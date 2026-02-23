@@ -324,7 +324,7 @@ void PrinterManagerOverlay::finish_name_edit() {
     // Save to config
     Config* config = Config::get_instance();
     if (config) {
-        config->set<std::string>(helix::wizard::PRINTER_NAME, name_str);
+        config->set<std::string>(config->df() + helix::wizard::PRINTER_NAME, name_str);
         config->save();
         spdlog::info("[{}] Printer name changed to: '{}'", get_name(), name_str);
     }
@@ -394,7 +394,7 @@ void PrinterManagerOverlay::refresh_printer_info() {
     }
 
     // Printer name from config (user-given name, or fallback)
-    std::string name = config->get<std::string>(helix::wizard::PRINTER_NAME, "");
+    std::string name = config->get<std::string>(config->df() + helix::wizard::PRINTER_NAME, "");
     if (name.empty()) {
         name = "My Printer";
     }
@@ -403,7 +403,7 @@ void PrinterManagerOverlay::refresh_printer_info() {
     lv_subject_copy_string(&printer_manager_name_, name_buf_);
 
     // Printer model/type from config
-    std::string model = config->get<std::string>(helix::wizard::PRINTER_TYPE, "");
+    std::string model = config->get<std::string>(config->df() + helix::wizard::PRINTER_TYPE, "");
     std::strncpy(model_buf_, model.c_str(), sizeof(model_buf_) - 1);
     model_buf_[sizeof(model_buf_) - 1] = '\0';
     lv_subject_copy_string(&printer_manager_model_, model_buf_);

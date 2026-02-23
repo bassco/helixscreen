@@ -11,6 +11,8 @@
 using AppConstants::Update::PREUPDATE_CONFIG_BACKUP;
 using AppConstants::Update::PREUPDATE_ENV_BACKUP;
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iomanip>
 #include <sys/stat.h>
@@ -264,6 +266,60 @@ static void migrate_v1_to_v2(json& config) {
     }
 }
 
+/// Migration v2→v3: Multi-printer support — restructure single printer to printers map
+static void migrate_v2_to_v3(json& config) {
+    // Already migrated if /printers exists
+    if (config.contains("printers")) {
+        return;
+    }
+
+    // Nothing to migrate if no /printer section
+    if (!config.contains("printer")) {
+        return;
+    }
+
+    spdlog::info("[Config] Migration v3: restructuring single printer to multi-printer format");
+
+    // Generate printer ID from name, or use "default"
+    std::string printer_name;
+    if (config["printer"].contains("name") && config["printer"]["name"].is_string()) {
+        printer_name = config["printer"]["name"].get<std::string>();
+    }
+    std::string printer_id = printer_name.empty() ? "default" : Config::slugify(printer_name);
+
+    // Move /printer → /printers/{id}
+    json printer_data = config["printer"];
+
+    // Move /filament into printer entry (if exists at root)
+    if (config.contains("filament")) {
+        printer_data["filament"] = config["filament"];
+        config.erase("filament");
+        spdlog::info("[Config] Migration v3: moved /filament into printer entry");
+    }
+
+    // Move /panel_widgets into printer entry (if exists at root)
+    if (config.contains("panel_widgets")) {
+        printer_data["panel_widgets"] = config["panel_widgets"];
+        config.erase("panel_widgets");
+        spdlog::info("[Config] Migration v3: moved /panel_widgets into printer entry");
+    }
+
+    // Copy wizard_completed into printer entry (keep root copy for backward compat)
+    if (config.contains("wizard_completed") && config["wizard_completed"].is_boolean()) {
+        printer_data["wizard_completed"] = config["wizard_completed"];
+    }
+
+    // Create printers map and set active printer
+    config["printers"] = json::object();
+    config["printers"][printer_id] = printer_data;
+    config["active_printer_id"] = printer_id;
+
+    // Remove old /printer key
+    config.erase("printer");
+
+    spdlog::info("[Config] Migration v3: created printer '{}' in /printers/ map", printer_id);
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config) {
     int version = 0;
@@ -275,6 +331,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v0_to_v1(config);
     if (version < 2)
         migrate_v1_to_v2(config);
+    if (version < 3)
+        migrate_v2_to_v3(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
@@ -284,7 +342,11 @@ static void run_versioned_migrations(json& config) {
 /// @param include_user_prefs Include user preference fields (brightness, sounds, etc.)
 json get_default_config(const std::string& moonraker_host, bool include_user_prefs) {
     // log_level intentionally absent - test_mode provides fallback to DEBUG
+    std::string printer_id = "default";
+    json printer_data = get_default_printer_config(moonraker_host);
+
     json config = {{"config_version", CURRENT_CONFIG_VERSION},
+                   {"active_printer_id", printer_id},
                    {"log_path", "/tmp/helixscreen.log"},
                    {"dark_mode", true},
                    {"theme", {{"preset", 0}}},
@@ -302,7 +364,7 @@ json get_default_config(const std::string& moonraker_host, bool include_user_pre
                        {"d", 0.0},
                        {"e", 1.0},
                        {"f", 0.0}}}}},
-                   {"printer", get_default_printer_config(moonraker_host)}};
+                   {"printers", {{printer_id, printer_data}}}};
 
     if (include_user_prefs) {
         config["brightness"] = 50;
@@ -459,82 +521,108 @@ void Config::init(const std::string& config_path) {
         config_modified = true;
     }
 
-    // Ensure printer section exists with required fields
-    auto& printer = data["/printer"_json_pointer];
-    if (printer.is_null()) {
-        data["/printer"_json_pointer] = get_default_printer_config("127.0.0.1");
+    // Load active printer ID from config (must happen before df() is used)
+    if (data.contains("active_printer_id") && data["active_printer_id"].is_string()) {
+        active_printer_id_ = data["active_printer_id"].get<std::string>();
+    }
+
+    // Ensure printers map exists
+    if (!data.contains("printers") || !data["printers"].is_object()) {
+        data["printers"] = {{"default", get_default_printer_config("127.0.0.1")}};
+        data["active_printer_id"] = "default";
+        active_printer_id_ = "default";
         config_modified = true;
-    } else {
-        // Ensure heaters exists with defaults
-        auto& heaters = data[json::json_pointer(df() + "heaters")];
-        if (heaters.is_null()) {
-            data[json::json_pointer(df() + "heaters")] = {{"bed", "heater_bed"},
-                                                          {"hotend", "extruder"}};
-            config_modified = true;
-        }
+    }
 
-        // Ensure temp_sensors exists with defaults
-        auto& temp_sensors = data[json::json_pointer(df() + "temp_sensors")];
-        if (temp_sensors.is_null()) {
-            data[json::json_pointer(df() + "temp_sensors")] = {{"bed", "heater_bed"},
-                                                               {"hotend", "extruder"}};
+    // If active_printer_id is empty or doesn't exist in printers map, pick first one
+    if (active_printer_id_.empty() || !data["printers"].contains(active_printer_id_)) {
+        if (!data["printers"].empty()) {
+            active_printer_id_ = data["printers"].begin().key();
+            data["active_printer_id"] = active_printer_id_;
             config_modified = true;
+            spdlog::info("[Config] Auto-selected active printer: {}", active_printer_id_);
         }
+    }
 
-        // Ensure fans exists with defaults
-        auto& fans = data[json::json_pointer(df() + "fans")];
-        if (fans.is_null()) {
-            data[json::json_pointer(df() + "fans")] = {{"part", "fan"},
-                                                       {"hotend", "heater_fan hotend_fan"}};
+    // Ensure active printer has required fields with defaults
+    if (!active_printer_id_.empty()) {
+        auto printer_ptr = json::json_pointer("/printers/" + active_printer_id_);
+        auto& printer = data[printer_ptr];
+        if (printer.is_null()) {
+            data[printer_ptr] = get_default_printer_config("127.0.0.1");
             config_modified = true;
-        }
+        } else {
+            // Ensure heaters exists with defaults
+            auto& heaters = data[json::json_pointer(df() + "heaters")];
+            if (heaters.is_null()) {
+                data[json::json_pointer(df() + "heaters")] = {{"bed", "heater_bed"},
+                                                              {"hotend", "extruder"}};
+                config_modified = true;
+            }
 
-        // Ensure leds exists with defaults
-        auto& leds = data[json::json_pointer(df() + "leds")];
-        if (leds.is_null()) {
-            data[json::json_pointer(df() + "leds")] = {{"strip", "neopixel chamber_light"}};
-            config_modified = true;
-        }
+            // Ensure temp_sensors exists with defaults
+            auto& temp_sensors = data[json::json_pointer(df() + "temp_sensors")];
+            if (temp_sensors.is_null()) {
+                data[json::json_pointer(df() + "temp_sensors")] = {{"bed", "heater_bed"},
+                                                                   {"hotend", "extruder"}};
+                config_modified = true;
+            }
 
-        // Ensure leds/selected array exists (for multi-LED support)
-        auto& leds_selected = data[json::json_pointer(df() + "leds/selected")];
-        if (leds_selected.is_null()) {
-            // Check if there's a legacy strip value to migrate
-            auto& strip = data[json::json_pointer(df() + "leds/strip")];
-            if (!strip.is_null() && strip.is_string()) {
-                std::string led = strip.get<std::string>();
-                if (!led.empty()) {
-                    data[json::json_pointer(df() + "leds/selected")] = json::array({led});
+            // Ensure fans exists with defaults
+            auto& fans = data[json::json_pointer(df() + "fans")];
+            if (fans.is_null()) {
+                data[json::json_pointer(df() + "fans")] = {{"part", "fan"},
+                                                           {"hotend", "heater_fan hotend_fan"}};
+                config_modified = true;
+            }
+
+            // Ensure leds exists with defaults
+            auto& leds = data[json::json_pointer(df() + "leds")];
+            if (leds.is_null()) {
+                data[json::json_pointer(df() + "leds")] = {{"strip", "neopixel chamber_light"}};
+                config_modified = true;
+            }
+
+            // Ensure leds/selected array exists (for multi-LED support)
+            auto& leds_selected = data[json::json_pointer(df() + "leds/selected")];
+            if (leds_selected.is_null()) {
+                // Check if there's a legacy strip value to migrate
+                auto& strip = data[json::json_pointer(df() + "leds/strip")];
+                if (!strip.is_null() && strip.is_string()) {
+                    std::string led = strip.get<std::string>();
+                    if (!led.empty()) {
+                        data[json::json_pointer(df() + "leds/selected")] = json::array({led});
+                    } else {
+                        data[json::json_pointer(df() + "leds/selected")] = json::array();
+                    }
                 } else {
                     data[json::json_pointer(df() + "leds/selected")] = json::array();
                 }
-            } else {
-                data[json::json_pointer(df() + "leds/selected")] = json::array();
+                config_modified = true;
             }
-            config_modified = true;
-        }
 
-        // Ensure extra_sensors exists (empty object for user additions)
-        auto& extra_sensors = data[json::json_pointer(df() + "extra_sensors")];
-        if (extra_sensors.is_null()) {
-            data[json::json_pointer(df() + "extra_sensors")] = json::object();
-            config_modified = true;
-        }
+            // Ensure extra_sensors exists (empty object for user additions)
+            auto& extra_sensors = data[json::json_pointer(df() + "extra_sensors")];
+            if (extra_sensors.is_null()) {
+                data[json::json_pointer(df() + "extra_sensors")] = json::object();
+                config_modified = true;
+            }
 
-        // Ensure hardware section exists
-        auto& hardware = data[json::json_pointer(df() + "hardware")];
-        if (hardware.is_null()) {
-            data[json::json_pointer(df() + "hardware")] = {{"optional", json::array()},
-                                                           {"expected", json::array()},
-                                                           {"last_snapshot", json::object()}};
-            config_modified = true;
-        }
+            // Ensure hardware section exists
+            auto& hardware = data[json::json_pointer(df() + "hardware")];
+            if (hardware.is_null()) {
+                data[json::json_pointer(df() + "hardware")] = {{"optional", json::array()},
+                                                               {"expected", json::array()},
+                                                               {"last_snapshot", json::object()}};
+                config_modified = true;
+            }
 
-        // Ensure default_macros exists
-        auto& default_macros = data[json::json_pointer(df() + "default_macros")];
-        if (default_macros.is_null()) {
-            data[json::json_pointer(df() + "default_macros")] = get_default_macros();
-            config_modified = true;
+            // Ensure default_macros exists
+            auto& default_macros = data[json::json_pointer(df() + "default_macros")];
+            if (default_macros.is_null()) {
+                data[json::json_pointer(df() + "default_macros")] = get_default_macros();
+                config_modified = true;
+            }
         }
     }
 
@@ -620,7 +708,96 @@ void Config::init(const std::string& config_path) {
 }
 
 std::string Config::df() {
-    return "/printer/";
+    if (active_printer_id_.empty()) {
+        spdlog::warn("[Config] df() called with no active printer, using 'default'");
+        return "/printers/default/";
+    }
+    return "/printers/" + active_printer_id_ + "/";
+}
+
+// ============================================================================
+// Multi-printer support
+// ============================================================================
+
+std::string Config::get_active_printer_id() const {
+    return active_printer_id_;
+}
+
+bool Config::set_active_printer(const std::string& printer_id) {
+    if (!data.contains("printers") || !data["printers"].contains(printer_id)) {
+        spdlog::error("[Config] Cannot switch to unknown printer '{}'", printer_id);
+        return false;
+    }
+    active_printer_id_ = printer_id;
+    data["active_printer_id"] = printer_id;
+    spdlog::info("[Config] Switched active printer to '{}'", printer_id);
+    return true;
+}
+
+std::vector<std::string> Config::get_printer_ids() const {
+    std::vector<std::string> ids;
+    if (data.contains("printers") && data["printers"].is_object()) {
+        for (auto& [key, _] : data["printers"].items()) {
+            ids.push_back(key);
+        }
+    }
+    return ids;
+}
+
+void Config::add_printer(const std::string& printer_id, const json& printer_data) {
+    if (!data.contains("printers")) {
+        data["printers"] = json::object();
+    }
+    data["printers"][printer_id] = printer_data;
+    spdlog::info("[Config] Added printer '{}'", printer_id);
+}
+
+void Config::remove_printer(const std::string& printer_id) {
+    if (!data.contains("printers") || !data["printers"].contains(printer_id)) {
+        spdlog::warn("[Config] Cannot remove unknown printer '{}'", printer_id);
+        return;
+    }
+    data["printers"].erase(printer_id);
+    spdlog::info("[Config] Removed printer '{}'", printer_id);
+
+    // Clear active if we just removed the active printer
+    if (active_printer_id_ == printer_id) {
+        active_printer_id_.clear();
+        data["active_printer_id"] = "";
+        spdlog::warn("[Config] Removed active printer — active_printer_id cleared");
+    }
+}
+
+std::string Config::slugify(const std::string& name) {
+    std::string result;
+    result.reserve(name.size());
+
+    for (char c : name) {
+        if (std::isalnum(static_cast<unsigned char>(c))) {
+            result += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        } else {
+            // Replace non-alphanumeric with hyphen
+            if (!result.empty() && result.back() != '-') {
+                result += '-';
+            }
+        }
+    }
+
+    // Strip trailing hyphens
+    while (!result.empty() && result.back() == '-') {
+        result.pop_back();
+    }
+
+    // Strip leading hyphens
+    size_t start = 0;
+    while (start < result.size() && result[start] == '-') {
+        ++start;
+    }
+    if (start > 0) {
+        result = result.substr(start);
+    }
+
+    return result.empty() ? "default" : result;
 }
 
 std::string Config::get_path() {
@@ -667,18 +844,28 @@ bool Config::save() {
 }
 
 bool Config::is_wizard_required() {
-    // Check explicit wizard completion flag
-    // IMPORTANT: Use contains() first to avoid creating null entries via operator[]
-    json::json_pointer ptr("/wizard_completed");
+    // Check per-printer wizard_completed first (v3 config)
+    if (!active_printer_id_.empty()) {
+        json::json_pointer printer_ptr(df() + "wizard_completed");
+        if (data.contains(printer_ptr)) {
+            auto& wc = data[printer_ptr];
+            if (wc.is_boolean()) {
+                bool is_completed = wc.get<bool>();
+                spdlog::trace("[Config] Per-printer wizard_completed = {}", is_completed);
+                return !is_completed;
+            }
+        }
+    }
 
+    // Fall back to root-level wizard_completed (backward compat)
+    json::json_pointer ptr("/wizard_completed");
     if (data.contains(ptr)) {
         auto& wizard_completed = data[ptr];
         if (wizard_completed.is_boolean()) {
             bool is_completed = wizard_completed.get<bool>();
-            spdlog::trace("[Config] Wizard completed flag = {}", is_completed);
-            return !is_completed; // Wizard required if flag is false
+            spdlog::trace("[Config] Root wizard_completed flag = {}", is_completed);
+            return !is_completed;
         }
-        // Key exists but wrong type - treat as not set
         spdlog::warn("[Config] wizard_completed has invalid type, treating as unset");
     }
 

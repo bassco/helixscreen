@@ -751,10 +751,10 @@ void SettingsPanel::populate_info_rows() {
     if (printer_row) {
         printer_value_ = lv_obj_find_by_name(printer_row, "value");
         if (printer_value_) {
-            // Try to get printer name from config (wizard stores at /printer/name)
+            // Try to get printer name from config (wizard stores under active printer)
             Config* config = Config::get_instance();
             std::string printer_name =
-                config->get<std::string>(helix::wizard::PRINTER_NAME, "Unknown");
+                config->get<std::string>(config->df() + helix::wizard::PRINTER_NAME, "Unknown");
             // Update subject (label binding happens in XML)
             lv_subject_copy_string(&printer_value_subject_, printer_name.c_str());
             spdlog::trace("[{}]   ✓ Printer: {}", get_name(), printer_name);

@@ -1168,15 +1168,16 @@ bool Application::run_wizard() {
                                       nlohmann::json::object());
 
         // Clear wizard hardware selections (heaters, fans, LEDs, sensors)
-        const char* wizard_paths[] = {
+        const char* wizard_suffixes[] = {
             helix::wizard::BED_HEATER,    helix::wizard::HOTEND_HEATER, helix::wizard::BED_SENSOR,
             helix::wizard::HOTEND_SENSOR, helix::wizard::HOTEND_FAN,    helix::wizard::PART_FAN,
             helix::wizard::CHAMBER_FAN,   helix::wizard::EXHAUST_FAN,   helix::wizard::LED_STRIP,
         };
-        for (const auto* path : wizard_paths) {
-            m_config->set<std::string>(path, "");
+        for (const auto* suffix : wizard_suffixes) {
+            m_config->set<std::string>(m_config->df() + suffix, "");
         }
-        m_config->set<nlohmann::json>(helix::wizard::LED_SELECTED, nlohmann::json::array());
+        m_config->set<nlohmann::json>(m_config->df() + helix::wizard::LED_SELECTED,
+                                      nlohmann::json::array());
         m_config->set<nlohmann::json>(m_config->df() + "filament_sensors/sensors",
                                       nlohmann::json::array());
 

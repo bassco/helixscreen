@@ -55,7 +55,7 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(led_enabled_subject_, 0, "settings_led_enabled", subjects_);
 
     // Z movement style (default: 0 = Auto)
-    int z_movement_style = config->get<int>("/printer/z_movement_style", 0);
+    int z_movement_style = config->get<int>(config->df() + "z_movement_style", 0);
     z_movement_style = std::clamp(z_movement_style, 0, 2);
     UI_MANAGED_SUBJECT_INT(z_movement_style_subject_, z_movement_style, "settings_z_movement_style",
                            subjects_);
@@ -67,7 +67,7 @@ void SettingsManager::init_subjects() {
     }
 
     // Extrude/retract speed (default: 5 mm/s, range 1-50)
-    int extrude_speed = config->get<int>("/filament/extrude_speed", 5);
+    int extrude_speed = config->get<int>(config->df() + "filament/extrude_speed", 5);
     extrude_speed = std::clamp(extrude_speed, 1, 50);
     UI_MANAGED_SUBJECT_INT(extrude_speed_subject_, extrude_speed, "settings_extrude_speed",
                            subjects_);
@@ -142,7 +142,7 @@ void SettingsManager::set_z_movement_style(ZMovementStyle style) {
 
     // 2. Persist to config
     Config* config = Config::get_instance();
-    config->set<int>("/printer/z_movement_style", val);
+    config->set<int>(config->df() + "z_movement_style", val);
     config->save();
 
     // 3. Apply override to printer state
@@ -170,7 +170,7 @@ void SettingsManager::set_extrude_speed(int mm_per_sec) {
 
     // 2. Persist to config
     Config* config = Config::get_instance();
-    config->set<int>("/filament/extrude_speed", mm_per_sec);
+    config->set<int>(config->df() + "filament/extrude_speed", mm_per_sec);
     config->save();
 }
 
@@ -182,11 +182,11 @@ std::optional<SlotInfo> SettingsManager::get_external_spool_info() const {
     Config* config = Config::get_instance();
 
     // Primary check: explicit assigned boolean (new format)
-    bool assigned = config->get<bool>("/filament/external_spool/assigned", false);
+    bool assigned = config->get<bool>(config->df() + "filament/external_spool/assigned", false);
 
     // Backward compat: old configs have color_rgb but no assigned key
     if (!assigned) {
-        auto color = config->get<int>("/filament/external_spool/color_rgb", -1);
+        auto color = config->get<int>(config->df() + "filament/external_spool/color_rgb", -1);
         if (color == -1) {
             return std::nullopt;
         }
@@ -196,42 +196,52 @@ std::optional<SlotInfo> SettingsManager::get_external_spool_info() const {
     SlotInfo info;
     info.slot_index = -2; // External spool sentinel
     info.global_index = -2;
-    info.color_rgb = static_cast<uint32_t>(config->get<int>(
-        "/filament/external_spool/color_rgb", static_cast<int>(AMS_DEFAULT_SLOT_COLOR)));
-    info.material = config->get<std::string>("/filament/external_spool/material", "");
-    info.brand = config->get<std::string>("/filament/external_spool/brand", "");
-    info.nozzle_temp_min = config->get<int>("/filament/external_spool/nozzle_temp_min", 0);
-    info.nozzle_temp_max = config->get<int>("/filament/external_spool/nozzle_temp_max", 0);
-    info.bed_temp = config->get<int>("/filament/external_spool/bed_temp", 0);
-    info.spoolman_id = config->get<int>("/filament/external_spool/spoolman_id", 0);
-    info.spool_name = config->get<std::string>("/filament/external_spool/spool_name", "");
+    info.color_rgb =
+        static_cast<uint32_t>(config->get<int>(config->df() + "filament/external_spool/color_rgb",
+                                               static_cast<int>(AMS_DEFAULT_SLOT_COLOR)));
+    info.material = config->get<std::string>(config->df() + "filament/external_spool/material", "");
+    info.brand = config->get<std::string>(config->df() + "filament/external_spool/brand", "");
+    info.nozzle_temp_min =
+        config->get<int>(config->df() + "filament/external_spool/nozzle_temp_min", 0);
+    info.nozzle_temp_max =
+        config->get<int>(config->df() + "filament/external_spool/nozzle_temp_max", 0);
+    info.bed_temp = config->get<int>(config->df() + "filament/external_spool/bed_temp", 0);
+    info.spoolman_id = config->get<int>(config->df() + "filament/external_spool/spoolman_id", 0);
+    info.spool_name =
+        config->get<std::string>(config->df() + "filament/external_spool/spool_name", "");
     info.remaining_weight_g =
-        config->get<float>("/filament/external_spool/remaining_weight_g", -1.0f);
-    info.total_weight_g = config->get<float>("/filament/external_spool/total_weight_g", -1.0f);
+        config->get<float>(config->df() + "filament/external_spool/remaining_weight_g", -1.0f);
+    info.total_weight_g =
+        config->get<float>(config->df() + "filament/external_spool/total_weight_g", -1.0f);
     info.status = SlotStatus::AVAILABLE;
     return info;
 }
 
 void SettingsManager::set_external_spool_info(const SlotInfo& info) {
     Config* config = Config::get_instance();
-    config->set<bool>("/filament/external_spool/assigned", true);
-    config->set<int>("/filament/external_spool/color_rgb", static_cast<int>(info.color_rgb));
-    config->set<std::string>("/filament/external_spool/material", info.material);
-    config->set<std::string>("/filament/external_spool/brand", info.brand);
-    config->set<int>("/filament/external_spool/nozzle_temp_min", info.nozzle_temp_min);
-    config->set<int>("/filament/external_spool/nozzle_temp_max", info.nozzle_temp_max);
-    config->set<int>("/filament/external_spool/bed_temp", info.bed_temp);
-    config->set<int>("/filament/external_spool/spoolman_id", info.spoolman_id);
-    config->set<std::string>("/filament/external_spool/spool_name", info.spool_name);
-    config->set<float>("/filament/external_spool/remaining_weight_g", info.remaining_weight_g);
-    config->set<float>("/filament/external_spool/total_weight_g", info.total_weight_g);
+    config->set<bool>(config->df() + "filament/external_spool/assigned", true);
+    config->set<int>(config->df() + "filament/external_spool/color_rgb",
+                     static_cast<int>(info.color_rgb));
+    config->set<std::string>(config->df() + "filament/external_spool/material", info.material);
+    config->set<std::string>(config->df() + "filament/external_spool/brand", info.brand);
+    config->set<int>(config->df() + "filament/external_spool/nozzle_temp_min",
+                     info.nozzle_temp_min);
+    config->set<int>(config->df() + "filament/external_spool/nozzle_temp_max",
+                     info.nozzle_temp_max);
+    config->set<int>(config->df() + "filament/external_spool/bed_temp", info.bed_temp);
+    config->set<int>(config->df() + "filament/external_spool/spoolman_id", info.spoolman_id);
+    config->set<std::string>(config->df() + "filament/external_spool/spool_name", info.spool_name);
+    config->set<float>(config->df() + "filament/external_spool/remaining_weight_g",
+                       info.remaining_weight_g);
+    config->set<float>(config->df() + "filament/external_spool/total_weight_g",
+                       info.total_weight_g);
     config->save();
 }
 
 void SettingsManager::clear_external_spool_info() {
     Config* config = Config::get_instance();
     try {
-        auto& filament = config->get_json("/filament");
+        auto& filament = config->get_json(config->df() + "filament");
         if (filament.is_object() && filament.contains("external_spool")) {
             filament.erase("external_spool");
         }
