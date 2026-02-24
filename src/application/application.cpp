@@ -152,6 +152,7 @@
 #include <SDL.h>
 #endif
 
+#include <algorithm>
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
@@ -2206,11 +2207,29 @@ void Application::handle_keyboard_shortcuts() {
             },
             [this]() { return m_moonraker && m_moonraker->client(); });
 
-        // P key - test action prompt (test mode only)
+        // P key - cycle through configured printers (test mode only)
         shortcuts.register_key_if(
             SDL_SCANCODE_P,
             [this]() {
-                spdlog::info("[Application] P key - triggering test action prompt");
+                auto ids = m_config->get_printer_ids();
+                if (ids.size() > 1) {
+                    auto current = m_config->get_active_printer_id();
+                    auto it = std::find(ids.begin(), ids.end(), current);
+                    auto next = (it != ids.end() && std::next(it) != ids.end()) ? *std::next(it)
+                                                                                : ids.front();
+                    spdlog::info("[Application] P key - switching to printer '{}'", next);
+                    switch_printer(next);
+                } else {
+                    spdlog::info("[Application] P key - only one printer configured, no switch");
+                }
+            },
+            [this]() { return get_runtime_config()->is_test_mode() && m_config; });
+
+        // A key - test action prompt (test mode only)
+        shortcuts.register_key_if(
+            SDL_SCANCODE_A,
+            [this]() {
+                spdlog::info("[Application] A key - triggering test action prompt");
                 m_action_prompt_manager->trigger_test_prompt();
             },
             [this]() { return get_runtime_config()->is_test_mode() && m_action_prompt_manager; });
@@ -2252,6 +2271,173 @@ void Application::check_timeouts() {
         }
         m_last_timeout_check = current_time;
     }
+}
+
+// ============================================================================
+// SOFT RESTART (printer switching)
+// ============================================================================
+
+void Application::switch_printer(const std::string& printer_id) {
+    spdlog::info("[Application] Switching to printer '{}'...", printer_id);
+
+    // Validate printer exists in config
+    if (!m_config->set_active_printer(printer_id)) {
+        spdlog::error("[Application] Failed to switch — unknown printer '{}'", printer_id);
+        return;
+    }
+    m_config->save();
+
+    // Show switching splash (simple label on screen)
+    auto* splash = lv_label_create(m_screen);
+    lv_label_set_text(splash, "Switching printer...");
+    lv_obj_center(splash);
+    lv_refr_now(nullptr); // Force immediate render
+
+    tear_down_printer_state();
+    init_printer_state();
+
+    // Clean up splash (it survived because it's a direct child of screen, not app_layout)
+    if (splash) {
+        lv_obj_del(splash);
+    }
+
+    // Navigate to home
+    NavigationManager::instance().set_active(PanelId::Home);
+
+    spdlog::info("[Application] Switched to printer '{}'", printer_id);
+}
+
+void Application::tear_down_printer_state() {
+    spdlog::info("[Application] Tearing down printer state...");
+
+    // 1. Deactivate overlays and clear navigation registries
+    NavigationManager::instance().shutdown();
+
+    // 2. Clear app_globals BEFORE destroying managers to prevent
+    //    destructors from accessing destroyed objects
+    set_moonraker_manager(nullptr);
+    set_moonraker_api(nullptr);
+    set_moonraker_client(nullptr);
+    set_print_history_manager(nullptr);
+    set_temperature_history_manager(nullptr);
+
+    // 3. Unload plugins (may hold refs to managers)
+    if (m_plugin_manager) {
+        m_plugin_manager->unload_all();
+        m_plugin_manager.reset();
+    }
+
+    // 4. Disconnect WebSocket thread FIRST to prevent callback races
+    if (m_moonraker && m_moonraker->client()) {
+        m_moonraker->client()->disconnect();
+    }
+
+    // 5. Release history managers
+    m_history_manager.reset();
+    m_temp_history_manager.reset();
+
+    // 6. Clear AMS backends before subjects (hold subscription guards)
+    AmsState::instance().clear_backends();
+
+    // 7. Release action prompt system
+    if (m_moonraker && m_moonraker->client() && m_action_prompt_manager) {
+        m_moonraker->client()->unregister_method_callback("notify_gcode_response",
+                                                          "action_prompt_manager");
+    }
+    AmsState::instance().set_gcode_response_callback(nullptr);
+    m_action_prompt_modal.reset();
+    helix::ActionPromptManager::set_instance(nullptr);
+    m_action_prompt_manager.reset();
+
+    // 8. Release PanelFactory (panel widget pointers)
+    m_panels.reset();
+
+    // 9. Release SubjectInitializer (releases observer guards, TempControlPanel, UsbManager)
+    m_subjects.reset();
+
+    // 10. Flush pending async callbacks BEFORE destroying panels
+    helix::ui::update_queue_shutdown();
+
+    // 11. Kill all LVGL animations (hold widget pointers)
+    lv_anim_delete_all();
+
+    // 12. Destroy all static panel/overlay globals (releases observers)
+    StaticPanelRegistry::instance().destroy_all();
+
+    // 13. Deinit core singleton subjects (LIFO order via StaticSubjectRegistry)
+    StaticSubjectRegistry::instance().deinit_all();
+
+    // 14. Release MoonrakerManager
+    m_moonraker.reset();
+
+    // 15. Delete LVGL widget tree (panels already released references)
+    //     DO NOT call lv_deinit() — display stays alive
+    if (m_app_layout) {
+        lv_obj_del(m_app_layout);
+        m_app_layout = nullptr;
+    }
+    m_overlay_panels = {};
+
+    spdlog::info("[Application] Printer state torn down");
+}
+
+void Application::init_printer_state() {
+    spdlog::info("[Application] Initializing printer state...");
+
+    // 1. Initialize core subjects (PrinterState, AmsState, etc.)
+    if (!init_core_subjects()) {
+        spdlog::error("[Application] Failed to reinitialize core subjects");
+        return;
+    }
+
+    // 2. Initialize Moonraker (creates client + API + history managers)
+    if (!init_moonraker()) {
+        spdlog::error("[Application] Failed to reinitialize Moonraker");
+        return;
+    }
+
+    // 3. Initialize panel subjects with API injection + post-init
+    if (!init_panel_subjects()) {
+        spdlog::error("[Application] Failed to reinitialize panel subjects");
+        return;
+    }
+
+    // 4. Recreate UI (app_layout from XML, wire navigation)
+    if (!init_ui()) {
+        spdlog::error("[Application] Failed to reinitialize UI");
+        return;
+    }
+
+    // 5. Run wizard if needed for new printer
+    if (run_wizard()) {
+        m_wizard_active = true;
+        set_wizard_active(true);
+    }
+
+    // 6. Create CLI overlay panels (if any)
+    if (!m_wizard_active) {
+        create_overlays();
+    }
+
+    // 7. Reload plugins
+    if (!init_plugins()) {
+        spdlog::warn("[Application] Plugin reinitialization had errors (non-fatal)");
+    }
+
+    // 8. Connect to new printer's Moonraker
+    if (!connect_moonraker()) {
+        spdlog::warn("[Application] Running without printer connection after switch");
+    }
+
+    // Reinitialize update queue for new session
+    helix::ui::update_queue_init();
+
+    // Force full screen refresh
+    lv_obj_update_layout(m_screen);
+    invalidate_all_recursive(m_screen);
+    lv_refr_now(nullptr);
+
+    spdlog::info("[Application] Printer state initialized");
 }
 
 void Application::shutdown() {

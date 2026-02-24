@@ -100,6 +100,11 @@ class Application {
     // Shutdown
     void shutdown();
 
+    // Soft restart (printer switching)
+    void switch_printer(const std::string& printer_id);
+    void tear_down_printer_state();
+    void init_printer_state();
+
     // Helper functions
     void ensure_project_root_cwd();
     void auto_configure_mock_state();

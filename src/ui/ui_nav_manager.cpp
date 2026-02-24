@@ -1454,6 +1454,9 @@ void NavigationManager::deinit_subjects() {
     previous_connection_state_ = -1;
     previous_klippy_state_ = -1;
 
+    // Allow re-initialization after soft restart (shutdown() sets this to true)
+    shutting_down_ = false;
+
     subjects_initialized_ = false;
     spdlog::trace("[NavigationManager] Subjects deinitialized");
 }
