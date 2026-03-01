@@ -133,8 +133,13 @@ endif
 # Ccache integration - auto-detect and use if available (10x faster rebuilds)
 CCACHE := $(shell command -v ccache 2>/dev/null)
 ifneq ($(CCACHE),)
-    CC := ccache $(CC)
-    CXX := ccache $(CXX)
+    # Avoid double-wrapping when CC/CXX already include ccache (common in CI env).
+    ifneq ($(notdir $(firstword $(CC))),ccache)
+        CC := ccache $(CC)
+    endif
+    ifneq ($(notdir $(firstword $(CXX))),ccache)
+        CXX := ccache $(CXX)
+    endif
 endif
 
 # Dependency generation flags for proper header tracking
@@ -365,6 +370,14 @@ else
     LIBHV_INC := -isystem $(LIBHV_DIR)/include -isystem $(LIBHV_DIR)/cpputil -isystem $(LIBHV_DIR)
     LIBHV_LIB := $(BUILD_DIR)/lib/libhv.a
     LIBHV_LIBS := $(LIBHV_LIB)
+endif
+
+# libhv generates include/hv headers during libhv-build. Track json.hpp so a
+# stale archive cannot be reused when generated headers are missing.
+ifneq ($(LIBHV_LIB),)
+    LIBHV_JSON_HEADER := $(LIBHV_DIR)/include/hv/json.hpp
+else
+    LIBHV_JSON_HEADER :=
 endif
 
 # spdlog (logging library) - Use system version if available, otherwise use submodule
