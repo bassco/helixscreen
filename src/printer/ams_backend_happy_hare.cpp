@@ -106,6 +106,9 @@ AmsSystemInfo AmsBackendHappyHare::get_system_info() const {
     info.sync_drive = system_info_.sync_drive;
     info.clog_detection = system_info_.clog_detection;
     info.encoder_flow_rate = system_info_.encoder_flow_rate;
+    info.encoder_info = system_info_.encoder_info;
+    info.flowguard_info = system_info_.flowguard_info;
+    info.sync_feedback_flow_rate = system_info_.sync_feedback_flow_rate;
     info.toolchange_purge_volume = system_info_.toolchange_purge_volume;
 
     // Copy unit-level metadata not managed by registry
@@ -551,15 +554,73 @@ void AmsBackendHappyHare::parse_mmu_state(const nlohmann::json& mmu_data) {
     if (mmu_data.contains("clog_detection_enabled") &&
         mmu_data["clog_detection_enabled"].is_number_integer()) {
         system_info_.clog_detection = mmu_data["clog_detection_enabled"].get<int>();
+        system_info_.encoder_info.detection_mode = system_info_.clog_detection;
+        system_info_.encoder_info.enabled = (system_info_.clog_detection > 0);
         spdlog::trace("[AMS HappyHare] Clog detection: {}", system_info_.clog_detection);
     }
 
-    // Parse encoder.flow_rate: printer.mmu.encoder.flow_rate (v4, nested)
+    // Parse encoder: printer.mmu.encoder (v4, nested)
     if (mmu_data.contains("encoder") && mmu_data["encoder"].is_object()) {
         const auto& encoder = mmu_data["encoder"];
-        if (encoder.contains("flow_rate") && encoder["flow_rate"].is_number_integer()) {
-            system_info_.encoder_flow_rate = encoder["flow_rate"].get<int>();
+        if (encoder.contains("flow_rate") && encoder["flow_rate"].is_number()) {
+            system_info_.encoder_info.flow_rate = encoder["flow_rate"].get<int>();
+            // Keep legacy field in sync
+            system_info_.encoder_flow_rate = system_info_.encoder_info.flow_rate;
             spdlog::trace("[AMS HappyHare] Encoder flow rate: {}", system_info_.encoder_flow_rate);
+        }
+        if (encoder.contains("desired_headroom") && encoder["desired_headroom"].is_number()) {
+            system_info_.encoder_info.desired_headroom =
+                encoder["desired_headroom"].get<float>();
+        }
+        if (encoder.contains("detection_length") && encoder["detection_length"].is_number()) {
+            system_info_.encoder_info.detection_length =
+                encoder["detection_length"].get<float>();
+        }
+        if (encoder.contains("headroom") && encoder["headroom"].is_number()) {
+            system_info_.encoder_info.headroom = encoder["headroom"].get<float>();
+        }
+        if (encoder.contains("min_headroom") && encoder["min_headroom"].is_number()) {
+            system_info_.encoder_info.min_headroom = encoder["min_headroom"].get<float>();
+        }
+        spdlog::trace("[AMS HappyHare] Encoder: headroom={:.1f}/{:.1f} min={:.1f}",
+                      system_info_.encoder_info.headroom,
+                      system_info_.encoder_info.detection_length,
+                      system_info_.encoder_info.min_headroom);
+    }
+
+    // Parse flowguard: printer.mmu.flowguard (v4, nested)
+    if (mmu_data.contains("flowguard") && mmu_data["flowguard"].is_object()) {
+        const auto& fg = mmu_data["flowguard"];
+        if (fg.contains("is_enabled") && fg["is_enabled"].is_boolean()) {
+            system_info_.flowguard_info.enabled = fg["is_enabled"].get<bool>();
+        }
+        if (fg.contains("is_active") && fg["is_active"].is_boolean()) {
+            system_info_.flowguard_info.active = fg["is_active"].get<bool>();
+        }
+        if (fg.contains("clog_or_tangle") && fg["clog_or_tangle"].is_string()) {
+            system_info_.flowguard_info.trigger = fg["clog_or_tangle"].get<std::string>();
+        }
+        if (fg.contains("flow_rate_level") && fg["flow_rate_level"].is_number()) {
+            system_info_.flowguard_info.level = fg["flow_rate_level"].get<float>();
+        }
+        if (fg.contains("max_clog") && fg["max_clog"].is_number()) {
+            system_info_.flowguard_info.max_clog = fg["max_clog"].get<float>();
+        }
+        if (fg.contains("max_tangle") && fg["max_tangle"].is_number()) {
+            system_info_.flowguard_info.max_tangle = fg["max_tangle"].get<float>();
+        }
+        spdlog::trace("[AMS HappyHare] Flowguard: enabled={} active={} trigger={} level={:.2f}",
+                      system_info_.flowguard_info.enabled, system_info_.flowguard_info.active,
+                      system_info_.flowguard_info.trigger, system_info_.flowguard_info.level);
+    }
+
+    // Parse sync_feedback.flow_rate: printer.mmu.sync_feedback (v4, nested)
+    if (mmu_data.contains("sync_feedback") && mmu_data["sync_feedback"].is_object()) {
+        const auto& sf = mmu_data["sync_feedback"];
+        if (sf.contains("flow_rate") && sf["flow_rate"].is_number()) {
+            system_info_.sync_feedback_flow_rate = sf["flow_rate"].get<float>();
+            spdlog::trace("[AMS HappyHare] Sync feedback flow rate: {:.1f}",
+                          system_info_.sync_feedback_flow_rate);
         }
     }
 
