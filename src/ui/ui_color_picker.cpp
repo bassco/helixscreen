@@ -153,6 +153,55 @@ void ColorPicker::on_show() {
             this);
         spdlog::debug("[ColorPicker] HSV picker initialized with color #{:06X}", selected_color_);
     }
+
+    // Detect TINY breakpoint for compact layout
+    lv_subject_t* bp_subject = theme_manager_get_breakpoint_subject();
+    is_tiny_mode_ = bp_subject && lv_subject_get_int(bp_subject) == UI_BP_TINY;
+
+    if (is_tiny_mode_ && dialog_) {
+        // Full-screen on TINY
+        lv_obj_set_size(dialog_, LV_PCT(100), LV_PCT(100));
+        lv_obj_set_style_radius(dialog_, 0, 0);
+
+        // Find TINY-specific containers
+        presets_content_ = find_widget("presets_content");
+        custom_content_ = find_widget("custom_content");
+        btn_tab_presets_ = find_widget("btn_tab_presets");
+        btn_tab_custom_ = find_widget("btn_tab_custom");
+
+        // Wire up TINY-mode HSV picker
+        lv_obj_t* hsv_picker_tiny = find_widget("hsv_picker_tiny");
+        if (hsv_picker_tiny) {
+            ui_hsv_picker_set_color_rgb(hsv_picker_tiny, selected_color_);
+            ui_hsv_picker_set_callback(
+                hsv_picker_tiny,
+                [](uint32_t rgb, void* user_data) {
+                    auto* self = static_cast<ColorPicker*>(user_data);
+                    self->update_preview(rgb, true);
+                },
+                this);
+        }
+
+        // Wire up TINY-mode hex input
+        lv_obj_t* hex_input_tiny = find_widget("hex_input_tiny");
+        if (hex_input_tiny && dialog_) {
+            helix::ui::modal_register_keyboard(dialog_, hex_input_tiny);
+        }
+
+        // Bind TINY name label to subject
+        lv_obj_t* name_label_tiny = find_widget("selected_name_label_tiny");
+        if (name_label_tiny) {
+            lv_label_bind_text(name_label_tiny, &name_subject_, nullptr);
+        }
+
+        // Override hex_input_ to point to TINY version so existing handlers work
+        hex_input_ = find_widget("hex_input_tiny");
+
+        // Start on presets tab
+        switch_tab(false);
+
+        spdlog::debug("[ColorPicker] TINY mode: full-screen with tabbed layout");
+    }
 }
 
 void ColorPicker::on_hide() {
@@ -162,6 +211,13 @@ void ColorPicker::on_hide() {
     }
 
     spdlog::debug("[ColorPicker] on_hide()");
+
+    // Clean up TINY mode state
+    presets_content_ = nullptr;
+    custom_content_ = nullptr;
+    btn_tab_presets_ = nullptr;
+    btn_tab_custom_ = nullptr;
+    is_tiny_mode_ = false;
 
     // Call dismiss callback if set (fires on any close - select, cancel, or backdrop)
     if (dismiss_callback_) {
@@ -224,6 +280,12 @@ void ColorPicker::update_preview(uint32_t color_rgb, bool from_hsv_picker, bool 
         lv_obj_set_style_bg_color(preview, lv_color_hex(color_rgb), 0);
     }
 
+    // Update TINY preview swatch too
+    lv_obj_t* preview_tiny = find_widget("selected_color_preview_tiny");
+    if (preview_tiny) {
+        lv_obj_set_style_bg_color(preview_tiny, lv_color_hex(color_rgb), 0);
+    }
+
     // Update the hex input (unless change came from hex input itself)
     if (!from_hex_input && hex_input_) {
         hex_input_updating_ = true;
@@ -231,6 +293,13 @@ void ColorPicker::update_preview(uint32_t color_rgb, bool from_hsv_picker, bool 
         lv_textarea_set_text(hex_input_, hex_buf_);
         lv_obj_set_style_text_color(hex_input_, theme_manager_get_color("text"), LV_PART_MAIN);
         hex_input_updating_ = false;
+    }
+
+    // Update TINY hex input too (if it's a different widget from hex_input_)
+    lv_obj_t* hex_input_tiny = find_widget("hex_input_tiny");
+    if (!from_hex_input && hex_input_tiny && hex_input_tiny != hex_input_) {
+        lv_textarea_set_text(hex_input_tiny, hex_buf_);
+        lv_obj_set_style_text_color(hex_input_tiny, theme_manager_get_color("text"), LV_PART_MAIN);
     }
 
     // Update the color name label via subject
@@ -243,6 +312,12 @@ void ColorPicker::update_preview(uint32_t color_rgb, bool from_hsv_picker, bool 
         lv_obj_t* hsv_picker = find_widget("hsv_picker");
         if (hsv_picker) {
             ui_hsv_picker_set_color_rgb(hsv_picker, color_rgb);
+        }
+
+        // Sync TINY HSV picker too
+        lv_obj_t* hsv_picker_tiny = find_widget("hsv_picker_tiny");
+        if (hsv_picker_tiny) {
+            ui_hsv_picker_set_color_rgb(hsv_picker_tiny, color_rgb);
         }
     }
 }
@@ -324,10 +399,41 @@ void ColorPicker::register_callbacks() {
         {"color_picker_select_cb", on_select_cb},
         {"hex_input_changed_cb", on_hex_input_changed_cb},
         {"hex_input_defocused_cb", on_hex_input_defocused_cb},
+        {"color_picker_tab_presets_cb", on_tab_presets_cb},
+        {"color_picker_tab_custom_cb", on_tab_custom_cb},
     });
 
     callbacks_registered_ = true;
     spdlog::debug("[ColorPicker] Callbacks registered");
+}
+
+// ============================================================================
+// TINY Mode Tab Switching
+// ============================================================================
+
+void ColorPicker::switch_tab(bool show_custom) {
+    if (!is_tiny_mode_) return;
+
+    if (presets_content_) {
+        if (show_custom) lv_obj_add_flag(presets_content_, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_remove_flag(presets_content_, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (custom_content_) {
+        if (show_custom) lv_obj_remove_flag(custom_content_, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(custom_content_, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // Style active tab
+    if (btn_tab_presets_) {
+        auto color = show_custom ? theme_manager_get_color("text_muted")
+                                 : theme_manager_get_color("primary");
+        lv_obj_set_style_text_color(btn_tab_presets_, color, 0);
+    }
+    if (btn_tab_custom_) {
+        auto color = show_custom ? theme_manager_get_color("primary")
+                                 : theme_manager_get_color("text_muted");
+        lv_obj_set_style_text_color(btn_tab_custom_, color, 0);
+    }
 }
 
 // ============================================================================
@@ -380,6 +486,16 @@ void ColorPicker::on_hex_input_defocused_cb(lv_event_t* e) {
     if (self) {
         self->handle_hex_input_defocused();
     }
+}
+
+void ColorPicker::on_tab_presets_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) self->switch_tab(false);
+}
+
+void ColorPicker::on_tab_custom_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) self->switch_tab(true);
 }
 
 } // namespace helix::ui
