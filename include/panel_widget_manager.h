@@ -73,6 +73,10 @@ class PanelWidgetManager {
     std::vector<std::unique_ptr<PanelWidget>> populate_widgets(const std::string& panel_id,
                                                                lv_obj_t* container);
 
+    /// Compute which widget IDs would be visible for a panel without creating
+    /// any LVGL objects. Used to short-circuit rebuilds when the list is unchanged.
+    std::vector<std::string> compute_visible_widget_ids(const std::string& panel_id);
+
     // -- Gate observers --
 
     /// Observe hardware gate subjects and klippy_state so that widgets

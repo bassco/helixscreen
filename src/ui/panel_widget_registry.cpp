@@ -65,7 +65,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"clog_detection",   "Clog Detection",    "water",            "Filament clog/flow detection meter",           "Clog Detection",   "clog_meter_mode",    true,  1, 1, 1, 1, 2, 2},
     {"print_stats",      "Print Stats",       "printer_3d",       "Print history statistics",                     "Print Stats",      nullptr,              false, 2, 2, 2, 1, 3, 2},
 #if HELIX_HAS_CAMERA
-    {"camera",           "Camera",            "video",            "Live webcam feed",                             "Camera",           "printer_has_webcam", false, 2, 2, 1, 1, 4, 3},
+    {"camera",           "Camera",            "video",            "Live webcam feed",                             "Camera",           nullptr,              false, 2, 2, 1, 1, 4, 3},
 #endif
     {"notifications",    "Notifications",     "notifications",    "Pending alerts and system messages",           "Notifications",    nullptr,              true,  1, 1, 1, 1, 2, 1},
 };

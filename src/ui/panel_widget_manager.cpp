@@ -531,6 +531,37 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
     return result;
 }
 
+std::vector<std::string>
+PanelWidgetManager::compute_visible_widget_ids(const std::string& panel_id) {
+    auto& widget_config = get_widget_config_impl(panel_id);
+    std::vector<std::string> ids;
+
+    for (const auto& entry : widget_config.entries()) {
+        if (!entry.enabled) {
+            continue;
+        }
+        const auto* def = find_widget_def(entry.id);
+        if (def && def->hardware_gate_subject) {
+            lv_subject_t* gate = lv_xml_get_subject(nullptr, def->hardware_gate_subject);
+            if (gate && lv_subject_get_int(gate) == 0) {
+                continue;
+            }
+        }
+        ids.push_back(entry.id);
+    }
+
+    // Conditional firmware_restart injection (same logic as populate_widgets)
+    bool has_fw_restart = std::find(ids.begin(), ids.end(), "firmware_restart") != ids.end();
+    if (!has_fw_restart) {
+        lv_subject_t* klippy = lv_xml_get_subject(nullptr, "klippy_state");
+        if (klippy && lv_subject_get_int(klippy) != static_cast<int>(KlippyState::READY)) {
+            ids.push_back("firmware_restart");
+        }
+    }
+
+    return ids;
+}
+
 void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
                                               RebuildCallback rebuild_cb) {
     using helix::ui::observe_int_sync;
@@ -540,12 +571,12 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
     gate_observers_.erase(panel_id);
     rebuild_timers_.erase(panel_id);
     auto& observers = gate_observers_[panel_id];
-    // 200ms coalesce window: during startup, multiple gate subjects fire in rapid
-    // succession as hardware is discovered (power, LED, filament, humidity, etc.).
-    // A 1ms window only coalesces within a single LVGL tick, but discovery events
-    // arrive across multiple ticks (~30ms spread in mock, potentially wider on real
-    // hardware with WebSocket latency). 200ms batches all discovery into one rebuild.
-    auto& timer = rebuild_timers_.emplace(panel_id, ui::CoalescedTimer(300)).first->second;
+    // Gate observers only fire from hardware discovery (WebSocket data from
+    // Moonraker), never from user interaction — config changes and grid edit
+    // mode bypass the coalesced timer entirely via force=true. A 2s window
+    // batches all startup discovery into a single rebuild instead of 2-3
+    // separate ones (gate subjects arrive sequentially over ~1-3s).
+    auto& timer = rebuild_timers_.emplace(panel_id, ui::CoalescedTimer(2000)).first->second;
 
     // Collect unique gate subject names from the widget registry
     std::vector<const char*> gate_names;

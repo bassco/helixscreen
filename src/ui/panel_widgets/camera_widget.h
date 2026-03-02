@@ -6,6 +6,7 @@
 #if HELIX_HAS_CAMERA
 
 #include "camera_stream.h"
+#include "observer_factory.h"
 #include "panel_widget.h"
 
 #include <memory>
@@ -34,6 +35,10 @@ class CameraWidget : public PanelWidget {
     lv_obj_t* camera_image_ = nullptr;
 
     std::unique_ptr<CameraStream> stream_;
+    bool active_ = false; // true when on_activate() has been called
+
+    // Observer for webcam availability — starts stream when URLs arrive
+    ObserverGuard webcam_observer_;
 
     // Alive guard — prevents use-after-free in queued callbacks
     std::shared_ptr<bool> alive_;

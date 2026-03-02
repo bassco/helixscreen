@@ -23,8 +23,7 @@ TEST_CASE("CameraWidget: registered in widget registry", "[camera][panel_widget]
     REQUIRE(def != nullptr);
     REQUIRE(std::string(def->display_name) == "Camera");
     REQUIRE(std::string(def->icon) == "video");
-    REQUIRE(def->hardware_gate_subject != nullptr);
-    REQUIRE(std::string(def->hardware_gate_subject) == "printer_has_webcam");
+    REQUIRE(def->hardware_gate_subject == nullptr);
     REQUIRE(def->default_enabled == false); // opt-in widget
     REQUIRE(def->colspan == 2);
     REQUIRE(def->rowspan == 2);

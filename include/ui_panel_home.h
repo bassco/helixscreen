@@ -39,8 +39,11 @@ class HomePanel : public PanelBase {
         return "home_panel";
     }
 
-    /// Rebuild the widget list from current PanelWidgetConfig
-    void populate_widgets();
+    /// Rebuild the widget list from current PanelWidgetConfig.
+    /// @param force  If false (gate observer path), skip rebuild when the
+    ///               visible widget ID list hasn't changed. If true (config
+    ///               change, grid edit mode), always rebuild.
+    void populate_widgets(bool force = true);
 
     /// Apply printer-level config (delegates to PrinterImageWidget)
     void apply_printer_config();
@@ -64,6 +67,9 @@ class HomePanel : public PanelBase {
 
     // Cached image path for skipping redundant refresh_printer_image() calls
     std::string last_printer_image_path_;
+
+    // Cached widget ID list for skipping redundant populate_widgets() rebuilds
+    std::vector<std::string> last_visible_widget_ids_;
 
     // Active PanelWidget instances (factory-created, lifecycle-managed)
     std::vector<std::unique_ptr<helix::PanelWidget>> active_widgets_;

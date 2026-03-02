@@ -1,17 +1,19 @@
 <component>
-  <view name="panel_widget_camera" width="100%" height="100%"
-        style_bg_color="#card_bg" style_bg_opa="cover" clip_corner="true"
-        style_radius="#border_radius">
+  <view name="panel_widget_camera" extends="ui_card"
+        width="100%" height="100%" style_clip_corner="true"
+        style_pad_all="0">
     <lv_image name="camera_image" width="100%" height="100%"
+              style_radius="#border_radius" style_clip_corner="true"
               style_image_recolor="#000000" style_image_recolor_opa="0"/>
     <lv_obj name="camera_overlay" align="center"
-            width="100%" height="content"
+            width="100%" height="100%"
             style_pad_all="#space_lg"
-            style_bg_opa="transp"
+            style_bg_color="#card_bg" style_bg_opa="cover"
+            style_radius="#border_radius" style_clip_corner="true"
             flex_flow="column" style_flex_cross_place="center"
             style_layout="flex" style_flex_main_place="center"
             style_gap_row="#space_sm">
-      <spinner name="camera_spinner" size="md"/>
+      <icon name="camera_icon" src="video" size="lg" variant="secondary"/>
       <text_body name="camera_status" width="100%"
                  style_text_color="#text_muted"
                  style_text_align="center"

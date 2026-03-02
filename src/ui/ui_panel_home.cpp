@@ -111,6 +111,9 @@ void HomePanel::deinit_subjects() {
     // Release gate observers BEFORE subjects are freed
     helix::PanelWidgetManager::instance().clear_gate_observers("home");
 
+    // Clear cached widget IDs so reconnects get a fresh rebuild
+    last_visible_widget_ids_.clear();
+
     // SubjectManager handles all lv_subject_deinit() calls via RAII
     subjects_.deinit_all();
     subjects_initialized_ = false;
@@ -119,10 +122,14 @@ void HomePanel::deinit_subjects() {
 
 void HomePanel::setup_widget_gate_observers() {
     auto& mgr = helix::PanelWidgetManager::instance();
-    mgr.setup_gate_observers("home", [this]() { populate_widgets(); });
+    // Gate observer rebuilds are the only path that benefits from the
+    // skip-if-unchanged optimization. Config changes and grid edit mode
+    // always need a real rebuild (positions/config may change without
+    // changing the widget ID list).
+    mgr.setup_gate_observers("home", [this]() { populate_widgets(/*force=*/false); });
 }
 
-void HomePanel::populate_widgets() {
+void HomePanel::populate_widgets(bool force) {
     if (populating_widgets_) {
         spdlog::debug("[{}] populate_widgets: already in progress, skipping", get_name());
         return;
@@ -134,6 +141,19 @@ void HomePanel::populate_widgets() {
         spdlog::error("[{}] widget_container not found", get_name());
         populating_widgets_ = false;
         return;
+    }
+
+    // Skip rebuild if the resulting widget list would be identical.
+    // Only applies to gate observer rebuilds (force=false). Config changes
+    // and grid edit mode pass force=true to always rebuild, since positions
+    // and per-widget config can change without affecting the widget ID list.
+    if (!force) {
+        auto new_ids = helix::PanelWidgetManager::instance().compute_visible_widget_ids("home");
+        if (new_ids == last_visible_widget_ids_) {
+            spdlog::debug("[{}] Widget list unchanged, skipping rebuild", get_name());
+            populating_widgets_ = false;
+            return;
+        }
     }
 
     // Detach active PanelWidget instances before clearing
@@ -175,6 +195,11 @@ void HomePanel::populate_widgets() {
             w->on_activate();
         }
     }
+
+    // Cache the visible widget IDs AFTER successful rebuild so that
+    // gate observer rebuilds can skip if the list hasn't changed.
+    last_visible_widget_ids_ =
+        helix::PanelWidgetManager::instance().compute_visible_widget_ids("home");
 
     populating_widgets_ = false;
 }
@@ -304,15 +329,21 @@ void HomePanel::ams_clicked_cb(lv_event_t* e) {
 
 void HomePanel::on_home_grid_long_press(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_long_press");
+
+    // If the user is scrolling a child widget (e.g., swiping a carousel),
+    // LVGL still fires LONG_PRESSED based on hold time alone. Ignore it —
+    // a drag/swipe should never trigger edit mode.
+    lv_indev_t* indev = lv_indev_active();
+    bool scrolling = indev && lv_indev_get_scroll_obj(indev);
+
     extern HomePanel& get_global_home_panel();
     auto& panel = get_global_home_panel();
-    if (!panel.grid_edit_mode_.is_active()) {
+    if (scrolling) {
+        // Swipe in progress — don't enter or interact with edit mode
+    } else if (!panel.grid_edit_mode_.is_active()) {
         // Cancel the in-progress press to prevent the widget's click action
         // from firing on release. Also clears PRESSED state from tracked objects.
-        lv_indev_t* indev = lv_indev_active();
-        if (indev) {
-            lv_indev_reset(indev, nullptr);
-        }
+        if (indev) lv_indev_reset(indev, nullptr);
         // Clear PRESSED state from all descendants — the pressed button
         // may be deeply nested inside a widget (e.g., print_status card).
         auto* wc = lv_obj_find_by_name(panel.panel_, "widget_container");

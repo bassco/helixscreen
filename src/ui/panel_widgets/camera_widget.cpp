@@ -27,7 +27,7 @@ static void camera_widget_init_subjects() {
     }
 
     lv_subject_init_string(&s_camera_status_subject, s_camera_status_buffer, nullptr,
-                           sizeof(s_camera_status_buffer), "No camera");
+                           sizeof(s_camera_status_buffer), "No Camera");
     lv_xml_register_subject(nullptr, "camera_status_text", &s_camera_status_subject);
     SubjectDebugRegistry::instance().register_subject(&s_camera_status_subject,
                                                       "camera_status_text",
@@ -64,27 +64,35 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* /*parent_screen*/) {
 
     lv_obj_set_user_data(widget_obj_, this);
 
-    // Widget is only shown when printer_has_webcam > 0 (registry gate),
-    // so if we're attached, a webcam is configured
-    auto& state = get_printer_state();
-    bool has_urls = !state.get_webcam_stream_url().empty() || !state.get_webcam_snapshot_url().empty();
-
-    if (has_urls) {
-        set_status_text("Connecting...");
-    } else {
-        set_status_text("No camera");
+    // Observe printer_has_webcam — URLs may not be available yet at attach
+    // time (Moonraker sends webcam list asynchronously). When the subject
+    // transitions to 1, try starting the stream if we're active.
+    lv_subject_t* gate = lv_xml_get_subject(nullptr, "printer_has_webcam");
+    if (gate) {
+        webcam_observer_ = helix::ui::observe_int_sync<CameraWidget>(gate, this, [](CameraWidget* self, int val) {
+            if (val > 0) {
+                self->set_status_text("Connecting Camera...");
+                if (self->active_) {
+                    self->start_stream();
+                }
+            } else {
+                self->stop_stream();
+                self->set_status_text("No Camera");
+            }
+        });
     }
 
-    spdlog::debug("[CameraWidget] Attached (has_urls={})", has_urls);
+    spdlog::debug("[CameraWidget] Attached");
 }
 
 void CameraWidget::detach() {
-    *alive_ = false;
-    stop_stream();
-
-    if (camera_image_ && lv_is_initialized() && lv_obj_is_valid(camera_image_)) {
-        lv_image_set_src(camera_image_, nullptr);
+    if (!widget_obj_) {
+        return; // Already detached or never attached
     }
+
+    active_ = false;
+    webcam_observer_.reset();
+    stop_stream(); // Owns alive_ invalidation and reset
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -92,17 +100,16 @@ void CameraWidget::detach() {
     }
     camera_image_ = nullptr;
 
-    // Reset alive guard for potential reuse
-    alive_ = std::make_shared<bool>(true);
-
     spdlog::debug("[CameraWidget] Detached");
 }
 
 void CameraWidget::on_activate() {
+    active_ = true;
     start_stream();
 }
 
 void CameraWidget::on_deactivate() {
+    active_ = false;
     stop_stream();
 }
 
@@ -125,7 +132,7 @@ void CameraWidget::start_stream() {
     std::string snapshot_url = state.get_webcam_snapshot_url();
 
     if (stream_url.empty() && snapshot_url.empty()) {
-        set_status_text("No camera URL");
+        // URLs not available yet — observer will retry when they arrive
         return;
     }
 
@@ -166,7 +173,7 @@ void CameraWidget::start_stream() {
         spdlog::warn("[CameraWidget] No MoonrakerAPI available for URL resolution");
     }
 
-    set_status_text("Connecting...");
+    set_status_text("Connecting Camera...");
 
     stream_ = std::make_unique<CameraStream>();
     stream_->set_flip(state.get_webcam_flip_horizontal(), state.get_webcam_flip_vertical());
@@ -215,24 +222,27 @@ void CameraWidget::start_stream() {
 }
 
 void CameraWidget::stop_stream() {
-    if (stream_) {
-        // Invalidate alive guard FIRST — queued UI callbacks check this and
-        // become no-ops, preventing use-after-free on freed draw buffers
-        *alive_ = false;
-
-        // Clear image source before stopping — stop() frees the draw buffers
-        // that LVGL may still reference for rendering
-        if (camera_image_ && lv_is_initialized()) {
-            lv_image_set_src(camera_image_, nullptr);
-        }
-        stream_->stop();
-        stream_.reset();
-
-        // Reset alive guard so the stream can be restarted (on_activate)
-        alive_ = std::make_shared<bool>(true);
-
-        spdlog::debug("[CameraWidget] Stream stopped");
+    if (!stream_) {
+        return;
     }
+
+    // Invalidate alive guard FIRST — queued UI callbacks check this and
+    // become no-ops, preventing use-after-free on freed draw buffers
+    *alive_ = false;
+
+    // Clear image source before stopping — stop() frees the draw buffers
+    // that LVGL may still reference for rendering
+    if (camera_image_ && lv_is_initialized()) {
+        lv_image_set_src(camera_image_, nullptr);
+    }
+
+    stream_->stop();
+    stream_.reset();
+
+    // Reset alive guard so the stream can be restarted (on_activate)
+    alive_ = std::make_shared<bool>(true);
+
+    spdlog::debug("[CameraWidget] Stream stopped");
 }
 
 void CameraWidget::set_status_text(const char* text) {
