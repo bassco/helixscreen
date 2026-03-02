@@ -23,7 +23,7 @@ Config restructured from flat `/printer/` to `/printers/{id}/` object map.
 - StaticSubjectRegistry/StaticPanelRegistry: added `clear()` for soft restart
 - 13 new test cases, all ~70 existing call sites updated
 
-**Known issue:** 11 LED config test failures from path changes (test_led_config.cpp needs updating)
+**Known issue:** ~~11 LED config test failures from path changes~~ Fixed in `490027e8`.
 
 ## Phase 2: Soft Restart Machinery — COMPLETE
 
@@ -102,12 +102,40 @@ Config restructured from flat `/printer/` to `/printers/{id}/` object map.
 5. Subject corruption from stale XML subject registry pointers (lv_xml.c)
 6. Dangling `api_` in `LedController::discover_wled_strips`
 
-## Phase 3: UI Integration — NOT STARTED
+## Phase 3: UI Integration — COMPLETE
 
-- Printer manager overlay/modal (list printers, add/remove, switch)
-- Printer name display in navbar or home panel
-- Wizard integration for adding new printers
-- Connection status per-printer
+**Commits:** `0eb78cf7`..`6d1a07be` (7 commits)
+**Design:** `docs/devel/plans/2026-03-01-multi-printer-phase3-ui-design.md`
+
+Navbar printer badge with context menu for quick switching between configured printers.
+
+### What Was Built
+
+- **Navbar printer icon** — `printer_3d` icon at bottom of navbar, visible only when >1 printer configured. Connection status dot (green/yellow/red) overlaid at top-right corner. Bound to `multi_printer_enabled` subject.
+- **PrinterSwitchMenu** — `ContextMenu` subclass with dynamic printer list. Active printer shown with MDI `check` icon. Tapping a different printer calls `switch_printer()` → soft restart. Backdrop click dismisses.
+- **"+ Add Printer"** — Creates empty config entry, soft restarts into wizard. Wizard completion callback clears the temporary state.
+- **Subjects** — `active_printer_name` (string) and `multi_printer_enabled` (int) registered globally, set during `init_printer_state()`.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `include/ui_printer_switch_menu.h` | `PrinterSwitchMenu` class (extends `ContextMenu`) |
+| `src/ui/ui_printer_switch_menu.cpp` | Dynamic row creation, switch/add callbacks |
+| `ui_xml/printer_switch_menu.xml` | Context menu XML layout |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `include/printer_state.h` | Added `active_printer_name_` and `multi_printer_enabled_` subjects |
+| `src/printer/printer_state.cpp` | Subject init/deinit/setters |
+| `ui_xml/navigation_bar.xml` | Printer badge `ui_button` with icon + status dot |
+| `include/ui_nav_manager.h` | Menu member, dot observer, badge click handler |
+| `src/ui/ui_nav_manager.cpp` | Badge click → menu, connection dot color observer |
+| `src/application/application.cpp` | `add_printer_via_wizard()`, subject wiring, P key test helper |
+| `include/application.h` | `add_printer_via_wizard()` declaration |
+| `src/xml_registration.cpp` | Register component + callbacks |
 
 ## Phase 4: Discovery & Auto-Add — NOT STARTED
 
@@ -130,4 +158,6 @@ make -j                                          # Build
 
 - Add collision detection to `Config::add_printer()` slugify
 - Tests for soft restart cycle (observer cleanup, queue lifecycle)
-- Fix 11 LED config test failures from v3 path changes
+- ~~Fix 11 LED config test failures from v3 path changes~~ Fixed
+- Wizard cancel recovery (remove empty printer entry, restore previous)
+- Printer removal UI in Settings
