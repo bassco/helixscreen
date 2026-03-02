@@ -324,6 +324,24 @@ class NavigationManager {
      */
     void set_printer_callbacks(PrinterSwitchCallback switch_cb, AddPrinterCallback add_cb);
 
+    /**
+     * @brief Trigger a printer switch via the registered callback
+     *
+     * Used by overlays (PrinterListOverlay) that need to trigger printer switching
+     * without depending on Application directly.
+     *
+     * @param printer_id The printer ID to switch to
+     */
+    void trigger_printer_switch(const std::string& printer_id);
+
+    /**
+     * @brief Trigger the add-printer wizard via the registered callback
+     *
+     * Used by overlays (PrinterListOverlay) that need to launch the setup wizard
+     * without depending on Application directly.
+     */
+    void trigger_add_printer();
+
   private:
     // Private constructor/destructor for singleton
     NavigationManager() = default;

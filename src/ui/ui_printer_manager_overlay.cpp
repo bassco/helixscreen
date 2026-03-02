@@ -5,6 +5,7 @@
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_fan_control_overlay.h"
+#include "ui_printer_list_overlay.h"
 #include "ui_keyboard_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_overlay_printer_image.h"
@@ -263,8 +264,9 @@ void PrinterManagerOverlay::pm_manage_printers_clicked_cb(lv_event_t* /*e*/) {
 }
 
 void PrinterManagerOverlay::handle_manage_printers_clicked() {
-    spdlog::info("[{}] Manage Printers clicked", get_name());
-    // TODO: Push PrinterListOverlay (Task 4)
+    spdlog::info("[{}] Manage Printers clicked — opening printer list", get_name());
+    auto& overlay = helix::ui::get_printer_list_overlay();
+    overlay.show(lv_display_get_screen_active(nullptr));
 }
 
 // =============================================================================

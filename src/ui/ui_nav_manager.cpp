@@ -1499,6 +1499,22 @@ void NavigationManager::set_printer_callbacks(PrinterSwitchCallback switch_cb,
     add_printer_cb_ = std::move(add_cb);
 }
 
+void NavigationManager::trigger_printer_switch(const std::string& printer_id) {
+    if (printer_switch_cb_) {
+        printer_switch_cb_(printer_id);
+    } else {
+        spdlog::warn("[NavigationManager] No printer switch callback registered");
+    }
+}
+
+void NavigationManager::trigger_add_printer() {
+    if (add_printer_cb_) {
+        add_printer_cb_();
+    } else {
+        spdlog::warn("[NavigationManager] No add printer callback registered");
+    }
+}
+
 void NavigationManager::on_printer_badge_clicked() {
     if (printer_switch_menu_.is_visible()) {
         printer_switch_menu_.hide();
