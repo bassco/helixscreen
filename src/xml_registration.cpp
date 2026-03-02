@@ -332,6 +332,7 @@ void register_xml_components() {
     register_xml("job_queue_modal.xml");
     register_xml("thermistor_sensor_picker.xml");
     register_xml("favorite_macro_picker.xml");
+    register_xml("printer_switch_menu.xml");
     register_xml("macro_param_modal.xml");
 
     // Main navigation and panels
