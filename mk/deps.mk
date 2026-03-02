@@ -88,9 +88,6 @@ install-deps:
 			libpng:brew) echo "libpng";; \
 			libpng:apt) echo "libpng-dev";; \
 			libpng:dnf) echo "libpng-devel";; \
-			libjpeg:brew) echo "jpeg";; \
-			libjpeg:apt) echo "libjpeg-dev";; \
-			libjpeg:dnf) echo "libjpeg-turbo-devel";; \
 			librsvg:brew) echo "librsvg";; \
 			librsvg:apt) echo "librsvg2-dev";; \
 			librsvg:dnf) echo "librsvg2-devel";; \
@@ -150,9 +147,6 @@ install-deps:
 		fi; \
 		if ! pkg-config --exists libpng 2>/dev/null; then \
 			INSTALL_NEEDED=1; TO_INSTALL="$$TO_INSTALL $$(add_pkg libpng)"; \
-		fi; \
-		if ! pkg-config --exists libjpeg 2>/dev/null; then \
-			INSTALL_NEEDED=1; TO_INSTALL="$$TO_INSTALL $$(add_pkg libjpeg)"; \
 		fi; \
 		if ! pkg-config --exists librsvg-2.0 2>/dev/null; then \
 			INSTALL_NEEDED=1; TO_INSTALL="$$TO_INSTALL $$(add_pkg librsvg)"; \

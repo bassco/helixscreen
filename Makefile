@@ -492,7 +492,7 @@ STB_INC := -isystem lib/stb
 INCLUDES := -I. -I$(INC_DIR) -Isrc/generated -I$(BUILD_DIR)/generated -isystem lib -isystem lib/glm $(LVGL_INC) $(LIBHV_INC) $(SPDLOG_INC) $(STB_INC) $(LV_MARKDOWN_INC) $(WPA_INC) $(SDL2_INC)
 
 # Common linker flags (used by both macOS and Linux)
-LDFLAGS_COMMON := $(SDL2_LIBS) $(LIBHV_LIBS) $(FMT_LIBS) -ljpeg -lz -lm -lpthread
+LDFLAGS_COMMON := $(SDL2_LIBS) $(LIBHV_LIBS) $(FMT_LIBS) -lz -lm -lpthread
 
 # Platform-specific configuration
 # Cross-compilation targets (pi, ad5m, k1) are Linux-based embedded systems
@@ -522,7 +522,7 @@ ifneq ($(CROSS_COMPILE),)
         # K2 uses musl - fully static, no system library paths needed (same as K1)
         LDFLAGS := $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) -ldl -lz -lm -lpthread
     else
-        LDFLAGS := -L/usr/lib/$(TARGET_TRIPLE) $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) $(SYSTEMD_LIBS) -ljpeg -ldl -lz -lm -lpthread
+        LDFLAGS := -L/usr/lib/$(TARGET_TRIPLE) $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) $(SYSTEMD_LIBS) -ldl -lz -lm -lpthread
     endif
     ifeq ($(ENABLE_SSL),yes)
         ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both,$(PLATFORM_TARGET)))
