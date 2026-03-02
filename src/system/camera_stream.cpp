@@ -58,25 +58,23 @@ void CameraStream::start(const std::string& stream_url, const std::string& snaps
 }
 
 void CameraStream::stop() {
-    if (!running_.load()) {
-        return;
-    }
+    bool was_running = running_.exchange(false);
 
-    spdlog::info("[CameraStream] Stopping");
-    running_.store(false);
+    if (was_running) {
+        spdlog::info("[CameraStream] Stopping");
 
-    // Cancel any in-flight HTTP request to unblock the stream thread
-    {
-        std::lock_guard<std::mutex> lock(req_mutex_);
-        if (active_req_) {
-            active_req_->Cancel();
+        // Cancel any in-flight HTTP request to unblock the stream thread
+        {
+            std::lock_guard<std::mutex> lock(req_mutex_);
+            if (active_req_) {
+                active_req_->Cancel();
+            }
         }
     }
 
-    // Timed join — don't block shutdown indefinitely if HTTP is stuck.
-    // Use shared_ptr for `joined` flag because on timeout we detach the
-    // join_helper thread — it outlives this scope and must not write to
-    // a stack local (use-after-free).
+    // Always join/detach a joinable thread — even if running_ was already
+    // false (e.g. called from ~CameraStream after an earlier stop()).
+    // Destroying a joinable std::thread calls std::terminate().
     if (stream_thread_.joinable()) {
         auto joined = std::make_shared<std::atomic<bool>>(false);
         std::thread join_helper([this, joined]() {
@@ -103,11 +101,13 @@ void CameraStream::stop() {
         }
     }
 
-    free_buffers();
-    recv_buf_.clear();
-    boundary_.clear();
-    on_frame_ = nullptr;
-    on_error_ = nullptr;
+    if (was_running) {
+        free_buffers();
+        recv_buf_.clear();
+        boundary_.clear();
+        on_frame_ = nullptr;
+        on_error_ = nullptr;
+    }
 }
 
 bool CameraStream::is_running() const {
@@ -157,12 +157,20 @@ void CameraStream::stream_thread_func() {
     recv_buf_.clear();
     recv_buf_.reserve(256 * 1024);
     boundary_.clear();
+    got_stream_data_.store(false);
+    bool ever_connected = false;
 
     while (running_.load() && stream_fail_count_ < kMaxStreamFailures) {
         auto req = std::make_shared<HttpRequest>();
         req->method = HTTP_GET;
         req->url = stream_url_;
-        req->timeout = kStreamTimeoutSec;
+        // Short timeout until the first successful connection, then long
+        // timeout for the persistent stream. MJPEG responses are infinite —
+        // the timeout just drives periodic reconnection.
+        int timeout = ever_connected ? kStreamTimeoutSec : kStreamConnectTimeoutSec;
+        req->timeout = timeout;
+        spdlog::debug("[CameraStream] Attempting stream connection to {} (timeout={}s, attempt={})",
+                      stream_url_, timeout, stream_fail_count_ + 1);
 
         // Store the request for cancellation by stop()
         {
@@ -189,6 +197,8 @@ void CameraStream::stream_thread_func() {
                 boundary_ = parse_boundary(content_type);
                 if (boundary_.empty()) {
                     spdlog::warn("[CameraStream] No boundary in Content-Type: {}", content_type);
+                } else {
+                    got_stream_data_.store(true);
                 }
                 spdlog::debug("[CameraStream] Stream connected, boundary='{}'", boundary_);
             } else if (state == HP_BODY) {
@@ -227,23 +237,32 @@ void CameraStream::stream_thread_func() {
             }
         }
 
-        // Evaluate success: if we got frames, reset fail count
+        // Evaluate success: MJPEG streams are infinite so requests::request()
+        // always returns with status=-1 (timeout). If http_cb received data,
+        // the stream was healthy — the timeout just ended a streaming session.
+        bool had_data = got_stream_data_.load();
         bool got_response = resp && resp->status_code >= 200 && resp->status_code < 300;
-        if (!got_response) {
+
+        if (had_data) {
+            // Stream was flowing — timeout is normal, not a failure
+            spdlog::debug("[CameraStream] Stream session ended (received data, reconnecting)");
+            stream_fail_count_ = 0;
+            ever_connected = true;
+        } else if (!got_response) {
             spdlog::warn("[CameraStream] Stream request failed (status={})",
                          resp ? static_cast<int>(resp->status_code) : -1);
             stream_fail_count_++;
         } else if (boundary_.empty()) {
-            // Got response but no boundary — not a proper MJPEG stream
+            // Got HTTP 200 but no multipart boundary — not an MJPEG stream
             stream_fail_count_++;
         } else {
-            // Successful stream session (timed out or disconnected normally)
             stream_fail_count_ = 0;
         }
 
         // Clear partial data before reconnecting
         recv_buf_.clear();
         boundary_.clear();
+        got_stream_data_.store(false);
 
         if (running_.load() && stream_fail_count_ < kMaxStreamFailures) {
             // Brief backoff before reconnecting
