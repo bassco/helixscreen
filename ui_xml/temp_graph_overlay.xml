@@ -8,7 +8,7 @@
     <!-- Content area: graph+chips left, controls right (side-by-side) -->
     <lv_obj name="overlay_content"
             width="100%" flex_grow="1"
-            style_pad_all="#space_lg"
+            style_pad_all="#space_lg" style_pad_top="0"
             scrollable="false" style_border_opa="0"
             flex_flow="row" style_flex_main_place="space_between">
       <!-- Disable content when printer not connected or klippy not ready -->

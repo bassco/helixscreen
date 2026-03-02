@@ -114,6 +114,10 @@ class PrinterDiscovery {
                 sensors_.push_back(name);
                 fans_.push_back(name); // Also add to fans for control
             }
+            // TMC stepper drivers with built-in temperature (tmc2240, tmc5160)
+            else if (name.rfind("tmc2240 ", 0) == 0 || name.rfind("tmc5160 ", 0) == 0) {
+                sensors_.push_back(name);
+            }
             // ================================================================
             // Fans: fan, heater_fan, fan_generic, controller_fan
             // ================================================================

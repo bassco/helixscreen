@@ -83,6 +83,10 @@ void TemperatureSensorManager::discover(const std::vector<std::string>& klipper_
                    sensor_name.find("raspberry") != std::string::npos) {
             config.role = TemperatureSensorRole::HOST;
             config.priority = 20;
+        } else if (klipper_name.rfind("tmc2240 ", 0) == 0 ||
+                   klipper_name.rfind("tmc5160 ", 0) == 0) {
+            config.role = TemperatureSensorRole::STEPPER_DRIVER;
+            config.priority = 30;
         } else {
             config.role = TemperatureSensorRole::AUXILIARY;
             config.priority = 100;
@@ -193,8 +197,8 @@ void TemperatureSensorManager::update_from_status(const nlohmann::json& status) 
             auto& state = states_[sensor.klipper_name];
             TemperatureSensorState old_state = state;
 
-            // Update temperature
-            if (sensor_data.contains("temperature")) {
+            // Update temperature (skip null values from drivers without temp sensing)
+            if (sensor_data.contains("temperature") && !sensor_data["temperature"].is_null()) {
                 state.temperature = sensor_data["temperature"].get<float>();
             }
 
@@ -247,8 +251,10 @@ void TemperatureSensorManager::inject_mock_sensors(std::vector<std::string>& obj
     objects.emplace_back("temperature_sensor raspberry_pi");
     objects.emplace_back("temperature_sensor chamber_temp");
     objects.emplace_back("temperature_fan exhaust_fan");
+    objects.emplace_back("tmc2240 stepper_x");
+    objects.emplace_back("tmc2240 stepper_y");
     spdlog::debug("[TemperatureSensorManager] Injected mock sensors: mcu_temp, raspberry_pi, "
-                  "chamber_temp, exhaust_fan");
+                  "chamber_temp, exhaust_fan, tmc2240 stepper_x/y");
 }
 
 void TemperatureSensorManager::inject_mock_status(nlohmann::json& status) {
@@ -257,6 +263,8 @@ void TemperatureSensorManager::inject_mock_status(nlohmann::json& status) {
     status["temperature_sensor chamber_temp"] = {{"temperature", 35.0f}};
     status["temperature_fan exhaust_fan"] = {
         {"temperature", 38.5f}, {"target", 40.0f}, {"speed", 0.65f}};
+    status["tmc2240 stepper_x"] = {{"temperature", 62.4f}};
+    status["tmc2240 stepper_y"] = {{"temperature", 68.1f}};
 }
 
 void TemperatureSensorManager::load_config(const nlohmann::json& config) {
@@ -512,6 +520,16 @@ bool TemperatureSensorManager::parse_klipper_name(const std::string& klipper_nam
         sensor_name = klipper_name.substr(temp_fan_prefix.length());
         type = TemperatureSensorType::TEMPERATURE_FAN;
         return true;
+    }
+
+    // TMC stepper drivers with built-in temperature sensing
+    static const std::string tmc_prefixes[] = {"tmc2240 ", "tmc5160 "};
+    for (const auto& prefix : tmc_prefixes) {
+        if (klipper_name.rfind(prefix, 0) == 0) {
+            sensor_name = klipper_name.substr(prefix.length());
+            type = TemperatureSensorType::TEMPERATURE_SENSOR;
+            return true;
+        }
     }
 
     return false;

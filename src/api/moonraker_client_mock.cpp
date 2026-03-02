@@ -638,7 +638,8 @@ void MoonrakerClientMock::populate_hardware() {
         discovery_.sensors() = {"heater_bed", // Bed thermistor (Klipper naming: bare heater name)
                                 "extruder", // Hotend thermistor (Klipper naming: bare heater name)
                                 "temperature_sensor chamber", "temperature_sensor raspberry_pi",
-                                "temperature_sensor mcu_temp"};
+                                "temperature_sensor mcu_temp",
+                                "tmc2240 stepper_x", "tmc2240 stepper_y"};
         discovery_.fans() = {"heater_fan hotend_fan",
                              "fan", // Part cooling fan
                              "fan_generic nevermore", "controller_fan controller_fan"};
@@ -654,7 +655,8 @@ void MoonrakerClientMock::populate_hardware() {
                                 "temperature_sensor chamber",
                                 "temperature_sensor raspberry_pi",
                                 "temperature_sensor mcu_temp",
-                                "temperature_sensor z_thermal_adjust"};
+                                "temperature_sensor z_thermal_adjust",
+                                "tmc2240 stepper_x", "tmc2240 stepper_y"};
         discovery_.fans() = {"heater_fan hotend_fan", "fan", "fan_generic exhaust_fan",
                              "controller_fan electronics_fan"};
         discovery_.leds() = {"neopixel sb_leds", "neopixel chamber_leds"};
@@ -2823,6 +2825,10 @@ void MoonrakerClientMock::dispatch_initial_state() {
             initial_status[s] = {{"temperature", temp}};
         } else if (s.rfind("temperature_fan ", 0) == 0) {
             initial_status[s] = {{"temperature", 35.0}, {"target", 40.0}, {"speed", 0.0}};
+        } else if (s.rfind("tmc2240 ", 0) == 0 || s.rfind("tmc5160 ", 0) == 0) {
+            // TMC stepper drivers with built-in temperature
+            double temp = 55.0 + (std::hash<std::string>{}(s) % 20);
+            initial_status[s] = {{"temperature", temp}};
         }
     }
 
@@ -3558,6 +3564,11 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 // Temperature fans have temp, target, and speed
                 double temp = 35.0 + 3.0 * std::sin(2.0 * M_PI * sim_time / 80.0);
                 status_obj[s] = {{"temperature", temp}, {"target", 40.0}, {"speed", 0.5}};
+            } else if (s.rfind("tmc2240 ", 0) == 0 || s.rfind("tmc5160 ", 0) == 0) {
+                // TMC stepper drivers: drift around a base temp per-driver
+                double base = 55.0 + (std::hash<std::string>{}(s) % 20);
+                double temp = base + 3.0 * std::sin(2.0 * M_PI * sim_time / 120.0);
+                status_obj[s] = {{"temperature", temp}};
             }
         }
 

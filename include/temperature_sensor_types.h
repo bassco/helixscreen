@@ -13,7 +13,8 @@ enum class TemperatureSensorRole {
     CHAMBER = 1,   ///< Chamber temperature monitoring
     MCU = 2,       ///< MCU/board temperature
     HOST = 3,      ///< Host computer (Raspberry Pi, etc.)
-    AUXILIARY = 4, ///< Any other temperature sensor
+    AUXILIARY = 4,       ///< Any other temperature sensor
+    STEPPER_DRIVER = 5,  ///< TMC stepper driver built-in temperature
 };
 
 /// @brief Type of temperature sensor in Klipper
@@ -63,6 +64,8 @@ struct TemperatureSensorState {
         return "host";
     case TemperatureSensorRole::AUXILIARY:
         return "auxiliary";
+    case TemperatureSensorRole::STEPPER_DRIVER:
+        return "stepper_driver";
     default:
         return "none";
     }
@@ -80,6 +83,8 @@ struct TemperatureSensorState {
         return TemperatureSensorRole::HOST;
     if (str == "auxiliary")
         return TemperatureSensorRole::AUXILIARY;
+    if (str == "stepper_driver")
+        return TemperatureSensorRole::STEPPER_DRIVER;
     return TemperatureSensorRole::NONE;
 }
 
@@ -98,6 +103,8 @@ struct TemperatureSensorState {
         return "Host";
     case TemperatureSensorRole::AUXILIARY:
         return "Auxiliary";
+    case TemperatureSensorRole::STEPPER_DRIVER:
+        return "Stepper Driver";
     default:
         return "Unassigned";
     }
