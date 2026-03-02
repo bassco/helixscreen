@@ -203,8 +203,10 @@ else ifeq ($(PLATFORM_TARGET),ad5m)
     # -Wno-error=conversion: LVGL headers have int32_t->float conversions that GCC flags
     # -DHELIX_RELEASE_BUILD: Disables debug features like LV_USE_ASSERT_STYLE
     # NOTE: AD5M framebuffer is 32bpp (ARGB8888), as is lv_conf.h (LV_COLOR_DEPTH=32)
+    # -funwind-tables: Emit ARM unwind info (.ARM.exidx) so backtrace() can walk
+    # the full call stack in crash reports. ~5-10% code size, zero runtime cost.
     TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a7 \
-        -Os -flto -ffunction-sections -fdata-sections \
+        -Os -flto -ffunction-sections -fdata-sections -funwind-tables \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_AD5M
     # -Wl,--gc-sections: Remove unused sections during linking (works with -ffunction-sections)
     # -flto: Must match compiler flag for LTO to work

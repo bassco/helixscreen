@@ -75,6 +75,7 @@ void CameraStream::stop() {
     // Always join/detach a joinable thread — even if running_ was already
     // false (e.g. called from ~CameraStream after an earlier stop()).
     // Destroying a joinable std::thread calls std::terminate().
+    bool thread_joined = true;
     if (stream_thread_.joinable()) {
         auto joined = std::make_shared<std::atomic<bool>>(false);
         std::thread join_helper([this, joined]() {
@@ -91,6 +92,7 @@ void CameraStream::stop() {
                 spdlog::warn("[CameraStream] Stream thread join timed out, detaching");
                 join_helper.detach();
                 stream_thread_.detach();
+                thread_joined = false;
                 break;
             }
             std::this_thread::sleep_for(kPollInterval);
@@ -102,7 +104,20 @@ void CameraStream::stop() {
     }
 
     if (was_running) {
-        free_buffers();
+        if (thread_joined) {
+            // Safe to free — stream thread has exited
+            free_buffers();
+        } else {
+            // Stream thread still running — leak buffers to avoid UAF.
+            // They are small (~1.8MB for 640x480 double buffer) and this
+            // only happens when the camera connection is stuck on shutdown.
+            spdlog::warn("[CameraStream] Leaking draw buffers (stream thread still running)");
+            front_buf_ = nullptr;
+            back_buf_ = nullptr;
+            retired_bufs_.clear();
+            frame_width_ = 0;
+            frame_height_ = 0;
+        }
         recv_buf_.clear();
         boundary_.clear();
         on_frame_ = nullptr;
@@ -153,6 +168,7 @@ std::string CameraStream::parse_boundary(const std::string& content_type) {
 // ============================================================================
 
 void CameraStream::stream_thread_func() {
+    try {
     spdlog::debug("[CameraStream] Stream thread started for {}", stream_url_);
     recv_buf_.clear();
     recv_buf_.reserve(256 * 1024);
@@ -288,6 +304,15 @@ void CameraStream::stream_thread_func() {
     }
 
     spdlog::debug("[CameraStream] Stream thread exiting");
+    } catch (const std::bad_alloc& e) {
+        spdlog::error("[CameraStream] Out of memory in stream thread: {}", e.what());
+        recv_buf_.clear();
+        recv_buf_.shrink_to_fit();
+        if (on_error_) on_error_("Out of memory");
+    } catch (const std::exception& e) {
+        spdlog::error("[CameraStream] Uncaught exception in stream thread: {}", e.what());
+        if (on_error_) on_error_(e.what());
+    }
 }
 
 // ============================================================================

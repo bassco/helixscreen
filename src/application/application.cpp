@@ -284,10 +284,11 @@ int Application::run(int argc, char** argv) {
         }
 
         if (recent_timestamps.size() >= MAX_CRASH_RESTARTS) {
-            spdlog::warn("[Application] Crash loop detected: {} restarts within {}s, "
-                         "resetting counter",
-                         recent_timestamps.size(), CRASH_WINDOW_SEC);
+            spdlog::error("[Application] Crash loop detected: {} restarts within {}s — "
+                          "halting to prevent infinite restart loop",
+                          recent_timestamps.size(), CRASH_WINDOW_SEC);
             std::filesystem::remove(CRASH_MARKER_PATH);
+            return 1;
         } else {
             // Write filtered timestamps plus current restart
             std::ofstream out(CRASH_MARKER_PATH, std::ios::trunc);
