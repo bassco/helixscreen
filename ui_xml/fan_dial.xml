@@ -25,7 +25,8 @@
     <lv_obj name="dial_container"
             width="100%" flex_grow="1"
             style_pad_all="0" style_pad_top="#space_sm" scrollable="false"
-            style_flex_main_place="center" style_flex_cross_place="center">
+            style_flex_main_place="center" style_flex_cross_place="center"
+            style_clip_content="true">
       <!-- 270-degree arc dial (size set dynamically by C++ SIZE_CHANGED callback) -->
       <lv_arc name="dial_arc"
               align="center"

@@ -3,6 +3,8 @@
 
 #include "ui_fan_arc_resize.h"
 
+#include "theme_manager.h"
+
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
@@ -33,11 +35,13 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     // Force layout computation so flex_grow children have real sizes
     lv_obj_update_layout(card_root);
 
-    int32_t content_w = lv_obj_get_content_width(card_root);
+    int32_t content_w = lv_obj_get_content_width(container);
     int32_t container_h = lv_obj_get_content_height(container);
 
-    // Arc must be square, fit in both dimensions
-    int32_t arc_size = LV_MIN(content_w, container_h);
+    // Arc must be square, fit in both dimensions with responsive inset
+    int32_t inset = theme_manager_get_spacing("space_xl");
+    int32_t available = LV_MIN(content_w, container_h);
+    int32_t arc_size = available - inset * 2;
     arc_size = LV_MAX(arc_size, MIN_ARC_SIZE);
 
     // Skip if already at target size (avoids re-entrancy from child layout changes)
