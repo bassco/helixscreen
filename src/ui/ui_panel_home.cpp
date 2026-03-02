@@ -8,6 +8,7 @@
 #include "ui_nav_manager.h"
 #include "ui_panel_ams.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "ams_state.h"
 #include "app_globals.h"
@@ -21,7 +22,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include <functional>
 #include <memory>
 
 using namespace helix;
@@ -37,15 +37,9 @@ static void set_event_bubble_recursive(lv_obj_t* obj) {
     }
 }
 
-/// Recursively remove CLICKABLE flag from all descendants.
-static void disable_widget_clicks_recursive(lv_obj_t* obj) {
-    uint32_t count = lv_obj_get_child_count(obj);
-    for (uint32_t i = 0; i < count; ++i) {
-        lv_obj_t* child = lv_obj_get_child(obj, static_cast<int32_t>(i));
-        lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
-        disable_widget_clicks_recursive(child);
-    }
-}
+// disable_widget_clicks_recursive() and clear_pressed_state_recursive() are in ui_utils.h
+using helix::ui::clear_pressed_state_recursive;
+using helix::ui::disable_widget_clicks_recursive;
 
 HomePanel::HomePanel(PrinterState& printer_state, MoonrakerAPI* api)
     : PanelBase(printer_state, api) {
@@ -226,6 +220,9 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     helix::PanelWidgetManager::instance().register_rebuild_callback(
         "home", [this]() { populate_widgets(); });
 
+    // Set grid edit mode rebuild callback once (used when edit mode rearranges widgets)
+    grid_edit_mode_.set_rebuild_callback([this]() { populate_widgets(); });
+
     // Widgets handle their own initialization via version observers
     // (no explicit config reload needed)
 
@@ -314,7 +311,6 @@ void HomePanel::handle_ams_clicked() {
 void HomePanel::printer_status_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] printer_status_clicked_cb");
     (void)e;
-    extern HomePanel& get_global_home_panel();
     get_global_home_panel().handle_printer_status_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -322,62 +318,56 @@ void HomePanel::printer_status_clicked_cb(lv_event_t* e) {
 void HomePanel::ams_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] ams_clicked_cb");
     (void)e;
-    extern HomePanel& get_global_home_panel();
     get_global_home_panel().handle_ams_clicked();
     LVGL_SAFE_EVENT_CB_END();
+}
+
+/// Returns true if the active input device is currently scrolling an object
+/// (e.g., user is swiping a carousel). Used to suppress edit mode interactions
+/// during drag/swipe gestures — LVGL fires LONG_PRESSED, PRESSING, etc.
+/// based purely on hold duration, regardless of finger movement.
+static bool is_indev_scrolling() {
+    lv_indev_t* indev = lv_indev_active();
+    return indev && lv_indev_get_scroll_obj(indev);
 }
 
 void HomePanel::on_home_grid_long_press(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_long_press");
 
-    // If the user is scrolling a child widget (e.g., swiping a carousel),
-    // LVGL still fires LONG_PRESSED based on hold time alone. Ignore it —
-    // a drag/swipe should never trigger edit mode.
-    lv_indev_t* indev = lv_indev_active();
-    bool scrolling = indev && lv_indev_get_scroll_obj(indev);
+    // A drag/swipe should never trigger or interact with edit mode.
+    // LVGL fires LONG_PRESSED based purely on hold duration, regardless
+    // of finger movement, so we must explicitly check for scroll state.
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (!panel.grid_edit_mode_.is_active()) {
+            // Cancel the in-progress press to prevent the widget's click
+            // action from firing on release.
+            lv_indev_t* indev = lv_indev_active();
+            if (indev) lv_indev_reset(indev, nullptr);
 
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (scrolling) {
-        // Swipe in progress — don't enter or interact with edit mode
-    } else if (!panel.grid_edit_mode_.is_active()) {
-        // Cancel the in-progress press to prevent the widget's click action
-        // from firing on release. Also clears PRESSED state from tracked objects.
-        if (indev) lv_indev_reset(indev, nullptr);
-        // Clear PRESSED state from all descendants — the pressed button
-        // may be deeply nested inside a widget (e.g., print_status card).
-        auto* wc = lv_obj_find_by_name(panel.panel_, "widget_container");
-        if (wc) {
-            std::function<void(lv_obj_t*)> clear_pressed = [&](lv_obj_t* obj) {
-                lv_obj_remove_state(obj, LV_STATE_PRESSED);
-                uint32_t count = lv_obj_get_child_count(obj);
-                for (uint32_t i = 0; i < count; ++i) {
-                    clear_pressed(lv_obj_get_child(obj, static_cast<int32_t>(i)));
-                }
-            };
-            clear_pressed(wc);
-        }
+            // Clear PRESSED state from all descendants — the pressed button
+            // may be deeply nested inside a widget (e.g., print_status card).
+            auto* container = lv_obj_find_by_name(panel.panel_, "widget_container");
+            clear_pressed_state_recursive(container);
 
-        // Enter edit mode on first long-press
-        auto* container = lv_obj_find_by_name(panel.panel_, "widget_container");
-        auto& config = helix::PanelWidgetManager::instance().get_widget_config("home");
-        panel.grid_edit_mode_.set_rebuild_callback([&panel]() { panel.populate_widgets(); });
-        panel.grid_edit_mode_.enter(container, &config);
-        // Select the widget under the finger and start dragging immediately.
-        panel.grid_edit_mode_.handle_click(e);
-        if (panel.grid_edit_mode_.selected_widget()) {
-            panel.grid_edit_mode_.handle_drag_start(e);
+            // Enter edit mode on first long-press
+            auto& config = helix::PanelWidgetManager::instance().get_widget_config("home");
+            panel.grid_edit_mode_.enter(container, &config);
+            // Select the widget under the finger and start dragging immediately.
+            panel.grid_edit_mode_.handle_click(e);
+            if (panel.grid_edit_mode_.selected_widget()) {
+                panel.grid_edit_mode_.handle_drag_start(e);
+            }
+        } else {
+            // Already in edit mode — start drag if a widget is selected
+            panel.grid_edit_mode_.handle_long_press(e);
         }
-    } else {
-        // Already in edit mode — start drag if a widget is selected
-        panel.grid_edit_mode_.handle_long_press(e);
     }
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void HomePanel::on_home_grid_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_clicked");
-    extern HomePanel& get_global_home_panel();
     auto& panel = get_global_home_panel();
     if (panel.grid_edit_mode_.is_active()) {
         panel.grid_edit_mode_.handle_click(e);
@@ -387,20 +377,22 @@ void HomePanel::on_home_grid_clicked(lv_event_t* e) {
 
 void HomePanel::on_home_grid_pressing(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_pressing");
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (panel.grid_edit_mode_.is_active()) {
-        panel.grid_edit_mode_.handle_pressing(e);
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (panel.grid_edit_mode_.is_active()) {
+            panel.grid_edit_mode_.handle_pressing(e);
+        }
     }
     LVGL_SAFE_EVENT_CB_END();
 }
 
 void HomePanel::on_home_grid_released(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] on_home_grid_released");
-    extern HomePanel& get_global_home_panel();
-    auto& panel = get_global_home_panel();
-    if (panel.grid_edit_mode_.is_active()) {
-        panel.grid_edit_mode_.handle_released(e);
+    if (!is_indev_scrolling()) {
+        auto& panel = get_global_home_panel();
+        if (panel.grid_edit_mode_.is_active()) {
+            panel.grid_edit_mode_.handle_released(e);
+        }
     }
     LVGL_SAFE_EVENT_CB_END();
 }

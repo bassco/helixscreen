@@ -5,6 +5,7 @@
 #include "ui_image_helpers.h"
 #include "ui_utils.h"
 
+#include "../lvgl_test_fixture.h"
 #include "../ui_test_utils.h"
 #include "theme_manager.h"
 
@@ -353,4 +354,119 @@ TEST_CASE("UI Utils: ui_brightness_to_lightbulb_icon - full brightness", "[ui_ut
     REQUIRE(strcmp(ui_brightness_to_lightbulb_icon(100), "lightbulb_on") == 0);
     REQUIRE(strcmp(ui_brightness_to_lightbulb_icon(150), "lightbulb_on") == 0);
     REQUIRE(strcmp(ui_brightness_to_lightbulb_icon(255), "lightbulb_on") == 0);
+}
+
+// ============================================================================
+// disable_widget_clicks_recursive() Tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: disable_widget_clicks_recursive - removes CLICKABLE from children",
+                 "[ui_utils][widget_flags]") {
+    lv_obj_t* parent = lv_obj_create(test_screen());
+    lv_obj_t* child1 = lv_obj_create(parent);
+    lv_obj_t* child2 = lv_obj_create(parent);
+
+    // LVGL objects are clickable by default
+    REQUIRE(lv_obj_has_flag(child1, LV_OBJ_FLAG_CLICKABLE));
+    REQUIRE(lv_obj_has_flag(child2, LV_OBJ_FLAG_CLICKABLE));
+
+    helix::ui::disable_widget_clicks_recursive(parent);
+
+    REQUIRE_FALSE(lv_obj_has_flag(child1, LV_OBJ_FLAG_CLICKABLE));
+    REQUIRE_FALSE(lv_obj_has_flag(child2, LV_OBJ_FLAG_CLICKABLE));
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: disable_widget_clicks_recursive - recurses into grandchildren",
+                 "[ui_utils][widget_flags]") {
+    lv_obj_t* root = lv_obj_create(test_screen());
+    lv_obj_t* child = lv_obj_create(root);
+    lv_obj_t* grandchild = lv_obj_create(child);
+
+    REQUIRE(lv_obj_has_flag(grandchild, LV_OBJ_FLAG_CLICKABLE));
+
+    helix::ui::disable_widget_clicks_recursive(root);
+
+    REQUIRE_FALSE(lv_obj_has_flag(child, LV_OBJ_FLAG_CLICKABLE));
+    REQUIRE_FALSE(lv_obj_has_flag(grandchild, LV_OBJ_FLAG_CLICKABLE));
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: disable_widget_clicks_recursive - does not modify parent",
+                 "[ui_utils][widget_flags]") {
+    lv_obj_t* parent = lv_obj_create(test_screen());
+    lv_obj_create(parent); // child
+
+    REQUIRE(lv_obj_has_flag(parent, LV_OBJ_FLAG_CLICKABLE));
+
+    helix::ui::disable_widget_clicks_recursive(parent);
+
+    // Parent itself should NOT have CLICKABLE removed — only descendants
+    REQUIRE(lv_obj_has_flag(parent, LV_OBJ_FLAG_CLICKABLE));
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: disable_widget_clicks_recursive - null is safe",
+                 "[ui_utils][widget_flags][edge]") {
+    helix::ui::disable_widget_clicks_recursive(nullptr); // Should not crash
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: disable_widget_clicks_recursive - no children is no-op",
+                 "[ui_utils][widget_flags][edge]") {
+    lv_obj_t* parent = lv_obj_create(test_screen());
+    helix::ui::disable_widget_clicks_recursive(parent); // Should not crash
+    REQUIRE(lv_obj_has_flag(parent, LV_OBJ_FLAG_CLICKABLE));
+}
+
+// ============================================================================
+// clear_pressed_state_recursive() Tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: clear_pressed_state_recursive - clears PRESSED from tree",
+                 "[ui_utils][widget_flags]") {
+    lv_obj_t* parent = lv_obj_create(test_screen());
+    lv_obj_t* child = lv_obj_create(parent);
+    lv_obj_t* grandchild = lv_obj_create(child);
+
+    // Manually set PRESSED state on all
+    lv_obj_add_state(parent, LV_STATE_PRESSED);
+    lv_obj_add_state(child, LV_STATE_PRESSED);
+    lv_obj_add_state(grandchild, LV_STATE_PRESSED);
+
+    helix::ui::clear_pressed_state_recursive(parent);
+
+    REQUIRE_FALSE(lv_obj_has_state(parent, LV_STATE_PRESSED));
+    REQUIRE_FALSE(lv_obj_has_state(child, LV_STATE_PRESSED));
+    REQUIRE_FALSE(lv_obj_has_state(grandchild, LV_STATE_PRESSED));
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: clear_pressed_state_recursive - does not clear other states",
+                 "[ui_utils][widget_flags]") {
+    lv_obj_t* obj = lv_obj_create(test_screen());
+    lv_obj_add_state(obj, LV_STATE_PRESSED);
+    lv_obj_add_state(obj, LV_STATE_CHECKED);
+
+    helix::ui::clear_pressed_state_recursive(obj);
+
+    REQUIRE_FALSE(lv_obj_has_state(obj, LV_STATE_PRESSED));
+    REQUIRE(lv_obj_has_state(obj, LV_STATE_CHECKED));
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: clear_pressed_state_recursive - null is safe",
+                 "[ui_utils][widget_flags][edge]") {
+    helix::ui::clear_pressed_state_recursive(nullptr); // Should not crash
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "UI Utils: clear_pressed_state_recursive - no PRESSED state is no-op",
+                 "[ui_utils][widget_flags][edge]") {
+    lv_obj_t* obj = lv_obj_create(test_screen());
+    // Not pressed — should be a no-op
+    helix::ui::clear_pressed_state_recursive(obj);
+    REQUIRE_FALSE(lv_obj_has_state(obj, LV_STATE_PRESSED));
 }

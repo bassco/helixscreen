@@ -150,4 +150,44 @@ inline bool safe_delete(lv_obj_t*& obj) {
     return true;
 }
 
+// ============================================================================
+// Recursive Widget Flag Utilities
+// ============================================================================
+
+/**
+ * @brief Recursively remove CLICKABLE flag from all descendants of obj
+ *
+ * Used by edit mode to prevent widget click handlers from firing
+ * while grid rearrangement is in progress.
+ *
+ * @param obj Parent object whose descendants will have CLICKABLE removed
+ */
+inline void disable_widget_clicks_recursive(lv_obj_t* obj) {
+    if (!obj) return;
+    uint32_t count = lv_obj_get_child_count(obj);
+    for (uint32_t i = 0; i < count; ++i) {
+        lv_obj_t* child = lv_obj_get_child(obj, static_cast<int32_t>(i));
+        if (!child) continue;
+        lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
+        disable_widget_clicks_recursive(child);
+    }
+}
+
+/**
+ * @brief Recursively remove PRESSED state from obj and all descendants
+ *
+ * Clears visual press feedback from deeply nested children after
+ * cancelling a press (e.g., when entering edit mode via long-press).
+ *
+ * @param obj Root object to clear PRESSED state from
+ */
+inline void clear_pressed_state_recursive(lv_obj_t* obj) {
+    if (!obj) return;
+    lv_obj_remove_state(obj, LV_STATE_PRESSED);
+    uint32_t count = lv_obj_get_child_count(obj);
+    for (uint32_t i = 0; i < count; ++i) {
+        clear_pressed_state_recursive(lv_obj_get_child(obj, static_cast<int32_t>(i)));
+    }
+}
+
 } // namespace helix::ui

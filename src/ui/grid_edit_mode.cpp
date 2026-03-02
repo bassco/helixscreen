@@ -3,6 +3,7 @@
 #include "grid_edit_mode.h"
 
 #include "ui_fonts.h"
+#include "ui_utils.h"
 #include "ui_widget_catalog_overlay.h"
 
 #include "app_globals.h"
@@ -38,22 +39,8 @@ static constexpr int DRAG_SHADOW_OFS = 4;
 static constexpr int EDGE_HIT_INWARD = 18;
 static constexpr int EDGE_HIT_MARGIN = 18;
 
-/// Recursively remove CLICKABLE flag from all descendants of obj.
-
-static void disable_widget_clicks_recursive(lv_obj_t* obj) {
-    if (!obj) {
-        return;
-    }
-    uint32_t count = lv_obj_get_child_count(obj);
-    for (uint32_t i = 0; i < count; ++i) {
-        lv_obj_t* child = lv_obj_get_child(obj, static_cast<int32_t>(i));
-        if (!child) {
-            continue;
-        }
-        lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
-        disable_widget_clicks_recursive(child);
-    }
-}
+// disable_widget_clicks_recursive() is in ui_utils.h (helix::ui namespace)
+using helix::ui::disable_widget_clicks_recursive;
 
 GridEditMode::~GridEditMode() {
     if (active_) {
