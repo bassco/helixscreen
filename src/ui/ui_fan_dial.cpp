@@ -9,7 +9,6 @@
 #include "display_settings_manager.h"
 #include "format_utils.h"
 #include "helix-xml/src/xml/lv_xml.h"
-#include "settings_manager.h"
 #include "theme_manager.h"
 #include "ui/fan_spin_animation.h"
 #include "ui/ui_event_trampoline.h"
@@ -18,7 +17,6 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <utility>
 
 using namespace helix;
 
@@ -27,7 +25,7 @@ using namespace helix;
 // ============================================================================
 
 FanDial::FanDial(lv_obj_t* parent, const std::string& name, const std::string& fan_id,
-                 int initial_speed)
+                 int initial_speed, bool label_bottom)
     : name_(name), fan_id_(fan_id), current_speed_(initial_speed) {
     // Build attributes array for XML creation
     char initial_value_str[16];
@@ -41,6 +39,16 @@ FanDial::FanDial(lv_obj_t* parent, const std::string& name, const std::string& f
     if (!root_) {
         spdlog::error("[FanDial] Failed to create fan_dial component for '{}'", name);
         return;
+    }
+
+    // Carousel layout: label below arc
+    if (label_bottom) {
+        lv_obj_t* top_label = lv_obj_find_by_name(root_, "name_label");
+        lv_obj_t* bot_label = lv_obj_find_by_name(root_, "name_label_bottom");
+        if (top_label)
+            lv_obj_add_flag(top_label, LV_OBJ_FLAG_HIDDEN);
+        if (bot_label)
+            lv_obj_remove_flag(bot_label, LV_OBJ_FLAG_HIDDEN);
     }
 
     // Find child widgets by name
@@ -94,7 +102,7 @@ FanDial::~FanDial() {
     // on freed memory, crashing in lv_obj_set_style_* → lv_obj_get_parent.
     lv_anim_delete(this, label_anim_exec_cb);
     // Stop fan icon spin animation (uses icon obj as var, not this)
-    stop_spin(fan_icon_);
+    helix::ui::fan_spin_stop(fan_icon_);
 
     // Remove event callbacks to prevent stale 'this' dispatch if events
     // are still pending in the LVGL event queue after widget deletion
@@ -151,7 +159,7 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
     if (this != &other) {
         // Clean up current resources: stop animations and remove callbacks first
         lv_anim_delete(this, label_anim_exec_cb);
-        stop_spin(fan_icon_);
+        helix::ui::fan_spin_stop(fan_icon_);
         if (arc_)
             lv_obj_remove_event_cb(arc_, on_arc_value_changed);
         if (btn_off_)
@@ -180,7 +188,7 @@ FanDial& FanDial::operator=(FanDial&& other) noexcept {
 
         // Stop animations on the source before clearing its pointers
         lv_anim_delete(&other, label_anim_exec_cb);
-        stop_spin(other.fan_icon_);
+        helix::ui::fan_spin_stop(other.fan_icon_);
 
         // Clear source pointers so other's destructor is a no-op
         other.root_ = nullptr;
@@ -328,13 +336,8 @@ void FanDial::update_speed_label(int percent) {
     if (!speed_label_)
         return;
 
-    if (percent == 0) {
-        lv_label_set_text(speed_label_, lv_tr("Off"));
-    } else {
-        char buf[8];
-        helix::format::format_percent(percent, buf, sizeof(buf));
-        lv_label_set_text(speed_label_, buf);
-    }
+    char buf[8];
+    lv_label_set_text(speed_label_, lv_tr(helix::format::format_fan_speed(percent, buf, sizeof(buf))));
 }
 
 void FanDial::handle_arc_changed() {
@@ -435,10 +438,6 @@ void FanDial::handle_on_clicked() {
     spdlog::debug("[FanDial] '{}' On button clicked", name_);
 }
 
-// ============================================================================
-// Fan Icon Spin Animation
-// ============================================================================
-
 void FanDial::set_read_only(bool read_only) {
     if (!arc_)
         return;
@@ -497,22 +496,10 @@ void FanDial::update_fan_animation(int speed_pct) {
         return;
 
     if (!DisplaySettingsManager::instance().get_animations_enabled() || speed_pct <= 0) {
-        stop_spin(fan_icon_);
+        helix::ui::fan_spin_stop(fan_icon_);
     } else {
-        start_spin(fan_icon_, speed_pct);
+        helix::ui::fan_spin_start(fan_icon_, speed_pct);
     }
-}
-
-void FanDial::spin_anim_cb(void* var, int32_t value) {
-    helix::ui::fan_spin_anim_cb(var, value);
-}
-
-void FanDial::stop_spin(lv_obj_t* icon) {
-    helix::ui::fan_spin_stop(icon);
-}
-
-void FanDial::start_spin(lv_obj_t* icon, int speed_pct) {
-    helix::ui::fan_spin_start(icon, speed_pct);
 }
 
 // ============================================================================

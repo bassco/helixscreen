@@ -356,6 +356,7 @@ void register_xml_components() {
                              TempGraphOverlay::on_temp_graph_preset_clicked);
     lv_xml_register_event_cb(nullptr, "on_temp_graph_custom_clicked",
                              TempGraphOverlay::on_temp_graph_custom_clicked);
+    register_xml("fan_arc_core.xml");
     register_xml("fan_dial.xml");
     register_fan_dial_callbacks(); // Register FanDial event callbacks
     register_xml("fan_status_card.xml");

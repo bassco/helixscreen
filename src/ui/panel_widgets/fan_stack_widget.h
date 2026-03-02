@@ -98,14 +98,6 @@ class FanStackWidget : public PanelWidget {
     void update_fan_animation(lv_obj_t* icon, int speed_pct);
     void refresh_all_animations();
 
-    /// Stop any running spin animation on an icon
-    static void stop_spin(lv_obj_t* icon);
-
-    /// Start continuous spin animation scaled to fan speed
-    static void start_spin(lv_obj_t* icon, int speed_pct);
-
-    /// LVGL animation exec callback for rotation
-    static void spin_anim_cb(void* var, int32_t value);
 };
 
 } // namespace helix

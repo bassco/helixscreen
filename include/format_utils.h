@@ -35,6 +35,24 @@ inline constexpr const char* UNAVAILABLE = "—";
 char* format_percent(int percent, char* buf, size_t size);
 
 /**
+ * @brief Format fan speed as "Off" (when 0) or "XX%" (when > 0)
+ *
+ * Returns a pointer suitable for lv_label_set_text(). When speed is 0,
+ * returns the static string "Off" (pass through lv_tr() for translation).
+ * When speed > 0, formats "XX%" into the provided buffer.
+ *
+ * Typical usage:
+ *   char buf[8];
+ *   lv_label_set_text(label, lv_tr(format_fan_speed(speed, buf, sizeof(buf))));
+ *
+ * @param speed_pct Fan speed percentage (0-100)
+ * @param buf Output buffer (used only when speed > 0)
+ * @param size Buffer size (recommended: 8)
+ * @return Pointer to "Off" literal or formatted buffer
+ */
+const char* format_fan_speed(int speed_pct, char* buf, size_t size);
+
+/**
  * @brief Format percentage or show UNAVAILABLE when data is missing
  *
  * @param percent Percentage value

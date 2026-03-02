@@ -26,7 +26,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include <cstdio>
 
 namespace helix {
 void register_fan_stack_widget() {
@@ -156,8 +155,21 @@ void FanStackWidget::attach_carousel(lv_obj_t* widget_obj) {
         return;
     }
 
-    // Observe fans_version to rebuild carousel pages when fans are discovered
+    // Read initial animation setting and observe changes
+    animations_enabled_ = DisplaySettingsManager::instance().get_animations_enabled();
     std::weak_ptr<bool> weak_alive = alive_;
+    anim_settings_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
+        DisplaySettingsManager::instance().subject_animations_enabled(), this,
+        [weak_alive](FanStackWidget* self, int enabled) {
+            if (weak_alive.expired())
+                return;
+            self->animations_enabled_ = (enabled != 0);
+            for (auto& page : self->carousel_pages_) {
+                self->update_fan_animation(page.fan_icon, page.arc ? lv_arc_get_value(page.arc) : 0);
+            }
+        });
+
+    // Observe fans_version to rebuild carousel pages when fans are discovered
     version_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
         printer_state_.get_fans_version_subject(), this,
         [weak_alive](FanStackWidget* self, int /*version*/) {
@@ -184,16 +196,16 @@ void FanStackWidget::detach() {
 
     // Stop any running animations before clearing pointers
     if (part_icon_)
-        stop_spin(part_icon_);
+        helix::ui::fan_spin_stop(part_icon_);
     if (hotend_icon_)
-        stop_spin(hotend_icon_);
+        helix::ui::fan_spin_stop(hotend_icon_);
     if (aux_icon_)
-        stop_spin(aux_icon_);
+        helix::ui::fan_spin_stop(aux_icon_);
 
     // Stop carousel fan icon animations
     for (auto& page : carousel_pages_) {
         if (page.fan_icon)
-            stop_spin(page.fan_icon);
+            helix::ui::fan_spin_stop(page.fan_icon);
     }
     carousel_pages_.clear();
 
@@ -457,29 +469,34 @@ void FanStackWidget::bind_carousel_fans() {
     if (!carousel)
         return;
 
-    // Reset existing per-fan observers and pages
-    part_observer_.reset();
-    hotend_observer_.reset();
-    aux_observer_.reset();
-    carousel_observers_.clear();
-    for (auto& page : carousel_pages_) {
-        if (page.fan_icon)
-            stop_spin(page.fan_icon);
+    // Freeze the update queue while tearing down observers and widgets to
+    // prevent the WebSocket thread from enqueuing callbacks for destroyed objects.
+    {
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        part_observer_.reset();
+        hotend_observer_.reset();
+        aux_observer_.reset();
+        carousel_observers_.clear();
+        for (auto& page : carousel_pages_) {
+            if (page.fan_icon)
+                helix::ui::fan_spin_stop(page.fan_icon);
+        }
+        carousel_pages_.clear();
+
+        // Clear existing carousel pages (the carousel may have pages from a previous bind)
+        auto* state_ptr = ui_carousel_get_state(carousel);
+        if (state_ptr && state_ptr->scroll_container) {
+            helix::ui::UpdateQueue::instance().drain();
+            lv_obj_clean(state_ptr->scroll_container);
+            state_ptr->real_tiles.clear();
+            ui_carousel_rebuild_indicators(carousel);
+        }
     }
-    carousel_pages_.clear();
 
     const auto& fans = printer_state_.get_fans();
     if (fans.empty()) {
         spdlog::debug("[FanStackWidget] Carousel: no fans discovered yet");
         return;
-    }
-
-    // Clear existing carousel pages (the carousel may have pages from a previous bind)
-    auto* state = ui_carousel_get_state(carousel);
-    if (state && state->scroll_container) {
-        lv_obj_clean(state->scroll_container);
-        state->real_tiles.clear();
-        ui_carousel_rebuild_indicators(carousel);
     }
 
     std::weak_ptr<bool> weak_alive = alive_;
@@ -506,8 +523,19 @@ void FanStackWidget::bind_carousel_fans() {
         if (!arc_core) {
             spdlog::error("[FanStackWidget] lv_xml_create('fan_arc_core') returned NULL for '{}'",
                           fan.display_name);
+            lv_obj_delete(page);
             continue;
         }
+
+        // XML component root views don't propagate their name attribute to
+        // lv_obj_set_name(), but fan_arc_resize_to_fit() needs to find
+        // "dial_container" by name. Set it explicitly.
+        lv_obj_set_name_static(arc_core, "dial_container");
+
+        // fan_arc_core uses token-based sizing for card contexts; carousel
+        // needs it to fill the tile instead.
+        lv_obj_set_size(arc_core, LV_PCT(100), LV_PCT(100));
+        lv_obj_set_flex_grow(arc_core, 1);
 
         // Strip top padding — fan_arc_core has pad_top for overlay cards with
         // a name label above, but the carousel has no label above the arc
@@ -563,10 +591,6 @@ void FanStackWidget::bind_carousel_fans() {
 
         ui_carousel_add_item(carousel, page);
 
-        // Attach auto-resize AFTER page is in the carousel so initial
-        // layout computation uses carousel tile dimensions, not screen size
-        helix::ui::fan_arc_attach_auto_resize(page);
-
         size_t page_idx = carousel_pages_.size();
         carousel_pages_.push_back(cp);
 
@@ -585,13 +609,9 @@ void FanStackWidget::bind_carousel_fans() {
                     if (cp.arc)
                         lv_arc_set_value(cp.arc, speed);
                     if (cp.speed_label) {
-                        if (speed == 0) {
-                            lv_label_set_text(cp.speed_label, lv_tr("Off"));
-                        } else {
-                            char buf[8];
-                            helix::format::format_percent(speed, buf, sizeof(buf));
-                            lv_label_set_text(cp.speed_label, buf);
-                        }
+                        char buf[8];
+                        lv_label_set_text(cp.speed_label,
+                                          lv_tr(helix::format::format_fan_speed(speed, buf, sizeof(buf))));
                     }
                     self->update_fan_animation(cp.fan_icon, speed);
                 },
@@ -603,17 +623,29 @@ void FanStackWidget::bind_carousel_fans() {
             if (cp.arc)
                 lv_arc_set_value(cp.arc, current);
             if (cp.speed_label) {
-                if (current == 0) {
-                    lv_label_set_text(cp.speed_label, lv_tr("Off"));
-                } else {
-                    char buf[8];
-                    helix::format::format_percent(current, buf, sizeof(buf));
-                    lv_label_set_text(cp.speed_label, buf);
-                }
+                char buf[8];
+                lv_label_set_text(cp.speed_label,
+                                  lv_tr(helix::format::format_fan_speed(current, buf, sizeof(buf))));
             }
             update_fan_animation(cp.fan_icon, current);
 
             carousel_observers_.push_back(std::move(obs));
+        }
+    }
+
+    // Attach auto-resize AFTER all pages are reparented into the carousel.
+    // Doing it inside the loop above would trigger an initial resize before the
+    // carousel layout is finalized, resulting in 0x0 container dimensions and
+    // the arc collapsing to MIN_ARC_SIZE.
+    lv_obj_update_layout(carousel);
+    auto* state = ui_carousel_get_state(carousel);
+    if (state && state->scroll_container) {
+        uint32_t child_count = lv_obj_get_child_count(state->scroll_container);
+        for (uint32_t i = 0; i < child_count; i++) {
+            lv_obj_t* child = lv_obj_get_child(state->scroll_container, static_cast<int32_t>(i));
+            if (child) {
+                helix::ui::fan_arc_attach_auto_resize(child);
+            }
         }
     }
 
@@ -626,7 +658,7 @@ void FanStackWidget::update_label(lv_obj_t* label, int speed_pct) {
         return;
 
     char buf[8];
-    std::snprintf(buf, sizeof(buf), "%d%%", speed_pct);
+    helix::format::format_percent(speed_pct, buf, sizeof(buf));
     lv_label_set_text(label, buf);
 }
 
@@ -645,18 +677,6 @@ void FanStackWidget::refresh_all_animations() {
     update_fan_animation(part_icon_, part_speed_);
     update_fan_animation(hotend_icon_, hotend_speed_);
     update_fan_animation(aux_icon_, aux_speed_);
-}
-
-void FanStackWidget::spin_anim_cb(void* var, int32_t value) {
-    helix::ui::fan_spin_anim_cb(var, value);
-}
-
-void FanStackWidget::stop_spin(lv_obj_t* icon) {
-    helix::ui::fan_spin_stop(icon);
-}
-
-void FanStackWidget::start_spin(lv_obj_t* icon, int speed_pct) {
-    helix::ui::fan_spin_start(icon, speed_pct);
 }
 
 void FanStackWidget::handle_clicked() {

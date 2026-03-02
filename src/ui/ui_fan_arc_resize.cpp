@@ -3,8 +3,6 @@
 
 #include "ui_fan_arc_resize.h"
 
-#include "theme_manager.h"
-
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
@@ -18,19 +16,28 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     if (!card_root)
         return;
 
-    // Re-entrancy guard: lv_obj_update_layout() below can fire SIZE_CHANGED
-    // which calls back into this function via the event callback
-    static bool in_resize = false;
-    if (in_resize)
+    // Per-object re-entrancy guard: lv_obj_update_layout() below can fire
+    // SIZE_CHANGED which calls back into this function via the event callback.
+    // Using a per-object flag (not a static bool) so resizing one card doesn't
+    // block a different card that fires SIZE_CHANGED in the same layout pass.
+    if (lv_obj_has_flag(card_root, LV_OBJ_FLAG_USER_1))
         return;
-    in_resize = true;
+    lv_obj_add_flag(card_root, LV_OBJ_FLAG_USER_1);
+    struct Guard {
+        lv_obj_t* obj;
+        ~Guard() { lv_obj_remove_flag(obj, LV_OBJ_FLAG_USER_1); }
+    } guard{card_root};
 
-    lv_obj_t* container = lv_obj_find_by_name(card_root, "dial_container");
     lv_obj_t* arc = lv_obj_find_by_name(card_root, "dial_arc");
-    if (!container || !arc) {
-        in_resize = false;
+    if (!arc)
         return;
-    }
+
+    // The container is either found by name (carousel pages set it explicitly)
+    // or inferred as the arc's parent (XML component roots get their name
+    // overwritten by the component system, so "dial_container" won't match).
+    lv_obj_t* container = lv_obj_find_by_name(card_root, "dial_container");
+    if (!container)
+        container = lv_obj_get_parent(arc);
 
     // Force layout computation so flex_grow children have real sizes
     lv_obj_update_layout(card_root);
@@ -38,17 +45,13 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     int32_t content_w = lv_obj_get_content_width(container);
     int32_t container_h = lv_obj_get_content_height(container);
 
-    // Arc must be square, fit in both dimensions with responsive inset
-    int32_t inset = theme_manager_get_spacing("space_xl");
-    int32_t available = LV_MIN(content_w, container_h);
-    int32_t arc_size = available - inset * 2;
+    // Arc must be square, fit in both dimensions
+    int32_t arc_size = LV_MIN(content_w, container_h);
     arc_size = LV_MAX(arc_size, MIN_ARC_SIZE);
 
-    // Skip if already at target size (avoids re-entrancy from child layout changes)
-    if (lv_obj_get_width(arc) == arc_size && lv_obj_get_height(arc) == arc_size) {
-        in_resize = false;
+    // Skip if already at target size (avoids layout churn)
+    if (lv_obj_get_width(arc) == arc_size && lv_obj_get_height(arc) == arc_size)
         return;
-    }
 
     lv_obj_set_size(arc, arc_size, arc_size);
 
@@ -57,9 +60,8 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     lv_obj_set_style_arc_width(arc, track_w, LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc, track_w, LV_PART_INDICATOR);
 
-    spdlog::trace("[FanArcResize] card_w={} container_h={} -> arc={}x{} track_w={}", content_w,
+    spdlog::trace("[FanArcResize] content_w={} container_h={} -> arc={}x{} track_w={}", content_w,
                   container_h, arc_size, arc_size, track_w);
-    in_resize = false;
 }
 
 static void on_card_size_changed(lv_event_t* e) {

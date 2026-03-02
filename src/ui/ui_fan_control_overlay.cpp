@@ -162,7 +162,7 @@ void FanControlOverlay::cleanup() {
     unsubscribe_from_fan_speeds();
     // Stop spin animations before clearing cards
     for (auto& card : auto_fan_cards_) {
-        stop_spin(card.fan_icon);
+        helix::ui::fan_spin_stop(card.fan_icon);
     }
     // Clear widget tracking vectors (widgets will be destroyed by OverlayBase::cleanup)
     animated_fan_dials_.clear();
@@ -185,7 +185,7 @@ void FanControlOverlay::populate_fans() {
     // destroy LVGL widgets first, that pointer is freed and we crash.
     animated_fan_dials_.clear();
     for (auto& card : auto_fan_cards_) {
-        stop_spin(card.fan_icon);
+        helix::ui::fan_spin_stop(card.fan_icon);
     }
     auto_fan_cards_.clear();
 
@@ -236,8 +236,14 @@ void FanControlOverlay::populate_fans() {
                     lv_label_set_text(speed_label, speed_str);
                 }
 
-                // Find arc for live updates
+                // Find arc and make read-only (fan_arc_core is interactive by default)
                 lv_obj_t* arc = lv_obj_find_by_name(card, "dial_arc");
+                if (arc) {
+                    lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);
+                    lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
+                    lv_obj_set_style_shadow_width(arc, 0, LV_PART_KNOB);
+                    lv_obj_set_style_outline_width(arc, 0, LV_PART_KNOB);
+                }
 
                 // Find fan icon for spin animation
                 lv_obj_t* fan_icon = lv_obj_find_by_name(card, "fan_icon");
@@ -404,16 +410,4 @@ void FanControlOverlay::refresh_all_auto_fan_animations() {
     for (auto& card : auto_fan_cards_) {
         update_auto_fan_animation(card, card.last_speed_pct);
     }
-}
-
-void FanControlOverlay::spin_anim_cb(void* var, int32_t value) {
-    helix::ui::fan_spin_anim_cb(var, value);
-}
-
-void FanControlOverlay::stop_spin(lv_obj_t* icon) {
-    helix::ui::fan_spin_stop(icon);
-}
-
-void FanControlOverlay::start_spin(lv_obj_t* icon, int speed_pct) {
-    helix::ui::fan_spin_start(icon, speed_pct);
 }

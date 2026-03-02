@@ -123,8 +123,6 @@ class FanControlOverlay : public OverlayBase {
      */
     void send_fan_speed(const std::string& object_name, int speed_percent);
 
-    // on_fans_version_changed migrated to lambda observer factory
-
     /**
      * @brief Subscribe to all per-fan speed subjects
      */
@@ -195,9 +193,6 @@ class FanControlOverlay : public OverlayBase {
     void update_auto_fan_animation(AutoFanCard& card, int speed_pct);
     void refresh_all_auto_fan_animations();
 
-    static void spin_anim_cb(void* var, int32_t value);
-    static void start_spin(lv_obj_t* icon, int speed_pct);
-    static void stop_spin(lv_obj_t* icon);
 };
 
 /**

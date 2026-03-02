@@ -19,7 +19,7 @@
     <!-- Card height -->
     <px name="fan_card_height_tiny" value="170"/>
     <px name="fan_card_height_small" value="152"/>
-    <px name="fan_card_height_medium" value="190"/>
+    <px name="fan_card_height_medium" value="180"/>
     <px name="fan_card_height_large" value="220"/>
     <!-- Arc dial diameter -->
     <px name="fan_arc_size_tiny" value="105"/>

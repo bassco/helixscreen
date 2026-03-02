@@ -16,6 +16,14 @@ char* format_percent(int percent, char* buf, size_t size) {
     return buf;
 }
 
+const char* format_fan_speed(int speed_pct, char* buf, size_t size) {
+    if (speed_pct == 0) {
+        return "Off";
+    }
+    format_percent(speed_pct, buf, size);
+    return buf;
+}
+
 char* format_percent_or_unavailable(int percent, bool available, char* buf, size_t size) {
     if (available) {
         return format_percent(percent, buf, size);

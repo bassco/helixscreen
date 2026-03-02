@@ -37,9 +37,10 @@ class FanDial {
      * @param name Display name (e.g., "Part Fan")
      * @param fan_id Identifier passed to callbacks (e.g., "fan" or "fan_generic chamber")
      * @param initial_speed Initial speed percentage (0-100)
+     * @param label_bottom If true, fan name label appears below the arc instead of above
      */
     FanDial(lv_obj_t* parent, const std::string& name, const std::string& fan_id,
-            int initial_speed = 0);
+            int initial_speed = 0, bool label_bottom = false);
     ~FanDial();
 
     // Disable copy, allow move
@@ -131,11 +132,6 @@ class FanDial {
 
     void update_knob_glow(int percent);
     void update_fan_animation(int speed_pct);
-
-    // Fan icon spin animation (matches FanStackWidget pattern)
-    static void spin_anim_cb(void* var, int32_t value);
-    static void start_spin(lv_obj_t* icon, int speed_pct);
-    static void stop_spin(lv_obj_t* icon);
 
     lv_obj_t* root_ = nullptr;
     lv_obj_t* arc_ = nullptr;

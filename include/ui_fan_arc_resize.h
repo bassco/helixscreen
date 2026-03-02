@@ -13,8 +13,6 @@ namespace helix::ui {
  * computes optimal square arc size from available content dimensions,
  * and scales the arc track width at an 11:1 ratio.
  *
- * Call from a SIZE_CHANGED callback on a fan card root widget.
- *
  * @param card_root Root widget of a fan_dial or fan_status_card
  */
 void fan_arc_resize_to_fit(lv_obj_t* card_root);
