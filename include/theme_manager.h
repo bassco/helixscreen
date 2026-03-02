@@ -198,7 +198,7 @@ class ThemeManager {
 // ============================================================================
 
 // Theme colors: Use theme_manager_get_color() to retrieve from globals.xml
-// Available tokens: primary_color, text_primary, text_secondary, success_color, etc.
+// Available tokens: primary_color, text_primary, text_muted, success_color, etc.
 
 // Nav width is defined in navigation_bar.xml as nav_width_tiny/small/medium/large
 // and registered at runtime using horizontal breakpoint (see theme_manager.cpp)

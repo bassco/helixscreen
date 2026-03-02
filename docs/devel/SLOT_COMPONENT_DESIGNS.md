@@ -287,7 +287,7 @@ If LVGL 9.5 doesn't support dynamic slot generation, use a prop-based approach:
       <event_cb trigger="value_changed" callback="on_tune_speed_changed"/>
     </lv_slider>
   </lv_obj>
-  <text_small text="Movement speed" style_text_color="#text_secondary"/>
+  <text_small text="Movement speed" style_text_color="#text_muted"/>
 </ui_card>
 ```
 
@@ -322,7 +322,7 @@ If LVGL 9.5 doesn't support dynamic slot generation, use a prop-based approach:
         <event_cb trigger="value_changed" callback="$slider_callback"/>
       </lv_slider>
     </lv_obj>
-    <text_small text="$description" style_text_color="#text_secondary"/>
+    <text_small text="$description" style_text_color="#text_muted"/>
   </view>
 </component>
 ```

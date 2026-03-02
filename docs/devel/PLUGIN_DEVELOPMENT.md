@@ -1194,13 +1194,13 @@ This example creates a custom temperature display widget and injects it into the
         style_flex_flow="column" style_flex_main_place="center"
         style_flex_cross_place="center">
 
-    <text_small style_text_color="#text_secondary">Nozzle</text_small>
+    <text_small style_text_color="#text_muted">Nozzle</text_small>
 
     <lv_obj style_flex_flow="row" style_flex_cross_place="center"
             style_flex_gap_column="#space_xs">
       <icon codepoint="0xF18B6" style_text_color="#warning_color"/>
       <text_heading name="temp_value" bind_text="temp-widget.nozzle_temp"/>
-      <text_body style_text_color="#text_secondary">C</text_body>
+      <text_body style_text_color="#text_muted">C</text_body>
     </lv_obj>
 
   </view>

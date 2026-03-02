@@ -25,7 +25,7 @@
  * ## Color-Coding Function
  *
  * Use `get_heating_state_color()` for consistent 4-state thermal feedback:
- * - Off (target=0): gray (text_secondary)
+ * - Off (target=0): gray (text_muted)
  * - Heating (current < target-2): red (primary_color)
  * - At-temp (within ±2): green (success_color)
  * - Cooling (current > target+2): blue (info_color)
@@ -227,7 +227,7 @@ constexpr int DEFAULT_AT_TEMP_TOLERANCE = 2;
  * @brief Get theme color for temperature display based on 4-state heating logic
  *
  * Returns a color indicating the thermal state of a heater:
- * - **Off** (target=0): text_secondary (gray) - heater disabled
+ * - **Off** (target=0): text_muted (gray) - heater disabled
  * - **Heating** (current < target - tolerance): primary_color (red) - actively heating
  * - **At-temp** (within ±tolerance): success_color (green) - stable at target
  * - **Cooling** (current > target + tolerance): info_color (blue) - cooling down

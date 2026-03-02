@@ -654,7 +654,7 @@ Visual separators with theme-aware colors.
 <divider_horizontal width="100%"/>
 ```
 
-**Built-in defaults:** 1px width/height, `text_secondary` color at 50% opacity
+**Built-in defaults:** 1px width/height, `text_muted` color at 50% opacity
 
 #### ui_markdown
 
@@ -1066,7 +1066,7 @@ Widgets **can safely omit names**:
 ```xml
 <!-- These DON'T need names (decorative) -->
 <lv_obj flex_flow="row" style_pad_gap="#space_md">
-  <lv_obj width="1" height="100%" style_bg_color="#text_secondary"/>
+  <lv_obj width="1" height="100%" style_bg_color="#text_muted"/>
   <lv_label text="Settings"/>
 </lv_obj>
 

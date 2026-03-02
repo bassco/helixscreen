@@ -118,7 +118,7 @@ void ui_theme_init(lv_display_t* display, bool dark_mode) {
 - ✅ **State-based styling** - Automatic pressed/disabled/checked states
 
 **Theme Customization:**
-- **Colors:** `primary_color`, `secondary_color`, `text_primary`, `text_secondary` defined in globals.xml
+- **Colors:** `primary_color`, `secondary_color`, `text_primary`, `text_muted` defined in globals.xml
 - **Fonts:** `font_heading`, `font_body`, `font_small` for manual widget styling when needed
 - **Mode:** Dark/light mode controlled via config file or command-line flags
 

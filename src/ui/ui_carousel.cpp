@@ -20,7 +20,7 @@ namespace {
  * @brief Update indicator dot styles without recreating them
  *
  * Sets the active dot to accent color with full opacity and
- * inactive dots to text_secondary with reduced opacity.
+ * inactive dots to text_muted with reduced opacity.
  */
 void update_indicators(CarouselState* state) {
     if (!state || !state->indicator_row) {

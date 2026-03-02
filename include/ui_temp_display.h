@@ -73,9 +73,9 @@
  *
  * The widget uses semantic colors from the theme:
  * - Current temp: 4-state color (see Color States above)
- * - Separator (" / "): text_secondary
+ * - Separator (" / "): text_muted
  * - Target temp: text_primary
- * - Unit ("°C"): text_secondary
+ * - Unit ("°C"): text_muted
  *
  * Standard lv_obj style properties can also be applied (align, width, etc.)
  *

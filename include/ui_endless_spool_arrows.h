@@ -20,7 +20,7 @@ extern "C" {
  *   - Routed lines: up from source slot, over horizontally, down to target slot
  *   - Arrowheads pointing down at target end
  *   - Multiple connections draw at different vertical heights to avoid overlap
- *   - Uses subtle color (#text_secondary) to avoid overwhelming filament colors
+ *   - Uses subtle color (#text_muted) to avoid overwhelming filament colors
  *
  * XML usage:
  * @code{.xml}
