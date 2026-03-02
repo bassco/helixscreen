@@ -8,10 +8,13 @@
 
 #include <atomic>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
+
+class HttpRequest;
 
 namespace helix {
 
@@ -42,6 +45,24 @@ class CameraStream {
         flip_v_.store(vertical);
     }
 
+    /**
+     * @brief Copy RGB pixels to LVGL BGR format with optional flip.
+     *
+     * stb_image outputs R,G,B byte order but LVGL's RGB888 stores B,G,R in
+     * memory (matching lv_color_t layout). This helper swaps R↔B during copy.
+     * Exposed as public static for unit testing.
+     */
+    static void copy_pixels_rgb_to_lvgl(const uint8_t* src, uint8_t* dst, int width, int height,
+                                        int src_stride, int dst_stride, bool flip_h, bool flip_v);
+
+    /**
+     * @brief Parse a boundary string from a Content-Type header value.
+     *
+     * Extracts the boundary parameter, strips quotes, and prepends "--" if
+     * needed. Returns empty string if no boundary found. Exposed for testing.
+     */
+    static std::string parse_boundary(const std::string& content_type);
+
     void start(const std::string& stream_url, const std::string& snapshot_url,
                FrameCallback on_frame, ErrorCallback on_error = nullptr);
     void stop();
@@ -51,8 +72,8 @@ class CameraStream {
     void frame_consumed();
 
   private:
+    int process_stream_data();
     void stream_thread_func();
-    void parse_mjpeg_frames(const std::string& boundary);
     void snapshot_poll_loop();
     void fetch_snapshot();
     bool decode_jpeg(const uint8_t* data, size_t len);
@@ -85,6 +106,11 @@ class CameraStream {
 
     // MJPEG parser state
     std::vector<uint8_t> recv_buf_;
+    std::string boundary_;
+
+    // Active HTTP request for streaming — stored for cancellation in stop()
+    std::shared_ptr<HttpRequest> active_req_;
+    std::mutex req_mutex_;
 
     // State
     std::atomic<bool> running_{false};
@@ -94,7 +120,7 @@ class CameraStream {
 
     static constexpr int kMaxStreamFailures = 3;
     static constexpr int kSnapshotIntervalMs = 2000;
-    static constexpr int kStreamTimeoutSec = 10;
+    static constexpr int kStreamTimeoutSec = 30;
 };
 
 } // namespace helix
