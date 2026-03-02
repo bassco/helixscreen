@@ -168,6 +168,14 @@ void HomePanel::populate_widgets() {
         disable_widget_clicks_recursive(container);
     }
 
+    // If the panel is already active (rebuild triggered by gate observer or
+    // settings change), activate the new widgets so timers/observers start.
+    if (panel_active_) {
+        for (auto& w : active_widgets_) {
+            w->on_activate();
+        }
+    }
+
     populating_widgets_ = false;
 }
 
@@ -200,6 +208,8 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 }
 
 void HomePanel::on_activate() {
+    panel_active_ = true;
+
     // Notify all widgets that the panel is visible
     for (auto& w : active_widgets_) {
         w->on_activate();
@@ -210,6 +220,7 @@ void HomePanel::on_activate() {
 }
 
 void HomePanel::on_deactivate() {
+    panel_active_ = false;
     // Exit grid edit mode if active, UNLESS the widget catalog overlay is open
     // (push_overlay triggers on_deactivate, but edit mode must survive)
     if (grid_edit_mode_.is_active() && !grid_edit_mode_.is_catalog_open()) {
