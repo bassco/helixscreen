@@ -209,6 +209,10 @@ class FilamentPanel : public PanelBase {
     // Purge amount state
     int purge_amount_ = 10; // Default 10mm
 
+    // Preset button temperature label subjects (e.g., "210°C / 60°C")
+    lv_subject_t preset_temps_subjects_[4];
+    char preset_temps_bufs_[4][24];
+
     // Subject storage buffers
     char temp_display_buf_[32];
     char status_buf_[64];
@@ -303,6 +307,7 @@ class FilamentPanel : public PanelBase {
     void update_warning_text();
     void update_safety_state();
     void update_preset_buttons_visual();
+    void update_preset_button_temps();   ///< Update preset button labels from filament DB
     void check_and_auto_select_preset(); ///< Auto-select preset if targets match
     void update_all_temps();             ///< Unified handler for temp observer bundle
 
