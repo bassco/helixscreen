@@ -12,6 +12,7 @@
 #include "printer_state.h"
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
+#include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
@@ -46,20 +47,45 @@ static void camera_widget_init_subjects() {
     spdlog::debug("[CameraWidget] Subjects initialized");
 }
 
+// Only one fullscreen camera overlay can be open at a time
+static helix::CameraWidget* s_fullscreen_owner = nullptr;
+
+static void on_camera_clicked(lv_event_t* e) {
+    auto* self = helix::panel_widget_from_event<helix::CameraWidget>(e);
+    if (self) {
+        self->open_fullscreen();
+    }
+}
+
+static void on_camera_fullscreen_close(lv_event_t* /*e*/) {
+    if (s_fullscreen_owner) {
+        s_fullscreen_owner->close_fullscreen();
+    }
+}
+
 namespace helix {
 void register_camera_widget() {
     register_widget_factory("camera", []() { return std::make_unique<CameraWidget>(); });
     register_widget_subjects("camera", camera_widget_init_subjects);
+    lv_xml_register_event_cb(nullptr, "on_camera_clicked", on_camera_clicked);
+    lv_xml_register_event_cb(nullptr, "on_camera_fullscreen_close", on_camera_fullscreen_close);
 }
 
 CameraWidget::CameraWidget() : alive_(std::make_shared<bool>(true)) {}
 
 CameraWidget::~CameraWidget() {
+    // detach() handles LVGL pointer cleanup, observer release, fullscreen close
     detach();
+    // Full cleanup beyond detach: invalidate alive guard and stop stream
+    if (alive_) {
+        *alive_ = false;
+    }
+    stop_stream();
 }
 
-void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* /*parent_screen*/) {
+void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
+    parent_screen_ = parent_screen;
     camera_image_ = lv_obj_find_by_name(widget_obj_, "camera_image");
 
     lv_obj_set_user_data(widget_obj_, this);
@@ -90,17 +116,24 @@ void CameraWidget::detach() {
         return; // Already detached or never attached
     }
 
-    active_ = false;
-    webcam_observer_.reset();
-    stop_stream(); // Owns alive_ invalidation and reset
-
-    if (widget_obj_) {
-        lv_obj_set_user_data(widget_obj_, nullptr);
-        widget_obj_ = nullptr;
+    // Close fullscreen if open before detaching
+    if (fullscreen_overlay_) {
+        close_fullscreen();
     }
+
+    // Lightweight detach: release observer and LVGL pointers but preserve
+    // the camera stream. alive_ is intentionally NOT invalidated here
+    // (unlike other widgets) — the stream keeps running during the
+    // detach→reattach gap. Frame callbacks check camera_image_ (null
+    // after detach) and safely no-op until re-attach.
+    webcam_observer_.reset();
+
+    lv_obj_set_user_data(widget_obj_, nullptr);
+    widget_obj_ = nullptr;
+    parent_screen_ = nullptr;
     camera_image_ = nullptr;
 
-    spdlog::debug("[CameraWidget] Detached");
+    spdlog::debug("[CameraWidget] Detached (stream preserved)");
 }
 
 void CameraWidget::on_activate() {
@@ -191,8 +224,10 @@ void CameraWidget::start_stream() {
                 auto alive = weak_alive.lock();
                 if (!alive || !*alive) return;
 
-                if (camera_image_) {
-                    lv_image_set_src(camera_image_, frame);
+                // Deliver frame to fullscreen image if open, otherwise widget image
+                lv_obj_t* target = fullscreen_image_ ? fullscreen_image_ : camera_image_;
+                if (target) {
+                    lv_image_set_src(target, frame);
                     set_status_text("");
                     // Hide spinner overlay on first frame
                     if (widget_obj_) {
@@ -230,10 +265,15 @@ void CameraWidget::stop_stream() {
     // become no-ops, preventing use-after-free on freed draw buffers
     *alive_ = false;
 
-    // Clear image source before stopping — stop() frees the draw buffers
+    // Clear image sources before stopping — stop() frees the draw buffers
     // that LVGL may still reference for rendering
-    if (camera_image_ && lv_is_initialized()) {
-        lv_image_set_src(camera_image_, nullptr);
+    if (lv_is_initialized()) {
+        if (fullscreen_image_) {
+            lv_image_set_src(fullscreen_image_, nullptr);
+        }
+        if (camera_image_) {
+            lv_image_set_src(camera_image_, nullptr);
+        }
     }
 
     stream_->stop();
@@ -249,6 +289,62 @@ void CameraWidget::set_status_text(const char* text) {
     if (s_subjects_initialized) {
         lv_subject_copy_string(&s_camera_status_subject, text);
     }
+}
+
+void CameraWidget::open_fullscreen() {
+    if (fullscreen_overlay_ || !parent_screen_ || !stream_) {
+        return;
+    }
+
+    // Create overlay as child of active screen (standard overlay pattern)
+    lv_obj_t* screen = lv_display_get_screen_active(nullptr);
+    if (!screen) {
+        return;
+    }
+
+    auto* overlay =
+        static_cast<lv_obj_t*>(lv_xml_create(screen, "camera_fullscreen", nullptr));
+    if (!overlay) {
+        spdlog::warn("[CameraWidget] Failed to create camera_fullscreen component");
+        return;
+    }
+
+    // Start hidden — push_overlay handles showing it
+    lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
+
+    fullscreen_overlay_ = overlay;
+    fullscreen_image_ = lv_obj_find_by_name(overlay, "fullscreen_camera_image");
+    s_fullscreen_owner = this;
+
+    if (fullscreen_image_) {
+        lv_image_set_inner_align(fullscreen_image_, LV_IMAGE_ALIGN_COVER);
+    }
+
+    // Register close callback so NavigationManager cleanup works
+    NavigationManager::instance().register_overlay_close_callback(overlay, [this]() {
+        fullscreen_overlay_ = nullptr;
+        fullscreen_image_ = nullptr;
+        s_fullscreen_owner = nullptr;
+        spdlog::debug("[CameraWidget] Fullscreen overlay closed via navigation");
+    });
+
+    // Use zoom animation from the widget's position
+    lv_area_t source_rect;
+    lv_obj_get_coords(widget_obj_, &source_rect);
+    NavigationManager::instance().push_overlay_zoom_from(overlay, source_rect);
+
+    spdlog::info("[CameraWidget] Opened fullscreen camera");
+}
+
+void CameraWidget::close_fullscreen() {
+    if (!fullscreen_overlay_) {
+        return;
+    }
+
+    // go_back() triggers the registered close callback which clears our pointers
+    NavigationManager::instance().go_back();
+
+    spdlog::debug("[CameraWidget] Closed fullscreen camera");
 }
 
 } // namespace helix

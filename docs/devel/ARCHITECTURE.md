@@ -445,6 +445,7 @@ public:
     virtual std::string get_component_name() const;           // XML component to create
     virtual void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) = 0;
     virtual void detach() = 0;            // Reset observers, clear pointers
+    virtual bool supports_reuse() const { return true; }   // Instance survives rebuilds
     virtual void on_activate() {}         // Panel became visible
     virtual void on_deactivate() {}       // Panel went offscreen
     virtual void on_size_changed(int colspan, int rowspan, int width_px, int height_px) {}  // Adapt to cell size
@@ -471,7 +472,7 @@ void register_fan_stack_widget() {
 
 `PanelWidgetManager` (`include/panel_widget_manager.h`) is the central coordinator:
 - `init_widget_subjects()` — calls each widget's `init_subjects()` before XML creation
-- `populate_widgets(panel_id, container)` — creates XML components and calls `attach()` for each enabled widget
+- `populate_widgets(panel_id, container, reuse={})` — creates XML components and calls `attach()` for each enabled widget; accepts an optional `WidgetReuseMap` to reuse existing C++ instances
 - `setup_gate_observers(panel_id, rebuild_cb)` — observes hardware availability subjects; rebuilds the widget row when capabilities change
 - `notify_config_changed(panel_id)` — triggers a rebuild after config changes (e.g., widget reorder)
 
@@ -483,18 +484,60 @@ void register_fan_stack_widget() {
 void HomePanel::populate_widgets() {
     lv_obj_t* container = lv_obj_find_by_name(panel_, "widget_container");
 
-    // Detach and clear previous widgets
-    for (auto& w : active_widgets_) { w->detach(); }
+    // Extract reusable instances before destroying LVGL tree
+    WidgetReuseMap reuse;
+    for (auto& w : active_widgets_) {
+        w->detach();
+        if (w->supports_reuse())
+            reuse[w->id()] = std::move(w);
+    }
+    lv_obj_clean(container);
     active_widgets_.clear();
 
-    // Manager handles XML creation, factory invocation, and attach()
-    active_widgets_ = PanelWidgetManager::instance().populate_widgets("home", container);
-
-    cache_widget_references();
+    // Manager reuses existing instances or creates new ones via factory
+    active_widgets_ = PanelWidgetManager::instance().populate_widgets(
+        "home", container, std::move(reuse));
 }
 ```
 
 Gate observers call `populate_widgets()` automatically when hardware capabilities or klippy state change, so the widget row adapts to the connected printer without any manual dispatch.
+
+### Widget Instance Reuse Across Rebuilds
+
+When gate observers trigger a rebuild, the LVGL widget tree is destroyed and recreated. However, PanelWidget **C++ instances** are preserved across rebuilds to avoid stopping and restarting expensive resources (e.g., camera MJPEG streams).
+
+**How it works:**
+
+1. `HomePanel::populate_widgets()` calls `detach()` on all active widgets, then extracts instances that return `true` from `supports_reuse()` into a `WidgetReuseMap`
+2. The LVGL tree is destroyed (`lv_obj_clean`), and non-reusable C++ instances are destroyed
+3. `PanelWidgetManager::populate_widgets()` receives the reuse map. For each widget, it checks the map first before invoking the factory — reused instances skip allocation entirely
+4. Reused instances get `attach()` called with the fresh LVGL objects from the new XML tree
+
+**Contract for reusable widgets:**
+
+- `supports_reuse()` returns `true` (the default; override to `false` to opt out)
+- `detach()` is lightweight: clears LVGL pointers and observers only. Does NOT destroy expensive state
+- The destructor handles full cleanup (stream stop, alive guard invalidation, etc.)
+- `attach()` must work correctly on a previously-detached instance
+
+**Thread safety during the detach→reattach gap:**
+
+Background threads (e.g., camera stream) may still deliver callbacks. The pattern is:
+- LVGL pointers are null after `detach()`, so queued `ui_queue_update` callbacks that check `camera_image_` etc. become safe no-ops
+- Alive guards remain valid (not invalidated in `detach()`), so `weak_ptr` locks succeed but find null LVGL pointers
+- After `attach()`, the next callback finds valid LVGL pointers and resumes normal operation
+
+```cpp
+// In HomePanel::populate_widgets():
+WidgetReuseMap reuse;
+for (auto& w : active_widgets_) {
+    w->detach();
+    if (w->supports_reuse())
+        reuse[w->id()] = std::move(w);
+}
+// ... drain queue, destroy LVGL tree ...
+active_widgets_ = mgr.populate_widgets("home", container, std::move(reuse));
+```
 
 ### Version-Observer Self-Binding Pattern
 

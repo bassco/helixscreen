@@ -10,6 +10,16 @@
 
 using namespace helix;
 
+TEST_CASE("PanelWidget: supports_reuse defaults to true", "[panel_widget]") {
+    struct TestWidget : PanelWidget {
+        void attach(lv_obj_t*, lv_obj_t*) override {}
+        void detach() override {}
+        const char* id() const override { return "test"; }
+    };
+    TestWidget w;
+    REQUIRE(w.supports_reuse() == true);
+}
+
 TEST_CASE("PanelWidgetManager singleton access", "[panel_widget][manager]") {
     auto& mgr = PanelWidgetManager::instance();
     auto& mgr2 = PanelWidgetManager::instance();

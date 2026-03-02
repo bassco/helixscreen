@@ -61,6 +61,13 @@ class PanelWidget {
         (void)height_px;
     }
 
+    /// Whether this widget's C++ instance can be reused across rebuilds.
+    /// When true, detach() must be lightweight (clear LVGL pointers only),
+    /// preserving expensive state like camera streams. The destructor
+    /// handles full cleanup. Default: true. Override to return false if
+    /// the widget's detach() is irreversible or cannot be re-attached.
+    virtual bool supports_reuse() const { return true; }
+
     /// Whether this widget supports configuration in edit mode.
     /// Override to return true to show the configure (gear) button.
     virtual bool has_edit_configure() const {
@@ -76,6 +83,17 @@ class PanelWidget {
 
     /// Stable identifier matching PanelWidgetDef::id
     virtual const char* id() const = 0;
+
+    /// Panel ID this widget belongs to. Set by PanelWidgetManager before attach().
+    const std::string& panel_id() const { return panel_id_; }
+    void set_panel_id(const std::string& panel_id) { panel_id_ = panel_id; }
+
+    /// Persist per-widget config through the PanelWidgetManager.
+    /// Widgets call this instead of reaching into PanelWidgetManager directly.
+    void save_widget_config(const nlohmann::json& config);
+
+  private:
+    std::string panel_id_;
 };
 
 /// Safe recovery of PanelWidget pointer from event callback.

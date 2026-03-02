@@ -22,6 +22,10 @@ namespace helix {
 
 class PanelWidget;
 
+/// Map of widget ID → reusable PanelWidget instance, passed into populate_widgets
+/// so that expensive C++ state (e.g. camera streams) survives LVGL tree rebuilds.
+using WidgetReuseMap = std::unordered_map<std::string, std::unique_ptr<PanelWidget>>;
+
 /// Central manager for panel widget lifecycle, shared resources, and config change
 /// notifications. Widgets and panels interact through this singleton rather than
 /// reaching into each other directly.
@@ -71,7 +75,8 @@ class PanelWidgetManager {
     /// components and attaching PanelWidget instances via their factories.
     /// Returns the vector of active (attached) PanelWidget instances.
     std::vector<std::unique_ptr<PanelWidget>> populate_widgets(const std::string& panel_id,
-                                                               lv_obj_t* container);
+                                                               lv_obj_t* container,
+                                                               WidgetReuseMap reuse = {});
 
     /// Compute which widget IDs would be visible for a panel without creating
     /// any LVGL objects. Used to short-circuit rebuilds when the list is unchanged.

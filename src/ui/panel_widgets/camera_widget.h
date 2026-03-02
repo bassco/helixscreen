@@ -26,13 +26,22 @@ class CameraWidget : public PanelWidget {
     void on_deactivate() override;
     void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
 
+    /// Open/close fullscreen camera overlay
+    void open_fullscreen();
+    void close_fullscreen();
+
   private:
     void start_stream();
     void stop_stream();
     void set_status_text(const char* text);
 
     lv_obj_t* widget_obj_ = nullptr;
+    lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* camera_image_ = nullptr;
+
+    // Fullscreen overlay state
+    lv_obj_t* fullscreen_overlay_ = nullptr;
+    lv_obj_t* fullscreen_image_ = nullptr;
 
     std::unique_ptr<CameraStream> stream_;
     bool active_ = false; // true when on_activate() has been called

@@ -150,9 +150,15 @@ void HomePanel::populate_widgets(bool force) {
         }
     }
 
-    // Detach active PanelWidget instances before clearing
+    // Extract reusable widget instances before destroying the rest.
+    // Widgets that support reuse (e.g. CameraWidget) keep expensive C++ state
+    // (camera stream) alive across LVGL tree rebuilds.
+    helix::WidgetReuseMap reuse;
     for (auto& w : active_widgets_) {
         w->detach();
+        if (w->supports_reuse()) {
+            reuse[w->id()] = std::move(w);
+        }
     }
 
     // Flush any deferred observer callbacks that captured raw widget pointers.
@@ -164,11 +170,14 @@ void HomePanel::populate_widgets(bool force) {
     helix::ui::UpdateQueue::instance().drain();
 
     // Destroy LVGL children BEFORE destroying C++ widget instances.
+    // Must happen here (not in the manager) to ensure correct ordering:
+    // drain → clean LVGL → clear C++. Manager's lv_obj_clean is a no-op.
     lv_obj_clean(container);
     active_widgets_.clear();
 
-    // Delegate generic widget creation to the manager
-    active_widgets_ = helix::PanelWidgetManager::instance().populate_widgets("home", container);
+    // Delegate generic widget creation to the manager, passing reusable instances
+    active_widgets_ =
+        helix::PanelWidgetManager::instance().populate_widgets("home", container, std::move(reuse));
 
     // Enable event bubbling on the entire widget subtree so touch events
     // (long_press, click, etc.) propagate from deeply-nested clickable

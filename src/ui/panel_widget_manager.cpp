@@ -82,7 +82,8 @@ static PanelWidgetConfig& get_widget_config_impl(const std::string& panel_id) {
 }
 
 std::vector<std::unique_ptr<PanelWidget>>
-PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* container) {
+PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* container,
+                                     WidgetReuseMap reuse) {
     if (!container) {
         spdlog::debug("[PanelWidgetManager] populate_widgets: null container for '{}'", panel_id);
         return {};
@@ -132,16 +133,20 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
         slot.widget_id = entry.id;
         slot.config = entry.config;
 
-        // If this widget has a factory, create the instance early so it can
-        // resolve the XML component name (e.g. carousel vs stack mode).
-        if (def && def->factory) {
+        // Acquire instance: reuse existing or create via factory
+        auto reuse_it = reuse.find(entry.id);
+        if (reuse_it != reuse.end()) {
+            slot.instance = std::move(reuse_it->second);
+            reuse.erase(reuse_it);
+            spdlog::debug("[PanelWidgetManager] Reusing widget instance '{}'", entry.id);
+        } else if (def && def->factory) {
             slot.instance = def->factory();
-            if (slot.instance) {
-                slot.instance->set_config(entry.config);
-                slot.component_name = slot.instance->get_component_name();
-            } else {
-                slot.component_name = "panel_widget_" + entry.id;
-            }
+        }
+
+        if (slot.instance) {
+            slot.instance->set_panel_id(panel_id);
+            slot.instance->set_config(entry.config);
+            slot.component_name = slot.instance->get_component_name();
         } else {
             slot.component_name = "panel_widget_" + entry.id;
         }
@@ -637,6 +642,17 @@ void PanelWidgetManager::clear_gate_observers(const std::string& panel_id) {
 
 PanelWidgetConfig& PanelWidgetManager::get_widget_config(const std::string& panel_id) {
     return get_widget_config_impl(panel_id);
+}
+
+// -- PanelWidget base class --
+
+void PanelWidget::save_widget_config(const nlohmann::json& config) {
+    if (panel_id_.empty()) {
+        spdlog::warn("[PanelWidget] save_widget_config called with no panel_id set for '{}'", id());
+        return;
+    }
+    auto& wc = PanelWidgetManager::instance().get_widget_config(panel_id_);
+    wc.set_widget_config(id(), config);
 }
 
 } // namespace helix

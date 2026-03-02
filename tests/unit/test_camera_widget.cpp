@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "panel_widget.h"
 #include "panel_widget_registry.h"
 
 #include "../catch_amalgamated.hpp"
