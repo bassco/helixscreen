@@ -3,9 +3,9 @@ translations:
   ' elapsed · ': ' 已用 · '
   ' frames captured': ' 帧已捕获'
   ' left': ' 剩余'
-  '%lu days ago': ''
-  '%lu hours ago': ''
-  '%lu min ago': ''
+  '%lu days ago': '%lu天前'
+  '%lu hours ago': '%lu小时前'
+  '%lu min ago': '%lu分钟前'
   '%u layers': '%u 层'
   + Add: + 添加
   + Add Preset: + 添加预设
@@ -17,11 +17,11 @@ translations:
   0 = computed: ''
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
-  1 day ago: ''
+  1 day ago: 1天前
   1 event queued: 1 个事件排队中
-  1 hour ago: ''
+  1 hour ago: 1小时前
   1 layer: 1 层
-  1 min ago: ''
+  1 min ago: 1分钟前
   1 minute: 1 分钟
   1 more tap to {} beta features: 再点击 1 次以{}测试功能
   1. Printer homes and probes the bed: 1. 打印机归位并探测热床

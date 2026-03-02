@@ -3,9 +3,9 @@ translations:
   ' elapsed · ': ' trascorso · '
   ' frames captured': ' fotogrammi acquisiti'
   ' left': ' rimanente'
-  '%lu days ago': ''
-  '%lu hours ago': ''
-  '%lu min ago': ''
+  '%lu days ago': '%lu giorni fa'
+  '%lu hours ago': '%lu ore fa'
+  '%lu min ago': '%lu min fa'
   '%u layers': '%u strati'
   + Add: + Aggiungi
   + Add Preset: + Aggiungi preset
@@ -17,11 +17,11 @@ translations:
   0 = computed: ''
   0 slots: '{0} Slot'
   0.4-2mm direct drive, 4-6mm bowden: 0,4-2mm direct drive, 4-6mm bowden
-  1 day ago: ''
+  1 day ago: 1 giorno fa
   1 event queued: 1 evento in coda
-  1 hour ago: ''
+  1 hour ago: 1 ora fa
   1 layer: 1 strato
-  1 min ago: ''
+  1 min ago: 1 min fa
   1 minute: 1 minuto
   1 more tap to {} beta features: 1 tocco per {} funzioni beta
   1. Printer homes and probes the bed: 1. La stampante esegue homing e sonda il piano

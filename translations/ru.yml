@@ -3,9 +3,9 @@ translations:
   ' elapsed · ': ' истёк · '
   ' frames captured': ' кадров захвачено'
   ' left': ' осталось'
-  '%lu days ago': ''
-  '%lu hours ago': ''
-  '%lu min ago': ''
+  '%lu days ago': '%lu дн. назад'
+  '%lu hours ago': '%lu ч. назад'
+  '%lu min ago': '%lu мин. назад'
   '%u layers': '%u слоёв'
   + Add: + Добавить
   + Add Preset: + Добавить пресет
@@ -17,11 +17,11 @@ translations:
   0 = computed: ''
   0 slots: '{0} Слотов'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2мм для директа, 4-6мм для боудена
-  1 day ago: ''
+  1 day ago: 1 день назад
   1 event queued: 1 событие в очереди
-  1 hour ago: ''
+  1 hour ago: 1 ч. назад
   1 layer: 1 слой
-  1 min ago: ''
+  1 min ago: 1 мин. назад
   1 minute: 1 минута
   1 more tap to {} beta features: 1 нажатие до {} бета-функций
   1. Printer homes and probes the bed: 1. Принтер паркуется и зондирует стол

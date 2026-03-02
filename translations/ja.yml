@@ -3,9 +3,9 @@ translations:
   ' elapsed · ': ' 経過 · '
   ' frames captured': ' フレームをキャプチャしました'
   ' left': ' 残り'
-  '%lu days ago': ''
-  '%lu hours ago': ''
-  '%lu min ago': ''
+  '%lu days ago': '%lu日前'
+  '%lu hours ago': '%lu時間前'
+  '%lu min ago': '%lu分前'
   '%u layers': '%uレイヤー'
   + Add: + 追加
   + Add Preset: + プリセットを追加
@@ -17,11 +17,11 @@ translations:
   0 = computed: ''
   0 slots: '{0} スロット'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm ダイレクトドライブ、4-6mm ボーデン
-  1 day ago: ''
+  1 day ago: 1日前
   1 event queued: 1件のイベント待機中
-  1 hour ago: ''
+  1 hour ago: 1時間前
   1 layer: 1レイヤー
-  1 min ago: ''
+  1 min ago: 1分前
   1 minute: 1分
   1 more tap to {} beta features: あと1回タップでベータ機能を{}
   1. Printer homes and probes the bed: 1. プリンターがホーミングしてベッドをプローブします

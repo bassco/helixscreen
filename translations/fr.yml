@@ -1075,7 +1075,7 @@ translations:
   Starting Print...: "Démarrage de l'impression..."
   Starting...: Démarrage...
   Startup, auto-control, and macro devices: Démarrage, contrôle auto et appareils macro
-  State: ''
+  State: 'État'
   Status: État
   Status icons: Icônes d'état
   Step: Étape
@@ -1085,7 +1085,7 @@ translations:
   Stop Print?: Arrêter l'impression ?
   Stops all motion. Requires firmware restart.: Arrête tout mouvement. Nécessite un redémarrage du firmware.
   Stow: Ranger
-  Success: ''
+  Success: Succès
   Success Rate: Taux de réussite
   Success!: Succès !
   Surfaces inherit app background tokens for light and dark modes.: Les surfaces héritent des jetons d'arrière-plan de l'application pour les modes clair et sombre.
@@ -1094,8 +1094,8 @@ translations:
   Switch between light and dark themes: Basculer entre les thèmes clair et sombre
   Switching heater control to MPC. Klipper will restart.: Basculement du chauffage vers MPC. Klipper va redémarrer.
   Switching to MPC requires a config change and Klipper restart.: Le passage à MPC nécessite une modification de la config et un redémarrage de Klipper.
-  Sync Drive: ''
-  Sync Feedback: ''
+  Sync Drive: 'Entraînement sync'
+  Sync Feedback: 'Retour sync'
   Sync with Spoolman: Synchroniser avec Spoolman
   Sysfs: Sysfs
   System: Système
@@ -1250,7 +1250,7 @@ translations:
   Webcam: Webcam
   Website (optional): Site web (facultatif)
   Week: Semaine
-  Weekly Print Stats: ''
+  Weekly Print Stats: "Statistiques d'impression hebdomadaires"
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Les données de poids sont synchronisées depuis Spoolman pour afficher le filament restant. Les modifications sont également synchronisées au démarrage, à la pause ou à la fin des impressions.
   Weight sync settings: Paramètres de synchronisation du poids
@@ -1299,16 +1299,16 @@ translations:
   disabled: désactivé
   e.g. Jet Black: p. ex. Noir profond
   e.g. Polymaker: p. ex. Polymaker
-  eSpooler: ''
+  eSpooler: eSpooler
   elapsed: écoulé
   enable: activer
   enabled: activé
   est: est
   layers: couches
-  mm before clog: ''
+  mm before clog: 'mm avant bouchon'
   not detected: non détecté
   of: de
-  prints: ''
+  prints: impressions
   set to: réglé à
   started: lancé
   tall: de haut

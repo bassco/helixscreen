@@ -3,9 +3,9 @@ translations:
   ' elapsed · ': ' decorrido · '
   ' frames captured': ' frames capturados'
   ' left': ' restante'
-  '%lu days ago': ''
-  '%lu hours ago': ''
-  '%lu min ago': ''
+  '%lu days ago': 'há %lu dias'
+  '%lu hours ago': 'há %lu horas'
+  '%lu min ago': 'há %lu min'
   '%u layers': '%u camadas'
   + Add: + Adicionar
   + Add Preset: + Adicionar Predefinição
@@ -17,11 +17,11 @@ translations:
   0 = computed: ''
   0 slots: '{0} Slots'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm direct drive, 4-6mm bowden
-  1 day ago: ''
+  1 day ago: há 1 dia
   1 event queued: 1 evento na fila
-  1 hour ago: ''
+  1 hour ago: há 1 hora
   1 layer: 1 camada
-  1 min ago: ''
+  1 min ago: há 1 min
   1 minute: 1 minuto
   1 more tap to {} beta features: Mais 1 toque para {} recursos beta
   1. Printer homes and probes the bed: 1. A impressora faz home e sonda a mesa
