@@ -36,7 +36,7 @@
 #include "lvgl/lvgl.h"
 
 // Default configuration
-#define UI_TEMP_GRAPH_MAX_SERIES 8       // Maximum concurrent temperature series
+#define UI_TEMP_GRAPH_MAX_SERIES 16      // Maximum concurrent temperature series
 #define UI_TEMP_GRAPH_DISPLAY_MINUTES 20 // Display period in minutes (primary constant)
 #define UI_TEMP_GRAPH_SAMPLE_RATE_HZ 1   // Sample rate (1 sample per second)
 #define UI_TEMP_GRAPH_DEFAULT_POINTS                                                               \
