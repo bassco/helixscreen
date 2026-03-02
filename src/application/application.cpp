@@ -2430,7 +2430,16 @@ void Application::handle_keyboard_shortcuts() {
                     spdlog::info("[Application] P key - switching to printer '{}'", next);
                     switch_printer(next);
                 } else {
-                    spdlog::info("[Application] P key - only one printer configured, no switch");
+                    // Create a second test printer so we can test switching
+                    spdlog::info("[Application] P key - creating test printer for multi-printer testing");
+                    nlohmann::json test_data;
+                    test_data["printer_name"] = "Test Printer 2";
+                    test_data["moonraker_host"] = "127.0.0.1";
+                    test_data["moonraker_port"] = 7125;
+                    m_config->add_printer("test-printer-2", test_data);
+                    m_config->save();
+                    // Update subjects so the badge appears
+                    get_printer_state().set_multi_printer_enabled(true);
                 }
             },
             [this]() { return get_runtime_config()->is_test_mode() && m_config; });

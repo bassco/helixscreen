@@ -7,6 +7,7 @@
 #include "theme_manager.h"
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
+#include "ui_icon_codepoints.h"
 
 #include <spdlog/spdlog.h>
 
@@ -81,8 +82,18 @@ void PrinterSwitchMenu::populate_printer_list() {
     int space_sm = get_token("space_sm", 6);
 
     lv_color_t accent = theme_manager_get_color("accent");
-    lv_color_t text_primary = theme_manager_get_color("text_primary");
-    const lv_font_t* default_font = lv_font_get_default();
+    lv_color_t text_color = theme_manager_get_color("text");
+
+    // Resolve fonts via XML token system (same pattern as other context menus)
+    const char* body_font_name = lv_xml_get_const(nullptr, "font_body");
+    const lv_font_t* body_font =
+        body_font_name ? lv_xml_get_font(nullptr, body_font_name) : lv_font_get_default();
+    const char* icon_font_name = lv_xml_get_const(nullptr, "icon_font_sm");
+    const lv_font_t* icon_font =
+        icon_font_name ? lv_xml_get_font(nullptr, icon_font_name) : body_font;
+
+    // Get check icon codepoint from our icon system
+    const char* check_codepoint = ui_icon::lookup_codepoint("check");
 
     for (const auto& id : printer_ids) {
         bool is_active = (id == active_id);
@@ -105,16 +116,17 @@ void PrinterSwitchMenu::populate_printer_list() {
         lv_obj_set_style_bg_opa(row, 30, LV_STATE_PRESSED);
         lv_obj_set_style_bg_color(row, accent, LV_STATE_PRESSED);
 
-        // Checkmark (active) or spacer (inactive)
+        // Checkmark icon (active) or spacer (inactive)
         lv_obj_t* indicator = lv_label_create(row);
-        if (is_active) {
-            lv_label_set_text(indicator, LV_SYMBOL_OK);
+        if (is_active && check_codepoint) {
+            lv_label_set_text(indicator, check_codepoint);
+            lv_obj_set_style_text_font(indicator, icon_font, 0);
             lv_obj_set_style_text_color(indicator, accent, 0);
         } else {
             lv_label_set_text(indicator, "");
             lv_obj_set_style_min_width(indicator, 16, 0);
+            lv_obj_set_style_text_font(indicator, icon_font, 0);
         }
-        lv_obj_set_style_text_font(indicator, default_font, 0);
         lv_obj_remove_flag(indicator, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(indicator, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -123,8 +135,8 @@ void PrinterSwitchMenu::populate_printer_list() {
         lv_label_set_text(label, name.c_str());
         lv_obj_set_flex_grow(label, 1);
         lv_label_set_long_mode(label, LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_style_text_font(label, default_font, 0);
-        lv_obj_set_style_text_color(label, text_primary, 0);
+        lv_obj_set_style_text_font(label, body_font, 0);
+        lv_obj_set_style_text_color(label, text_color, 0);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
