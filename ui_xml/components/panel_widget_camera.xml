@@ -5,10 +5,10 @@
     <lv_image name="camera_image" width="100%" height="100%"
               style_image_recolor="#000000" style_image_recolor_opa="0"/>
     <lv_obj name="camera_overlay" align="center"
-            width="content" height="content"
+            width="100%" height="content"
             style_pad_all="#space_lg"
             style_bg_opa="transp"
-            flex_flow="column" flex_cross_place="center"
+            flex_flow="column" style_flex_cross_place="center"
             style_layout="flex" style_flex_main_place="center"
             style_gap_row="#space_sm">
       <spinner name="camera_spinner" size="md"/>
