@@ -120,3 +120,4 @@ config/helixconfig.json.voronv2
 config/crash_report.txt
 config/crash.txt
 config/tool_spools.json
+config/.crash_restart_count
