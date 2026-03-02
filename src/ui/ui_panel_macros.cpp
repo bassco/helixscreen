@@ -360,18 +360,37 @@ void MacrosPanel::fetch_params_and_run(const std::string& macro_name) {
             try {
                 if (response.contains("result") && response["result"].contains("status") &&
                     response["result"]["status"].contains("configfile") &&
-                    response["result"]["status"]["configfile"].contains("config") &&
-                    response["result"]["status"]["configfile"]["config"].contains(config_key) &&
-                    response["result"]["status"]["configfile"]["config"][config_key].contains(
-                        "gcode")) {
-                    gcode_template =
-                        response["result"]["status"]["configfile"]["config"][config_key]["gcode"]
-                            .get<std::string>();
+                    response["result"]["status"]["configfile"].contains("config")) {
+                    auto& config =
+                        response["result"]["status"]["configfile"]["config"];
+                    if (config.contains(config_key)) {
+                        if (config[config_key].contains("gcode")) {
+                            gcode_template =
+                                config[config_key]["gcode"].get<std::string>();
+                        } else {
+                            spdlog::warn("[{}] Config key '{}' has no 'gcode' "
+                                         "field (keys: {})",
+                                         get_name(), config_key,
+                                         config[config_key].dump());
+                        }
+                    } else {
+                        spdlog::warn("[{}] Config key '{}' not found in "
+                                     "configfile.config",
+                                     get_name(), config_key);
+                    }
+                } else {
+                    spdlog::warn("[{}] configfile.config not present in "
+                                 "response for {}",
+                                 get_name(), macro_copy);
                 }
             } catch (const std::exception& e) {
                 spdlog::warn("[{}] Failed to parse template for {}: {}", get_name(), macro_copy,
                              e.what());
             }
+
+            spdlog::debug("[{}] Template for '{}' (key='{}'): {} chars",
+                          get_name(), macro_copy, config_key,
+                          gcode_template.size());
 
             auto parsed = helix::parse_macro_params(gcode_template);
 

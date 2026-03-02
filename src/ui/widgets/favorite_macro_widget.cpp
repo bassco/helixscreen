@@ -240,18 +240,38 @@ void FavoriteMacroWidget::fetch_and_execute() {
             try {
                 if (response.contains("result") && response["result"].contains("status") &&
                     response["result"]["status"].contains("configfile") &&
-                    response["result"]["status"]["configfile"].contains("config") &&
-                    response["result"]["status"]["configfile"]["config"].contains(config_key) &&
-                    response["result"]["status"]["configfile"]["config"][config_key].contains(
-                        "gcode")) {
-                    gcode_template =
-                        response["result"]["status"]["configfile"]["config"][config_key]["gcode"]
-                            .get<std::string>();
+                    response["result"]["status"]["configfile"].contains("config")) {
+                    auto& config =
+                        response["result"]["status"]["configfile"]["config"];
+                    if (config.contains(config_key)) {
+                        if (config[config_key].contains("gcode")) {
+                            gcode_template =
+                                config[config_key]["gcode"].get<std::string>();
+                        } else {
+                            spdlog::warn("[FavoriteMacroWidget] Config key '{}' "
+                                         "has no 'gcode' field (keys: {})",
+                                         config_key,
+                                         config[config_key].dump());
+                        }
+                    } else {
+                        spdlog::warn("[FavoriteMacroWidget] Config key '{}' not "
+                                     "found in configfile.config",
+                                     config_key);
+                    }
+                } else {
+                    spdlog::warn("[FavoriteMacroWidget] configfile.config not "
+                                 "present in response for {}",
+                                 macro_name_copy);
                 }
             } catch (const std::exception& e) {
                 spdlog::warn("[FavoriteMacroWidget] Failed to parse template for {}: {}",
                              macro_name_copy, e.what());
             }
+
+            spdlog::debug("[FavoriteMacroWidget] Template for '{}' (key='{}'): "
+                          "{} chars",
+                          macro_name_copy, config_key,
+                          gcode_template.size());
 
             // Parse and cache params (on UI thread via queue)
             auto parsed = parse_macro_params(gcode_template);
