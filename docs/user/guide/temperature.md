@@ -34,7 +34,13 @@ Built-in presets:
 | PETG | 240°C | 80°C |
 | ABS | 250°C | 100°C |
 
-Tap a preset to set both current and target. Custom presets can be configured via Klipper macros.
+Tap a preset to set the target temperature immediately.
+
+### Spool Preset
+
+When you have a filament loaded — either via an [external spool configuration](filament.md#external-spool-configuration) or an active AMS slot — and the material doesn't match one of the standard presets (PLA, PETG, ABS, TPU), an additional **spool preset** button appears below the standard presets.
+
+The spool preset shows the material name and recommended temperature (e.g., "PA-CF (265°C)"). Tap it to set the temperature for that specific material. This appears on both the Nozzle and Bed temperature panels.
 
 ---
 
@@ -100,6 +106,7 @@ When multiple extruders are configured, the nozzle controls include an extruder 
 From the right column:
 
 - Tap a **material preset** (Off, PLA, PETG, ABS) to set that temperature immediately
+- If a non-standard filament is loaded, tap the **spool preset** to set the recommended temperature for that material
 - Tap **Custom...** to enter an exact temperature via the on-screen keypad
 
 ---

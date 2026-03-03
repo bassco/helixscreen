@@ -2,6 +2,22 @@
 
 ---
 
+## External Spool Configuration
+
+If you're not using an AMS or multi-material system, you can tell HelixScreen what filament is loaded by configuring an **external spool**. Tap the spool icon on the Filament panel to set the material, color, and brand. If Spoolman is configured, you can also link to a specific Spoolman spool.
+
+Once configured, the external spool information is used throughout the UI:
+
+- **Spool preset button** — A dynamic preset button appears on the Filament panel with your spool's material name and recommended temperatures. Tap it to pre-heat both the nozzle and bed to the correct temperatures for your loaded filament.
+- **Temperature panel presets** — The Nozzle and Bed temperature panels also show a spool preset button for quick one-tap heating.
+- **Purge temperature** — When you tap **Purge**, HelixScreen automatically passes the recommended nozzle temperature to the purge macro (as the `PURGE_TEMP` parameter), so macros that support it can heat to the right temperature.
+
+The spool preset button only appears when the loaded material differs from the standard presets (PLA, PETG, ABS, TPU). For standard materials, just use the built-in preset buttons.
+
+> **Tip:** The spool preset updates automatically when you change the external spool configuration — no need to close and reopen panels.
+
+---
+
 ## Extrusion Panel
 
 ![Extrusion Panel](../../images/user/controls-extrusion.png)
@@ -55,6 +71,8 @@ For multi-material systems (Happy Hare, AFC-Klipper):
 - **Home**: Run homing sequence for the AMS
 
 Tap a slot to select it before load/unload operations.
+
+When an AMS slot is actively loaded, its material information drives the same spool preset behavior described in [External Spool Configuration](#external-spool-configuration) — you'll see the spool preset button on the Filament and Temperature panels, and purge macros receive the correct temperature automatically.
 
 ---
 
