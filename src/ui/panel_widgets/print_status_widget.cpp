@@ -40,7 +40,7 @@ PrintStatusWidget::~PrintStatusWidget() {
 void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     using helix::ui::observe_int_sync;
     using helix::ui::observe_print_state;
-    using helix::ui::observe_string;
+    using helix::ui::observe_string_immediate;
 
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
@@ -52,6 +52,9 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     print_card_thumb_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb");
     print_card_active_thumb_ = lv_obj_find_by_name(widget_obj_, "print_card_active_thumb");
     print_card_label_ = lv_obj_find_by_name(widget_obj_, "print_card_label");
+    print_card_layout_ = lv_obj_find_by_name(widget_obj_, "print_card_layout");
+    print_card_thumb_wrap_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_wrap");
+    print_card_info_ = lv_obj_find_by_name(widget_obj_, "print_card_info");
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -78,13 +81,17 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                                                 self->on_print_progress_or_time_changed();
                                             });
 
-    print_thumbnail_path_observer_ =
-        observe_string<PrintStatusWidget>(printer_state_.get_print_thumbnail_path_subject(), this,
-                                          [](PrintStatusWidget* self, const char* path) {
-                                              if (!self->widget_obj_)
-                                                  return;
-                                              self->on_print_thumbnail_path_changed(path);
-                                          });
+    // Use observe_string_immediate: the thumbnail handler only calls lv_image_set_src
+    // (no observer lifecycle changes), and set_print_thumbnail_path is always called
+    // from the UI thread via queue_update. Immediate avoids the double-deferral that
+    // caused stale reads when the subject changed between notification and handler.
+    print_thumbnail_path_observer_ = observe_string_immediate<PrintStatusWidget>(
+        printer_state_.get_print_thumbnail_path_subject(), this,
+        [](PrintStatusWidget* self, const char* path) {
+            if (!self->widget_obj_)
+                return;
+            self->on_print_thumbnail_path_changed(path);
+        });
 
     auto& fsm = helix::FilamentSensorManager::instance();
     filament_runout_observer_ = observe_int_sync<PrintStatusWidget>(
@@ -131,6 +138,9 @@ void PrintStatusWidget::detach() {
     print_card_thumb_ = nullptr;
     print_card_active_thumb_ = nullptr;
     print_card_label_ = nullptr;
+    print_card_layout_ = nullptr;
+    print_card_thumb_wrap_ = nullptr;
+    print_card_info_ = nullptr;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -139,6 +149,41 @@ void PrintStatusWidget::detach() {
     parent_screen_ = nullptr;
 
     spdlog::debug("[PrintStatusWidget] Detached");
+}
+
+// ============================================================================
+// Size-Dependent Layout
+// ============================================================================
+
+void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/,
+                                        int /*height_px*/) {
+    if (!print_card_layout_ || !print_card_thumb_wrap_ || !print_card_info_) {
+        return;
+    }
+
+    // 2x2: column layout (thumbnail on top, info below)
+    // 1x2, 3x2: row layout (thumbnail left, info right)
+    bool use_column = (colspan == 2 && rowspan >= 2);
+
+    if (use_column) {
+        lv_obj_set_flex_flow(print_card_layout_, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_width(print_card_thumb_wrap_, LV_PCT(100));
+        lv_obj_set_style_flex_grow(print_card_thumb_wrap_, 1, 0);
+        lv_obj_set_width(print_card_info_, LV_PCT(100));
+        lv_obj_set_height(print_card_info_, LV_SIZE_CONTENT);
+        lv_obj_set_style_flex_grow(print_card_info_, 0, 0);
+    } else {
+        lv_obj_set_flex_flow(print_card_layout_, LV_FLEX_FLOW_ROW);
+        lv_obj_set_width(print_card_thumb_wrap_, LV_PCT(40));
+        lv_obj_set_height(print_card_thumb_wrap_, LV_PCT(100));
+        lv_obj_set_style_flex_grow(print_card_thumb_wrap_, 0, 0);
+        lv_obj_set_height(print_card_info_, LV_PCT(100));
+        lv_obj_set_width(print_card_info_, LV_SIZE_CONTENT);
+        lv_obj_set_style_flex_grow(print_card_info_, 1, 0);
+    }
+
+    spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {}", colspan, rowspan,
+                  use_column ? "column" : "row");
 }
 
 // ============================================================================
@@ -188,21 +233,17 @@ void PrintStatusWidget::on_print_progress_or_time_changed() {
     update_print_card_from_state();
 }
 
-void PrintStatusWidget::on_print_thumbnail_path_changed(const char* /*path*/) {
+void PrintStatusWidget::on_print_thumbnail_path_changed(const char* path) {
     if (!widget_obj_ || !print_card_active_thumb_) {
         return;
     }
 
-    // Already deferred via observe_string's queue_update — safe to update directly.
-    const char* current_path =
-        lv_subject_get_string(printer_state_.get_print_thumbnail_path_subject());
-
-    if (current_path && current_path[0] != '\0') {
-        lv_image_set_src(print_card_active_thumb_, current_path);
-        spdlog::debug("[PrintStatusWidget] Active print thumbnail updated: {}", current_path);
+    if (path && path[0] != '\0') {
+        lv_image_set_src(print_card_active_thumb_, path);
+        spdlog::info("[PrintStatusWidget] Active print thumbnail updated: {}", path);
     } else {
         lv_image_set_src(print_card_active_thumb_, "A:assets/images/benchy_thumbnail_white.png");
-        spdlog::debug("[PrintStatusWidget] Active print thumbnail cleared");
+        spdlog::debug("[PrintStatusWidget] Active print thumbnail cleared (empty path)");
     }
 }
 

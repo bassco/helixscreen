@@ -20,6 +20,7 @@ class PrintStatusWidget : public PanelWidget {
 
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
+    void on_size_changed(int colspan, int rowspan, int width_px, int height_px) override;
     const char* id() const override {
         return "print_status";
     }
@@ -38,6 +39,9 @@ class PrintStatusWidget : public PanelWidget {
     lv_obj_t* print_card_thumb_ = nullptr;        // Idle state thumbnail
     lv_obj_t* print_card_active_thumb_ = nullptr; // Active print thumbnail
     lv_obj_t* print_card_label_ = nullptr;        // Dynamic text label
+    lv_obj_t* print_card_layout_ = nullptr;       // Row/column layout container
+    lv_obj_t* print_card_thumb_wrap_ = nullptr;   // Thumbnail wrapper
+    lv_obj_t* print_card_info_ = nullptr;         // Info section (filename/progress)
 
     // PrinterState reference for subject access
     PrinterState& printer_state_;

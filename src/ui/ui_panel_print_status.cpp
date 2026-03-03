@@ -652,8 +652,14 @@ void PrintStatusPanel::on_ui_destroyed() {
     resize_registered_ = false;
     is_active_ = false;
     gcode_loaded_ = false;
-    // Clear dedup guard so gcode reload isn't blocked on next open
+    // Clear dedup guards so thumbnail + gcode reload isn't blocked on next open.
+    // loaded_thumbnail_filename_ gates the outer set_filename() idempotency check;
+    // requested_gcode_filename_ gates the inner gcode download dedup;
+    // pending_gcode_filename_ would cause a redundant load in on_activate() if stale.
+    // All must be cleared or reopen after destroy-on-close silently skips all reloads.
+    loaded_thumbnail_filename_.clear();
     requested_gcode_filename_.clear();
+    pending_gcode_filename_.clear();
 }
 
 // Cached widget pointer for lazy creation (separate from overlay_root_ which
