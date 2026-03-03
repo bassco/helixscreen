@@ -1085,6 +1085,31 @@ void handle_ui_event(lv_event_t* e) {
 }
 ```
 
+### ⚠️ No Object Deletion During Input Event Processing
+
+**Never call `lv_obj_delete()` on container children from inside an input event callback** (`LV_EVENT_CLICKED`, `LV_EVENT_RELEASED`, etc. triggered by `indev_proc_release`/`indev_proc_press`). LVGL may be iterating the parent's child list during input dispatch — synchronous deletion corrupts the iteration state, causing `lv_obj_get_parent` to dereference freed memory → SIGSEGV.
+
+```cpp
+// ❌ CRASH — deleting container child during input event processing
+void on_done_clicked(lv_event_t* e) {
+    lv_obj_delete(overlay_);    // Corrupts child list mid-iteration
+    overlay_ = nullptr;
+    rebuild_widgets();           // lv_obj_clean() would have handled it
+}
+
+// ✅ CORRECT — null pointer, let rebuild's lv_obj_clean() handle deletion
+void on_done_clicked(lv_event_t* e) {
+    overlay_ = nullptr;          // Just drop the reference
+    rebuild_widgets();           // lv_obj_clean(container) safely destroys all children
+}
+```
+
+**When a rebuild follows:** If the event handler triggers a rebuild (`lv_obj_clean(container)` → recreate children), individual `lv_obj_delete()` calls on container children are both redundant and dangerous. Just null the pointers and let the rebuild's `lv_obj_clean()` handle cleanup — it runs after input processing completes.
+
+**When no rebuild follows:** Use `lv_obj_delete_async()` to defer deletion until after the current event processing cycle, or use `helix::ui::safe_delete()`.
+
+**Note:** `lv_obj_delete_async()` is NOT safe if a subsequent `lv_obj_clean()` on the parent runs before the async delete fires — this causes a double-free. Only use it when no parent cleanup follows.
+
 ### Backend Integration Pattern: helix::ui::queue_update()
 
 **Problem:** Backend threads (networking, file I/O, WiFi scanning) need to update UI but cannot call LVGL APIs directly.

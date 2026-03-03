@@ -142,6 +142,8 @@ void MyState::init_subjects() {
 
 See `ui_observer_guard.h` for full documentation of the `SubjectLifetime` pattern.
 
+**No `lv_obj_delete()` in input event handlers:** Never delete container children synchronously inside `LV_EVENT_CLICKED`/`LV_EVENT_RELEASED` handlers — LVGL may be iterating the child list during `indev_proc_release`. If a rebuild (`lv_obj_clean`) follows, just null pointers and let the rebuild handle deletion. See `docs/devel/ARCHITECTURE.md` § "No Object Deletion During Input Event Processing".
+
 ---
 
 ## Patterns
