@@ -18,6 +18,7 @@
 #include "ui_wizard_printer_identify.h"
 #include "ui_wizard_probe_sensor_select.h"
 #include "ui_wizard_summary.h"
+#include "ui_wizard_telemetry.h"
 #include "ui_wizard_touch_calibration.h"
 #include "ui_wizard_wifi.h"
 
@@ -98,8 +99,26 @@ static bool probe_step_skipped = false;
 // Track if input shaper step (11) is being skipped - no accelerometer
 static bool input_shaper_step_skipped = false;
 
+// Track if printer identify step (4) is being skipped - preset mode
+static bool printer_identify_step_skipped = false;
+
+// Track if heater select step (5) is being skipped - preset mode
+static bool heater_select_step_skipped = false;
+
+// Track if fan select step (6) is being skipped - preset mode
+static bool fan_select_step_skipped = false;
+
+// Track if summary step (12) is being skipped - preset mode
+static bool summary_step_skipped = false;
+
+// Track if telemetry step (13) is being skipped - enabled in preset mode only
+static bool telemetry_step_skipped = true;
+
 // Track if we've calculated the actual step total (happens after connection step)
 static bool skips_precalculated = false;
+
+// Preset mode: skip hardware steps and show telemetry instead of summary
+static bool preset_mode = false;
 
 // Guard against rapid double-clicks during navigation
 static bool navigating = false;
@@ -134,9 +153,10 @@ static const char* const STEP_COMPONENT_NAMES[] = {
     "wizard_filament_sensor_select", // 9 (may be skipped if <2 sensors)
     "wizard_probe_sensor_select",    // 10 (may be skipped if no unassigned sensors)
     "wizard_input_shaper",           // 11 (may be skipped if no accelerometer)
-    "wizard_summary"                 // 12
+    "wizard_summary",                // 12
+    "wizard_telemetry"               // 13 (preset mode only)
 };
-static constexpr int STEP_COMPONENT_COUNT = 12; // Last step number (summary at step 12)
+static constexpr int STEP_COMPONENT_COUNT = 13; // Last step number (telemetry at step 13)
 
 /**
  * Get step title from XML component's <consts> block
@@ -198,6 +218,13 @@ static bool wizard_subjects_initialized = false;
 
 void ui_wizard_init_subjects() {
     spdlog::debug("[Wizard] Initializing subjects");
+
+    // Check if running in preset mode (pre-configured printer package)
+    preset_mode = Config::get_instance()->has_preset();
+    if (preset_mode) {
+        spdlog::info("[Wizard] Preset mode active (preset: {})",
+                     Config::get_instance()->get_preset());
+    }
 
     // Initialize subjects with defaults using managed macros for RAII cleanup
     UI_MANAGED_SUBJECT_INT(current_step, 1, "current_step", wizard_subjects_);
@@ -334,6 +361,7 @@ void ui_wizard_container_register_responsive_constants() {
         "wizard_input_shaper",
         "wizard_language_chooser",
         "wizard_summary",
+        "wizard_telemetry",
         nullptr // Sentinel
     };
 
@@ -387,11 +415,16 @@ static helix::WizardSkipFlags get_current_skip_flags() {
         .touch_cal = touch_cal_step_skipped,
         .language = language_step_skipped,
         .wifi = wifi_step_skipped,
+        .printer_identify = printer_identify_step_skipped,
+        .heater_select = heater_select_step_skipped,
+        .fan_select = fan_select_step_skipped,
         .ams = ams_step_skipped,
         .led = led_step_skipped,
         .filament = filament_step_skipped,
         .probe = probe_step_skipped,
         .input_shaper = input_shaper_step_skipped,
+        .summary = summary_step_skipped,
+        .telemetry = telemetry_step_skipped,
     };
 }
 
@@ -421,11 +454,16 @@ void ui_wizard_navigate_to_step(int step) {
         touch_cal_step_skipped = false;
         language_step_skipped = false;
         wifi_step_skipped = false;
+        printer_identify_step_skipped = false;
+        heater_select_step_skipped = false;
+        fan_select_step_skipped = false;
         ams_step_skipped = false;
         led_step_skipped = false;
         filament_step_skipped = false;
         probe_step_skipped = false;
         input_shaper_step_skipped = false;
+        summary_step_skipped = false;
+        telemetry_step_skipped = !preset_mode; // Enable telemetry step only in preset mode
         skips_precalculated = false;
 
         // Auto-skip touch calibration step if not needed
@@ -468,8 +506,9 @@ void ui_wizard_navigate_to_step(int step) {
         min_step = 3;
     lv_subject_set_int(&wizard_back_visible, (step > min_step) ? 1 : 0);
 
-    // Determine if this is the last step (summary is always step 12 internally)
-    bool is_last_step = (step == 12);
+    // Determine if this is the last step (no more non-skipped steps after this)
+    auto skips = get_current_skip_flags();
+    bool is_last_step = (helix::wizard_next_step(step, skips) == -1);
 
     // Update final step flag for button visibility binding
     lv_subject_set_int(&wizard_is_final_step, is_last_step ? 1 : 0);
@@ -534,54 +573,73 @@ void ui_wizard_refresh_header_translations() {
 static void ui_wizard_precalculate_skips() {
     spdlog::info("[Wizard] Pre-calculating step skips based on hardware data");
 
-    // Touch calibration (step 0) and language (step 1) are already handled at navigation time
-
-    // AMS skip (step 7)
-    if (!ams_step_skipped && get_wizard_ams_identify_step()->should_skip()) {
+    if (preset_mode) {
+        // Preset mode: skip all hardware steps and summary, show telemetry
+        printer_identify_step_skipped = true;
+        heater_select_step_skipped = true;
+        fan_select_step_skipped = true;
         ams_step_skipped = true;
-        spdlog::info("[Wizard] Pre-skip: AMS step will be skipped");
-    }
-
-    // LED skip (step 8)
-    if (!led_step_skipped && get_wizard_led_select_step()->should_skip()) {
         led_step_skipped = true;
-        spdlog::info("[Wizard] Pre-skip: LED step will be skipped");
-    }
+        filament_step_skipped = true;
+        probe_step_skipped = true;
+        input_shaper_step_skipped = true;
+        summary_step_skipped = true;
+        telemetry_step_skipped = false; // Enable telemetry step
+        spdlog::info("[Wizard] Preset mode: skipping all hardware steps and summary, "
+                     "showing telemetry");
+    } else {
+        // Touch calibration (step 0) and language (step 1) handled at navigation time
 
-    // Ensure FilamentSensorManager is populated before skip checks
-    auto& fsm = helix::FilamentSensorManager::instance();
-    if (fsm.get_sensors().empty()) {
-        MoonrakerAPI* api = get_moonraker_api();
-        if (api && api->hardware().has_filament_sensors()) {
-            fsm.discover_sensors(api->hardware().filament_sensor_names());
-            spdlog::debug("[Wizard] Populated FilamentSensorManager for skip calculation");
+        // AMS skip (step 7)
+        if (!ams_step_skipped && get_wizard_ams_identify_step()->should_skip()) {
+            ams_step_skipped = true;
+            spdlog::info("[Wizard] Pre-skip: AMS step will be skipped");
+        }
+
+        // LED skip (step 8)
+        if (!led_step_skipped && get_wizard_led_select_step()->should_skip()) {
+            led_step_skipped = true;
+            spdlog::info("[Wizard] Pre-skip: LED step will be skipped");
+        }
+
+        // Ensure FilamentSensorManager is populated before skip checks
+        auto& fsm = helix::FilamentSensorManager::instance();
+        if (fsm.get_sensors().empty()) {
+            MoonrakerAPI* api = get_moonraker_api();
+            if (api && api->hardware().has_filament_sensors()) {
+                fsm.discover_sensors(api->hardware().filament_sensor_names());
+                spdlog::debug("[Wizard] Populated FilamentSensorManager for skip calculation");
+            }
+        }
+
+        // Filament sensor skip (step 9)
+        if (!filament_step_skipped && get_wizard_filament_sensor_select_step()->should_skip()) {
+            filament_step_skipped = true;
+            spdlog::info("[Wizard] Pre-skip: Filament sensor step will be skipped");
+        }
+
+        // Probe sensor skip (step 10)
+        if (!probe_step_skipped && get_wizard_probe_sensor_select_step()->should_skip()) {
+            probe_step_skipped = true;
+            spdlog::info("[Wizard] Pre-skip: Probe sensor step will be skipped");
+        }
+
+        // Input shaper skip (step 11)
+        if (!input_shaper_step_skipped && get_wizard_input_shaper_step()->should_skip()) {
+            input_shaper_step_skipped = true;
+            spdlog::info("[Wizard] Pre-skip: Input shaper step will be skipped");
         }
     }
 
-    // Filament sensor skip (step 9)
-    if (!filament_step_skipped && get_wizard_filament_sensor_select_step()->should_skip()) {
-        filament_step_skipped = true;
-        spdlog::info("[Wizard] Pre-skip: Filament sensor step will be skipped");
-    }
-
-    // Probe sensor skip (step 10)
-    if (!probe_step_skipped && get_wizard_probe_sensor_select_step()->should_skip()) {
-        probe_step_skipped = true;
-        spdlog::info("[Wizard] Pre-skip: Probe sensor step will be skipped");
-    }
-
-    // Input shaper skip (step 11)
-    if (!input_shaper_step_skipped && get_wizard_input_shaper_step()->should_skip()) {
-        input_shaper_step_skipped = true;
-        spdlog::info("[Wizard] Pre-skip: Input shaper step will be skipped");
-    }
-
     int total_skipped = (touch_cal_step_skipped ? 1 : 0) + (language_step_skipped ? 1 : 0) +
-                        (wifi_step_skipped ? 1 : 0) + (ams_step_skipped ? 1 : 0) +
+                        (wifi_step_skipped ? 1 : 0) + (printer_identify_step_skipped ? 1 : 0) +
+                        (heater_select_step_skipped ? 1 : 0) +
+                        (fan_select_step_skipped ? 1 : 0) + (ams_step_skipped ? 1 : 0) +
                         (led_step_skipped ? 1 : 0) + (filament_step_skipped ? 1 : 0) +
-                        (probe_step_skipped ? 1 : 0) + (input_shaper_step_skipped ? 1 : 0);
+                        (probe_step_skipped ? 1 : 0) + (input_shaper_step_skipped ? 1 : 0) +
+                        (summary_step_skipped ? 1 : 0) + (telemetry_step_skipped ? 1 : 0);
     spdlog::info("[Wizard] Pre-calculated skips: {} steps will be skipped, {} total steps",
-                 total_skipped, 13 - total_skipped);
+                 total_skipped, 14 - total_skipped);
 
     // Mark that we now know the true step count
     skips_precalculated = true;
@@ -643,6 +701,9 @@ static void ui_wizard_cleanup_current_screen() {
         break;
     case 12: // Summary
         get_wizard_summary_step()->cleanup();
+        break;
+    case 13: // Telemetry
+        get_wizard_telemetry_step()->cleanup();
         break;
     default:
         spdlog::warn("[Wizard] Unknown screen step {} during cleanup", current_screen_step);
@@ -821,6 +882,14 @@ static void ui_wizard_load_screen(int step) {
         lv_obj_update_layout(content);
         break;
 
+    case 13: // Telemetry (preset mode only)
+        spdlog::debug("[Wizard] Creating telemetry screen");
+        get_wizard_telemetry_step()->init_subjects();
+        get_wizard_telemetry_step()->register_callbacks();
+        get_wizard_telemetry_step()->create(content);
+        lv_obj_update_layout(content);
+        break;
+
     default:
         spdlog::warn("[Wizard] Invalid step {}, ignoring", step);
         break;
@@ -981,6 +1050,16 @@ static void on_back_clicked(lv_event_t* e) {
     if (current > min_step) {
         int prev_step = current - 1;
 
+        // Skip telemetry step (13) when going back if it was skipped
+        if (prev_step == 13 && telemetry_step_skipped) {
+            prev_step = 12;
+        }
+
+        // Skip summary step (12) when going back if it was skipped
+        if (prev_step == 12 && summary_step_skipped) {
+            prev_step = 11;
+        }
+
         // Skip input shaper step (11) when going back if it was skipped
         if (prev_step == 11 && input_shaper_step_skipped) {
             prev_step = 10;
@@ -1004,6 +1083,21 @@ static void on_back_clicked(lv_event_t* e) {
         // Skip AMS step (7) when going back if it was skipped
         if (prev_step == 7 && ams_step_skipped) {
             prev_step = 6;
+        }
+
+        // Skip fan select step (6) when going back if it was skipped
+        if (prev_step == 6 && fan_select_step_skipped) {
+            prev_step = 5;
+        }
+
+        // Skip heater select step (5) when going back if it was skipped
+        if (prev_step == 5 && heater_select_step_skipped) {
+            prev_step = 4;
+        }
+
+        // Skip printer identify step (4) when going back if it was skipped
+        if (prev_step == 4 && printer_identify_step_skipped) {
+            prev_step = 3;
         }
 
         // Skip WiFi step (2) when going back if it was skipped
@@ -1037,8 +1131,9 @@ static void on_next_clicked(lv_event_t* e) {
     navigating = true;
     int current = lv_subject_get_int(&current_step);
 
-    // Summary (step 12) is the last step
-    if (current >= STEP_COMPONENT_COUNT) {
+    // Check if this is the last step (no more non-skipped steps after this)
+    auto skip_flags = get_current_skip_flags();
+    if (helix::wizard_next_step(current, skip_flags) == -1) {
         spdlog::info("[Wizard] Finish button clicked, completing wizard");
         ui_wizard_complete();
         return;
@@ -1065,11 +1160,39 @@ static void on_next_clicked(lv_event_t* e) {
         spdlog::debug("[Wizard] Skipping WiFi step (Android platform)");
     }
 
+    // Preset mode: auto-validate connection before showing step 3
+    if (preset_mode && next_step == 3) {
+        MoonrakerClient* client = get_moonraker_client();
+        if (client && client->get_connection_state() == ConnectionState::CONNECTED) {
+            spdlog::info("[Wizard] Preset mode: already connected, skipping connection step");
+            // Trigger precalculate since we're skipping step 3's exit
+            ui_wizard_precalculate_skips();
+            auto flags = get_current_skip_flags();
+            int skip_to = helix::wizard_next_step(3, flags);
+            if (skip_to == -1) {
+                ui_wizard_complete();
+                return;
+            }
+            ui_wizard_navigate_to_step(skip_to);
+            navigating = false;
+            return;
+        }
+    }
+
     // Pre-calculate all skip flags when leaving connection step (step 3)
     // This ensures consistent step totals from step 4 onwards
     if (current == 3) {
         spdlog::info("[Wizard] Leaving connection step, pre-calculating skips...");
         ui_wizard_precalculate_skips();
+    }
+
+    // Preset mode: skip hardware config steps 4-6
+    if (preset_mode && next_step >= 4 && next_step <= 6) {
+        printer_identify_step_skipped = true;
+        heater_select_step_skipped = true;
+        fan_select_step_skipped = true;
+        next_step = 7;
+        spdlog::info("[Wizard] Preset mode: skipping hardware config steps 4-6");
     }
 
     // Skip AMS step (7) if no AMS detected
@@ -1124,6 +1247,19 @@ static void on_next_clicked(lv_event_t* e) {
         input_shaper_step_skipped = true;
         next_step = 12;
         spdlog::debug("[Wizard] Skipping input shaper step (no accelerometer)");
+    }
+
+    // Skip summary step (12) in preset mode
+    if (next_step == 12 && summary_step_skipped) {
+        next_step = 13;
+        spdlog::debug("[Wizard] Skipping summary step");
+    }
+
+    // Skip telemetry step (13) if not in preset mode
+    if (next_step == 13 && telemetry_step_skipped) {
+        spdlog::debug("[Wizard] Skipping telemetry step");
+        ui_wizard_complete();
+        return;
     }
 
     ui_wizard_navigate_to_step(next_step);
