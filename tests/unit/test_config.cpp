@@ -1752,6 +1752,46 @@ TEST_CASE("Config: v3→v4 migration skips if /printers already exists",
     std::filesystem::remove_all(temp_dir);
 }
 
+TEST_CASE("Config: v3→v4 migration moves printer_image to per-printer path",
+          "[core][config][migration][v4]") {
+    std::string temp_dir = "/tmp/helix_test_v3_to_v4_printer_image";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    // Write a v3 config with /display/printer_image (pre-multi-printer schema)
+    json v3_config = {
+        {"config_version", 3},
+        {"printer",
+         {{"name", "My Printer"},
+          {"moonraker_host", "192.168.1.100"},
+          {"moonraker_port", 7125}}},
+        {"display", {{"printer_image", "shipped:voron-24r2"}, {"rotate", 0}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v3_config.dump(2);
+    }
+
+    Config test_config;
+    test_config.init(temp_path);
+
+    // Should have migrated to v4
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+
+    // printer_image should be at per-printer path, not under /display
+    REQUIRE(test_config.get<std::string>(test_config.df() + PRINTER_IMAGE) == "shipped:voron-24r2");
+
+    // /display/printer_image should no longer exist
+    auto display = test_config.get<json>("/display", json::object());
+    REQUIRE_FALSE(display.contains("printer_image"));
+
+    // /display should still have other keys intact
+    REQUIRE(test_config.get<int>("/display/rotate") == 0);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
 // ============================================================================
 // Multi-printer CRUD
 // ============================================================================

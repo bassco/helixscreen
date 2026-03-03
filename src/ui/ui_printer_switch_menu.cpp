@@ -168,18 +168,13 @@ void PrinterSwitchMenu::dispatch_switch_action(MenuAction action,
                                                 const std::string& printer_id) {
     auto callback = switch_callback_;
     s_active_instance_ = nullptr;
+    hide();  // Safe: uses lv_obj_delete_async internally
 
-    // Defer hide + callback — we're inside a click event on a child of menu_obj_
-    helix::ui::queue_update([this, callback, action, printer_id]() {
-        hide();
-        if (callback) {
+    if (callback) {
+        helix::ui::queue_update([callback, action, printer_id]() {
             callback(action, printer_id);
-        }
-    });
-}
-
-void PrinterSwitchMenu::cleanup_row_user_data() {
-    // No-op: row IDs are stored via lv_obj_set_name(), no heap cleanup needed.
+        });
+    }
 }
 
 // ============================================================================

@@ -1043,10 +1043,19 @@ void KeyboardManager::set_mode(lv_keyboard_mode_t mode) {
 void KeyboardManager::reset() {
     spdlog::debug("[KeyboardManager] Resetting state for soft restart");
 
-    // Widget pointers are dangling — the LVGL widget tree has been destroyed.
-    // Do NOT call lv_obj_del or any LVGL API on these pointers.
+    // Delete keyboard widget (child of m_screen, survives app_layout teardown)
+    if (keyboard_) {
+        lv_anim_delete(keyboard_, nullptr);  // Cancel pending slide animations
+        lv_obj_del(keyboard_);
+    }
     keyboard_ = nullptr;
-    context_textarea_ = nullptr;
+
+    context_textarea_ = nullptr;  // Child of app_layout — deleted by lv_obj_del(m_app_layout)
+
+    // Delete overlay (also child of m_screen)
+    if (overlay_) {
+        lv_obj_del(overlay_);
+    }
     overlay_ = nullptr;
 
     // Reset all state so init() can be called again

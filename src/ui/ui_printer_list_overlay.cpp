@@ -24,6 +24,7 @@ static std::unique_ptr<helix::ui::PrinterListOverlay> g_printer_list_overlay;
 namespace helix::ui {
 
 bool PrinterListOverlay::s_callbacks_registered_ = false;
+std::string PrinterListOverlay::s_pending_delete_id_;
 
 PrinterListOverlay& get_printer_list_overlay() {
     if (!g_printer_list_overlay) {
@@ -203,13 +204,13 @@ void PrinterListOverlay::handle_delete_printer(const std::string& printer_id) {
     std::string name =
         cfg->get<std::string>("/printers/" + printer_id + "/printer_name", printer_id);
 
-    // Heap-allocate ID for the modal callbacks
-    auto* id_copy = new std::string(printer_id);
+    // Store pending delete ID as static (overlay is a singleton; only one confirm at a time)
+    s_pending_delete_id_ = printer_id;
 
     std::string msg = "Remove " + name + "? All settings for this printer will be deleted.";
 
     modal_show_confirmation("Remove Printer", msg.c_str(), ModalSeverity::Error, "Remove",
-                            on_delete_confirm_cb, on_delete_cancel_cb, id_copy);
+                            on_delete_confirm_cb, on_delete_cancel_cb, nullptr);
 }
 
 void PrinterListOverlay::handle_add_printer() {
@@ -289,14 +290,12 @@ void PrinterListOverlay::on_delete_printer_cb(lv_event_t* e) {
 void PrinterListOverlay::on_delete_confirm_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrinterListOverlay] on_delete_confirm_cb");
 
-    auto* id_ptr = static_cast<std::string*>(lv_event_get_user_data(e));
-    if (!id_ptr) {
+    (void)e;
+    std::string printer_id = s_pending_delete_id_;
+    s_pending_delete_id_.clear();
+    if (printer_id.empty()) {
         return;
     }
-
-    // Take ownership immediately to guard against double invocation
-    std::string printer_id = *id_ptr;
-    delete id_ptr;
 
     // Close the modal first
     lv_obj_t* top = Modal::get_top();
@@ -340,12 +339,8 @@ void PrinterListOverlay::on_delete_confirm_cb(lv_event_t* e) {
 void PrinterListOverlay::on_delete_cancel_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrinterListOverlay] on_delete_cancel_cb");
 
-    // Take ownership immediately to guard against double invocation
-    auto* id_ptr = static_cast<std::string*>(lv_event_get_user_data(e));
-    if (!id_ptr) {
-        return;
-    }
-    delete id_ptr;
+    (void)e;
+    s_pending_delete_id_.clear();
 
     // Close the modal
     lv_obj_t* top = Modal::get_top();

@@ -2579,6 +2579,7 @@ void Application::switch_printer(const std::string& printer_id) {
     // Validate printer exists in config
     if (!m_config->set_active_printer(printer_id)) {
         spdlog::error("[Application] Failed to switch — unknown printer '{}'", printer_id);
+        m_soft_restart_in_progress = false;
         return;
     }
     m_config->save();
@@ -2725,9 +2726,10 @@ void Application::tear_down_printer_state() {
     //    objects referenced by queued callbacks.
     helix::ui::update_queue_shutdown();
 
-    // 6b. Release JobQueueState (holds API/client pointers and subjects)
+    // 6b. Clear global pointer to JobQueueState (prevents access via global pointer).
+    //     Actual destruction deferred to after StaticSubjectRegistry::deinit_all()
+    //     so the registered lambda doesn't run on freed memory.
     set_job_queue_state(nullptr);
-    m_job_queue_state.reset();
 
     // 7. Release history managers
     m_history_manager.reset();
@@ -2776,6 +2778,9 @@ void Application::tear_down_printer_state() {
     // 16. Deinit core singleton subjects (LIFO order via StaticSubjectRegistry).
     //     lv_subject_deinit() removes+frees all remaining observers from each subject.
     StaticSubjectRegistry::instance().deinit_all();
+
+    // 16b. Destroy JobQueueState (after deinit_all so its registered lambda runs safely)
+    m_job_queue_state.reset();
 
     // 17. Invalidate all observer guards. From this point, any ObserverGuard::reset()
     //     in surviving singletons (not destroyed by StaticPanelRegistry) will release

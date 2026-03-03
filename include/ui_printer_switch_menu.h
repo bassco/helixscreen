@@ -45,7 +45,6 @@ class PrinterSwitchMenu : public ContextMenu {
     void handle_printer_selected(const std::string& printer_id);
     void handle_add_printer();
     void dispatch_switch_action(MenuAction action, const std::string& printer_id = "");
-    void cleanup_row_user_data();
 
     SwitchCallback switch_callback_;
 

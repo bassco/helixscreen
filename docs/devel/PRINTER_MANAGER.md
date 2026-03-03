@@ -194,7 +194,7 @@ All image references use a namespaced ID string:
 | `"shipped:NAME"` | Bundled printer image | `"shipped:voron-24r2"` |
 | `"custom:NAME"` | User-imported image | `"custom:my-printer"` |
 
-The active image ID is persisted in `Config` at `/display/printer_image`.
+The active image ID is persisted in `Config` at the per-printer path (e.g., `/printers/{id}/printer_image`). Legacy configs with `/display/printer_image` are migrated automatically during v3-to-v4 config migration.
 
 ### Supported Source Formats
 

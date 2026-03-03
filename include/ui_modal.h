@@ -299,8 +299,13 @@ class ModalStack {
         return stack_.empty();
     }
 
-    // Clear all modal tracking (used during teardown when widgets are destroyed externally)
+    // Delete modal widgets and clear tracking (used during teardown after lv_anim_delete_all)
     void clear() {
+        for (auto& entry : stack_) {
+            if (entry.backdrop && lv_obj_is_valid(entry.backdrop)) {
+                lv_obj_del(entry.backdrop);  // dialog is a child of backdrop — deleted too
+            }
+        }
         stack_.clear();
     }
 

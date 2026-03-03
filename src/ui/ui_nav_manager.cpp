@@ -1452,6 +1452,9 @@ void NavigationManager::shutdown() {
     spdlog::trace("[NavigationManager] Shutting down...");
     shutting_down_ = true;
 
+    // Hide printer switch menu if open (its widget is a child of the screen)
+    printer_switch_menu_.hide();
+
     // Deactivate any overlays in the stack
     for (lv_obj_t* overlay_widget : panel_stack_) {
         auto it = overlay_instances_.find(overlay_widget);

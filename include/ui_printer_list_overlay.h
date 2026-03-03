@@ -32,6 +32,7 @@ class PrinterListOverlay : public OverlayBase {
     void populate_printer_list();
 
     static bool s_callbacks_registered_;
+    static std::string s_pending_delete_id_;  // Printer ID pending delete confirmation
 
     static void on_add_printer_cb(lv_event_t* e);
     static void on_printer_row_cb(lv_event_t* e);
