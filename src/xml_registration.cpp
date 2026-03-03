@@ -492,6 +492,7 @@ register_xml("sound_settings_overlay.xml");
     register_xml("wizard_input_shaper.xml");
     register_xml("wizard_language_chooser.xml");
     register_xml("wizard_summary.xml");
+    register_xml("wizard_telemetry.xml");
     register_xml("telemetry_info_modal.xml");
 
     spdlog::trace("[XML Registration] XML component registration complete");
