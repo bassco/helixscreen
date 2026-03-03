@@ -305,16 +305,7 @@ void FavoriteMacroWidget::fetch_and_execute() {
         }
         break;
     case MacroParamKnowledge::UNKNOWN:
-        if (parent_screen_) {
-            std::weak_ptr<bool> weak_alive = alive_;
-            get_shared_param_modal().show_for_unknown_params(
-                parent_screen_, macro_name_,
-                [this, weak_alive](const std::map<std::string, std::string>& values) {
-                    if (weak_alive.expired())
-                        return;
-                    execute_with_params(values);
-                });
-        }
+        execute_with_params({});
         break;
     }
 }

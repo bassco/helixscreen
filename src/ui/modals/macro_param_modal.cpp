@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "macro_param_modal.h"
-#include "macro_param_cache.h"
 
 #include "ui_event_safety.h"
 
@@ -78,6 +77,34 @@ std::vector<MacroParam> helix::parse_macro_params(const std::string& gcode_templ
         result.push_back({name, default_value});
     }
 
+    // Second pass: catch {% if 'NAME' in params %} / {% if "NAME" in params %}
+    // Also matches 'not in params'. Skips names already found by dot/bracket access.
+    std::regex in_params_re(
+        R"RE((?:'([A-Za-z_][A-Za-z0-9_]*)'|"([A-Za-z_][A-Za-z0-9_]*)")\s+(?:not\s+)?in\s+params)RE");
+
+    auto it2 =
+        std::sregex_iterator(gcode_template.begin(), gcode_template.end(), in_params_re);
+    for (; it2 != end; ++it2) {
+        const auto& match = *it2;
+
+        std::string name;
+        if (match[1].matched)
+            name = match[1].str();
+        else if (match[2].matched)
+            name = match[2].str();
+
+        std::transform(name.begin(), name.end(), name.begin(),
+                       [](unsigned char c) { return std::toupper(c); });
+
+        if (seen.count(name)) {
+            continue;
+        }
+        seen.insert(name);
+
+        // No default value extractable from conditional checks
+        result.push_back({name, ""});
+    }
+
     return result;
 }
 
@@ -89,30 +116,18 @@ void MacroParamModal::show_for_macro(lv_obj_t* parent, const std::string& macro_
     macro_name_ = macro_name;
     params_ = params;
     on_execute_ = std::move(on_execute);
-    raw_mode_ = false;
-    show_common(parent);
-}
-
-void MacroParamModal::show_for_unknown_params(lv_obj_t* parent, const std::string& macro_name,
-                                               MacroExecuteCallback on_execute) {
-    macro_name_ = macro_name;
-    params_.clear();
-    on_execute_ = std::move(on_execute);
-    raw_mode_ = true;
     show_common(parent);
 }
 
 void MacroParamModal::show_common(lv_obj_t* parent) {
     textareas_.clear();
-    raw_textarea_ = nullptr;
 
     // Register callbacks before showing (idempotent)
     lv_xml_register_event_cb(nullptr, "macro_param_modal_run_cb", MacroParamModal::run_cb);
     lv_xml_register_event_cb(nullptr, "macro_param_modal_cancel_cb", MacroParamModal::cancel_cb);
 
     if (!show(parent)) {
-        spdlog::error("[MacroParamModal] Failed to show modal{}", raw_mode_ ? " (raw mode)" : "");
-        raw_mode_ = false;
+        spdlog::error("[MacroParamModal] Failed to show modal");
         return;
     }
 
@@ -141,8 +156,6 @@ void MacroParamModal::on_cancel() {
 }
 
 void MacroParamModal::dismiss() {
-    raw_mode_ = false;
-    raw_textarea_ = nullptr;
     textareas_.clear(); // Clear before hide() -- widgets are about to be deleted
     s_active_instance_ = nullptr;
     hide();
@@ -157,19 +170,6 @@ void MacroParamModal::populate_param_fields() {
 
     textareas_.clear();
 
-    if (raw_mode_) {
-        const char* attrs[] = {"label",       lv_tr("Parameters"),
-                               "placeholder", lv_tr("e.g. NAME=my_var VALUE=123"),
-                               nullptr,       nullptr};
-        lv_obj_t* field =
-            static_cast<lv_obj_t*>(lv_xml_create(param_list, "form_field", attrs));
-        if (field) {
-            raw_textarea_ = lv_obj_find_by_name(field, "field_input");
-        }
-        spdlog::debug("[MacroParamModal] Created raw param field for {}", macro_name_);
-        return;
-    }
-
     for (const auto& param : params_) {
         // Prettify: lowercase with first letter capitalized
         std::string display_name = param.name;
@@ -178,9 +178,13 @@ void MacroParamModal::populate_param_fields() {
             display_name[0] = static_cast<char>(::toupper(display_name[0]));
         }
 
+        // Show default value as placeholder hint; empty field = use macro's own default
+        std::string placeholder =
+            param.default_value.empty() ? param.name : param.default_value;
+
         // Create form_field component (label + themed text_input with keyboard wiring)
         const char* attrs[] = {"label",       display_name.c_str(),
-                               "placeholder", param.name.c_str(),
+                               "placeholder", placeholder.c_str(),
                                nullptr,       nullptr};
         lv_obj_t* field =
             static_cast<lv_obj_t*>(lv_xml_create(param_list, "form_field", attrs));
@@ -189,11 +193,7 @@ void MacroParamModal::populate_param_fields() {
             continue;
         }
 
-        // Find the text_input inside the form_field to set default value
         lv_obj_t* textarea = lv_obj_find_by_name(field, "field_input");
-        if (textarea && !param.default_value.empty()) {
-            lv_textarea_set_text(textarea, param.default_value.c_str());
-        }
 
         textareas_.push_back(textarea);
     }
@@ -202,14 +202,6 @@ void MacroParamModal::populate_param_fields() {
 }
 
 std::map<std::string, std::string> MacroParamModal::collect_values() const {
-    if (raw_mode_ && raw_textarea_) {
-        const char* text = lv_textarea_get_text(raw_textarea_);
-        if (text && text[0] != '\0') {
-            return MacroParamCache::parse_raw_params(text);
-        }
-        return {};
-    }
-
     std::map<std::string, std::string> result;
 
     for (size_t i = 0; i < params_.size() && i < textareas_.size(); ++i) {

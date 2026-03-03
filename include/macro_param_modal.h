@@ -48,13 +48,6 @@ class MacroParamModal : public Modal {
     void show_for_macro(lv_obj_t* parent, const std::string& macro_name,
                         const std::vector<MacroParam>& params, MacroExecuteCallback on_execute);
 
-    /// Show the modal for a macro with unknown parameters (raw text input).
-    /// @param parent Parent object (usually lv_screen_active())
-    /// @param macro_name Display name for the subtitle
-    /// @param on_execute Called when user clicks Run with parsed KEY=VALUE pairs
-    void show_for_unknown_params(lv_obj_t* parent, const std::string& macro_name,
-                                 MacroExecuteCallback on_execute);
-
     // Static callbacks for button wiring
     static void run_cb(lv_event_t* e);
     static void cancel_cb(lv_event_t* e);
@@ -69,8 +62,6 @@ class MacroParamModal : public Modal {
     std::vector<MacroParam> params_;
     MacroExecuteCallback on_execute_;
     std::vector<lv_obj_t*> textareas_; ///< One textarea per param, in order
-    bool raw_mode_ = false;       ///< True when showing raw text input
-    lv_obj_t* raw_textarea_ = nullptr; ///< Textarea for raw param input
 
     void show_common(lv_obj_t* parent);
     void dismiss();

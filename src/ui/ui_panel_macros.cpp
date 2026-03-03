@@ -323,18 +323,9 @@ void MacrosPanel::fetch_params_and_run(const std::string& macro_name) {
             });
         break;
     }
-    case helix::MacroParamKnowledge::UNKNOWN: {
-        std::weak_ptr<bool> weak = alive_;
-        std::string name = macro_name;
-        param_modal_.show_for_unknown_params(
-            lv_screen_active(), macro_name,
-            [this, weak, name](const std::map<std::string, std::string>& values) {
-                if (weak.expired())
-                    return;
-                execute_with_params(name, values);
-            });
+    case helix::MacroParamKnowledge::UNKNOWN:
+        execute_macro(macro_name);
         break;
-    }
     }
 }
 

@@ -142,6 +142,74 @@ M104 S{extruder_temp}
     CHECK(param_map["FILAMENT_TYPE"] == "PLA");
 }
 
+// ============================================================================
+// 'in params' conditional pattern tests
+// ============================================================================
+
+TEST_CASE("parse_macro_params - single-quoted in params", "[macro_params]") {
+    auto result = parse_macro_params("{% if 'PURGE_LINE' in params %}\n"
+                                     "  PURGE\n"
+                                     "{% endif %}");
+
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].name == "PURGE_LINE");
+    CHECK(result[0].default_value.empty());
+}
+
+TEST_CASE("parse_macro_params - double-quoted in params", "[macro_params]") {
+    auto result = parse_macro_params(R"({% if "BED_TEMP" in params %})");
+
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].name == "BED_TEMP");
+}
+
+TEST_CASE("parse_macro_params - not in params", "[macro_params]") {
+    auto result = parse_macro_params("{% if 'SKIP_HEAT' not in params %}\n"
+                                     "  M104 S200\n"
+                                     "{% endif %}");
+
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].name == "SKIP_HEAT");
+}
+
+TEST_CASE("parse_macro_params - in params dedup with dot access", "[macro_params]") {
+    // Dot access finds BED_TEMP with default; conditional should not add duplicate
+    auto result = parse_macro_params("{% set bed = params.BED_TEMP|default(60) %}\n"
+                                     "{% if 'BED_TEMP' in params %}\n"
+                                     "  ; override\n"
+                                     "{% endif %}");
+
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].name == "BED_TEMP");
+    CHECK(result[0].default_value == "60"); // Keeps dot-access default, not clobbered
+}
+
+TEST_CASE("parse_macro_params - in params mixed with dot access", "[macro_params]") {
+    std::string gcode = R"(
+{% set bed_temp = params.BED_TEMP|default(60)|float %}
+{% if 'PURGE_LINE' in params %}
+  PURGE
+{% endif %}
+{% if "CHAMBER_TEMP" in params %}
+  M141 S{params.CHAMBER_TEMP}
+{% endif %}
+)";
+
+    auto result = parse_macro_params(gcode);
+    REQUIRE(result.size() == 3);
+
+    std::map<std::string, std::string> param_map;
+    for (const auto& p : result) {
+        param_map[p.name] = p.default_value;
+    }
+
+    CHECK(param_map.count("BED_TEMP") == 1);
+    CHECK(param_map["BED_TEMP"] == "60");
+    CHECK(param_map.count("PURGE_LINE") == 1);
+    CHECK(param_map["PURGE_LINE"].empty());
+    CHECK(param_map.count("CHAMBER_TEMP") == 1);
+}
+
 TEST_CASE("parse_macro_params - no default value", "[macro_params]") {
     auto result = parse_macro_params("{% set temp = params.TEMP %}\n"
                                      "M104 S{temp}");

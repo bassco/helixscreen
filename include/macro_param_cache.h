@@ -40,10 +40,6 @@ class MacroParamCache {
     /// Clear all cached state (call on disconnect/reconnect).
     void clear();
 
-    /// Parse raw "KEY=VALUE KEY2=VALUE2" text into a parameter map.
-    [[nodiscard]] static std::map<std::string, std::string>
-    parse_raw_params(const std::string& raw_text);
-
   private:
     MacroParamCache() = default;
 

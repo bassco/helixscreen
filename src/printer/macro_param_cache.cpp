@@ -5,7 +5,6 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
-#include <sstream>
 #include <string_view>
 
 namespace helix {
@@ -98,28 +97,6 @@ void MacroParamCache::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     cache_.clear();
     spdlog::debug("[MacroParamCache] Cache cleared");
-}
-
-std::map<std::string, std::string>
-MacroParamCache::parse_raw_params(const std::string& raw_text) {
-    std::map<std::string, std::string> result;
-    std::istringstream iss(raw_text);
-    std::string token;
-
-    while (iss >> token) {
-        auto eq_pos = token.find('=');
-        if (eq_pos == std::string::npos || eq_pos == 0) {
-            continue; // Skip tokens without '=' or starting with '='
-        }
-        std::string key = token.substr(0, eq_pos);
-        std::string value = token.substr(eq_pos + 1);
-        // Uppercase the key to match Klipper convention
-        std::transform(key.begin(), key.end(), key.begin(),
-                       [](unsigned char c) { return std::toupper(c); });
-        result[key] = value;
-    }
-
-    return result;
 }
 
 } // namespace helix
