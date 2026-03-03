@@ -7,6 +7,7 @@
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_global_panel_helper.h"
+#include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_common.h"
 #include "ui_subject_registry.h"
@@ -22,7 +23,8 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
-#include <cstring>
+#include <ctime>
+#include <utility>
 #include <vector>
 
 // ============================================================================
@@ -37,13 +39,37 @@ DEFINE_GLOBAL_PANEL(ConsolePanel, g_console_panel, get_global_console_panel)
 
 namespace {
 
-/**
- * @brief Parsed text segment with optional color class
- */
+// HTML span tag delimiters used by AFC/Happy Hare plugins (Mainsail-style)
+constexpr const char SPAN_OPEN[] = "<span class=";
+constexpr size_t SPAN_OPEN_LEN = sizeof(SPAN_OPEN) - 1; // 12
+constexpr const char SPAN_CLOSE[] = "</span>";
+constexpr size_t SPAN_CLOSE_LEN = sizeof(SPAN_CLOSE) - 1; // 7
+
 struct TextSegment {
     std::string text;
     std::string color_class; // empty = default, "success", "info", "warning", "error"
 };
+
+/**
+ * @brief Extract a color class name from a span's class attribute
+ *
+ * Maps "success--text" -> "success", "info--text" -> "info", etc.
+ * Returns empty string for unrecognized classes.
+ */
+std::string extract_color_class(const std::string& class_attr) {
+    static constexpr std::pair<const char*, const char*> mappings[] = {
+        {"success--text", "success"},
+        {"info--text", "info"},
+        {"warning--text", "warning"},
+        {"error--text", "error"},
+    };
+    for (const auto& [pattern, name] : mappings) {
+        if (class_attr.find(pattern) != std::string::npos) {
+            return name;
+        }
+    }
+    return {};
+}
 
 /**
  * @brief Check if a message contains HTML spans we can parse
@@ -52,7 +78,7 @@ struct TextSegment {
  * <span class=success--text>LOADED</span>
  */
 bool contains_html_spans(const std::string& message) {
-    return message.find("<span class=") != std::string::npos &&
+    return message.find(SPAN_OPEN) != std::string::npos &&
            (message.find("success--text") != std::string::npos ||
             message.find("info--text") != std::string::npos ||
             message.find("warning--text") != std::string::npos ||
@@ -72,81 +98,73 @@ std::vector<TextSegment> parse_html_spans(const std::string& message) {
     const size_t len = message.size();
 
     while (pos < len) {
-        // Look for next <span class=
-        size_t span_start = message.find("<span class=", pos);
+        size_t span_start = message.find(SPAN_OPEN, pos);
 
         if (span_start == std::string::npos) {
-            // No more spans - add remaining text as plain segment
-            if (pos < len) {
-                TextSegment seg;
-                seg.text = message.substr(pos);
-                if (!seg.text.empty()) {
-                    segments.push_back(seg);
-                }
+            std::string remaining = message.substr(pos);
+            if (!remaining.empty()) {
+                segments.push_back({std::move(remaining), {}});
             }
             break;
         }
 
         // Add any text before the span as a plain segment
         if (span_start > pos) {
-            TextSegment seg;
-            seg.text = message.substr(pos, span_start - pos);
-            segments.push_back(seg);
+            segments.push_back({message.substr(pos, span_start - pos), {}});
         }
 
-        // Parse the span: <span class=XXX--text>content</span>
         // Find the class value (ends at >)
-        size_t class_start = span_start + 12; // strlen("<span class=")
+        size_t class_start = span_start + SPAN_OPEN_LEN;
         size_t class_end = message.find('>', class_start);
 
         if (class_end == std::string::npos) {
             // Malformed - add rest as plain text
-            TextSegment seg;
-            seg.text = message.substr(span_start);
-            segments.push_back(seg);
+            segments.push_back({message.substr(span_start), {}});
             break;
         }
 
-        // Extract color class from "success--text", "info--text", etc.
-        std::string class_attr = message.substr(class_start, class_end - class_start);
-        std::string color_class;
-
-        if (class_attr.find("success--text") != std::string::npos) {
-            color_class = "success";
-        } else if (class_attr.find("info--text") != std::string::npos) {
-            color_class = "info";
-        } else if (class_attr.find("warning--text") != std::string::npos) {
-            color_class = "warning";
-        } else if (class_attr.find("error--text") != std::string::npos) {
-            color_class = "error";
-        }
+        std::string color_class =
+            extract_color_class(message.substr(class_start, class_end - class_start));
 
         // Find the closing </span>
         size_t content_start = class_end + 1;
-        size_t span_close = message.find("</span>", content_start);
+        size_t span_close = message.find(SPAN_CLOSE, content_start);
 
         if (span_close == std::string::npos) {
-            // No closing tag - add rest as plain text
-            TextSegment seg;
-            seg.text = message.substr(content_start);
-            seg.color_class = color_class;
-            segments.push_back(seg);
+            // No closing tag - add rest as colored text
+            segments.push_back({message.substr(content_start), color_class});
             break;
         }
 
-        // Extract content between > and </span>
-        TextSegment seg;
-        seg.text = message.substr(content_start, span_close - content_start);
-        seg.color_class = color_class;
-        if (!seg.text.empty()) {
-            segments.push_back(seg);
+        std::string content = message.substr(content_start, span_close - content_start);
+        if (!content.empty()) {
+            segments.push_back({std::move(content), std::move(color_class)});
         }
 
-        // Move past </span>
-        pos = span_close + 7; // strlen("</span>")
+        pos = span_close + SPAN_CLOSE_LEN;
     }
 
     return segments;
+}
+
+/**
+ * @brief Format a Unix timestamp as HH:MM:SS local time
+ *
+ * @param timestamp Unix timestamp (> 0), or 0 to use current time
+ * @return Formatted string "HH:MM:SS " (with trailing space)
+ */
+std::string format_timestamp(double timestamp) {
+    time_t t;
+    if (timestamp > 0.0) {
+        t = static_cast<time_t>(timestamp);
+    } else {
+        t = std::time(nullptr);
+    }
+    struct tm tm_buf {};
+    localtime_r(&t, &tm_buf);
+    char buf[12];
+    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d ", tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
+    return std::string(buf);
 }
 
 } // namespace
@@ -157,7 +175,6 @@ std::vector<TextSegment> parse_html_spans(const std::string& message) {
 
 ConsolePanel::ConsolePanel() {
     spdlog::trace("[{}] Constructor", get_name());
-    std::memset(status_buf_, 0, sizeof(status_buf_));
 }
 
 ConsolePanel::~ConsolePanel() {
@@ -172,8 +189,9 @@ ConsolePanel::~ConsolePanel() {
 void ConsolePanel::init_subjects() {
     init_subjects_guarded([this]() {
         // Initialize status subject for reactive binding
-        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_, "Loading history...",
-                                  "console_status", subjects_);
+        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_,
+                                  lv_tr("Loading history..."), "console_status",
+                                  subjects_);
     });
 }
 
@@ -198,7 +216,7 @@ void ConsolePanel::register_callbacks() {
 
     spdlog::debug("[{}] Registering event callbacks", get_name());
 
-    // Register XML event callbacks for send and clear buttons
+    // Register XML event callbacks for send, clear, and filter buttons
     register_xml_callbacks({
         {"on_console_send_clicked",
          [](lv_event_t* /*e*/) {
@@ -208,7 +226,23 @@ void ConsolePanel::register_callbacks() {
         {"on_console_clear_clicked",
          [](lv_event_t* /*e*/) {
              spdlog::debug("[Console] Clear button clicked");
-             get_global_console_panel().clear_display();
+             helix::ui::modal_show_confirmation(
+                 lv_tr("Clear Console?"),
+                 lv_tr("This will remove all entries from the display."),
+                 ModalSeverity::Info, lv_tr("Clear"),
+                 [](lv_event_t* /*e*/) { get_global_console_panel().clear_display(); },
+                 nullptr, nullptr);
+         }},
+        {"on_console_filter_toggled",
+         [](lv_event_t* e) {
+             spdlog::debug("[Console] Filter toggle clicked");
+             auto& panel = get_global_console_panel();
+             panel.filter_temps_ = !panel.filter_temps_;
+             spdlog::debug("[Console] Temperature filter: {}",
+                           panel.filter_temps_ ? "ON" : "OFF");
+             // Update button visual to indicate state
+             auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+             lv_obj_set_style_opa(btn, panel.filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
          }},
     });
 
@@ -247,9 +281,88 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
         return nullptr;
     }
 
+    // Track user scroll position for smart auto-scroll behavior.
+    // When user scrolls up to read history, auto-scroll is paused.
+    lv_obj_add_event_cb(
+        console_container_,
+        [](lv_event_t* e) {
+            auto* panel = static_cast<ConsolePanel*>(lv_event_get_user_data(e));
+            auto* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+            int32_t scroll_bottom = lv_obj_get_scroll_bottom(obj);
+            // At bottom when remaining scroll distance is negligible (within 5px)
+            panel->user_scrolled_up_ = (scroll_bottom > 5);
+        },
+        LV_EVENT_SCROLL, this);
+
     if (!gcode_input_) {
         spdlog::warn("[{}] gcode_input not found - input disabled", get_name());
+    } else {
+        // Enter key submits the command (LV_EVENT_READY fires on Enter
+        // in a one-line textarea)
+        lv_obj_add_event_cb(
+            gcode_input_,
+            [](lv_event_t* e) {
+                auto* panel =
+                    static_cast<ConsolePanel*>(lv_event_get_user_data(e));
+                panel->send_gcode_command();
+            },
+            LV_EVENT_READY, this);
+
+        // Up/Down arrow keys navigate command history
+        lv_obj_add_event_cb(
+            gcode_input_,
+            [](lv_event_t* e) {
+                auto* panel =
+                    static_cast<ConsolePanel*>(lv_event_get_user_data(e));
+                uint32_t key = lv_event_get_key(e);
+
+                if (key == LV_KEY_UP) {
+                    if (panel->command_history_.empty()) {
+                        return;
+                    }
+                    // Save current input on first press into history
+                    if (panel->history_index_ == -1) {
+                        const char* cur =
+                            lv_textarea_get_text(panel->gcode_input_);
+                        panel->saved_input_ = cur ? cur : "";
+                    }
+                    // Move to older command (increment index)
+                    int next = panel->history_index_ + 1;
+                    if (next < static_cast<int>(panel->command_history_.size())) {
+                        panel->history_index_ = next;
+                        lv_textarea_set_text(
+                            panel->gcode_input_,
+                            panel->command_history_[static_cast<size_t>(next)]
+                                .c_str());
+                    }
+                } else if (key == LV_KEY_DOWN) {
+                    if (panel->history_index_ < 0) {
+                        return;
+                    }
+                    // Move to newer command (decrement index)
+                    int next = panel->history_index_ - 1;
+                    if (next >= 0) {
+                        panel->history_index_ = next;
+                        lv_textarea_set_text(
+                            panel->gcode_input_,
+                            panel->command_history_[static_cast<size_t>(next)]
+                                .c_str());
+                    } else {
+                        // Restore saved input
+                        panel->history_index_ = -1;
+                        lv_textarea_set_text(panel->gcode_input_,
+                                             panel->saved_input_.c_str());
+                    }
+                }
+            },
+            LV_EVENT_KEY, this);
     }
+
+    // Show timestamps on medium+ screens (vertical resolution > 460px)
+    int32_t ver_res = lv_display_get_vertical_resolution(lv_display_get_default());
+    show_timestamps_ = (ver_res > UI_BREAKPOINT_SMALL_MAX);
+    spdlog::debug("[{}] Timestamps {} (ver_res={})", get_name(),
+                  show_timestamps_ ? "enabled" : "disabled", ver_res);
 
     spdlog::info("[{}] Overlay created successfully", get_name());
     return overlay_root_;
@@ -265,12 +378,28 @@ void ConsolePanel::on_activate() {
 
     spdlog::debug("[{}] on_activate()", get_name());
 
+    // Reset state for fresh activation
+    user_scrolled_up_ = false;
+    history_index_ = -1;
+    saved_input_.clear();
+
+    // Sync filter button visual with current filter_temps_ state
+    lv_obj_t* overlay_content = lv_obj_find_by_name(overlay_root_, "overlay_content");
+    if (overlay_content) {
+        lv_obj_t* input_row = lv_obj_find_by_name(overlay_content, "input_row");
+        if (input_row) {
+            lv_obj_t* filter_btn = lv_obj_find_by_name(input_row, "filter_btn");
+            if (filter_btn) {
+                lv_obj_set_style_opa(filter_btn,
+                                     filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
+            }
+        }
+    }
+
     // Refresh history when panel becomes visible
     fetch_history();
     // Subscribe to real-time updates
     subscribe_to_gcode_responses();
-    // Reset scroll tracking
-    user_scrolled_up_ = false;
 }
 
 void ConsolePanel::on_deactivate() {
@@ -295,26 +424,38 @@ void ConsolePanel::on_ui_destroyed() {
 // ============================================================================
 
 void ConsolePanel::fetch_history() {
+    // I5: Prevent concurrent fetches (rapid activate/deactivate cycles)
+    if (fetch_in_flight_) {
+        spdlog::debug("[{}] Fetch already in flight, skipping", get_name());
+        return;
+    }
+
     MoonrakerAPI* api = get_moonraker_api();
     if (!api) {
         spdlog::warn("[{}] No MoonrakerAPI available", get_name());
-        std::snprintf(status_buf_, sizeof(status_buf_), "Not connected to printer");
+        std::snprintf(status_buf_, sizeof(status_buf_), "%s",
+                      lv_tr("Not connected to printer"));
         lv_subject_copy_string(&status_subject_, status_buf_);
         update_visibility();
         return;
     }
 
+    fetch_in_flight_ = true;
+
     // Update status while loading
-    std::snprintf(status_buf_, sizeof(status_buf_), "Loading...");
+    std::snprintf(status_buf_, sizeof(status_buf_), "%s", lv_tr("Loading..."));
     lv_subject_copy_string(&status_subject_, status_buf_);
 
     // Request gcode history from Moonraker
+    // CRITICAL: Callbacks run on libhv background thread - defer LVGL work to main thread
+    // and guard with alive_ to prevent use-after-free if panel is destroyed [L072]
     api->get_gcode_store(
         FETCH_COUNT,
-        [this](const std::vector<GcodeStoreEntry>& entries) {
-            spdlog::info("[{}] Received {} gcode entries", get_name(), entries.size());
+        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](
+            const std::vector<GcodeStoreEntry>& entries) {
+            spdlog::info("[Console] Received {} gcode entries", entries.size());
 
-            // Convert to our entry format
+            // Convert to our entry format on background thread (no LVGL calls)
             std::vector<GcodeEntry> converted;
             converted.reserve(entries.size());
 
@@ -328,35 +469,60 @@ void ConsolePanel::fetch_history() {
                 converted.push_back(e);
             }
 
-            populate_entries(converted);
+            // Defer LVGL operations to main thread with alive guard
+            struct Ctx {
+                ConsolePanel* panel;
+                std::weak_ptr<std::atomic<bool>> alive;
+                std::vector<GcodeEntry> entries;
+            };
+            auto ctx =
+                std::make_unique<Ctx>(Ctx{this, alive_weak, std::move(converted)});
+            helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
+                auto alive = c->alive.lock();
+                if (!alive || !alive->load())
+                    return;
+                c->panel->fetch_in_flight_ = false;
+                c->panel->populate_entries(c->entries);
+            });
         },
-        [this](const MoonrakerError& err) {
-            spdlog::error("[{}] Failed to fetch gcode store: {}", get_name(), err.message);
-            std::snprintf(status_buf_, sizeof(status_buf_), "Failed to load history");
-            lv_subject_copy_string(&status_subject_, status_buf_);
-            update_visibility();
+        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](
+            const MoonrakerError& err) {
+            spdlog::error("[Console] Failed to fetch gcode store: {}", err.message);
+
+            // Defer LVGL operations to main thread with alive guard
+            struct Ctx {
+                ConsolePanel* panel;
+                std::weak_ptr<std::atomic<bool>> alive;
+                std::string error_msg;
+            };
+            auto ctx = std::make_unique<Ctx>(Ctx{this, alive_weak, err.message});
+            helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
+                auto alive = c->alive.lock();
+                if (!alive || !alive->load())
+                    return;
+                c->panel->fetch_in_flight_ = false;
+                std::snprintf(c->panel->status_buf_, sizeof(c->panel->status_buf_),
+                              "%s", lv_tr("Failed to load history"));
+                lv_subject_copy_string(&c->panel->status_subject_,
+                                       c->panel->status_buf_);
+                c->panel->update_visibility();
+            });
         });
 }
 
 void ConsolePanel::populate_entries(const std::vector<GcodeEntry>& entries) {
     clear_entries();
 
-    // Store entries (already oldest-first from API)
-    for (const auto& entry : entries) {
-        entries_.push_back(entry);
-
-        // Enforce max size (remove oldest)
-        if (entries_.size() > MAX_ENTRIES) {
-            entries_.pop_front();
-        }
+    // Keep only the most recent MAX_ENTRIES entries (input is oldest-first)
+    size_t start = (entries.size() > MAX_ENTRIES) ? entries.size() - MAX_ENTRIES : 0;
+    for (size_t i = start; i < entries.size(); i++) {
+        entries_.push_back(entries[i]);
     }
 
-    // Create widgets for each entry
     for (const auto& entry : entries_) {
         create_entry_widget(entry);
     }
 
-    // Update visibility and scroll to bottom
     update_visibility();
     scroll_to_bottom();
 }
@@ -366,56 +532,80 @@ void ConsolePanel::create_entry_widget(const GcodeEntry& entry) {
         return;
     }
 
-    const lv_font_t* font = theme_manager_get_font("font_small");
+    const lv_font_t* font = theme_manager_get_font("font_mono");
+    if (!font) {
+        font = theme_manager_get_font("font_small");
+    }
 
-    if (contains_html_spans(entry.message)) {
-        // Create spangroup for rich text with colored segments
+    const bool is_command = (entry.type == GcodeEntry::Type::COMMAND);
+
+    // Color based on entry type: errors red, responses green, commands default
+    auto entry_color = [&]() -> lv_color_t {
+        if (entry.is_error) {
+            return theme_manager_get_color("danger");
+        }
+        if (entry.type == GcodeEntry::Type::RESPONSE) {
+            return theme_manager_get_color("success");
+        }
+        return theme_manager_get_color("text");
+    };
+
+    // Resolve a span color class name to a theme color, falling back to entry color
+    auto resolve_span_color = [&](const std::string& color_class) -> lv_color_t {
+        // "error" class maps to "danger" theme token; others map directly
+        if (color_class == "error") {
+            return theme_manager_get_color("danger");
+        }
+        if (!color_class.empty()) {
+            return theme_manager_get_color(color_class.c_str());
+        }
+        return entry_color();
+    };
+
+    bool has_html = contains_html_spans(entry.message);
+
+    // Use spangroup when timestamps or HTML spans need mixed colors
+    if (show_timestamps_ || has_html) {
         lv_obj_t* spangroup = lv_spangroup_create(console_container_);
         lv_obj_set_width(spangroup, LV_PCT(100));
         lv_obj_set_style_text_font(spangroup, font, 0);
 
-        auto segments = parse_html_spans(entry.message);
-        for (const auto& seg : segments) {
+        // Helper to add a colored span
+        auto add_span = [&](const char* text, lv_color_t color) {
             lv_span_t* span = lv_spangroup_add_span(spangroup);
-            lv_span_set_text(span, seg.text.c_str());
-
-            // Determine color based on segment's color class
-            lv_color_t color;
-            if (seg.color_class == "success") {
-                color = theme_manager_get_color("success");
-            } else if (seg.color_class == "info") {
-                color = theme_manager_get_color("info");
-            } else if (seg.color_class == "warning") {
-                color = theme_manager_get_color("warning");
-            } else if (seg.color_class == "error") {
-                color = theme_manager_get_color("danger");
-            } else {
-                // Default color based on entry type
-                color = entry.is_error ? theme_manager_get_color("danger")
-                        : entry.type == GcodeEntry::Type::RESPONSE
-                            ? theme_manager_get_color("success")
-                            : theme_manager_get_color("text");
-            }
+            lv_span_set_text(span, text);
             lv_style_set_text_color(lv_span_get_style(span), color);
+        };
+
+        if (show_timestamps_) {
+            std::string ts = format_timestamp(entry.timestamp);
+            add_span(ts.c_str(), theme_manager_get_color("text_muted"));
         }
+
+        if (is_command) {
+            add_span("> ", theme_manager_get_color("text"));
+        }
+
+        if (has_html) {
+            for (const auto& seg : parse_html_spans(entry.message)) {
+                add_span(seg.text.c_str(), resolve_span_color(seg.color_class));
+            }
+        } else {
+            add_span(entry.message.c_str(), entry_color());
+        }
+
         lv_spangroup_refresh(spangroup);
     } else {
-        // Plain label for non-HTML messages (faster, simpler)
+        // No timestamps, no HTML: plain label (fastest path)
         lv_obj_t* label = lv_label_create(console_container_);
-        lv_label_set_text(label, entry.message.c_str());
-        lv_obj_set_width(label, LV_PCT(100));
-
-        // Apply color based on entry type
-        lv_color_t color;
-        if (entry.is_error) {
-            color = theme_manager_get_color("danger");
-        } else if (entry.type == GcodeEntry::Type::RESPONSE) {
-            color = theme_manager_get_color("success");
+        if (is_command) {
+            std::string display_text = "> " + entry.message;
+            lv_label_set_text(label, display_text.c_str());
         } else {
-            // Commands use primary text color
-            color = theme_manager_get_color("text");
+            lv_label_set_text(label, entry.message.c_str());
         }
-        lv_obj_set_style_text_color(label, color, 0);
+        lv_obj_set_width(label, LV_PCT(100));
+        lv_obj_set_style_text_color(label, entry_color(), 0);
         lv_obj_set_style_text_font(label, font, 0);
     }
 }
@@ -430,28 +620,23 @@ void ConsolePanel::clear_entries() {
 
 void ConsolePanel::scroll_to_bottom() {
     if (console_container_) {
+        user_scrolled_up_ = false;
         lv_obj_scroll_to_y(console_container_, LV_COORD_MAX, LV_ANIM_OFF);
     }
 }
 
 bool ConsolePanel::is_error_message(const std::string& message) {
-    if (message.empty()) {
-        return false;
-    }
-
-    // Klipper errors typically start with "!!" or "Error:"
     if (message.size() >= 2 && message[0] == '!' && message[1] == '!') {
         return true;
     }
 
-    // Case-insensitive check for "error" at start
+    // Case-insensitive check for "error" at start (covers "Error:", "ERROR:", etc.)
     if (message.size() >= 5) {
-        std::string lower = message.substr(0, 5);
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        if (lower == "error") {
-            return true;
-        }
+        auto ci_eq = [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) ==
+                   std::tolower(static_cast<unsigned char>(b));
+        };
+        return std::equal(message.begin(), message.begin() + 5, "error", ci_eq);
     }
 
     return false;
@@ -467,21 +652,25 @@ bool ConsolePanel::is_temp_message(const std::string& message) {
     // "T:210.5 /210.0 B:60.2 /60.0"
     // "ok B:60.0 /60.0 T0:210.0 /210.0"
 
-    // Look for temperature patterns: T: or B: followed by numbers
-    // Simple heuristic: contains "T:" or "B:" with "/" nearby
+    // Check for "T:" or "B:" followed immediately by a digit, with "/" somewhere after
     size_t t_pos = message.find("T:");
     size_t b_pos = message.find("B:");
 
-    if (t_pos != std::string::npos || b_pos != std::string::npos) {
-        // Check for temperature format: number / number
-        size_t slash_pos = message.find('/');
-        if (slash_pos != std::string::npos) {
-            // Very likely a temperature status message
-            return true;
+    auto check_temp_pattern = [&](size_t pos) -> bool {
+        if (pos == std::string::npos)
+            return false;
+        // Require digit immediately after the colon (e.g. "T:210" not "T: see docs")
+        size_t val_start = pos + 2; // skip "T:" or "B:"
+        if (val_start < message.size() &&
+            std::isdigit(static_cast<unsigned char>(message[val_start]))) {
+            // Also require "/" somewhere after the pattern (target temp separator)
+            size_t slash_pos = message.find('/', val_start);
+            return slash_pos != std::string::npos;
         }
-    }
+        return false;
+    };
 
-    return false;
+    return check_temp_pattern(t_pos) || check_temp_pattern(b_pos);
 }
 
 void ConsolePanel::update_visibility() {
@@ -490,11 +679,9 @@ void ConsolePanel::update_visibility() {
     // Toggle visibility: show console OR empty state
     helix::ui::toggle_list_empty_state(console_container_, empty_state_, has_entries);
 
-    // Update status message
+    // Clear status message when entries are loaded (error/loading set elsewhere)
     if (has_entries) {
-        std::snprintf(status_buf_, sizeof(status_buf_), "%zu entries", entries_.size());
-    } else {
-        status_buf_[0] = '\0'; // Clear status text
+        status_buf_[0] = '\0';
     }
     lv_subject_copy_string(&status_subject_, status_buf_);
 }
@@ -519,9 +706,16 @@ void ConsolePanel::subscribe_to_gcode_responses() {
     gcode_handler_name_ = "console_panel_" + std::to_string(++s_handler_id);
 
     // Register for notify_gcode_response notifications
-    // Capture 'this' safely since we unregister in on_deactivate()
-    api->register_method_callback("notify_gcode_response", gcode_handler_name_,
-                                  [this](const nlohmann::json& msg) { on_gcode_response(msg); });
+    // Guard with alive_ weak_ptr in case panel is destroyed before unsubscribe [L072]
+    api->register_method_callback(
+        "notify_gcode_response", gcode_handler_name_,
+        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](
+            const nlohmann::json& msg) {
+            auto alive = alive_weak.lock();
+            if (!alive || !alive->load())
+                return;
+            on_gcode_response(msg);
+        });
 
     is_subscribed_ = true;
     spdlog::debug("[{}] Subscribed to notify_gcode_response (handler: {})", get_name(),
@@ -549,6 +743,10 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
         return;
     }
 
+    // I4: Type-check params[0] before extracting string reference
+    if (!msg["params"][0].is_string()) {
+        return;
+    }
     const std::string& line = msg["params"][0].get_ref<const std::string&>();
 
     // Skip empty lines and common noise
@@ -556,12 +754,10 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
         return;
     }
 
-    // Filter temperature status messages if enabled
-    if (filter_temps_ && is_temp_message(line)) {
-        return;
-    }
+    // Build entry on background thread (no LVGL calls, only pure C++)
+    // Note: is_temp_message and is_error_message are pure functions, safe on any thread
+    bool is_temp = is_temp_message(line);
 
-    // Create entry for this response
     GcodeEntry entry;
     entry.message = line;
     entry.timestamp = 0.0; // Real-time entries don't have timestamps
@@ -574,11 +770,15 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
         ConsolePanel* panel;
         std::weak_ptr<std::atomic<bool>> alive;
         GcodeEntry entry;
+        bool is_temp;
     };
-    auto ctx = std::make_unique<Ctx>(Ctx{this, alive_, std::move(entry)});
+    auto ctx = std::make_unique<Ctx>(Ctx{this, alive_, std::move(entry), is_temp});
     helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
         auto alive = c->alive.lock();
         if (!alive || !alive->load())
+            return;
+        // C1: Read filter_temps_ on main thread only (avoids data race)
+        if (c->panel->filter_temps_ && c->is_temp)
             return;
         c->panel->add_entry(c->entry);
     });
@@ -624,6 +824,14 @@ void ConsolePanel::send_gcode_command() {
     std::string command(text);
     spdlog::info("[{}] Sending G-code: {}", get_name(), command);
 
+    // Add to command history (newest first) and reset browsing state
+    command_history_.push_front(command);
+    if (command_history_.size() > MAX_HISTORY) {
+        command_history_.pop_back();
+    }
+    history_index_ = -1;
+    saved_input_.clear();
+
     // Clear the input field immediately
     lv_textarea_set_text(gcode_input_, "");
 
@@ -635,10 +843,18 @@ void ConsolePanel::send_gcode_command() {
     cmd_entry.is_error = false;
     add_entry(cmd_entry);
 
-    // Send via MoonrakerAPI (fire-and-forget for console commands)
+    // Send via MoonrakerAPI with error feedback
     MoonrakerAPI* api = get_moonraker_api();
     if (api) {
-        api->execute_gcode(command, nullptr, nullptr);
+        api->execute_gcode(
+            command, nullptr, // success: no-op, response comes via WS subscription
+            [alive_weak =
+                 std::weak_ptr<std::atomic<bool>>(alive_)](const MoonrakerError& err) {
+                auto alive = alive_weak.lock();
+                if (!alive || !alive->load())
+                    return;
+                NOTIFY_ERROR("Failed to send command: {}", err.message);
+            });
     } else {
         spdlog::warn("[{}] No MoonrakerAPI available", get_name());
     }

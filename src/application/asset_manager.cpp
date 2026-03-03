@@ -126,6 +126,12 @@ void AssetManager::register_fonts() {
     lv_xml_register_font(nullptr, "noto_sans_bold_24", &noto_sans_bold_24);
     lv_xml_register_font(nullptr, "noto_sans_bold_28", &noto_sans_bold_28);
 
+    // Source Code Pro - Monospace (for console/terminal displays)
+    lv_xml_register_font(nullptr, "source_code_pro_10", &source_code_pro_10);
+    lv_xml_register_font(nullptr, "source_code_pro_12", &source_code_pro_12);
+    lv_xml_register_font(nullptr, "source_code_pro_14", &source_code_pro_14);
+    lv_xml_register_font(nullptr, "source_code_pro_16", &source_code_pro_16);
+
     s_fonts_registered = true;
     if (skipped > 0) {
         spdlog::info("[AssetManager] Fonts registered ({} skipped for breakpoint)", skipped);

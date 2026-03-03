@@ -43,6 +43,12 @@ LV_FONT_DECLARE(noto_sans_bold_20);
 LV_FONT_DECLARE(noto_sans_bold_24);
 LV_FONT_DECLARE(noto_sans_bold_28);
 
+// Source Code Pro - Monospace (for console/terminal displays)
+LV_FONT_DECLARE(source_code_pro_10);
+LV_FONT_DECLARE(source_code_pro_12);
+LV_FONT_DECLARE(source_code_pro_14);
+LV_FONT_DECLARE(source_code_pro_16);
+
 // =============================================================================
 // Material Design Icons - UTF-8 encoded codepoints
 // MDI uses Unicode Plane 15 Private Use Area (0xF0000+)

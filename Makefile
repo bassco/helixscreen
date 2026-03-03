@@ -328,6 +328,8 @@ FONT_SRCS += assets/fonts/noto_sans_10.c assets/fonts/noto_sans_11.c assets/font
 FONT_SRCS += assets/fonts/noto_sans_light_10.c assets/fonts/noto_sans_light_11.c assets/fonts/noto_sans_light_12.c assets/fonts/noto_sans_light_14.c assets/fonts/noto_sans_light_16.c assets/fonts/noto_sans_light_18.c
 # Noto Sans - Bold weight (14-28px)
 FONT_SRCS += assets/fonts/noto_sans_bold_14.c assets/fonts/noto_sans_bold_16.c assets/fonts/noto_sans_bold_18.c assets/fonts/noto_sans_bold_20.c assets/fonts/noto_sans_bold_24.c assets/fonts/noto_sans_bold_28.c
+# Source Code Pro - Monospace (10-16px for console/terminal)
+FONT_SRCS += assets/fonts/source_code_pro_10.c assets/fonts/source_code_pro_12.c assets/fonts/source_code_pro_14.c assets/fonts/source_code_pro_16.c
 FONT_OBJS := $(patsubst %.c,$(OBJ_DIR)/%.o,$(FONT_SRCS))
 
 # Material Design Icons - REMOVED

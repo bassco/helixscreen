@@ -30,16 +30,21 @@
               width="100%" height="content" style_pad_all="0" flex_flow="row" style_pad_gap="#space_sm"
               style_flex_cross_place="center" scrollable="false">
         <!-- G-code text input -->
-        <text_input name="gcode_input" flex_grow="1" placeholder="Enter G-code command..." one_line="true"/>
+        <text_input name="gcode_input" flex_grow="1" placeholder="Enter G-code command..." placeholder_translation_tag="Enter G-code command..." one_line="true"/>
         <!-- Send button -->
         <ui_button name="send_btn" width="60">
           <event_cb trigger="clicked" callback="on_console_send_clicked"/>
-          <icon src="send" size="md" variant="primary"/>
+          <icon src="send" size="md" variant="primary" clickable="false" event_bubble="true"/>
         </ui_button>
         <!-- Clear button -->
         <ui_button name="clear_btn" width="60" height="100%" variant="secondary">
           <event_cb trigger="clicked" callback="on_console_clear_clicked"/>
-          <icon src="delete" size="md" variant="secondary"/>
+          <icon src="delete" size="md" variant="secondary" clickable="false" event_bubble="true"/>
+        </ui_button>
+        <!-- Temperature filter toggle (ON by default, dims when OFF) -->
+        <ui_button name="filter_btn" width="60" height="100%" variant="primary">
+          <event_cb trigger="clicked" callback="on_console_filter_toggled"/>
+          <icon src="thermometer" size="md" variant="primary" clickable="false" event_bubble="true"/>
         </ui_button>
       </lv_obj>
     </lv_obj>

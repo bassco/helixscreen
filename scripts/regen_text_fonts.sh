@@ -194,6 +194,29 @@ for SIZE in $SIZES_BOLD; do
     fi
 done
 
+# Generate Source Code Pro Monospace (for console/terminal)
+FONT_MONO=assets/fonts/SourceCodePro-Regular.ttf
+SIZES_MONO="10 12 14 16"
+
+if [ -f "$FONT_MONO" ]; then
+    echo ""
+    echo "Source Code Pro (Monospace):"
+    for SIZE in $SIZES_MONO; do
+        OUTPUT="assets/fonts/source_code_pro_${SIZE}.c"
+        echo "  Generating source_code_pro_${SIZE} -> $OUTPUT"
+
+        lv_font_conv \
+            --font "$FONT_MONO" --size "$SIZE" --bpp 4 --format lvgl \
+            --range "$UNICODE_RANGES" \
+            --no-compress \
+            -o "$OUTPUT"
+    done
+else
+    echo ""
+    echo "Source Code Pro not found ($FONT_MONO) - skipping monospace fonts"
+    echo "Download from: https://github.com/adobe-fonts/source-code-pro/tree/release/TTF"
+fi
+
 echo ""
 echo "Done! Generated text fonts with extended Unicode support."
 echo ""

@@ -11,31 +11,32 @@
 #include <deque>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "hv/json.hpp"
 
 /**
  * @file ui_panel_console.h
- * @brief G-code console panel with command history display
+ * @brief G-code console panel with command history and real-time streaming
  *
- * Displays a read-only scrollable history of G-code commands and responses
- * from Moonraker's gcode_store endpoint. Uses color-coded output to
- * distinguish commands from responses and errors.
+ * Full-featured G-code console overlay for interacting with Klipper via
+ * Moonraker. Displays color-coded command history with real-time streaming
+ * of G-code responses.
  *
- * ## Features (Phase 1)
- * - Read-only command history display
- * - Color-coded output (errors red, responses green)
- * - Auto-scroll to newest messages (terminal-style)
+ * ## Features
+ * - Command history display from Moonraker gcode_store
+ * - Real-time response streaming via notify_gcode_response WebSocket
+ * - G-code input field with Enter key submission
+ * - Command history navigation (Up/Down arrow keys)
+ * - Color-coded output (commands, responses green, errors red)
+ * - HTML span parsing for AFC/Happy Hare colored output
+ * - Temperature message filtering (periodic T:/B: reports)
+ * - Auto-scroll to newest messages (pauses when user scrolls up)
  * - Empty state when no history available
  *
  * ## Moonraker API
- * - GET /server/gcode_store - Fetch command history
- *
- * ## Future Enhancements (Phase 2)
- * - Real-time updates via notify_gcode_response WebSocket
- * - G-code input field with on-screen keyboard
- * - Temperature message filtering
+ * - server.gcode_store - Fetch command history
+ * - notify_gcode_response - Real-time response subscription
+ * - printer.gcode.script - Send G-code commands
  *
  * @see docs/FEATURE_STATUS.md for implementation progress
  */
@@ -58,26 +59,13 @@ class ConsolePanel : public OverlayBase {
     void on_deactivate() override;
     void on_ui_destroyed() override;
 
-    /**
-     * @brief Send the current G-code command from the input field
-     *
-     * Gets text from gcode_input_, sends via Moonraker, clears input,
-     * and adds a COMMAND entry to the console. Public for callback access.
-     */
+    /// Send the current G-code command from the input field via Moonraker
     void send_gcode_command();
 
-    /**
-     * @brief Clear all entries from the console display
-     *
-     * Removes all entries and widgets, shows empty state.
-     * Public for callback access.
-     */
+    /// Clear all entries from the console display and show empty state
     void clear_display();
 
   private:
-    /**
-     * @brief Entry in the console history
-     */
     struct GcodeEntry {
         std::string message;    ///< The G-code command or response text
         double timestamp = 0.0; ///< Unix timestamp from Moonraker
@@ -88,114 +76,40 @@ class ConsolePanel : public OverlayBase {
         bool is_error = false; ///< True if response contains error (!! prefix)
     };
 
-    /**
-     * @brief Fetch initial history from gcode_store
-     *
-     * Calls Moonraker's server.gcode_store JSON-RPC method to retrieve
-     * the most recent command history.
-     */
+    /// Fetch initial history from Moonraker's server.gcode_store
     void fetch_history();
 
-    /**
-     * @brief Populate the console with fetched entries
-     *
-     * Clears any existing entries and creates text widgets for each
-     * entry in the history.
-     *
-     * @param entries Vector of gcode entries from API (oldest first)
-     */
+    /// Replace all displayed entries with the given history (oldest first)
     void populate_entries(const std::vector<GcodeEntry>& entries);
 
-    /**
-     * @brief Create a single console line widget
-     *
-     * Creates a text_small label with appropriate color based on entry type:
-     * - Commands: primary text color
-     * - Success responses: success color (green)
-     * - Error responses: error color (red)
-     *
-     * @param entry The gcode entry to display
-     */
+    /// Create a single color-coded console line widget for an entry
     void create_entry_widget(const GcodeEntry& entry);
 
-    /**
-     * @brief Clear all console entries
-     *
-     * Removes all child widgets from console_container_.
-     */
+    /// Remove all entries and child widgets from the container
     void clear_entries();
 
-    /**
-     * @brief Scroll console to bottom (newest entries)
-     *
-     * Called after populating entries to ensure most recent
-     * content is visible (terminal-style scrolling).
-     */
+    /// Scroll to the bottom (newest entries visible)
     void scroll_to_bottom();
 
-    /**
-     * @brief Check if a response message indicates an error
-     *
-     * Moonraker/Klipper errors typically start with "!!" or contain
-     * "error" in the message.
-     *
-     * @param message Response message text
-     * @return true if message is an error
-     */
+    /// True if message starts with "!!" or "Error" (case-insensitive)
     static bool is_error_message(const std::string& message);
 
-    /**
-     * @brief Update UI visibility based on entry count
-     *
-     * Shows console_container_ if entries exist, otherwise shows
-     * empty_state_. Updates status message accordingly.
-     */
+    /// Toggle console_container_ vs empty_state_ visibility
     void update_visibility();
 
-    /**
-     * @brief Add a single entry to the console (real-time)
-     *
-     * Appends entry to history, creates widget, and auto-scrolls if
-     * user hasn't manually scrolled up. Used by notify_gcode_response handler.
-     *
-     * @param entry The gcode entry to add
-     */
+    /// Append a single entry, create its widget, and auto-scroll if appropriate
     void add_entry(const GcodeEntry& entry);
 
-    /**
-     * @brief Handle incoming G-code response from WebSocket
-     *
-     * Called by notify_gcode_response callback. Parses the notification
-     * and adds entry to console.
-     *
-     * @param msg JSON notification message
-     */
+    /// Handle incoming notify_gcode_response WebSocket notification
     void on_gcode_response(const nlohmann::json& msg);
 
-    /**
-     * @brief Subscribe to real-time G-code responses
-     *
-     * Registers callback for notify_gcode_response WebSocket notifications.
-     * Called from on_activate().
-     */
+    /// Subscribe to real-time G-code responses (called from on_activate)
     void subscribe_to_gcode_responses();
 
-    /**
-     * @brief Unsubscribe from real-time G-code responses
-     *
-     * Unregisters callback. Called from on_deactivate().
-     */
+    /// Unsubscribe from real-time G-code responses (called from on_deactivate)
     void unsubscribe_from_gcode_responses();
 
-    /**
-     * @brief Check if a message is a temperature status update
-     *
-     * Filters out periodic temperature reports like:
-     * "ok T:210.0 /210.0 B:60.0 /60.0"
-     *
-     * @param message The G-code response message
-     * @return true if message is a temperature status
-     */
+    /// True if message is a periodic temperature report (e.g. "ok T:210.0 /210.0 B:60.0 /60.0")
     static bool is_temp_message(const std::string& message);
 
     // Widget references
@@ -209,11 +123,21 @@ class ConsolePanel : public OverlayBase {
     static constexpr size_t MAX_ENTRIES = 200; ///< Maximum entries to display
     static constexpr int FETCH_COUNT = 100;    ///< Number of entries to fetch
 
+    // Command history (up/down arrow navigation)
+    std::deque<std::string> command_history_; ///< Previously sent commands (newest first)
+    int history_index_ = -1;                  ///< -1 = not browsing, 0 = most recent
+    std::string saved_input_;                 ///< In-progress text saved when browsing history
+    static constexpr size_t MAX_HISTORY = 20; ///< Maximum commands to remember
+
     // Real-time subscription state
     std::string gcode_handler_name_; ///< Unique handler name for callback registration
     bool is_subscribed_ = false;     ///< True if subscribed to notify_gcode_response
+    bool fetch_in_flight_ = false;   ///< True while a gcode_store fetch is pending
     bool user_scrolled_up_ = false;  ///< True if user manually scrolled up
     bool filter_temps_ = true;       ///< Filter out temperature status messages
+
+    // Timestamp display (responsive: medium+ breakpoints only)
+    bool show_timestamps_ = false; ///< True if screen is large enough for timestamps
 
     // Subjects
     SubjectManager subjects_;

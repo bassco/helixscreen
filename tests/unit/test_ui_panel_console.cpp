@@ -9,7 +9,10 @@
  * These tests don't require LVGL initialization since they test pure C++ logic.
  */
 
+#include <algorithm>
+#include <cctype>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../catch_amalgamated.hpp"
@@ -19,30 +22,17 @@
 // (Replicated from ui_panel_console.cpp since it's a private static method)
 // ============================================================================
 
-/**
- * @brief Check if a response message indicates an error
- *
- * Moonraker/Klipper errors typically start with "!!" or contain
- * "error" in the message.
- */
 static bool is_error_message(const std::string& message) {
-    if (message.empty()) {
-        return false;
-    }
-
-    // Klipper errors typically start with "!!" prefix
     if (message.size() >= 2 && message[0] == '!' && message[1] == '!') {
         return true;
     }
 
-    // Case-insensitive check for "error" at start
     if (message.size() >= 5) {
-        std::string lower = message.substr(0, 5);
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        if (lower == "error") {
-            return true;
-        }
+        auto ci_eq = [](char a, char b) {
+            return std::tolower(static_cast<unsigned char>(a)) ==
+                   std::tolower(static_cast<unsigned char>(b));
+        };
+        return std::equal(message.begin(), message.begin() + 5, "error", ci_eq);
     }
 
     return false;
@@ -93,21 +83,7 @@ TEST_CASE("Console: is_error_message() with boundary cases", "[ui][error_detecti
 }
 
 // ============================================================================
-// Entry Type Classification Tests
-// ============================================================================
-
-TEST_CASE("Console: command vs response type classification", "[ui][entry_type]") {
-    // These would come from GcodeStoreEntry.type field (moonraker_types.h)
-
-    // Commands are user input
-    REQUIRE(std::string("command") == "command");
-
-    // Responses are Klipper output
-    REQUIRE(std::string("response") == "response");
-}
-
-// ============================================================================
-// Message Content Tests
+// Real-World Error Message Tests
 // ============================================================================
 
 TEST_CASE("Console: typical Klipper error messages", "[ui][error_detection]") {
@@ -142,21 +118,25 @@ static bool is_temp_message(const std::string& message) {
         return false;
     }
 
-    // Look for temperature patterns: T: or B: followed by numbers
-    // Simple heuristic: contains "T:" or "B:" with "/" nearby
+    // Check for "T:" or "B:" followed immediately by a digit, with "/" somewhere after
     size_t t_pos = message.find("T:");
     size_t b_pos = message.find("B:");
 
-    if (t_pos != std::string::npos || b_pos != std::string::npos) {
-        // Check for temperature format: number / number
-        size_t slash_pos = message.find('/');
-        if (slash_pos != std::string::npos) {
-            // Very likely a temperature status message
-            return true;
+    auto check_temp_pattern = [&](size_t pos) -> bool {
+        if (pos == std::string::npos)
+            return false;
+        // Require digit immediately after the colon (e.g. "T:210" not "T: see docs")
+        size_t val_start = pos + 2; // skip "T:" or "B:"
+        if (val_start < message.size() &&
+            std::isdigit(static_cast<unsigned char>(message[val_start]))) {
+            // Also require "/" somewhere after the pattern (target temp separator)
+            size_t slash_pos = message.find('/', val_start);
+            return slash_pos != std::string::npos;
         }
-    }
+        return false;
+    };
 
-    return false;
+    return check_temp_pattern(t_pos) || check_temp_pattern(b_pos);
 }
 
 // ============================================================================
@@ -195,11 +175,161 @@ TEST_CASE("Console: is_temp_message() edge cases", "[ui][temp_filter]") {
     // Edge cases that look like temps but aren't
     REQUIRE(is_temp_message("T:") == false);               // No value or slash
     REQUIRE(is_temp_message("B:60") == false);             // No slash
-    REQUIRE(is_temp_message("Setting T: value") == false); // No slash
+    REQUIRE(is_temp_message("Setting T: value") == false); // No digit after T:
 
     // Edge cases that might have slashes but no temp
     REQUIRE(is_temp_message("path/to/file") == false); // No T: or B:
     REQUIRE(is_temp_message("50/50 complete") == false);
+}
+
+TEST_CASE("Console: is_temp_message() tightened heuristic rejects non-digit after T:/B:",
+          "[ui][temp_filter]") {
+    // These have T: or B: with "/" but no digit after the colon
+    // Old heuristic would match, new one correctly rejects
+    REQUIRE(is_temp_message("T: see docs/here") == false);
+    REQUIRE(is_temp_message("B: test/path") == false);
+    REQUIRE(is_temp_message("T: abc/def") == false);
+    REQUIRE(is_temp_message("Set T: to 200/250") == false); // space after T:
+
+    // These should still match (digit immediately follows colon)
+    REQUIRE(is_temp_message("T:0 /0") == true);
+    REQUIRE(is_temp_message("B:0.0 /0.0") == true);
+    REQUIRE(is_temp_message("ok T:25.3 /210.0") == true);
+}
+
+// ============================================================================
+// Timestamp Formatting Tests
+// ============================================================================
+
+#include <ctime>
+
+static std::string format_timestamp(double timestamp) {
+    time_t t;
+    if (timestamp > 0.0) {
+        t = static_cast<time_t>(timestamp);
+    } else {
+        t = std::time(nullptr);
+    }
+    struct tm tm_buf {};
+    localtime_r(&t, &tm_buf);
+    char buf[12];
+    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d ", tm_buf.tm_hour, tm_buf.tm_min,
+                  tm_buf.tm_sec);
+    return std::string(buf);
+}
+
+TEST_CASE("Console: format_timestamp() with known timestamp", "[ui][timestamp]") {
+    // Use a known UTC timestamp and convert to local time for comparison
+    // 2024-01-01 00:00:00 UTC = 1704067200
+    double ts = 1704067200.0;
+    std::string result = format_timestamp(ts);
+
+    // Should be in HH:MM:SS format with trailing space
+    REQUIRE(result.size() == 9); // "HH:MM:SS "
+    REQUIRE(result[2] == ':');
+    REQUIRE(result[5] == ':');
+    REQUIRE(result[8] == ' ');
+    // All characters should be digits or colons or space
+    for (size_t i = 0; i < 8; i++) {
+        REQUIRE((std::isdigit(result[i]) || result[i] == ':'));
+    }
+}
+
+TEST_CASE("Console: format_timestamp() with zero uses current time", "[ui][timestamp]") {
+    std::string result = format_timestamp(0.0);
+
+    // Should produce valid format
+    REQUIRE(result.size() == 9);
+    REQUIRE(result[2] == ':');
+    REQUIRE(result[5] == ':');
+    REQUIRE(result[8] == ' ');
+
+    // Hour should be 00-23
+    int hour = std::stoi(result.substr(0, 2));
+    REQUIRE(hour >= 0);
+    REQUIRE(hour <= 23);
+
+    // Minute should be 00-59
+    int minute = std::stoi(result.substr(3, 2));
+    REQUIRE(minute >= 0);
+    REQUIRE(minute <= 59);
+
+    // Second should be 00-59
+    int second = std::stoi(result.substr(6, 2));
+    REQUIRE(second >= 0);
+    REQUIRE(second <= 59);
+}
+
+// ============================================================================
+// Command History Buffer Tests
+// ============================================================================
+
+TEST_CASE("Console: command history deque operations", "[ui][command_history]") {
+    std::deque<std::string> history;
+    constexpr size_t MAX_HISTORY = 20;
+
+    SECTION("push and recall") {
+        history.push_front("G28");
+        history.push_front("M104 S200");
+        history.push_front("G1 X10 Y10");
+
+        REQUIRE(history.size() == 3);
+        REQUIRE(history[0] == "G1 X10 Y10"); // Most recent
+        REQUIRE(history[1] == "M104 S200");
+        REQUIRE(history[2] == "G28"); // Oldest
+    }
+
+    SECTION("overflow at MAX_HISTORY") {
+        for (int i = 0; i < 25; i++) {
+            history.push_front("CMD_" + std::to_string(i));
+            if (history.size() > MAX_HISTORY) {
+                history.pop_back();
+            }
+        }
+
+        REQUIRE(history.size() == MAX_HISTORY);
+        REQUIRE(history[0] == "CMD_24"); // Most recent
+        // Oldest should be CMD_5 (0-4 were popped)
+        REQUIRE(history.back() == "CMD_5");
+    }
+
+    SECTION("up/down navigation simulation") {
+        history.push_front("G28");
+        history.push_front("M104 S200");
+        history.push_front("G1 X10");
+
+        int index = -1;
+        std::string saved_input = "partial";
+
+        // Up: save input, go to most recent
+        index = 0;
+        REQUIRE(history[static_cast<size_t>(index)] == "G1 X10");
+
+        // Up again: go to older
+        index = 1;
+        REQUIRE(history[static_cast<size_t>(index)] == "M104 S200");
+
+        // Up again: go to oldest
+        index = 2;
+        REQUIRE(history[static_cast<size_t>(index)] == "G28");
+
+        // Up again: should stay at 2 (bounds check)
+        int next = index + 1;
+        REQUIRE(next >= static_cast<int>(history.size()));
+        // Index stays at 2
+
+        // Down: go to newer
+        index = 1;
+        REQUIRE(history[static_cast<size_t>(index)] == "M104 S200");
+
+        // Down: go to most recent
+        index = 0;
+        REQUIRE(history[static_cast<size_t>(index)] == "G1 X10");
+
+        // Down: restore saved input
+        index = -1;
+        REQUIRE(saved_input == "partial");
+    }
 }
 
 // ============================================================================
@@ -207,34 +337,39 @@ TEST_CASE("Console: is_temp_message() edge cases", "[ui][temp_filter]") {
 // (Replicated from ui_panel_console.cpp since it's in anonymous namespace)
 // ============================================================================
 
-/**
- * @brief Parsed text segment with optional color class
- */
+static constexpr const char SPAN_OPEN[] = "<span class=";
+static constexpr size_t SPAN_OPEN_LEN = sizeof(SPAN_OPEN) - 1;
+static constexpr const char SPAN_CLOSE[] = "</span>";
+static constexpr size_t SPAN_CLOSE_LEN = sizeof(SPAN_CLOSE) - 1;
+
 struct TextSegment {
     std::string text;
     std::string color_class; // empty = default, "success", "info", "warning", "error"
 };
 
-/**
- * @brief Check if a message contains HTML spans we can parse
- *
- * Looks for Mainsail-style spans from AFC/Happy Hare plugins:
- * <span class=success--text>LOADED</span>
- */
+static std::string extract_color_class(const std::string& class_attr) {
+    static constexpr std::pair<const char*, const char*> mappings[] = {
+        {"success--text", "success"},
+        {"info--text", "info"},
+        {"warning--text", "warning"},
+        {"error--text", "error"},
+    };
+    for (const auto& [pattern, name] : mappings) {
+        if (class_attr.find(pattern) != std::string::npos) {
+            return name;
+        }
+    }
+    return {};
+}
+
 static bool contains_html_spans(const std::string& message) {
-    return message.find("<span class=") != std::string::npos &&
+    return message.find(SPAN_OPEN) != std::string::npos &&
            (message.find("success--text") != std::string::npos ||
             message.find("info--text") != std::string::npos ||
             message.find("warning--text") != std::string::npos ||
             message.find("error--text") != std::string::npos);
 }
 
-/**
- * @brief Parse HTML span tags into text segments with color classes
- *
- * Parses Mainsail-style spans: <span class=XXX--text>content</span>
- * Returns vector of segments, each with text and optional color class.
- */
 static std::vector<TextSegment> parse_html_spans(const std::string& message) {
     std::vector<TextSegment> segments;
 
@@ -242,78 +377,45 @@ static std::vector<TextSegment> parse_html_spans(const std::string& message) {
     const size_t len = message.size();
 
     while (pos < len) {
-        // Look for next <span class=
-        size_t span_start = message.find("<span class=", pos);
+        size_t span_start = message.find(SPAN_OPEN, pos);
 
         if (span_start == std::string::npos) {
-            // No more spans - add remaining text as plain segment
-            if (pos < len) {
-                TextSegment seg;
-                seg.text = message.substr(pos);
-                if (!seg.text.empty()) {
-                    segments.push_back(seg);
-                }
+            std::string remaining = message.substr(pos);
+            if (!remaining.empty()) {
+                segments.push_back({std::move(remaining), {}});
             }
             break;
         }
 
-        // Add any text before the span as a plain segment
         if (span_start > pos) {
-            TextSegment seg;
-            seg.text = message.substr(pos, span_start - pos);
-            segments.push_back(seg);
+            segments.push_back({message.substr(pos, span_start - pos), {}});
         }
 
-        // Parse the span: <span class=XXX--text>content</span>
-        // Find the class value (ends at >)
-        size_t class_start = span_start + 12; // strlen("<span class=")
+        size_t class_start = span_start + SPAN_OPEN_LEN;
         size_t class_end = message.find('>', class_start);
 
         if (class_end == std::string::npos) {
-            // Malformed - add rest as plain text
-            TextSegment seg;
-            seg.text = message.substr(span_start);
-            segments.push_back(seg);
+            segments.push_back({message.substr(span_start), {}});
             break;
         }
 
-        // Extract color class from "success--text", "info--text", etc.
-        std::string class_attr = message.substr(class_start, class_end - class_start);
-        std::string color_class;
+        std::string color_class =
+            extract_color_class(message.substr(class_start, class_end - class_start));
 
-        if (class_attr.find("success--text") != std::string::npos) {
-            color_class = "success";
-        } else if (class_attr.find("info--text") != std::string::npos) {
-            color_class = "info";
-        } else if (class_attr.find("warning--text") != std::string::npos) {
-            color_class = "warning";
-        } else if (class_attr.find("error--text") != std::string::npos) {
-            color_class = "error";
-        }
-
-        // Find the closing </span>
         size_t content_start = class_end + 1;
-        size_t span_close = message.find("</span>", content_start);
+        size_t span_close = message.find(SPAN_CLOSE, content_start);
 
         if (span_close == std::string::npos) {
-            // No closing tag - add rest as plain text
-            TextSegment seg;
-            seg.text = message.substr(content_start);
-            seg.color_class = color_class;
-            segments.push_back(seg);
+            segments.push_back({message.substr(content_start), color_class});
             break;
         }
 
-        // Extract content between > and </span>
-        TextSegment seg;
-        seg.text = message.substr(content_start, span_close - content_start);
-        seg.color_class = color_class;
-        if (!seg.text.empty()) {
-            segments.push_back(seg);
+        std::string content = message.substr(content_start, span_close - content_start);
+        if (!content.empty()) {
+            segments.push_back({std::move(content), std::move(color_class)});
         }
 
-        // Move past </span>
-        pos = span_close + 7; // strlen("</span>")
+        pos = span_close + SPAN_CLOSE_LEN;
     }
 
     return segments;

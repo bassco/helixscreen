@@ -276,6 +276,12 @@
     <string name="font_xs_medium" value="noto_sans_light_12"/>
     <string name="font_xs_large" value="noto_sans_light_14"/>
     <!-- NO BASE font_xs - registered at runtime -->
+    <!-- font_mono variants (monospace for console/terminal displays) - Source Code Pro -->
+    <string name="font_mono_tiny" value="source_code_pro_10"/>
+    <string name="font_mono_small" value="source_code_pro_12"/>
+    <string name="font_mono_medium" value="source_code_pro_14"/>
+    <string name="font_mono_large" value="source_code_pro_16"/>
+    <!-- NO BASE font_mono - registered at runtime -->
     <!-- ===================================================================== -->
     <!-- Icon Typography - Responsive Material Design Icon Fonts               -->
     <!-- ===================================================================== -->
