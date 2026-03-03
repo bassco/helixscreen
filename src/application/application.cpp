@@ -457,10 +457,37 @@ int Application::run(int argc, char** argv) {
         m_wizard_active = false;
     });
 
-    // Register wizard cancel callback for add-printer back-out recovery
-    set_wizard_cancel_callback([this]() {
-        cancel_add_printer_wizard();
-    });
+    // Cancel callback registered by add_printer_via_wizard() when recovery state exists.
+    // Don't register here — initial wizard has nowhere to cancel back to.
+
+    // Phase 11b: Graceful recovery — clean up stale incomplete printer entries
+    // If the active printer never finished the wizard (e.g., crash during add-printer),
+    // switch to a completed printer and remove the stale entry.
+    if (m_config && m_config->is_wizard_required()) {
+        auto printer_ids = m_config->get_printer_ids();
+        auto active_id = m_config->get_active_printer_id();
+
+        // Find a completed printer to fall back to
+        std::string fallback_id;
+        for (const auto& id : printer_ids) {
+            if (id == active_id)
+                continue;
+            bool completed = m_config->get<bool>("/printers/" + id + "/wizard_completed", false);
+            if (completed) {
+                fallback_id = id;
+                break;
+            }
+        }
+
+        if (!fallback_id.empty()) {
+            spdlog::info("[Application] Recovering from stale printer '{}' — "
+                         "switching to completed printer '{}'",
+                         active_id, fallback_id);
+            m_config->remove_printer(active_id);
+            m_config->set_active_printer(fallback_id);
+            m_config->save();
+        }
+    }
 
     // Phase 12: Run wizard if needed
     if (run_wizard()) {
@@ -2438,10 +2465,11 @@ void Application::handle_keyboard_shortcuts() {
                     // Create a second test printer so we can test switching
                     spdlog::info("[Application] P key - creating test printer for multi-printer testing");
                     nlohmann::json test_data;
-                    test_data["printer_name"] = "Test Printer 2";
+                    test_data["printer_name"] = "Voron 2.4";
+                    test_data["type"] = "Voron 2.4 350mm";
                     test_data["moonraker_host"] = "127.0.0.1";
                     test_data["moonraker_port"] = 7125;
-                    m_config->add_printer("test-printer-2", test_data);
+                    m_config->add_printer("voron-24", test_data);
                     m_config->save();
                     // Update subjects so the badge appears
                     get_printer_state().set_multi_printer_enabled(true);
@@ -2536,6 +2564,12 @@ void Application::switch_printer(const std::string& printer_id) {
     // Navigate to home
     NavigationManager::instance().set_active(PanelId::Home);
 
+    // Show toast with the new printer name
+    std::string printer_name =
+        m_config->get<std::string>(m_config->df() + "printer_name", printer_id);
+    std::string toast_msg = "Connected to " + printer_name;
+    ToastManager::instance().show(ToastSeverity::INFO, toast_msg.c_str());
+
     spdlog::info("[Application] Switched to printer '{}'", printer_id);
 }
 
@@ -2544,8 +2578,10 @@ void Application::add_printer_via_wizard() {
     std::string new_id = "printer-" + std::to_string(m_config->get_printer_ids().size() + 1);
     std::string previous_id = m_config->get_active_printer_id();
 
-    // Create empty printer entry and switch to it
-    m_config->add_printer(new_id, nlohmann::json::object());
+    // Create empty printer entry with wizard_completed=false so is_wizard_required()
+    // returns true (without this, root-level wizard_completed fallback blocks the wizard)
+    nlohmann::json printer_data = {{"wizard_completed", false}};
+    m_config->add_printer(new_id, printer_data);
     m_config->set_active_printer(new_id);
     m_config->save();
 
@@ -2555,10 +2591,18 @@ void Application::add_printer_via_wizard() {
     spdlog::info("[Application] Adding new printer '{}' via wizard (previous: '{}')", new_id,
                  previous_id);
 
-    // Soft restart into wizard (new printer has no config, so wizard_required triggers)
+    // Soft restart and launch wizard for the new printer.
+    // init_printer_state() calls run_wizard() internally when is_wizard_required() returns true
+    // (which it does for the new empty printer entry with wizard_completed=false).
+    // Do NOT call run_wizard() again here — that creates a duplicate wizard container.
     tear_down_printer_state();
+
+    // Register cancel callback AFTER tear_down (which clears it) but BEFORE init (which runs wizard)
+    set_wizard_cancel_callback([this]() {
+        cancel_add_printer_wizard();
+    });
+
     init_printer_state();
-    NavigationManager::instance().set_active(PanelId::Home);
 }
 
 void Application::cancel_add_printer_wizard() {
@@ -2568,18 +2612,25 @@ void Application::cancel_add_printer_wizard() {
     }
 
     std::string failed_id = m_config->get_active_printer_id();
+    std::string restore_id = m_wizard_previous_printer_id;
     spdlog::info("[Application] Cancelling add-printer wizard — removing '{}', restoring '{}'",
-                 failed_id, m_wizard_previous_printer_id);
+                 failed_id, restore_id);
 
     m_config->remove_printer(failed_id);
-    m_config->set_active_printer(m_wizard_previous_printer_id);
+    m_config->set_active_printer(restore_id);
     m_config->save();
     m_wizard_previous_printer_id.clear();
 
-    // Soft restart back to previous printer
-    tear_down_printer_state();
-    init_printer_state();
-    NavigationManager::instance().set_active(PanelId::Home);
+    // Defer wizard teardown + soft restart — we're called from a wizard button click handler,
+    // so the wizard_container must survive until the event callback returns.
+    helix::ui::queue_update([this]() {
+        set_wizard_active(false);
+        ui_wizard_deinit_subjects();
+
+        tear_down_printer_state();
+        init_printer_state();
+        NavigationManager::instance().set_active(PanelId::Home);
+    });
 }
 
 void Application::tear_down_printer_state() {

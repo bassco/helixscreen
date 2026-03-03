@@ -24,6 +24,8 @@
 #include "ams_state.h"
 #include "app_globals.h"
 #include "config.h"
+#include "ui_keyboard_manager.h"
+#include "ui_nav_manager.h"
 #include "filament_sensor_manager.h"
 #include "hardware_validator.h"
 #include "helix-xml/src/xml/lv_xml.h"
@@ -448,6 +450,16 @@ void ui_wizard_navigate_to_step(int step) {
             step = 3;
             spdlog::info("[Wizard] Skipping WiFi step (Android platform)");
         }
+
+        // Auto-skip WiFi step when adding a subsequent printer (WiFi already configured)
+        if (step == 2) {
+            auto* cfg = Config::get_instance();
+            if (cfg && cfg->get_printer_ids().size() > 1) {
+                wifi_step_skipped = true;
+                step = 3;
+                spdlog::info("[Wizard] Skipping WiFi step (subsequent printer)");
+            }
+        }
     }
 
     // Calculate display step and total for progress indicator
@@ -468,6 +480,28 @@ void ui_wizard_navigate_to_step(int step) {
         min_step = 3;
     bool has_cancel = (get_wizard_cancel_callback() != nullptr);
     lv_subject_set_int(&wizard_back_visible, (step > min_step || has_cancel) ? 1 : 0);
+
+    // Show "Cancel" instead of "Back" on the first step when add-printer cancel is available
+    if (wizard_container) {
+        lv_obj_t* btn_back = lv_obj_find_by_name(wizard_container, "btn_back");
+        if (btn_back) {
+            bool is_first_step = (step <= min_step);
+            const char* btn_label_text = (is_first_step && has_cancel) ? "Cancel" : "Back";
+            // ui_button stores label as lv_label child — find it by type
+            lv_obj_t* lbl = nullptr;
+            uint32_t child_count = lv_obj_get_child_count(btn_back);
+            for (uint32_t i = 0; i < child_count; i++) {
+                lv_obj_t* child = lv_obj_get_child(btn_back, i);
+                if (lv_obj_check_type(child, &lv_label_class)) {
+                    lbl = child;
+                    break;
+                }
+            }
+            if (lbl) {
+                lv_label_set_text(lbl, btn_label_text);
+            }
+        }
+    }
 
     // Determine if this is the last step (summary is always step 12 internally)
     bool is_last_step = (step == 12);
@@ -842,6 +876,8 @@ void ui_wizard_complete() {
     Config* config = Config::get_instance();
     if (config) {
         spdlog::debug("[Wizard] Setting wizard_completed flag");
+        config->set<bool>(config->df() + "wizard_completed", true);
+        // Also set root-level for backward compat
         config->set<bool>("/wizard_completed", true);
 
         // 1b. Populate expected_hardware from wizard selections
@@ -918,19 +954,25 @@ void ui_wizard_complete() {
     // 2. Cleanup current wizard screen
     ui_wizard_cleanup_current_screen();
 
-    // 3. Delete wizard container (main UI is already created underneath)
+    // 3. Dismiss any on-screen keyboard left over from wizard text inputs
+    // (prevents stale textarea focus from wizard_connection step)
+    KeyboardManager::instance().hide();
+
+    // 4. Delete wizard container (main UI is already created underneath)
     // SAFETY: Use lv_obj_del_async — the Finish button that triggered this call is a
     // child of wizard_container. Synchronous delete causes use-after-free (issue #80).
+    // Hide immediately so user sees the app layout underneath without waiting for async delete.
     if (wizard_container) {
-        spdlog::debug("[Wizard] Deleting wizard container (async)");
+        spdlog::debug("[Wizard] Hiding and deleting wizard container (async)");
+        lv_obj_add_flag(wizard_container, LV_OBJ_FLAG_HIDDEN);
         lv_obj_del_async(wizard_container);
         wizard_container = nullptr;
     }
 
-    // 4. Clear global wizard state
+    // 5. Clear global wizard state
     set_wizard_active(false);
 
-    // 5. Schedule deferred runout check - modal may need to show after wizard
+    // 6. Schedule deferred runout check - modal may need to show after wizard
     lv_timer_create(
         [](lv_timer_t* timer) {
             auto& fsm = helix::FilamentSensorManager::instance();
@@ -942,7 +984,7 @@ void ui_wizard_complete() {
         },
         500, nullptr); // 500ms delay for UI to stabilize
 
-    // 6. Trigger re-discovery through Application's pre-registered callbacks.
+    // 7. Trigger re-discovery through Application's pre-registered callbacks.
     // Discovery callbacks (set_hardware, init_fans, hardware validation, plugin detection,
     // etc.) were registered in Application::init_moonraker() via setup_discovery_callbacks().
     MoonrakerClient* client = get_moonraker_client();
@@ -956,7 +998,23 @@ void ui_wizard_complete() {
     // (LED and other hardware will update async when discovery completes)
     get_global_home_panel().apply_printer_config();
 
-    spdlog::info("[Wizard] Wizard complete, transitioned to main UI");
+    // Defer navigation to Home panel — discovery callbacks queue deferred subject updates
+    // via ui_queue_update() that can override panel state. A short timer ensures we
+    // navigate AFTER those queued updates have been processed.
+    lv_timer_create(
+        [](lv_timer_t* timer) {
+            spdlog::info("[Wizard] Deferred navigation to Home panel");
+            NavigationManager::instance().set_active(PanelId::Home);
+            lv_timer_delete(timer);
+        },
+        100, nullptr);
+
+    // Show success toast when adding a subsequent printer
+    if (config && config->get_printer_ids().size() > 1) {
+        NOTIFY_SUCCESS("New printer successfully added");
+    }
+
+    spdlog::info("[Wizard] Wizard complete, transitioning to main UI");
 }
 
 // ============================================================================
@@ -1053,6 +1111,7 @@ static void on_next_clicked(lv_event_t* e) {
     if (current >= STEP_COMPONENT_COUNT) {
         spdlog::info("[Wizard] Finish button clicked, completing wizard");
         ui_wizard_complete();
+        navigating = false;
         return;
     }
 
@@ -1075,6 +1134,16 @@ static void on_next_clicked(lv_event_t* e) {
         wifi_step_skipped = true;
         next_step = 3;
         spdlog::debug("[Wizard] Skipping WiFi step (Android platform)");
+    }
+
+    // Skip WiFi step (2) when adding a subsequent printer (WiFi already configured)
+    if (next_step == 2) {
+        auto* cfg = Config::get_instance();
+        if (cfg && cfg->get_printer_ids().size() > 1) {
+            wifi_step_skipped = true;
+            next_step = 3;
+            spdlog::debug("[Wizard] Skipping WiFi step (subsequent printer)");
+        }
     }
 
     // Pre-calculate all skip flags when leaving connection step (step 3)
