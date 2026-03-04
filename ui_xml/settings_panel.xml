@@ -88,7 +88,7 @@
             width="100%" style_pad_all="0" style_layout="flex" style_flex_flow="column" scrollable="false">
       <bind_flag_if_eq subject="printer_has_led" flag="hidden" ref_value="0"/>
       <setting_action_row name="row_led_settings"
-                          label="LED Settings" label_tag="LED Settings" icon="tune"
+                          label="LED Settings" label_tag="LED Settings" icon="led_strip"
                           description="Startup, auto-control, and macro devices"
                           description_tag="Startup, auto-control, and macro devices" callback="on_led_settings_clicked"/>
     </lv_obj>
