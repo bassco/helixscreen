@@ -3,14 +3,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <component>
   <!--
-    Clog Detection Panel Widget - Arc meter for filament clog/flow monitoring.
-
-    Binds to AmsState subjects:
-    - clog_meter_mode: 0=hidden, 1=encoder, 2=flowguard, 3=afc_buffer
-    - clog_meter_value_text: Flow rate or status text
-    - clog_meter_mode_text: Detection mode text
-
-    Arc size/stroke/color dynamically set by UiClogMeter C++ class.
+    Filament Health Panel Widget - Carousel with clog arc + buffer meter pages.
+    Pages are conditionally added in C++ based on available data.
   -->
   <view name="panel_widget_clog_detection" extends="lv_obj"
         width="100%" height="100%" flex_grow="1"
@@ -18,30 +12,7 @@
         flex_flow="column"
         style_flex_main_place="center" style_flex_cross_place="center"
         style_flex_track_place="center" scrollable="false">
-    <lv_obj name="clog_meter" width="100%" height="100%"
-            style_pad_all="0" style_pad_row="0" style_pad_column="0"
-            scrollable="false" flex_flow="column"
-            style_flex_main_place="center" style_flex_cross_place="center">
-      <bind_flag_if_eq subject="clog_meter_mode" flag="hidden" ref_value="0"/>
-      <lv_obj name="clog_arc_container"
-              style_pad_all="0" scrollable="false">
-        <lv_arc name="clog_arc" align="center"
-                bg_start_angle="135" bg_end_angle="45"
-                start_angle="135" end_angle="135"
-                min_value="0" max_value="100" value="0"
-                mode="normal" clickable="false"
-                style_arc_color="#border" style_arc_color-indicator="#primary"
-                style_arc_rounded="true" style_arc_rounded-indicator="true"
-                style_bg_opa="0" style_border_width="0"
-                style_bg_opa-knob="0" style_shadow_width-knob="0"
-                style_outline_width-knob="0"/>
-        <text_tiny name="clog_value_text" align="center"
-                   bind_text="clog_meter_value_text"
-                   style_text_align="center"/>
-      </lv_obj>
-      <text_tiny name="clog_mode_text" width="100%"
-                 bind_text="clog_meter_mode_text"
-                 style_text_color="#text_muted" style_text_align="center"/>
-    </lv_obj>
+    <ui_carousel name="filament_health_carousel" width="100%" height="100%"
+                 wrap="true" show_indicators="true"/>
   </view>
 </component>
