@@ -6,6 +6,7 @@
         extends="lv_obj" height="100%" flex_grow="1" style_pad_all="0" style_pad_left="#space_xs"
         style_pad_right="#space_xs" style_min_width="80" scrollable="false" flex_flow="column" style_pad_gap="#space_xs"
         style_flex_main_place="center" style_flex_cross_place="center" style_flex_track_place="center" clickable="true">
+    <bind_state_if_not_eq subject="printer_connection_state" state="disabled" ref_value="2"/>
     <event_cb trigger="clicked" callback="on_fan_stack_clicked"/>
 
     <!-- Part fan row -->
