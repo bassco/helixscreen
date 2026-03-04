@@ -3,6 +3,7 @@
 
 #include "ui_ams_detail.h"
 
+#include "ui/ams_drawing_utils.h"
 #include "ui_ams_slot.h"
 #include "ui_filament_path_canvas.h"
 #include "ui_utils.h"
@@ -10,7 +11,178 @@
 #include "ams_state.h"
 #include "printer_detector.h"
 
+#include <algorithm>
 #include <spdlog/spdlog.h>
+
+// ============================================================================
+// 3D Tray Box Drawing
+// ============================================================================
+
+/// Shared geometry for 3D tray box draw callbacks
+struct TrayBoxData {
+    int32_t tray_height = 0; ///< Height of the front face
+    int32_t dx = 0;          ///< Horizontal inset for back face (each side)
+    int32_t dy = 0;          ///< Vertical offset for back face (upward)
+    lv_color_t tray_bg = {}; ///< Tray fill color
+    lv_opa_t tray_opa = 100; ///< Tray fill opacity
+};
+
+/// Oblique projection constants matching spool ELLIPSE_RATIO (0.45)
+static constexpr int DEPTH_PCT = 40;      ///< Depth as % of tray height
+static constexpr int DY_PCT = 45;         ///< Vertical depth as % of horizontal depth
+static constexpr int MIN_DEPTH_PX = 4;
+static constexpr int MIN_DY_PX = 2;
+
+/// Lighten/darken amounts for 3D face shading
+static constexpr uint8_t SHADE_BACK_WALL = 25;
+static constexpr uint8_t SHADE_LEFT_WALL = 15;
+static constexpr uint8_t SHADE_RIGHT_WALL = 15;
+static constexpr uint8_t SHADE_FRONT_BORDER = 20;
+static constexpr uint8_t SHADE_BRIGHT_EDGE = 30;
+static constexpr uint8_t SHADE_DIM_EDGE = 15;
+
+/// Static data shared between both tray draw callbacks.
+/// Assumes only one ams_unit_detail component is active at a time
+/// (AmsPanel and AmsOverviewPanel each show one unit detail; panels are singletons).
+static TrayBoxData s_tray_box;
+
+/// Resolved front/back face coordinates for oblique projection
+struct TrayFaceCoords {
+    int32_t ft, fb, fl, fr; ///< Front face: top, bottom, left, right
+    int32_t bt, bb, bl, br; ///< Back face: top, bottom, left, right
+};
+
+/// Compute front and back face coordinates from object bounds and tray box geometry
+static TrayFaceCoords compute_face_coords(const lv_area_t& coords) {
+    TrayFaceCoords f;
+    f.ft = coords.y2 - s_tray_box.tray_height + 1; // +1: LVGL coords are inclusive
+    f.fb = coords.y2;
+    f.fl = coords.x1;
+    f.fr = coords.x2 - s_tray_box.dx;
+
+    f.bt = f.ft - s_tray_box.dy;
+    f.bb = f.fb - s_tray_box.dy;
+    f.bl = f.fl + s_tray_box.dx;
+    f.br = coords.x2;
+    return f;
+}
+
+/// Draw a quad (parallelogram) as 2 triangles: p0-p1-p2 and p0-p2-p3
+static void draw_quad(lv_layer_t* layer, lv_color_t color, lv_opa_t opa, int32_t x0, int32_t y0,
+                      int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t x3, int32_t y3) {
+    lv_draw_triangle_dsc_t tri;
+    lv_draw_triangle_dsc_init(&tri);
+    tri.color = color;
+    tri.opa = opa;
+
+    lv_point_precise_set(&tri.p[0], x0, y0);
+    lv_point_precise_set(&tri.p[1], x1, y1);
+    lv_point_precise_set(&tri.p[2], x2, y2);
+    lv_draw_triangle(layer, &tri);
+
+    lv_point_precise_set(&tri.p[1], x2, y2);
+    lv_point_precise_set(&tri.p[2], x3, y3);
+    lv_draw_triangle(layer, &tri);
+}
+
+/// Draw callback for back wall -- attached to slot_grid via LV_EVENT_DRAW_MAIN
+/// so it renders BEHIND the spool child widgets (open-top box, rear wall).
+static void tray_back_draw_cb(lv_event_t* e) {
+    lv_obj_t* obj = lv_event_get_target_obj(e);
+    lv_layer_t* layer = lv_event_get_layer(e);
+    if (!layer || s_tray_box.dy <= 0)
+        return;
+
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    auto f = compute_face_coords(coords);
+
+    lv_color_t bg = s_tray_box.tray_bg;
+    lv_opa_t opa = s_tray_box.tray_opa;
+
+    // Back wall parallelogram: front_TL -> front_TR -> back_TR -> back_TL
+    draw_quad(layer, ams_draw::lighten_color(bg, SHADE_BACK_WALL), opa, f.fl, f.ft, f.fr, f.ft,
+              f.br, f.bt, f.bl, f.bt);
+
+    // Dim edge highlights on back wall (behind spools)
+    lv_draw_line_dsc_t line_dsc;
+    lv_draw_line_dsc_init(&line_dsc);
+    line_dsc.color = ams_draw::lighten_color(bg, SHADE_DIM_EDGE);
+    line_dsc.opa = LV_OPA_40;
+    line_dsc.width = 1;
+
+    line_dsc.p1 = {f.bl, f.bt};
+    line_dsc.p2 = {f.br, f.bt};
+    lv_draw_line(layer, &line_dsc);
+
+    line_dsc.p1 = {f.bl, f.bb};
+    line_dsc.p2 = {f.br, f.bb};
+    lv_draw_line(layer, &line_dsc);
+}
+
+/// Draw callback for front face + side walls (rendered IN FRONT of spools)
+static void tray_front_draw_cb(lv_event_t* e) {
+    lv_obj_t* obj = lv_event_get_target_obj(e);
+    lv_layer_t* layer = lv_event_get_layer(e);
+    if (!layer || s_tray_box.dy <= 0)
+        return;
+
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    auto f = compute_face_coords(coords);
+
+    lv_color_t bg = s_tray_box.tray_bg;
+    lv_opa_t opa = s_tray_box.tray_opa;
+
+    // Edge line styles -- bright for visible edges, dim for obscured
+    lv_draw_line_dsc_t bright_edge;
+    lv_draw_line_dsc_init(&bright_edge);
+    bright_edge.color = ams_draw::lighten_color(bg, SHADE_BRIGHT_EDGE);
+    bright_edge.opa = LV_OPA_60;
+    bright_edge.width = 1;
+
+    lv_draw_line_dsc_t dim_edge;
+    lv_draw_line_dsc_init(&dim_edge);
+    dim_edge.color = ams_draw::lighten_color(bg, SHADE_DIM_EDGE);
+    dim_edge.opa = LV_OPA_40;
+    dim_edge.width = 1;
+
+    // Left side wall (receding -- darker, dim edges)
+    draw_quad(layer, ams_draw::darken_color(bg, SHADE_LEFT_WALL), opa, f.fl, f.ft, f.bl, f.bt,
+              f.bl, f.bb, f.fl, f.fb);
+    dim_edge.p1 = {f.fl, f.ft};
+    dim_edge.p2 = {f.bl, f.bt};
+    lv_draw_line(layer, &dim_edge);
+    dim_edge.p1 = {f.fl, f.fb};
+    dim_edge.p2 = {f.bl, f.bb};
+    lv_draw_line(layer, &dim_edge);
+    dim_edge.p1 = {f.bl, f.bt};
+    dim_edge.p2 = {f.bl, f.bb};
+    lv_draw_line(layer, &dim_edge);
+
+    // Right side wall (visible -- lighter, bright edges)
+    draw_quad(layer, ams_draw::lighten_color(bg, SHADE_RIGHT_WALL), opa, f.fr, f.ft, f.br, f.bt,
+              f.br, f.bb, f.fr, f.fb);
+    bright_edge.p1 = {f.fr, f.ft};
+    bright_edge.p2 = {f.br, f.bt};
+    lv_draw_line(layer, &bright_edge);
+    bright_edge.p1 = {f.fr, f.fb};
+    bright_edge.p2 = {f.br, f.bb};
+    lv_draw_line(layer, &bright_edge);
+
+    // Front face (main rectangle, drawn last so it's on top)
+    lv_area_t front_area = {f.fl, f.ft, f.fr, f.fb};
+    lv_draw_rect_dsc_t rect_dsc;
+    lv_draw_rect_dsc_init(&rect_dsc);
+    rect_dsc.bg_color = bg;
+    rect_dsc.bg_opa = opa;
+    rect_dsc.radius = 0;
+    rect_dsc.border_color = ams_draw::lighten_color(bg, SHADE_FRONT_BORDER);
+    rect_dsc.border_opa = LV_OPA_60;
+    rect_dsc.border_width = 1;
+    rect_dsc.border_side = LV_BORDER_SIDE_TOP;
+    lv_draw_rect(layer, &rect_dsc, &front_area);
+}
 
 AmsDetailWidgets ams_detail_find_widgets(lv_obj_t* root) {
     AmsDetailWidgets w;
@@ -137,10 +309,43 @@ void ams_detail_update_tray(AmsDetailWidgets& w) {
     if (tray_height < 20)
         tray_height = 20;
 
-    lv_obj_set_height(w.slot_tray, tray_height);
+    // 3D depth matching spool oblique projection (ELLIPSE_RATIO = 0.45)
+    int32_t depth = std::max(tray_height * DEPTH_PCT / 100, MIN_DEPTH_PX);
+    int32_t dx = depth;
+    int32_t dy = std::max(depth * DY_PCT / 100, MIN_DY_PX);
+
+    // Update shared draw data
+    s_tray_box.tray_height = tray_height;
+    s_tray_box.dx = dx;
+    s_tray_box.dy = dy;
+    s_tray_box.tray_bg = lv_color_hex(0x505050); // mirrors XML const #tray_bg
+    s_tray_box.tray_opa = 100;                   // mirrors XML const #tray_bg_opa
+
+    // Objects enlarged: +dy height for top wall, +dx width for right side wall
+    // Front face at LEFT portion; back face shifts RIGHT by dx
+    int32_t total_height = tray_height + dy;
+
+    // Keep tray at 100% width. The front face is inset by dx on the right
+    // so the right side wall fits within the same bounds.
+    lv_obj_set_height(w.slot_tray, total_height);
     lv_obj_align(w.slot_tray, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-    spdlog::debug("[AmsDetail] Tray sized to {}px (1/4 of {}px grid)", tray_height, grid_height);
+    // Attach draw callbacks once per object instance.
+    // Use LV_OBJ_FLAG_USER_1 as guard — user_data may already be set by XML (L069).
+
+    // Back wall on slot_grid (DRAW_MAIN = behind spool children)
+    if (!lv_obj_has_flag(w.slot_grid, LV_OBJ_FLAG_USER_1)) {
+        lv_obj_add_flag(w.slot_grid, LV_OBJ_FLAG_USER_1);
+        lv_obj_add_event_cb(w.slot_grid, tray_back_draw_cb, LV_EVENT_DRAW_MAIN, nullptr);
+    }
+    // Front face + side walls on slot_tray (IN FRONT of spools)
+    if (!lv_obj_has_flag(w.slot_tray, LV_OBJ_FLAG_USER_1)) {
+        lv_obj_add_flag(w.slot_tray, LV_OBJ_FLAG_USER_1);
+        lv_obj_add_event_cb(w.slot_tray, tray_front_draw_cb, LV_EVENT_DRAW_POST, nullptr);
+    }
+
+    spdlog::debug("[AmsDetail] Tray 3D box: {}px front, depth={}, dx={}, dy={}", tray_height, depth,
+                  dx, dy);
 }
 
 void ams_detail_update_labels(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int slot_count,

@@ -68,7 +68,7 @@ AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_
 void ams_detail_destroy_slots(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int& slot_count);
 
 /**
- * @brief Size tray to 1/3 of slot grid height (minimum 20px)
+ * @brief Size tray to 1/4 of slot grid height (minimum 20px) with 3D box effect
  * @param w Widget pointers — uses slot_grid height and positions slot_tray
  */
 void ams_detail_update_tray(AmsDetailWidgets& w);

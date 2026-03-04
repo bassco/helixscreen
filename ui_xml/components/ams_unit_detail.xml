@@ -7,9 +7,7 @@
     <color name="tray_bg" value="#505050"/>
     <color name="tray_border" value="#606060"/>
     <number name="tray_bg_opa" value="100"/>
-    <number name="tray_border_opa" value="140"/>
     <px name="tray_default_height" value="30"/>
-    <number name="tray_accent_border_opa" value="180"/>
   </consts>
   <!--
     AMS Unit Detail - Shared spool grid + tray + labels layer structure.
@@ -20,12 +18,12 @@
     - "labels_layer": overlay for material labels when 5+ slots overlap
     - "slot_tray": visual "holder" that renders ON TOP of spool bottoms
 
-    Z-order (front to back): labels_layer > badge_layer > slot_tray > slot_grid
+    Z-order (front to back): labels_layer > badge_layer > slot_tray > slot_grid > tray_back
     Badges reparented to badge_layer by ams_detail_update_badges() so they
     render in front of the tray.
   -->
   <view name="ams_unit_detail" extends="lv_obj" width="100%" height="content" style_pad_all="0" scrollable="false">
-    <!-- Slot Grid (rendered first = behind everything) -->
+    <!-- Slot Grid — back wall of 3D tray drawn via DRAW_MAIN callback on this object -->
     <lv_obj name="slot_grid"
             width="100%" height="content" style_pad_all="0" style_pad_row="0" style_pad_column="0" flex_flow="row"
             style_flex_main_place="start" style_flex_cross_place="start" scrollable="false">
@@ -36,21 +34,9 @@
     <!-- Tray - visual "holder" in front of spools, positioned at bottom.
          Height set dynamically by ams_detail_update_tray() to 1/3 of slot height. -->
     <lv_obj name="slot_tray"
-            width="100%" height="#tray_default_height" align="bottom_mid" style_bg_color="#tray_bg"
-            style_bg_opa="#tray_bg_opa" style_border_width="1" style_border_color="#tray_border"
-            style_border_opa="#tray_border_opa" style_radius="#border_radius" style_pad_all="0" scrollable="false"
-            clickable="false">
-      <!-- Left accent line -->
-      <lv_obj width="#space_xs"
-              height="80%" align="left_mid" style_translate_x="#space_xs" style_border_width="#space_xxs"
-              style_border_color="#text" style_border_opa="#tray_accent_border_opa" style_border_side="left"
-              style_radius="#border_radius" style_pad_all="0" scrollable="false" clickable="false"/>
-      <!-- Right accent line -->
-      <lv_obj width="#space_xs"
-              height="80%" align="right_mid" style_translate_x="-2" style_border_width="#space_xxs"
-              style_border_color="#text" style_border_opa="#tray_accent_border_opa" style_border_side="right"
-              style_radius="#border_radius" style_pad_all="0" scrollable="false" clickable="false"/>
-    </lv_obj>
+            width="100%" height="#tray_default_height" align="bottom_mid"
+            style_bg_opa="0" style_border_width="0"
+            style_pad_all="0" scrollable="false" clickable="false"/>
     <!-- Badge Layer - slot number badges reparented here to render in front of tray -->
     <lv_obj name="badge_layer" width="100%" height="100%" style_pad_all="0" scrollable="false" clickable="false"/>
   </view>
