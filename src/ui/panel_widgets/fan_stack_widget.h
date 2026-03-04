@@ -7,6 +7,7 @@
 
 #include "panel_widget.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -98,6 +99,11 @@ class FanStackWidget : public PanelWidget {
     void update_fan_animation(lv_obj_t* icon, int speed_pct);
     void refresh_all_animations();
 
+    static void set_icon_pivot(lv_obj_t* icon);
+    ObserverGuard bind_fan_observer(const std::string& fan_name,
+                                    std::function<void(int speed)> on_update);
+    void setup_common_observers(std::function<void()> on_anim_changed,
+                                std::function<void()> on_fans_version);
 };
 
 } // namespace helix

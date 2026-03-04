@@ -110,39 +110,12 @@ void FanStackWidget::attach_stack(lv_obj_t* /*widget_obj*/) {
     }
 
     // Set rotation pivots on icons (center of 16px icon)
-    for (auto* icon : {part_icon_, hotend_icon_, aux_icon_}) {
-        if (icon) {
-            lv_obj_set_style_transform_pivot_x(icon, LV_PCT(50), 0);
-            lv_obj_set_style_transform_pivot_y(icon, LV_PCT(50), 0);
-        }
-    }
+    for (auto* icon : {part_icon_, hotend_icon_, aux_icon_})
+        set_icon_pivot(icon);
 
-    // Read initial animation setting
-    auto& dsm = DisplaySettingsManager::instance();
-    animations_enabled_ = dsm.get_animations_enabled();
-
-    // Observe animation setting changes
-    std::weak_ptr<bool> weak_alive = alive_;
-    anim_settings_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-        DisplaySettingsManager::instance().subject_animations_enabled(), this,
-        [weak_alive](FanStackWidget* self, int enabled) {
-            if (weak_alive.expired())
-                return;
-            self->animations_enabled_ = (enabled != 0);
-            self->refresh_all_animations();
-        });
-
-    // Observe fans_version to re-bind when fans are discovered
-    version_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-        printer_state_.get_fans_version_subject(), this,
-        [weak_alive](FanStackWidget* self, int /*version*/) {
-            if (weak_alive.expired())
-                return;
-            self->bind_fans();
-        });
-
-    // Bind immediately with current fan data (the deferred observer callback
-    // may be dropped if the update queue is frozen during populate_widgets).
+    setup_common_observers(
+        [this]() { refresh_all_animations(); },
+        [this]() { bind_fans(); });
     bind_fans();
 
     spdlog::debug("[FanStackWidget] Attached stack (animations={})", animations_enabled_);
@@ -155,31 +128,12 @@ void FanStackWidget::attach_carousel(lv_obj_t* widget_obj) {
         return;
     }
 
-    // Read initial animation setting and observe changes
-    animations_enabled_ = DisplaySettingsManager::instance().get_animations_enabled();
-    std::weak_ptr<bool> weak_alive = alive_;
-    anim_settings_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-        DisplaySettingsManager::instance().subject_animations_enabled(), this,
-        [weak_alive](FanStackWidget* self, int enabled) {
-            if (weak_alive.expired())
-                return;
-            self->animations_enabled_ = (enabled != 0);
-            for (auto& page : self->carousel_pages_) {
-                self->update_fan_animation(page.fan_icon, page.arc ? lv_arc_get_value(page.arc) : 0);
-            }
-        });
-
-    // Observe fans_version to rebuild carousel pages when fans are discovered
-    version_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-        printer_state_.get_fans_version_subject(), this,
-        [weak_alive](FanStackWidget* self, int /*version*/) {
-            if (weak_alive.expired())
-                return;
-            self->bind_carousel_fans();
-        });
-
-    // Bind immediately with current fan data (the deferred observer callback
-    // may be dropped if the update queue is frozen during populate_widgets).
+    setup_common_observers(
+        [this]() {
+            for (auto& page : carousel_pages_)
+                update_fan_animation(page.fan_icon, page.arc ? lv_arc_get_value(page.arc) : 0);
+        },
+        [this]() { bind_carousel_fans(); });
     bind_carousel_fans();
 
     spdlog::debug("[FanStackWidget] Attached carousel");
@@ -195,18 +149,12 @@ void FanStackWidget::detach() {
     carousel_observers_.clear();
 
     // Stop any running animations before clearing pointers
-    if (part_icon_)
-        helix::ui::fan_spin_stop(part_icon_);
-    if (hotend_icon_)
-        helix::ui::fan_spin_stop(hotend_icon_);
-    if (aux_icon_)
-        helix::ui::fan_spin_stop(aux_icon_);
-
-    // Stop carousel fan icon animations
-    for (auto& page : carousel_pages_) {
+    for (auto* icon : {part_icon_, hotend_icon_, aux_icon_})
+        if (icon)
+            helix::ui::fan_spin_stop(icon);
+    for (auto& page : carousel_pages_)
         if (page.fan_icon)
             helix::ui::fan_spin_stop(page.fan_icon);
-    }
     carousel_pages_.clear();
 
     if (widget_obj_)
@@ -377,85 +325,31 @@ void FanStackWidget::bind_fans() {
         }
     }
 
-    std::weak_ptr<bool> weak_alive = alive_;
-
     // Bind part fan
-    if (!part_fan_name_.empty()) {
-        SubjectLifetime lifetime;
-        lv_subject_t* subject = printer_state_.get_fan_speed_subject(part_fan_name_, lifetime);
-        if (subject) {
-            part_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-                subject, this,
-                [weak_alive](FanStackWidget* self, int speed) {
-                    if (weak_alive.expired())
-                        return;
-                    self->part_speed_ = speed;
-                    self->update_label(self->part_label_, speed);
-                    self->update_fan_animation(self->part_icon_, speed);
-                },
-                lifetime);
-
-            // Read current value directly — the deferred observer initial fire
-            // is dropped when populate_widgets() freezes the update queue.
-            int current = lv_subject_get_int(subject);
-            part_speed_ = current;
-            update_label(part_label_, current);
-            update_fan_animation(part_icon_, current);
-        }
-    }
+    part_observer_ = bind_fan_observer(part_fan_name_, [this](int speed) {
+        part_speed_ = speed;
+        update_label(part_label_, speed);
+        update_fan_animation(part_icon_, speed);
+    });
 
     // Bind hotend fan
-    if (!hotend_fan_name_.empty()) {
-        SubjectLifetime lifetime;
-        lv_subject_t* subject = printer_state_.get_fan_speed_subject(hotend_fan_name_, lifetime);
-        if (subject) {
-            hotend_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-                subject, this,
-                [weak_alive](FanStackWidget* self, int speed) {
-                    if (weak_alive.expired())
-                        return;
-                    self->hotend_speed_ = speed;
-                    self->update_label(self->hotend_label_, speed);
-                    self->update_fan_animation(self->hotend_icon_, speed);
-                },
-                lifetime);
-
-            int current = lv_subject_get_int(subject);
-            hotend_speed_ = current;
-            update_label(hotend_label_, current);
-            update_fan_animation(hotend_icon_, current);
-        }
-    }
+    hotend_observer_ = bind_fan_observer(hotend_fan_name_, [this](int speed) {
+        hotend_speed_ = speed;
+        update_label(hotend_label_, speed);
+        update_fan_animation(hotend_icon_, speed);
+    });
 
     // Bind aux fan (hide row if none)
-    if (!aux_fan_name_.empty()) {
-        if (aux_row_) {
-            lv_obj_remove_flag(aux_row_, LV_OBJ_FLAG_HIDDEN);
-        }
-        SubjectLifetime lifetime;
-        lv_subject_t* subject = printer_state_.get_fan_speed_subject(aux_fan_name_, lifetime);
-        if (subject) {
-            aux_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
-                subject, this,
-                [weak_alive](FanStackWidget* self, int speed) {
-                    if (weak_alive.expired())
-                        return;
-                    self->aux_speed_ = speed;
-                    self->update_label(self->aux_label_, speed);
-                    self->update_fan_animation(self->aux_icon_, speed);
-                },
-                lifetime);
+    if (!aux_fan_name_.empty() && aux_row_)
+        lv_obj_remove_flag(aux_row_, LV_OBJ_FLAG_HIDDEN);
+    else if (aux_row_)
+        lv_obj_add_flag(aux_row_, LV_OBJ_FLAG_HIDDEN);
 
-            int current = lv_subject_get_int(subject);
-            aux_speed_ = current;
-            update_label(aux_label_, current);
-            update_fan_animation(aux_icon_, current);
-        }
-    } else {
-        if (aux_row_) {
-            lv_obj_add_flag(aux_row_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
+    aux_observer_ = bind_fan_observer(aux_fan_name_, [this](int speed) {
+        aux_speed_ = speed;
+        update_label(aux_label_, speed);
+        update_fan_animation(aux_icon_, speed);
+    });
 
     spdlog::debug("[FanStackWidget] Bound fans: part='{}' hotend='{}' aux='{}'", part_fan_name_,
                   hotend_fan_name_, aux_fan_name_);
@@ -494,16 +388,34 @@ void FanStackWidget::bind_carousel_fans() {
     }
 
     const auto& fans = printer_state_.get_fans();
+
+    // When no fans are discovered yet (e.g. disconnected), use placeholder
+    // entries so the carousel still shows arc widgets at 0%.
+    struct FanEntry {
+        std::string display_name;
+        std::string object_name;
+        int speed_percent;
+        bool is_controllable;
+    };
+    std::vector<FanEntry> entries;
     if (fans.empty()) {
-        spdlog::debug("[FanStackWidget] Carousel: no fans discovered yet");
-        return;
+        entries.push_back({lv_tr("Part"), "", 0, false});
+        entries.push_back({lv_tr("Hotend"), "", 0, false});
+        spdlog::debug("[FanStackWidget] Carousel: no fans discovered, using placeholders");
+    } else {
+        for (const auto& fan : fans) {
+            std::string short_name = fan.display_name;
+            auto pos = short_name.find(" Fan");
+            if (pos != std::string::npos && short_name.size() > 4)
+                short_name.erase(pos, 4);
+            entries.push_back({short_name, fan.object_name, fan.speed_percent, fan.is_controllable});
+        }
     }
 
-    std::weak_ptr<bool> weak_alive = alive_;
     const lv_font_t* xs_font = theme_manager_get_font("font_xs");
     lv_color_t text_muted = theme_manager_get_color("text_muted");
 
-    for (const auto& fan : fans) {
+    for (const auto& entry : entries) {
         // Thin wrapper page: column layout with arc core + tiny name label
         lv_obj_t* page = lv_obj_create(lv_scr_act());
         lv_obj_set_size(page, LV_PCT(100), LV_PCT(100));
@@ -517,12 +429,12 @@ void FanStackWidget::bind_carousel_fans() {
 
         // Create the core arc widget (no card chrome, no buttons)
         char val_str[16];
-        snprintf(val_str, sizeof(val_str), "%d", fan.speed_percent);
+        snprintf(val_str, sizeof(val_str), "%d", entry.speed_percent);
         const char* attrs[] = {"initial_value", val_str, nullptr};
         lv_obj_t* arc_core = static_cast<lv_obj_t*>(lv_xml_create(page, "fan_arc_core", attrs));
         if (!arc_core) {
             spdlog::error("[FanStackWidget] lv_xml_create('fan_arc_core') returned NULL for '{}'",
-                          fan.display_name);
+                          entry.display_name);
             lv_obj_delete(page);
             continue;
         }
@@ -541,14 +453,8 @@ void FanStackWidget::bind_carousel_fans() {
         // a name label above, but the carousel has no label above the arc
         lv_obj_set_style_pad_top(arc_core, 0, 0);
 
-        // Tiny name label below the arc — strip " Fan" for compact display
-        std::string short_name = fan.display_name;
-        auto pos = short_name.find(" Fan");
-        if (pos != std::string::npos && short_name.size() > 4) {
-            short_name.erase(pos, 4);
-        }
         lv_obj_t* name_lbl = lv_label_create(page);
-        lv_label_set_text(name_lbl, short_name.c_str());
+        lv_label_set_text(name_lbl, entry.display_name.c_str());
         lv_obj_set_style_text_color(name_lbl, text_muted, 0);
         if (xs_font)
             lv_obj_set_style_text_font(name_lbl, xs_font, 0);
@@ -563,14 +469,10 @@ void FanStackWidget::bind_carousel_fans() {
         if (xs_font && cp.speed_label)
             lv_obj_set_style_text_font(cp.speed_label, xs_font, 0);
 
-        // Set fan icon pivot for spin animation
-        if (cp.fan_icon) {
-            lv_obj_set_style_transform_pivot_x(cp.fan_icon, LV_PCT(50), 0);
-            lv_obj_set_style_transform_pivot_y(cp.fan_icon, LV_PCT(50), 0);
-        }
+        set_icon_pivot(cp.fan_icon);
 
         // Auto-controlled fans: hide knob, disable arc interaction
-        if (!fan.is_controllable && cp.arc) {
+        if (!entry.is_controllable && cp.arc) {
             lv_obj_remove_flag(cp.arc, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_set_style_bg_opa(cp.arc, LV_OPA_TRANSP, LV_PART_KNOB);
             lv_obj_set_style_shadow_width(cp.arc, 0, LV_PART_KNOB);
@@ -595,42 +497,25 @@ void FanStackWidget::bind_carousel_fans() {
         carousel_pages_.push_back(cp);
 
         // Observe fan speed → update arc value + label text + spin animation
-        SubjectLifetime lifetime;
-        lv_subject_t* subject = printer_state_.get_fan_speed_subject(fan.object_name, lifetime);
-        if (subject) {
-            auto obs = helix::ui::observe_int_sync<FanStackWidget>(
-                subject, this,
-                [weak_alive, page_idx](FanStackWidget* self, int speed) {
-                    if (weak_alive.expired())
-                        return;
-                    if (page_idx >= self->carousel_pages_.size())
-                        return;
-                    auto& cp = self->carousel_pages_[page_idx];
-                    if (cp.arc)
-                        lv_arc_set_value(cp.arc, speed);
-                    if (cp.speed_label) {
-                        char buf[8];
-                        lv_label_set_text(cp.speed_label,
-                                          lv_tr(helix::format::format_fan_speed(speed, buf, sizeof(buf))));
-                    }
-                    self->update_fan_animation(cp.fan_icon, speed);
-                },
-                lifetime);
+        // (skip for placeholders with no object_name)
+        if (entry.object_name.empty())
+            continue;
 
-            // Read current value immediately — deferred initial fire is
-            // dropped when populate_widgets() freezes the update queue.
-            int current = lv_subject_get_int(subject);
+        auto obs = bind_fan_observer(entry.object_name, [this, page_idx](int speed) {
+            if (page_idx >= carousel_pages_.size())
+                return;
+            auto& cp = carousel_pages_[page_idx];
             if (cp.arc)
-                lv_arc_set_value(cp.arc, current);
+                lv_arc_set_value(cp.arc, speed);
             if (cp.speed_label) {
                 char buf[8];
                 lv_label_set_text(cp.speed_label,
-                                  lv_tr(helix::format::format_fan_speed(current, buf, sizeof(buf))));
+                                  lv_tr(helix::format::format_fan_speed(speed, buf, sizeof(buf))));
             }
-            update_fan_animation(cp.fan_icon, current);
-
+            update_fan_animation(cp.fan_icon, speed);
+        });
+        if (obs)
             carousel_observers_.push_back(std::move(obs));
-        }
     }
 
     // Attach auto-resize AFTER all pages are reparented into the carousel.
@@ -651,6 +536,62 @@ void FanStackWidget::bind_carousel_fans() {
 
     int page_count = ui_carousel_get_page_count(carousel);
     spdlog::debug("[FanStackWidget] Carousel bound {} fan pages", page_count);
+}
+
+void FanStackWidget::set_icon_pivot(lv_obj_t* icon) {
+    if (icon) {
+        lv_obj_set_style_transform_pivot_x(icon, LV_PCT(50), 0);
+        lv_obj_set_style_transform_pivot_y(icon, LV_PCT(50), 0);
+    }
+}
+
+ObserverGuard FanStackWidget::bind_fan_observer(const std::string& fan_name,
+                                                std::function<void(int speed)> on_update) {
+    if (fan_name.empty())
+        return {};
+
+    SubjectLifetime lifetime;
+    lv_subject_t* subject = printer_state_.get_fan_speed_subject(fan_name, lifetime);
+    if (!subject)
+        return {};
+
+    std::weak_ptr<bool> weak_alive = alive_;
+    auto guard = helix::ui::observe_int_sync<FanStackWidget>(
+        subject, this,
+        [weak_alive, on_update](FanStackWidget* /*self*/, int speed) {
+            if (weak_alive.expired())
+                return;
+            on_update(speed);
+        },
+        lifetime);
+
+    // Read current value immediately — the deferred observer initial fire
+    // is dropped when populate_widgets() freezes the update queue.
+    on_update(lv_subject_get_int(subject));
+    return guard;
+}
+
+void FanStackWidget::setup_common_observers(std::function<void()> on_anim_changed,
+                                            std::function<void()> on_fans_version) {
+    animations_enabled_ = DisplaySettingsManager::instance().get_animations_enabled();
+
+    std::weak_ptr<bool> weak_alive = alive_;
+    anim_settings_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
+        DisplaySettingsManager::instance().subject_animations_enabled(), this,
+        [weak_alive, on_anim_changed](FanStackWidget* self, int enabled) {
+            if (weak_alive.expired())
+                return;
+            self->animations_enabled_ = (enabled != 0);
+            on_anim_changed();
+        });
+
+    version_observer_ = helix::ui::observe_int_sync<FanStackWidget>(
+        printer_state_.get_fans_version_subject(), this,
+        [weak_alive, on_fans_version](FanStackWidget* /*self*/, int /*version*/) {
+            if (weak_alive.expired())
+                return;
+            on_fans_version();
+        });
 }
 
 void FanStackWidget::update_label(lv_obj_t* label, int speed_pct) {
