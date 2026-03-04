@@ -114,7 +114,7 @@ void SettingsManager::set_led_enabled(bool enabled) {
     spdlog::info("[SettingsManager] set_led_enabled({})", enabled);
 
     // 1. Delegate to LedController for actual hardware control
-    helix::led::LedController::instance().toggle_all(enabled);
+    helix::led::LedController::instance().light_set(enabled);
 
     // 2. Update subject (UI reacts)
     lv_subject_set_int(&led_enabled_subject_, enabled ? 1 : 0);

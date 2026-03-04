@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "app_globals.h"
+#include "printer_state.h"
+
 #include "led/led_auto_state.h"
 #include "led/led_controller.h"
 
 #include "../catch_amalgamated.hpp"
+#include "../ui_test_utils.h"
 
 using namespace helix::led;
 
@@ -217,4 +221,102 @@ TEST_CASE("setup_default_mappings includes all 6 state keys", "[led][auto_state]
     }
 
     state.deinit();
+}
+
+// ============================================================================
+// apply_action integration: verify light_on_ state side effects
+// ============================================================================
+
+/// Helper: set up LedController with a native strip selected, init LedAutoState
+static void setup_auto_state_with_strip() {
+    auto& ctrl = LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    LedStripInfo strip;
+    strip.name = "Chamber Light";
+    strip.id = "neopixel chamber_light";
+    strip.backend = LedBackendType::NATIVE;
+    strip.supports_color = true;
+    strip.supports_white = true;
+    ctrl.native().add_strip(strip);
+    ctrl.set_selected_strips({"neopixel chamber_light"});
+}
+
+static void teardown_auto_state() {
+    LedAutoState::instance().deinit();
+    LedController::instance().deinit();
+}
+
+TEST_CASE("LedAutoState apply_action 'off' sets light_is_on false", "[led][autostate]") {
+    lv_init_safe();
+    setup_auto_state_with_strip();
+    auto& ctrl = LedController::instance();
+    auto& state = LedAutoState::instance();
+
+    // Start with light on
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    // init() first (loads config, resets enabled), then configure and enable
+    state.init(get_printer_state());
+    state.set_mapping("idle", {"off", 0xFFFFFF, 100, "", 0, ""});
+    state.set_enabled(true);
+
+    // Force evaluate to "idle" (no printer state subjects → idle)
+    state.evaluate();
+    REQUIRE_FALSE(ctrl.light_is_on());
+
+    teardown_auto_state();
+}
+
+TEST_CASE("LedAutoState apply_action 'color' sets light_is_on true", "[led][autostate]") {
+    lv_init_safe();
+    setup_auto_state_with_strip();
+    auto& ctrl = LedController::instance();
+    auto& state = LedAutoState::instance();
+
+    REQUIRE_FALSE(ctrl.light_is_on());
+
+    state.init(get_printer_state());
+    state.set_mapping("idle", {"color", 0xFF0000, 100, "", 0, ""});
+    state.set_enabled(true);
+
+    state.evaluate();
+    REQUIRE(ctrl.light_is_on());
+
+    teardown_auto_state();
+}
+
+TEST_CASE("LedAutoState apply_action 'brightness' sets light_is_on based on value",
+          "[led][autostate]") {
+    lv_init_safe();
+    setup_auto_state_with_strip();
+    auto& ctrl = LedController::instance();
+    auto& state = LedAutoState::instance();
+
+    // brightness > 0 → on
+    state.init(get_printer_state());
+    state.set_mapping("idle", {"brightness", 0xFFFFFF, 50, "", 0, ""});
+    state.set_enabled(true);
+
+    state.evaluate();
+    REQUIRE(ctrl.light_is_on());
+
+    teardown_auto_state();
+
+    // brightness == 0 → off
+    setup_auto_state_with_strip();
+    auto& ctrl2 = LedController::instance();
+    auto& state2 = LedAutoState::instance();
+
+    ctrl2.light_set(true);
+    state2.init(get_printer_state());
+    state2.set_mapping("idle", {"brightness", 0xFFFFFF, 0, "", 0, ""});
+    state2.set_enabled(true);
+
+    state2.evaluate();
+    REQUIRE_FALSE(ctrl2.light_is_on());
+
+    teardown_auto_state();
 }

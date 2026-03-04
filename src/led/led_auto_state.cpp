@@ -152,42 +152,25 @@ void LedAutoState::apply_action(const LedStateAction& action) {
     auto& ctrl = LedController::instance();
 
     if (action.action_type == "off") {
-        for (const auto& strip : ctrl.selected_strips()) {
-            ctrl.native().turn_off(strip);
-        }
+        ctrl.turn_off_all();
     } else if (action.action_type == "color") {
         double r = ((action.color >> 16) & 0xFF) / 255.0;
         double g = ((action.color >> 8) & 0xFF) / 255.0;
         double b = (action.color & 0xFF) / 255.0;
         double scale = action.brightness / 100.0;
-        for (const auto& strip : ctrl.selected_strips()) {
-            // Check if this strip supports color
-            bool strip_supports_color = false;
-            for (const auto& s : ctrl.native().strips()) {
-                if (s.id == strip) {
-                    strip_supports_color = s.supports_color;
-                    break;
-                }
-            }
-            if (strip_supports_color) {
-                ctrl.native().set_color(strip, r * scale, g * scale, b * scale, 0.0);
-            } else {
-                // Non-color LED: fall back to brightness-only (white intensity)
-                ctrl.native().set_color(strip, scale, scale, scale, 0.0);
-            }
-        }
+        ctrl.set_color_all(r * scale, g * scale, b * scale, 0.0);
     } else if (action.action_type == "brightness") {
-        double scale = action.brightness / 100.0;
-        for (const auto& strip : ctrl.selected_strips()) {
-            ctrl.native().set_color(strip, scale, scale, scale, 0.0);
-        }
+        ctrl.set_brightness_all(action.brightness);
     } else if (action.action_type == "effect") {
         ctrl.effects().activate_effect(action.effect_name);
+        ctrl.sync_light_state(true);
     } else if (action.action_type == "wled_preset") {
         for (const auto& strip : ctrl.wled().strips()) {
             ctrl.wled().set_preset(strip.name, action.wled_preset);
         }
+        ctrl.sync_light_state(true);
     } else if (action.action_type == "macro") {
+        // Custom G-code — resulting light state is unknowable, skip sync
         ctrl.macro().execute_custom_action(action.macro_gcode);
     } else {
         spdlog::warn("[LedAutoState] Unknown action type: '{}'", action.action_type);

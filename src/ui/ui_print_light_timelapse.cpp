@@ -118,9 +118,10 @@ void PrintLightTimelapseControls::handle_light_button() {
         return;
     }
 
-    // Toggle to opposite of current state via LedController
-    bool new_state = !led_on_;
-    led_ctrl.toggle_all(new_state);
+    // Sync LedController state from our tracked state, then toggle.
+    // This matches the pattern used in LedWidget for pre-toggle sync.
+    led_ctrl.sync_light_state(led_on_);
+    led_ctrl.light_toggle();
 }
 
 void PrintLightTimelapseControls::handle_timelapse_button() {

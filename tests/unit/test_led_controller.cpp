@@ -210,7 +210,7 @@ TEST_CASE("LedController: selected_strips can hold WLED strip IDs", "[led][contr
     REQUIRE(controller.selected_strips()[0] == "neopixel chamber_light");
 }
 
-TEST_CASE("LedController: toggle_all turns on all selected native strips", "[led][controller]") {
+TEST_CASE("LedController: light_set turns on all selected native strips", "[led][controller]") {
     auto& ctrl = helix::led::LedController::instance();
     ctrl.deinit();
     ctrl.init(nullptr, nullptr);
@@ -227,15 +227,17 @@ TEST_CASE("LedController: toggle_all turns on all selected native strips", "[led
     // Select the strip
     ctrl.set_selected_strips({"neopixel chamber_light"});
 
-    // toggle_all should exist and not crash with nullptr api
-    // (actual gcode won't be sent without real api, but the method should work)
-    ctrl.toggle_all(true);
-    ctrl.toggle_all(false);
+    // light_set should dispatch and update light_is_on()
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.light_set(false);
+    REQUIRE(!ctrl.light_is_on());
 
     ctrl.deinit();
 }
 
-TEST_CASE("LedController: toggle_all with empty selected_strips is a no-op", "[led][controller]") {
+TEST_CASE("LedController: light_set with empty selected_strips is a no-op", "[led][controller]") {
     // Clear any auto-selected strips persisted by prior tests
     auto* cfg = Config::get_instance();
     if (cfg) {
@@ -251,13 +253,13 @@ TEST_CASE("LedController: toggle_all with empty selected_strips is a no-op", "[l
     REQUIRE(ctrl.selected_strips().empty());
 
     // Should not crash
-    ctrl.toggle_all(true);
-    ctrl.toggle_all(false);
+    ctrl.light_set(true);
+    ctrl.light_set(false);
 
     ctrl.deinit();
 }
 
-TEST_CASE("LedController: toggle_all with mixed backend types", "[led][controller]") {
+TEST_CASE("LedController: light_set with mixed backend types", "[led][controller]") {
     auto& ctrl = helix::led::LedController::instance();
     ctrl.deinit();
     ctrl.init(nullptr, nullptr);
@@ -284,8 +286,11 @@ TEST_CASE("LedController: toggle_all with mixed backend types", "[led][controlle
     ctrl.set_selected_strips({"neopixel chamber_light", "wled_printer_led"});
 
     // Should dispatch to correct backends without crash
-    ctrl.toggle_all(true);
-    ctrl.toggle_all(false);
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.light_set(false);
+    REQUIRE(!ctrl.light_is_on());
 
     ctrl.deinit();
 }
@@ -420,7 +425,7 @@ TEST_CASE("LedController: backend_for_strip with macro: prefix", "[led][controll
     ctrl.deinit();
 }
 
-TEST_CASE("LedController: toggle_all dispatches macro: prefixed strips", "[led][controller]") {
+TEST_CASE("LedController: light_set dispatches macro: prefixed strips", "[led][controller]") {
     auto& ctrl = helix::led::LedController::instance();
     ctrl.deinit();
     ctrl.init(nullptr, nullptr);
@@ -437,8 +442,11 @@ TEST_CASE("LedController: toggle_all dispatches macro: prefixed strips", "[led][
     ctrl.set_selected_strips({"macro:Cabinet Light"});
 
     // Should not crash (will warn about no API, which is expected)
-    ctrl.toggle_all(true);
-    ctrl.toggle_all(false);
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.light_set(false);
+    REQUIRE(!ctrl.light_is_on());
 
     ctrl.deinit();
 }
@@ -688,11 +696,13 @@ TEST_CASE("LedController: light_toggle and light_is_on", "[led][controller]") {
     // Initially off
     REQUIRE(!ctrl.light_is_on());
 
-    // Toggle on (no API so macro state won't track, but light_toggle uses toggle_all)
+    // Toggle on
     ctrl.light_toggle();
+    REQUIRE(ctrl.light_is_on());
 
     // Toggle off
     ctrl.light_toggle();
+    REQUIRE(!ctrl.light_is_on());
 
     ctrl.deinit();
 }
@@ -884,5 +894,93 @@ TEST_CASE("LedController: version observer fires on bump", "[led][version]") {
     REQUIRE(user_data[1] == before + 1);
 
     lv_observer_remove(obs);
+    ctrl.deinit();
+}
+
+// ============================================================================
+// Regression tests: light_set / turn_off_all / apply_startup_preference state
+// ============================================================================
+
+TEST_CASE("LedController: light_set updates light_is_on", "[led][controller]") {
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.light_set(false);
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: turn_off_all sets light_is_on false", "[led][controller]") {
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    ctrl.light_set(true);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.turn_off_all();
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: set_color_all updates light_is_on", "[led][controller]") {
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    // Non-zero color sets light on
+    ctrl.set_color_all(1.0, 0.5, 0.0);
+    REQUIRE(ctrl.light_is_on());
+
+    // Zero color sets light off
+    ctrl.set_color_all(0.0, 0.0, 0.0, 0.0);
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: set_brightness_all updates light_is_on", "[led][controller]") {
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    ctrl.set_brightness_all(50);
+    REQUIRE(ctrl.light_is_on());
+
+    ctrl.set_brightness_all(0);
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.deinit();
+}
+
+TEST_CASE("LedController: apply_startup_preference sets light_is_on true", "[led][controller]") {
+    auto& ctrl = helix::led::LedController::instance();
+    ctrl.deinit();
+    ctrl.init(nullptr, nullptr);
+
+    // Add a strip so apply_startup_preference doesn't early-return
+    helix::led::LedStripInfo strip;
+    strip.name = "Chamber Light";
+    strip.id = "neopixel chamber_light";
+    strip.backend = helix::led::LedBackendType::NATIVE;
+    strip.supports_color = true;
+    strip.supports_white = true;
+    ctrl.native().add_strip(strip);
+    ctrl.set_selected_strips({"neopixel chamber_light"});
+
+    ctrl.set_led_on_at_start(true);
+    REQUIRE(!ctrl.light_is_on());
+
+    ctrl.apply_startup_preference();
+    REQUIRE(ctrl.light_is_on());
+
     ctrl.deinit();
 }

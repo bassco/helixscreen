@@ -384,8 +384,18 @@ class LedController {
     void load_config();
     void save_config();
 
-    // Toggle all selected strips on/off
-    void toggle_all(bool on);
+    /// Set light state and dispatch to all selected backends.
+    /// This is the primary API for turning lights on/off — always updates light_on_.
+    void light_set(bool on);
+
+    /// Convenience: turn off all selected strips.
+    void turn_off_all();
+
+    /// Set color on all selected native/output_pin strips. Sets light_on_ = true.
+    void set_color_all(double r, double g, double b, double w = 0.0);
+
+    /// Set brightness on all selected native/output_pin strips. Sets light_on_ = (pct > 0).
+    void set_brightness_all(int brightness_pct);
 
     // Determine which backend a given strip belongs to
     [[nodiscard]] LedBackendType backend_for_strip(const std::string& strip_id) const;
@@ -485,7 +495,11 @@ class LedController {
     std::vector<LedMacroInfo> configured_macros_;
     std::vector<std::string> discovered_led_macros_; // Raw macro names from hardware
     bool led_on_at_start_ = false;
-    bool light_on_ = false;             // Internal light state for abstract API
+    bool light_on_ = false; // Internal light state for abstract API
+
+    /// Dispatch on/off to all selected strips (low-level — callers should use light_set())
+    void toggle_all(bool on);
+
     lv_subject_t led_config_version_{}; // Bumped on discover/config changes
     bool version_subject_initialized_ = false;
 

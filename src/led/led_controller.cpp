@@ -1871,16 +1871,48 @@ bool LedController::light_state_trackable() const {
     return true;
 }
 
+void LedController::light_set(bool on) {
+    spdlog::info("[LedController] light_set({})", on);
+    light_on_ = on;
+    toggle_all(on);
+}
+
+void LedController::turn_off_all() {
+    light_set(false);
+}
+
+void LedController::set_color_all(double r, double g, double b, double w) {
+    light_on_ = (r > 0.0 || g > 0.0 || b > 0.0 || w > 0.0);
+    for (const auto& strip_id : selected_strips_) {
+        auto backend_type = backend_for_strip(strip_id);
+        if (backend_type == LedBackendType::NATIVE) {
+            native_.set_color(strip_id, r, g, b, w);
+        } else if (backend_type == LedBackendType::OUTPUT_PIN) {
+            // Use luminance approximation for single-channel pins
+            double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            output_pin_.set_value(strip_id, lum);
+        }
+    }
+}
+
+void LedController::set_brightness_all(int brightness_pct) {
+    light_on_ = (brightness_pct > 0);
+    double scale = brightness_pct / 100.0;
+    for (const auto& strip_id : selected_strips_) {
+        auto backend_type = backend_for_strip(strip_id);
+        if (backend_type == LedBackendType::NATIVE) {
+            native_.set_color(strip_id, scale, scale, scale, 0.0);
+        } else if (backend_type == LedBackendType::OUTPUT_PIN) {
+            output_pin_.set_brightness(strip_id, brightness_pct);
+        }
+    }
+}
+
 void LedController::light_toggle() {
-    light_on_ = !light_on_;
-    toggle_all(light_on_);
+    light_set(!light_on_);
 }
 
 bool LedController::light_is_on() const {
-    // Return the optimistic internal state set by light_toggle().
-    // This is immediately correct after toggling. For native LEDs, the
-    // Moonraker status update will subsequently confirm via PrinterState subjects.
-    // For WLED/macros, we track state optimistically in their backends.
     return light_on_;
 }
 
@@ -1912,7 +1944,7 @@ void LedController::apply_startup_preference() {
     }
 
     spdlog::info("[LedController] Applying startup preference: turning LEDs on");
-    toggle_all(true);
+    light_set(true);
 }
 
 void LedController::set_selected_strips(const std::vector<std::string>& strips) {
