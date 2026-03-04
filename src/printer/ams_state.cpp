@@ -20,6 +20,7 @@
 #include "ams_backend_mock.h"
 #include "app_globals.h"
 #include "format_utils.h"
+#include "humidity_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
@@ -258,6 +259,10 @@ void AmsState::init_subjects(bool register_xml) {
     INIT_SUBJECT_STRING(dryer_modal_temp_text, "55°C", subjects_, register_xml);
     INIT_SUBJECT_STRING(dryer_modal_duration_text, "4h", subjects_, register_xml);
 
+    // Dryer humidity and info bar visibility subjects
+    INIT_SUBJECT_STRING(dryer_humidity_text, "---", subjects_, register_xml);
+    INIT_SUBJECT_INT(dryer_info_visible, 0, subjects_, register_xml);
+
     // Currently Loaded display subjects (for reactive UI binding)
     // These subjects need ams_ prefix for XML but member vars don't have it
     lv_subject_init_string(&current_material_text_, current_material_text_buf_, nullptr,
@@ -360,10 +365,11 @@ void AmsState::deinit_subjects() {
 
     spdlog::trace("[AMS State] Deinitializing subjects");
 
-    // Reset cross-singleton observer FIRST — it observes PrinterState's
-    // print_state_enum_ subject, which lives outside our SubjectManager.
-    // Must be cleaned up while PrinterState subjects are still alive.
+    // Reset cross-singleton observers FIRST — they observe subjects from
+    // other singletons, which live outside our SubjectManager.
+    // Must be cleaned up while those subjects are still alive.
     print_state_observer_.reset();
+    dryer_humidity_observer_.reset();
 
     // IMPORTANT: clear_backends() MUST precede subjects_.deinit_all() because
     // BackendSlotSubjects are managed outside SubjectManager for lifetime reasons
@@ -1093,6 +1099,67 @@ void AmsState::sync_dryer_from_backend() {
     spdlog::trace("[AMS State] Synced dryer - supported={}, active={}, temp={}→{}°C, {}min left",
                   dryer.supported, dryer.active, static_cast<int>(dryer.current_temp_c),
                   static_cast<int>(dryer.target_temp_c), dryer.remaining_min);
+
+    // Update info bar visibility: show if dryer supported OR humidity sensor exists
+    auto& hmgr = helix::sensors::HumiditySensorManager::instance();
+    auto* humidity_subj = hmgr.get_dryer_humidity_subject();
+    bool has_humidity =
+        humidity_subj != nullptr && lv_subject_get_int(humidity_subj) >= 0;
+    bool visible = (lv_subject_get_int(&dryer_supported_) != 0) || has_humidity;
+    int new_visible = visible ? 1 : 0;
+    if (lv_subject_get_int(&dryer_info_visible_) != new_visible) {
+        lv_subject_set_int(&dryer_info_visible_, new_visible);
+    }
+
+    // Set up humidity observer on first call (lazy init)
+    setup_humidity_observer();
+}
+
+void AmsState::setup_humidity_observer() {
+    // Only set up once
+    if (dryer_humidity_observer_) {
+        return;
+    }
+
+    auto& hmgr = helix::sensors::HumiditySensorManager::instance();
+    auto* humidity_subj = hmgr.get_dryer_humidity_subject();
+    if (!humidity_subj) {
+        return;
+    }
+
+    using helix::ui::observe_int_sync;
+    dryer_humidity_observer_ = observe_int_sync<AmsState>(
+        humidity_subj, this, [](AmsState* self, int humidity_x10) {
+            if (humidity_x10 < 0) {
+                if (strcmp(lv_subject_get_string(&self->dryer_humidity_text_), "---") != 0) {
+                    lv_subject_copy_string(&self->dryer_humidity_text_, "---");
+                }
+            } else {
+                snprintf(self->dryer_humidity_text_buf_, sizeof(self->dryer_humidity_text_buf_),
+                         "%d%%", humidity_x10 / 10);
+                if (strcmp(lv_subject_get_string(&self->dryer_humidity_text_),
+                          self->dryer_humidity_text_buf_) != 0) {
+                    lv_subject_copy_string(&self->dryer_humidity_text_,
+                                           self->dryer_humidity_text_buf_);
+                }
+            }
+
+            // Re-evaluate info bar visibility when humidity changes
+            bool has_humidity = humidity_x10 >= 0;
+            bool dryer_supported = lv_subject_get_int(&self->dryer_supported_) != 0;
+            int new_visible = (dryer_supported || has_humidity) ? 1 : 0;
+            if (lv_subject_get_int(&self->dryer_info_visible_) != new_visible) {
+                lv_subject_set_int(&self->dryer_info_visible_, new_visible);
+            }
+        });
+}
+
+lv_subject_t* AmsState::get_dryer_humidity_text_subject() {
+    return &dryer_humidity_text_;
+}
+
+lv_subject_t* AmsState::get_dryer_info_visible_subject() {
+    return &dryer_info_visible_;
 }
 
 void AmsState::sync_clog_meter_from_info(const AmsSystemInfo& info) {

@@ -528,6 +528,13 @@ class AmsState {
         return &dryer_modal_duration_text_;
     }
 
+    /// Get subject for formatted dryer humidity text (e.g., "35%" or "---")
+    [[nodiscard]] lv_subject_t* get_dryer_humidity_text_subject();
+
+    /// Get subject for dryer info bar visibility (1 = show, 0 = hide)
+    /// Shows when dryer_supported OR humidity sensor exists
+    [[nodiscard]] lv_subject_t* get_dryer_info_visible_subject();
+
     // ========================================================================
     // Clog Detection Meter Subjects
     // ========================================================================
@@ -871,6 +878,9 @@ class AmsState {
     /** @brief Sync clog detection meter subjects from system info */
     void sync_clog_meter_from_info(const AmsSystemInfo& info);
 
+    /** @brief Set up observer on HumiditySensorManager dryer humidity subject */
+    void setup_humidity_observer();
+
     AmsState();
     ~AmsState();
 
@@ -993,6 +1003,12 @@ class AmsState {
     char dryer_target_temp_text_buf_[16];
     lv_subject_t dryer_time_text_;
     char dryer_time_text_buf_[32];
+
+    // Dryer humidity and info bar visibility subjects
+    lv_subject_t dryer_humidity_text_;
+    char dryer_humidity_text_buf_[8]; ///< "35%" or "---"
+    lv_subject_t dryer_info_visible_; ///< 1 when info bar should show
+    ObserverGuard dryer_humidity_observer_; ///< Observer on HumiditySensorManager
 
     // Dryer modal editing subjects (user-adjustable values)
     lv_subject_t dryer_modal_temp_text_;
