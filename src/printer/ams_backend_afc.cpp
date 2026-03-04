@@ -1928,7 +1928,7 @@ AmsError AmsBackendAfc::load_filament(int slot_index) {
     return execute_gcode(cmd.str());
 }
 
-AmsError AmsBackendAfc::unload_filament() {
+AmsError AmsBackendAfc::unload_filament(int slot_index) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -1944,6 +1944,16 @@ AmsError AmsBackendAfc::unload_filament() {
     }
 
     if (num_extruders_ > 1) {
+        // Resolve which extruder to unselect from the slot's mapped_tool
+        if (slot_index >= 0) {
+            const auto* entry = slots_.get(slot_index);
+            int tool = entry ? entry->info.mapped_tool : slot_index;
+            if (tool >= 0 && tool < static_cast<int>(extruders_.size())) {
+                std::string cmd = "AFC_UNSELECT_TOOL TOOL=" + extruders_[tool].name;
+                spdlog::info("[AMS AFC] Unloading slot {} via toolchanger: {}", slot_index, cmd);
+                return execute_gcode(cmd);
+            }
+        }
         spdlog::info("[AMS AFC] Unloading via toolchanger: AFC_UNSELECT_TOOL");
         return execute_gcode("AFC_UNSELECT_TOOL");
     }

@@ -2720,7 +2720,7 @@ TEST_CASE("AFC load_filament sends CHANGE_TOOL in single-extruder mode",
     REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_SELECT_TOOL"));
 }
 
-TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL in toolchanger mode",
+TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL in toolchanger mode (no slot)",
           "[ams][afc][toolchanger]") {
     AmsBackendAfcTestHelper helper;
     helper.initialize_test_lanes_with_slots(4);
@@ -2735,6 +2735,33 @@ TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL in toolchanger mode",
     REQUIRE_FALSE(helper.has_gcode("TOOL_UNLOAD"));
 }
 
+TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL TOOL=name for specific slot",
+          "[ams][afc][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.set_filament_loaded(true);
+    helper.setup_toolchanger(4);
+
+    SECTION("slot 0 maps to extruder") {
+        auto result = helper.unload_filament(0);
+        REQUIRE(result);
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder"));
+    }
+
+    SECTION("slot 1 maps to extruder1") {
+        auto result = helper.unload_filament(1);
+        REQUIRE(result);
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder1"));
+    }
+
+    SECTION("slot 3 maps to extruder3") {
+        auto result = helper.unload_filament(3);
+        REQUIRE(result);
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder3"));
+    }
+}
+
 TEST_CASE("AFC unload_filament sends TOOL_UNLOAD in single-extruder mode",
           "[ams][afc][toolchanger]") {
     AmsBackendAfcTestHelper helper;
@@ -2747,6 +2774,20 @@ TEST_CASE("AFC unload_filament sends TOOL_UNLOAD in single-extruder mode",
     REQUIRE(result);
     REQUIRE(helper.has_gcode("TOOL_UNLOAD"));
     REQUIRE_FALSE(helper.has_gcode("AFC_UNSELECT_TOOL"));
+}
+
+TEST_CASE("AFC unload_filament ignores slot_index in single-extruder mode",
+          "[ams][afc][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.set_filament_loaded(true);
+
+    auto result = helper.unload_filament(3);
+
+    REQUIRE(result);
+    REQUIRE(helper.has_gcode("TOOL_UNLOAD"));
+    REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_UNSELECT_TOOL"));
 }
 
 // ============================================================================

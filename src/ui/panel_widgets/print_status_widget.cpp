@@ -345,8 +345,12 @@ void PrintStatusWidget::reset_print_card_to_idle() {
         return;
     }
 
-    // Check if we already have a cached version
-    auto cached = get_thumbnail_cache().get_if_cached(thumb_rel_path);
+    // Use detail-sized thumbnail for the print status card (200-400px depending on display)
+    auto detail_target = helix::ThumbnailProcessor::get_target_for_display(
+        helix::ThumbnailSize::Detail);
+
+    // Check if we already have a pre-scaled BIN version
+    auto cached = get_thumbnail_cache().get_if_optimized(thumb_rel_path, detail_target);
     if (!cached.empty()) {
         lv_image_set_src(print_card_thumb_, cached.c_str());
         spdlog::debug("[PrintStatusWidget] Idle thumbnail from cache: {}", cached);
@@ -367,10 +371,9 @@ void PrintStatusWidget::reset_print_card_to_idle() {
     lv_obj_t* thumb_widget = print_card_thumb_;
     auto ctx = ThumbnailLoadContext::create(alive_);
 
-    get_thumbnail_cache().fetch_for_card_view(
+    get_thumbnail_cache().fetch_for_detail_view(
         api, thumb_rel_path, ctx,
         [thumb_widget](const std::string& lvgl_path) {
-            // alive check handled by fetch_for_card_view's ctx guard
             helix::ui::queue_update<std::string>(
                 std::make_unique<std::string>(lvgl_path),
                 [thumb_widget](std::string* path) {

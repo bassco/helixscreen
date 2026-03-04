@@ -1193,7 +1193,7 @@ AmsError AmsBackendHappyHare::load_filament(int slot_index) {
     return execute_gcode(cmd.str());
 }
 
-AmsError AmsBackendHappyHare::unload_filament() {
+AmsError AmsBackendHappyHare::unload_filament(int /*slot_index*/) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
 

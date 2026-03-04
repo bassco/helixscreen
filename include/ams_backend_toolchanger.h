@@ -79,7 +79,7 @@ class AmsBackendToolChanger : public AmsSubscriptionBackend {
 
     // Operations
     AmsError load_filament(int slot_index) override;
-    AmsError unload_filament() override;
+    AmsError unload_filament(int slot_index = -1) override;
     AmsError select_slot(int slot_index) override;
     AmsError change_tool(int tool_number) override;
 

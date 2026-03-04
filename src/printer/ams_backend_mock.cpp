@@ -496,7 +496,7 @@ AmsError AmsBackendMock::load_filament(int slot_index) {
     return AmsErrorHelper::success();
 }
 
-AmsError AmsBackendMock::unload_filament() {
+AmsError AmsBackendMock::unload_filament(int /*slot_index*/) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
 

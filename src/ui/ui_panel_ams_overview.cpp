@@ -1062,7 +1062,7 @@ void AmsOverviewPanel::show_detail_context_menu(int slot_index, lv_obj_t* near_w
                     return;
                 }
                 {
-                    AmsError error = backend->unload_filament();
+                    AmsError error = backend->unload_filament(slot);
                     if (error.result != AmsResult::SUCCESS) {
                         NOTIFY_ERROR("Unload failed: {}", error.user_msg);
                     }

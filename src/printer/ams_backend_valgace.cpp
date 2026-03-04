@@ -259,7 +259,7 @@ AmsError AmsBackendValgACE::load_filament(int slot_index) {
     return execute_gcode("ACE_CHANGE_TOOL TOOL=" + std::to_string(slot_index));
 }
 
-AmsError AmsBackendValgACE::unload_filament() {
+AmsError AmsBackendValgACE::unload_filament(int /*slot_index*/) {
     auto err = check_preconditions();
     if (!err.success()) {
         return err;

@@ -350,8 +350,8 @@ AmsError AmsBackendToolChanger::load_filament(int slot_index) {
     return change_tool(slot_index);
 }
 
-AmsError AmsBackendToolChanger::unload_filament() {
-    // For tool changers, "unload" means unmount current tool
+AmsError AmsBackendToolChanger::unload_filament(int slot_index) {
+    // For tool changers, "unload" means unmount a specific tool (or current if -1)
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -360,9 +360,20 @@ AmsError AmsBackendToolChanger::unload_filament() {
             return precondition;
         }
 
-        if (system_info_.current_tool < 0) {
+        if (slot_index >= 0) {
+            AmsError slot_valid = validate_slot_index(slot_index);
+            if (!slot_valid) {
+                return slot_valid;
+            }
+        } else if (system_info_.current_tool < 0) {
             return AmsErrorHelper::not_loaded();
         }
+    }
+
+    if (slot_index >= 0) {
+        std::string cmd = "UNSELECT_TOOL T=" + std::to_string(slot_index);
+        spdlog::info("[AMS ToolChanger] Unmounting tool {}: {}", slot_index, cmd);
+        return execute_gcode(cmd);
     }
 
     spdlog::info("[AMS ToolChanger] Unmounting current tool");

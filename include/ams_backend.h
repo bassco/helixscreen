@@ -324,10 +324,14 @@ class AmsBackend {
     virtual AmsError load_filament(int slot_index) = 0;
 
     /**
-     * @brief Unload current filament (async)
+     * @brief Unload filament (async)
      *
-     * Initiates filament unload from extruder back to current slot.
+     * Initiates filament unload from extruder back to its slot.
      * Results delivered via EVENT_UNLOAD_COMPLETE or EVENT_ERROR.
+     *
+     * @param slot_index Slot to unload (-1 = unload current/default).
+     *        On toolchangers, specifies which tool to unmount.
+     *        On single-extruder systems, ignored (only one thing loaded).
      *
      * Requires:
      * - Filament currently loaded
@@ -336,7 +340,7 @@ class AmsBackend {
      *
      * @return AmsError indicating if operation was started successfully
      */
-    virtual AmsError unload_filament() = 0;
+    virtual AmsError unload_filament(int slot_index = -1) = 0;
 
     /**
      * @brief Select tool/slot without loading (async)
