@@ -207,6 +207,31 @@ AmsDetailWidgets ams_detail_find_widgets(lv_obj_t* root) {
     return w;
 }
 
+/// Dim spool on press, restore on release — visual feedback for slot taps.
+/// LVGL canvas widgets don't support transform_scale (raw pixel buffers),
+/// so we use opacity for the flash effect.
+static void slot_pressed_cb(lv_event_t* e) {
+    lv_obj_t* slot = lv_event_get_current_target_obj(e);
+    lv_obj_t* spool = lv_obj_find_by_name(slot, "spool_container");
+    if (spool) {
+        lv_obj_set_style_opa(spool, 140, 0);
+    }
+}
+
+static void slot_released_cb(lv_event_t* e) {
+    lv_obj_t* slot = lv_event_get_current_target_obj(e);
+    lv_obj_t* spool = lv_obj_find_by_name(slot, "spool_container");
+    if (spool) {
+        lv_obj_set_style_opa(spool, LV_OPA_COVER, 0);
+    }
+}
+
+static void ams_detail_add_slot_press_feedback(lv_obj_t* slot) {
+    lv_obj_add_event_cb(slot, slot_pressed_cb, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(slot, slot_released_cb, LV_EVENT_RELEASED, nullptr);
+    lv_obj_add_event_cb(slot, slot_released_cb, LV_EVENT_PRESS_LOST, nullptr);
+}
+
 AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_widgets[],
                                             int max_slots, int unit_index, lv_event_cb_t click_cb,
                                             void* user_data) {
@@ -252,6 +277,9 @@ AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_
         slot_widgets[i] = slot;
         lv_obj_set_user_data(slot, reinterpret_cast<void*>(static_cast<intptr_t>(global_index)));
         lv_obj_add_event_cb(slot, click_cb, LV_EVENT_CLICKED, user_data);
+
+        // Add visual press feedback (opacity flash on touch)
+        ams_detail_add_slot_press_feedback(slot);
     }
 
     result.slot_count = count;
