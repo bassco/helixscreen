@@ -40,6 +40,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <sstream>
 #include <unordered_map>
@@ -99,6 +100,7 @@ static void ensure_ams_widgets_registered() {
     // xml_registration.cpp
     lv_xml_register_component_from_file("A:ui_xml/components/ams_unit_detail.xml");
     lv_xml_register_component_from_file("A:ui_xml/components/ams_loaded_card.xml");
+    lv_xml_register_component_from_file("A:ui_xml/components/ams_dryer_info_bar.xml");
     lv_xml_register_component_from_file("A:ui_xml/components/ams_sidebar.xml");
     lv_xml_register_component_from_file("A:ui_xml/ams_panel.xml");
     lv_xml_register_component_from_file("A:ui_xml/ams_context_menu.xml");
@@ -1123,7 +1125,7 @@ void AmsPanel::handle_buffer_click() {
     const char* title = lv_tr("Buffer Status");
 
     if (info.type == AmsType::AFC) {
-        // AFC: Show buffer health from the unit (one buffer per unit)
+        // AFC: Show buffer health from the unit
         bool found_health = false;
         if (effective_unit >= 0 && effective_unit < static_cast<int>(info.units.size())) {
             const auto& unit = info.units[effective_unit];
@@ -1131,11 +1133,17 @@ void AmsPanel::handle_buffer_click() {
                 const auto& bh = unit.buffer_health.value();
                 message += fmt::format("{}: {}\n", lv_tr("State"),
                                        bh.state.empty() ? lv_tr("Unknown") : bh.state.c_str());
-                message += fmt::format("{}: {:.1f} mm\n", lv_tr("Distance to Fault"),
-                                       bh.distance_to_fault);
-                message += fmt::format("{}: {}", lv_tr("Fault Detection"),
-                                       bh.fault_detection_enabled ? lv_tr("Enabled")
-                                                                  : lv_tr("Disabled"));
+                if (bh.fault_detection_enabled) {
+                    if (bh.distance_to_fault >= 0) {
+                        message += fmt::format("{}: {:.1f} mm\n", lv_tr("Distance to Fault"),
+                                               bh.distance_to_fault);
+                        message += fmt::format("  {}\n",
+                                               lv_tr("(extrusion remaining before clog fault triggers)"));
+                    }
+                    message += fmt::format("{}: {}", lv_tr("Fault Detection"), lv_tr("Enabled"));
+                } else {
+                    message += fmt::format("{}: {}", lv_tr("Fault Detection"), lv_tr("Disabled"));
+                }
                 found_health = true;
             }
         }
@@ -1144,7 +1152,26 @@ void AmsPanel::handle_buffer_click() {
         }
     } else if (info.type == AmsType::HAPPY_HARE) {
         title = lv_tr("Sync Feedback");
-        // Happy Hare: Show sync feedback info from system info
+
+        // Proportional bias display
+        if (info.sync_feedback_bias > -1.5f) {
+            float abs_bias = std::fabs(info.sync_feedback_bias);
+            int pct = static_cast<int>(abs_bias * 100.0f);
+            const char* direction;
+            if (abs_bias < 0.02f) {
+                direction = "N"; // i18n: do not translate (Neutral indicator)
+            } else if (info.sync_feedback_bias < 0) {
+                direction = "T"; // i18n: do not translate (Tension indicator)
+            } else {
+                direction = "C"; // i18n: do not translate (Compression indicator)
+            }
+            message += fmt::format("{}: {} {}%\n", lv_tr("Buffer Position"),
+                                   direction, pct);
+            message += fmt::format("{}: {:.3f}\n", lv_tr("Bias (modelled)"),
+                                   info.sync_feedback_bias);
+        }
+
+        // Existing fields
         if (!info.sync_feedback_state.empty() && info.sync_feedback_state != "disabled") {
             message += fmt::format("{}: {}\n", lv_tr("Sync Feedback"),
                                    info.sync_feedback_state);
@@ -1158,9 +1185,13 @@ void AmsPanel::handle_buffer_click() {
             message += fmt::format("{}: {}\n", lv_tr("Clog Detection"),
                                    info.clog_detection == 2 ? lv_tr("Auto") : lv_tr("Manual"));
         }
-        if (info.encoder_flow_rate >= 0) {
+        if (info.sync_feedback_flow_rate >= 0) {
+            message += fmt::format("{}: {:.0f}%", lv_tr("Flow Rate"),
+                                   info.sync_feedback_flow_rate);
+        } else if (info.encoder_flow_rate >= 0) {
             message += fmt::format("{}: {}%", lv_tr("Flow Rate"), info.encoder_flow_rate);
         }
+
         // Trim trailing newline
         if (!message.empty() && message.back() == '\n') {
             message.pop_back();
