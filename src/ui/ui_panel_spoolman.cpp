@@ -15,6 +15,9 @@
 
 #include "ams_state.h"
 #include "app_globals.h"
+#include "brother_ql_printer.h"
+#include "label_printer_settings.h"
+#include "label_renderer.h"
 #include "format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
@@ -390,10 +393,7 @@ void SpoolmanPanel::handle_context_action(helix::ui::SpoolmanContextMenu::MenuAc
         break;
 
     case MenuAction::PRINT_LABEL:
-        // TODO: Print label (Phase 4)
-        spdlog::info("[{}] Print label for spool {} (not yet implemented)", get_name(), spool_id);
-        ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Label printing coming soon"),
-                                      2000);
+        print_label_for_spool(spool_id);
         break;
 
     case MenuAction::DELETE:
@@ -625,4 +625,56 @@ void SpoolmanPanel::on_search_timer(lv_timer_t* timer) {
 
     // Re-filter and repopulate (populate_spool_list handles empty/non-empty states)
     self->populate_spool_list();
+}
+
+void SpoolmanPanel::print_label_for_spool(int spool_id) {
+    auto& settings = helix::LabelPrinterSettingsManager::instance();
+
+    if (!settings.is_configured()) {
+        ToastManager::instance().show(ToastSeverity::INFO,
+                                      lv_tr("Set up your label printer in Settings"), 3000);
+        return;
+    }
+
+    const SpoolInfo* spool = find_cached_spool(spool_id);
+    if (!spool) {
+        spdlog::warn("[{}] Cannot print label: spool {} not found", get_name(), spool_id);
+        return;
+    }
+
+    // Get settings
+    std::string host = settings.get_printer_address();
+    int port = settings.get_printer_port();
+    int size_idx = settings.get_label_size_index();
+    int preset_idx = settings.get_label_preset();
+
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
+        size_idx = 0;
+    const auto& label_size = sizes[size_idx];
+
+    auto preset = static_cast<helix::LabelPreset>(std::clamp(preset_idx, 0, 2));
+
+    // Render label
+    auto bitmap = helix::LabelRenderer::render(*spool, preset, label_size);
+    if (bitmap.empty()) {
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to render label"),
+                                      3000);
+        return;
+    }
+
+    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
+
+    // Print async — callback fires on UI thread
+    printer_.print_label(host, port, bitmap, label_size,
+                         [](bool success, const std::string& error) {
+                             if (success) {
+                                 ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                                               lv_tr("Label printed"), 2000);
+                             } else {
+                                 spdlog::error("[SpoolmanPanel] Print failed: {}", error);
+                                 ToastManager::instance().show(ToastSeverity::ERROR,
+                                                               lv_tr("Print failed"), 3000);
+                             }
+                         });
 }

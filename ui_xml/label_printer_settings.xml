@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2025-2026 356C LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Label Printer Settings Overlay -->
+<!-- Configure Brother QL label printer: address, port, label size, preset, test print -->
+<component>
+  <view name="label_printer_settings"
+        extends="overlay_panel" width="#overlay_panel_width_full" title="Label Printer" title_tag="Label Printer"
+        bg_color="#screen_bg">
+    <lv_obj name="overlay_content" width="100%" flex_grow="1" style_pad_top="0" style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_bottom="#space_lg" scrollable="true" flex_flow="column">
+      <!-- Printer Address -->
+      <setting_form_input name="row_printer_address" label="Address" placeholder="192.168.1.50"/>
+      <!-- Printer Port -->
+      <setting_form_input name="row_printer_port" label="Port" placeholder="9100"/>
+      <!-- Label Size -->
+      <setting_dropdown_row name="row_label_size"
+                            label="Label Size" label_tag="Label Size" icon="straighten"
+                            description="Select your label media"
+                            description_tag="Select your label media"
+                            callback="on_lp_label_size_changed"/>
+      <!-- Label Preset -->
+      <setting_dropdown_row name="row_preset"
+                            label="Label Preset" label_tag="Label Preset" icon="tune"
+                            description="Layout style for labels"
+                            description_tag="Layout style for labels"
+                            callback="on_lp_preset_changed"/>
+      <!-- Test Print -->
+      <setting_action_row name="row_test_print"
+                          label="Test Print" label_tag="Test Print" icon="print"
+                          description="Print a test label"
+                          description_tag="Print a test label"
+                          callback="on_lp_test_print"/>
+    </lv_obj>
+  </view>
+</component>
