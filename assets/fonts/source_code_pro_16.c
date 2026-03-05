@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 16 px
  * Bpp: 4
- * Opts: --font assets/fonts/SourceCodePro-Regular.ttf --size 16 --bpp 4 --format lvgl --no-compress --range 0x20-0x7F,0xA0-0xFF,0x100-0x17F,0x400-0x4FF,0x2013-0x2014,0x2018-0x201D,0x2022,0x2026,0x20AC,0x2122 -o assets/fonts/source_code_pro_16.c
+ * Opts: --font assets/fonts/SourceCodePro-Regular.ttf --size 16 --bpp 4 --format lvgl --range 0x20-0x7F,0xA0-0xFF,0x100-0x17F,0x400-0x4FF,0x2013-0x2014,0x2018-0x201D,0x2022,0x2026,0x20AC,0x2122 --no-compress -o assets/fonts/source_code_pro_16.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE

@@ -58,6 +58,7 @@ TRANS_SYNC_SCRIPT := scripts/translation_sync.py
 
 # Sync translations: extract from XML/C++, merge new keys to YAML
 # Use translation-sync-dry-run first to preview changes
+# After sync, checks if CJK text fonts need regeneration (new characters added)
 .PHONY: translation-sync
 translation-sync:
 	$(ECHO) "$(CYAN)Syncing translation strings...$(RESET)"
@@ -67,6 +68,7 @@ translation-sync:
 		echo "$(RED)✗ Python venv not available - run 'make venv-setup'$(RESET)"; \
 		exit 1; \
 	fi
+	$(Q)scripts/check_cjk_font_staleness.sh
 
 # Preview sync without modifying files
 .PHONY: translation-sync-dry-run

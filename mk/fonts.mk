@@ -49,7 +49,7 @@ regen-fonts:
 		exit 1; \
 	fi
 
-# Regenerate Noto Sans text fonts with extended Unicode (Latin, Cyrillic)
+# Regenerate Noto Sans text fonts with extended Unicode (Latin, Cyrillic, CJK)
 # Use this for internationalization support
 regen-text-fonts:
 	$(ECHO) "$(CYAN)Regenerating Noto Sans text fonts...$(RESET)"
@@ -59,6 +59,27 @@ regen-text-fonts:
 	else \
 		echo "$(RED)✗ regen_text_fonts.sh not found$(RESET)"; \
 		exit 1; \
+	fi
+
+# Auto-regenerate text fonts when CJK translation files change
+# Only triggers if CJK source fonts are present (they're gitignored)
+CJK_FONT_SC := assets/fonts/NotoSansCJKsc-Regular.otf
+CJK_FONT_JP := assets/fonts/NotoSansCJKjp-Regular.otf
+CJK_TRANS_YAML := translations/zh.yml translations/ja.yml
+TEXT_FONT_STAMP := .text-fonts.stamp
+
+# Check if any CJK translation YAML is newer than the text font stamp
+$(TEXT_FONT_STAMP): $(CJK_TRANS_YAML) scripts/regen_text_fonts.sh
+	$(Q)if [ -f "$(CJK_FONT_SC)" ] && [ -f "$(CJK_FONT_JP)" ]; then \
+		if command -v lv_font_conv >/dev/null 2>&1; then \
+			echo "$(YELLOW)→ CJK translations changed - regenerating text fonts...$(RESET)"; \
+			./scripts/regen_text_fonts.sh && touch $@ && echo "$(GREEN)✓ Text fonts regenerated with CJK$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ lv_font_conv not found - skipping CJK font regeneration$(RESET)"; \
+			touch $@; \
+		fi; \
+	else \
+		touch $@; \
 	fi
 
 # Regenerate icon constants in globals.xml from ui_icon_codepoints.h
