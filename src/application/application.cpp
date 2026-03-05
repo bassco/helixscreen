@@ -165,7 +165,9 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <sys/file.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #ifdef __APPLE__
@@ -213,10 +215,41 @@ void graceful_quit_signal_handler(int /*sig*/) {
 
 } // namespace
 
+static constexpr const char* INSTANCE_LOCK_PATH = "config/.helix-screen.lock";
+
+bool Application::acquire_instance_lock() {
+    m_lock_fd = open(INSTANCE_LOCK_PATH, O_CREAT | O_RDWR, 0644);
+    if (m_lock_fd < 0) {
+        spdlog::error("[Application] Cannot open lock file {}: {}", INSTANCE_LOCK_PATH,
+                      strerror(errno));
+        return false;
+    }
+    if (flock(m_lock_fd, LOCK_EX | LOCK_NB) < 0) {
+        if (errno == EWOULDBLOCK) {
+            spdlog::error("[Application] Another instance of helix-screen is already running");
+        } else {
+            spdlog::error("[Application] Failed to acquire lock: {}", strerror(errno));
+        }
+        close(m_lock_fd);
+        m_lock_fd = -1;
+        return false;
+    }
+    return true;
+}
+
+void Application::release_instance_lock() {
+    if (m_lock_fd >= 0) {
+        flock(m_lock_fd, LOCK_UN);
+        close(m_lock_fd);
+        m_lock_fd = -1;
+    }
+}
+
 Application::Application() = default;
 
 Application::~Application() {
     shutdown();
+    release_instance_lock();
 }
 
 int Application::run(int argc, char** argv) {
@@ -239,6 +272,12 @@ int Application::run(int argc, char** argv) {
 
     // Ensure we're running from the project root
     ensure_project_root_cwd();
+
+    // Prevent multiple instances from running simultaneously.
+    // Two instances fighting for DRM causes 100% CPU (flush retry loop) and segfaults.
+    if (!acquire_instance_lock()) {
+        return 1;
+    }
 
     // Phase 1: Parse command line args
     if (!parse_args(argc, argv)) {

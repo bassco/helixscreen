@@ -159,6 +159,11 @@ class Application {
     // Main loop timing handler (screenshot, auto-quit, benchmark)
     helix::application::MainLoopHandler m_loop_handler;
 
+    // Single-instance lock
+    bool acquire_instance_lock();
+    void release_instance_lock();
+    int m_lock_fd = -1;
+
     // State
     bool m_running = false;
     bool m_wizard_active = false;
