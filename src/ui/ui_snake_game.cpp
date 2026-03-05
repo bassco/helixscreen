@@ -559,27 +559,21 @@ void set_direction(Direction dir) {
 
 // Touch state for swipe detection
 lv_point_t g_touch_start = {0, 0};
-bool g_touch_active = false;
-bool g_swipe_handled = false; // Prevent multiple swipes per touch
+bool g_swipe_handled = false;
 
-void gesture_cb(lv_event_t* e) {
+void touch_cb(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
+    lv_indev_t* indev = lv_indev_active();
+    if (!indev) {
+        return;
+    }
 
     if (code == LV_EVENT_PRESSED) {
-        lv_indev_t* indev = lv_indev_active();
-        if (indev) {
-            lv_indev_get_point(indev, &g_touch_start);
-            g_touch_active = true;
-            g_swipe_handled = false;
-        }
+        lv_indev_get_point(indev, &g_touch_start);
+        g_swipe_handled = false;
     } else if (code == LV_EVENT_PRESSING) {
-        // Detect swipe direction while finger is still down
-        if (!g_touch_active || g_swipe_handled || g_game_over) {
-            return;
-        }
-
-        lv_indev_t* indev = lv_indev_active();
-        if (!indev) {
+        // React as soon as finger moves enough — don't wait for release
+        if (g_swipe_handled || g_game_over) {
             return;
         }
 
@@ -591,9 +585,7 @@ void gesture_cb(lv_event_t* e) {
         int32_t abs_dx = LV_ABS(dx);
         int32_t abs_dy = LV_ABS(dy);
 
-        // Swipe threshold — respond as soon as finger moves enough
-        constexpr int32_t SWIPE_THRESHOLD = 30;
-
+        constexpr int32_t SWIPE_THRESHOLD = 20;
         if (abs_dx < SWIPE_THRESHOLD && abs_dy < SWIPE_THRESHOLD) {
             return;
         }
@@ -603,21 +595,38 @@ void gesture_cb(lv_event_t* e) {
         } else {
             set_direction(dy > 0 ? Direction::DOWN : Direction::UP);
         }
-
-        // Mark handled and reset start point for potential follow-up swipe
         g_swipe_handled = true;
     } else if (code == LV_EVENT_RELEASED) {
-        if (g_touch_active && !g_swipe_handled && g_game_over) {
-            // Tap (no swipe) while game over → restart
-            init_game();
-            if (g_game_timer) {
-                lv_timer_resume(g_game_timer);
-            }
-            if (g_game_area) {
-                lv_obj_invalidate(g_game_area);
+        if (!g_swipe_handled) {
+            // PRESSING might not have fired — check swipe on release as fallback
+            lv_point_t end;
+            lv_indev_get_point(indev, &end);
+
+            int32_t dx = end.x - g_touch_start.x;
+            int32_t dy = end.y - g_touch_start.y;
+            int32_t abs_dx = LV_ABS(dx);
+            int32_t abs_dy = LV_ABS(dy);
+
+            constexpr int32_t SWIPE_THRESHOLD = 20;
+            if (abs_dx >= SWIPE_THRESHOLD || abs_dy >= SWIPE_THRESHOLD) {
+                if (!g_game_over) {
+                    if (abs_dx > abs_dy) {
+                        set_direction(dx > 0 ? Direction::RIGHT : Direction::LEFT);
+                    } else {
+                        set_direction(dy > 0 ? Direction::DOWN : Direction::UP);
+                    }
+                }
+            } else if (g_game_over) {
+                // Tap — restart
+                init_game();
+                if (g_game_timer) {
+                    lv_timer_resume(g_game_timer);
+                }
+                if (g_game_area) {
+                    lv_obj_invalidate(g_game_area);
+                }
             }
         }
-        g_touch_active = false;
         g_swipe_handled = false;
     }
 }
@@ -628,6 +637,11 @@ void input_cb(lv_event_t* e) {
     if (code == LV_EVENT_KEY) {
         // Arrow key support for dev/testing
         uint32_t key = lv_event_get_key(e);
+
+        if (key == LV_KEY_ESC) {
+            SnakeGame::hide();
+            return;
+        }
 
         if (g_game_over) {
             // Any key restarts
@@ -690,15 +704,22 @@ void create_overlay() {
         return;
     }
 
-    // Make overlay a flex column container
-    lv_obj_set_flex_flow(g_overlay, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(g_overlay, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+    // Content container on top of backdrop for flex layout.
+    // The backdrop may be an lv_image (blurred) with a tint child — adding
+    // flex children directly to it breaks layout and input hit testing.
+    lv_obj_t* content = lv_obj_create(g_overlay);
+    lv_obj_set_size(content, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(content, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(content, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(content, 4, LV_PART_MAIN);
+    lv_obj_remove_flag(content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(g_overlay, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(g_overlay, 4, LV_PART_MAIN);
 
     // === Header row (score + close button) ===
-    lv_obj_t* header = lv_obj_create(g_overlay);
+    lv_obj_t* header = lv_obj_create(content);
     lv_obj_set_size(header, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(header, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
@@ -729,7 +750,7 @@ void create_overlay() {
     lv_obj_center(close_label);
 
     // === Game area ===
-    g_game_area = lv_obj_create(g_overlay);
+    g_game_area = lv_obj_create(content);
     lv_obj_set_style_bg_opa(g_game_area, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(g_game_area, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(g_game_area, 0, LV_PART_MAIN);
@@ -758,11 +779,16 @@ void create_overlay() {
     // Register custom draw callback
     lv_obj_add_event_cb(g_game_area, draw_cb, LV_EVENT_DRAW_MAIN, nullptr);
 
-    // Register input callbacks on the game area
+    // Register touch input on the game area. PRESSING fires on each indev
+    // read while touched — detect swipe direction as early as possible.
+    // RELEASED is the guaranteed fallback for devices where PRESSING is flaky.
+    // Remove SCROLL_CHAIN so LVGL's scroll handler doesn't walk up to
+    // lv_layer_top() and absorb touch movement into scroll processing.
     lv_obj_add_flag(g_game_area, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(g_game_area, gesture_cb, LV_EVENT_PRESSED, nullptr);
-    lv_obj_add_event_cb(g_game_area, gesture_cb, LV_EVENT_PRESSING, nullptr);
-    lv_obj_add_event_cb(g_game_area, gesture_cb, LV_EVENT_RELEASED, nullptr);
+    lv_obj_remove_flag(g_game_area, LV_OBJ_FLAG_SCROLL_CHAIN);
+    lv_obj_add_event_cb(g_game_area, touch_cb, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(g_game_area, touch_cb, LV_EVENT_PRESSING, nullptr);
+    lv_obj_add_event_cb(g_game_area, touch_cb, LV_EVENT_RELEASED, nullptr);
     lv_obj_add_event_cb(g_game_area, input_cb, LV_EVENT_KEY, nullptr);
 
     // Add to default group for keyboard input
@@ -773,7 +799,7 @@ void create_overlay() {
     }
 
     // === Game over overlay label ===
-    g_gameover_label = lv_label_create(g_overlay);
+    g_gameover_label = lv_label_create(content);
     lv_obj_set_style_text_color(g_gameover_label, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_text_font(g_gameover_label, theme_manager_get_font("font_heading"),
                                LV_PART_MAIN);
@@ -796,7 +822,7 @@ void create_overlay() {
 }
 
 void destroy_overlay() {
-    // Stop timer
+    // Stop timers
     if (g_game_timer) {
         lv_timer_delete(g_game_timer);
         g_game_timer = nullptr;
@@ -822,6 +848,7 @@ void destroy_overlay() {
     g_snake.clear();
     g_game_started = false;
     g_game_over = false;
+    g_swipe_handled = false;
 
     spdlog::info("[SnakeGame] Game closed");
 }
