@@ -81,14 +81,21 @@ void HeatingIconAnimator::detach() {
     if (icon_ == nullptr) {
         return;
     }
+
+    // Cache and null icon_ FIRST — makes this function re-entrant safe.
+    // If the crash handler invokes ~HeatingIconAnimator → detach() while we're
+    // mid-execution, the nullptr check above will bail out immediately.
+    lv_obj_t* icon = icon_;
+    icon_ = nullptr;
+
     stop_pulse();
 
-    // Remove our delete callback to prevent re-entrant detach (needs icon_ valid)
-    lv_obj_remove_event_cb_with_user_data(icon_, icon_delete_cb, this);
-
-    // Nullify widget pointer BEFORE resetting observers — any cascading callback
-    // that slips through will see nullptr and bail out safely.
-    icon_ = nullptr;
+    // Remove our delete callback — icon is non-null because we just cached it.
+    // Applying [L076]: do NOT use lv_obj_is_valid() here (O(n) recursive walk,
+    // can stack overflow on Pi). The icon pointer is valid because detach() is
+    // only called while the widget tree is alive, and icon_delete_cb would have
+    // nulled icon_ (bailing at the top) if the widget was already destroyed.
+    lv_obj_remove_event_cb_with_user_data(icon, icon_delete_cb, this);
 
     // ObserverGuard::reset() removes the observer from the subject
     theme_observer_.reset();

@@ -266,6 +266,14 @@ void LedControlOverlay::cleanup() {
     spdlog::debug("[{}] Cleanup", get_name());
     wled_brightness_observer_.reset();
     deinit_subjects_base(subjects_);
+
+    // Null widget pointers — WLED poll callbacks may still be in-flight
+    strip_selector_section_ = nullptr;
+    color_presets_container_ = nullptr;
+    effects_container_ = nullptr;
+    wled_presets_container_ = nullptr;
+    macro_buttons_container_ = nullptr;
+
     OverlayBase::cleanup();
 }
 
@@ -1113,11 +1121,16 @@ void LedControlOverlay::refresh_wled_status() {
         return;
 
     controller.wled().poll_status([this]() {
-        if (wled_presets_container_) {
-            lv_obj_clean(wled_presets_container_);
-            populate_wled();
-        }
-        update_wled_toggle_button();
+        // poll_status callback fires on the libhv background thread —
+        // all LVGL operations must be deferred to the UI thread.
+        helix::ui::queue_update([this]() {
+            if (cleanup_called()) return;
+            if (wled_presets_container_) {
+                lv_obj_clean(wled_presets_container_);
+                populate_wled();
+            }
+            update_wled_toggle_button();
+        });
     });
 }
 

@@ -541,9 +541,7 @@ void AmsPanel::rebuild_backend_selector() {
     lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
 
     // Clear existing children
-    while (lv_obj_get_child_count(row) > 0) {
-        lv_obj_delete(lv_obj_get_child(row, 0));
-    }
+    lv_obj_clean(row);
 
     for (int i = 0; i < count; ++i) {
         auto* backend = ams.get_backend(i);
