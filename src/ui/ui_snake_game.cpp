@@ -13,7 +13,6 @@
 
 #include "ui_snake_game.h"
 
-#include "ui_effects.h"
 #include "ui_spool_drawing.h"
 #include "ui_utils.h"
 
@@ -37,8 +36,6 @@ static constexpr int32_t CELL_SIZE = 20;
 static constexpr uint32_t INITIAL_TICK_MS = 150;
 static constexpr uint32_t MIN_TICK_MS = 70;
 static constexpr int SPEED_UP_INTERVAL = 5; // Speed up every N food items
-static constexpr uint8_t BACKDROP_OPACITY = 220;
-
 // Config key for persisted high score (non-obvious name)
 static constexpr const char* HIGH_SCORE_KEY = "/display/frame_counter";
 
@@ -696,27 +693,24 @@ void create_overlay() {
     // Seed RNG
     srand(static_cast<unsigned>(time(nullptr)));
 
-    // Create full-screen backdrop on top layer
+    // Opaque backdrop on top layer (no blur — keeps it simple and avoids
+    // lv_image flex/input issues with blurred backdrops)
     lv_obj_t* parent = lv_layer_top();
-    g_overlay = helix::ui::create_fullscreen_backdrop(parent, BACKDROP_OPACITY);
-    if (!g_overlay) {
-        spdlog::error("[SnakeGame] Failed to create backdrop");
-        return;
-    }
-
-    // Content container on top of backdrop for flex layout.
-    // The backdrop may be an lv_image (blurred) with a tint child — adding
-    // flex children directly to it breaks layout and input hit testing.
-    lv_obj_t* content = lv_obj_create(g_overlay);
-    lv_obj_set_size(content, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_style_bg_opa(content, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(content, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(content, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(content, 4, LV_PART_MAIN);
-    lv_obj_remove_flag(content, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(content, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+    g_overlay = lv_obj_create(parent);
+    lv_obj_set_size(g_overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_align(g_overlay, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(g_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(g_overlay, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(g_overlay, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(g_overlay, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(g_overlay, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(g_overlay, 4, LV_PART_MAIN);
+    lv_obj_add_flag(g_overlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(g_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(g_overlay, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(g_overlay, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
+    lv_obj_t* content = g_overlay;
 
     // === Header row (score + close button) ===
     lv_obj_t* header = lv_obj_create(content);
