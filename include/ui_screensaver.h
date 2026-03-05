@@ -60,6 +60,9 @@ class FlyingToasterScreensaver : public Screensaver {
         bool flap_forward;
         int8_t flap_counter;
         int8_t ticks_per_flap; // pre-computed: ticks between frame changes
+        // Previous position — skip lv_obj_set_pos() when unchanged to avoid invalidation
+        int16_t prev_x = INT16_MIN;
+        int16_t prev_y = INT16_MIN;
     };
 
     /** @brief Create the full-screen black overlay */

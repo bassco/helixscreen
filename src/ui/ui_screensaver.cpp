@@ -23,9 +23,9 @@ static constexpr int NUM_TOASTER_FRAMES =
 // CSS reference: translate(-1600px, 1600px) — fixed travel distance
 static constexpr int FLIGHT_DISTANCE = 1600;
 
-// Single timer period — ~30fps is smooth enough for slow diagonal flight
-// and cuts CPU usage roughly in half vs running at display refresh rate.
-static constexpr uint32_t TICK_PERIOD_MS = 33;
+// Single timer period — ~15fps is smooth enough for slow diagonal flight
+// and minimizes CPU usage on embedded devices.
+static constexpr uint32_t TICK_PERIOD_MS = 66;
 
 // Object definition matching the exact CSS classes and positions.
 // CSS uses right/top percentages. Negative right = off-screen to the right.
@@ -286,7 +286,13 @@ void FlyingToasterScreensaver::tick_cb(lv_timer_t* timer) {
         uint32_t t = local_ms % static_cast<uint32_t>(obj.fly_ms);
         int32_t dx = static_cast<int32_t>(-FLIGHT_DISTANCE) * static_cast<int32_t>(t) / obj.fly_ms;
         int32_t dy = static_cast<int32_t>(FLIGHT_DISTANCE) * static_cast<int32_t>(t) / obj.fly_ms;
-        lv_obj_set_pos(obj.img, obj.start_x + dx, obj.start_y + dy);
+        auto new_x = static_cast<int16_t>(obj.start_x + dx);
+        auto new_y = static_cast<int16_t>(obj.start_y + dy);
+        if (new_x != obj.prev_x || new_y != obj.prev_y) {
+            lv_obj_set_pos(obj.img, new_x, new_y);
+            obj.prev_x = new_x;
+            obj.prev_y = new_y;
+        }
 
         // Flap wing frames (toasters only)
         if (!obj.is_toaster) continue;
