@@ -12,6 +12,7 @@
 #include "moonraker_client.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
+#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -345,28 +346,20 @@ void ScrewsTiltPanel::start_probing() {
     auto alive = alive_;
     api_->advanced().calculate_screws_tilt(
         [this, alive](const std::vector<ScrewTiltResult>& results) {
-            // Check if panel was destroyed or cleanup was called
-            if (!alive->load()) {
-                spdlog::trace("[ScrewsTilt] Ignoring results - panel destroyed");
-                return;
-            }
-            if (cleanup_called()) {
-                spdlog::debug("[ScrewsTilt] Ignoring results - cleanup called");
-                return;
-            }
-            on_screws_tilt_results(results);
+            // Route to UI thread - LVGL is not thread-safe (#309)
+            helix::ui::queue_update([this, alive, results]() {
+                if (!alive->load() || cleanup_called()) return;
+                if (state_ != State::PROBING) return;
+                on_screws_tilt_results(results);
+            });
         },
         [this, alive](const MoonrakerError& err) {
-            // Check if panel was destroyed or cleanup was called
-            if (!alive->load()) {
-                spdlog::trace("[ScrewsTilt] Ignoring error - panel destroyed");
-                return;
-            }
-            if (cleanup_called()) {
-                spdlog::debug("[ScrewsTilt] Ignoring error - cleanup called");
-                return;
-            }
-            on_screws_tilt_error(err.message);
+            // Route to UI thread - LVGL is not thread-safe (#309)
+            helix::ui::queue_update([this, alive, msg = err.message]() {
+                if (!alive->load() || cleanup_called()) return;
+                if (state_ != State::PROBING) return;
+                on_screws_tilt_error(msg);
+            });
         });
 }
 
