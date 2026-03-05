@@ -5,6 +5,42 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.96.4] - 2026-03-04
+
+This release adds AMS dryer status, proportional buffer feedback for Happy Hare, a filament health carousel, LED startup brightness control, and proactive memory monitoring. Camera stability received major crash fixes, and G-code viewer memory usage was cut in half.
+
+### Added
+- AMS dryer info bar showing humidity and dryer status on filament panels
+- AMS proportional buffer meter with color-coded bias visualization and fault context modals
+- AMS filament health carousel replacing the clog detection widget
+- Visual press feedback on AMS filament slot taps
+- LED startup brightness slider in LED settings
+- Last printed file thumbnail on idle home screen print status card
+- Proactive memory monitoring with device-tier thresholds and telemetry dashboard
+- PFA Stealthfork printer profile and updated Micron heuristics
+- Single-instance file lock to prevent dual-process DRM conflicts
+
+### Fixed
+- Camera use-after-free crashes from detached stream threads and stalled ScopedFreeze rebuilds
+- Camera stream not recovering after detach/reattach or widget drag rebuild
+- 3D bed mesh view not rendering on initial load
+- Crash diagnostics: ARM32 static-PIE load_base capture and AD5M filtered memory maps (#296)
+- Object deletion during LVGL input event processing causing child list corruption
+- Phantom print starts on startup before printer state is fully synced
+- Config backup loss during Moonraker update wipes
+- Config backup failing when /var/log is unwritable
+- LED toggle state inverted; LED state not queried on startup
+- Fan widgets not shown or not disabled when printer disconnected
+- AMS toolchanger unload using wrong slot index; AFC current_slot not preserved
+- Thumbnail picker selecting smallest instead of best-fit resolution
+
+### Changed
+- Camera stream and extended sleep suspended during display off to reduce idle power
+- Screensaver CPU usage reduced across all three modes (pre-decoded sprites, optimized toasters)
+- G-code ToolpathSegment halved to 40 bytes; loading deferred 5s after print start; streaming forced on ≤4GB RAM
+- Adaptive main loop sleep replaces fixed 5ms delay
+- Settings reorganized: G-code preview consolidated, Time Format moved to Appearance
+
 ## [0.96.3] - 2026-03-03
 
 This release adds a floating emergency stop button, temperature sensor carousel with multi-sensor picker, 3D box effects on AMS trays with Happy Hare Type B hub detection, and improved DRM display rotation robustness. QR label printing for Brother QL printers is available as a beta feature.
@@ -1528,6 +1564,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.96.4]: https://github.com/prestonbrown/helixscreen/compare/v0.96.3...v0.96.4
 [0.96.3]: https://github.com/prestonbrown/helixscreen/compare/v0.96.2...v0.96.3
 [0.96.2]: https://github.com/prestonbrown/helixscreen/compare/v0.96.1...v0.96.2
 [0.96.1]: https://github.com/prestonbrown/helixscreen/compare/v0.96.0...v0.96.1
