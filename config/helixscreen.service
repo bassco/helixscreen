@@ -75,6 +75,8 @@ LimitNPROC=4096
 # Security hardening (can be relaxed if needed)
 ProtectSystem=strict
 ReadWritePaths=@@INSTALL_DIR@@/config /var/log
+StateDirectory=helixscreen
+StateDirectoryMode=0700
 PrivateTmp=true
 NoNewPrivileges=true
 

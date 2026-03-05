@@ -68,9 +68,9 @@ constexpr const char* GITHUB_RELEASES_URL =
 /// HTTP request timeout in seconds
 constexpr int HTTP_TIMEOUT_SECONDS = 30;
 
-/// Shorthand for pre-update backup paths (defined in app_constants.h)
-constexpr const char* PREUPDATE_CONFIG_BACKUP = AppConstants::Update::PREUPDATE_CONFIG_BACKUP;
-constexpr const char* PREUPDATE_ENV_BACKUP = AppConstants::Update::PREUPDATE_ENV_BACKUP;
+/// Pre-update backup paths (fallback tier, defined in app_constants.h)
+using AppConstants::Update::PREUPDATE_CONFIG_BACKUP;
+using AppConstants::Update::PREUPDATE_ENV_BACKUP;
 
 /**
  * @brief Strip 'v' or 'V' prefix from version tag
@@ -445,11 +445,9 @@ void cleanup_stale_old_install() {
         spdlog::warn("[UpdateChecker] Could not remove stale backup {} (exit {})", old_dir, ret);
     }
 
-    // Clean up .pre-update safety net files from a successful previous update.
-    // These live in /var/log/ (outside INSTALL_DIR) so they survive the swap.
-    // If we're running, the update succeeded and we no longer need them.
-    std::remove(PREUPDATE_CONFIG_BACKUP);
-    std::remove(PREUPDATE_ENV_BACKUP);
+    // Rolling backups in /var/lib/ and /var/log/ are maintained by Config::save()
+    // and Config::init() — do NOT delete them here. They protect against Moonraker
+    // wiping the install directory during updates.
 }
 
 /**
@@ -1090,13 +1088,8 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // Safety net: copy config to /var/log/ BEFORE calling install.sh.
     // The installer backs up config to TMP_DIR, but under systemd's PrivateTmp=true
     // that backup lives in a volatile mount that's cleaned up on service restart.
-    // If install.sh crashes between the atomic swap and config restore, the TMP_DIR
-    // backup is lost.
-    //
-    // Why /var/log/? The installer does `mv INSTALL_DIR → INSTALL_DIR.old`, so any
-    // backup inside INSTALL_DIR/ gets swept into .old/.  Under ProtectSystem=strict,
-    // /var/log is the only writable path outside INSTALL_DIR (from ReadWritePaths).
-    // Config::init() auto-restores from these files if the config is missing.
+    // These backups supplement the rolling backups in /var/lib/helixscreen/ maintained
+    // by Config::save(). Config::init() auto-restores from either location.
     {
         std::string install_root = resolve_install_root();
         if (!install_root.empty()) {

@@ -109,14 +109,24 @@ constexpr uint32_t FAST_DURATION_MS = 150;
 } // namespace Animation
 
 /**
- * @brief Pre-update config backup paths
+ * @brief Rolling config backup paths (two-tier: primary + fallback)
  *
- * During in-app upgrades, config files are backed up to /var/log/ BEFORE
- * calling install.sh.  These live outside INSTALL_DIR so they survive the
- * atomic swap (mv INSTALL_DIR → INSTALL_DIR.old).  /var/log is on
- * ReadWritePaths under systemd's ProtectSystem=strict.
+ * Config files are backed up outside INSTALL_DIR so they survive both the
+ * atomic swap (mv INSTALL_DIR -> INSTALL_DIR.old) during in-app upgrades
+ * and Moonraker's shutil.rmtree() wipe of the install directory.
+ *
+ * Primary:  /var/lib/helixscreen/ via systemd StateDirectory=
+ * Fallback: /var/log/ via ReadWritePaths= (writable on all installs)
+ *
+ * Config::save() maintains rolling backups; Config::init() restores from
+ * them if the config directory is missing after an update.
  */
 namespace Update {
+/// Primary backup — systemd StateDirectory (/var/lib/helixscreen/)
+constexpr const char* CONFIG_BACKUP_PRIMARY = "/var/lib/helixscreen/helixconfig.json.backup";
+constexpr const char* ENV_BACKUP_PRIMARY = "/var/lib/helixscreen/helixscreen.env.backup";
+
+/// Fallback backup — /var/log/ (writable even without StateDirectory)
 constexpr const char* PREUPDATE_CONFIG_BACKUP = "/var/log/helixconfig.json.pre-update";
 constexpr const char* PREUPDATE_ENV_BACKUP = "/var/log/helixscreen.env.pre-update";
 } // namespace Update
