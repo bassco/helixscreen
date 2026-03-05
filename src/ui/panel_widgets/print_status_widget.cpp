@@ -3,6 +3,7 @@
 
 #include "print_status_widget.h"
 
+#include "app_constants.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_print_status.h"
@@ -223,6 +224,17 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
 // ============================================================================
 
 void PrintStatusWidget::handle_print_card_clicked() {
+    // Startup grace period: reject phantom clicks during early boot
+    static const auto app_start_time = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::steady_clock::now() - app_start_time;
+    if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        spdlog::warn("[PrintStatusWidget] Rejected print card click during startup grace period "
+                     "({}s < {}s)",
+                     secs, AppConstants::Startup::PRINT_START_GRACE_PERIOD.count());
+        return;
+    }
+
     if (!printer_state_.can_start_new_print()) {
         // Print in progress - show print status overlay
         spdlog::info(

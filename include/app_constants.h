@@ -17,6 +17,8 @@
 #include "lvgl.h"
 
 #include <chrono>
+#include <cstdlib>
+#include <string>
 
 /**
  * @brief Application-wide constants shared between UI and backend
@@ -84,6 +86,11 @@ constexpr std::chrono::seconds NOTIFICATION_GRACE_PERIOD{10};
 /// Grace period for filament sensor state stabilization after Moonraker connects
 /// Allows time for initial sensor state to arrive after discovery
 constexpr std::chrono::seconds SENSOR_STABILIZATION_PERIOD{5};
+
+/// Grace period before allowing user-initiated print starts after app launch.
+/// Prevents ghost touch events during startup from accidentally starting prints.
+/// Measured from UI creation (main loop entry), not from app process start.
+constexpr std::chrono::seconds PRINT_START_GRACE_PERIOD{5};
 } // namespace Startup
 
 /**
@@ -116,7 +123,7 @@ constexpr uint32_t FAST_DURATION_MS = 150;
  * and Moonraker's shutil.rmtree() wipe of the install directory.
  *
  * Primary:  /var/lib/helixscreen/ via systemd StateDirectory=
- * Fallback: /var/log/ via ReadWritePaths= (writable on all installs)
+ * Fallback: $HOME/.helixscreen/ (writable without StateDirectory)
  *
  * Config::save() maintains rolling backups; Config::init() restores from
  * them if the config directory is missing after an update.
@@ -126,8 +133,16 @@ namespace Update {
 constexpr const char* CONFIG_BACKUP_PRIMARY = "/var/lib/helixscreen/helixconfig.json.backup";
 constexpr const char* ENV_BACKUP_PRIMARY = "/var/lib/helixscreen/helixscreen.env.backup";
 
-/// Fallback backup — /var/log/ (writable even without StateDirectory)
-constexpr const char* PREUPDATE_CONFIG_BACKUP = "/var/log/helixconfig.json.pre-update";
-constexpr const char* PREUPDATE_ENV_BACKUP = "/var/log/helixscreen.env.pre-update";
+/// Fallback backup — $HOME/.helixscreen/ (writable without StateDirectory)
+inline std::string backup_fallback_dir() {
+    const char* home = std::getenv("HOME");
+    return std::string(home ? home : "/tmp") + "/.helixscreen";
+}
+inline std::string config_backup_fallback() {
+    return backup_fallback_dir() + "/helixconfig.json.backup";
+}
+inline std::string env_backup_fallback() {
+    return backup_fallback_dir() + "/helixscreen.env.backup";
+}
 } // namespace Update
 } // namespace AppConstants

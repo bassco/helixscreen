@@ -21,6 +21,7 @@
 #include "ui_update_queue.h"
 
 #include "abort_manager.h"
+#include "app_constants.h"
 #include "ams_state.h"
 #include "app_globals.h"
 #include "config.h"
@@ -1079,6 +1080,16 @@ void PrintStatusPanel::handle_cancel_button() {
 }
 
 void PrintStatusPanel::handle_reprint_button() {
+    // Startup grace period: reject phantom clicks during early boot
+    static const auto app_start_time = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::steady_clock::now() - app_start_time;
+    if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        spdlog::warn("[{}] Rejected reprint during startup grace period ({}s < {}s)", get_name(),
+                     secs, AppConstants::Startup::PRINT_START_GRACE_PERIOD.count());
+        return;
+    }
+
     spdlog::info("[{}] Reprint button clicked - reprinting: {}", get_name(),
                  current_print_filename_);
 

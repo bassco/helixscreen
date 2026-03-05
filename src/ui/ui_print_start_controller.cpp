@@ -21,12 +21,15 @@
 
 #include "active_print_media_manager.h"
 #include "ams_state.h"
+#include "app_constants.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "printer_state.h"
 
 #include <spdlog/spdlog.h>
+
+#include <chrono>
 
 namespace helix::ui {
 
@@ -85,6 +88,23 @@ bool PrintStartController::is_ready() const {
 // ============================================================================
 
 void PrintStartController::initiate() {
+    // Safety: reject print starts during startup grace period.
+    // Ghost touch events during app initialization can trigger the full print chain
+    // (file select → detail view → print button → filament warning confirm) in seconds.
+    static const auto app_start_time = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::steady_clock::now() - app_start_time;
+    if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
+        auto secs =
+            std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        spdlog::warn("[PrintStartController] Rejected print start during startup grace period "
+                     "({}s < {}s)",
+                     secs, AppConstants::Startup::PRINT_START_GRACE_PERIOD.count());
+        if (update_print_button_) {
+            update_print_button_(); // Re-enable button
+        }
+        return;
+    }
+
     // OPTIMISTIC UI: Disable button IMMEDIATELY to prevent double-clicks.
     // This must happen BEFORE any async work or checks that could allow
     // the user to click again while we're processing.
