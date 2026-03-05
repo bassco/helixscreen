@@ -56,19 +56,18 @@ class SymbolTable:
 
     @classmethod
     def from_file(cls, path: Path) -> "SymbolTable":
+        import re
+        lto_pattern = re.compile(r'\.\w+\.[0-9a-f]{6,}$')
         entries: list[tuple[int, str]] = []
         with open(path, "r") as f:
             for line in f:
                 line = line.rstrip("\n")
                 if not line:
                     continue
-                # nm output: "00000000004xxxxx T function_name" or
-                # "                 U external_symbol"
                 parts = line.split(None, 2)
                 if len(parts) < 3:
                     continue
                 addr_str, sym_type, name = parts[0], parts[1], parts[2]
-                # Only keep text (code) symbols
                 if sym_type not in ("T", "t", "W", "w"):
                     continue
                 try:
@@ -76,6 +75,9 @@ class SymbolTable:
                 except ValueError:
                     continue
                 if addr == 0:
+                    continue
+                # Filter LTO compilation-unit section markers (e.g., "foo.c.35cb4f60")
+                if lto_pattern.search(name):
                     continue
                 entries.append((addr, name))
         entries.sort(key=lambda x: x[0])
@@ -201,6 +203,7 @@ def resolve_backtrace(
     backtrace: list[str],
     platform: str,
     symbols: Optional[SymbolTable],
+    load_base: Optional[str] = None,
 ) -> list[dict]:
     """Resolve a crash backtrace to named frames.
 
@@ -229,8 +232,27 @@ def resolve_backtrace(
             })
         return frames
 
-    # Frame 0 is crash_signal_handler — use it to compute ASLR base
-    base_address = addrs[0] - symbols.crash_handler_offset
+    # Determine ASLR base address
+    if load_base is not None:
+        # Explicit load_base from crash event (preferred — no heuristic needed)
+        try:
+            base_address = int(load_base, 16)
+        except ValueError:
+            base_address = 0
+    elif addrs and addrs[0] > symbols.crash_handler_offset:
+        # Legacy heuristic: frame 0 is a return address inside crash_signal_handler.
+        # Check if addresses are already file-relative by testing frame 0 against symbols.
+        naive_file_offset = addrs[0]
+        resolved_test = symbols.lookup(naive_file_offset)
+        if "crash_signal_handler" in resolved_test:
+            # Addresses are already file-relative (base=0)
+            base_address = 0
+        else:
+            # Addresses are ASLR'd. Frame 0 = base + crash_handler_offset + intra_offset.
+            # Best estimate: base = frame0 - crash_handler_offset (off by intra_offset).
+            base_address = addrs[0] - symbols.crash_handler_offset
+    else:
+        base_address = 0
 
     for i, addr in enumerate(addrs):
         is_lib = is_shared_lib_addr(addr, platform)
@@ -457,7 +479,8 @@ def analyze_crashes(
         symbols = symbol_cache.get(version, platform)
 
         # Resolve backtrace
-        frames = resolve_backtrace(backtrace, platform, symbols)
+        load_base = crash.get("load_base")
+        frames = resolve_backtrace(backtrace, platform, symbols, load_base=load_base)
 
         # Compute signature
         sig = compute_signature(frames)

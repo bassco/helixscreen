@@ -1032,7 +1032,8 @@ void TelemetryManager::check_previous_crash() {
     // Copy crash-specific fields (signal info, backtrace, register state)
     for (const char* key :
          {"signal", "signal_name", "app_version", "uptime_sec", "backtrace", "fault_addr",
-          "fault_code", "fault_code_name", "reg_pc", "reg_sp", "reg_lr", "reg_bp", "load_base"}) {
+          "fault_code", "fault_code_name", "reg_pc", "reg_sp", "reg_lr", "reg_bp", "load_base",
+          "memory_map"}) {
         if (crash_data.contains(key)) {
             event[key] = crash_data[key];
         }

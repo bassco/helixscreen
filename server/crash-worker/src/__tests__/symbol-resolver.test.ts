@@ -67,6 +67,21 @@ another bad line
     expect(parseSymbolTable("")).toEqual([]);
     expect(parseSymbolTable("\n\n\n")).toEqual([]);
   });
+
+  it("filters LTO compilation-unit section markers", () => {
+    const input = `00010000 T _start
+00020000 T main
+1bdf2f2c t lv_i18n_translations.c.35cb4f60
+00030000 T real_function
+004dd6c0 t tvgSwRle.cpp.a1b2c3d4`;
+    const symbols = parseSymbolTable(input);
+    const names = symbols.map((s) => s.name);
+    expect(names).not.toContain("lv_i18n_translations.c.35cb4f60");
+    expect(names).not.toContain("tvgSwRle.cpp.a1b2c3d4");
+    expect(names).toContain("_start");
+    expect(names).toContain("main");
+    expect(names).toContain("real_function");
+  });
 });
 
 // ---------- lookupSymbol ----------
@@ -338,5 +353,27 @@ describe("resolveBacktrace", () => {
     // Should not throw
     const result = await resolveBacktrace(bucket, report);
     expect(result.symbolFileFound).toBe(false);
+  });
+
+  it("treats load_base '0x0' as file-relative addresses without auto-detect override", async () => {
+    const bucket = createMockBucket({
+      "symbols/v0.9.9/pi.sym": symFileContent,
+    });
+
+    // Simulate static-PIE ARM32: backtrace() returns file-relative addresses,
+    // load_base explicitly reported as 0x0
+    const report = {
+      app_version: "0.9.9",
+      platform: "pi",
+      load_base: "0x0",
+      backtrace: ["0x00020200", "0x00020000"],
+    };
+
+    const result = await resolveBacktrace(bucket, report);
+    expect(result.symbolFileFound).toBe(true);
+    // Should NOT try auto-detection — load_base was explicitly provided
+    expect(result.autoDetectedBase).toBe(false);
+    expect(result.frames[0].symbol).toBe("Application::run()+0x0");
+    expect(result.frames[1].symbol).toBe("main+0x0");
   });
 });

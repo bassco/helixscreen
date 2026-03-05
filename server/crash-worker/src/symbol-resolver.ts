@@ -54,19 +54,23 @@ export interface CrashReport {
  * Only includes text/code symbols (T/t/W/w types).
  */
 export function parseSymbolTable(text: string): Symbol[] {
+  // LTO compilation-unit section markers (e.g., "foo.c.35cb4f60", "bar.cpp.a1b2c3d4")
+  // These appear in nm output from LTO builds but are NOT real functions.
+  const LTO_PATTERN = /\.\w+\.[0-9a-f]{6,}$/;
+
   const symbols: Symbol[] = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
 
-    // nm output format: "00000000004xxxxx T function_name"
-    // With demangled names: "00000000004xxxxx T std::vector<int>::push_back(int const&)"
     const match = line.match(/^([0-9a-fA-F]+)\s+([A-Za-z])\s+(.+)$/);
     if (!match) continue;
 
     const [, addrHex, type, name] = match;
 
-    // Only text/code symbols
     if (type !== "T" && type !== "t" && type !== "W" && type !== "w") continue;
+
+    // Filter LTO compilation-unit section markers
+    if (LTO_PATTERN.test(name.trim())) continue;
 
     symbols.push({
       address: parseInt(addrHex, 16),
@@ -234,13 +238,17 @@ export async function resolveBacktrace(bucket: R2Bucket, report: CrashReport): P
     // Determine load base
     let loadBase = 0;
     let autoDetected = false;
+    // Track whether load_base was explicitly provided (even as "0x0")
+    const hasExplicitLoadBase = !!report.load_base;
 
-    if (report.load_base) {
-      loadBase = parseHexAddr(report.load_base);
+    if (hasExplicitLoadBase) {
+      loadBase = parseHexAddr(report.load_base!);
     }
 
-    // Try auto-detection if no load_base or load_base is 0
-    if (loadBase === 0 && report.backtrace && report.backtrace.length > 0) {
+    // Only try auto-detection if load_base was NOT provided at all.
+    // When load_base is explicitly "0x0", that means the crash handler detected it
+    // as 0 (non-PIE or static-PIE) — don't override with auto-detection.
+    if (!hasExplicitLoadBase && report.backtrace && report.backtrace.length > 0) {
       const detected = autoDetectLoadBase(symbols, report.backtrace);
       if (detected !== null && detected > 0) {
         loadBase = detected;

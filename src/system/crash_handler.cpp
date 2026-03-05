@@ -66,6 +66,9 @@ static time_t s_start_time = 0;
 /// ELF load base address (ASLR offset), discovered at install time
 static uintptr_t s_load_base = 0;
 
+/// Whether load_base detection has run (distinguishes "detected 0" from "not yet detected")
+static bool s_load_base_detected = false;
+
 /// Saved previous signal actions for restoration
 static struct sigaction s_old_sigsegv = {};
 static struct sigaction s_old_sigabrt = {};
@@ -80,6 +83,15 @@ static struct sigaction s_old_sigfpe = {};
 // =============================================================================
 // ELF load base discovery (called at install time, NOT in signal handler)
 // =============================================================================
+
+// __executable_start is a linker-defined symbol at the beginning of the ELF image.
+// On static-PIE, its runtime address reflects the ASLR offset.
+// On non-PIE, it's typically 0x10000 (ARM) or 0x400000 (x86_64).
+#if defined(__linux__)
+extern "C" {
+extern char __executable_start[];
+}
+#endif
 
 #ifdef HAVE_DL_ITERATE_PHDR
 /// Callback for dl_iterate_phdr: find the main executable's load base.
@@ -341,8 +353,10 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     }
 
     // Write ELF load base (for ASLR address resolution)
-    // Discovered at install time via dl_iterate_phdr; zero on non-PIE or macOS
-    if (s_load_base != 0) {
+    // Always write when detection ran so resolvers can distinguish
+    // "load_base is 0" (non-PIE / static-PIE with dl_iterate_phdr) from
+    // "load_base not detected" (detection never ran)
+    if (s_load_base_detected) {
         safe_write(fd, "load_base:");
         safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), s_load_base));
         safe_write(fd, "\n");
@@ -444,12 +458,31 @@ void crash_handler::install(const std::string& crash_file_path) {
 #ifdef HAVE_DL_ITERATE_PHDR
     s_load_base = 0;
     dl_iterate_phdr(find_load_base_cb, nullptr);
+#endif
+
+#if defined(__linux__)
+    // Fallback for static-PIE: dl_iterate_phdr returns 0 because there's no
+    // dynamic linker. Use __executable_start (linker-defined symbol at the start
+    // of the ELF image) to compute the actual ASLR load base.
+    // On static-PIE ARM32, __executable_start's runtime address IS the load base
+    // (file offset of __executable_start is 0x0 in the ELF).
+    if (s_load_base == 0) {
+        auto exec_start = reinterpret_cast<uintptr_t>(__executable_start);
+        // Heuristic: if the runtime address is above 0x100000, ASLR is active.
+        // Non-PIE ARM32 has __executable_start at 0x10000; non-PIE x86_64 at 0x400000.
+        // ASLR'd static-PIE addresses are typically 0x5xxxxxxx+ (ARM32) or 0x5xxxxx+ (x86_64).
+        if (exec_start > 0x100000) {
+            s_load_base = exec_start;
+        }
+    }
+#endif
+
+    s_load_base_detected = true;
     if (s_load_base != 0) {
         spdlog::debug("[CrashHandler] ELF load base: 0x{:x} (ASLR active)", s_load_base);
     } else {
-        spdlog::debug("[CrashHandler] ELF load base: 0 (non-PIE or static)");
+        spdlog::debug("[CrashHandler] ELF load base: 0 (non-PIE or static without ASLR)");
     }
-#endif
 
     // Install signal handlers via sigaction (not signal())
     struct sigaction sa;
