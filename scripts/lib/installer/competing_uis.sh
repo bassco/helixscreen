@@ -73,6 +73,14 @@ stop_kmod_competing_uis() {
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
+    # During self-update, competing UIs were already disabled during initial install.
+    # Re-running this would chmod -x init scripts that may have been restored or
+    # customized by the platform (e.g. ZMOD manages S80guppyscreen) (#314).
+    if _is_self_update; then
+        log_info "Skipping competing UI check (self-update; already handled at install)"
+        return 0
+    fi
+
     log_info "Checking for competing screen UIs..."
 
     found_any=false
@@ -81,7 +89,12 @@ stop_competing_uis() {
     case "$AD5M_FIRMWARE" in
         forge_x)    stop_forgex_competing_uis ;;
         klipper_mod) stop_kmod_competing_uis ;;
-        zmod)       ;; # ZMOD: no platform-specific UIs, generic loop below handles it
+        zmod)
+            # ZMOD manages its own init scripts (S80guppyscreen etc.)
+            # Do NOT fall through to the generic loop which would chmod -x them
+            log_info "ZMOD platform: skipping generic UI disabling (ZMOD-managed)"
+            return 0
+            ;;
     esac
 
     # Handle the specific previous UI if we know it (for clean reversibility)

@@ -57,6 +57,14 @@ HELIX_INIT_SCRIPTS="/etc/init.d/S80helixscreen /etc/init.d/S90helixscreen /etc/i
 # HelixScreen process names (order matters: watchdog first to prevent crash dialog)
 HELIX_PROCESSES="helix-watchdog helix-screen helix-splash"
 
+# Returns true when install.sh was spawned by helix-screen's in-app update.
+# Used by multiple modules (service.sh, competing_uis.sh) to skip operations
+# that are unnecessary or destructive during self-update.
+# Set by update_checker.cpp before execv().
+_is_self_update() {
+    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
+}
+
 # Get sudo prefix needed for a file operation.
 # Returns empty string if current user has write access, $SUDO otherwise.
 # For existing files, checks file writability. For new files, checks parent dir.
@@ -1653,6 +1661,14 @@ stop_kmod_competing_uis() {
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
+    # During self-update, competing UIs were already disabled during initial install.
+    # Re-running this would chmod -x init scripts that may have been restored or
+    # customized by the platform (e.g. ZMOD manages S80guppyscreen) (#314).
+    if _is_self_update; then
+        log_info "Skipping competing UI check (self-update; already handled at install)"
+        return 0
+    fi
+
     log_info "Checking for competing screen UIs..."
 
     found_any=false
@@ -1661,7 +1677,12 @@ stop_competing_uis() {
     case "$AD5M_FIRMWARE" in
         forge_x)    stop_forgex_competing_uis ;;
         klipper_mod) stop_kmod_competing_uis ;;
-        zmod)       ;; # ZMOD: no platform-specific UIs, generic loop below handles it
+        zmod)
+            # ZMOD manages its own init scripts (S80guppyscreen etc.)
+            # Do NOT fall through to the generic loop which would chmod -x them
+            log_info "ZMOD platform: skipping generic UI disabling (ZMOD-managed)"
+            return 0
+            ;;
     esac
 
     # Handle the specific previous UI if we know it (for clean reversibility)
@@ -2421,13 +2442,7 @@ _has_no_new_privs() {
     [ -r /proc/self/status ] && grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status 2>/dev/null
 }
 
-# Returns true when install.sh was spawned by helix-screen's in-app update.
-# On SysV systems (AD5M, K1), stop_service/start_service are skipped because
-# the watchdog handles the restart via _exit(0) — same as the NoNewPrivileges
-# path on systemd.  Set by update_checker.cpp before execv().
-_is_self_update() {
-    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
-}
+# _is_self_update() is defined in common.sh (sourced before this module)
 
 # Install service (dispatcher)
 # Calls install_service_systemd or install_service_sysv based on INIT_SYSTEM
@@ -2443,6 +2458,14 @@ install_service() {
 
 # Install systemd service
 install_service_systemd() {
+    # During self-update, the service file is already installed and correct.
+    # Overwriting it could destroy user/platform customizations (#314).
+    if _is_self_update; then
+        log_info "Skipping service file install (self-update; already installed)"
+        CLEANUP_SERVICE=true
+        return 0
+    fi
+
     log_info "Installing systemd service..."
 
     local service_src="${INSTALL_DIR}/config/helixscreen.service"
@@ -2527,6 +2550,14 @@ install_update_watcher_systemd() {
 
 # Install SysV init script
 install_service_sysv() {
+    # During self-update, the init script is already installed and correct.
+    # Overwriting it destroys platform customizations (ZMOD, Klipper Mod) (#314).
+    if _is_self_update; then
+        log_info "Skipping init script install (self-update; already installed)"
+        CLEANUP_SERVICE=true
+        return 0
+    fi
+
     log_info "Installing SysV init script..."
 
     local init_src="${INSTALL_DIR}/config/helixscreen.init"

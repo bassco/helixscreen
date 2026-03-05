@@ -22,13 +22,7 @@ _has_no_new_privs() {
     [ -r /proc/self/status ] && grep -q '^NoNewPrivs:[[:space:]]*1' /proc/self/status 2>/dev/null
 }
 
-# Returns true when install.sh was spawned by helix-screen's in-app update.
-# On SysV systems (AD5M, K1), stop_service/start_service are skipped because
-# the watchdog handles the restart via _exit(0) — same as the NoNewPrivileges
-# path on systemd.  Set by update_checker.cpp before execv().
-_is_self_update() {
-    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
-}
+# _is_self_update() is defined in common.sh (sourced before this module)
 
 # Install service (dispatcher)
 # Calls install_service_systemd or install_service_sysv based on INIT_SYSTEM
@@ -44,6 +38,14 @@ install_service() {
 
 # Install systemd service
 install_service_systemd() {
+    # During self-update, the service file is already installed and correct.
+    # Overwriting it could destroy user/platform customizations (#314).
+    if _is_self_update; then
+        log_info "Skipping service file install (self-update; already installed)"
+        CLEANUP_SERVICE=true
+        return 0
+    fi
+
     log_info "Installing systemd service..."
 
     local service_src="${INSTALL_DIR}/config/helixscreen.service"
@@ -128,6 +130,14 @@ install_update_watcher_systemd() {
 
 # Install SysV init script
 install_service_sysv() {
+    # During self-update, the init script is already installed and correct.
+    # Overwriting it destroys platform customizations (ZMOD, Klipper Mod) (#314).
+    if _is_self_update; then
+        log_info "Skipping init script install (self-update; already installed)"
+        CLEANUP_SERVICE=true
+        return 0
+    fi
+
     log_info "Installing SysV init script..."
 
     local init_src="${INSTALL_DIR}/config/helixscreen.init"

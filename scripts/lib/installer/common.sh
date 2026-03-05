@@ -28,6 +28,14 @@ HELIX_INIT_SCRIPTS="/etc/init.d/S80helixscreen /etc/init.d/S90helixscreen /etc/i
 # HelixScreen process names (order matters: watchdog first to prevent crash dialog)
 HELIX_PROCESSES="helix-watchdog helix-screen helix-splash"
 
+# Returns true when install.sh was spawned by helix-screen's in-app update.
+# Used by multiple modules (service.sh, competing_uis.sh) to skip operations
+# that are unnecessary or destructive during self-update.
+# Set by update_checker.cpp before execv().
+_is_self_update() {
+    [ "${HELIX_SELF_UPDATE:-}" = "1" ]
+}
+
 # Get sudo prefix needed for a file operation.
 # Returns empty string if current user has write access, $SUDO otherwise.
 # For existing files, checks file writability. For new files, checks parent dir.
