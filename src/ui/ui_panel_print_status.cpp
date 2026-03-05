@@ -1090,8 +1090,7 @@ void PrintStatusPanel::handle_cancel_button() {
 
 void PrintStatusPanel::handle_reprint_button() {
     // Startup grace period: reject phantom clicks during early boot
-    static const auto app_start_time = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::steady_clock::now() - app_start_time;
+    auto elapsed = std::chrono::steady_clock::now() - AppConstants::Startup::PROCESS_START_TIME;
     if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
         auto secs = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         spdlog::warn("[{}] Rejected reprint during startup grace period ({}s < {}s)", get_name(),

@@ -91,8 +91,7 @@ void PrintStartController::initiate() {
     // Safety: reject print starts during startup grace period.
     // Ghost touch events during app initialization can trigger the full print chain
     // (file select → detail view → print button → filament warning confirm) in seconds.
-    static const auto app_start_time = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::steady_clock::now() - app_start_time;
+    auto elapsed = std::chrono::steady_clock::now() - AppConstants::Startup::PROCESS_START_TIME;
     if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
         auto secs =
             std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();

@@ -89,8 +89,11 @@ constexpr std::chrono::seconds SENSOR_STABILIZATION_PERIOD{5};
 
 /// Grace period before allowing user-initiated print starts after app launch.
 /// Prevents ghost touch events during startup from accidentally starting prints.
-/// Measured from UI creation (main loop entry), not from app process start.
 constexpr std::chrono::seconds PRINT_START_GRACE_PERIOD{5};
+
+/// Process start timestamp for grace period calculations.
+/// Initialized at static init time (before main), shared across all TUs.
+inline const auto PROCESS_START_TIME = std::chrono::steady_clock::now();
 } // namespace Startup
 
 /**
