@@ -169,16 +169,21 @@ CrashHistoryEntry CrashHistory::entry_from_json(const json& j) {
 }
 
 json CrashHistory::entry_to_json(const CrashHistoryEntry& entry) {
-    return json{{"timestamp", entry.timestamp},
-                {"signal", entry.signal},
-                {"signal_name", entry.signal_name},
-                {"app_version", entry.app_version},
-                {"uptime_sec", entry.uptime_sec},
-                {"fault_addr", entry.fault_addr},
-                {"fault_code_name", entry.fault_code_name},
-                {"github_issue", entry.github_issue},
-                {"github_url", entry.github_url},
-                {"sent_via", entry.sent_via}};
+    try {
+        return json{{"timestamp", entry.timestamp},
+                    {"signal", entry.signal},
+                    {"signal_name", entry.signal_name},
+                    {"app_version", entry.app_version},
+                    {"uptime_sec", entry.uptime_sec},
+                    {"fault_addr", entry.fault_addr},
+                    {"fault_code_name", entry.fault_code_name},
+                    {"github_issue", entry.github_issue},
+                    {"github_url", entry.github_url},
+                    {"sent_via", entry.sent_via}};
+    } catch (const std::exception& e) {
+        spdlog::error("[CrashHistory] Failed to serialize entry: {}", e.what());
+        return json{{"error", "serialization_failed"}};
+    }
 }
 
 } // namespace helix
