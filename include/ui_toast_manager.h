@@ -117,9 +117,10 @@ class ToastManager {
     ToastManager() = default;
     ~ToastManager();
 
-    // Internal helper
+    // Internal helpers
     void create_toast_internal(ToastSeverity severity, const char* message, uint32_t duration_ms,
                                bool with_action);
+    void deferred_delete_toast(lv_obj_t*& toast_ptr);
 
     // Animation helpers
     void animate_entrance(lv_obj_t* toast);

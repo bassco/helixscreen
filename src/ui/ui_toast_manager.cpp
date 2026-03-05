@@ -145,9 +145,8 @@ void ToastManager::animate_entrance(lv_obj_t* toast) {
 void ToastManager::animate_exit(lv_obj_t* toast) {
     // Skip animation if disabled - directly clean up
     if (!DisplaySettingsManager::instance().get_animations_enabled()) {
-        // Directly delete the toast - no animation
         if (toast && active_toast_ == toast) {
-            helix::ui::safe_delete(active_toast_);
+            deferred_delete_toast(active_toast_);
             animating_exit_ = false;
             spdlog::debug("[ToastManager] Animations disabled - hiding toast instantly");
         }
@@ -184,9 +183,9 @@ void ToastManager::exit_animation_complete_cb(lv_anim_t* anim) {
             lv_group_remove_obj(toast);
         }
 
-        helix::ui::safe_delete(mgr.active_toast_);
+        mgr.deferred_delete_toast(mgr.active_toast_);
         mgr.animating_exit_ = false;
-        spdlog::debug("[ToastManager] Exit animation complete, toast deleted");
+        spdlog::debug("[ToastManager] Exit animation complete, toast deletion deferred");
     }
 }
 
@@ -369,9 +368,10 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
             dismiss_timer_ = nullptr;
         }
 
-        // Use safe_delete for consistent cleanup (defocuses tree, guards against
-        // deletion during LVGL shutdown). See GitHub issue #98.
-        helix::ui::safe_delete(old_toast);
+        // Defer actual deletion to avoid corrupting LVGL's event linked list.
+        // We're inside UpdateQueue::process_pending() → lv_timer_handler, so
+        // synchronous deletion can SEGV in lv_event_mark_deleted. See #316.
+        deferred_delete_toast(old_toast);
     }
 
     // Clear action state for basic toasts, keep for action toasts
@@ -421,6 +421,21 @@ void ToastManager::create_toast_internal(ToastSeverity severity, const char* mes
 
     spdlog::debug("[ToastManager] Toast shown: [{}] {} ({}ms, action={})",
                   severity_to_string(severity), message, duration_ms, with_action);
+}
+
+void ToastManager::deferred_delete_toast(lv_obj_t*& toast_ptr) {
+    if (!toast_ptr) return;
+    lv_obj_t* to_delete = toast_ptr;
+    toast_ptr = nullptr;
+    // Hide immediately so the old toast isn't visible while deletion is deferred
+    lv_obj_add_flag(to_delete, LV_OBJ_FLAG_HIDDEN);
+    helix::ui::queue_update([to_delete]() {
+        if (!lv_is_initialized()) return;
+        if (!lv_obj_is_valid(to_delete)) return;
+        helix::ui::defocus_tree(to_delete);
+        lv_obj_delete(to_delete);
+        spdlog::debug("[ToastManager] Deferred toast deletion complete");
+    });
 }
 
 void ToastManager::dismiss_timer_cb(lv_timer_t* timer) {
