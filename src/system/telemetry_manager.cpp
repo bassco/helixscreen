@@ -1808,11 +1808,11 @@ void TelemetryManager::record_error(const std::string& category, const std::stri
 
         // Prune expired entries to prevent unbounded growth
         if (error_rate_limit_.size() > 200) {
-            for (auto it = error_rate_limit_.begin(); it != error_rate_limit_.end();) {
-                if (now - it->second >= ERROR_RATE_LIMIT_INTERVAL) {
-                    it = error_rate_limit_.erase(it);
+            for (auto prune_it = error_rate_limit_.begin(); prune_it != error_rate_limit_.end();) {
+                if (now - prune_it->second >= ERROR_RATE_LIMIT_INTERVAL) {
+                    prune_it = error_rate_limit_.erase(prune_it);
                 } else {
-                    ++it;
+                    ++prune_it;
                 }
             }
         }
