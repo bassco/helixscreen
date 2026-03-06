@@ -437,8 +437,27 @@ void ui_carousel_rebuild_indicators(lv_obj_t* carousel) {
     // Clear existing dots
     lv_obj_clean(state->indicator_row);
 
-    // Create one dot per real page
     int count = static_cast<int>(state->real_tiles.size());
+
+    // Single page: hide indicators and disable swiping
+    if (count <= 1) {
+        lv_obj_add_flag(state->indicator_row, LV_OBJ_FLAG_HIDDEN);
+        if (state->scroll_container) {
+            lv_obj_set_scroll_dir(state->scroll_container, LV_DIR_NONE);
+        }
+        spdlog::trace("[ui_carousel] Single page — indicators hidden, scroll disabled");
+        return;
+    }
+
+    // Multiple pages: show indicators and enable horizontal scrolling
+    if (state->show_indicators) {
+        lv_obj_remove_flag(state->indicator_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (state->scroll_container) {
+        lv_obj_set_scroll_dir(state->scroll_container, LV_DIR_HOR);
+    }
+
+    // Create one dot per real page
     for (int i = 0; i < count; i++) {
         lv_obj_t* dot = lv_obj_create(state->indicator_row);
         // Strip LVGL's default theme styles so only our explicit styles apply
