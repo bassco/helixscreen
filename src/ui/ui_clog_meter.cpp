@@ -257,6 +257,8 @@ void UiClogMeter::update_safe_state() {
         lv_obj_set_style_text_font(safe_icon_, &mdi_icons_24, 0);
         lv_obj_set_style_text_color(safe_icon_, theme_manager_get_color("primary"), 0);
         lv_obj_align(safe_icon_, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_remove_flag(safe_icon_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(safe_icon_, LV_OBJ_FLAG_EVENT_BUBBLE);
     }
     if (safe_icon_) {
         if (safe) {
