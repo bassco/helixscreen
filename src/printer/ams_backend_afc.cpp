@@ -489,7 +489,7 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             for (const auto& ext_name : extruder_names_) {
                 std::string key = "AFC_extruder " + ext_name;
                 if (params.contains(key) && params[key].is_object()) {
-                    parse_afc_extruder(params[key]);
+                    parse_afc_extruder(ext_name, params[key]);
                     state_changed = true;
                 }
             }
@@ -497,7 +497,7 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             // Backward compat: single extruder fallback
             if (params.contains("AFC_extruder extruder") &&
                 params["AFC_extruder extruder"].is_object()) {
-                parse_afc_extruder(params["AFC_extruder extruder"]);
+                parse_afc_extruder("extruder", params["AFC_extruder extruder"]);
                 state_changed = true;
             }
         }
@@ -517,6 +517,26 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
                 params[unit_info.klipper_key].is_object()) {
                 parse_afc_unit_object(unit_info, params[unit_info.klipper_key]);
                 state_changed = true;
+            }
+        }
+
+        // Tool changer reconciliation: when we have a populated tool-to-slot
+        // map and an active tool, the tool authoritatively determines
+        // current_slot. During tool swaps current_load may briefly go null
+        // while current_tool already reflects the new tool.
+        if (!system_info_.tool_to_slot_map.empty() && system_info_.current_tool >= 0) {
+            int tool = system_info_.current_tool;
+            if (tool < static_cast<int>(system_info_.tool_to_slot_map.size())) {
+                int slot = system_info_.tool_to_slot_map[tool];
+                if (slot >= 0 && slot < slots_.slot_count()) {
+                    if (system_info_.current_slot != slot) {
+                        spdlog::debug("[AMS AFC] Tool changer reconciliation: T{} -> slot {} "
+                                      "(was {})",
+                                      tool, slot, system_info_.current_slot);
+                    }
+                    system_info_.current_slot = slot;
+                    system_info_.filament_loaded = true;
+                }
             }
         }
     }
@@ -592,12 +612,20 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                       loaded_lane);
     } else if ((afc_data.contains("current_load") && afc_data["current_load"].is_null()) ||
                (afc_data.contains("current_lane") && afc_data["current_lane"].is_null())) {
-        // current_load/current_lane went null (unloaded) — clear filament state
+        // current_load/current_lane went null (unloaded) — clear filament state.
+        // Preserve current_tool if explicitly provided (tool changer mid-swap:
+        // current_load goes null while current_tool already reflects new tool).
+        bool has_explicit_tool =
+            afc_data.contains("current_tool") && afc_data["current_tool"].is_number_integer();
         system_info_.filament_loaded = false;
         system_info_.current_slot = -1;
-        system_info_.current_tool = -1;
+        if (!has_explicit_tool) {
+            system_info_.current_tool = -1;
+        }
         current_slot_set_by_afc_state = true;
-        spdlog::debug("[AMS AFC] Filament unloaded (current lane/load=null)");
+        spdlog::debug("[AMS AFC] Filament unloaded (current lane/load=null, "
+                      "preserve_tool={})",
+                      has_explicit_tool);
     }
 
     // Parse action/status
@@ -1201,7 +1229,8 @@ void AmsBackendAfc::parse_afc_buffer(const std::string& buffer_name, const nlohm
     }
 }
 
-void AmsBackendAfc::parse_afc_extruder(const nlohmann::json& data) {
+void AmsBackendAfc::parse_afc_extruder(const std::string& ext_name,
+                                       const nlohmann::json& data) {
     // Parse AFC_extruder object for toolhead sensors
     // {
     //   "tool_start_status": true,   // Toolhead entry sensor
@@ -1219,17 +1248,43 @@ void AmsBackendAfc::parse_afc_extruder(const nlohmann::json& data) {
 
     if (data.contains("lane_loaded") && !data["lane_loaded"].is_null()) {
         if (data["lane_loaded"].is_string()) {
-            current_lane_name_ = data["lane_loaded"].get<std::string>();
-            // Update current_slot from lane name
-            int loaded_slot = slots_.index_of(current_lane_name_);
+            std::string lane = data["lane_loaded"].get<std::string>();
+            int loaded_slot = slots_.index_of(lane);
             if (loaded_slot >= 0) {
-                system_info_.current_slot = loaded_slot;
+                // Derive tool number from extruder name:
+                // "extruder" = T0, "extruder1" = T1, "extruder2" = T2, etc.
+                int ext_tool = 0;
+                if (ext_name.size() > 8) { // longer than "extruder"
+                    try {
+                        ext_tool = std::stoi(ext_name.substr(8));
+                    } catch (const std::exception& e) {
+                        spdlog::warn("[AMS AFC] Failed to parse tool number from '{}': {}",
+                                     ext_name, e.what());
+                        ext_tool = 0;
+                    }
+                }
+
+                // Only update current_slot if this extruder is the active tool
+                // or no authoritative source has set it yet
+                bool is_active_tool = (system_info_.current_tool >= 0) &&
+                                      (ext_tool == system_info_.current_tool);
+                if (system_info_.current_slot < 0 || is_active_tool) {
+                    current_lane_name_ = lane;
+                    system_info_.current_slot = loaded_slot;
+                    spdlog::trace("[AMS AFC] Extruder {} (T{}): lane_loaded={} -> slot {}",
+                                  ext_name, ext_tool, lane, loaded_slot);
+                } else {
+                    spdlog::trace("[AMS AFC] Extruder {} (T{}): lane_loaded={} ignored "
+                                  "(active tool=T{}, current_slot={})",
+                                  ext_name, ext_tool, lane, system_info_.current_tool,
+                                  system_info_.current_slot);
+                }
             }
         }
     }
 
-    spdlog::trace("[AMS AFC] Extruder: tool_start={} tool_end={} lane={}", tool_start_sensor_,
-                  tool_end_sensor_, current_lane_name_);
+    spdlog::trace("[AMS AFC] Extruder {}: tool_start={} tool_end={} lane={}", ext_name,
+                  tool_start_sensor_, tool_end_sensor_, current_lane_name_);
 }
 
 void AmsBackendAfc::parse_afc_unit_object(AfcUnitInfo& unit_info, const nlohmann::json& data) {

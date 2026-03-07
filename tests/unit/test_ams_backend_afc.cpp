@@ -366,10 +366,13 @@ class AmsBackendAfcTestHelper : public AmsBackendAfc {
     void setup_toolchanger(int num_extruders) {
         num_extruders_ = num_extruders;
         extruders_.clear();
+        extruder_names_.clear();
         for (int i = 0; i < num_extruders; ++i) {
+            std::string name = (i == 0) ? "extruder" : "extruder" + std::to_string(i);
             AfcExtruderInfo ext;
-            ext.name = (i == 0) ? "extruder" : "extruder" + std::to_string(i);
+            ext.name = name;
             extruders_.push_back(std::move(ext));
+            extruder_names_.push_back(std::move(name));
         }
     }
 };
@@ -3171,4 +3174,214 @@ TEST_CASE("AFC 3-unit incremental arrival preserves all unit lanes",
         }
     }
     CHECK(found_turtle);
+}
+
+// ============================================================================
+// Reactive lane highlighting & current_slot stability (PR #336 + improvements)
+// ============================================================================
+
+TEST_CASE("AFC stepper-only updates do not overwrite current_slot set by AFC state",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(10);
+    helper.initialize_slots_from_discovery();
+
+    // Step 1: AFC global state sets current_load = "lane9" (slot 9)
+    {
+        nlohmann::json params;
+        params["AFC"] = {{"current_load", "lane9"}, {"filament_loaded", true}};
+        params["AFC_stepper lane9"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "00AEFF"},  {"material", "ASA"},
+            {"spool_id", "42"},   {"weight", 800}};
+        helper.feed_status_update(params);
+    }
+    REQUIRE(helper.get_system_info().current_slot == 9);
+
+    // Step 2: Incremental update with ONLY AFC_stepper for lane0 — must NOT reset to 0
+    {
+        nlohmann::json params;
+        params["AFC_stepper lane0"] = {
+            {"prep", true}, {"load", true}, {"status", "Ready"},
+            {"tool_loaded", false}};
+        helper.feed_status_update(params);
+    }
+
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 9);
+    CHECK(info.filament_loaded == true);
+
+    // Step 3: Another stepper-only update for a different lane — still preserved
+    {
+        nlohmann::json params;
+        params["AFC_stepper lane3"] = {
+            {"prep", false}, {"load", false}, {"status", "None"},
+            {"tool_loaded", false}};
+        helper.feed_status_update(params);
+    }
+    CHECK(helper.get_system_info().current_slot == 9);
+}
+
+TEST_CASE("AFC reconciliation updates current_slot when active lane becomes unloaded",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // Step 1: Set current_slot = 2 via AFC state
+    {
+        nlohmann::json params;
+        params["AFC"] = {{"current_load", "lane2"}};
+        params["AFC_stepper lane2"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "FF0000"},  {"material", "PLA"}};
+        helper.feed_status_update(params);
+    }
+    REQUIRE(helper.get_system_info().current_slot == 2);
+
+    // Step 2: Tool change — lane2 unloaded, lane3 loaded (AFC state included)
+    {
+        nlohmann::json params;
+        params["AFC"] = {{"current_load", "lane3"}};
+        params["AFC_stepper lane2"] = {
+            {"status", "Ready"}, {"tool_loaded", false}};
+        params["AFC_stepper lane3"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "00FF00"},  {"material", "PETG"}};
+        helper.feed_status_update(params);
+    }
+
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 3);
+}
+
+TEST_CASE("AFC reconciliation via stepper-only updates current_slot when no authoritative source",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // Step 1: Set current_slot via stepper LOADED status only (no AFC state)
+    {
+        nlohmann::json params;
+        params["AFC_stepper lane2"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "FF0000"},  {"material", "PLA"}};
+        helper.feed_status_update(params);
+    }
+    REQUIRE(helper.get_system_info().current_slot == 2);
+
+    // Step 2: Stepper-only tool change — should detect and update
+    {
+        nlohmann::json params;
+        params["AFC_stepper lane2"] = {
+            {"status", "Ready"}, {"tool_loaded", false}};
+        params["AFC_stepper lane3"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "00FF00"},  {"material", "PETG"}};
+        helper.feed_status_update(params);
+    }
+
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 3);
+}
+
+TEST_CASE("AFC non-active extruder does not overwrite current_slot",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+    helper.setup_toolchanger(2);
+
+    // Set tool mapping: T0 -> lane0 (slot 0), T1 -> lane1 (slot 1)
+    helper.feed_afc_stepper("lane0", {{"map", "T0"}, {"status", "Tooled"},
+                                      {"tool_loaded", true}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1", {{"map", "T1"}, {"status", "Ready"},
+                                      {"tool_loaded", false}, {"color", "00FF00"}});
+
+    // AFC state says current_load = lane0, current_tool = 0
+    helper.feed_afc_state({{"current_load", "lane0"}, {"current_tool", 0}});
+    REQUIRE(helper.get_system_info().current_slot == 0);
+    REQUIRE(helper.get_system_info().current_tool == 0);
+
+    // Non-active extruder1 reports lane_loaded = lane1 — must NOT overwrite current_slot
+    helper.feed_afc_extruder("extruder1", {{"lane_loaded", "lane1"},
+                                            {"tool_start_status", false},
+                                            {"tool_end_status", false}});
+
+    auto info2 = helper.get_system_info();
+    CHECK(info2.current_slot == 0);
+    CHECK(info2.current_tool == 0);
+}
+
+TEST_CASE("AFC filament unload (current_load=null) clears state",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // Load filament into lane2
+    {
+        nlohmann::json params;
+        params["AFC"] = {{"current_load", "lane2"}, {"filament_loaded", true}};
+        params["AFC_stepper lane2"] = {
+            {"status", "Tooled"}, {"tool_loaded", true},
+            {"color", "FF0000"},  {"material", "PLA"}};
+        helper.feed_status_update(params);
+    }
+    REQUIRE(helper.get_system_info().current_slot == 2);
+    REQUIRE(helper.get_system_info().filament_loaded == true);
+
+    // AFC reports current_load = null (unloaded)
+    helper.feed_afc_state({{"current_load", nullptr}});
+
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == -1);
+    CHECK(info.filament_loaded == false);
+}
+
+TEST_CASE("AFC tool changer reconciliation derives current_slot from active tool",
+          "[ams][afc][reconciliation]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+    helper.setup_toolchanger(4);
+
+    // Set up tool mapping: T0->slot0, T1->slot1, T2->slot2, T3->slot3
+    helper.feed_afc_stepper("lane0", {{"map", "T0"}, {"status", "Ready"},
+                                      {"tool_loaded", false}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1", {{"map", "T1"}, {"status", "Ready"},
+                                      {"tool_loaded", false}, {"color", "00FF00"}});
+    helper.feed_afc_stepper("lane2", {{"map", "T2"}, {"status", "Ready"},
+                                      {"tool_loaded", false}, {"color", "0000FF"}});
+    helper.feed_afc_stepper("lane3", {{"map", "T3"}, {"status", "Ready"},
+                                      {"tool_loaded", false}, {"color", "FFFF00"}});
+
+    // Verify tool mapping is populated
+    auto mapping = helper.get_tool_to_slot_map();
+    REQUIRE(mapping.size() >= 4);
+
+    // Set up PARALLEL topology via unit object
+    {
+        nlohmann::json params;
+        nlohmann::json bt_data;
+        bt_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+        bt_data["extruders"] = nlohmann::json::array({"extruder", "extruder1", "extruder2", "extruder3"});
+        bt_data["hubs"] = nlohmann::json::array();
+        bt_data["buffers"] = nlohmann::json::array();
+        params["AFC_BoxTurtle Turtle_1"] = bt_data;
+        helper.feed_status_update(params);
+    }
+
+    // Simulate: Klipper reports active tool = T2, current_load is null (mid tool-swap)
+    // With tool_to_slot_map populated, should derive current_slot = 2
+    {
+        nlohmann::json params;
+        params["AFC"] = {{"current_load", nullptr}, {"current_tool", 2}};
+        helper.feed_status_update(params);
+    }
+
+    auto info = helper.get_system_info();
+    CHECK(info.current_slot == 2);
+    CHECK(info.filament_loaded == true);
 }

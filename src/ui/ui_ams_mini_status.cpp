@@ -94,6 +94,7 @@ struct AmsMiniStatusData {
     // Uses ObserverGuard for RAII lifecycle management
     // Note: slots_version is always bumped after slot_count changes, so one observer suffices
     ObserverGuard slots_version_observer;
+    ObserverGuard current_slot_observer;
 };
 
 // Static registry for safe cleanup
@@ -403,6 +404,7 @@ static void on_delete(lv_event_t* e) {
             // release() skips lv_observer_remove() — safe during both normal
             // widget deletion and shutdown (subjects may already be deinited).
             data->slots_version_observer.release();
+            data->current_slot_observer.release();
         }
         // data automatically freed when unique_ptr goes out of scope
         s_registry.erase(it);
@@ -507,6 +509,17 @@ lv_obj_t* ui_ams_mini_status_create(lv_obj_t* parent, int32_t height) {
             sync_from_ams_state(data);
         }
         spdlog::debug("[AmsMiniStatus] Auto-bound to AmsState slots_version subject");
+    }
+
+    // Observe current_slot to reactively update lane highlights
+    lv_subject_t* current_slot_subject = AmsState::instance().get_current_slot_subject();
+    if (current_slot_subject) {
+        data->current_slot_observer = observe_int_sync<lv_obj_t>(
+            current_slot_subject, container, [](lv_obj_t* obj, int /* slot */) {
+                auto* d = get_data(obj);
+                if (d)
+                    sync_from_ams_state(d);
+            });
     }
 
     spdlog::trace("[AmsMiniStatus] Created (height={})", height);
@@ -661,7 +674,7 @@ static void sync_from_ams_state(AmsMiniStatusData* data) {
         slot_bar->color_rgb = slot.color_rgb;
         slot_bar->fill_pct = ams_draw::fill_percent_from_slot(slot, 0);
         slot_bar->present = slot.is_present();
-        slot_bar->loaded = (slot.status == SlotStatus::LOADED);
+        slot_bar->loaded = (i == lv_subject_get_int(AmsState::instance().get_current_slot_subject()));
         slot_bar->has_error = (slot.status == SlotStatus::BLOCKED || slot.error.has_value());
         slot_bar->severity = slot.error.has_value() ? slot.error->severity : SlotError::INFO;
     }
@@ -763,6 +776,17 @@ static void* ui_ams_mini_status_xml_create(lv_xml_parser_state_t* state, const c
         if (slot_count_subject && lv_subject_get_int(slot_count_subject) > 0) {
             sync_from_ams_state(data);
         }
+    }
+
+    // Observe current_slot to reactively update lane highlights
+    lv_subject_t* current_slot_subject = AmsState::instance().get_current_slot_subject();
+    if (current_slot_subject) {
+        data->current_slot_observer = observe_int_sync<lv_obj_t>(
+            current_slot_subject, container, [](lv_obj_t* obj, int /* slot */) {
+                auto* d = get_data(obj);
+                if (d)
+                    sync_from_ams_state(d);
+            });
     }
 
     spdlog::trace("[AmsMiniStatus] Created via XML (responsive height)");
