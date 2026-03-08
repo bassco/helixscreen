@@ -157,6 +157,82 @@ TEST_CASE("AmsState - refresh_spoolman_weights with no API set", "[ams][spoolman
 }
 
 // ============================================================================
+// Active spool sync on slot edit (regression test for AFC spool assignment)
+//
+// When the user edits a slot via the AMS edit modal and changes the Spoolman
+// spool, the active spool in Spoolman must be updated if that slot is currently
+// loaded. AFC manages active spool on physical load/unload but NOT on
+// UI-initiated spool reassignment, so HelixScreen must call set_active_spool.
+//
+// Tests exercise AmsState::sync_active_spool_after_edit() which is called
+// from the AmsPanel edit modal completion callback.
+// ============================================================================
+
+TEST_CASE("sync_active_spool_after_edit syncs when edited slot is loaded",
+          "[ams][spoolman][active-spool]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    auto& ams = AmsState::instance();
+    ams.set_moonraker_api(&api);
+
+    // Clear active spool to a known starting value
+    api.spoolman().set_active_spool(0, []() {}, [](const MoonrakerError&) {});
+
+    // Set current loaded slot to 2 via the subject
+    lv_subject_set_int(ams.get_current_slot_subject(), 2);
+
+    SECTION("syncs active spool when edited slot matches current slot") {
+        ams.sync_active_spool_after_edit(2, 42);
+
+        int active_after = -1;
+        api.spoolman().get_spoolman_status(
+            [&](bool /*connected*/, int active_id) { active_after = active_id; },
+            [](const MoonrakerError&) {});
+        REQUIRE(active_after == 42);
+    }
+
+    SECTION("does NOT sync when edited slot differs from current slot") {
+        ams.sync_active_spool_after_edit(0, 42);
+
+        int active_after = -1;
+        api.spoolman().get_spoolman_status(
+            [&](bool /*connected*/, int active_id) { active_after = active_id; },
+            [](const MoonrakerError&) {});
+        REQUIRE(active_after == 0);
+    }
+
+    SECTION("does NOT sync when spoolman_id is 0 (unlinked)") {
+        ams.sync_active_spool_after_edit(2, 0);
+
+        int active_after = -1;
+        api.spoolman().get_spoolman_status(
+            [&](bool /*connected*/, int active_id) { active_after = active_id; },
+            [](const MoonrakerError&) {});
+        REQUIRE(active_after == 0);
+    }
+
+    SECTION("does NOT sync when no API is set") {
+        ams.set_moonraker_api(nullptr);
+        // Should not crash and should not change active spool
+        ams.sync_active_spool_after_edit(2, 42);
+
+        // Re-set API to verify state
+        ams.set_moonraker_api(&api);
+        int active_after = -1;
+        api.spoolman().get_spoolman_status(
+            [&](bool /*connected*/, int active_id) { active_after = active_id; },
+            [](const MoonrakerError&) {});
+        REQUIRE(active_after == 0);
+    }
+
+    // Cleanup
+    lv_subject_set_int(ams.get_current_slot_subject(), -1);
+    ams.set_moonraker_api(nullptr);
+}
+
+// ============================================================================
 // Spoolman Polling Tests (start/stop with refcount)
 // ============================================================================
 

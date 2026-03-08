@@ -1422,6 +1422,11 @@ void AmsPanel::show_edit_modal(int slot_index) {
             if (backend) {
                 backend->set_slot_info(result.slot_index, result.slot_info);
 
+                // Sync Spoolman active spool if edited slot is currently loaded.
+                // Backends like AFC only sync on physical load/unload, not UI edits.
+                AmsState::instance().sync_active_spool_after_edit(
+                    result.slot_index, result.slot_info.spoolman_id);
+
                 AmsState::instance().sync_from_backend();
 
                 NOTIFY_INFO("Slot {} updated", result.slot_index + 1);

@@ -1357,6 +1357,23 @@ void AmsState::set_current_loaded_defaults() {
     }
 }
 
+void AmsState::sync_active_spool_after_edit(int slot_index, int spoolman_id) {
+    if (!api_ || spoolman_id <= 0)
+        return;
+
+    int current_slot = lv_subject_get_int(&current_slot_);
+    if (slot_index != current_slot)
+        return;
+
+    spdlog::info("[AmsState] Edited slot {} is loaded, syncing active Spoolman spool to {}",
+                 slot_index, spoolman_id);
+    api_->spoolman().set_active_spool(
+        spoolman_id, []() {},
+        [](const MoonrakerError& err) {
+            spdlog::warn("[AmsState] Failed to set active spool: {}", err.message);
+        });
+}
+
 void AmsState::sync_current_loaded_from_backend() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
