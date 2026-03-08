@@ -119,6 +119,8 @@ config/helixconfig.json.voronv2
 .env.telemetry
 config/crash_report.txt
 config/crash.txt
+config/crash_*.txt
+config/crash_history.json
 config/tool_spools.json
 config/.crash_restart_count
 config/.helix-screen.lock
