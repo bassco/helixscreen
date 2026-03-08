@@ -1642,6 +1642,27 @@ void LedController::load_config() {
             }
         }
     }
+
+    // Clean up stale macro strip entries that no longer have matching macros
+    auto before_size = selected_strips_.size();
+    selected_strips_.erase(
+        std::remove_if(selected_strips_.begin(), selected_strips_.end(),
+                       [this](const std::string& s) {
+                           if (s.rfind("macro:", 0) != 0)
+                               return false;
+                           std::string raw = s.substr(6);
+                           for (const auto& m : configured_macros_) {
+                               if (m.display_name == raw)
+                                   return false;
+                           }
+                           spdlog::info("[LedController] Removing stale macro strip '{}'", s);
+                           return true;
+                       }),
+        selected_strips_.end());
+    if (selected_strips_.size() != before_size) {
+        needs_resave = true;
+    }
+
     if (needs_resave) {
         // Save just the strips (can't call save_config() since we haven't finished loading)
         auto* cfg2 = Config::get_instance();
@@ -1853,6 +1874,14 @@ LedBackendType LedController::backend_for_strip(const std::string& strip_id) con
     for (const auto& p : output_pin_.pins()) {
         if (p.id == strip_id)
             return LedBackendType::OUTPUT_PIN;
+    }
+
+    // If strip has "macro:" prefix but macro was deleted, still classify as MACRO
+    // to prevent the stale ID from hitting NATIVE's set_led() validation
+    if (strip_id.rfind("macro:", 0) == 0) {
+        spdlog::debug("[LedController] Stale macro strip '{}' - no matching configured macro",
+                      strip_id);
+        return LedBackendType::MACRO;
     }
 
     // Default to native (for backward compat with old configs)

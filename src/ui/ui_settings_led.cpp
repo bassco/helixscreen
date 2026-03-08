@@ -25,6 +25,7 @@
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <memory>
 
 namespace helix::settings {
@@ -831,11 +832,21 @@ void LedSettingsOverlay::handle_delete_macro_device(int index) {
         return;
     }
 
-    spdlog::info("[{}] Deleting macro device {}: '{}'", get_name(), index,
-                 updated[index].display_name);
+    std::string deleted_name = updated[index].display_name;
+    spdlog::info("[{}] Deleting macro device {}: '{}'", get_name(), index, deleted_name);
 
     updated.erase(updated.begin() + index);
     ctrl.set_configured_macros(updated);
+
+    // Remove deleted macro from selected strips to prevent stale entries
+    std::string macro_strip_id = "macro:" + deleted_name;
+    auto strips = ctrl.selected_strips();
+    auto it = std::find(strips.begin(), strips.end(), macro_strip_id);
+    if (it != strips.end()) {
+        strips.erase(it);
+        ctrl.set_selected_strips(strips);
+    }
+
     ctrl.save_config();
 
     // Rebuild macro backend with remaining macros
