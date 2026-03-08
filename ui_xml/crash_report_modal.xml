@@ -19,18 +19,28 @@
         <lv_label text="󰀦" style_text_font="mdi_icons_24" style_text_color="#warning"/>
         <text_heading text="HelixScreen Crashed" translation_tag="HelixScreen Crashed"/>
       </lv_obj>
-      <!-- Crash details -->
+      <!-- Details + QR row -->
       <lv_obj width="100%"
-              height="content" flex_flow="column" style_pad_all="#space_sm" style_pad_gap="#space_xs"
-              style_bg_opa="cover" style_bg_color="#card_bg" style_radius="#border_radius">
-        <text_body width="100%" bind_text="crash_report_details" long_mode="wrap"/>
-      </lv_obj>
-      <!-- Status message -->
-      <text_body name="status_text" width="100%" bind_text="crash_report_status" style_text_align="center"/>
-      <!-- QR container (hidden initially) -->
-      <lv_obj name="qr_container"
-              width="200" height="200" style_flex_main_place="center" style_flex_cross_place="center">
-        <bind_flag_if_eq subject="crash_report_show_qr" flag="hidden" ref_value="0"/>
+              height="content" flex_flow="row" style_pad_all="0" style_pad_gap="#space_md"
+              style_flex_cross_place="center">
+        <!-- Left: crash details + status -->
+        <lv_obj flex_grow="1"
+                height="content" flex_flow="column" style_pad_all="0" style_pad_gap="#space_md">
+          <!-- Crash details -->
+          <lv_obj width="100%"
+                  height="content" flex_flow="column" style_pad_all="#space_sm" style_pad_gap="#space_xs"
+                  style_bg_opa="cover" style_bg_color="#card_bg" style_radius="#border_radius">
+            <text_body width="100%" bind_text="crash_report_details" long_mode="wrap"/>
+          </lv_obj>
+          <!-- Status message -->
+          <text_body name="status_text" width="100%" bind_text="crash_report_status" long_mode="wrap"/>
+        </lv_obj>
+        <!-- Right: QR code (hidden initially) -->
+        <ui_card name="qr_container"
+                 width="content" height="content" style_flex_main_place="center" style_flex_cross_place="center"
+                 style_pad_all="#space_xs">
+          <bind_flag_if_eq subject="crash_report_show_qr" flag="hidden" ref_value="0"/>
+        </ui_card>
       </lv_obj>
     </lv_obj>
     <!-- Divider -->

@@ -13,6 +13,12 @@
 
 #include <lvgl.h>
 
+#if LV_USE_QRCODE
+extern "C" {
+#include "lvgl/src/libs/qrcode/qrcodegen.h"
+}
+#endif
+
 // =============================================================================
 // Static Members
 // =============================================================================
@@ -221,10 +227,23 @@ void CrashReportModal::show_qr_code(const std::string& url) {
 #if LV_USE_QRCODE
     lv_obj_t* qr = lv_qrcode_create(qr_container);
     if (qr) {
+        // Compute exact canvas size to eliminate white margin:
+        // Get QR version for this data, then size canvas to exact multiple of modules
+        int qr_version = qrcodegen_getMinFitVersion(qrcodegen_Ecc_MEDIUM, url.size());
+        int qr_modules = (qr_version > 0) ? qrcodegen_version2size(qr_version) : 0;
+        int target_px = 180;
+        int canvas_size = target_px;
+        if (qr_modules > 0) {
+            int scale = target_px / qr_modules;
+            if (scale < 1) scale = 1;
+            canvas_size = qr_modules * scale;
+        }
+        lv_qrcode_set_size(qr, canvas_size);
+        lv_qrcode_set_quiet_zone(qr, false);
         lv_qrcode_update(qr, url.c_str(), static_cast<uint32_t>(url.size()));
-        lv_obj_set_size(qr, 180, 180);
         lv_obj_center(qr);
-        spdlog::debug("[CrashReportModal] QR code created for URL ({} chars)", url.size());
+        spdlog::debug("[CrashReportModal] QR code created: {} chars, version={}, modules={}, canvas={}px",
+                       url.size(), qr_version, qr_modules, canvas_size);
     }
 #else
     spdlog::warn("[CrashReportModal] QR code support not compiled in (LV_USE_QRCODE=0)");
