@@ -47,9 +47,8 @@ ExecStartPre=+/bin/sh -c 'systemctl stop display-sleep.service 2>/dev/null || tr
 ExecStartPre=+/bin/sh -c 'u=@@HELIX_USER@@; for f in /etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla /etc/polkit-1/rules.d/50-helixscreen-network.rules; do [ -f "$$f" ] && grep -q "@@""HELIX_USER""@@" "$$f" 2>/dev/null && sed -i "s|@@""HELIX_USER""@@|$$u|g" "$$f" || true; done'
 
 # Create NetworkManager polkit rule if missing (self-heal for installs that predate polkit support).
-# Runs as root (+prefix) so it can write to /etc/polkit-1/rules.d/.
-# Only acts when: (1) nmcli exists, (2) rules.d exists, (3) no HelixScreen rule present.
-ExecStartPre=+/bin/sh -c 'u=@@HELIX_USER@@; [ "$$u" = "root" ] && exit 0; command -v nmcli >/dev/null 2>&1 || exit 0; d=/etc/polkit-1/rules.d; [ -d "$$d" ] || exit 0; f="$$d/50-helixscreen-network.rules"; [ -f "$$f" ] && exit 0; printf "polkit.addRule(function(action, subject) {\\n    if (action.id.indexOf(\"org.freedesktop.NetworkManager.\") === 0 &&\\n        subject.user === \"$$u\") {\\n        return polkit.Result.YES;\\n    }\\n});\\n" > "$$f"'
+# Runs as root (+prefix). Handles both .rules (Debian 12+) and .pkla (Debian 11) formats.
+ExecStartPre=+@@INSTALL_DIR@@/config/ensure-polkit-rule.sh @@HELIX_USER@@
 
 # Fix install dir ownership for self-updates.  Initial installs (run as root)
 # may leave files root-owned; the service user needs write access for in-app
