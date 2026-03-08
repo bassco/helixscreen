@@ -64,7 +64,7 @@ HomePanel::~HomePanel() {
 
     // Detach active PanelWidget instances
     for (auto& w : active_widgets_) {
-        w->detach();
+        if (w) w->detach();
     }
     active_widgets_.clear();
 }
@@ -177,6 +177,12 @@ void HomePanel::populate_widgets(bool force) {
             reuse[w->id()] = std::move(w);
         }
     }
+    // Remove null entries left by std::move() above so that drain() below
+    // cannot trigger re-entrant iteration (e.g. on_deactivate) over nullptrs.
+    active_widgets_.erase(
+        std::remove_if(active_widgets_.begin(), active_widgets_.end(),
+                        [](const auto& w) { return !w; }),
+        active_widgets_.end());
 
     // Flush any deferred observer callbacks that captured raw widget pointers.
     // observe_int_sync / observe_string defer via ui_queue_update(), so lambdas
