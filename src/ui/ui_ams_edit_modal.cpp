@@ -718,17 +718,17 @@ void AmsEditModal::update_spoolman_button_state() {
     lv_obj_t* btn_unlink = find_widget("btn_unlink_spool");
 
     if (working_info_.spoolman_id > 0) {
-        // Linked to Spoolman: show "Change Spool" and "Unlink"
+        // Linked: show "Change Saved Spool" and "Unlink"
         if (btn_change) {
-            ui_button_set_text(btn_change, "Change Spool");
+            ui_button_set_text(btn_change, lv_tr("Change Saved Spool"));
         }
         if (btn_unlink) {
             lv_obj_remove_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
         }
     } else {
-        // Not linked: show "Link to Spoolman", hide "Unlink"
+        // Not linked: show "Choose Saved Spool", hide "Unlink"
         if (btn_change) {
-            ui_button_set_text(btn_change, "Link to Spoolman");
+            ui_button_set_text(btn_change, lv_tr("Choose Saved Spool"));
         }
         if (btn_unlink) {
             lv_obj_add_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
@@ -1138,6 +1138,28 @@ void AmsEditModal::handle_save() {
     // Resolve API: prefer stored api_, fall back to global
     if (!api_) {
         api_ = get_moonraker_api();
+    }
+
+    // If slot was unlinked from Spoolman, clear active spool on server
+    if (original_info_.spoolman_id > 0 && working_info_.spoolman_id == 0 && api_) {
+        spdlog::info("[AmsEditModal] Spool unlinked — clearing active spool on server");
+        std::weak_ptr<bool> guard = callback_guard_;
+        api_->spoolman().set_active_spool(
+            0,
+            [this, guard]() {
+                helix::ui::queue_update([this, guard]() {
+                    if (guard.expired()) return;
+                    fire_completion(true);
+                });
+            },
+            [this, guard](const MoonrakerError& err) {
+                helix::ui::queue_update([this, guard, err]() {
+                    if (guard.expired()) return;
+                    spdlog::warn("[AmsEditModal] Failed to clear active spool: {}", err.message);
+                    fire_completion(true); // Still save locally
+                });
+            });
+        return;
     }
 
     // If slot is linked to Spoolman and there are changes, use SpoolmanSlotSaver

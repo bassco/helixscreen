@@ -1071,7 +1071,11 @@ void FilamentPanel::show_external_spool_edit_modal() {
 
     edit_modal_->set_completion_callback([](const helix::ui::AmsEditModal::EditResult& result) {
         if (result.saved) {
-            AmsState::instance().set_external_spool_info(result.slot_info);
+            if (result.slot_info.spoolman_id > 0 || !result.slot_info.material.empty()) {
+                AmsState::instance().set_external_spool_info(result.slot_info);
+            } else {
+                AmsState::instance().clear_external_spool_info();
+            }
             NOTIFY_INFO("External spool updated");
         }
     });
