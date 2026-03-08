@@ -226,13 +226,10 @@ void SlotRegistry::set_tool_mapping(int global_index, int tool_number) {
     if (!is_valid_index(global_index) || tool_number < 0)
         return;
 
-    // Clear any previous holder of this tool number
-    if (tool_number < static_cast<int>(tool_to_slot_.size())) {
-        int prev = tool_to_slot_[tool_number];
-        if (prev >= 0 && prev < static_cast<int>(slots_.size())) {
-            slots_[prev].info.mapped_tool = -1;
-        }
-    }
+    // Note: we intentionally do NOT clear the previous holder of this tool number.
+    // Multiple slots can share the same mapped_tool (e.g., hub lanes that converge
+    // to one extruder). The tool_to_slot_ reverse map points to the most recent
+    // slot, which is sufficient for tool changer reconciliation.
 
     // Clear any previous tool on this slot
     int old_tool = slots_[global_index].info.mapped_tool;

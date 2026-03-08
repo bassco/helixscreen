@@ -562,6 +562,53 @@ TEST_CASE("SystemToolLayout: 3 HUB units sharing same hub_tool_label merge to 1 
     CHECK(layout.physical_to_virtual_label[0] == 0);
 }
 
+TEST_CASE("SystemToolLayout: PARALLEL unit with shared mapped_tools (toolchanger+hub)",
+          "[ams][tool_layout]") {
+    // Toolchanger with hub: 4 lanes, 3 extruders.
+    // Lanes 0,1 direct (T0, T1), lanes 2,3 share T2 via hub.
+    // PARALLEL topology should produce 3 physical nozzles with T2 shared.
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    AmsUnit unit;
+    unit.unit_index = 0;
+    unit.slot_count = 4;
+    unit.first_slot_global_index = 0;
+    unit.topology = PathTopology::PARALLEL;
+    int tool_map[] = {0, 1, 2, 2};
+    for (int s = 0; s < 4; ++s) {
+        SlotInfo slot;
+        slot.slot_index = s;
+        slot.global_index = s;
+        slot.mapped_tool = tool_map[s];
+        unit.slots.push_back(slot);
+    }
+    info.units.push_back(unit);
+    info.total_slots = 4;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // 3 unique tools → 3 physical nozzles
+    CHECK(layout.total_physical_tools == 3);
+    REQUIRE(layout.units.size() == 1);
+    CHECK(layout.units[0].tool_count == 3);
+    CHECK(layout.units[0].first_physical_tool == 0);
+
+    // Virtual T0, T1, T2 each map to their own physical nozzle
+    REQUIRE(layout.virtual_to_physical.count(0) == 1);
+    REQUIRE(layout.virtual_to_physical.count(1) == 1);
+    REQUIRE(layout.virtual_to_physical.count(2) == 1);
+    CHECK(layout.virtual_to_physical.at(0) == 0);
+    CHECK(layout.virtual_to_physical.at(1) == 1);
+    CHECK(layout.virtual_to_physical.at(2) == 2);
+
+    // Labels: T0, T1, T2
+    REQUIRE(layout.physical_to_virtual_label.size() == 3);
+    CHECK(layout.physical_to_virtual_label[0] == 0);
+    CHECK(layout.physical_to_virtual_label[1] == 1);
+    CHECK(layout.physical_to_virtual_label[2] == 2);
+}
+
 TEST_CASE("SystemToolLayout: 2 HUB units with different hub_tool_labels stay separate",
           "[ams][tool_layout]") {
     // Multi-extruder setup: unit 0 feeds T0, unit 1 feeds T1

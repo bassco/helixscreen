@@ -1893,6 +1893,56 @@ TEST_CASE("AFC backend unit-level object populates AfcUnitInfo", "[ams][afc][mix
     }
 }
 
+TEST_CASE("AFC unit with hubs AND multiple extruders gets PARALLEL topology",
+          "[ams][afc][mixed][toolchanger]") {
+    // Toolchanger scenario: HTLF unit has 4 lanes, 3 extruders, 1 hub.
+    // Lanes 1,2 go direct to extruder/extruder1, lanes 3,4 go through hub to extruder2.
+    // Must be PARALLEL so each unique mapped_tool gets its own physical nozzle.
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+    helper.setup_toolchanger(3);
+
+    // Feed AFC state with unit name
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array({"HTLF HTLF_1"});
+    helper.feed_afc_state(afc_state);
+
+    // Feed unit object: hubs present + 3 extruders (mixed topology)
+    nlohmann::json unit_data;
+    unit_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+    unit_data["extruders"] = nlohmann::json::array({"extruder", "extruder1", "extruder2"});
+    unit_data["hubs"] = nlohmann::json::array({"hub1"});
+    unit_data["buffers"] = nlohmann::json::array();
+
+    nlohmann::json params;
+    params["AFC_HTLF HTLF_1"] = unit_data;
+    helper.feed_status_update(params);
+
+    // Verify topology is PARALLEL (not HUB)
+    const auto& unit_infos = helper.get_unit_infos();
+    REQUIRE(unit_infos.size() == 1);
+    REQUIRE(unit_infos[0].topology == PathTopology::PARALLEL);
+    REQUIRE(helper.get_unit_topology(0) == PathTopology::PARALLEL);
+
+    // Feed stepper map data: lanes 0,1 direct, lanes 2,3 shared via hub
+    helper.feed_afc_stepper("lane0", {{"map", "T0"}, {"status", "Ready"}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1", {{"map", "T1"}, {"status", "Ready"}, {"color", "00FF00"}});
+    helper.feed_afc_stepper("lane2", {{"map", "T2"}, {"status", "Ready"}, {"color", "0000FF"}});
+    helper.feed_afc_stepper("lane3", {{"map", "T2"}, {"status", "Ready"}, {"color", "FFFF00"}});
+
+    // Verify tool mappings
+    auto info = helper.get_system_info();
+    auto* slot0 = info.get_slot_global(0);
+    auto* slot1 = info.get_slot_global(1);
+    auto* slot2 = info.get_slot_global(2);
+    auto* slot3 = info.get_slot_global(3);
+    REQUIRE(slot0->mapped_tool == 0);
+    REQUIRE(slot1->mapped_tool == 1);
+    REQUIRE(slot2->mapped_tool == 2);
+    REQUIRE(slot3->mapped_tool == 2); // Shared via hub
+}
+
 TEST_CASE("AFC backend unit object triggers lane reorganization", "[ams][afc][mixed]") {
     AmsBackendAfcTestHelper helper;
     helper.initialize_test_lanes_zero_based(8);

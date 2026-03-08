@@ -1330,11 +1330,16 @@ void AmsBackendAfc::parse_afc_unit_object(AfcUnitInfo& unit_info, const nlohmann
     // Derive topology from hub/extruder counts:
     // - No hubs + multiple extruders → PARALLEL (Box Turtle: 1:1 lane-to-tool)
     // - Hubs present + single extruder → HUB (OpenAMS: N:1 through hub)
-    // - Default: HUB
+    // - Hubs + multiple extruders → PARALLEL (toolchanger with hub: some lanes
+    //   direct, some through hub. compute_system_tool_layout handles shared
+    //   mapped_tool values correctly — lanes sharing a tool map to the same
+    //   physical nozzle position)
     if (unit_info.hubs.empty() && unit_info.extruders.size() > 1) {
         unit_info.topology = PathTopology::PARALLEL;
     } else if (!unit_info.hubs.empty() && unit_info.extruders.size() <= 1) {
         unit_info.topology = PathTopology::HUB;
+    } else if (!unit_info.hubs.empty() && unit_info.extruders.size() > 1) {
+        unit_info.topology = PathTopology::PARALLEL;
     } else {
         unit_info.topology = PathTopology::HUB;
     }
