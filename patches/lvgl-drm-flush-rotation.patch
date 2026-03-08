@@ -1,5 +1,5 @@
 diff --git a/src/drivers/display/drm/lv_linux_drm.c b/src/drivers/display/drm/lv_linux_drm.c
-index 2a6ca6ed0..6b3ec0614 100644
+index 2a6ca6ed0..3a6608d7e 100644
 --- a/src/drivers/display/drm/lv_linux_drm.c
 +++ b/src/drivers/display/drm/lv_linux_drm.c
 @@ -78,6 +78,7 @@ typedef struct {
@@ -230,7 +230,28 @@ index 2a6ca6ed0..6b3ec0614 100644
      ret = 0;
  
  free_res:
-@@ -1074,6 +1171,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
+@@ -1052,11 +1149,18 @@ static void drm_flush_wait(lv_display_t * disp)
+     while(drm_dev->req) {
+         int ret;
+         do {
+-            ret = poll(&pfd, 1, -1);
++            ret = poll(&pfd, 1, 2000);
+         } while(ret == -1 && errno == EINTR);
+ 
+-        if(ret > 0)
++        if(ret > 0) {
+             drmHandleEvent(drm_dev->fd, &drm_dev->drm_event_ctx);
++        }
++        else if(ret == 0) {
++            LV_LOG_WARN("drm_flush_wait: timed out waiting for page flip event, freeing request");
++            drmModeAtomicFree(drm_dev->req);
++            drm_dev->req = NULL;
++            return;
++        }
+         else {
+             LV_LOG_ERROR("poll failed: %s", strerror(errno));
+             return;
+@@ -1074,6 +1178,36 @@ static void drm_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_
  
      LV_ASSERT(drm_dev->act_buf != NULL);
  
