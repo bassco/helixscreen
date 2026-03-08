@@ -124,6 +124,13 @@ json DebugBundleCollector::collect(const BundleOptions& options) {
         bundle["moonraker"] = json{{"error", e.what()}};
     }
 
+    try {
+        bundle["filament_system"] = collect_filament_system_info();
+    } catch (const std::exception& e) {
+        spdlog::warn("[DebugBundle] Failed to collect filament system info: {}", e.what());
+        bundle["filament_system"] = json{{"error", e.what()}};
+    }
+
     if (options.include_klipper_logs) {
         try {
             auto klipper_log = collect_klipper_log_tail();
@@ -535,6 +542,116 @@ json DebugBundleCollector::collect_moonraker_info() {
     }
 
     return mr;
+}
+
+// =============================================================================
+// Filament system info (AFC, Happy Hare, ValgACE, Spoolman, tool changers)
+// =============================================================================
+
+json DebugBundleCollector::filter_filament_objects(const json& object_list) {
+    static const std::vector<std::string> prefixes = {
+        "AFC", "mmu", "toolchanger", "tool ", "filament_switch_sensor", "filament_motion_sensor"};
+
+    json result = json::array();
+    if (!object_list.is_array())
+        return result;
+
+    for (const auto& obj : object_list) {
+        if (!obj.is_string())
+            continue;
+        std::string name = obj.get<std::string>();
+        for (const auto& prefix : prefixes) {
+            if (name.compare(0, prefix.size(), prefix) == 0) {
+                result.push_back(name);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+json DebugBundleCollector::collect_filament_system_info() {
+    json fs;
+    std::string base_url = get_moonraker_url();
+
+    if (base_url.empty()) {
+        spdlog::debug("[DebugBundle] Moonraker not connected, skipping filament system info");
+        fs["object_list"] = json::array();
+        fs["object_state"] = json{{"error", "Not connected"}};
+        fs["spoolman_status"] = json{{"error", "Not connected"}};
+        fs["afc_version"] = json{{"error", "Not connected"}};
+        fs["mmu_version"] = json{{"error", "Not connected"}};
+        return fs;
+    }
+
+    spdlog::info("[DebugBundle] Collecting filament system info from {}", base_url);
+
+    // Phase 1: Discover filament-related Klipper objects
+    json discovered = json::array();
+    try {
+        auto objects_resp = moonraker_get(base_url, "/printer/objects/list");
+        if (objects_resp.contains("result") && objects_resp["result"].contains("objects")) {
+            discovered = filter_filament_objects(objects_resp["result"]["objects"]);
+        }
+    } catch (const std::exception& e) {
+        spdlog::debug("[DebugBundle] object_list discovery failed: {}", e.what());
+    }
+    fs["object_list"] = discovered;
+
+    // Phase 2: Batch query all discovered objects
+    if (!discovered.empty()) {
+        try {
+            // Build query string with URL-encoded object names
+            std::string query = "/printer/objects/query?";
+            for (size_t i = 0; i < discovered.size(); ++i) {
+                if (i > 0)
+                    query += '&';
+                // Percent-encode spaces in object names (e.g. "AFC_stepper lane1")
+                std::string name = discovered[i].get<std::string>();
+                std::string encoded;
+                encoded.reserve(name.size());
+                for (char c : name) {
+                    if (c == ' ')
+                        encoded += "%20";
+                    else
+                        encoded += c;
+                }
+                query += encoded;
+            }
+            fs["object_state"] = sanitize_json(moonraker_get(base_url, query));
+        } catch (const std::exception& e) {
+            spdlog::debug("[DebugBundle] filament object_state query failed: {}", e.what());
+            fs["object_state"] = json{{"error", e.what()}};
+        }
+    } else {
+        fs["object_state"] = json::object();
+    }
+
+    // Phase 3: Additional endpoints
+    try {
+        fs["spoolman_status"] = sanitize_json(moonraker_get(base_url, "/server/spoolman/status"));
+    } catch (const std::exception& e) {
+        spdlog::debug("[DebugBundle] spoolman_status failed: {}", e.what());
+        fs["spoolman_status"] = json{{"error", e.what()}};
+    }
+
+    try {
+        fs["afc_version"] =
+            sanitize_json(moonraker_get(base_url, "/server/database/item?namespace=afc-install"));
+    } catch (const std::exception& e) {
+        spdlog::debug("[DebugBundle] afc_version failed: {}", e.what());
+        fs["afc_version"] = json{{"error", e.what()}};
+    }
+
+    try {
+        fs["mmu_version"] =
+            sanitize_json(moonraker_get(base_url, "/server/database/item?namespace=mmu-install"));
+    } catch (const std::exception& e) {
+        spdlog::debug("[DebugBundle] mmu_version failed: {}", e.what());
+        fs["mmu_version"] = json{{"error", e.what()}};
+    }
+
+    return fs;
 }
 
 // =============================================================================

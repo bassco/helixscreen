@@ -289,6 +289,80 @@ TEST_CASE("DebugBundleCollector: collect includes moonraker section", "[debug-bu
 }
 
 // ============================================================================
+// collect_filament_system_info() tests [debug-bundle][filament]
+// ============================================================================
+
+TEST_CASE("DebugBundleCollector: collect_filament_system_info returns object with expected keys",
+          "[debug-bundle][filament]") {
+    // When not connected, should return an object with error/empty sub-keys (not crash)
+    json filament = helix::DebugBundleCollector::collect_filament_system_info();
+    REQUIRE(filament.is_object());
+    REQUIRE(filament.contains("object_list"));
+    REQUIRE(filament["object_list"].is_array());
+    REQUIRE(filament.contains("object_state"));
+    REQUIRE(filament.contains("spoolman_status"));
+}
+
+TEST_CASE("DebugBundleCollector: collect_filament_system_info has all keys when disconnected",
+          "[debug-bundle][filament]") {
+    json filament = helix::DebugBundleCollector::collect_filament_system_info();
+    REQUIRE(filament.contains("afc_version"));
+    REQUIRE(filament.contains("mmu_version"));
+}
+
+TEST_CASE("DebugBundleCollector: collect includes filament_system section",
+          "[debug-bundle][filament]") {
+    json bundle = helix::DebugBundleCollector::collect();
+    REQUIRE(bundle.contains("filament_system"));
+    REQUIRE(bundle["filament_system"].is_object());
+}
+
+TEST_CASE("DebugBundleCollector: filter_filament_objects matches expected prefixes",
+          "[debug-bundle][filament]") {
+    json objects = json::array({
+        "AFC",
+        "AFC_stepper lane1",
+        "AFC_stepper lane2",
+        "AFC_hub Turtle_1",
+        "AFC_extruder extruder",
+        "AFC_buffer TN_1",
+        "AFC_lane lane3",
+        "AFC_BoxTurtle Turtle_1",
+        "mmu",
+        "toolchanger",
+        "tool T0",
+        "tool T1",
+        "filament_switch_sensor runout",
+        "filament_motion_sensor encoder",
+        "extruder",
+        "heater_bed",
+        "fan",
+        "print_stats",
+        "toolhead",
+    });
+
+    auto filtered = helix::DebugBundleCollector::filter_filament_objects(objects);
+    REQUIRE(filtered.size() == 14);
+
+    // Verify no false positives
+    for (const auto& obj : filtered) {
+        std::string name = obj.get<std::string>();
+        REQUIRE(name != "extruder");
+        REQUIRE(name != "heater_bed");
+        REQUIRE(name != "fan");
+        REQUIRE(name != "print_stats");
+        REQUIRE(name != "toolhead");
+    }
+}
+
+TEST_CASE("DebugBundleCollector: filter_filament_objects handles empty and non-array input",
+          "[debug-bundle][filament]") {
+    REQUIRE(helix::DebugBundleCollector::filter_filament_objects(json::array()).empty());
+    REQUIRE(helix::DebugBundleCollector::filter_filament_objects(json::object()).empty());
+    REQUIRE(helix::DebugBundleCollector::filter_filament_objects(json(42)).empty());
+}
+
+// ============================================================================
 // Realistic Moonraker config sanitization [debug-bundle][sanitize]
 // ============================================================================
 

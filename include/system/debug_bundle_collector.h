@@ -60,6 +60,12 @@ class DebugBundleCollector {
     /// Collect Moonraker state via REST (server info, printer state, config)
     static nlohmann::json collect_moonraker_info();
 
+    /// Collect filament system data (AFC, Happy Hare, ValgACE, Spoolman, tool changers)
+    static nlohmann::json collect_filament_system_info();
+
+    /// Filter a Klipper object list to filament-related objects (public for testing)
+    static nlohmann::json filter_filament_objects(const nlohmann::json& object_list);
+
     /// Sanitize a string value for PII patterns (emails, credentials, webhooks, tokens, MACs)
     static std::string sanitize_value(const std::string& value);
 
