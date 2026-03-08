@@ -5,6 +5,26 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.97.2] - 2026-03-08
+
+### Added
+- Decimal point button and Android-style bottom row layout in numeric keypad
+- Actual speed and flow rate display in tuning overlay
+
+### Fixed
+- Crash from object deletion in UpdateQueue callbacks; shared library addresses now detected in crash reports (#355, #356)
+- Shutdown hang from DRM page-flip poll blocking indefinitely (#334)
+- Stale LED macro entries persisted after strip deletion or config reload (#329)
+- Slider and arc knob clipping in fan and PID menus (#331)
+- Self-update restart loop caused by stale PathExists systemd watcher
+- Missing polkit rule not detected or auto-created during self-update
+- Polkit auto-creation failing on systems using .pkla format instead of .rules
+- Crash worker extracting metadata from wrong debug bundle JSON keys
+
+### Changed
+- Printer switcher toggle moved from settings to Manage Printers overlay
+- Sensors overlay headers updated to use consistent section header style with status badges
+
 ## [0.97.1] - 2026-03-07
 
 ### Added
@@ -1699,6 +1719,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.97.2]: https://github.com/prestonbrown/helixscreen/compare/v0.97.1...v0.97.2
 [0.97.1]: https://github.com/prestonbrown/helixscreen/compare/v0.97.0...v0.97.1
 [0.97.0]: https://github.com/prestonbrown/helixscreen/compare/v0.96.9...v0.97.0
 [0.96.9]: https://github.com/prestonbrown/helixscreen/compare/v0.96.8...v0.96.9
