@@ -41,6 +41,11 @@ void PrinterMotionState::init_subjects(bool register_xml) {
     // Speed/Flow subjects (percentages)
     INIT_SUBJECT_INT(speed_factor, 100, subjects_, register_xml);
     INIT_SUBJECT_INT(flow_factor, 100, subjects_, register_xml);
+
+    // Actual speed/velocity subjects
+    INIT_SUBJECT_INT(gcode_speed, 0, subjects_, register_xml);
+    INIT_SUBJECT_INT(max_velocity, 0, subjects_, register_xml);
+    INIT_SUBJECT_INT(live_extruder_velocity, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(gcode_z_offset, 0, subjects_,
                      register_xml); // Z-offset in microns from homing_origin[2]
     INIT_SUBJECT_INT(pending_z_offset_delta, 0, subjects_,
@@ -85,6 +90,13 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
             }
         }
 
+        if (toolhead.contains("max_velocity") && toolhead["max_velocity"].is_number()) {
+            int max_vel = static_cast<int>(toolhead["max_velocity"].get<double>());
+            if (lv_subject_get_int(&max_velocity_) != max_vel) {
+                lv_subject_set_int(&max_velocity_, max_vel);
+            }
+        }
+
         if (toolhead.contains("homed_axes") && toolhead["homed_axes"].is_string()) {
             std::string axes = toolhead["homed_axes"].get<std::string>();
             if (strcmp(lv_subject_get_string(&homed_axes_), axes.c_str()) != 0) {
@@ -120,6 +132,13 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
             }
         }
 
+        if (gcode_move.contains("speed") && gcode_move["speed"].is_number()) {
+            int speed_mm_s = static_cast<int>(gcode_move["speed"].get<double>());
+            if (lv_subject_get_int(&gcode_speed_) != speed_mm_s) {
+                lv_subject_set_int(&gcode_speed_, speed_mm_s);
+            }
+        }
+
         if (gcode_move.contains("speed_factor") && gcode_move["speed_factor"].is_number()) {
             int factor_pct = helix::units::json_to_percent(gcode_move, "speed_factor");
             if (lv_subject_get_int(&speed_factor_) != factor_pct) {
@@ -143,6 +162,17 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
                     lv_subject_set_int(&gcode_z_offset_, z_microns);
                     spdlog::trace("[PrinterMotionState] G-code Z-offset: {}um", z_microns);
                 }
+            }
+        }
+    }
+    // Update motion_report data (live extruder velocity)
+    if (status.contains("motion_report")) {
+        const auto& mr = status["motion_report"];
+        if (mr.contains("live_extruder_velocity") && mr["live_extruder_velocity"].is_number()) {
+            int vel_centimm =
+                static_cast<int>(mr["live_extruder_velocity"].get<double>() * 100.0);
+            if (lv_subject_get_int(&live_extruder_velocity_) != vel_centimm) {
+                lv_subject_set_int(&live_extruder_velocity_, vel_centimm);
             }
         }
     }

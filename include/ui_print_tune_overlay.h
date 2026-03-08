@@ -6,6 +6,7 @@
 #include "ui_save_z_offset_modal.h"
 
 #include "lvgl/lvgl.h"
+#include "observer_factory.h"
 #include "overlay_base.h"
 #include "subject_managed_panel.h"
 
@@ -181,6 +182,8 @@ class PrintTuneOverlay : public OverlayBase {
     void setup_panel();
     void update_display();
     void sync_to_state();
+    void update_actual_speed_display();
+    void update_actual_flow_display();
 
     //
     // === Dependencies ===
@@ -204,12 +207,18 @@ class PrintTuneOverlay : public OverlayBase {
     lv_subject_t z_closer_icon_subject_;     ///< Icon name for closer button (kinematic-aware)
     lv_subject_t z_farther_icon_subject_;    ///< Icon name for farther button (kinematic-aware)
 
+    // Actual speed/flow display subjects
+    lv_subject_t tune_actual_speed_subject_;
+    lv_subject_t tune_actual_flow_subject_;
+
     // Subject storage buffers
     char tune_speed_buf_[16] = "100%";
     char tune_flow_buf_[16] = "100%";
     char tune_z_offset_buf_[16] = "0.000mm";
     char z_closer_icon_buf_[24] = "arrow_down";
     char z_farther_icon_buf_[24] = "arrow_up";
+    char tune_actual_speed_buf_[32] = "";
+    char tune_actual_flow_buf_[32] = "";
 
     //
     // === State ===
@@ -222,6 +231,15 @@ class PrintTuneOverlay : public OverlayBase {
     int selected_z_step_idx_ = Z_STEP_DEFAULT;
     int speed_percent_ = 100;
     int flow_percent_ = 100;
+
+    //
+    // === Observers ===
+    //
+
+    ObserverGuard speed_observer_;
+    ObserverGuard gcode_speed_observer_;
+    ObserverGuard max_velocity_observer_;
+    ObserverGuard extruder_vel_observer_;
 
     //
     // === Modals ===

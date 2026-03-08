@@ -29,6 +29,8 @@
                   style_pad_gap="#space_sm">
             <text_small text="Print Speed" translation_tag="Print Speed"/>
             <text_heading name="speed_display" bind_text="tune_speed_display"/>
+            <lv_obj flex_grow="1" style_pad_all="0" height="1" scrollable="false"/>
+            <text_small name="actual_speed_display" bind_text="tune_actual_speed_display" style_text_color="#text_muted"/>
           </lv_obj>
           <lv_obj width="100%"
                   height="content" style_pad_all="0" flex_flow="row" style_pad_gap="#space_xxs" scrollable="false">
@@ -55,6 +57,8 @@
                   style_pad_gap="#space_sm">
             <text_small text="Flow Rate" translation_tag="Flow Rate"/>
             <text_heading name="flow_display" bind_text="tune_flow_display"/>
+            <lv_obj flex_grow="1" style_pad_all="0" height="1" scrollable="false"/>
+            <text_small name="actual_flow_display" bind_text="tune_actual_flow_display" style_text_color="#text_muted"/>
           </lv_obj>
           <lv_obj width="100%"
                   height="content" style_pad_all="0" flex_flow="row" style_pad_gap="#space_xxs" scrollable="false">

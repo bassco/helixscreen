@@ -390,7 +390,8 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
 
             // gcode_move
             if (objects.contains("gcode_move")) {
-                status_obj["gcode_move"] = {{"speed_factor", 1.0},
+                status_obj["gcode_move"] = {{"speed", 100.0},
+                                            {"speed_factor", 1.0},
                                             {"extrude_factor", 1.0},
                                             {"absolute_coordinates", true},
                                             {"absolute_extrude", true},
