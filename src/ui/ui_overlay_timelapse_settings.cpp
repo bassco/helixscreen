@@ -44,8 +44,13 @@ void init_global_timelapse_settings(MoonrakerAPI* api) {
         return;
     }
     g_timelapse_settings = std::make_unique<TimelapseSettingsOverlay>(api);
-    StaticPanelRegistry::instance().register_destroy("TimelapseSettingsOverlay",
-                                                     []() { g_timelapse_settings.reset(); });
+    StaticPanelRegistry::instance().register_destroy("TimelapseSettingsOverlay", []() {
+        if (g_timelapse_settings_panel) {
+            NavigationManager::instance().unregister_overlay_instance(g_timelapse_settings_panel);
+        }
+        g_timelapse_settings_panel = nullptr;
+        g_timelapse_settings.reset();
+    });
     spdlog::trace("[Timelapse Settings] TimelapseSettingsOverlay initialized");
 }
 

@@ -64,7 +64,10 @@ void ui_keypad_init_subjects() {
     subjects_initialized = true;
 
     // Self-register cleanup — ensures deinit runs before lv_deinit()
-    StaticPanelRegistry::instance().register_destroy("KeypadSubjects", ui_keypad_deinit_subjects);
+    StaticPanelRegistry::instance().register_destroy("KeypadSubjects", []() {
+        keypad_widget = nullptr;
+        ui_keypad_deinit_subjects();
+    });
 
     spdlog::debug("[Keypad] Subjects initialized");
 }

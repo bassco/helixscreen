@@ -1511,7 +1511,10 @@ void destroy_ams_panel_ui() {
 AmsPanel& get_global_ams_panel() {
     if (!g_ams_panel) {
         g_ams_panel = std::make_unique<AmsPanel>(get_printer_state(), get_moonraker_api());
-        StaticPanelRegistry::instance().register_destroy("AmsPanel", []() { g_ams_panel.reset(); });
+        StaticPanelRegistry::instance().register_destroy("AmsPanel", []() {
+            destroy_ams_panel_ui();
+            g_ams_panel.reset();
+        });
     }
 
     // Lazy create the panel UI if not yet created

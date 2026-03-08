@@ -45,6 +45,9 @@ void init_global_timelapse_install(MoonrakerAPI* api) {
     }
     g_timelapse_install = std::make_unique<TimelapseInstallOverlay>(api);
     StaticPanelRegistry::instance().register_destroy("TimelapseInstallOverlay", []() {
+        if (g_timelapse_install_panel) {
+            NavigationManager::instance().unregister_overlay_instance(g_timelapse_install_panel);
+        }
         g_timelapse_install_panel = nullptr;
         g_timelapse_install.reset();
     });

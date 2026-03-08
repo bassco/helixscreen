@@ -60,6 +60,10 @@ using helix::gcode::resolve_gcode_filename;
 // Global instance for legacy API and resize callback
 static std::unique_ptr<PrintStatusPanel> g_print_status_panel;
 
+// Cached widget pointer for lazy creation (separate from overlay_root_ which
+// is managed by OverlayBase). Declared here so teardown callback can null it.
+static lv_obj_t* s_cached_panel = nullptr;
+
 using helix::ui::temperature::centi_to_degrees;
 using helix::ui::temperature::format_temperature_pair;
 
@@ -72,8 +76,13 @@ using helix::ui::observe_string;
 PrintStatusPanel& get_global_print_status_panel() {
     if (!g_print_status_panel) {
         g_print_status_panel = std::make_unique<PrintStatusPanel>(get_printer_state(), nullptr);
-        StaticPanelRegistry::instance().register_destroy("PrintStatusPanel",
-                                                         []() { g_print_status_panel.reset(); });
+        StaticPanelRegistry::instance().register_destroy("PrintStatusPanel", []() {
+            if (s_cached_panel && g_print_status_panel) {
+                g_print_status_panel->destroy_overlay_ui(s_cached_panel);
+            }
+            s_cached_panel = nullptr;
+            g_print_status_panel.reset();
+        });
     }
     return *g_print_status_panel;
 }
@@ -693,11 +702,6 @@ void PrintStatusPanel::on_ui_destroyed() {
     requested_gcode_filename_.clear();
     pending_gcode_filename_.clear();
 }
-
-// Cached widget pointer for lazy creation (separate from overlay_root_ which
-// is managed by OverlayBase). This is the "external" reference passed to
-// destroy_overlay_ui() so it gets nulled on close.
-static lv_obj_t* s_cached_panel = nullptr;
 
 bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
     if (!parent_screen) {

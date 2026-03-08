@@ -998,8 +998,10 @@ AmsOverviewPanel& get_global_ams_overview_panel() {
     if (!g_ams_overview_panel) {
         g_ams_overview_panel =
             std::make_unique<AmsOverviewPanel>(get_printer_state(), get_moonraker_api());
-        StaticPanelRegistry::instance().register_destroy("AmsOverviewPanel",
-                                                         []() { g_ams_overview_panel.reset(); });
+        StaticPanelRegistry::instance().register_destroy("AmsOverviewPanel", []() {
+            destroy_ams_overview_panel_ui();
+            g_ams_overview_panel.reset();
+        });
     }
 
     // Lazy create the panel UI if not yet created
