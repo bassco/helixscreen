@@ -82,11 +82,12 @@ LimitNOFILE=65536
 LimitNPROC=4096
 
 # Security hardening
-# Full INSTALL_DIR is writable (not just config/) so in-app self-updates
-# can replace binaries without sudo.  ProtectSystem=strict prevents writes
-# anywhere else; NoNewPrivileges blocks privilege escalation.
+# Full INSTALL_DIR + its parent are writable so in-app self-updates can do
+# an atomic directory swap (mv old; mv new) instead of a racy in-place
+# content replacement.  ProtectSystem=strict prevents writes anywhere else;
+# NoNewPrivileges blocks privilege escalation.
 ProtectSystem=strict
-ReadWritePaths=@@INSTALL_DIR@@ /var/log
+ReadWritePaths=@@INSTALL_DIR@@ @@INSTALL_PARENT@@ /var/log
 StateDirectory=helixscreen
 StateDirectoryMode=0700
 PrivateTmp=true

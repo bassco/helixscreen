@@ -41,6 +41,10 @@ setup() {
     grep -q 'ReadWritePaths=' "$SERVICE_TEMPLATE"
 }
 
+@test "service template has @@INSTALL_PARENT@@ in ReadWritePaths" {
+    grep -q 'ReadWritePaths=.*@@INSTALL_PARENT@@' "$SERVICE_TEMPLATE"
+}
+
 @test "service template HAS ProtectSystem=strict" {
     grep -q 'ProtectSystem=strict' "$SERVICE_TEMPLATE"
 }
@@ -117,10 +121,17 @@ setup() {
 
 @test "no @@ markers remain after full substitution" {
     cp "$SERVICE_TEMPLATE" "$BATS_TEST_TMPDIR/test.service"
-    sed -i '' "s|@@HELIX_USER@@|biqu|g;s|@@HELIX_GROUP@@|biqu|g;s|@@INSTALL_DIR@@|/opt/helixscreen|g" "$BATS_TEST_TMPDIR/test.service" 2>/dev/null || \
-    sed -i "s|@@HELIX_USER@@|biqu|g;s|@@HELIX_GROUP@@|biqu|g;s|@@INSTALL_DIR@@|/opt/helixscreen|g" "$BATS_TEST_TMPDIR/test.service"
+    sed -i '' "s|@@HELIX_USER@@|biqu|g;s|@@HELIX_GROUP@@|biqu|g;s|@@INSTALL_DIR@@|/opt/helixscreen|g;s|@@INSTALL_PARENT@@|/opt|g" "$BATS_TEST_TMPDIR/test.service" 2>/dev/null || \
+    sed -i "s|@@HELIX_USER@@|biqu|g;s|@@HELIX_GROUP@@|biqu|g;s|@@INSTALL_DIR@@|/opt/helixscreen|g;s|@@INSTALL_PARENT@@|/opt|g" "$BATS_TEST_TMPDIR/test.service"
     # Line 47 intentionally preserves @@HELIX_USER@@ in a runtime self-heal command
     # using quote-splitting (@@""HELIX_USER""@@) to survive the installer's sed pass.
     # Exclude that line when checking for un-substituted markers.
     ! grep -v '@@""HELIX_USER""@@' "$BATS_TEST_TMPDIR/test.service" | grep -q '@@'
+}
+
+@test "substitution replaces @@INSTALL_PARENT@@ with parent of install dir" {
+    cp "$SERVICE_TEMPLATE" "$BATS_TEST_TMPDIR/test.service"
+    sed -i '' "s|@@INSTALL_DIR@@|/opt/helixscreen|g;s|@@INSTALL_PARENT@@|/opt|g" "$BATS_TEST_TMPDIR/test.service" 2>/dev/null || \
+    sed -i "s|@@INSTALL_DIR@@|/opt/helixscreen|g;s|@@INSTALL_PARENT@@|/opt|g" "$BATS_TEST_TMPDIR/test.service"
+    grep -q 'ReadWritePaths=/opt/helixscreen /opt /var/log' "$BATS_TEST_TMPDIR/test.service"
 }

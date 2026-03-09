@@ -542,11 +542,11 @@ extract_release() {
             log_info "Backed up existing helixscreen.env"
         fi
 
-        # Self-update under NoNewPrivileges: the parent directory (e.g. /opt)
-        # is read-only under ProtectSystem=strict, so we can't do an atomic
-        # directory rename.  Instead, replace contents in-place within
-        # INSTALL_DIR — this only needs write access to INSTALL_DIR itself
-        # (covered by ReadWritePaths in the service file).
+        # Under NoNewPrivileges (self-update from in-app), we prefer the
+        # atomic swap (mv old; mv new) if the parent dir is writable (service
+        # file v0.97.4+ adds ReadWritePaths for it).  Fall back to the racy
+        # in-place content replacement only on older service files where the
+        # parent is still read-only under ProtectSystem=strict.
         if _has_no_new_privs; then
             # Verify INSTALL_DIR is writable.  Older service files only grant
             # ReadWritePaths to config/, so ProtectSystem=strict blocks writes
@@ -562,80 +562,90 @@ extract_release() {
             fi
             rm -f "${INSTALL_DIR}/.update_test" 2>/dev/null
 
-            log_info "Self-update: replacing install contents in-place..."
+            # Test if parent dir is writable — if so, skip the racy in-place
+            # path and fall through to the atomic swap below.
+            local _parent_dir
+            _parent_dir="$(dirname "${INSTALL_DIR}")"
+            if touch "${_parent_dir}/.update_test" 2>/dev/null; then
+                rm -f "${_parent_dir}/.update_test" 2>/dev/null
+                log_info "Parent dir writable — using atomic swap"
+                # Fall through to the standard atomic swap path below
+            else
+                log_info "Self-update: replacing install contents in-place (parent read-only)..."
 
-            # Remove old contents (except config/).
-            # Don't use || true — if rm fails, we must not proceed to mv
-            # because mv can't overwrite a non-empty directory.
-            local _inplace_failed=false
-            for _item in "${INSTALL_DIR}"/*; do
-                [ -e "$_item" ] || continue
-                _base=$(basename "$_item")
-                [ "$_base" = "config" ] && continue
-                if ! rm -rf "$_item"; then
-                    log_error "Failed to remove old ${_base}"
-                    _inplace_failed=true
-                fi
-            done
-            # Hidden files too
-            for _item in "${INSTALL_DIR}"/.*; do
-                [ -e "$_item" ] || continue
-                _base=$(basename "$_item")
-                case "$_base" in .|..) continue ;; esac
-                rm -rf "$_item" 2>/dev/null || true
-            done
+                # Remove old contents (except config/).
+                # Don't use || true — if rm fails, we must not proceed to mv
+                # because mv can't overwrite a non-empty directory.
+                local _inplace_failed=false
+                for _item in "${INSTALL_DIR}"/*; do
+                    [ -e "$_item" ] || continue
+                    _base=$(basename "$_item")
+                    [ "$_base" = "config" ] && continue
+                    if ! rm -rf "$_item"; then
+                        log_error "Failed to remove old ${_base}"
+                        _inplace_failed=true
+                    fi
+                done
+                # Hidden files too
+                for _item in "${INSTALL_DIR}"/.*; do
+                    [ -e "$_item" ] || continue
+                    _base=$(basename "$_item")
+                    case "$_base" in .|..) continue ;; esac
+                    rm -rf "$_item" 2>/dev/null || true
+                done
 
-            if [ "$_inplace_failed" = true ]; then
-                log_error "In-place update failed. Install may be in a broken state."
-                log_error "Fix: re-run the installer: curl -fsSL https://install.helixscreen.org | bash"
-                rm -rf "$extract_dir"
-                exit 1
-            fi
-
-            # Move new contents in (except config/)
-            for _item in "${new_install}"/*; do
-                [ -e "$_item" ] || continue
-                _base=$(basename "$_item")
-                [ "$_base" = "config" ] && continue
-                if ! mv "$_item" "${INSTALL_DIR}/${_base}"; then
-                    log_error "Failed to install: ${_base}"
+                if [ "$_inplace_failed" = true ]; then
+                    log_error "In-place update failed. Install may be in a broken state."
+                    log_error "Fix: re-run the installer: curl -fsSL https://install.helixscreen.org | bash"
                     rm -rf "$extract_dir"
                     exit 1
                 fi
-            done
-            # Hidden files too
-            for _item in "${new_install}"/.*; do
-                [ -e "$_item" ] || continue
-                _base=$(basename "$_item")
-                case "$_base" in .|..) continue ;; esac
-                mv "$_item" "${INSTALL_DIR}/${_base}" 2>/dev/null || true
-            done
 
-            # Merge new config defaults without overwriting user files.
-            # New versions may ship config files that didn't exist before.
-            if [ -d "${new_install}/config" ]; then
-                for _item in "${new_install}/config"/*; do
+                # Move new contents in (except config/)
+                for _item in "${new_install}"/*; do
                     [ -e "$_item" ] || continue
                     _base=$(basename "$_item")
-                    if [ ! -e "${INSTALL_DIR}/config/${_base}" ]; then
-                        mv "$_item" "${INSTALL_DIR}/config/${_base}" 2>/dev/null || true
-                        log_info "Added new config default: ${_base}"
-                    elif [ -d "$_item" ] && [ -d "${INSTALL_DIR}/config/${_base}" ]; then
-                        # Merge directory contents (e.g. printer_database.d/)
-                        for _subitem in "$_item"/*; do
-                            [ -e "$_subitem" ] || continue
-                            _subbase=$(basename "$_subitem")
-                            if [ ! -e "${INSTALL_DIR}/config/${_base}/${_subbase}" ]; then
-                                mv "$_subitem" "${INSTALL_DIR}/config/${_base}/${_subbase}" 2>/dev/null || true
-                            fi
-                        done
+                    [ "$_base" = "config" ] && continue
+                    if ! mv "$_item" "${INSTALL_DIR}/${_base}"; then
+                        log_error "Failed to install: ${_base}"
+                        rm -rf "$extract_dir"
+                        exit 1
                     fi
                 done
-            fi
+                # Hidden files too
+                for _item in "${new_install}"/.*; do
+                    [ -e "$_item" ] || continue
+                    _base=$(basename "$_item")
+                    case "$_base" in .|..) continue ;; esac
+                    mv "$_item" "${INSTALL_DIR}/${_base}" 2>/dev/null || true
+                done
 
-            rm -rf "$extract_dir"
-            log_success "Updated in-place at ${INSTALL_DIR}"
-            return 0
+                # Merge new config defaults without overwriting user files.
+                # New versions may ship config files that didn't exist before.
+                if [ -d "${new_install}/config" ]; then
+                    for _item in "${new_install}/config"/*; do
+                        [ -e "$_item" ] || continue
+                        _base=$(basename "$_item")
+                        if [ ! -e "${INSTALL_DIR}/config/${_base}" ]; then
+                            mv "$_item" "${INSTALL_DIR}/config/${_base}" 2>/dev/null || true
+                            log_info "Added new config default: ${_base}"
+                        elif [ -d "$_item" ] && [ -d "${INSTALL_DIR}/config/${_base}" ]; then
+                            # Merge directory contents (e.g. printer_database.d/)
+                            for _subitem in "$_item"/*; do
+                                [ -e "$_subitem" ] || continue
+                                _subbase=$(basename "$_subitem")
+                                if [ ! -e "${INSTALL_DIR}/config/${_base}/${_subbase}" ]; then
+                                    mv "$_subitem" "${INSTALL_DIR}/config/${_base}/${_subbase}" 2>/dev/null || true
+                                fi
+                            done
+                        fi
+                    done
+                fi
+
+                rm -rf "$extract_dir"
+                log_success "Updated in-place at ${INSTALL_DIR}"
+                return 0
+            fi
         fi
 
         # Standard path (fresh install or non-self-update with sudo access):

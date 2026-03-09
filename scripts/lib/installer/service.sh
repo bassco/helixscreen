@@ -89,9 +89,13 @@ install_service_systemd() {
     local helix_group="${KLIPPER_USER:-root}"
     local install_dir="${INSTALL_DIR:-/opt/helixscreen}"
 
+    local install_parent
+    install_parent="$(dirname "${install_dir}")"
+
     _sed_inplace "s|@@HELIX_USER@@|${helix_user}|g" "$service_dest"
     _sed_inplace "s|@@HELIX_GROUP@@|${helix_group}|g" "$service_dest"
     _sed_inplace "s|@@INSTALL_DIR@@|${install_dir}|g" "$service_dest"
+    _sed_inplace "s|@@INSTALL_PARENT@@|${install_parent}|g" "$service_dest"
 
     if ! $SUDO systemctl daemon-reload; then
         log_error "Failed to reload systemd daemon."

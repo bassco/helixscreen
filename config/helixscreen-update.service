@@ -31,7 +31,8 @@ ExecStartPre=/bin/sh -c '\
     WDIR=$$(grep "^WorkingDirectory=" "$$DEST" | cut -d= -f2); \
     IDIR=$$(dirname "$$(dirname "$$SRC")"); \
     cp "$$SRC" "$$DEST"; \
-    sed -i "s|@@HELIX_USER@@|$${USER:-root}|g; s|@@HELIX_GROUP@@|$${GROUP:-root}|g; s|@@INSTALL_DIR@@|$${IDIR}|g" "$$DEST"; \
+    PDIR=$$(dirname "$$IDIR"); \
+    sed -i "s|@@HELIX_USER@@|$${USER:-root}|g; s|@@HELIX_GROUP@@|$${GROUP:-root}|g; s|@@INSTALL_DIR@@|$${IDIR}|g; s|@@INSTALL_PARENT@@|$${PDIR}|g" "$$DEST"; \
     systemctl daemon-reload; \
   fi'
 
