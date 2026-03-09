@@ -321,6 +321,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_temperature.xml");
     register_xml("components/panel_widget_temp_stack.xml");
     register_xml("components/panel_widget_temp_carousel.xml");
+    register_xml("components/panel_widget_preheat.xml");
     register_xml("components/panel_widget_led.xml");
     register_xml("components/panel_widget_led_controls.xml");
     register_xml("components/panel_widget_humidity.xml");

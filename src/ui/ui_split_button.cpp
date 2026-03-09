@@ -36,9 +36,13 @@ struct SplitButtonData {
     bool show_selection{true};
 };
 
+// Store data on main_btn (first child), NOT on sb itself.
+// Callers (preheat_widget) may overwrite sb's user_data.
 SplitButtonData* get_data(lv_obj_t* sb) {
     if (!sb) return nullptr;
-    auto* data = static_cast<SplitButtonData*>(lv_obj_get_user_data(sb));
+    lv_obj_t* first_child = lv_obj_get_child(sb, 0);
+    if (!first_child) return nullptr;
+    auto* data = static_cast<SplitButtonData*>(lv_obj_get_user_data(first_child));
     if (!data || data->magic != SplitButtonData::MAGIC) return nullptr;
     return data;
 }
@@ -104,6 +108,23 @@ void split_button_style_changed_cb(lv_event_t* e) {
 }
 
 /**
+ * @brief Constrain label width to available space in main_btn.
+ * Must be called after any lv_label_set_text() which resets label to content width.
+ */
+void constrain_label_width(SplitButtonData* data) {
+    if (!data || !data->label || !data->main_btn) return;
+
+    int32_t avail = lv_obj_get_content_width(data->main_btn);
+    if (data->icon) {
+        avail -= lv_obj_get_width(data->icon);
+        avail -= lv_obj_get_style_pad_column(data->main_btn, LV_PART_MAIN);
+    }
+    if (avail > 0) {
+        lv_obj_set_width(data->label, avail);
+    }
+}
+
+/**
  * @brief Update the button label from current dropdown selection
  */
 void update_label_from_selection(SplitButtonData* data) {
@@ -119,6 +140,7 @@ void update_label_from_selection(SplitButtonData* data) {
     } else {
         lv_label_set_text(data->label, selected_text);
     }
+    constrain_label_width(data);
 }
 
 /**
@@ -132,6 +154,26 @@ void main_btn_clicked_cb(lv_event_t* e) {
 }
 
 /**
+ * @brief Style the dropdown list to match the button variant colors
+ */
+void style_dropdown_list(lv_obj_t* sb, lv_obj_t* list) {
+    if (!sb || !list) return;
+
+    lv_color_t bg_color = lv_obj_get_style_bg_color(sb, LV_PART_MAIN);
+    lv_color_t text_color = theme_manager_get_contrast_color(bg_color);
+
+    lv_obj_set_style_bg_color(list, bg_color, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_text_color(list, text_color, LV_PART_MAIN);
+    lv_obj_set_style_border_color(list, text_color, LV_PART_MAIN);
+    lv_obj_set_style_border_opa(list, LV_OPA_30, LV_PART_MAIN);
+    // Selected item highlight
+    lv_obj_set_style_bg_color(list, text_color, LV_PART_SELECTED);
+    lv_obj_set_style_bg_opa(list, LV_OPA_20, LV_PART_SELECTED);
+    lv_obj_set_style_text_color(list, text_color, LV_PART_SELECTED);
+}
+
+/**
  * @brief Arrow button clicked — open dropdown + play sound
  */
 void arrow_btn_clicked_cb(lv_event_t* e) {
@@ -140,8 +182,18 @@ void arrow_btn_clicked_cb(lv_event_t* e) {
     auto* data = get_data(sb);
     if (!data || !data->dropdown) return;
 
+    lv_event_stop_bubbling(e);  // Don't trigger container's CLICKED (main action)
     SoundManager::instance().play("button_tap");
     lv_dropdown_open(data->dropdown);
+
+    // Style and reposition the list
+    lv_obj_t* list = lv_dropdown_get_list(data->dropdown);
+    if (list) {
+        style_dropdown_list(sb, list);
+        // LVGL positions relative to the dropdown obj (right side of flex row).
+        // Reposition: align to the split button container, right-aligned with the arrow.
+        lv_obj_align_to(list, sb, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 0);
+    }
 }
 
 /**
@@ -166,8 +218,10 @@ void split_button_delete_cb(lv_event_t* e) {
     if (!data) return;
 
     lv_free(data->text_format);
+    if (data->main_btn) {
+        lv_obj_set_user_data(data->main_btn, nullptr);
+    }
     delete data;
-    lv_obj_set_user_data(sb, nullptr);
 }
 
 /**
@@ -219,6 +273,7 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     lv_obj_t* sb = lv_obj_create(parent);
     lv_obj_set_height(sb, theme_manager_get_spacing("button_height"));
     lv_obj_set_style_pad_all(sb, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(sb, 0, LV_PART_MAIN);
     lv_obj_set_flex_flow(sb, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(sb, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_remove_flag(sb, LV_OBJ_FLAG_SCROLLABLE);
@@ -238,31 +293,41 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     const char* icon_name = lv_xml_get_value_of(attrs, "icon");
     const char* options = lv_xml_get_value_of(attrs, "options");
 
-    // Allocate user data
+    // Allocate user data (stored on main_btn child, not sb — see get_data())
     auto* data = new SplitButtonData{};
-    lv_obj_set_user_data(sb, data);
 
-    // --- Main button (ghost, flex_grow=1) ---
-    data->main_btn = lv_button_create(sb);
+    // --- Main button area (clickable lv_obj, flex_grow=1) ---
+    // Using lv_obj instead of lv_button to avoid button's content-based min sizing
+    data->main_btn = lv_obj_create(sb);
+    lv_obj_set_user_data(data->main_btn, data);  // Store data here (sb's user_data is for callers)
+    lv_obj_add_flag(data->main_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(data->main_btn, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(data->main_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(data->main_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(data->main_btn, 0, LV_PART_MAIN);
     lv_obj_set_flex_grow(data->main_btn, 1);
+    lv_obj_set_width(data->main_btn, 0);
+    lv_obj_set_style_min_width(data->main_btn, 0, LV_PART_MAIN);
     lv_obj_set_height(data->main_btn, lv_pct(100));
+    lv_obj_remove_flag(data->main_btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(data->main_btn, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(data->main_btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(data->main_btn, theme_manager_get_spacing("space_xs"), LV_PART_MAIN);
-    lv_obj_set_style_pad_left(data->main_btn, theme_manager_get_spacing("space_sm"), LV_PART_MAIN);
+    lv_obj_set_style_pad_column(data->main_btn, theme_manager_get_spacing("space_xxs"), LV_PART_MAIN);
+    lv_obj_set_style_pad_left(data->main_btn, theme_manager_get_spacing("space_xs"), LV_PART_MAIN);
 
     // Icon (optional)
     if (icon_name && strlen(icon_name) > 0) {
         data->icon = create_icon(data->main_btn, icon_name);
     }
 
-    // Label
+    // Label — width=1 so flex doesn't expand main_btn to content size.
+    // Height = 1 line so DOTS mode truncates (DOTS needs height overflow to trigger).
+    // Correct width is set by async callback after layout resolves.
     data->label = lv_label_create(data->main_btn);
+    lv_obj_set_width(data->label, 1);
+    const lv_font_t* text_font = lv_obj_get_style_text_font(data->label, LV_PART_MAIN);
+    lv_obj_set_height(data->label, lv_font_get_line_height(text_font));
+    lv_label_set_long_mode(data->label, LV_LABEL_LONG_MODE_DOTS);
     lv_label_set_text(data->label, text);
 
     // Main button click handler
@@ -279,13 +344,16 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_CLICKABLE);
 
-    // --- Arrow button (ghost, fixed width ~40px) ---
-    data->arrow_btn = lv_button_create(sb);
+    // --- Arrow button (ghost, covers full area right of divider) ---
+    data->arrow_btn = lv_obj_create(sb);
+    lv_obj_add_flag(data->arrow_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(data->arrow_btn, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(data->arrow_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(data->arrow_btn, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(data->arrow_btn, 0, LV_PART_MAIN);
-    lv_obj_set_size(data->arrow_btn, 40, lv_pct(100));
+    lv_obj_set_style_pad_left(data->arrow_btn, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(data->arrow_btn, 6, LV_PART_MAIN);
+    lv_obj_set_size(data->arrow_btn, LV_SIZE_CONTENT, lv_pct(100));
+    lv_obj_remove_flag(data->arrow_btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(data->arrow_btn, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(data->arrow_btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -301,13 +369,14 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     // Arrow button click handler
     lv_obj_add_event_cb(data->arrow_btn, arrow_btn_clicked_cb, LV_EVENT_CLICKED, nullptr);
 
-    // --- Hidden dropdown (zero size, for popup list) ---
+    // --- Hidden dropdown (zero-height, full-width for popup list positioning) ---
     data->dropdown = lv_dropdown_create(sb);
-    lv_obj_set_size(data->dropdown, 0, 0);
+    lv_obj_set_size(data->dropdown, LV_SIZE_CONTENT, 0);
     lv_obj_set_style_opa(data->dropdown, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(data->dropdown, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(data->dropdown, 0, LV_PART_MAIN);
     lv_obj_remove_flag(data->dropdown, LV_OBJ_FLAG_CLICKABLE);
+    lv_dropdown_set_dir(data->dropdown, LV_DIR_BOTTOM);
 
     if (options && strlen(options) > 0) {
         lv_dropdown_set_options(data->dropdown, options);
@@ -315,6 +384,46 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
 
     // Dropdown value changed handler
     lv_obj_add_event_cb(data->dropdown, dropdown_value_changed_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    // Compute label width from available space after layout resolves.
+    // Must defer because flex_grow sizes aren't final during create.
+    lv_async_call(
+        [](void* user_data) {
+            auto* sb = static_cast<lv_obj_t*>(user_data);
+            auto* d = get_data(sb);
+            if (!d || !d->label || !d->main_btn) return;
+
+            lv_obj_update_layout(sb);
+
+            int32_t avail = lv_obj_get_content_width(d->main_btn);
+            if (d->icon) {
+                avail -= lv_obj_get_width(d->icon);
+                avail -= lv_obj_get_style_pad_column(d->main_btn, LV_PART_MAIN);
+            }
+            if (avail < 0) avail = 0;
+            lv_obj_set_width(d->label, avail);
+            spdlog::debug("[ui_split_button] Label width set to {} (main_btn content_w={})",
+                          avail, lv_obj_get_content_width(d->main_btn));
+        },
+        sb);
+
+    // Also recompute label width on resize (breakpoint changes, etc.)
+    lv_obj_add_event_cb(
+        sb,
+        [](lv_event_t* e) {
+            lv_obj_t* obj = lv_event_get_target_obj(e);
+            auto* d = get_data(obj);
+            if (!d || !d->label || !d->main_btn) return;
+
+            int32_t avail = lv_obj_get_content_width(d->main_btn);
+            if (d->icon) {
+                avail -= lv_obj_get_width(d->icon);
+                avail -= lv_obj_get_style_pad_column(d->main_btn, LV_PART_MAIN);
+            }
+            if (avail < 0) avail = 0;
+            lv_obj_set_width(d->label, avail);
+        },
+        LV_EVENT_SIZE_CHANGED, nullptr);
 
     // Register event handlers on container
     lv_obj_add_event_cb(sb, split_button_style_changed_cb, LV_EVENT_STYLE_CHANGED, nullptr);
@@ -398,5 +507,6 @@ void ui_split_button_set_text(lv_obj_t* sb, const char* text) {
     auto* data = get_data(sb);
     if (!data || !data->label || !text) return;
     lv_label_set_text(data->label, text);
+    constrain_label_width(data);
     lv_obj_invalidate(sb);
 }
