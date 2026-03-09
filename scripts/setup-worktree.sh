@@ -231,6 +231,27 @@ if [[ -d "$MAIN_OBJ" ]]; then
         CLONE_END=$(date +%s)
         NEW_COUNT=$(find "$WORKTREE_OBJ" -name "*.o" 2>/dev/null | wc -l | tr -d ' ')
         echo -e "  build/obj: ${GREEN}cloned $NEW_COUNT objects in $((CLONE_END - CLONE_START))s${RESET}"
+
+        # Validate object file architecture — cross-compilation leaves wrong-arch .o files
+        SAMPLE_OBJ=$(find "$WORKTREE_OBJ" -name "*.o" -print -quit 2>/dev/null)
+        if [[ -n "$SAMPLE_OBJ" ]]; then
+            SAMPLE_ARCH=$(objdump -f "$SAMPLE_OBJ" 2>/dev/null | grep -m1 "architecture:" | awk -F',' '{print $1}' | awk '{print $NF}')
+            HOST_ARCH_CHECK=$(uname -m)
+            ARCH_MISMATCH=false
+            case "$HOST_ARCH_CHECK" in
+                x86_64)
+                    [[ "$SAMPLE_ARCH" != *"x86-64"* && "$SAMPLE_ARCH" != *"i386"* ]] && ARCH_MISMATCH=true
+                    ;;
+                aarch64)
+                    [[ "$SAMPLE_ARCH" != *"aarch64"* ]] && ARCH_MISMATCH=true
+                    ;;
+            esac
+            if [[ "$ARCH_MISMATCH" == "true" ]]; then
+                echo -e "  build/obj: ${YELLOW}wrong architecture ($SAMPLE_ARCH for $HOST_ARCH_CHECK), clearing — will rebuild from scratch${RESET}"
+                rm -rf "$WORKTREE_OBJ"
+                mkdir -p "$WORKTREE_OBJ"
+            fi
+        fi
     fi
 else
     echo -e "  build/obj: ${YELLOW}main tree not built yet (will build from scratch)${RESET}"
@@ -247,7 +268,7 @@ fi
 # These are expensive to build and rarely change
 echo -e "${CYAN}Symlinking compiled libraries from main tree...${RESET}"
 
-MAIN_LIBS=("libhv.a")
+MAIN_LIBS=("libhv.a" "libwpa_client.a")
 for lib in "${MAIN_LIBS[@]}"; do
     MAIN_LIB="$MAIN_TREE/build/lib/$lib"
     WORKTREE_LIB="$WORKTREE_PATH/build/lib/$lib"
@@ -289,6 +310,36 @@ if [[ -f "$MAIN_PCH" ]]; then
 else
     echo -e "  lvgl_pch.h.gch: ${YELLOW}not found in main tree (will build from scratch)${RESET}"
 fi
+
+# Step 5b: Validate library architectures
+# Cross-compilation (make pi-test) can leave ARM .a files in build/lib/.
+# Detect and remove them so make rebuilds for the correct architecture.
+echo -e "${CYAN}Validating library architectures...${RESET}"
+HOST_ARCH=$(uname -m)
+for lib_file in "$WORKTREE_PATH/build/lib/"*.a; do
+    [[ -f "$lib_file" ]] || continue
+    [[ -L "$lib_file" ]] && continue  # Skip symlinks — they point to main tree
+    LIB_NAME=$(basename "$lib_file")
+    # Check first object file's architecture
+    LIB_ARCH=$(objdump -f "$lib_file" 2>/dev/null | grep -m1 "architecture:" | awk -F',' '{print $1}' | awk '{print $NF}')
+    if [[ -n "$LIB_ARCH" ]]; then
+        case "$HOST_ARCH" in
+            x86_64)
+                if [[ "$LIB_ARCH" != *"x86-64"* && "$LIB_ARCH" != *"i386"* ]]; then
+                    echo -e "  $LIB_NAME: ${YELLOW}wrong architecture ($LIB_ARCH), removing — will rebuild${RESET}"
+                    rm -f "$lib_file"
+                fi
+                ;;
+            aarch64)
+                if [[ "$LIB_ARCH" != *"aarch64"* ]]; then
+                    echo -e "  $LIB_NAME: ${YELLOW}wrong architecture ($LIB_ARCH), removing — will rebuild${RESET}"
+                    rm -f "$lib_file"
+                fi
+                ;;
+        esac
+    fi
+done
+
 echo -e "${GREEN}✓ Libraries configured${RESET}"
 
 # Step 6: Symlink node_modules (font converter tools)
