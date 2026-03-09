@@ -539,7 +539,8 @@ ifneq ($(CROSS_COMPILE),)
         # K2 uses musl - fully static, no system library paths needed (same as K1)
         LDFLAGS := $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) -ldl -lz -lm -lpthread
     else
-        LDFLAGS := -L/usr/lib/$(TARGET_TRIPLE) $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) $(SYSTEMD_LIBS) -ldl -lz -lm -lpthread
+        LDFLAGS := -L/usr/lib/$(TARGET_TRIPLE) $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) $(SYSTEMD_LIBS) -lusb-1.0 -ldl -lz -lm -lpthread
+        CXXFLAGS += -DHELIX_HAS_LIBUSB=1
     endif
     ifeq ($(ENABLE_SSL),yes)
         ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both,$(PLATFORM_TARGET)))
@@ -584,14 +585,16 @@ else ifeq ($(UNAME_S),Darwin)
     SUBMODULE_CXXFLAGS += $(MACOS_DEPLOYMENT_TARGET)
     # -Wl,-w suppresses linker warnings about macOS version mismatches between
     # our 10.15 deployment target and libraries built for newer versions
-    LDFLAGS := -Wl,-w $(LDFLAGS_COMMON) -framework Foundation -framework CoreFoundation -framework Security -framework CoreWLAN -framework CoreLocation -framework Cocoa -framework IOKit -framework CoreVideo -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework CoreAudio -framework Metal -liconv
+    LDFLAGS := -Wl,-w $(LDFLAGS_COMMON) -framework Foundation -framework CoreFoundation -framework Security -framework CoreWLAN -framework CoreLocation -framework Cocoa -framework IOKit -framework CoreVideo -framework AudioToolbox -framework ForceFeedback -framework Carbon -framework CoreAudio -framework Metal -liconv -lusb-1.0
+    CXXFLAGS += -DHELIX_HAS_LIBUSB=1
     PLATFORM := macOS
     WPA_DEPS :=
 else
     # Linux native build - Include libwpa_client.a for WiFi control
     NPROC := $(shell nproc 2>/dev/null || echo 4)
     # Note: -lstdc++fs needed for std::experimental::filesystem on GCC < 9
-    LDFLAGS := $(LDFLAGS_COMMON) $(WPA_CLIENT_LIB) $(SYSTEMD_LIBS) -lssl -lcrypto -ldl -lstdc++fs
+    LDFLAGS := $(LDFLAGS_COMMON) $(WPA_CLIENT_LIB) $(SYSTEMD_LIBS) -lusb-1.0 -lssl -lcrypto -ldl -lstdc++fs
+    CXXFLAGS += -DHELIX_HAS_LIBUSB=1
     # GPU-accelerated 3D G-code rendering via OpenGL ES 2.0 (SDL GL context on desktop)
     ifeq ($(ENABLE_GLES_3D),yes)
         LDFLAGS += -lGLESv2

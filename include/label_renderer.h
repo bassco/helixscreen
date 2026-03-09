@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "brother_ql_printer.h"
 #include "label_bitmap.h"
+#include "label_printer.h"
 
 #include <string>
 

@@ -7,7 +7,7 @@
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands init sequence", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 10, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto& size = sizes[0]; // 29mm continuous
 
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, size);
@@ -23,7 +23,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands init sequence", "[label]") {
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands media info", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 10, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto& size = sizes[0]; // 29mm continuous
 
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, size);
@@ -41,7 +41,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands media info", "[label]") {
 TEST_CASE("BrotherQLPrinter::build_raster_commands blank row optimization", "[label]") {
     // All-white bitmap produces 0x5A blank line markers
     auto bitmap = helix::LabelBitmap::create(306, 5, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // Count 0x5A bytes after the header section
@@ -55,7 +55,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands blank row optimization", "[la
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands ends with print", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 5, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     REQUIRE(commands.back() == 0x1A);
@@ -65,7 +65,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands raster row format", "[label]"
     auto bitmap = helix::LabelBitmap::create(306, 3, 300);
     bitmap.set_pixel(0, 1, true); // Set a pixel in row 1
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // Should contain at least one raster data row (0x67 0x00 ...)
@@ -87,7 +87,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands row right-alignment", "[label
     // Set a pixel so we get a raster row, not a blank
     bitmap.set_pixel(0, 0, true);
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // Find the raster data row
@@ -107,7 +107,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands 62mm full width", "[label]") 
     auto bitmap = helix::LabelBitmap::create(696, 2, 300);
     bitmap.set_pixel(0, 0, true);
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     // Find 62mm continuous
     helix::LabelSize size_62;
     for (auto& s : sizes) {
@@ -133,7 +133,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands 62mm full width", "[label]") 
 }
 
 TEST_CASE("BrotherQLPrinter::supported_sizes returns known sizes", "[label]") {
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     REQUIRE(sizes.size() >= 3);
 
     // Verify 29mm continuous
@@ -156,7 +156,7 @@ TEST_CASE("BrotherQLPrinter::supported_sizes returns known sizes", "[label]") {
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands die-cut media type", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 10, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
 
     // Find 29x90mm die-cut
     helix::LabelSize die_cut;
@@ -190,7 +190,7 @@ TEST_CASE("label_preset_options returns newline-separated list", "[label]") {
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands raster mode command", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 1, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // ESC i a 01 at offset 202
@@ -202,7 +202,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands raster mode command", "[label
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands expanded mode command", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 1, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // ESC i K 08 at offset 227
@@ -214,7 +214,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands expanded mode command", "[lab
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands compression disabled", "[label]") {
     auto bitmap = helix::LabelBitmap::create(306, 1, 300);
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // M 0x00 at offset 236
@@ -229,7 +229,7 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands horizontal flip", "[label]") 
     // Pixel at x=305 should NOT be set
     REQUIRE_FALSE(bitmap.get_pixel(305, 0));
 
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // Find the raster row

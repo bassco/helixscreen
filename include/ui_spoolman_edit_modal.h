@@ -5,7 +5,6 @@
 
 #include "ui_modal.h"
 
-#include "brother_ql_printer.h"
 #include "spoolman_types.h"
 #include "subject_managed_panel.h"
 
@@ -80,7 +79,7 @@ class SpoolEditModal : public Modal {
     MoonrakerAPI* api_ = nullptr;
     CompletionCallback completion_callback_;
     std::shared_ptr<bool> callback_guard_;
-    helix::BrotherQLPrinter printer_;
+
 
     bool subjects_initialized_ = false;
     bool populating_ = false;

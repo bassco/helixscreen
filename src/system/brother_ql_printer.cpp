@@ -22,25 +22,29 @@ namespace helix {
 static constexpr int RASTER_ROW_BYTES = 90;
 
 
-const char* label_preset_name(LabelPreset preset) {
-    switch (preset) {
-    case LabelPreset::STANDARD: return "Standard";
-    case LabelPreset::COMPACT:  return "Compact";
-    case LabelPreset::MINIMAL:  return "QR Only";
-    }
-    return "Standard";
-}
-
-const char* label_preset_options() {
-    return "Standard\nCompact\nQR Only";
-}
-
 struct BrotherQLPrinter::Impl {};
 
 BrotherQLPrinter::BrotherQLPrinter() : impl_(std::make_unique<Impl>()) {}
+
+BrotherQLPrinter::BrotherQLPrinter(std::string host, int port)
+    : impl_(std::make_unique<Impl>()), host_(std::move(host)), port_(port) {}
+
 BrotherQLPrinter::~BrotherQLPrinter() = default;
 
-std::vector<LabelSize> BrotherQLPrinter::supported_sizes() {
+std::string BrotherQLPrinter::name() const {
+    return "Brother QL";
+}
+
+void BrotherQLPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
+                              PrintCallback callback) {
+    print_label(host_, port_, bitmap, size, std::move(callback));
+}
+
+std::vector<LabelSize> BrotherQLPrinter::supported_sizes() const {
+    return supported_sizes_static();
+}
+
+std::vector<LabelSize> BrotherQLPrinter::supported_sizes_static() {
     return {
         {"29mm",     306,    0, 300, 0x0A, 29,  0},
         {"38mm",     413,    0, 300, 0x0A, 38,  0},

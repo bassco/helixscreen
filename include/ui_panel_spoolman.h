@@ -8,7 +8,6 @@
 #include "ui_spoolman_edit_modal.h"
 #include "ui_spoolman_list_view.h"
 
-#include "brother_ql_printer.h"
 #include "overlay_base.h"
 #include "spoolman_types.h" // For SpoolInfo
 #include "subject_managed_panel.h"
@@ -126,8 +125,7 @@ class SpoolmanPanel : public OverlayBase {
     helix::ui::SpoolmanContextMenu context_menu_;
     helix::ui::SpoolEditModal edit_modal_;
 
-    // === Label Printer ===
-    helix::BrotherQLPrinter printer_;
+    // === Label Printing ===
 
     // === Spool Wizard ===
     lv_obj_t* wizard_panel_ = nullptr;

@@ -9,7 +9,7 @@
 #include "ui_update_queue.h"
 
 #include "label_printer_settings.h"
-#include "label_renderer.h"
+#include "label_printer_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "theme_manager.h"
@@ -545,38 +545,16 @@ void SpoolEditModal::handle_print_label() {
         return;
     }
 
-    std::string host = settings.get_printer_address();
-    int port = settings.get_printer_port();
-    int size_idx = settings.get_label_size_index();
-    int preset_idx = settings.get_label_preset();
-
-    auto sizes = helix::BrotherQLPrinter::supported_sizes();
-    if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
-        size_idx = 0;
-    const auto& label_size = sizes[size_idx];
-
-    auto preset = static_cast<helix::LabelPreset>(
-        std::clamp(preset_idx, 0, static_cast<int>(helix::LabelPreset::MINIMAL)));
-
-    auto bitmap = helix::LabelRenderer::render(working_spool_, preset, label_size);
-    if (bitmap.empty()) {
-        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to render label"), 3000);
-        return;
-    }
-
     ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
 
-    printer_.print_label(host, port, bitmap, label_size,
-                         [](bool success, const std::string& error) {
-                             if (success) {
-                                 ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                                               lv_tr("Label printed"), 2000);
-                             } else {
-                                 spdlog::error("[SpoolEditModal] Print failed: {}", error);
-                                 ToastManager::instance().show(ToastSeverity::ERROR,
-                                                               lv_tr("Print failed"), 3000);
-                             }
-                         });
+    helix::print_spool_label(working_spool_, [](bool success, const std::string& error) {
+        if (success) {
+            ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
+        } else {
+            spdlog::error("[SpoolEditModal] Print failed: {}", error);
+            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
+        }
+    });
 }
 
 // ============================================================================

@@ -809,6 +809,16 @@ install_permission_rules() {
         log_info "Installed backlight udev rule"
     fi
 
+    # --- USB label printer udev rule ---
+    local usb_printer_src="${INSTALL_DIR}/config/99-helixscreen-usb-printers.rules"
+    local usb_printer_dest="/etc/udev/rules.d/99-helixscreen-usb-printers.rules"
+
+    if [ -f "$usb_printer_src" ] && [ -d /etc/udev/rules.d ]; then
+        $SUDO cp "$usb_printer_src" "$usb_printer_dest"
+        $SUDO udevadm trigger --subsystem-match=usb 2>/dev/null || true
+        log_info "Installed USB label printer udev rule"
+    fi
+
     # --- NetworkManager polkit rule ---
     # All content is generated inline — no template files, no sed, no @@HELIX_USER@@.
     if command -v nmcli >/dev/null 2>&1; then
