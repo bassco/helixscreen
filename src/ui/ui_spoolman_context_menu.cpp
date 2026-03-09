@@ -177,6 +177,11 @@ void SpoolmanContextMenu::handle_print_label() {
     dispatch_spoolman_action(MenuAction::PRINT_LABEL);
 }
 
+void SpoolmanContextMenu::handle_duplicate() {
+    spdlog::info("[SpoolmanContextMenu] Duplicate requested for spool {}", get_item_index());
+    dispatch_spoolman_action(MenuAction::DUPLICATE);
+}
+
 void SpoolmanContextMenu::handle_delete() {
     spdlog::info("[SpoolmanContextMenu] Delete requested for spool {}", get_item_index());
     dispatch_spoolman_action(MenuAction::DELETE);
@@ -196,6 +201,7 @@ void SpoolmanContextMenu::register_callbacks() {
         {"spoolman_context_set_active_cb", on_set_active_cb},
         {"spoolman_context_edit_cb", on_edit_cb},
         {"spoolman_context_print_label_cb", on_print_label_cb},
+        {"spoolman_context_duplicate_cb", on_duplicate_cb},
         {"spoolman_context_delete_cb", on_delete_cb},
     });
 
@@ -239,6 +245,13 @@ void SpoolmanContextMenu::on_print_label_cb(lv_event_t* /*e*/) {
     auto* self = get_active_instance();
     if (self) {
         self->handle_print_label();
+    }
+}
+
+void SpoolmanContextMenu::on_duplicate_cb(lv_event_t* /*e*/) {
+    auto* self = get_active_instance();
+    if (self) {
+        self->handle_duplicate();
     }
 }
 

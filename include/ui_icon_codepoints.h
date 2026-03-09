@@ -89,6 +89,7 @@ static const IconMapping ICON_MAP[] = {
     {"code_tags",          "\xF3\xB0\x85\xB4"},  // F0174 code-tags
     {"cog",                "\xF3\xB0\x92\x93"},  // F0493 cog/settings
     {"console",            "\xF3\xB0\x86\x8D"},  // F018D console/terminal
+    {"content_copy",       "\xF3\xB0\x86\x8F"},  // F018F content-copy (duplicate)
     {"cooldown",           "\xF3\xB0\x9C\x97"},  // F0717 snowflake
     {"cube",               "\xF3\xB0\x86\xA7"},  // F01A7 cube-outline
     {"cube_outline",       "\xF3\xB0\x86\xA7"},  // F01A7 cube-outline

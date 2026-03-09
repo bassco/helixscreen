@@ -42,6 +42,7 @@ class SpoolmanContextMenu : public ContextMenu {
         SET_ACTIVE,  ///< Set this spool as active
         EDIT,        ///< Edit spool properties
         PRINT_LABEL, ///< Print a label for this spool
+        DUPLICATE,   ///< Create a fresh copy of this spool
         DELETE       ///< Delete this spool
     };
 
@@ -100,6 +101,7 @@ class SpoolmanContextMenu : public ContextMenu {
     void handle_set_active();
     void handle_edit();
     void handle_print_label();
+    void handle_duplicate();
     void handle_delete();
 
     // === Static Callback Registration ===
@@ -113,6 +115,7 @@ class SpoolmanContextMenu : public ContextMenu {
     static void on_set_active_cb(lv_event_t* e);
     static void on_edit_cb(lv_event_t* e);
     static void on_print_label_cb(lv_event_t* e);
+    static void on_duplicate_cb(lv_event_t* e);
     static void on_delete_cb(lv_event_t* e);
 };
 

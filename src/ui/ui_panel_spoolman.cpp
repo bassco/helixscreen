@@ -390,6 +390,10 @@ void SpoolmanPanel::handle_context_action(helix::ui::SpoolmanContextMenu::MenuAc
         print_label_for_spool(spool_id);
         break;
 
+    case MenuAction::DUPLICATE:
+        duplicate_spool(spool_id);
+        break;
+
     case MenuAction::DELETE:
         delete_spool(spool_id);
         break;
@@ -495,6 +499,56 @@ void SpoolmanPanel::show_edit_modal(int spool_id) {
 // ============================================================================
 // Delete Spool
 // ============================================================================
+
+void SpoolmanPanel::duplicate_spool(int spool_id) {
+    MoonrakerAPI* api = get_moonraker_api();
+    if (!api) {
+        spdlog::warn("[{}] No API, cannot duplicate spool", get_name());
+        return;
+    }
+
+    const SpoolInfo* spool = find_cached_spool(spool_id);
+    if (!spool) {
+        spdlog::warn("[{}] Spool {} not found in cache", get_name(), spool_id);
+        return;
+    }
+
+    // Build create payload: same filament, full weight, blank lot/notes
+    nlohmann::json body;
+    body["filament_id"] = spool->filament_id;
+    if (spool->initial_weight_g > 0) {
+        body["remaining_weight"] = spool->initial_weight_g;
+    }
+    if (spool->spool_weight_g > 0) {
+        body["spool_weight"] = spool->spool_weight_g;
+    }
+
+    std::string display = spool->display_name();
+    std::weak_ptr<bool> weak_guard = callback_guard_;
+
+    api->spoolman().create_spoolman_spool(
+        body,
+        [weak_guard, display](const SpoolInfo& created) {
+            spdlog::info("[Spoolman] Duplicated '{}' as spool #{}", display, created.id);
+            helix::ui::queue_update([weak_guard, created]() {
+                std::string msg =
+                    std::string(lv_tr("Duplicated")) + ": #" + std::to_string(created.id);
+                ToastManager::instance().show(ToastSeverity::SUCCESS, msg.c_str(), 3000);
+                if (weak_guard.expired())
+                    return;
+                auto& panel = get_global_spoolman_panel();
+                panel.preserve_scroll_ = true;
+                panel.refresh_spools();
+            });
+        },
+        [display](const MoonrakerError& err) {
+            spdlog::error("[Spoolman] Failed to duplicate '{}': {}", display, err.message);
+            helix::ui::queue_update([]() {
+                ToastManager::instance().show(ToastSeverity::ERROR,
+                                              lv_tr("Failed to duplicate spool"), 3000);
+            });
+        });
+}
 
 void SpoolmanPanel::delete_spool(int spool_id) {
     // Build confirmation message with spool info

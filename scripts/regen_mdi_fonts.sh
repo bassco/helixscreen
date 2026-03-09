@@ -80,6 +80,7 @@ MDI_ICONS+=",0xF0159"    # close-circle (xmark-circle)
 MDI_ICONS+=",0xF0169"    # code-braces
 MDI_ICONS+=",0xF0174"    # code-tags
 MDI_ICONS+=",0xF018D"    # console
+MDI_ICONS+=",0xF018F"    # content-copy (duplicate)
 MDI_ICONS+=",0xF01B4"    # delete (trash)
 MDI_ICONS+=",0xF01BC"    # database
 MDI_ICONS+=",0xF01D9"    # dots-vertical (advanced)
