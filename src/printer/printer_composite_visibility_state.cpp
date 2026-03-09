@@ -102,13 +102,28 @@ void PrinterCompositeVisibilityState::update_visibility(
         lv_subject_get_int(capabilities.get_printer_has_timelapse_subject());
     update_if_changed(&has_any_preprint_options_, any_visible ? 1 : 0);
 
-    spdlog::debug("[PrinterCompositeVisibilityState] Visibility updated: bed_mesh={}, qgl={}, "
-                  "z_tilt={}, nozzle_clean={}, purge_line={}, any={} (plugin={})",
-                  lv_subject_get_int(&can_show_bed_mesh_), lv_subject_get_int(&can_show_qgl_),
-                  lv_subject_get_int(&can_show_z_tilt_),
-                  lv_subject_get_int(&can_show_nozzle_clean_),
-                  lv_subject_get_int(&can_show_purge_line_),
-                  lv_subject_get_int(&has_any_preprint_options_), plugin_installed);
+    int cur_bm = lv_subject_get_int(&can_show_bed_mesh_);
+    int cur_qgl = lv_subject_get_int(&can_show_qgl_);
+    int cur_zt = lv_subject_get_int(&can_show_z_tilt_);
+    int cur_nc = lv_subject_get_int(&can_show_nozzle_clean_);
+    int cur_pl = lv_subject_get_int(&can_show_purge_line_);
+    int cur_any = lv_subject_get_int(&has_any_preprint_options_);
+
+    if (!last_log_state_initialized_ || cur_bm != last_bed_mesh_ || cur_qgl != last_qgl_ ||
+        cur_zt != last_z_tilt_ || cur_nc != last_nozzle_clean_ || cur_pl != last_purge_line_ ||
+        cur_any != last_any_ || plugin_installed != last_plugin_) {
+        spdlog::debug("[PrinterCompositeVisibilityState] Visibility updated: bed_mesh={}, qgl={}, "
+                      "z_tilt={}, nozzle_clean={}, purge_line={}, any={} (plugin={})",
+                      cur_bm, cur_qgl, cur_zt, cur_nc, cur_pl, cur_any, plugin_installed);
+        last_bed_mesh_ = cur_bm;
+        last_qgl_ = cur_qgl;
+        last_z_tilt_ = cur_zt;
+        last_nozzle_clean_ = cur_nc;
+        last_purge_line_ = cur_pl;
+        last_any_ = cur_any;
+        last_plugin_ = plugin_installed;
+        last_log_state_initialized_ = true;
+    }
 }
 
 } // namespace helix

@@ -25,6 +25,9 @@
 
 namespace {
 
+// When true, translation warnings are suppressed to trace level during init
+static bool s_suppress_translation_warnings = false;
+
 #ifdef HAVE_STACK_TRACE
 /**
  * @brief Demangle a C++ symbol name
@@ -250,7 +253,9 @@ void lvgl_log_callback(lv_log_level_t level, const char* buf) {
         spdlog::info("[LVGL] {}", msg);
         break;
     case LV_LOG_LEVEL_WARN:
-        if (is_scroll_boundary_warning || is_translation_warning) {
+        if (is_translation_warning && s_suppress_translation_warnings) {
+            spdlog::trace("[LVGL] {}", msg);
+        } else if (is_scroll_boundary_warning || is_translation_warning) {
             spdlog::debug("[LVGL] {}", msg);
         } else {
             spdlog::warn("[LVGL] {}", msg);
@@ -313,6 +318,10 @@ namespace logging {
 void register_lvgl_log_handler() {
     lv_log_register_print_cb(lvgl_log_callback);
     spdlog::trace("[Logging] Registered custom LVGL log handler");
+}
+
+void set_suppress_translation_warnings(bool suppress) {
+    s_suppress_translation_warnings = suppress;
 }
 
 } // namespace logging
