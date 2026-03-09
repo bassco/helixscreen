@@ -159,6 +159,7 @@ translations:
   Both: 両方
   Brightness: 明るさ
   Brightness level when LEDs turn on at startup: 起動時にLEDが点灯する際の明るさレベル
+  Brother QL: ''
   Browse: 参照
   'Browse guides, configuration references, and troubleshooting ': 'ガイド、設定リファレンス、トラブルシューティングを参照 '
   Buffer Status: 'バッファーステータス'
@@ -173,6 +174,7 @@ translations:
   CHANGED FROM LAST SESSION: 前回のセッションから変更
   COLOR SENSORS: カラーセンサー
   COLORS REQUIRED: 必要な色
+  CONNECTION TYPE: 接続タイプ
   CRITICAL: 重大
   CUSTOM IMAGES: カスタム画像
   Calibrate All: すべてキャリブレート
@@ -249,14 +251,15 @@ translations:
   Configure: 設定
   Configure G10/G11 firmware retraction: G10/G11 ファームウェアリトラクションを設定
   Configure PRINT_START: PRINT_START を設定
-  Configure QR label printing: 'QRラベル印刷を設定'
   Configure Spoolman integration and weight sync settings.: Spoolman 連携と重量同期設定を行います。
   Configure devices in Moonraker: Moonraker でデバイスを設定
+  Configure label printer and auto-discovery: ラベルプリンターの設定と自動検出
   Configure printer sensors: プリンターセンサーを設定
   Configure quick buttons and standard macros: クイックボタンと標準マクロを設定
   Configure timelapse recording: タイムラプス録画を設定
   Configuring Moonraker...: Moonrakerを設定中...
   Connect: 接続
+  Connect a USB label printer first: 先にUSBラベルプリンターを接続してください
   Connect an ADXL345 accelerometer to calibrate: キャリブレーションには ADXL345 加速度センサーを接続してください
   'Connect to your printer via SSH and run:': 'SSHでプリンターに接続し、次を実行してください:'
   Connected: 接続済み
@@ -308,8 +311,10 @@ translations:
   Customize Macro: 'マクロをカスタマイズ'
   Customize preset temperatures: プリセット温度をカスタマイズ
   Cutting filament...: フィラメントを切断中...
+  DETECTED USB PRINTERS: 検出されたUSBプリンター
   DIAGNOSTICS: 診断
   DISABLED: 無効
+  DISCOVERED PRINTERS: 検出されたプリンター
   Damping (Kd): 減衰 (Kd)
   Danger: 危険
   Danger Zone: '危険ゾーン'
@@ -357,6 +362,8 @@ translations:
   Drop shadow strength (0 = disabled): 影の強さ (0 = 無効)
   Dryer: ドライヤー
   Dryer Control: ドライヤー制御
+  Duplicate: 複製
+  Duplicated: 複製しました
   Duration: 時間
   E-Stop Confirmation: 緊急停止の確認
   EMERGENCY CONTROLS: 緊急コントロール
@@ -429,6 +436,7 @@ translations:
   Failed to apply settings: 設定の適用に失敗しました
   Failed to delete spool: スプールの削除に失敗しました
   Failed to download moonraker.conf.\nCheck printer connection.: moonraker.confのダウンロードに失敗しました。\nプリンター接続を確認してください。
+  Failed to duplicate spool: スプールの複製に失敗しました
   Failed to enable tuning tower: チューニングタワーの有効化に失敗しました
   Failed to get limits: 制限の取得に失敗しました
   Failed to load history: '履歴の読み込みに失敗しました'
@@ -635,6 +643,7 @@ translations:
   'MAC:': 'MAC:'
   MACRO DEVICES: マクロデバイス
   MAIN POWER BUTTON: メイン電源ボタン
+  MANUAL: 手動
   MCU, host, and auxiliary temperature monitoring: MCU、ホスト、補助温度の監視
   MDI Icons: MDI アイコン
   MISSING CONFIGURED: 設定済みが見つかりません
@@ -685,7 +694,6 @@ translations:
   Mesh Complete: メッシュ完了
   Method: 方法
   Min: 最小
-  Minimal: 'ミニマル'
   Mode: モード
   Modified: 変更日時
   Month: 月
@@ -710,6 +718,7 @@ translations:
   Name (optional): 名前（オプション）
   Named actions in the LED control panel (long-press).: LEDコントロールパネルの名前付きアクション（長押し）。
   Net Weight (g): 正味重量（g）
+  Network: ネットワーク
   Network Address: ネットワークアドレス
   Network Name: ネットワーク名
   Network Name (SSID): ネットワーク名 (SSID)
@@ -731,6 +740,7 @@ translations:
   No PRINT_START macro found: PRINT_START マクロが見つかりません
   No Power Devices: 電源デバイスなし
   No Spools: スプールなし
+  No USB printers found: USBプリンターが見つかりません
   No buffer data available: 'バッファーデータがありません'
   No changes to revert: 元に戻す変更はありません
   No effects available: 利用可能なエフェクトがありません
@@ -740,6 +750,7 @@ translations:
   No files available for printing: 印刷可能なファイルがありません
   No images found on USB drive: USBドライブに画像が見つかりません
   No jobs in queue: キューにジョブがありません
+  No label printers found: ラベルプリンターが見つかりません
   No macros available: 利用可能なマクロがありません
   No macros found: 'マクロが見つかりません'
   No matching prints: 一致する印刷なし
@@ -825,6 +836,7 @@ translations:
   Phase tracking disabled: フェーズトラッキング無効
   Phase tracking enabled: フェーズトラッキング有効
   Phase tracking update failed: フェーズトラッキングの更新に失敗
+  Phomemo M110: ''
   Pick: 選択
   Pick Color: 色を選択
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '画像ファイル (PNG, JPEG, BMP, GIF) を config/custom_images/ に配置してください。最大サイズ: 2048×2048 ピクセル。'
@@ -874,7 +886,6 @@ translations:
   Print Status: 印刷ステータス
   Print Time: 印刷時間
   Print Tuning: 印刷チューニング
-  Print a test label: 'テストラベルを印刷'
   Print failed: '印刷失敗'
   Printer: プリンター
   Printer Error: プリンターエラー
@@ -912,6 +923,7 @@ translations:
   Purging nozzle: ノズルをパージ中
   Purging...: パージ中...
   QGL: QGL
+  QR Only: QRのみ
   QUEUED EVENTS: キュー内のイベント
   QUICK BUTTONS: クイックボタン
   Quad Gantry Level: クアッドガントリーレベル

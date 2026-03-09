@@ -159,6 +159,7 @@ translations:
   Both: Ambos
   Brightness: Brillo
   Brightness level when LEDs turn on at startup: Nivel de brillo cuando los LEDs se encienden al iniciar
+  Brother QL: ''
   Browse: Explorar
   'Browse guides, configuration references, and troubleshooting ': 'Consulte guías, referencias de configuración y solución de problemas '
   Buffer Status: 'Estado del búfer'
@@ -173,6 +174,7 @@ translations:
   CHANGED FROM LAST SESSION: CAMBIADO DESDE LA ÚLTIMA SESIÓN
   COLOR SENSORS: SENSORES DE COLOR
   COLORS REQUIRED: COLORES REQUERIDOS
+  CONNECTION TYPE: TIPO DE CONEXIÓN
   CRITICAL: CRÍTICO
   CUSTOM IMAGES: IMÁGENES PERSONALIZADAS
   Calibrate All: Calibrar Todo
@@ -249,14 +251,15 @@ translations:
   Configure: Configurar
   Configure G10/G11 firmware retraction: Configurar retracción de firmware G10/G11
   Configure PRINT_START: Configurar PRINT_START
-  Configure QR label printing: 'Configurar impresión de etiquetas QR'
   Configure Spoolman integration and weight sync settings.: Configurar integración de Spoolman y ajustes de sincronización de peso.
   Configure devices in Moonraker: Configurar dispositivos en Moonraker
+  Configure label printer and auto-discovery: Configurar impresora de etiquetas y detección automática
   Configure printer sensors: Configurar sensores de impresora
   Configure quick buttons and standard macros: Configurar botones rápidos y macros estándar
   Configure timelapse recording: Configurar grabación de timelapse
   Configuring Moonraker...: Configurando Moonraker...
   Connect: Conectar
+  Connect a USB label printer first: Conecte primero una impresora de etiquetas USB
   Connect an ADXL345 accelerometer to calibrate: Conecte un acelerómetro ADXL345 para calibrar
   'Connect to your printer via SSH and run:': 'Conéctese a su impresora vía SSH y ejecute:'
   Connected: Conectado
@@ -308,8 +311,10 @@ translations:
   Customize Macro: 'Personalizar Macro'
   Customize preset temperatures: Personalizar temperaturas preestablecidas
   Cutting filament...: Cortando filamento...
+  DETECTED USB PRINTERS: IMPRESORAS USB DETECTADAS
   DIAGNOSTICS: DIAGNÓSTICOS
   DISABLED: DESACTIVADO
+  DISCOVERED PRINTERS: IMPRESORAS DESCUBIERTAS
   Damping (Kd): Amortiguación (Kd)
   Danger: Peligro
   Danger Zone: 'Zona de peligro'
@@ -357,6 +362,8 @@ translations:
   Drop shadow strength (0 = disabled): Intensidad de sombra (0 = desactivada)
   Dryer: Secador
   Dryer Control: Control de Secador
+  Duplicate: Duplicar
+  Duplicated: Duplicado
   Duration: Duración
   E-Stop Confirmation: Confirmación de Parada de Emergencia
   EMERGENCY CONTROLS: CONTROLES DE EMERGENCIA
@@ -429,6 +436,7 @@ translations:
   Failed to apply settings: Error al aplicar ajustes
   Failed to delete spool: Error al eliminar bobina
   Failed to download moonraker.conf.\nCheck printer connection.: Error al descargar moonraker.conf.\nCompruebe la conexión.
+  Failed to duplicate spool: Error al duplicar el carrete
   Failed to enable tuning tower: Error al activar torre de ajuste
   Failed to get limits: Error al obtener límites
   Failed to load history: 'Error al cargar historial'
@@ -635,6 +643,7 @@ translations:
   'MAC:': 'MAC:'
   MACRO DEVICES: DISPOSITIVOS DE MACRO
   MAIN POWER BUTTON: BOTÓN DE ENCENDIDO PRINCIPAL
+  MANUAL: MANUAL
   MCU, host, and auxiliary temperature monitoring: Monitoreo de temperatura de MCU, host y auxiliares
   MDI Icons: Iconos MDI
   MISSING CONFIGURED: CONFIGURADO FALTANTE
@@ -685,7 +694,6 @@ translations:
   Mesh Complete: Malla Completa
   Method: Método
   Min: Mín
-  Minimal: 'Mínimo'
   Mode: Modo
   Modified: Modificado
   Month: Mes
@@ -710,6 +718,7 @@ translations:
   Name (optional): Nombre (opcional)
   Named actions in the LED control panel (long-press).: Acciones con nombre en el panel de control LED (presión larga).
   Net Weight (g): Peso Neto (g)
+  Network: Red
   Network Address: Dirección de Red
   Network Name: Nombre de Red
   Network Name (SSID): Nombre de Red (SSID)
@@ -731,6 +740,7 @@ translations:
   No PRINT_START macro found: No se encontró macro PRINT_START
   No Power Devices: Sin Dispositivos de Energía
   No Spools: Sin Bobinas
+  No USB printers found: No se encontraron impresoras USB
   No buffer data available: 'Sin datos de búfer disponibles'
   No changes to revert: No hay cambios para revertir
   No effects available: No hay efectos disponibles
@@ -740,6 +750,7 @@ translations:
   No files available for printing: No hay archivos disponibles para imprimir
   No images found on USB drive: No se encontraron imágenes en la unidad USB
   No jobs in queue: Sin trabajos en cola
+  No label printers found: No se encontraron impresoras de etiquetas
   No macros available: No hay macros disponibles
   No macros found: 'No se encontraron macros'
   No matching prints: Sin impresiones coincidentes
@@ -825,6 +836,7 @@ translations:
   Phase tracking disabled: Seguimiento de fase desactivado
   Phase tracking enabled: Seguimiento de fase activado
   Phase tracking update failed: Error en actualización de seguimiento de fase
+  Phomemo M110: ''
   Pick: Elegir
   Pick Color: Elegir Color
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': 'Coloque archivos de imagen (PNG, JPEG, BMP, GIF) en config/custom_images/. Tamaño máx.: 2048×2048 píxeles.'
@@ -874,7 +886,6 @@ translations:
   Print Status: Estado de Impresión
   Print Time: Tiempo de Impresión
   Print Tuning: Ajuste de Impresión
-  Print a test label: 'Imprimir etiqueta de prueba'
   Print failed: 'Impresión fallida'
   Printer: Impresora
   Printer Error: Error de Impresora
@@ -912,6 +923,7 @@ translations:
   Purging nozzle: Purgando boquilla
   Purging...: Purgando...
   QGL: QGL
+  QR Only: Solo QR
   QUEUED EVENTS: EVENTOS EN COLA
   QUICK BUTTONS: BOTONES RÁPIDOS
   Quad Gantry Level: Nivelación de Pórtico Cuádruple

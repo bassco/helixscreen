@@ -159,6 +159,7 @@ translations:
   Both: 两者
   Brightness: 亮度
   Brightness level when LEDs turn on at startup: 启动时 LED 开启的亮度级别
+  Brother QL: ''
   Browse: 浏览
   'Browse guides, configuration references, and troubleshooting ': 浏览指南、配置参考和故障排除
   Buffer Status: '缓冲区状态'
@@ -173,6 +174,7 @@ translations:
   CHANGED FROM LAST SESSION: 与上次会话相比有更改
   COLOR SENSORS: 颜色传感器
   COLORS REQUIRED: 所需颜色
+  CONNECTION TYPE: 连接类型
   CRITICAL: 严重
   CUSTOM IMAGES: 自定义图片
   Calibrate All: 全部校准
@@ -249,14 +251,15 @@ translations:
   Configure: 配置
   Configure G10/G11 firmware retraction: 配置 G10/G11 固件回抽
   Configure PRINT_START: 配置 PRINT_START
-  Configure QR label printing: '配置二维码标签打印'
   Configure Spoolman integration and weight sync settings.: 配置 Spoolman 集成和重量同步设置。
   Configure devices in Moonraker: 在 Moonraker 中配置设备
+  Configure label printer and auto-discovery: 配置标签打印机及自动发现
   Configure printer sensors: 配置打印机传感器
   Configure quick buttons and standard macros: 配置快捷按钮和标准宏
   Configure timelapse recording: 配置延时录像
   Configuring Moonraker...: 正在配置 Moonraker...
   Connect: 连接
+  Connect a USB label printer first: 请先连接 USB 标签打印机
   Connect an ADXL345 accelerometer to calibrate: 连接 ADXL345 加速度计以进行校准
   'Connect to your printer via SSH and run:': 通过 SSH 连接到打印机并运行：
   Connected: 已连接
@@ -308,8 +311,10 @@ translations:
   Customize Macro: '自定义宏'
   Customize preset temperatures: 自定义预设温度
   Cutting filament...: 正在切断耗材...
+  DETECTED USB PRINTERS: 已检测到的 USB 打印机
   DIAGNOSTICS: 诊断
   DISABLED: 已禁用
+  DISCOVERED PRINTERS: 已发现的打印机
   Damping (Kd): 阻尼 (Kd)
   Danger: 危险
   Danger Zone: '危险区域'
@@ -357,6 +362,8 @@ translations:
   Drop shadow strength (0 = disabled): 阴影强度（0 = 禁用）
   Dryer: 干燥器
   Dryer Control: 干燥器控制
+  Duplicate: 复制
+  Duplicated: 已复制
   Duration: 持续时间
   E-Stop Confirmation: 急停确认
   EMERGENCY CONTROLS: 紧急控制
@@ -429,6 +436,7 @@ translations:
   Failed to apply settings: 应用设置失败
   Failed to delete spool: 删除料盘失败
   Failed to download moonraker.conf.\nCheck printer connection.: 下载 moonraker.conf 失败。\n请检查打印机连接。
+  Failed to duplicate spool: 复制线轴失败
   Failed to enable tuning tower: 启用调优塔失败
   Failed to get limits: 获取限制失败
   Failed to load history: '加载历史记录失败'
@@ -635,6 +643,7 @@ translations:
   'MAC:': MAC：
   MACRO DEVICES: 宏设备
   MAIN POWER BUTTON: 主电源按钮
+  MANUAL: 手动
   MCU, host, and auxiliary temperature monitoring: MCU、主机及辅助温度监控
   MDI Icons: MDI 图标
   MISSING CONFIGURED: 缺少配置
@@ -685,7 +694,6 @@ translations:
   Mesh Complete: 网格完成
   Method: 方法
   Min: 最小
-  Minimal: '极简'
   Mode: 模式
   Modified: 已修改
   Month: 月
@@ -710,6 +718,7 @@ translations:
   Name (optional): 名称（可选）
   Named actions in the LED control panel (long-press).: LED 控制面板中的命名操作（长按）。
   Net Weight (g): 净重（克）
+  Network: 网络
   Network Address: 网络地址
   Network Name: 网络名称
   Network Name (SSID): 网络名称 (SSID)
@@ -731,6 +740,7 @@ translations:
   No PRINT_START macro found: 未找到 PRINT_START 宏
   No Power Devices: 无电源设备
   No Spools: 无料盘
+  No USB printers found: 未找到 USB 打印机
   No buffer data available: '无可用缓冲区数据'
   No changes to revert: 没有可撤销的更改
   No effects available: 无可用特效
@@ -740,6 +750,7 @@ translations:
   No files available for printing: 没有可用于打印的文件
   No images found on USB drive: USB驱动器上未找到图片
   No jobs in queue: 队列中无任务
+  No label printers found: 未找到标签打印机
   No macros available: 无可用宏
   No macros found: '未找到宏'
   No matching prints: 没有匹配的打印
@@ -825,6 +836,7 @@ translations:
   Phase tracking disabled: 相位跟踪已禁用
   Phase tracking enabled: 相位跟踪已启用
   Phase tracking update failed: 相位跟踪更新失败
+  Phomemo M110: ''
   Pick: 选取
   Pick Color: 选择颜色
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': '将图片文件 (PNG, JPEG, BMP, GIF) 放入 config/custom_images/。最大尺寸: 2048×2048 像素。'
@@ -874,7 +886,6 @@ translations:
   Print Status: 打印状态
   Print Time: 打印时间
   Print Tuning: 打印调优
-  Print a test label: '打印测试标签'
   Print failed: '打印失败'
   Printer: 打印机
   Printer Error: 打印机错误
@@ -912,6 +923,7 @@ translations:
   Purging nozzle: 正在清洗喷嘴
   Purging...: 正在清料...
   QGL: QGL
+  QR Only: 仅 QR 码
   QUEUED EVENTS: 排队事件
   QUICK BUTTONS: 快捷按钮
   Quad Gantry Level: 四角龙门调平

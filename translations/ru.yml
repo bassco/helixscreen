@@ -159,6 +159,7 @@ translations:
   Both: Оба
   Brightness: Яркость
   Brightness level when LEDs turn on at startup: Уровень яркости при включении LED при запуске
+  Brother QL: ''
   Browse: Обзор
   'Browse guides, configuration references, and troubleshooting ': 'Руководства, справочники по настройке и устранение неполадок '
   Buffer Status: 'Статус буфера'
@@ -173,6 +174,7 @@ translations:
   CHANGED FROM LAST SESSION: ИЗМЕНЕНО С ПРОШЛОЙ СЕССИИ
   COLOR SENSORS: ДАТЧИКИ ЦВЕТА
   COLORS REQUIRED: ТРЕБУЕМЫЕ ЦВЕТА
+  CONNECTION TYPE: ТИП ПОДКЛЮЧЕНИЯ
   CRITICAL: КРИТИЧНО
   CUSTOM IMAGES: СВОИ ИЗОБРАЖЕНИЯ
   Calibrate All: Калибровать всё
@@ -249,14 +251,15 @@ translations:
   Configure: Настроить
   Configure G10/G11 firmware retraction: Настроить аппаратный ретракт G10/G11
   Configure PRINT_START: Настроить PRINT_START
-  Configure QR label printing: 'Настроить печать QR-этикеток'
   Configure Spoolman integration and weight sync settings.: Настройте интеграцию со Spoolman и синхронизацию веса.
   Configure devices in Moonraker: Настроить устройства в Moonraker
+  Configure label printer and auto-discovery: Настройка принтера этикеток и автообнаружение
   Configure printer sensors: Настроить датчики принтера
   Configure quick buttons and standard macros: Настроить быстрые кнопки и стандартные макросы
   Configure timelapse recording: Настроить запись таймлапса
   Configuring Moonraker...: Настройка Moonraker...
   Connect: Подключить
+  Connect a USB label printer first: Сначала подключите USB-принтер этикеток
   Connect an ADXL345 accelerometer to calibrate: Подключите акселерометр ADXL345 для калибровки
   'Connect to your printer via SSH and run:': 'Подключитесь к принтеру по SSH и выполните:'
   Connected: Подключен
@@ -308,8 +311,10 @@ translations:
   Customize Macro: 'Настроить макрос'
   Customize preset temperatures: Настройка пресетов температур
   Cutting filament...: Обрезка филамента...
+  DETECTED USB PRINTERS: ОБНАРУЖЕННЫЕ USB-ПРИНТЕРЫ
   DIAGNOSTICS: ДИАГНОСТИКА
   DISABLED: ОТКЛЮЧЕНО
+  DISCOVERED PRINTERS: НАЙДЕННЫЕ ПРИНТЕРЫ
   Damping (Kd): Демпфирование (Kd)
   Danger: Опасность
   Danger Zone: 'Опасная зона'
@@ -357,6 +362,8 @@ translations:
   Drop shadow strength (0 = disabled): Интенсивность тени (0 = отключено)
   Dryer: Сушилка
   Dryer Control: Управление сушилкой
+  Duplicate: Дублировать
+  Duplicated: Дублировано
   Duration: Длительность
   E-Stop Confirmation: Подтверждение аварийной остановки
   EMERGENCY CONTROLS: АВАРИЙНОЕ УПРАВЛЕНИЕ
@@ -429,6 +436,7 @@ translations:
   Failed to apply settings: Не удалось применить настройки
   Failed to delete spool: Не удалось удалить катушку
   Failed to download moonraker.conf.\nCheck printer connection.: Не удалось скачать moonraker.conf.\nПроверьте подключение принтера.
+  Failed to duplicate spool: Не удалось дублировать катушку
   Failed to enable tuning tower: Не удалось включить башню настройки
   Failed to get limits: Не удалось получить ограничения
   Failed to load history: 'Не удалось загрузить историю'
@@ -635,6 +643,7 @@ translations:
   'MAC:': 'MAC:'
   MACRO DEVICES: МАКРО-УСТРОЙСТВА
   MAIN POWER BUTTON: ГЛАВНАЯ КНОПКА ПИТАНИЯ
+  MANUAL: ВРУЧНУЮ
   MCU, host, and auxiliary temperature monitoring: Мониторинг температуры MCU, хоста и вспомогательных датчиков
   MDI Icons: Иконки MDI
   MISSING CONFIGURED: ОТСУТСТВУЕТ НАСТРОЕННОЕ
@@ -685,7 +694,6 @@ translations:
   Mesh Complete: Сетка завершена
   Method: Метод
   Min: Мин
-  Minimal: 'Минимальный'
   Mode: Режим
   Modified: Изменён
   Month: Месяц
@@ -710,6 +718,7 @@ translations:
   Name (optional): Название (необязательно)
   Named actions in the LED control panel (long-press).: Именованные действия в панели управления LED (долгое нажатие).
   Net Weight (g): Вес нетто (г)
+  Network: Сеть
   Network Address: Сетевой адрес
   Network Name: Название сети
   Network Name (SSID): Название сети (SSID)
@@ -731,6 +740,7 @@ translations:
   No PRINT_START macro found: Макрос PRINT_START не найден
   No Power Devices: Нет устройств питания
   No Spools: Нет катушек
+  No USB printers found: USB-принтеры не найдены
   No buffer data available: 'Данные буфера недоступны'
   No changes to revert: Нет изменений для отката
   No effects available: Нет доступных эффектов
@@ -740,6 +750,7 @@ translations:
   No files available for printing: Нет файлов для печати
   No images found on USB drive: Изображения на USB-накопителе не найдены
   No jobs in queue: Очередь пуста
+  No label printers found: Принтеры этикеток не найдены
   No macros available: Нет доступных макросов
   No macros found: 'Макросы не найдены'
   No matching prints: Нет совпадающих печатей
@@ -825,6 +836,7 @@ translations:
   Phase tracking disabled: Отслеживание фазы отключено
   Phase tracking enabled: Отслеживание фазы включено
   Phase tracking update failed: Не удалось обновить отслеживание фазы
+  Phomemo M110: ''
   Pick: Выбрать
   Pick Color: Выбрать цвет
   'Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels.': 'Поместите файлы изображений (PNG, JPEG, BMP, GIF) в config/custom_images/. Макс. размер: 2048×2048 пикселей.'
@@ -874,7 +886,6 @@ translations:
   Print Status: Статус печати
   Print Time: Время печати
   Print Tuning: Настройка печати
-  Print a test label: 'Напечатать тестовую этикетку'
   Print failed: 'Печать не удалась'
   Printer: Принтер
   Printer Error: Ошибка принтера
@@ -912,6 +923,7 @@ translations:
   Purging nozzle: Продувка сопла
   Purging...: Продувка...
   QGL: QGL
+  QR Only: Только QR
   QUEUED EVENTS: ОЧЕРЕДЬ СОБЫТИЙ
   QUICK BUTTONS: БЫСТРЫЕ КНОПКИ
   Quad Gantry Level: Выравнивание портала
