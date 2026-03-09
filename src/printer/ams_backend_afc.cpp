@@ -921,6 +921,17 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                     }
                 }
 
+                // Parse toolhead distances
+                if (ext_data.contains("tool_stn") && ext_data["tool_stn"].is_number()) {
+                    info.tool_stn = ext_data["tool_stn"].get<float>();
+                }
+                if (ext_data.contains("tool_stn_unload") && ext_data["tool_stn_unload"].is_number()) {
+                    info.tool_stn_unload = ext_data["tool_stn_unload"].get<float>();
+                }
+                if (ext_data.contains("tool_sensor_after_extruder") && ext_data["tool_sensor_after_extruder"].is_number()) {
+                    info.tool_sensor_after_extruder = ext_data["tool_sensor_after_extruder"].get<float>();
+                }
+
                 spdlog::debug("[AMS AFC] Extruder '{}': lane_loaded='{}', {} lanes", ext_name,
                               info.lane_loaded, info.available_lanes.size());
                 extruders_.push_back(std::move(info));

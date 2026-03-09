@@ -54,6 +54,9 @@ struct AfcExtruderInfo {
     std::string name;                         ///< Extruder name ("extruder", "extruder1")
     std::string lane_loaded;                  ///< Currently loaded lane (or empty)
     std::vector<std::string> available_lanes; ///< Lanes that can feed this extruder
+    float tool_stn = 72.0f;                   ///< Sensor-to-nozzle distance (mm)
+    float tool_stn_unload = 100.0f;           ///< Unload retraction distance (mm)
+    float tool_sensor_after_extruder = 0.0f;  ///< Post-sensor clear distance (mm)
 };
 
 /**
