@@ -13,6 +13,9 @@ static SpoolInfo make_test_spool() {
     spool.color_name = "Red";
     spool.remaining_weight_g = 800;
     spool.initial_weight_g = 1000;
+    spool.lot_nr = "LOT-2026-001";
+    spool.comment = "Great filament";
+    spool.spool_weight_g = 200;
     return spool;
 }
 
@@ -130,4 +133,55 @@ TEST_CASE("LabelRenderer MINIMAL die-cut centers QR", "[label]") {
         if (label.get_pixel(x, 0))
             top_row_clear = false;
     REQUIRE(top_row_clear);
+}
+
+TEST_CASE("LabelRenderer COMPACT wider label produces larger content", "[label]") {
+    auto spool = make_test_spool();
+    auto compact_62 = helix::LabelRenderer::render(
+        spool, helix::LabelPreset::COMPACT, continuous_62mm());
+    auto compact_29 = helix::LabelRenderer::render(
+        spool, helix::LabelPreset::COMPACT, continuous_29mm());
+
+    REQUIRE_FALSE(compact_62.empty());
+    REQUIRE_FALSE(compact_29.empty());
+    // 62mm label is wider than 29mm
+    REQUIRE(compact_62.width() > compact_29.width());
+}
+
+TEST_CASE("LabelRenderer MINIMAL QR code capped size", "[label]") {
+    auto spool = make_test_spool();
+    auto label = helix::LabelRenderer::render(
+        spool, helix::LabelPreset::MINIMAL, continuous_62mm());
+
+    REQUIRE_FALSE(label.empty());
+    // Find the bounding box of black pixels to check QR size
+    int max_y = 0;
+    for (int y = 0; y < label.height(); y++)
+        for (int x = 0; x < label.width(); x++)
+            if (label.get_pixel(x, y))
+                max_y = y;
+
+    // QR code height should be reasonable (capped, not filling entire label width)
+    REQUIRE(max_y < label.width()); // QR shouldn't be as tall as the label is wide
+    REQUIRE(max_y <= 300); // QR should be capped around 250px + margin
+}
+
+TEST_CASE("LabelRenderer STANDARD richer spool produces more content", "[label]") {
+    // Minimal spool (just material)
+    SpoolInfo minimal_spool;
+    minimal_spool.id = 1;
+    minimal_spool.material = "PLA";
+
+    // Rich spool (all fields)
+    auto rich_spool = make_test_spool();
+
+    auto minimal_label = helix::LabelRenderer::render(
+        minimal_spool, helix::LabelPreset::STANDARD, continuous_62mm());
+    auto rich_label = helix::LabelRenderer::render(
+        rich_spool, helix::LabelPreset::STANDARD, continuous_62mm());
+
+    REQUIRE_FALSE(minimal_label.empty());
+    REQUIRE_FALSE(rich_label.empty());
+    // Rich spool should produce taller label (more text content)
+    REQUIRE(rich_label.height() >= minimal_label.height());
 }

@@ -28,14 +28,14 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands media info", "[label]") {
 
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, size);
 
-    // Media info starts at offset 202: ESC i z
-    REQUIRE(commands[202] == 0x1B);
-    REQUIRE(commands[203] == 0x69);
-    REQUIRE(commands[204] == 0x7A);
-    REQUIRE(commands[205] == 0x86); // Validity flags
-    REQUIRE(commands[206] == 0x0A); // Media type: continuous
-    REQUIRE(commands[207] == 29);   // Width mm
-    REQUIRE(commands[208] == 0);    // Length mm (0 = continuous)
+    // Media info starts after init + raster mode: ESC i z
+    REQUIRE(commands[206] == 0x1B);
+    REQUIRE(commands[207] == 0x69);
+    REQUIRE(commands[208] == 0x7A);
+    REQUIRE(commands[209] == 0x86); // Validity flags
+    REQUIRE(commands[210] == 0x0A); // Media type: continuous
+    REQUIRE(commands[211] == 29);   // Width mm
+    REQUIRE(commands[212] == 0);    // Length mm (0 = continuous)
 }
 
 TEST_CASE("BrotherQLPrinter::build_raster_commands blank row optimization", "[label]") {
@@ -45,9 +45,9 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands blank row optimization", "[la
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
 
     // Count 0x5A bytes after the header section
-    // Header: 200 (invalidate) + 2 (init) + 13 (media) + 4 (auto-cut) + 4 (cut-every) + 5 (margins) = 228
+    // Header: 200 (invalidate) + 2 (init) + 4 (raster mode) + 13 (media) + 4 (auto-cut) + 4 (cut-every) + 4 (expanded) + 5 (margins) + 2 (compression) = 238
     int blank_count = 0;
-    for (size_t i = 228; i < commands.size() - 1; i++) {
+    for (size_t i = 238; i < commands.size() - 1; i++) {
         if (commands[i] == 0x5A) blank_count++;
     }
     REQUIRE(blank_count == 5);
@@ -170,20 +170,85 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands die-cut media type", "[label]
 
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, die_cut);
     // Verify media type byte in command buffer
-    REQUIRE(commands[206] == 0x0B);
-    REQUIRE(commands[208] == 90); // Length mm
+    REQUIRE(commands[210] == 0x0B);
+    REQUIRE(commands[212] == 90); // Length mm
 }
 
 TEST_CASE("label_preset_name returns correct names", "[label]") {
     REQUIRE(std::string(helix::label_preset_name(helix::LabelPreset::STANDARD)) == "Standard");
     REQUIRE(std::string(helix::label_preset_name(helix::LabelPreset::COMPACT)) == "Compact");
-    REQUIRE(std::string(helix::label_preset_name(helix::LabelPreset::MINIMAL)) == "Minimal");
+    REQUIRE(std::string(helix::label_preset_name(helix::LabelPreset::MINIMAL)) == "QR Only");
 }
 
 TEST_CASE("label_preset_options returns newline-separated list", "[label]") {
     std::string opts = helix::label_preset_options();
     REQUIRE(opts.find("Standard") != std::string::npos);
     REQUIRE(opts.find("Compact") != std::string::npos);
-    REQUIRE(opts.find("Minimal") != std::string::npos);
+    REQUIRE(opts.find("QR Only") != std::string::npos);
     REQUIRE(opts.find('\n') != std::string::npos);
+}
+
+TEST_CASE("BrotherQLPrinter::build_raster_commands raster mode command", "[label]") {
+    auto bitmap = helix::LabelBitmap::create(306, 1, 300);
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
+
+    // ESC i a 01 at offset 202
+    REQUIRE(commands[202] == 0x1B);
+    REQUIRE(commands[203] == 0x69);
+    REQUIRE(commands[204] == 0x61);
+    REQUIRE(commands[205] == 0x01);
+}
+
+TEST_CASE("BrotherQLPrinter::build_raster_commands expanded mode command", "[label]") {
+    auto bitmap = helix::LabelBitmap::create(306, 1, 300);
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
+
+    // ESC i K 08 at offset 227
+    REQUIRE(commands[227] == 0x1B);
+    REQUIRE(commands[228] == 0x69);
+    REQUIRE(commands[229] == 0x4B);
+    REQUIRE(commands[230] == 0x08);
+}
+
+TEST_CASE("BrotherQLPrinter::build_raster_commands compression disabled", "[label]") {
+    auto bitmap = helix::LabelBitmap::create(306, 1, 300);
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
+
+    // M 0x00 at offset 236
+    REQUIRE(commands[236] == 0x4D);
+    REQUIRE(commands[237] == 0x00);
+}
+
+TEST_CASE("BrotherQLPrinter::build_raster_commands horizontal flip", "[label]") {
+    auto bitmap = helix::LabelBitmap::create(306, 1, 300);
+    // Set pixel at x=0
+    bitmap.set_pixel(0, 0, true);
+    // Pixel at x=305 should NOT be set
+    REQUIRE_FALSE(bitmap.get_pixel(305, 0));
+
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, sizes[0]);
+
+    // Find the raster row
+    for (size_t i = 0; i + 2 < commands.size(); i++) {
+        if (commands[i] == 0x67 && commands[i + 1] == 0x00) {
+            // 29mm: 306px = 39 bytes, left_pad = 51
+            // After flip, pixel at x=0 should appear at x=305
+            // x=305 in flipped data: byte 305/8 = 38, bit 7-(305%8) = 7-1 = 6
+            // So flipped_row[38] should have bit 6 set
+            // In the command buffer: offset i+3 + 51 (pad) + 38 = i + 92
+            uint8_t flipped_byte = commands[i + 3 + 51 + 38];
+            REQUIRE((flipped_byte & (1 << 6)) != 0);
+
+            // Original position x=0 should be empty after flip
+            // x=0 in flipped data: byte 0, bit 7
+            // In command buffer: offset i+3 + 51 + 0
+            uint8_t original_byte = commands[i + 3 + 51];
+            REQUIRE((original_byte & (1 << 7)) == 0);
+            break;
+        }
+    }
 }

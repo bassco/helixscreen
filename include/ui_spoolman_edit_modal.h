@@ -5,6 +5,7 @@
 
 #include "ui_modal.h"
 
+#include "brother_ql_printer.h"
 #include "spoolman_types.h"
 #include "subject_managed_panel.h"
 
@@ -79,6 +80,7 @@ class SpoolEditModal : public Modal {
     MoonrakerAPI* api_ = nullptr;
     CompletionCallback completion_callback_;
     std::shared_ptr<bool> callback_guard_;
+    helix::BrotherQLPrinter printer_;
 
     bool subjects_initialized_ = false;
     bool populating_ = false;
@@ -104,6 +106,7 @@ class SpoolEditModal : public Modal {
     void handle_field_changed();
     void handle_reset();
     void handle_save();
+    void handle_print_label();
 
     // === Static Callback Registration ===
     static void register_callbacks();
@@ -116,6 +119,7 @@ class SpoolEditModal : public Modal {
     static void on_field_changed_cb(lv_event_t* e);
     static void on_reset_cb(lv_event_t* e);
     static void on_save_cb(lv_event_t* e);
+    static void on_print_label_cb(lv_event_t* e);
 };
 
 } // namespace helix::ui

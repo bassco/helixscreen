@@ -10,6 +10,7 @@
 #include "brother_ql_printer.h"
 #include "label_bitmap.h"
 #include "label_printer_settings.h"
+#include "label_printer_utils.h"
 #include "label_renderer.h"
 #include "spoolman_types.h"
 #include "static_panel_registry.h"
@@ -288,61 +289,6 @@ void LabelPrinterSettingsOverlay::stop_label_printer_discovery() {
     }
 }
 
-/**
- * @brief Score how likely a discovered printer is a label printer
- *
- * Checks the display name (from TXT ty/product or hostname) for known
- * label printer model patterns. Higher score = more likely label printer.
- * Returns 0 for printers that are definitely NOT label printers.
- */
-static int label_printer_score(const DiscoveredPrinter& printer) {
-    // Case-insensitive matching on the display name and hostname
-    auto lower = [](const std::string& s) {
-        std::string out = s;
-        std::transform(out.begin(), out.end(), out.begin(), ::tolower);
-        return out;
-    };
-    std::string name = lower(printer.name);
-    std::string host = lower(printer.hostname);
-
-    // Strong signals — these are definitely label printers
-    // Brother QL series (QL-800, QL-820NWB, QL-1110NWB, etc.)
-    if (name.find("ql-") != std::string::npos || name.find("ql ") != std::string::npos)
-        return 100;
-    // Brother TD series (thermal direct label printers)
-    if (name.find("td-") != std::string::npos || name.find("td ") != std::string::npos)
-        return 100;
-    // DYMO LabelWriter
-    if (name.find("labelwriter") != std::string::npos || name.find("dymo") != std::string::npos)
-        return 90;
-    // Zebra label printers (ZD, ZT, GK, GX series)
-    if (name.find("zebra") != std::string::npos)
-        return 80;
-    // Rollo, Munbyn, JADENS — common USB/network label printers
-    if (name.find("rollo") != std::string::npos || name.find("munbyn") != std::string::npos)
-        return 80;
-    // Generic "label" in name
-    if (name.find("label") != std::string::npos)
-        return 70;
-
-    // Moderate signals from hostname (BRW prefix = Brother wireless)
-    if (host.find("brw") != std::string::npos)
-        return 50;
-
-    // Negative signals — definitely NOT label printers
-    if (name.find("laserjet") != std::string::npos || name.find("officejet") != std::string::npos)
-        return 0;
-    if (name.find("inkjet") != std::string::npos || name.find("pixma") != std::string::npos)
-        return 0;
-    if (name.find("ecotank") != std::string::npos || name.find("envy") != std::string::npos)
-        return 0;
-    // EPSON ET series = EcoTank inkjet
-    if (name.find("epson") != std::string::npos && name.find("et-") != std::string::npos)
-        return 0;
-
-    // Unknown — could be anything, low score but still show
-    return 10;
-}
 
 void LabelPrinterSettingsOverlay::on_printers_discovered(
     const std::vector<DiscoveredPrinter>& printers) {
@@ -355,7 +301,7 @@ void LabelPrinterSettingsOverlay::on_printers_discovered(
 
     std::vector<ScoredPrinter> scored;
     for (const auto& p : printers) {
-        int score = label_printer_score(p);
+        int score = helix::label_printer_score(p);
         if (score > 0) {
             scored.push_back({p, score});
         } else {

@@ -8,6 +8,8 @@
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
+#include "label_printer_settings.h"
+#include "label_renderer.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "theme_manager.h"
@@ -137,6 +139,10 @@ void SpoolEditModal::init_subjects() {
     lv_subject_init_string(&save_button_text_subject_, save_button_text_buf_, nullptr,
                            sizeof(save_button_text_buf_), "Close");
     lv_xml_register_subject(nullptr, "spoolman_edit_save_text", &save_button_text_subject_);
+    lv_xml_register_subject(
+        lv_xml_component_get_scope("spoolman_edit_modal"),
+        "label_printer_configured",
+        helix::LabelPrinterSettingsManager::instance().subject_printer_configured());
 
     subjects_initialized_ = true;
 }
@@ -530,6 +536,49 @@ void SpoolEditModal::handle_save() {
     }
 }
 
+void SpoolEditModal::handle_print_label() {
+    auto& settings = helix::LabelPrinterSettingsManager::instance();
+
+    if (!settings.is_configured()) {
+        ToastManager::instance().show(ToastSeverity::INFO,
+                                      lv_tr("Set up your label printer in Settings"), 3000);
+        return;
+    }
+
+    std::string host = settings.get_printer_address();
+    int port = settings.get_printer_port();
+    int size_idx = settings.get_label_size_index();
+    int preset_idx = settings.get_label_preset();
+
+    auto sizes = helix::BrotherQLPrinter::supported_sizes();
+    if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
+        size_idx = 0;
+    const auto& label_size = sizes[size_idx];
+
+    auto preset = static_cast<helix::LabelPreset>(
+        std::clamp(preset_idx, 0, static_cast<int>(helix::LabelPreset::MINIMAL)));
+
+    auto bitmap = helix::LabelRenderer::render(working_spool_, preset, label_size);
+    if (bitmap.empty()) {
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to render label"), 3000);
+        return;
+    }
+
+    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
+
+    printer_.print_label(host, port, bitmap, label_size,
+                         [](bool success, const std::string& error) {
+                             if (success) {
+                                 ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                                               lv_tr("Label printed"), 2000);
+                             } else {
+                                 spdlog::error("[SpoolEditModal] Print failed: {}", error);
+                                 ToastManager::instance().show(ToastSeverity::ERROR,
+                                                               lv_tr("Print failed"), 3000);
+                             }
+                         });
+}
+
 // ============================================================================
 // Static Callback Registration
 // ============================================================================
@@ -543,6 +592,7 @@ void SpoolEditModal::register_callbacks() {
     lv_xml_register_event_cb(nullptr, "spoolman_edit_field_changed_cb", on_field_changed_cb);
     lv_xml_register_event_cb(nullptr, "spoolman_edit_reset_cb", on_reset_cb);
     lv_xml_register_event_cb(nullptr, "spoolman_edit_save_cb", on_save_cb);
+    lv_xml_register_event_cb(nullptr, "spoolman_edit_print_label_cb", on_print_label_cb);
 
     callbacks_registered_ = true;
     spdlog::debug("[SpoolEditModal] Callbacks registered");
@@ -588,6 +638,13 @@ void SpoolEditModal::on_save_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_save();
+    }
+}
+
+void SpoolEditModal::on_print_label_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) {
+        self->handle_print_label();
     }
 }
 
