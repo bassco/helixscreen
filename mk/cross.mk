@@ -321,7 +321,7 @@ else ifneq ($(filter mips k1,$(PLATFORM_TARGET)),)
     # Size optimization:
     # -Os: Optimize for size
     # -fomit-frame-pointer: Don't keep frame pointer (saves registers/stack)
-    # -fno-unwind-tables -fno-asynchronous-unwind-tables: Remove exception tables
+    # -funwind-tables: Emit DWARF unwind info for crash backtrace quality
     # -fmerge-all-constants: Merge duplicate string/numeric constants
     # -fno-ident: Don't embed GCC version string
     #
@@ -334,7 +334,7 @@ else ifneq ($(filter mips k1,$(PLATFORM_TARGET)),)
     #
     TARGET_CFLAGS := -march=mips32r2 -mtune=mips32r2 \
         -Os -flto=auto -ffunction-sections -fdata-sections \
-        -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables \
+        -fomit-frame-pointer -funwind-tables \
         -fmerge-all-constants -fno-ident \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_MIPS
     # Linker flags:

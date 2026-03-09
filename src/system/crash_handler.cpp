@@ -28,8 +28,9 @@
 #include <ucontext.h>
 #endif
 
-// backtrace() is available on glibc (Linux) and macOS
-#if (defined(__GLIBC__) || defined(__APPLE__)) && !defined(__ANDROID__)
+// backtrace() is available on glibc (Linux) and macOS.
+// __has_include catches MIPS-gnu toolchains where __GLIBC__ may not be defined.
+#if (defined(__GLIBC__) || defined(__APPLE__) || __has_include(<execinfo.h>)) && !defined(__ANDROID__)
 #include <execinfo.h>
 #define HAVE_BACKTRACE 1
 #elif defined(__ANDROID__)
@@ -392,6 +393,62 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "reg_bp:");
         safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.gregs[REG_RBP]));
         safe_write(fd, "\n");
+#elif defined(__mips__)
+        safe_write(fd, "reg_pc:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.pc)));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_sp:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[29])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_ra:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[31])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_fp:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[30])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_at:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[1])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_v0:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[2])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_v1:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[3])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_a0:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[4])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_a1:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[5])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_a2:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[6])));
+        safe_write(fd, "\n");
+        safe_write(fd, "reg_a3:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[7])));
+        safe_write(fd, "\n");
 #endif
     }
 
@@ -455,6 +512,17 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "bt:");
         safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.gregs[REG_RIP]));
         safe_write(fd, "\n");
+#elif defined(__mips__)
+        safe_write(fd, "bt:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.pc)));
+        safe_write(fd, "\n");
+        safe_write(fd, "bt:");
+        safe_write(fd,
+                   ptr_to_hex(hex_buf, sizeof(hex_buf),
+                              static_cast<uintptr_t>(uctx->uc_mcontext.gregs[31])));
+        safe_write(fd, "\n");
 #endif
     }
 
@@ -480,7 +548,21 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     if (ucontext) {
         const auto* uctx = static_cast<const ucontext_t*>(ucontext);
         auto sp = uctx->uc_mcontext.arm_sp;
-        // Dump 128 words (512 bytes) from SP upward — covers several stack frames
+        safe_write(fd, "stack_base:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), sp));
+        safe_write(fd, "\n");
+        const auto* stack_ptr = reinterpret_cast<const uint32_t*>(sp);
+        for (int i = 0; i < 128; ++i) {
+            safe_write(fd, "stk:");
+            safe_write(
+                fd, ptr_to_hex(hex_buf, sizeof(hex_buf), static_cast<uintptr_t>(stack_ptr[i])));
+            safe_write(fd, "\n");
+        }
+    }
+#elif defined(__mips__) && defined(__linux__)
+    if (ucontext) {
+        const auto* uctx = static_cast<const ucontext_t*>(ucontext);
+        auto sp = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[29]);
         safe_write(fd, "stack_base:");
         safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), sp));
         safe_write(fd, "\n");
