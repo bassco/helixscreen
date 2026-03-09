@@ -35,6 +35,7 @@
 class TestableNMBackend : public WifiBackendNetworkManager {
   public:
     // Expose private methods for unit testing via public wrappers
+    using WifiBackendNetworkManager::is_polkit_permission_error;
     using WifiBackendNetworkManager::parse_scan_output;
     using WifiBackendNetworkManager::split_nmcli_fields;
     using WifiBackendNetworkManager::validate_input;
@@ -464,6 +465,53 @@ TEST_CASE("NM backend: status thread lifecycle", "[network][nm][status]") {
         WifiBackendNetworkManager backend;
         REQUIRE_NOTHROW(backend.stop());
         REQUIRE_NOTHROW(backend.stop());
+    }
+}
+
+// ============================================================================
+// Polkit Permission Error Detection Tests
+// ============================================================================
+
+TEST_CASE("NM backend: is_polkit_permission_error", "[network][nm][polkit]") {
+    SECTION("Detects 'Not authorized'") {
+        CHECK(TestableNMBackend::is_polkit_permission_error(
+            "Error: Not authorized to control networking."));
+    }
+
+    SECTION("Detects 'Permission denied'") {
+        CHECK(TestableNMBackend::is_polkit_permission_error("Error: Permission denied."));
+    }
+
+    SECTION("Detects 'Insufficient privileges'") {
+        CHECK(TestableNMBackend::is_polkit_permission_error("Error: Insufficient privileges.\n"));
+    }
+
+    SECTION("Detects 'insufficient privilege' case-insensitive") {
+        CHECK(TestableNMBackend::is_polkit_permission_error("INSUFFICIENT PRIVILEGES"));
+    }
+
+    SECTION("Detects polkit keyword") {
+        CHECK(TestableNMBackend::is_polkit_permission_error(
+            "polkit: authorization check failed"));
+    }
+
+    SECTION("Detects NetworkManager D-Bus denial") {
+        CHECK(TestableNMBackend::is_polkit_permission_error(
+            "org.freedesktop.NetworkManager: not permitted"));
+    }
+
+    SECTION("Returns false for empty string") {
+        CHECK_FALSE(TestableNMBackend::is_polkit_permission_error(""));
+    }
+
+    SECTION("Returns false for wrong password error") {
+        CHECK_FALSE(TestableNMBackend::is_polkit_permission_error(
+            "Error: Connection activation failed: Secrets were required, but not provided."));
+    }
+
+    SECTION("Returns false for timeout error") {
+        CHECK_FALSE(
+            TestableNMBackend::is_polkit_permission_error("Error: Timeout 90 sec expired."));
     }
 }
 

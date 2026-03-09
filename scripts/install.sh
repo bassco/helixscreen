@@ -744,9 +744,11 @@ check_permissions() {
 # Check if a polkit rule for HelixScreen exists (either .rules or .pkla)
 _polkit_rule_exists() {
     local pkla="/etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla"
-    local rules="/etc/polkit-1/rules.d/50-helixscreen-network.rules"
+    local rules="/etc/polkit-1/rules.d/49-helixscreen-network.rules"
+    local rules_old="/etc/polkit-1/rules.d/50-helixscreen-network.rules"
 
     test -f "$rules" 2>/dev/null && return 0
+    test -f "$rules_old" 2>/dev/null && return 0
     test -f "$pkla" 2>/dev/null && return 0
     return 1
 }
@@ -755,7 +757,7 @@ _polkit_rule_exists() {
 _permission_rules_need_repair() {
     local helix_user="$1"
     local pkla="/etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla"
-    local rules="/etc/polkit-1/rules.d/50-helixscreen-network.rules"
+    local rules="/etc/polkit-1/rules.d/49-helixscreen-network.rules"
 
     # Check pkla file for literal placeholder (parent dir may be root-only)
     if $SUDO test -f "$pkla" && $SUDO grep -q '@@HELIX_USER@@' "$pkla" 2>/dev/null; then
@@ -809,16 +811,6 @@ install_permission_rules() {
         log_info "Installed backlight udev rule"
     fi
 
-    # --- USB label printer udev rule ---
-    local usb_printer_src="${INSTALL_DIR}/config/99-helixscreen-usb-printers.rules"
-    local usb_printer_dest="/etc/udev/rules.d/99-helixscreen-usb-printers.rules"
-
-    if [ -f "$usb_printer_src" ] && [ -d /etc/udev/rules.d ]; then
-        $SUDO cp "$usb_printer_src" "$usb_printer_dest"
-        $SUDO udevadm trigger --subsystem-match=usb 2>/dev/null || true
-        log_info "Installed USB label printer udev rule"
-    fi
-
     # --- NetworkManager polkit rule ---
     # All content is generated inline — no template files, no sed, no @@HELIX_USER@@.
     if command -v nmcli >/dev/null 2>&1; then
@@ -828,7 +820,7 @@ install_permission_rules() {
         local pkla_dir="/etc/polkit-1/localauthority/50-local.d"
 
         if $SUDO test -d "$rules_dir"; then
-            local rules_dest="${rules_dir}/50-helixscreen-network.rules"
+            local rules_dest="${rules_dir}/49-helixscreen-network.rules"
             if $SUDO tee "$rules_dest" > /dev/null << POLKIT_EOF
 // Installed by HelixScreen — allow service user to manage NetworkManager
 polkit.addRule(function(action, subject) {
@@ -843,7 +835,8 @@ POLKIT_EOF
             else
                 log_warn "Failed to install polkit rule to ${rules_dest} — Wi-Fi scanning may not work"
             fi
-            # Clean up stale .pkla from older installs / OS upgrades (Debian 11→12)
+            # Clean up old 50- rule and stale .pkla from older installs / OS upgrades
+            $SUDO rm -f "${rules_dir}/50-helixscreen-network.rules" 2>/dev/null || true
             local stale_pkla="${pkla_dir}/helixscreen-network.pkla"
             if $SUDO test -f "$stale_pkla" 2>/dev/null; then
                 $SUDO rm -f "$stale_pkla" 2>/dev/null || true
@@ -3339,6 +3332,7 @@ uninstall() {
         # Remove permission rules (udev, polkit)
         $SUDO rm -f /etc/udev/rules.d/99-helixscreen-backlight.rules
         $SUDO rm -f /etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla
+        $SUDO rm -f /etc/polkit-1/rules.d/49-helixscreen-network.rules
         $SUDO rm -f /etc/polkit-1/rules.d/50-helixscreen-network.rules
         $SUDO systemctl daemon-reload
     else
@@ -3539,6 +3533,7 @@ clean_old_installation() {
     # Remove permission rules (udev, polkit)
     $SUDO rm -f /etc/udev/rules.d/99-helixscreen-backlight.rules
     $SUDO rm -f /etc/polkit-1/localauthority/50-local.d/helixscreen-network.pkla
+    $SUDO rm -f /etc/polkit-1/rules.d/49-helixscreen-network.rules
     $SUDO rm -f /etc/polkit-1/rules.d/50-helixscreen-network.rules
     $SUDO systemctl daemon-reload 2>/dev/null || true
 

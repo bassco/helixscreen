@@ -81,31 +81,27 @@ SUDOEOF
 }
 
 @test "install_permission_rules: skips under NoNewPrivileges when rules OK" {
-    # Mock _has_no_new_privs to simulate systemd NoNewPrivileges=true
+    # Override functions to simulate NoNewPrivileges + rules already installed
     _has_no_new_privs() { return 0; }
-    export -f _has_no_new_privs
+    _polkit_rule_exists() { return 0; }
+    _permission_rules_need_repair() { return 1; }
 
-    run install_permission_rules "pi"
+    local output status=0
+    output="$(install_permission_rules "pi" 2>&1)" || status=$?
+
     [ "$status" -eq 0 ]
     [[ "$output" == *"NoNewPrivileges"* ]]
-    # Should NOT warn about repair when no broken files exist
     [[ "$output" != *"need repair"* ]]
 }
 
 @test "install_permission_rules: warns under NoNewPrivileges when pkla is broken" {
-    # Mock _has_no_new_privs to simulate systemd NoNewPrivileges=true
     _has_no_new_privs() { return 0; }
-    export -f _has_no_new_privs
+    _polkit_rule_exists() { return 0; }
+    _permission_rules_need_repair() { return 0; }
 
-    # Deploy a broken pkla (un-substituted template) to the real path
-    local pkla_dir="/etc/polkit-1/localauthority/50-local.d"
-    # We can't write to /etc in tests, so override the function to use a test path
-    _permission_rules_need_repair() {
-        return 0  # simulate broken pkla detected
-    }
-    export -f _permission_rules_need_repair
+    local output status=0
+    output="$(install_permission_rules "pi" 2>&1)" || status=$?
 
-    run install_permission_rules "pi"
     [ "$status" -eq 0 ]
     [[ "$output" == *"need repair"* ]]
     [[ "$output" == *"Wi-Fi may not work"* ]]
@@ -464,9 +460,9 @@ SUDOEOF
     [ "$status" -eq 0 ]
 
     # JS rules should be installed, NOT pkla
-    [ -f "$rules_dir/50-helixscreen-network.rules" ]
-    grep -q "polkit.addRule" "$rules_dir/50-helixscreen-network.rules"
-    grep -q '"biqu"' "$rules_dir/50-helixscreen-network.rules"
+    [ -f "$rules_dir/49-helixscreen-network.rules" ]
+    grep -q "polkit.addRule" "$rules_dir/49-helixscreen-network.rules"
+    grep -q '"biqu"' "$rules_dir/49-helixscreen-network.rules"
     # pkla should NOT be installed (JS takes priority)
     [ ! -f "$pkla_dir/helixscreen-network.pkla" ]
 }
@@ -509,8 +505,8 @@ SUDOEOF
     [ "$status" -eq 0 ]
 
     # JS rules installed
-    [ -f "$rules_dir/50-helixscreen-network.rules" ]
-    grep -q '"biqu"' "$rules_dir/50-helixscreen-network.rules"
+    [ -f "$rules_dir/49-helixscreen-network.rules" ]
+    grep -q '"biqu"' "$rules_dir/49-helixscreen-network.rules"
     # Stale pkla must be removed
     [ ! -f "$pkla_dir/helixscreen-network.pkla" ]
     [[ "$output" == *"Removed stale .pkla"* ]]
