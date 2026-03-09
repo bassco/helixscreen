@@ -258,6 +258,7 @@ bool WifiBackendNetworkManager::is_polkit_permission_error(const std::string& st
 
     return lower.find("not authorized") != std::string::npos ||
            lower.find("permission denied") != std::string::npos ||
+           lower.find("insufficient privilege") != std::string::npos ||
            lower.find("org.freedesktop.networkmanager") != std::string::npos ||
            lower.find("polkit") != std::string::npos;
 }

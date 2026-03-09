@@ -1772,6 +1772,100 @@ TEST_CASE("Config: v3→v4 migration moves printer_image to per-printer path",
 }
 
 // ============================================================================
+// v4→v5 migration: show_printer_switcher default for single-printer configs
+// ============================================================================
+
+TEST_CASE("Config: v4→v5 migration disables printer switcher for single-printer config",
+          "[core][config][migration][v5]") {
+    std::string temp_dir = "/tmp/helix_test_v4_to_v5_single";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v4_config = {
+        {"config_version", 4},
+        {"active_printer_id", "ender3"},
+        {"printers",
+         {{"ender3",
+           {{"moonraker_host", "192.168.1.50"},
+            {"moonraker_port", 7125}}}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v4_config.dump(2);
+    }
+
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    REQUIRE(test_config.get<bool>("/printers/show_printer_switcher") == false);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v4→v5 migration skips when multiple printers configured",
+          "[core][config][migration][v5]") {
+    std::string temp_dir = "/tmp/helix_test_v4_to_v5_multi";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v4_config = {
+        {"config_version", 4},
+        {"active_printer_id", "ender3"},
+        {"printers",
+         {{"ender3",
+           {{"moonraker_host", "192.168.1.50"}}},
+          {"voron",
+           {{"moonraker_host", "192.168.1.51"}}}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v4_config.dump(2);
+    }
+
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    // Migration should NOT have written the key for multi-printer configs
+    REQUIRE_FALSE(test_config.exists("/printers/show_printer_switcher"));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v4→v5 migration preserves explicit show_printer_switcher setting",
+          "[core][config][migration][v5]") {
+    std::string temp_dir = "/tmp/helix_test_v4_to_v5_explicit";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v4_config = {
+        {"config_version", 4},
+        {"active_printer_id", "ender3"},
+        {"printers",
+         {{"show_printer_switcher", true},
+          {"ender3",
+           {{"moonraker_host", "192.168.1.50"}}}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v4_config.dump(2);
+    }
+
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    // Should NOT override the explicit true setting
+    REQUIRE(test_config.get<bool>("/printers/show_printer_switcher") == true);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+// ============================================================================
 // Multi-printer CRUD
 // ============================================================================
 

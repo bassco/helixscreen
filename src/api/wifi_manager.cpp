@@ -470,8 +470,6 @@ void WiFiManager::handle_disconnected(const std::string& event_data) {
 }
 
 void WiFiManager::handle_auth_failed(const std::string& event_data) {
-    (void)event_data; // Could parse specific error from event data
-
     spdlog::warn("[WiFiManager] Authentication failed event received (backend thread)");
 
     connecting_in_progress_ = false; // Connection attempt complete (failed)
@@ -481,10 +479,13 @@ void WiFiManager::handle_auth_failed(const std::string& event_data) {
         return;
     }
 
+    // Pass through backend detail if provided, otherwise generic message
+    std::string error_msg = event_data.empty() ? "Authentication failed" : event_data;
+
     // Use RAII-safe async callback wrapper
     helix::ui::queue_update<ConnectCallbackData>(
         std::make_unique<ConnectCallbackData>(
-            ConnectCallbackData{self_, false, "Authentication failed"}),
+            ConnectCallbackData{self_, false, std::move(error_msg)}),
         [](ConnectCallbackData* d) {
             if (auto manager = d->manager.lock()) {
                 if (manager->connect_callback_) {

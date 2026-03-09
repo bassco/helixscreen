@@ -1287,11 +1287,21 @@ void NetworkSettingsOverlay::handle_password_connect_clicked() {
         } else {
             spdlog::error("[NetworkSettingsOverlay] Connection failed: {}", error);
 
-            // Show error in modal
+            // Show error in modal — use backend detail if available
             if (self->password_modal_) {
                 lv_obj_t* modal_status = lv_obj_find_by_name(self->password_modal_, "modal_status");
                 if (modal_status) {
-                    lv_label_set_text(modal_status, lv_tr("Connection failed. Check password."));
+                    // Permission errors get backend message; auth failures get generic
+                    auto lower_err = error;
+                    std::transform(lower_err.begin(), lower_err.end(), lower_err.begin(),
+                                   [](unsigned char c) { return std::tolower(c); });
+                    bool is_permission = lower_err.find("permission denied") != std::string::npos;
+                    if (is_permission) {
+                        lv_label_set_text(modal_status, error.c_str());
+                    } else {
+                        lv_label_set_text(modal_status,
+                                          lv_tr("Connection failed. Check password."));
+                    }
                     lv_obj_remove_flag(modal_status, LV_OBJ_FLAG_HIDDEN);
                 }
             }
