@@ -165,6 +165,11 @@ class AmsDeviceSectionDetailOverlay : public OverlayBase {
     static void on_slider_released(lv_event_t* e);
 
     /**
+     * @brief Callback for text input submit — validates and applies numeric value
+     */
+    static void on_value_input_ready(lv_event_t* e);
+
+    /**
      * @brief Callback for dynamic dropdown value change
      */
     static void on_dropdown_changed(lv_event_t* e);

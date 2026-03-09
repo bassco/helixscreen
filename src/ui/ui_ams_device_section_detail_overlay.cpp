@@ -324,26 +324,37 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
         }
         lv_slider_set_value(slider, slider_val, LV_ANIM_OFF);
 
-        // Value label on right showing current value + unit
-        lv_obj_t* value_label = lv_label_create(row);
-        lv_obj_set_style_text_color(value_label, theme_manager_get_color("text_muted"), 0);
+        // Editable numeric text input on right (replaces read-only value_label)
+        lv_obj_t* ta = lv_textarea_create(row);
+        lv_textarea_set_one_line(ta, true);
+        lv_obj_set_width(ta, 80);
+        lv_obj_set_height(ta, theme_manager_get_spacing("button_height_sm"));
+        lv_textarea_set_accepted_chars(ta, "0123456789.-");
         std::string val_text = std::to_string(slider_val);
+        lv_textarea_set_text(ta, val_text.c_str());
+
+        // Store unit as part of placeholder for reference
         if (!action.unit.empty()) {
-            val_text += " " + action.unit;
+            lv_textarea_set_placeholder_text(ta, action.unit.c_str());
         }
-        lv_label_set_text(value_label, val_text.c_str());
 
-        // Store action ID in vector, pass index as user_data
+        // Store action ID in vector, pass index as user_data on BOTH slider and textarea
         action_ids_.push_back(action.id);
-        lv_obj_set_user_data(slider, reinterpret_cast<void*>(action_ids_.size() - 1));
+        size_t action_index = action_ids_.size() - 1;
+        lv_obj_set_user_data(slider, reinterpret_cast<void*>(action_index));
+        lv_obj_set_user_data(ta, reinterpret_cast<void*>(action_index));
 
-        // Update label live during drag, execute action only on release
+        // Slider callbacks: update text input live during drag, execute on release
         lv_obj_add_event_cb(slider, on_slider_changed, LV_EVENT_VALUE_CHANGED, nullptr);
         lv_obj_add_event_cb(slider, on_slider_released, LV_EVENT_RELEASED, nullptr);
+
+        // Text input callback: validate and apply on Enter
+        lv_obj_add_event_cb(ta, on_value_input_ready, LV_EVENT_READY, nullptr);
 
         // Handle disabled state
         if (!action.enabled) {
             lv_obj_add_state(slider, LV_STATE_DISABLED);
+            lv_obj_add_state(ta, LV_STATE_DISABLED);
             if (!action.disable_reason.empty()) {
                 spdlog::debug("[{}] Slider '{}' disabled: {}", get_name(), action.id,
                               action.disable_reason);
@@ -520,21 +531,15 @@ void AmsDeviceSectionDetailOverlay::on_slider_changed(lv_event_t* e) {
             const std::string& action_id = overlay.action_ids_[index];
             int32_t int_val = lv_slider_get_value(slider);
 
-            // Update the value label (last child of the row: label, slider, value_label)
+            // Update the text input (last child of the row: label, slider, textarea)
             lv_obj_t* row = lv_obj_get_parent(slider);
             if (row) {
                 uint32_t child_count = lv_obj_get_child_count(row);
                 if (child_count >= 3) {
-                    lv_obj_t* value_label = lv_obj_get_child(row, child_count - 1);
-                    if (value_label) {
+                    lv_obj_t* ta = lv_obj_get_child(row, child_count - 1);
+                    if (ta) {
                         std::string val_text = std::to_string(int_val);
-                        for (const auto& act : overlay.cached_actions_) {
-                            if (act.id == action_id && !act.unit.empty()) {
-                                val_text += " " + act.unit;
-                                break;
-                            }
-                        }
-                        lv_label_set_text(value_label, val_text.c_str());
+                        lv_textarea_set_text(ta, val_text.c_str());
                     }
                 }
             }
@@ -589,6 +594,87 @@ void AmsDeviceSectionDetailOverlay::on_slider_released(lv_event_t* e) {
                     }
                 } else {
                     NOTIFY_ERROR("{}", result.user_msg);
+                }
+            }
+        }
+    }
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void AmsDeviceSectionDetailOverlay::on_value_input_ready(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[AmsDeviceSectionDetailOverlay] on_value_input_ready");
+
+    auto* ta = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    if (!ta || !lv_obj_is_valid(ta)) {
+        spdlog::warn("[AmsDeviceSectionDetailOverlay] on_value_input_ready: invalid target");
+    } else {
+        auto& overlay = get_ams_device_section_detail_overlay();
+        auto index = reinterpret_cast<size_t>(lv_obj_get_user_data(ta));
+        if (index >= overlay.action_ids_.size()) {
+            spdlog::warn("[AmsDeviceSectionDetailOverlay] Invalid text input action index: {}",
+                         index);
+        } else {
+            const std::string& action_id = overlay.action_ids_[index];
+            const char* text = lv_textarea_get_text(ta);
+            bool valid_input = (text && text[0] != '\0');
+
+            float val = 0.0f;
+            if (valid_input) {
+                try {
+                    val = std::stof(text);
+                } catch (...) {
+                    spdlog::warn("[AmsDeviceSectionDetailOverlay] Invalid numeric input: {}", text);
+                    valid_input = false;
+                }
+            }
+
+            if (valid_input) {
+                // Find action to validate range
+                float min_val = 0.0f, max_val = 0.0f;
+                std::string label, unit;
+                for (const auto& act : overlay.cached_actions_) {
+                    if (act.id == action_id) {
+                        min_val = act.min_value;
+                        max_val = act.max_value;
+                        label = act.label;
+                        unit = act.unit;
+                        break;
+                    }
+                }
+
+                // Clamp to valid range
+                if (val < min_val) val = min_val;
+                if (val > max_val) val = max_val;
+
+                // Update the textarea with clamped value
+                std::string clamped_text = std::to_string(static_cast<int32_t>(val));
+                lv_textarea_set_text(ta, clamped_text.c_str());
+
+                // Update the sibling slider (second child of row: label, slider, textarea)
+                lv_obj_t* row = lv_obj_get_parent(ta);
+                if (row) {
+                    lv_obj_t* slider = lv_obj_get_child(row, 1);
+                    if (slider) {
+                        lv_slider_set_value(slider, static_cast<int32_t>(val), LV_ANIM_ON);
+                    }
+                }
+
+                // Execute backend action
+                AmsBackend* backend = AmsState::instance().get_backend();
+                if (backend) {
+                    AmsError result = backend->execute_device_action(action_id, std::any(val));
+                    if (result.success()) {
+                        if (!unit.empty()) {
+                            NOTIFY_INFO("{} {} {} {}", lv_tr(label.c_str()), lv_tr("set to"),
+                                        static_cast<int32_t>(val), unit);
+                        } else {
+                            NOTIFY_INFO("{} {} {}", lv_tr(label.c_str()), lv_tr("set to"),
+                                        static_cast<int32_t>(val));
+                        }
+                    } else {
+                        NOTIFY_ERROR("{}", result.user_msg);
+                    }
                 }
             }
         }
