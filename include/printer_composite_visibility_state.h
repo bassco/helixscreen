@@ -130,6 +130,12 @@ class PrinterCompositeVisibilityState {
     SubjectManager subjects_;
     bool subjects_initialized_ = false;
 
+    // Dirty-tracking for debug logging (only log when values change)
+    bool last_log_state_initialized_ = false;
+    int last_bed_mesh_ = -1, last_qgl_ = -1, last_z_tilt_ = -1;
+    int last_nozzle_clean_ = -1, last_purge_line_ = -1, last_any_ = -1;
+    bool last_plugin_ = false;
+
     // Composite visibility subjects (all integer: 0=hidden, 1=visible)
     lv_subject_t can_show_bed_mesh_{};        // helix_plugin_installed && printer_has_bed_mesh
     lv_subject_t can_show_qgl_{};             // helix_plugin_installed && printer_has_qgl

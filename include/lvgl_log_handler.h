@@ -28,5 +28,14 @@ namespace logging {
  */
 void register_lvgl_log_handler();
 
+/**
+ * @brief Suppress LVGL translation warnings (downgrade to trace)
+ *
+ * When true, translation-related LVGL warnings (missing language, missing tag)
+ * are logged at trace level instead of debug. Used during init_translations()
+ * to avoid noisy startup output from expected incomplete translations.
+ */
+void set_suppress_translation_warnings(bool suppress);
+
 } // namespace logging
 } // namespace helix

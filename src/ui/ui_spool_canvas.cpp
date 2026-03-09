@@ -333,11 +333,11 @@ static void spool_canvas_xml_apply(lv_xml_parser_state_t* state, const char** at
             uint32_t hex = strtoul(value, nullptr, 0);
             data->color = lv_color_hex(hex);
             needs_redraw = true;
-            spdlog::debug("[SpoolCanvas] Set color=0x{:06X}", hex);
+            spdlog::trace("[SpoolCanvas] Set color=0x{:06X}", hex);
         } else if (strcmp(name, "fill_level") == 0) {
             data->fill_level = strtof(value, nullptr);
             needs_redraw = true;
-            spdlog::debug("[SpoolCanvas] Set fill_level={:.2f}", data->fill_level);
+            spdlog::trace("[SpoolCanvas] Set fill_level={:.2f}", data->fill_level);
         } else if (strcmp(name, "size") == 0) {
             int32_t new_size = atoi(value);
             if (new_size != data->size && new_size > 0) {
@@ -354,7 +354,7 @@ static void spool_canvas_xml_apply(lv_xml_parser_state_t* state, const char** at
                 }
                 lv_obj_set_size(data->canvas, new_size, new_size);
                 needs_redraw = true;
-                spdlog::debug("[SpoolCanvas] Set size={}", new_size);
+                spdlog::trace("[SpoolCanvas] Set size={}", new_size);
             }
         }
     }

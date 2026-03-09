@@ -1074,6 +1074,10 @@ bool Application::register_xml_components() {
 }
 
 bool Application::init_translations() {
+    // Suppress LVGL translation warnings during init — incomplete translations
+    // are expected and produce many "language is missing from tag" warnings
+    helix::logging::set_suppress_translation_warnings(true);
+
     // Load translation strings from XML (for LVGL's native translation system)
     // This must happen before UI creation but after the XML system is initialized
     lv_result_t result =
@@ -1099,6 +1103,9 @@ bool Application::init_translations() {
     std::string lang = m_config->get_language();
     lv_translation_set_language(lang.c_str());
     lv_i18n_set_locale(lang.c_str());
+
+    // Re-enable translation warnings for runtime (post-init warnings are actionable)
+    helix::logging::set_suppress_translation_warnings(false);
     spdlog::info("[Application] Language set to '{}' (both translation systems)", lang);
 
     return true;
