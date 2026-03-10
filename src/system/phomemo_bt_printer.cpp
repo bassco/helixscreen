@@ -2,6 +2,7 @@
 
 #include "phomemo_bt_printer.h"
 #include "bluetooth_loader.h"
+#include "bt_print_utils.h"
 #include "phomemo_printer.h"
 #include "phomemo_protocol.h"
 #include "ui_update_queue.h"
@@ -12,12 +13,13 @@
 
 namespace helix::label {
 
-void PhomemoBluetoothPrinter::set_device(const std::string& mac) {
+void PhomemoBluetoothPrinter::set_device(const std::string& mac, const std::string& transport) {
     mac_ = mac;
+    transport_ = transport;
 }
 
 std::string PhomemoBluetoothPrinter::name() const {
-    return "Phomemo M110 (Bluetooth)";
+    return "Phomemo (Bluetooth)";
 }
 
 std::vector<LabelSize> PhomemoBluetoothPrinter::supported_sizes() const {
@@ -44,44 +46,48 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
     }
 
     auto commands = phomemo_build_raster(bitmap, size);
-    spdlog::info("Phomemo BT: sending {} bytes to {} via BLE", commands.size(), mac_);
+    spdlog::info("Phomemo BT: sending {} bytes to {} via {}", commands.size(), mac_, transport_);
 
     std::string mac = mac_;
+    bool use_spp = (transport_ == "spp");
 
-    std::thread([mac, commands = std::move(commands), callback]() {
-        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    std::thread([mac, use_spp, commands = std::move(commands), callback]() {
         bool success = false;
         std::string error;
 
-        // Per-connection context
-        auto* ctx = loader.init();
-        if (!ctx) {
-            error = "Failed to initialize Bluetooth context";
-            spdlog::error("Phomemo BT: {}", error);
+        if (use_spp) {
+            auto result = helix::bluetooth::rfcomm_send(mac, 1, commands, "Phomemo BT");
+            success = result.success;
+            error = std::move(result.error);
         } else {
-            int handle = loader.connect_ble(ctx, mac.c_str(), PHOMEMO_WRITE_UUID);
-            if (handle < 0) {
-                const char* err = loader.last_error ? loader.last_error(ctx) : "unknown error";
-                error = fmt::format("BLE connect failed: {}", err);
+            // BLE GATT path
+            auto& loader = helix::bluetooth::BluetoothLoader::instance();
+            auto* ctx = loader.init();
+            if (!ctx) {
+                error = "Failed to initialize Bluetooth context";
                 spdlog::error("Phomemo BT: {}", error);
             } else {
-                // Plugin handles MTU chunking internally
-                int ret = loader.ble_write(ctx, handle,
-                                           commands.data(),
-                                           static_cast<int>(commands.size()));
-                if (ret < 0) {
+                int handle = loader.connect_ble(ctx, mac.c_str(), PHOMEMO_WRITE_UUID);
+                if (handle < 0) {
                     const char* err = loader.last_error ? loader.last_error(ctx) : "unknown error";
-                    error = fmt::format("BLE write failed: {}", err);
+                    error = fmt::format("BLE connect failed: {}", err);
                     spdlog::error("Phomemo BT: {}", error);
                 } else {
-                    success = true;
-                    spdlog::info("Phomemo BT: sent {} bytes successfully", commands.size());
+                    int ret = loader.ble_write(ctx, handle,
+                                               commands.data(),
+                                               static_cast<int>(commands.size()));
+                    if (ret < 0) {
+                        const char* err = loader.last_error ? loader.last_error(ctx) : "unknown error";
+                        error = fmt::format("BLE write failed: {}", err);
+                        spdlog::error("Phomemo BT: {}", error);
+                    } else {
+                        success = true;
+                        spdlog::info("Phomemo BT: sent {} bytes via BLE", commands.size());
+                    }
+                    loader.disconnect(ctx, handle);
                 }
-
-                loader.disconnect(ctx, handle);
+                loader.deinit(ctx);
             }
-
-            loader.deinit(ctx);
         }
 
         helix::ui::queue_update([callback, success, error]() {

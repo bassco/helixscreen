@@ -13,6 +13,7 @@
  */
 
 #include "bt_context.h"
+#include "bt_discovery_utils.h"
 #include "bluetooth_plugin.h"
 
 #include <cstdio>
@@ -21,9 +22,8 @@
 #include <string>
 #include <vector>
 
-// Label printer service UUIDs we filter for
-static const char* SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
-static const char* PHOMEMO_SERVICE_UUID = "0000ff00-0000-1000-8000-00805f9b34fb";
+using helix::bluetooth::is_label_printer_uuid;
+using helix::bluetooth::uuid_is_ble;
 
 /// State passed through the signal callback
 struct discover_ctx {
@@ -31,24 +31,6 @@ struct discover_ctx {
     helix_bt_discover_cb cb;
     void* user_data;
 };
-
-/// Check if a UUID string matches one of our target service UUIDs (case-insensitive prefix)
-static bool is_label_printer_uuid(const char* uuid)
-{
-    if (!uuid) return false;
-    // SPP
-    if (strncasecmp(uuid, "00001101", 8) == 0) return true;
-    // Phomemo BLE service
-    if (strncasecmp(uuid, "0000ff00", 8) == 0) return true;
-    return false;
-}
-
-/// Determine if a device is BLE based on its UUID
-static bool uuid_is_ble(const char* uuid)
-{
-    if (!uuid) return false;
-    return strncasecmp(uuid, "0000ff00", 8) == 0;
-}
 
 /// Parse a single device's properties from a D-Bus message iterator and invoke callback
 /// if it matches a label printer UUID.
@@ -120,21 +102,56 @@ static void parse_device_properties(sd_bus_message* msg, discover_ctx* dctx)
     }
     sd_bus_message_exit_container(msg);  // array "a{sv}"
 
-    // Check if any UUID matches our label printer services
+    // Skip devices with no name (raw MAC-only entries are not useful)
+    if (address.empty()) return;
+    bool has_real_name = !name.empty() && name != address;
+
+    // Determine BLE vs Classic from UUIDs if available
+    bool is_ble = false;
+    bool has_printer_uuid = false;
+    std::string matching_uuid;
     for (const auto& uuid : uuids) {
         if (is_label_printer_uuid(uuid.c_str())) {
-            helix_bt_device dev = {};
-            dev.mac = address.c_str();
-            dev.name = name.empty() ? address.c_str() : name.c_str();
-            dev.paired = paired;
-            dev.is_ble = uuid_is_ble(uuid.c_str());
-            dev.service_uuid = uuid.c_str();
-
-            if (dctx->cb) {
-                dctx->cb(&dev, dctx->user_data);
-            }
-            break;  // One callback per device
+            matching_uuid = uuid;
+            is_ble = uuid_is_ble(uuid.c_str());
+            has_printer_uuid = true;
+            break;
         }
+    }
+
+    // Filter: show device if any of these are true:
+    //  1. Has a known printer UUID (SPP or Phomemo BLE)
+    //  2. Name matches a known label printer brand/pattern
+    //  3. Previously paired (user explicitly set it up)
+    bool dominated_by_uuid = has_printer_uuid;
+    bool dominated_by_name = has_real_name &&
+        helix::bluetooth::is_likely_label_printer(name.c_str());
+    bool dominated_by_paired = paired && has_real_name;
+
+    if (!dominated_by_uuid && !dominated_by_name && !dominated_by_paired) {
+        fprintf(stderr, "[bt] filtered: %s '%s' (not a likely printer)\n",
+                address.c_str(), name.c_str());
+        return;
+    }
+
+    fprintf(stderr, "[bt] accept: %s '%s' (uuid=%d name=%d paired=%d)\n",
+            address.c_str(), name.c_str(),
+            dominated_by_uuid, dominated_by_name, dominated_by_paired);
+
+    // If no UUID available, use name heuristic for BLE detection
+    if (!has_printer_uuid && has_real_name) {
+        is_ble = helix::bluetooth::name_suggests_ble(name.c_str());
+    }
+
+    helix_bt_device dev = {};
+    dev.mac = address.c_str();
+    dev.name = has_real_name ? name.c_str() : address.c_str();
+    dev.paired = paired;
+    dev.is_ble = is_ble;
+    dev.service_uuid = matching_uuid.empty() ? nullptr : matching_uuid.c_str();
+
+    if (dctx->cb) {
+        dctx->cb(&dev, dctx->user_data);
     }
 }
 

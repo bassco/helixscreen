@@ -102,6 +102,12 @@ class LabelPrinterSettingsManager {
     /** @brief Set Bluetooth MAC address (updates configured subject, persists) */
     void set_bt_address(const std::string& address);
 
+    /** @brief Get Bluetooth device name (for display without scanning) */
+    [[nodiscard]] std::string get_bt_name() const;
+
+    /** @brief Set Bluetooth device name (persists to config) */
+    void set_bt_name(const std::string& name);
+
     /** @brief Get Bluetooth transport type ("spp" or "ble") */
     [[nodiscard]] std::string get_bt_transport() const;
 

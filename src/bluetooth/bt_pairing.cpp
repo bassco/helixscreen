@@ -16,6 +16,27 @@
 #include <cstdio>
 #include <cstring>
 
+/// Mark a device as trusted so future connections don't require re-authorization
+static void trust_device(sd_bus* bus, const char* path)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    int r = sd_bus_set_property(bus,
+                                "org.bluez",
+                                path,
+                                "org.bluez.Device1",
+                                "Trusted",
+                                &error,
+                                "b",
+                                1);
+    if (r < 0) {
+        fprintf(stderr, "[bt] failed to set Trusted on %s: %s\n",
+                path, error.message ? error.message : strerror(-r));
+    } else {
+        fprintf(stderr, "[bt] device %s marked as trusted\n", path);
+    }
+    sd_bus_error_free(&error);
+}
+
 extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac)
 {
     if (!ctx) return -EINVAL;
@@ -33,6 +54,7 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac)
     std::string path = mac_to_dbus_path(mac);
     fprintf(stderr, "[bt] pairing with %s (%s)\n", mac, path.c_str());
 
+    // Try Pair() first (Classic SPP devices)
     sd_bus_error error = SD_BUS_ERROR_NULL;
     int r = sd_bus_call_method(ctx->bus,
                                "org.bluez",
@@ -42,27 +64,74 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac)
                                &error,
                                nullptr,
                                "");
-    if (r < 0) {
-        // AlreadyExists means already paired — treat as success
-        if (sd_bus_error_has_name(&error, "org.bluez.Error.AlreadyExists")) {
-            fprintf(stderr, "[bt] device %s already paired\n", mac);
-            sd_bus_error_free(&error);
+    if (r >= 0) {
+        sd_bus_error_free(&error);
+        trust_device(ctx->bus, path.c_str());
+        fprintf(stderr, "[bt] paired successfully with %s\n", mac);
+        return 0;
+    }
+
+    // AlreadyExists means already paired — treat as success
+    if (sd_bus_error_has_name(&error, "org.bluez.Error.AlreadyExists")) {
+        fprintf(stderr, "[bt] device %s already paired\n", mac);
+        trust_device(ctx->bus, path.c_str());
+        sd_bus_error_free(&error);
+        return 0;
+    }
+
+    // BLE devices often don't support Pair() — fall back to Connect()
+    // which implicitly bonds on BLE devices
+    bool pair_method_missing =
+        sd_bus_error_has_name(&error, "org.freedesktop.DBus.Error.UnknownMethod") ||
+        sd_bus_error_has_name(&error, "org.bluez.Error.NotAvailable");
+
+    if (pair_method_missing) {
+        fprintf(stderr, "[bt] Pair() not available for %s, trying Connect() (BLE)\n", mac);
+        sd_bus_error_free(&error);
+
+        sd_bus_error error2 = SD_BUS_ERROR_NULL;
+        r = sd_bus_call_method(ctx->bus,
+                               "org.bluez",
+                               path.c_str(),
+                               "org.bluez.Device1",
+                               "Connect",
+                               &error2,
+                               nullptr,
+                               "");
+        if (r >= 0) {
+            sd_bus_error_free(&error2);
+            trust_device(ctx->bus, path.c_str());
+            fprintf(stderr, "[bt] connected (BLE) successfully with %s\n", mac);
             return 0;
         }
 
-        fprintf(stderr, "[bt] pair failed for %s: %s\n", mac,
-                error.message ? error.message : strerror(-r));
+        // AlreadyConnected is also success for our purposes
+        if (sd_bus_error_has_name(&error2, "org.bluez.Error.AlreadyConnected")) {
+            fprintf(stderr, "[bt] device %s already connected\n", mac);
+            trust_device(ctx->bus, path.c_str());
+            sd_bus_error_free(&error2);
+            return 0;
+        }
+
+        fprintf(stderr, "[bt] Connect() also failed for %s: %s\n", mac,
+                error2.message ? error2.message : strerror(-r));
         {
             std::lock_guard<std::mutex> lock(ctx->mutex);
-            ctx->last_error = error.message ? error.message : "pairing failed";
+            ctx->last_error = error2.message ? error2.message : "connect failed";
         }
-        sd_bus_error_free(&error);
+        sd_bus_error_free(&error2);
         return r;
     }
 
+    // Pair() failed for other reasons
+    fprintf(stderr, "[bt] pair failed for %s: %s\n", mac,
+            error.message ? error.message : strerror(-r));
+    {
+        std::lock_guard<std::mutex> lock(ctx->mutex);
+        ctx->last_error = error.message ? error.message : "pairing failed";
+    }
     sd_bus_error_free(&error);
-    fprintf(stderr, "[bt] paired successfully with %s\n", mac);
-    return 0;
+    return r;
 }
 
 extern "C" int helix_bt_is_paired(helix_bt_context* ctx, const char* mac)

@@ -22,6 +22,7 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <thread>
 
 /// Wait for ServicesResolved to become true (poll D-Bus property, timeout 10s)
 static int wait_services_resolved(sd_bus* bus, const char* device_path)
@@ -369,6 +370,10 @@ extern "C" int helix_bt_ble_write(helix_bt_context* ctx, int handle,
                 ctx->last_error = std::string("BLE write failed: ") + strerror(err);
                 return -err;
             }
+            // BLE printers need inter-chunk delay to avoid buffer overflow
+            if (offset + to_write < len) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         } else {
             // Slow path: WriteValue D-Bus method call per chunk
             sd_bus_error error = SD_BUS_ERROR_NULL;
@@ -424,6 +429,11 @@ extern "C" int helix_bt_ble_write(helix_bt_context* ctx, int handle,
                 return r;
             }
             sd_bus_error_free(&error);
+
+            // BLE printers need inter-chunk delay to avoid buffer overflow
+            if (offset + to_write < len) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
 
         offset += to_write;

@@ -5,6 +5,7 @@
 
 #include "brother_ql_bt_printer.h"
 #include "brother_ql_printer.h"
+#include "bt_discovery_utils.h"
 #include "label_printer_settings.h"
 #include "label_renderer.h"
 #include "phomemo_bt_printer.h"
@@ -28,9 +29,10 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
     if (is_usb) {
         sizes = PhomemoPrinter::supported_sizes_static();
     } else if (is_bt) {
-        const auto transport = settings.get_bt_transport();
-        sizes = (transport == "ble") ? PhomemoPrinter::supported_sizes_static()
-                                     : BrotherQLPrinter::supported_sizes_static();
+        const auto bt_name = settings.get_bt_name();
+        sizes = helix::bluetooth::is_brother_printer(bt_name.c_str())
+                    ? BrotherQLPrinter::supported_sizes_static()
+                    : PhomemoPrinter::supported_sizes_static();
     } else {
         sizes = BrotherQLPrinter::supported_sizes_static();
     }
@@ -76,17 +78,17 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         usb_printer.set_device(vid, pid, settings.get_usb_serial());
         usb_printer.print(bitmap, label_size, callback);
     } else if (is_bt) {
-        const auto transport = settings.get_bt_transport();
         const auto bt_address = settings.get_bt_address();
+        const auto bt_name = settings.get_bt_name();
 
-        if (transport == "ble") {
-            static helix::label::PhomemoBluetoothPrinter bt_phomemo;
-            bt_phomemo.set_device(bt_address);
-            bt_phomemo.print(bitmap, label_size, callback);
+        if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
+            helix::label::BrotherQLBluetoothPrinter printer;
+            printer.set_device(bt_address);
+            printer.print(bitmap, label_size, callback);
         } else {
-            static helix::label::BrotherQLBluetoothPrinter bt_brother;
-            bt_brother.set_device(bt_address);
-            bt_brother.print(bitmap, label_size, callback);
+            helix::label::PhomemoBluetoothPrinter printer;
+            printer.set_device(bt_address, settings.get_bt_transport());
+            printer.print(bitmap, label_size, callback);
         }
     } else {
         static BrotherQLPrinter net_printer;

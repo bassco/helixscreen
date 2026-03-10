@@ -85,8 +85,8 @@
     <lv_obj name="container_spoolman_settings" width="100%" style_pad_all="0" scrollable="false">
       <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
       <setting_action_row name="row_spoolman_settings"
-                          label="Spoolman" label_tag="Spoolman" icon="database" description="Weight sync settings"
-                          description_tag="Weight sync settings" callback="on_spoolman_settings_clicked"/>
+                          label="Spoolman" label_tag="Spoolman" icon="database" description="Filament tracking &amp; label printing"
+                          description_tag="Filament tracking &amp; label printing" callback="on_spoolman_settings_clicked"/>
     </lv_obj>
     <!-- Firmware Retraction Settings (hidden if no firmware_retraction capability) -->
     <lv_obj name="container_firmware_retraction" width="100%" style_pad_all="0" scrollable="false">

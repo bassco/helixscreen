@@ -745,10 +745,30 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
         return;
 
     lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
-    if (dropdown) {
-        if (bt_devices_.empty()) {
-            lv_dropdown_set_options(dropdown, lv_tr("Press Scan to search"));
-        }
+    if (!dropdown)
+        return;
+
+    // Pre-populate with saved paired device if available
+    auto& settings = LabelPrinterSettingsManager::instance();
+    std::string saved_addr = settings.get_bt_address();
+    std::string saved_name = settings.get_bt_name();
+
+    if (!saved_addr.empty()) {
+        // Add saved device to bt_devices_ so selection index works
+        BtDeviceInfo saved_dev;
+        saved_dev.mac = saved_addr;
+        saved_dev.name = saved_name.empty() ? saved_addr : saved_name;
+        saved_dev.paired = true;
+        saved_dev.is_ble = (settings.get_bt_transport() == "ble");
+
+        bt_devices_.clear();
+        bt_devices_.push_back(saved_dev);
+
+        std::string label = saved_dev.name + " (Paired)";
+        lv_dropdown_set_options(dropdown, label.c_str());
+        lv_dropdown_set_selected(dropdown, 0);
+    } else {
+        lv_dropdown_set_options(dropdown, lv_tr("Press Scan to search"));
     }
 }
 
@@ -776,7 +796,11 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
     }
 
     bt_discovering_ = true;
-    bt_devices_.clear();
+    // Keep saved paired device so it stays visible during scan
+    bt_devices_.erase(
+        std::remove_if(bt_devices_.begin(), bt_devices_.end(),
+                        [](const BtDeviceInfo& d) { return !d.paired; }),
+        bt_devices_.end());
 
     // Update dropdown to show scanning state
     if (overlay_root_) {
@@ -839,7 +863,8 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                 std::string options;
                                 for (const auto& d : overlay->bt_devices_) {
                                     if (!options.empty()) options += "\n";
-                                    options += d.name + " (" + d.mac + ")";
+                                    options += d.name;
+                                    if (d.paired) options += " (Paired)";
                                 }
                                 lv_dropdown_set_options(dropdown, options.c_str());
                             }
@@ -920,6 +945,7 @@ void LabelPrinterSettingsOverlay::handle_bt_printer_selected(int index) {
     // Already paired — save settings
     auto& settings = LabelPrinterSettingsManager::instance();
     settings.set_bt_address(device.mac);
+    settings.set_bt_name(device.name);
     settings.set_bt_transport(device.is_ble ? "ble" : "spp");
 
     // Refresh label size dropdown for the selected printer's transport
@@ -1017,12 +1043,9 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
     std::string mac = *mac_copy;
     delete mac_copy;
 
-    // Close the modal
-    auto* dialog = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* modal_root = lv_obj_get_parent(dialog);
-    if (modal_root) {
-        lv_obj_delete(modal_root);
-    }
+    // Close the modal via the Modal system
+    auto* top = Modal::get_top();
+    if (top) Modal::hide(top);
 
     auto& loader = helix::bluetooth::BluetoothLoader::instance();
     if (!loader.is_available() || !loader.pair) {
@@ -1054,16 +1077,34 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                 ToastManager::instance().show(ToastSeverity::SUCCESS,
                                               lv_tr("Paired successfully"), 2000);
 
-                // Find the device info and save settings
+                // Find the device info, mark paired, and save settings
                 auto& ov = get_label_printer_settings_overlay();
                 for (auto& dev : ov.bt_devices_) {
                     if (dev.mac == mac) {
                         dev.paired = true;
                         auto& settings = LabelPrinterSettingsManager::instance();
                         settings.set_bt_address(mac);
+                        settings.set_bt_name(dev.name);
                         settings.set_bt_transport(dev.is_ble ? "ble" : "spp");
                         ov.init_label_size_dropdown();
                         break;
+                    }
+                }
+
+                // Refresh dropdown to show paired checkmark
+                if (ov.overlay_root_) {
+                    lv_obj_t* row = lv_obj_find_by_name(ov.overlay_root_, "row_bt_printers");
+                    if (row) {
+                        lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
+                        if (dropdown) {
+                            std::string options;
+                            for (const auto& d : ov.bt_devices_) {
+                                if (!options.empty()) options += "\n";
+                                options += d.name;
+                                if (d.paired) options += " (Paired)";
+                            }
+                            lv_dropdown_set_options(dropdown, options.c_str());
+                        }
                     }
                 }
             } else {
@@ -1084,12 +1125,9 @@ void LabelPrinterSettingsOverlay::on_pair_cancel(lv_event_t* e) {
     auto* mac_copy = static_cast<std::string*>(lv_event_get_user_data(e));
     delete mac_copy;
 
-    // Close the modal
-    auto* dialog = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* modal_root = lv_obj_get_parent(dialog);
-    if (modal_root) {
-        lv_obj_delete(modal_root);
-    }
+    // Close the modal via the Modal system
+    auto* top = Modal::get_top();
+    if (top) Modal::hide(top);
 
     LVGL_SAFE_EVENT_CB_END();
 }

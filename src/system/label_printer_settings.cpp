@@ -208,6 +208,19 @@ void LabelPrinterSettingsManager::set_bt_address(const std::string& address) {
     }
 }
 
+std::string LabelPrinterSettingsManager::get_bt_name() const {
+    Config* config = Config::get_instance();
+    return config->get<std::string>("/label_printer/bt_name", "");
+}
+
+void LabelPrinterSettingsManager::set_bt_name(const std::string& name) {
+    spdlog::info("[LabelPrinterSettings] set_bt_name('{}')", name);
+
+    Config* config = Config::get_instance();
+    config->set<std::string>("/label_printer/bt_name", name);
+    config->save();
+}
+
 std::string LabelPrinterSettingsManager::get_bt_transport() const {
     Config* config = Config::get_instance();
     return config->get<std::string>("/label_printer/bt_transport", "spp");

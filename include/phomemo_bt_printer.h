@@ -7,14 +7,15 @@
 
 namespace helix::label {
 
-/// Phomemo label printer backend over Bluetooth Low Energy (BLE GATT).
-/// Uses BluetoothLoader for BLE connect/write and phomemo_build_raster()
+/// Phomemo label printer backend over Bluetooth.
+/// Supports both SPP (RFCOMM) and BLE (GATT) transports.
+/// Uses BluetoothLoader for connectivity and phomemo_build_raster()
 /// for protocol byte generation. Per-connection BT context (init on print,
 /// deinit after). Async via detached thread + callback via queue_update().
 class PhomemoBluetoothPrinter : public ILabelPrinter {
   public:
-    /// Set the Bluetooth device to print to
-    void set_device(const std::string& mac);
+    /// Set the Bluetooth device and transport to print to
+    void set_device(const std::string& mac, const std::string& transport = "ble");
 
     [[nodiscard]] std::string name() const override;
     void print(const LabelBitmap& bitmap, const LabelSize& size,
@@ -23,6 +24,7 @@ class PhomemoBluetoothPrinter : public ILabelPrinter {
 
   private:
     std::string mac_;
+    std::string transport_ = "ble";
     static constexpr const char* PHOMEMO_WRITE_UUID = "0000ff02-0000-1000-8000-00805f9b34fb";
 };
 
