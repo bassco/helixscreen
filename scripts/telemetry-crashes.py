@@ -174,39 +174,45 @@ class SymbolCache:
 # ASLR resolution
 # ---------------------------------------------------------------------------
 
+def is_static_platform(platform: str) -> bool:
+    """Platforms built with -static (no shared libraries at all)."""
+    return platform in ("ad5m", "ad5x", "cc1")
+
+
 def is_shared_lib_addr(addr: int, platform: str, load_base: int = 0,
                        sym_max: int = 0) -> bool:
     """Detect shared library addresses (not from our binary).
 
+    Static platforms (ad5m, ad5x, cc1): built with -static, so there are NO
+    shared libraries.  Every address is from our binary (or garbage from
+    failed signal-frame unwinding).  Always returns False.
+
     aarch64 (pi): binary at 0x0000aaaa..., shared libs at 0x0000ffff...
-    armhf (pi32/ad5m/cc1): binary at low addresses, shared libs at 0xa0000000+
-    mips (ad5x): binary at load_base+0..~0x800000, shared libs at 0x70000000+
+    armhf (pi32): binary at low addresses, shared libs at 0xf0000000+
 
     When load_base and sym_max are provided, uses precise range check:
     if addr is outside [load_base, load_base + sym_max], it's a shared lib.
     """
-    if platform in ("pi", "rpi4_64bit"):
-        # aarch64 PIE: our binary is loaded at 0x0000aaaa_XXXXXXXX
-        # Shared libs live at 0x0000ffff_XXXXXXXX
-        top_word = (addr >> 32) & 0xFFFF
-        return top_word >= 0xFFFF
+    # Static builds have no shared libraries — every frame is ours
+    if is_static_platform(platform):
+        return False
 
-    # For 32-bit platforms, use precise range check if we have symbol info
+    # Precise range check: if we know the binary span, anything outside is a lib
     if load_base > 0 and sym_max > 0:
         binary_end = load_base + sym_max + 0x10000  # generous padding
         return addr < load_base or addr > binary_end
 
+    if platform in ("pi", "rpi4_64bit"):
+        # aarch64 PIE: binary at 0x0000_55XX_XXXX_XXXX (or 0x0000_aaXX)
+        # Shared libs at 0x0000_7fXX_XXXX_XXXX
+        # Kernel/vDSO at 0x0000_ffffXXXX_XXXX
+        top_byte = (addr >> 40) & 0xFF
+        # Binary ASLR range is 0x55-0x56 or 0xaa-0xab; everything 0x7f+ is lib
+        return top_byte >= 0x7F
+
     # Heuristic fallbacks for 32-bit platforms without load_base
     if platform == "pi32":
         return addr >= 0xF0000000
-    elif platform in ("ad5m", "cc1"):
-        # armhf non-PIE: binary at 0x00010000-0x00600000
-        # Shared libs at 0xa0000000+ (ld-linux, libc, libstdc++, etc.)
-        return addr >= 0x10000000
-    elif platform == "ad5x":
-        # MIPS PIE: binary at ~0x55640000+, but shared libs at 0x70000000+
-        # Without load_base, use threshold
-        return addr >= 0x70000000
     return False
 
 
@@ -263,26 +269,44 @@ def resolve_backtrace(
         return frames
 
     # Determine ASLR base address
+    have_explicit_base = False
     if load_base is not None:
         # Explicit load_base from crash event (preferred — no heuristic needed)
         try:
             base_address = int(load_base, 16)
+            have_explicit_base = True
         except ValueError:
             base_address = 0
-    elif addrs and addrs[0] > symbols.crash_handler_offset:
-        # Legacy heuristic: frame 0 is a return address inside crash_signal_handler.
-        # Check if addresses are already file-relative by testing frame 0 against symbols.
-        naive_file_offset = addrs[0]
-        resolved_test = symbols.lookup(naive_file_offset)
-        if "crash_signal_handler" in resolved_test:
-            # Addresses are already file-relative (base=0)
-            base_address = 0
-        else:
-            # Addresses are ASLR'd. Frame 0 = base + crash_handler_offset + intra_offset.
-            # Best estimate: base = frame0 - crash_handler_offset (off by intra_offset).
-            base_address = addrs[0] - symbols.crash_handler_offset
     else:
         base_address = 0
+
+    # Auto-detect base from crash_signal_handler when no explicit load_base
+    # was provided.  This handles legacy events that predate the load_base
+    # field.  We do NOT override an explicit load_base — even if validation
+    # fails (e.g. SIGABRT in shared lib code), the explicit base is more
+    # trustworthy than heuristic detection.
+    if not have_explicit_base and symbols.crash_handler_offset is not None and addrs:
+        # First check if base=0 already resolves crash_handler correctly
+        handler_found = False
+        for addr in addrs:
+            file_offset = addr - base_address
+            if file_offset >= 0:
+                resolved_test = symbols.lookup(file_offset)
+                if "crash_signal_handler" in resolved_test:
+                    handler_found = True
+                    break
+
+        if not handler_found:
+            # Try to find the crash_handler frame and derive correct base
+            for addr in addrs:
+                candidate_base = addr - symbols.crash_handler_offset
+                if candidate_base < 0:
+                    continue
+                test_offset = addr - candidate_base
+                resolved_test = symbols.lookup(test_offset)
+                if "crash_signal_handler" in resolved_test:
+                    base_address = candidate_base
+                    break
 
     # Determine max symbol address for precise shared-lib detection
     sym_max = symbols.addrs[-1] if symbols and symbols.addrs else 0
@@ -652,7 +676,8 @@ def format_terminal(result: dict, detail: bool = False) -> str:
                 lines.append(f"    uptime: {_fmt_duration(min_up)} — {_fmt_duration(max_up)}")
 
         if group["shallow"]:
-            lines.append("    ⚠ shallow backtrace (pi32?) — grouping may be unreliable")
+            plat_hint = "/".join(sorted(group["platforms"])) if group["platforms"] else "pi32?"
+            lines.append(f"    ⚠ shallow backtrace ({plat_hint}) — grouping may be unreliable")
 
         if detail:
             for inst in group["instances"]:
