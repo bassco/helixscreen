@@ -87,6 +87,13 @@
           "pattern": "ad5m",
           "confidence": 90,
           "reason": "Hostname contains 'ad5m' (Adventurer 5M)"
+        },
+        {
+          "type": "hostname_exclude",
+          "field": "hostname",
+          "pattern": "ad5x",
+          "confidence": 0,
+          "reason": "Exclude AD5X from matching as AD5M"
         }
       ],
       "print_start_capabilities": {
@@ -193,6 +200,13 @@
           "pattern": "ad5mpro",
           "confidence": 96,
           "reason": "Hostname contains 'ad5mpro'"
+        },
+        {
+          "type": "hostname_exclude",
+          "field": "hostname",
+          "pattern": "ad5x",
+          "confidence": 0,
+          "reason": "Exclude AD5X from matching as AD5M Pro"
         }
       ],
       "print_start_capabilities": {
@@ -216,6 +230,20 @@
       "z_offset_calibration_strategy": "gcode_offset",
       "heuristics": [
         {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "zmod_ifs_switch_sensor",
+          "confidence": 98,
+          "reason": "IFS filament switch sensor - exclusive to AD5X"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "SET_EXTRUDER_SLOT",
+          "confidence": 95,
+          "reason": "SET_EXTRUDER_SLOT macro - AD5X IFS control"
+        },
+        {
           "type": "hostname_match",
           "field": "hostname",
           "pattern": "ad5x",
@@ -223,11 +251,25 @@
           "reason": "Hostname contains 'ad5x' (Adventurer 5X)"
         },
         {
+          "type": "tool_count",
+          "field": "heaters",
+          "pattern": "tool_count_4",
+          "confidence": 85,
+          "reason": "4-extruder IFS tool changer"
+        },
+        {
           "type": "sensor_match",
           "field": "sensors",
           "pattern": "weightValue",
           "confidence": 80,
           "reason": "Spool weight sensor (FlashForge signature)"
+        },
+        {
+          "type": "cpu_arch_match",
+          "field": "cpu_arch",
+          "pattern": "mips",
+          "confidence": 70,
+          "reason": "MIPS host architecture (Ingenic X2600)"
         },
         {
           "type": "sensor_match",
@@ -249,20 +291,6 @@
           "pattern": "corexy",
           "confidence": 30,
           "reason": "CoreXY kinematics"
-        },
-        {
-          "type": "tool_count",
-          "field": "heaters",
-          "pattern": "tool_count_4",
-          "confidence": 85,
-          "reason": "4-extruder IFS tool changer"
-        },
-        {
-          "type": "cpu_arch_match",
-          "field": "cpu_arch",
-          "pattern": "mips",
-          "confidence": 70,
-          "reason": "MIPS host architecture (Ingenic X2600)"
         }
       ]
     },

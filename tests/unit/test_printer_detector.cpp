@@ -2867,6 +2867,85 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
 }
 
 // ============================================================================
+// AD5X vs AD5M Detection Regression Tests (GitHub #375)
+// ============================================================================
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: AD5X with IFS objects detected correctly even without ad5x hostname",
+                 "[printer][heuristics][regression][ad5x]") {
+    // Regression test for #375: AD5X was incorrectly detected as AD5M because
+    // the hostname on many AD5X devices is "flashforge" (not "ad5x"), and
+    // the AD5M had stronger heuristics winning the scoring.
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {"weightValue", "weight"},
+        .fans = {},
+        .leds = {},
+        .hostname = "flashforge",  // Generic hostname — does NOT contain "ad5x"
+        .printer_objects = {"zmod_ifs_switch_sensor _ifs_port_sensor_1",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_2",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_3",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_4",
+                            "gcode_macro SET_EXTRUDER_SLOT",
+                            "gcode_macro IFS_STATUS",
+                            "gcode_macro START_PRINT"},
+        .steppers = {},
+        .kinematics = "corexy",
+        .cpu_arch = "MIPS Ingenic X2600"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+    REQUIRE(result.confidence >= 90);
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: AD5M not detected when hostname contains ad5x",
+                 "[printer][heuristics][regression][ad5x]") {
+    // hostname_exclude should prevent AD5M from matching when hostname has "ad5x"
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "heater_bed"},
+        .sensors = {"tvocValue", "tvoc", "weightValue", "weight"},
+        .fans = {},
+        .leds = {},
+        .hostname = "ad5x-flashforge",
+        .printer_objects = {"mod_params", "gcode_macro SUPPORT_FORGE_X"},
+        .steppers = {},
+        .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    // Should NOT detect as AD5M or AD5M Pro (hostname_exclude blocks it)
+    if (result.detected()) {
+        REQUIRE(result.type_name != "FlashForge Adventurer 5M");
+        REQUIRE(result.type_name != "FlashForge Adventurer 5M Pro");
+    }
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: AD5X wins over AD5M when both share FlashForge characteristics",
+                 "[printer][heuristics][regression][ad5x]") {
+    // Both AD5X and AD5M share: flashforge hostname, weight sensor, corexy
+    // AD5X should win due to IFS objects and 4-extruder tool count
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {"weightValue", "weight"},
+        .fans = {},
+        .leds = {},
+        .hostname = "flashforge",
+        .printer_objects = {"zmod_ifs_switch_sensor _ifs_port_sensor_1",
+                            "gcode_macro SET_EXTRUDER_SLOT"},
+        .steppers = {},
+        .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+}
+
+// ============================================================================
 // Z-Offset Calibration Strategy Lookup
 // ============================================================================
 
