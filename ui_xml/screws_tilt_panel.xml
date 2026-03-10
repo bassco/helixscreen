@@ -84,119 +84,123 @@
       </lv_obj>
       <!-- ================================================================== -->
       <!-- STATE: RESULTS - Horizontal layout: Bed diagram LEFT, List+Buttons RIGHT -->
+      <!-- Also shows success banner when all screws are within tolerance -->
       <!-- ================================================================== -->
       <lv_obj name="state_results"
-              width="100%" flex_grow="1" style_pad_all="0" flex_flow="row" style_pad_gap="#space_md" scrollable="false">
+              width="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_pad_gap="#space_sm"
+              style_flex_cross_place="center" scrollable="false">
         <bind_flag_if_not_eq subject="screws_tilt_state" flag="hidden" ref_value="2"/>
-        <!-- LEFT: Bed Diagram (square aspect, takes ~45% width) -->
-        <lv_obj name="bed_diagram_column"
-                width="45%" height="100%" style_pad_all="0" flex_flow="column" style_flex_main_place="center"
-                style_flex_cross_place="center" style_pad_gap="#space_xs" scrollable="false">
-          <!-- Bed Diagram Container (square) -->
-          <lv_obj name="bed_diagram_container"
-                  width="100%" flex_grow="1" style_bg_color="#section_bg" style_radius="#border_radius"
-                  style_pad_all="#space_sm" scrollable="false">
-            <!-- Screw indicators positioned dynamically by C++ code using LVGL alignment -->
-          </lv_obj>
-          <!-- FRONT label below diagram -->
-          <text_xs text="^ FRONT" translation_tag="^ FRONT"/>
+        <!-- Success banner (shown when all screws are level) -->
+        <lv_obj name="success_banner"
+                width="100%" height="content" style_pad_all="#space_sm" flex_flow="row"
+                style_flex_main_place="center" style_flex_cross_place="center" style_pad_gap="#space_sm"
+                style_bg_color="#success" style_bg_opa="40" style_radius="#border_radius" scrollable="false">
+          <bind_flag_if_eq subject="results_is_leveled" flag="hidden" ref_value="0"/>
+          <lv_label text="#icon_check_circle" style_text_font="mdi_icons_24" style_text_color="#success"/>
+          <text_body text="Bed is Level!" translation_tag="Bed is Level!" style_text_color="#success"/>
+          <text_small name="probe_count_label" bind_text="probe_count_text" style_text_color="#success"/>
         </lv_obj>
-        <!-- RIGHT: Screw List + Buttons (takes ~55% width) -->
-        <lv_obj name="results_right_column"
-                height="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_pad_gap="#space_sm"
-                scrollable="false">
-          <!-- Instruction text -->
-          <text_small name="results_instruction"
-                      width="100%" text="Adjust screws, then re-probe." translation_tag="Adjust screws, then re-probe." style_text_align="center"/>
-          <!-- Legend for rotation icons -->
-          <lv_obj width="100%"
-                  height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="center"
-                  style_pad_gap="#space_lg" scrollable="false">
-            <lv_obj height="content"
-                    style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
-                    scrollable="false">
-              <icon src="rotate_right" size="xs" variant="secondary"/>
-              <text_xs text="= Tighten" translation_tag="= Tighten"/>
+        <!-- Main content: diagram + list side by side -->
+        <lv_obj name="results_content"
+                width="100%" flex_grow="1" style_pad_all="0" flex_flow="row"
+                style_flex_main_place="center" style_pad_gap="#space_md" scrollable="false">
+          <!-- LEFT: Bed Diagram (square aspect, takes ~45% width) -->
+          <lv_obj name="bed_diagram_column"
+                  width="45%" height="100%" style_pad_all="0" flex_flow="column" style_flex_main_place="center"
+                  style_flex_cross_place="center" style_pad_gap="#space_xs" scrollable="false">
+            <!-- Bed Diagram Container (square) -->
+            <lv_obj name="bed_diagram_container"
+                    width="100%" flex_grow="1" style_bg_color="#section_bg" style_radius="#border_radius"
+                    style_pad_all="#space_sm" scrollable="false">
+              <!-- Screw indicators positioned dynamically by C++ code using LVGL alignment -->
             </lv_obj>
-            <lv_obj height="content"
-                    style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
-                    scrollable="false">
-              <icon src="rotate_left" size="xs" variant="secondary"/>
-              <text_xs text="= Loosen" translation_tag="= Loosen"/>
-            </lv_obj>
+            <!-- FRONT label below diagram -->
+            <text_xs text="^ FRONT" translation_tag="^ FRONT"/>
           </lv_obj>
-          <!-- Screw List - 4 pre-defined rows with subject bindings -->
-          <lv_obj name="screw_list_container"
-                  width="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_pad_gap="#space_xs"
-                  scrollable="true">
-            <!-- Row 0 -->
-            <lv_obj name="screw_row_0"
-                    width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
-                    style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
-                    style_flex_cross_place="center" scrollable="false">
-              <bind_flag_if_eq subject="screw_0_visible" flag="hidden" ref_value="0"/>
-              <lv_obj name="screw_dot_0" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
-              <text_body name="screw_name_0" bind_text="screw_0_name" flex_grow="1" style_pad_left="#space_sm"/>
-              <text_body name="screw_adj_0" bind_text="screw_0_adjustment"/>
+          <!-- RIGHT: Screw List + Buttons (takes ~55% width) -->
+          <lv_obj name="results_right_column"
+                  height="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_pad_gap="#space_sm"
+                  scrollable="false">
+            <!-- Instruction text (hidden when leveled) -->
+            <text_small name="results_instruction"
+                        width="100%" text="Adjust screws, then re-probe." translation_tag="Adjust screws, then re-probe." style_text_align="center">
+              <bind_flag_if_eq subject="results_is_leveled" flag="hidden" ref_value="1"/>
+            </text_small>
+            <!-- Legend for rotation icons -->
+            <lv_obj width="100%"
+                    height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="center"
+                    style_pad_gap="#space_lg" scrollable="false">
+              <lv_obj height="content"
+                      style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
+                      scrollable="false">
+                <icon src="rotate_right" size="xs" variant="secondary"/>
+                <text_xs text="= Tighten" translation_tag="= Tighten"/>
+              </lv_obj>
+              <lv_obj height="content"
+                      style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
+                      scrollable="false">
+                <icon src="rotate_left" size="xs" variant="secondary"/>
+                <text_xs text="= Loosen" translation_tag="= Loosen"/>
+              </lv_obj>
             </lv_obj>
-            <!-- Row 1 -->
-            <lv_obj name="screw_row_1"
-                    width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
-                    style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
-                    style_flex_cross_place="center" scrollable="false">
-              <bind_flag_if_eq subject="screw_1_visible" flag="hidden" ref_value="0"/>
-              <lv_obj name="screw_dot_1" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
-              <text_body name="screw_name_1" bind_text="screw_1_name" flex_grow="1" style_pad_left="#space_sm"/>
-              <text_body name="screw_adj_1" bind_text="screw_1_adjustment"/>
+            <!-- Screw List - 4 pre-defined rows with subject bindings -->
+            <lv_obj name="screw_list_container"
+                    width="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_pad_gap="#space_xs"
+                    scrollable="true">
+              <!-- Row 0 -->
+              <lv_obj name="screw_row_0"
+                      width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
+                      style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
+                      style_flex_cross_place="center" scrollable="false">
+                <bind_flag_if_eq subject="screw_0_visible" flag="hidden" ref_value="0"/>
+                <lv_obj name="screw_dot_0" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
+                <text_body name="screw_name_0" bind_text="screw_0_name" flex_grow="1" style_pad_left="#space_sm"/>
+                <text_body name="screw_adj_0" bind_text="screw_0_adjustment"/>
+              </lv_obj>
+              <!-- Row 1 -->
+              <lv_obj name="screw_row_1"
+                      width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
+                      style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
+                      style_flex_cross_place="center" scrollable="false">
+                <bind_flag_if_eq subject="screw_1_visible" flag="hidden" ref_value="0"/>
+                <lv_obj name="screw_dot_1" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
+                <text_body name="screw_name_1" bind_text="screw_1_name" flex_grow="1" style_pad_left="#space_sm"/>
+                <text_body name="screw_adj_1" bind_text="screw_1_adjustment"/>
+              </lv_obj>
+              <!-- Row 2 -->
+              <lv_obj name="screw_row_2"
+                      width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
+                      style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
+                      style_flex_cross_place="center" scrollable="false">
+                <bind_flag_if_eq subject="screw_2_visible" flag="hidden" ref_value="0"/>
+                <lv_obj name="screw_dot_2" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
+                <text_body name="screw_name_2" bind_text="screw_2_name" flex_grow="1" style_pad_left="#space_sm"/>
+                <text_body name="screw_adj_2" bind_text="screw_2_adjustment"/>
+              </lv_obj>
+              <!-- Row 3 -->
+              <lv_obj name="screw_row_3"
+                      width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
+                      style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
+                      style_flex_cross_place="center" scrollable="false">
+                <bind_flag_if_eq subject="screw_3_visible" flag="hidden" ref_value="0"/>
+                <lv_obj name="screw_dot_3" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
+                <text_body name="screw_name_3" bind_text="screw_3_name" flex_grow="1" style_pad_left="#space_sm"/>
+                <text_body name="screw_adj_3" bind_text="screw_3_adjustment"/>
+              </lv_obj>
             </lv_obj>
-            <!-- Row 2 -->
-            <lv_obj name="screw_row_2"
-                    width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
-                    style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
-                    style_flex_cross_place="center" scrollable="false">
-              <bind_flag_if_eq subject="screw_2_visible" flag="hidden" ref_value="0"/>
-              <lv_obj name="screw_dot_2" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
-              <text_body name="screw_name_2" bind_text="screw_2_name" flex_grow="1" style_pad_left="#space_sm"/>
-              <text_body name="screw_adj_2" bind_text="screw_2_adjustment"/>
+            <!-- Action Buttons (bottom of right column) -->
+            <lv_obj width="100%"
+                    height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="center"
+                    style_pad_gap="#space_sm" scrollable="false">
+              <ui_button name="btn_done_results" width="100" height="#button_height_sm" text="Done" translation_tag="Done">
+                <event_cb trigger="clicked" callback="screws_tilt_done_cb"/>
+              </ui_button>
+              <ui_button name="btn_reprobe" width="25%" height="#button_height_sm" text="Re-probe" translation_tag="Re-probe">
+                <event_cb trigger="clicked" callback="screws_tilt_reprobe_cb"/>
+              </ui_button>
             </lv_obj>
-            <!-- Row 3 -->
-            <lv_obj name="screw_row_3"
-                    width="100%" height="content" style_bg_color="#section_bg" style_bg_opa="255" style_radius="6"
-                    style_pad_all="#space_sm" flex_flow="row" style_flex_main_place="space_between"
-                    style_flex_cross_place="center" scrollable="false">
-              <bind_flag_if_eq subject="screw_3_visible" flag="hidden" ref_value="0"/>
-              <lv_obj name="screw_dot_3" width="10" height="10" style_radius="32767" style_bg_opa="255"/>
-              <text_body name="screw_name_3" bind_text="screw_3_name" flex_grow="1" style_pad_left="#space_sm"/>
-              <text_body name="screw_adj_3" bind_text="screw_3_adjustment"/>
-            </lv_obj>
-          </lv_obj>
-          <!-- Action Buttons (bottom of right column) -->
-          <lv_obj width="100%"
-                  height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="center"
-                  style_pad_gap="#space_sm" scrollable="false">
-            <ui_button name="btn_done_results" width="100" height="#button_height_sm" text="Done" translation_tag="Done">
-              <event_cb trigger="clicked" callback="screws_tilt_done_cb"/>
-            </ui_button>
-            <ui_button name="btn_reprobe" width="25%" height="#button_height_sm" text="Re-probe" translation_tag="Re-probe">
-              <event_cb trigger="clicked" callback="screws_tilt_reprobe_cb"/>
-            </ui_button>
           </lv_obj>
         </lv_obj>
-      </lv_obj>
-      <!-- ================================================================== -->
-      <!-- STATE: LEVELED - All screws within tolerance -->
-      <!-- ================================================================== -->
-      <lv_obj name="state_leveled"
-              width="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_flex_main_place="center"
-              style_flex_cross_place="center" style_pad_gap="#space_lg" scrollable="false">
-        <bind_flag_if_not_eq subject="screws_tilt_state" flag="hidden" ref_value="3"/>
-        <lv_label text="#icon_check_circle" style_text_font="mdi_icons_48" style_text_color="#success"/>
-        <text_heading text="Bed is Level!" translation_tag="Bed is Level!" style_text_align="center"/>
-        <text_muted text="All screws are within tolerance." translation_tag="All screws are within tolerance."/>
-        <text_small name="probe_count_label" text="Completed in 3 probes" translation_tag="Completed in 3 probes"/>
-        <ui_button name="btn_done_leveled" width="#panel_button_width" text="Done" translation_tag="Done">
-          <event_cb trigger="clicked" callback="screws_tilt_done_cb"/>
-        </ui_button>
       </lv_obj>
       <!-- ================================================================== -->
       <!-- STATE: ERROR - Something went wrong -->
@@ -204,7 +208,7 @@
       <lv_obj name="state_error"
               width="100%" flex_grow="1" style_pad_all="0" flex_flow="column" style_flex_main_place="center"
               style_flex_cross_place="center" style_pad_gap="#space_lg" scrollable="false">
-        <bind_flag_if_not_eq subject="screws_tilt_state" flag="hidden" ref_value="4"/>
+        <bind_flag_if_not_eq subject="screws_tilt_state" flag="hidden" ref_value="3"/>
         <lv_label text="#icon_xmark_circle" style_text_font="mdi_icons_48" style_text_color="#danger"/>
         <text_heading text="Probing Failed" translation_tag="Probing Failed" style_text_align="center"/>
         <text_muted name="error_message"

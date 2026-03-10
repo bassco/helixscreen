@@ -29,8 +29,7 @@ class MoonrakerAPI;
  * ## State Machine:
  * - IDLE: Shows instructions and Start button
  * - PROBING: Waiting for SCREWS_TILT_CALCULATE to complete
- * - RESULTS: Showing bed diagram and adjustment values
- * - LEVELED: All screws within tolerance
+ * - RESULTS: Showing bed diagram and adjustment values (with success banner if all level)
  * - ERROR: Something went wrong
  *
  * ## Usage:
@@ -48,8 +47,7 @@ class ScrewsTiltPanel : public OverlayBase {
     enum class State {
         IDLE,    ///< Ready to start, showing instructions
         PROBING, ///< SCREWS_TILT_CALCULATE running
-        RESULTS, ///< Showing adjustment results
-        LEVELED, ///< All screws within tolerance
+        RESULTS, ///< Showing adjustment results (with optional success banner)
         ERROR    ///< Error occurred
     };
 
@@ -226,6 +224,7 @@ class ScrewsTiltPanel : public OverlayBase {
     static constexpr size_t ERROR_MSG_BUF_SIZE = 256;
     lv_subject_t probe_count_subject_;
     lv_subject_t error_message_subject_;
+    lv_subject_t results_is_leveled_subject_;
     char probe_count_buf_[PROBE_COUNT_BUF_SIZE] = {};
     char error_message_buf_[ERROR_MSG_BUF_SIZE] = {};
 

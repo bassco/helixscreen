@@ -28,7 +28,7 @@ using namespace helix;
 
 static std::unique_ptr<ScrewsTiltPanel> s_screws_tilt_panel;
 
-// State subject (0=IDLE, 1=PROBING, 2=RESULTS, 3=LEVELED, 4=ERROR)
+// State subject (0=IDLE, 1=PROBING, 2=RESULTS, 3=ERROR)
 static lv_subject_t s_screws_tilt_state;
 
 // Forward declarations
@@ -164,6 +164,7 @@ void ScrewsTiltPanel::init_subjects() {
                               subjects_);
     UI_MANAGED_SUBJECT_STRING(error_message_subject_, error_message_buf_, "", "error_message_text",
                               subjects_);
+    UI_MANAGED_SUBJECT_INT(results_is_leveled_subject_, 0, "results_is_leveled", subjects_);
 
     subjects_initialized_ = true;
     spdlog::debug("[ScrewsTilt] Subjects initialized and registered");
@@ -268,6 +269,7 @@ void ScrewsTiltPanel::on_activate() {
 
     // Reset for fresh session
     probe_count_ = 0;
+    lv_subject_set_int(&results_is_leveled_subject_, 0);
     set_state(State::IDLE);
     clear_results();
 
@@ -322,7 +324,7 @@ void ScrewsTiltPanel::set_state(State new_state) {
     state_ = new_state;
 
     // Update subject - XML bindings handle visibility automatically
-    // State mapping: 0=IDLE, 1=PROBING, 2=RESULTS, 3=LEVELED, 4=ERROR
+    // State mapping: 0=IDLE, 1=PROBING, 2=RESULTS, 3=ERROR
     lv_subject_set_int(&s_screws_tilt_state, static_cast<int>(new_state));
 }
 
@@ -378,16 +380,18 @@ void ScrewsTiltPanel::on_screws_tilt_results(const std::vector<ScrewTiltResult>&
     screw_results_ = results;
     populate_results(results);
 
-    // Check if all screws are within tolerance
-    if (check_all_level()) {
+    // Always show RESULTS state — success banner shown via results_is_leveled subject
+    bool all_level = check_all_level();
+    lv_subject_set_int(&results_is_leveled_subject_, all_level ? 1 : 0);
+
+    if (all_level) {
         char buf[64];
         snprintf(buf, sizeof(buf), "Completed in %d probe%s", probe_count_,
                  probe_count_ == 1 ? "" : "s");
         lv_subject_copy_string(&probe_count_subject_, buf);
-        set_state(State::LEVELED);
-    } else {
-        set_state(State::RESULTS);
     }
+
+    set_state(State::RESULTS);
 }
 
 void ScrewsTiltPanel::on_screws_tilt_error(const std::string& message) {
