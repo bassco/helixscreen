@@ -37,6 +37,9 @@
 #include "screensaver.h"
 #endif
 
+#include "lock_manager.h"
+#include "ui_lock_screen.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -829,6 +832,14 @@ void DisplayManager::wake_display() {
     }
     spdlog::info("[DisplayManager] Display woken from {}, brightness restored to {}%",
                  was_sleeping ? "sleep" : "dim", brightness);
+
+    // Auto-lock: show lock screen if PIN set and auto-lock enabled
+    if (was_sleeping &&
+        helix::LockManager::instance().auto_lock_enabled() &&
+        helix::LockManager::instance().has_pin()) {
+        helix::LockManager::instance().lock();
+        helix::ui::LockScreenOverlay::instance().show();
+    }
 
     // Notify subscribers (camera stream, etc.) to resume background work
     for (auto& cb : m_sleep_callbacks) {
