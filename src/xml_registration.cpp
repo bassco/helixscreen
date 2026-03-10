@@ -28,6 +28,7 @@
 #include "ui_text.h"
 #include "ui_text_input.h"
 #include "ui_lock_screen.h"
+#include "ui_pin_entry_modal.h"
 #include "ui_z_offset_indicator.h"
 
 #include "layout_manager.h"
@@ -283,6 +284,10 @@ void register_xml_components() {
     helix::ui::register_lock_screen_callbacks();
     register_xml("components/lock_screen.xml");
 
+    // PIN entry modal (numeric keypad for security settings PIN set/change/remove)
+    PinEntryModal::register_callbacks();
+    register_xml("components/pin_entry_modal.xml");
+
     // emergency_stop_button.xml removed - E-Stop buttons are now embedded in panels
     register_xml("estop_confirmation_dialog.xml");
     register_xml("klipper_recovery_dialog.xml");
@@ -449,7 +454,8 @@ void register_xml_components() {
 
     // Settings overlay panels
     register_xml("display_settings_overlay.xml");
-register_xml("sound_settings_overlay.xml");
+    register_xml("sound_settings_overlay.xml");
+    register_xml("security_settings_overlay.xml");
     register_xml("label_printer_settings.xml");
     register_xml("led_settings_overlay.xml");
     register_xml("theme_editor_overlay.xml");

@@ -166,6 +166,12 @@
                             bind_selected="settings_cancel_escalation_timeout"
                             callback="on_cancel_escalation_timeout_changed"/>
     </lv_obj>
+    <!-- Security Settings (PIN lock and auto-lock) -->
+    <setting_action_row name="row_security"
+                        label="Security" label_tag="Security" icon="lock"
+                        description="Screen lock and PIN settings"
+                        description_tag="Screen lock and PIN settings"
+                        callback="on_security_clicked"/>
     <!-- ================================================================== -->
     <!-- SYSTEM SECTION -->
     <!-- ================================================================== -->

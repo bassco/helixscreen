@@ -28,6 +28,7 @@
 #include "ui_settings_plugins.h"
 #include "ui_settings_sensors.h"
 #include "ui_settings_label_printer.h"
+#include "ui_settings_security.h"
 #include "ui_settings_sound.h"
 #include "ui_settings_telemetry_data.h"
 #include "ui_severity_card.h"
@@ -769,6 +770,13 @@ void SettingsPanel::handle_sound_settings_clicked() {
     overlay.show(parent_screen_);
 }
 
+void SettingsPanel::handle_security_settings_clicked() {
+    spdlog::debug("[{}] Security clicked - delegating to SecuritySettingsOverlay", get_name());
+
+    auto& overlay = helix::settings::get_security_settings_overlay();
+    overlay.show(parent_screen_);
+}
+
 void SettingsPanel::handle_label_printer_settings_clicked() {
     spdlog::debug("[{}] Label Printer clicked - delegating to LabelPrinterSettingsOverlay",
                   get_name());
@@ -1155,6 +1163,12 @@ void SettingsPanel::on_sound_settings_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void SettingsPanel::on_security_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_security_clicked");
+    get_global_settings_panel().handle_security_settings_clicked();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 void SettingsPanel::on_label_printer_settings_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_label_printer_settings_clicked");
     get_global_settings_panel().handle_label_printer_settings_clicked();
@@ -1333,6 +1347,7 @@ void register_settings_panel_callbacks() {
         {"on_led_light_changed", SettingsPanel::on_led_light_changed},
         {"on_led_settings_clicked", SettingsPanel::on_led_settings_clicked},
         {"on_sound_settings_clicked", SettingsPanel::on_sound_settings_clicked},
+        {"on_security_clicked", SettingsPanel::on_security_clicked},
         {"on_label_printer_settings_clicked", SettingsPanel::on_label_printer_settings_clicked},
         {"on_estop_confirm_changed", SettingsPanel::on_estop_confirm_changed},
         {"on_cancel_escalation_changed", SettingsPanel::on_cancel_escalation_changed},
