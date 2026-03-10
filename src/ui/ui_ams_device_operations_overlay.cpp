@@ -291,11 +291,13 @@ static const char* section_icon_for_id(const std::string& id) {
     if (id == "maintenance")
         return "wrench";
     if (id == "hub")
-        return "filament";
+        return "source_branch";
     if (id == "tip_forming")
         return "thermometer";
     if (id == "purge")
         return "water";
+    if (id == "toolhead")
+        return "filament";
     if (id == "config")
         return "cog";
     return "cog"; // fallback for unknown sections
@@ -498,7 +500,7 @@ void AmsDeviceOperationsOverlay::on_bypass_toggled(lv_event_t* e) {
 void AmsDeviceOperationsOverlay::on_section_row_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[AmsDeviceOperationsOverlay] on_section_row_clicked");
 
-    auto* row = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    auto* row = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     if (!row || !lv_obj_is_valid(row)) {
         spdlog::warn("[AmsDeviceOperationsOverlay] on_section_row_clicked: invalid target");
     } else {

@@ -921,6 +921,17 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
                     }
                 }
 
+                // Parse toolhead distances
+                if (ext_data.contains("tool_stn") && ext_data["tool_stn"].is_number()) {
+                    info.tool_stn = ext_data["tool_stn"].get<float>();
+                }
+                if (ext_data.contains("tool_stn_unload") && ext_data["tool_stn_unload"].is_number()) {
+                    info.tool_stn_unload = ext_data["tool_stn_unload"].get<float>();
+                }
+                if (ext_data.contains("tool_sensor_after_extruder") && ext_data["tool_sensor_after_extruder"].is_number()) {
+                    info.tool_sensor_after_extruder = ext_data["tool_sensor_after_extruder"].get<float>();
+                }
+
                 spdlog::debug("[AMS AFC] Extruder '{}': lane_loaded='{}', {} lanes", ext_name,
                               info.lane_loaded, info.available_lanes.size());
                 extruders_.push_back(std::move(info));
@@ -2655,7 +2666,19 @@ void AmsBackendAfc::update_tip_method_from_config() {
 // ============================================================================
 
 std::vector<helix::printer::DeviceSection> AmsBackendAfc::get_device_sections() const {
-    return helix::printer::afc_default_sections();
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto sections = helix::printer::afc_default_sections();
+
+    // Hide tip forming section when tip forming isn't the active method
+    if (system_info_.tip_method != TipMethod::TIP_FORM) {
+        sections.erase(std::remove_if(sections.begin(), sections.end(),
+                                      [](const helix::printer::DeviceSection& s) {
+                                          return s.id == "tip_forming";
+                                      }),
+                       sections.end());
+    }
+
+    return sections;
 }
 
 std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() const {
@@ -2675,6 +2698,20 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
         if (a.id == "led_toggle") {
             a.label = afc_led_state_ ? "Turn Off LEDs" : "Turn On LEDs";
             a.icon = afc_led_state_ ? "lightbulb-off" : "lightbulb-on";
+        }
+    }
+
+    // Overlay toolhead distances from first extruder (single-extruder default)
+    if (!extruders_.empty()) {
+        const auto& ext = extruders_[0];
+        for (auto& a : actions) {
+            if (a.id == "tool_stn") {
+                a.current_value = std::any(ext.tool_stn);
+            } else if (a.id == "tool_stn_unload") {
+                a.current_value = std::any(ext.tool_stn_unload);
+            } else if (a.id == "tool_sensor_after_extruder") {
+                a.current_value = std::any(ext.tool_sensor_after_extruder);
+            }
         }
     }
 
@@ -2703,6 +2740,58 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
                              true,
                              ""});
         }
+    }
+
+    // Multi-extruder: replace single toolhead actions with per-extruder
+    if (num_extruders_ > 1 && !extruders_.empty()) {
+        actions.erase(std::remove_if(actions.begin(), actions.end(),
+                                     [](const DeviceAction& a) {
+                                         return a.id == "tool_stn" || a.id == "tool_stn_unload" ||
+                                                a.id == "tool_sensor_after_extruder";
+                                     }),
+                      actions.end());
+
+        for (int i = 0; i < static_cast<int>(extruders_.size()); ++i) {
+            const auto& ext = extruders_[i];
+            std::string suffix = "_T" + std::to_string(i);
+            std::string tool_label = " (T" + std::to_string(i) + ")";
+
+            actions.push_back(
+                DeviceAction{"tool_stn" + suffix, "Sensor to Nozzle" + tool_label,
+                             "ruler", "toolhead",
+                             "Distance from toolhead sensor to nozzle for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_stn), {},
+                             0.0f, 200.0f, "mm", -1, true, ""});
+            actions.push_back(
+                DeviceAction{"tool_stn_unload" + suffix, "Unload Distance" + tool_label,
+                             "ruler", "toolhead",
+                             "Retraction distance for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_stn_unload), {},
+                             0.0f, 200.0f, "mm", -1, true, ""});
+            actions.push_back(
+                DeviceAction{"tool_sensor_after_extruder" + suffix, "Post-Sensor Clear" + tool_label,
+                             "ruler", "toolhead",
+                             "Extra clear distance for T" + std::to_string(i),
+                             ActionType::SLIDER, std::any(ext.tool_sensor_after_extruder), {},
+                             0.0f, 100.0f, "mm", -1, true, ""});
+        }
+    }
+
+    // Per-lane dist_hub actions in the hub section
+    for (int i = 0; i < slots_.slot_count(); ++i) {
+        const auto* entry = slots_.get(i);
+        if (!entry) continue;
+        std::string lane_name = slots_.name_of(i);
+        std::string id = "dist_hub_" + lane_name;
+        std::string label = "Hub Distance (" + lane_name + ")";
+        float current = entry->sensors.dist_hub;
+
+        actions.push_back(
+            DeviceAction{id, label, "ruler", "hub",
+                         "Distance from lane extruder to hub",
+                         ActionType::SLIDER, std::any(current), {},
+                         0.0f, std::max(500.0f, current * 1.5f), "mm",
+                         i, true, ""});
     }
 
     // ---- Overlay dynamic values from config onto default actions ----
@@ -2806,26 +2895,29 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
             }
         }
 
-        // Purge & Wipe actions — from macro_vars_config_
+        // Purge & Wipe actions — from afc_config_ [AFC] and [AFC_poop] sections
         else if (a.id == "purge_enabled") {
-            if (macro_ready) {
-                a.current_value = std::any(get_macro_var_bool("variable_purge_enabled", false));
+            if (cfg_ready) {
+                a.current_value = std::any(
+                    afc_config_->parser().get_bool("AFC", "poop", false));
                 a.enabled = true;
             } else {
                 a.enabled = false;
                 a.disable_reason = not_loaded_reason;
             }
         } else if (a.id == "purge_length") {
-            if (macro_ready) {
-                a.current_value = std::any(get_macro_var_float("variable_purge_length", 0.0f));
+            if (cfg_ready) {
+                a.current_value = std::any(
+                    afc_config_->parser().get_float("AFC_poop", "purge_length", 70.0f));
                 a.enabled = true;
             } else {
                 a.enabled = false;
                 a.disable_reason = not_loaded_reason;
             }
         } else if (a.id == "brush_enabled") {
-            if (macro_ready) {
-                a.current_value = std::any(get_macro_var_bool("variable_brush_enabled", false));
+            if (cfg_ready) {
+                a.current_value = std::any(
+                    afc_config_->parser().get_bool("AFC", "wipe", false));
                 a.enabled = true;
             } else {
                 a.enabled = false;
@@ -2833,11 +2925,7 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
             }
         }
 
-        // Config section — save_restart enabled only when there are unsaved changes
-        else if (a.id == "save_restart") {
-            a.enabled = has_changes;
-            a.disable_reason = has_changes ? "" : "No unsaved changes";
-        }
+        // (config section removed — all changes are immediate)
     }
 
     return actions;
@@ -2972,6 +3060,79 @@ AmsError AmsBackendAfc::execute_device_action(const std::string& action_id, cons
         return execute_gcode("AFC_QUIET_MODE");
     }
 
+    // Per-lane dist_hub actions
+    if (action_id.rfind("dist_hub_", 0) == 0) {
+        std::string lane_name = action_id.substr(9);
+        if (!value.has_value()) {
+            return AmsError(AmsResult::WRONG_STATE, "Value required", "Missing value", "");
+        }
+        try {
+            float val = std::any_cast<float>(value);
+            AmsError err = execute_gcode(
+                fmt::format("SET_HUB_DIST LANE={} LENGTH={:g}", lane_name, val));
+            if (!err) return err;
+            AmsError save_err = execute_gcode("SAVE_HUB_DIST LANE=" + lane_name);
+            if (!save_err) {
+                spdlog::warn("[AMS AFC] SAVE_HUB_DIST failed (runtime value was set)");
+            }
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected float", "");
+        }
+    }
+
+    // ---- Toolhead distance actions (single + multi-extruder) ----
+    // Longest-prefix-first: tool_stn is a prefix of tool_stn_unload
+    auto parse_toolhead_action = [](const std::string& id) -> std::pair<std::string, int> {
+        static const std::vector<std::string> fields = {
+            "tool_sensor_after_extruder", "tool_stn_unload", "tool_stn"};
+        for (const auto& field : fields) {
+            if (id == field) {
+                return {field, 0};
+            }
+            if (id.rfind(field + "_T", 0) == 0) {
+                try {
+                    int idx = std::stoi(id.substr(field.size() + 2));
+                    return {field, idx};
+                } catch (...) {}
+            }
+        }
+        return {"", -1};
+    };
+
+    auto [th_field, th_tool] = parse_toolhead_action(action_id);
+    if (!th_field.empty()) {
+        if (!value.has_value()) {
+            return AmsError(AmsResult::WRONG_STATE, "Value required", "Missing value", "");
+        }
+        try {
+            float val = std::any_cast<float>(value);
+
+            std::string ext_name = "extruder";
+            if (th_tool > 0) {
+                ext_name = "extruder" + std::to_string(th_tool);
+            }
+
+            std::string param;
+            if (th_field == "tool_stn") param = "TOOL_STN";
+            else if (th_field == "tool_stn_unload") param = "TOOL_STN_UNLOAD";
+            else if (th_field == "tool_sensor_after_extruder") param = "TOOL_AFTER_EXTRUDER";
+
+            std::string cmd = fmt::format("UPDATE_TOOLHEAD_SENSORS EXTRUDER={} {}={:g}",
+                                          ext_name, param, val);
+            AmsError err = execute_gcode(cmd);
+            if (!err) return err;
+
+            AmsError save_err = execute_gcode("SAVE_EXTRUDER_VALUES EXTRUDER=" + ext_name);
+            if (!save_err) {
+                spdlog::warn("[AMS AFC] SAVE_EXTRUDER_VALUES failed (runtime value was set)");
+            }
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected float", "");
+        }
+    }
+
     // ---- Config-backed hub actions (afc_config_) ----
     if (action_id == "hub_cut_enabled" || action_id == "hub_cut_dist" ||
         action_id == "hub_bowden_length" || action_id == "assisted_retract") {
@@ -3031,18 +3192,12 @@ AmsError AmsBackendAfc::execute_device_action(const std::string& action_id, cons
         }
     }
 
-    // ---- Config-backed macro var actions (macro_vars_config_) ----
+    // ---- Config-backed macro var actions (tip forming — macro_vars_config_) ----
     static const std::unordered_map<std::string, std::string> macro_var_slider_keys = {
         {"ramming_volume", "variable_ramming_volume"},
         {"unloading_speed_start", "variable_unloading_speed_start"},
         {"cooling_tube_length", "variable_cooling_tube_length"},
         {"cooling_tube_retraction", "variable_cooling_tube_retraction"},
-        {"purge_length", "variable_purge_length"},
-    };
-
-    static const std::unordered_map<std::string, std::string> macro_var_toggle_keys = {
-        {"purge_enabled", "variable_purge_enabled"},
-        {"brush_enabled", "variable_brush_enabled"},
     };
 
     if (auto it = macro_var_slider_keys.find(action_id); it != macro_var_slider_keys.end()) {
@@ -3062,67 +3217,44 @@ AmsError AmsBackendAfc::execute_device_action(const std::string& action_id, cons
         }
     }
 
-    if (auto it = macro_var_toggle_keys.find(action_id); it != macro_var_toggle_keys.end()) {
-        if (!macro_vars_config_ || !macro_vars_config_->is_loaded()) {
-            return AmsError(AmsResult::WRONG_STATE, "Macro vars config not loaded",
-                            "Configuration not available", "Wait for config to load");
-        }
+    // ---- Purge/wipe toggles — immediate via AFC_TOGGLE_MACRO G-code ----
+    if (action_id == "purge_enabled") {
         try {
             bool val = std::any_cast<bool>(value);
-            macro_vars_config_->parser().set("gcode_macro AFC_MacroVars", it->second,
-                                             val ? "True" : "False");
-            macro_vars_config_->mark_dirty();
+            execute_gcode(fmt::format("AFC_TOGGLE_MACRO POOP={}", val ? 1 : 0));
             return AmsErrorHelper::success();
         } catch (const std::bad_any_cast&) {
-            return AmsError(AmsResult::WRONG_STATE, "Invalid value type for toggle",
-                            "Expected boolean", "");
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected boolean", "");
+        }
+    }
+    if (action_id == "brush_enabled") {
+        try {
+            bool val = std::any_cast<bool>(value);
+            execute_gcode(fmt::format("AFC_TOGGLE_MACRO WIPE={}", val ? 1 : 0));
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected boolean", "");
         }
     }
 
-    // ---- Save & Restart action ----
-    if (action_id == "save_restart") {
-        bool has_changes = (afc_config_ && afc_config_->has_unsaved_changes()) ||
-                           (macro_vars_config_ && macro_vars_config_->has_unsaved_changes());
-        if (!has_changes) {
-            return AmsError(AmsResult::WRONG_STATE, "No unsaved changes", "Nothing to save", "");
+    // ---- Purge length — config-backed, no runtime G-code available ----
+    if (action_id == "purge_length") {
+        if (!afc_config_ || !afc_config_->is_loaded()) {
+            return AmsError(AmsResult::WRONG_STATE, "AFC config not loaded",
+                            "Configuration not available", "Wait for config to load");
         }
-
-        auto saves_remaining = std::make_shared<std::atomic<int>>(0);
-
-        if (afc_config_ && afc_config_->has_unsaved_changes()) {
-            saves_remaining->fetch_add(1);
+        try {
+            float val = std::any_cast<float>(value);
+            afc_config_->parser().set("AFC_poop", "purge_length", fmt::format("{:g}", val));
+            afc_config_->mark_dirty();
+            afc_config_->save("AFC/AFC.cfg", [](bool ok, const std::string& err) {
+                if (!ok)
+                    spdlog::error("[AMS AFC] Failed to save purge_length: {}", err);
+            });
+            return AmsErrorHelper::success();
+        } catch (const std::bad_any_cast&) {
+            return AmsError(AmsResult::WRONG_STATE, "Invalid value type", "Expected float", "");
         }
-        if (macro_vars_config_ && macro_vars_config_->has_unsaved_changes()) {
-            saves_remaining->fetch_add(1);
-        }
-
-        auto save_errors = std::make_shared<std::vector<std::string>>();
-
-        auto on_save_done = [this, saves_remaining, save_errors](bool ok, const std::string& err) {
-            if (!ok) {
-                spdlog::error("[AMS AFC] Config save failed: {}", err);
-                save_errors->push_back(err);
-            }
-            if (saves_remaining->fetch_sub(1) == 1) {
-                if (save_errors->empty()) {
-                    // All saves succeeded — restart Klipper to apply
-                    spdlog::info("[AMS AFC] All configs saved, sending RESTART");
-                    execute_gcode("RESTART");
-                } else {
-                    spdlog::error("[AMS AFC] {} config save(s) failed, NOT restarting",
-                                  save_errors->size());
-                }
-            }
-        };
-
-        if (afc_config_ && afc_config_->has_unsaved_changes()) {
-            afc_config_->save("AFC/AFC.cfg", on_save_done);
-        }
-        if (macro_vars_config_ && macro_vars_config_->has_unsaved_changes()) {
-            macro_vars_config_->save("AFC/AFC_Macro_Vars.cfg", on_save_done);
-        }
-
-        return AmsErrorHelper::success();
     }
 
     return AmsErrorHelper::not_supported("Unknown action: " + action_id);
