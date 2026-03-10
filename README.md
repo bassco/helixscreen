@@ -34,7 +34,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 >
 > **Flashforge:** AD5M/Pro (Forge-X firmware), AD5X (ZMOD firmware).
 >
-> **Creality:** K1/K1C/K1 Max binaries are included. K2 Plus build target exists (ARM, static musl) but is **untested** — if you have one, we'd love your help!
+> **Creality:** Sonic Pad, K1/K1C/K1 Max binaries are included. K2 Plus build target exists (ARM, static musl) but is **untested** — if you have one, we'd love your help!
 >
 > **Snapmaker U1:** Cross-compile target with 480x320 display support.
 >
@@ -140,6 +140,7 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 | Flashforge AD5M/Pro | armv7-a | Tested |
 | Flashforge AD5X | MIPS32 | Supported |
 | QIDI (Q1 Pro, Plus 4, etc.) | aarch64 | Supported |
+| Creality Sonic Pad | armhf | Tested |
 | Creality K1/K1C/K1 Max | MIPS32 | Builds available |
 | Creality K2 Plus | ARM (musl) | Untested |
 | Sovol SV06/SV08 | Pi build | Active testing |
@@ -232,7 +233,7 @@ See [docs/user/TROUBLESHOOTING.md](docs/user/TROUBLESHOOTING.md) for more soluti
 ### User Guides
 | Guide | Description |
 |-------|-------------|
-| [Installation](docs/user/INSTALL.md) | Setup for Pi, K1, K2, AD5M, AD5X, QIDI, Snapmaker U1 |
+| [Installation](docs/user/INSTALL.md) | Setup for Pi, Sonic Pad, K1, K2, AD5M, AD5X, QIDI, Snapmaker U1 |
 | [User Guide](docs/user/USER_GUIDE.md) | Using HelixScreen — panels, overlays, settings |
 | [Configuration](docs/user/CONFIGURATION.md) | All settings with examples |
 | [Upgrading](docs/user/UPGRADING.md) | Version upgrade instructions |
