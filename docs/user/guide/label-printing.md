@@ -14,7 +14,7 @@ HelixScreen supports three families of label printers:
 | **Phomemo** | USB or Bluetooth | M110, M120, M02, Q199, and other M*/Q* series |
 | **Niimbot** | Bluetooth only | B21, D11, D110 |
 
-> **Note:** Bluetooth label printing requires a Bluetooth adapter on your HelixScreen device (Raspberry Pi 4/5 have built-in Bluetooth). Devices without Bluetooth hardware will only see Network and USB options.
+> **Note:** Bluetooth label printing requires a Bluetooth adapter on your HelixScreen device (Raspberry Pi 4/5 have built-in Bluetooth). Devices without Bluetooth hardware will only see Network and USB options. If Bluetooth is disabled for UART, see the [Bluetooth Setup Guide](bluetooth-setup.md).
 
 ---
 
@@ -107,6 +107,7 @@ A toast notification confirms success or shows an error message.
 
 - Your device doesn't have Bluetooth hardware, or it's disabled
 - On Raspberry Pi, check that Bluetooth is enabled: `bluetoothctl show` should list an adapter
+- If Bluetooth is disabled for UART (common in Klipper setups), see the [Bluetooth Setup Guide](bluetooth-setup.md) for how to enable it or add a USB dongle
 - The Bluetooth plugin (`libhelix-bluetooth.so`) must be present next to the HelixScreen binary
 
 ### "No USB printer detected"

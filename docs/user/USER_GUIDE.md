@@ -46,6 +46,9 @@ Extrusion controls, load/unload procedures, AMS multi-material systems with mult
 
 ![AMS Panel](../images/user/ams.png)
 
+### [Bluetooth Setup](guide/bluetooth-setup.md)
+Enable Bluetooth on Raspberry Pi or BTT Pi when it's disabled for UART, or add a USB Bluetooth dongle when your MCU uses the serial port.
+
 ### [Label Printing](guide/label-printing.md)
 Print spool labels to Brother QL, Phomemo, or Niimbot thermal printers via Network, USB, or Bluetooth. Setup, label sizes, and troubleshooting.
 
