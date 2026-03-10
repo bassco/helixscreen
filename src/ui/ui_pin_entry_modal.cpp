@@ -81,7 +81,7 @@ void PinEntryModal::create() {
     // Semi-transparent backdrop (blocks touches to underlying UI)
     backdrop_ = lv_obj_create(screen);
     lv_obj_set_size(backdrop_, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(backdrop_, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_color(backdrop_, theme_manager_get_color("screen_bg"), 0);
     lv_obj_set_style_bg_opa(backdrop_, 100, 0);
     lv_obj_set_style_border_width(backdrop_, 0, 0);
     lv_obj_set_style_pad_all(backdrop_, 0, 0);
