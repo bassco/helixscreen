@@ -130,15 +130,24 @@ class AmsDeviceSectionDetailOverlay : public OverlayBase {
     //
 
     /**
-     * @brief Create control for a single device action
+     * @brief Create control for a single device action (non-BUTTON types)
      *
-     * Creates the appropriate control based on action type (BUTTON, TOGGLE,
-     * INFO, SLIDER, DROPDOWN).
+     * Creates the appropriate control based on action type (TOGGLE,
+     * INFO, SLIDER, DROPDOWN). BUTTON actions are handled by
+     * create_button_in_row() instead.
      *
      * @param parent Container to add control to
      * @param action Action metadata
      */
     void create_action_control(lv_obj_t* parent, const helix::printer::DeviceAction& action);
+
+    /**
+     * @brief Create a button inside a 2-column row container
+     *
+     * @param row The flex row container (2 buttons per row)
+     * @param action Action metadata for the button
+     */
+    void create_button_in_row(lv_obj_t* row, const helix::printer::DeviceAction& action);
 
     //
     // === Static Callbacks ===

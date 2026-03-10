@@ -172,11 +172,38 @@ void AmsDeviceSectionDetailOverlay::refresh() {
     cached_actions_ = backend->get_device_actions();
 
     int count = 0;
+    lv_obj_t* button_row = nullptr;
+    int button_count_in_row = 0;
+
     for (const auto& action : cached_actions_) {
-        if (action.section == section_id_) {
-            create_action_control(actions_container_, action);
-            count++;
+        if (action.section != section_id_) {
+            continue;
         }
+
+        if (action.type == helix::printer::ActionType::BUTTON) {
+            // Start a new row if needed (no current row or current row is full)
+            if (!button_row || button_count_in_row >= 2) {
+                button_row = lv_obj_create(actions_container_);
+                lv_obj_set_width(button_row, LV_PCT(100));
+                lv_obj_set_height(button_row, LV_SIZE_CONTENT);
+                lv_obj_set_style_pad_all(button_row, 0, 0);
+                lv_obj_set_style_pad_column(button_row, theme_manager_get_spacing("space_sm"), 0);
+                lv_obj_set_style_bg_opa(button_row, LV_OPA_TRANSP, 0);
+                lv_obj_set_style_border_width(button_row, 0, 0);
+                lv_obj_set_flex_flow(button_row, LV_FLEX_FLOW_ROW);
+                lv_obj_remove_flag(button_row, LV_OBJ_FLAG_SCROLLABLE);
+                button_count_in_row = 0;
+            }
+
+            create_button_in_row(button_row, action);
+            button_count_in_row++;
+        } else {
+            // Non-button action closes any open button row
+            button_row = nullptr;
+            button_count_in_row = 0;
+            create_action_control(actions_container_, action);
+        }
+        count++;
     }
 
     spdlog::debug("[{}] Created {} controls for section '{}'", get_name(), count, section_id_);
@@ -209,35 +236,12 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     switch (action.type) {
-    case helix::printer::ActionType::BUTTON: {
-        // Create action button spanning full width
-        lv_obj_t* btn = lv_button_create(row);
-        lv_obj_set_flex_grow(btn, 1);
-        lv_obj_set_height(btn, theme_manager_get_spacing("button_height_sm"));
-        lv_obj_set_style_radius(btn, theme_manager_get_spacing("border_radius"), 0);
-
-        // Button label
-        lv_obj_t* btn_label = lv_label_create(btn);
-        lv_label_set_text(btn_label, lv_tr(action.label.c_str()));
-        lv_obj_center(btn_label);
-
-        // Store action ID in vector, pass index as user_data
-        action_ids_.push_back(action.id);
-        lv_obj_set_user_data(btn, reinterpret_cast<void*>(action_ids_.size() - 1));
-
-        // Register click callback
-        lv_obj_add_event_cb(btn, on_action_clicked, LV_EVENT_CLICKED, nullptr);
-
-        // Handle disabled state
-        if (!action.enabled) {
-            lv_obj_add_state(btn, LV_STATE_DISABLED);
-            if (!action.disable_reason.empty()) {
-                spdlog::debug("[{}] Action '{}' disabled: {}", get_name(), action.id,
-                              action.disable_reason);
-            }
-        }
+    case helix::printer::ActionType::BUTTON:
+        // Buttons are handled by create_button_in_row() via refresh() loop
+        spdlog::warn("[{}] BUTTON action '{}' passed to create_action_control(); use "
+                     "create_button_in_row() instead",
+                     get_name(), action.id);
         break;
-    }
 
     case helix::printer::ActionType::TOGGLE: {
         // Label on left
@@ -424,6 +428,39 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
         }
         break;
     }
+    }
+}
+
+void AmsDeviceSectionDetailOverlay::create_button_in_row(
+    lv_obj_t* row, const helix::printer::DeviceAction& action) {
+    // NOTE: Imperative lv_obj_add_event_cb() is necessary here — dynamic controls
+    // from backend data (documented exception for declarative UI rules).
+    spdlog::debug("[{}] Creating button in row: {}", get_name(), action.label);
+
+    lv_obj_t* btn = lv_button_create(row);
+    lv_obj_set_flex_grow(btn, 1);
+    lv_obj_set_height(btn, theme_manager_get_spacing("button_height_sm"));
+    lv_obj_set_style_radius(btn, theme_manager_get_spacing("border_radius"), 0);
+
+    // Button label
+    lv_obj_t* btn_label = lv_label_create(btn);
+    lv_label_set_text(btn_label, lv_tr(action.label.c_str()));
+    lv_obj_center(btn_label);
+
+    // Store action ID in vector, pass index as user_data
+    action_ids_.push_back(action.id);
+    lv_obj_set_user_data(btn, reinterpret_cast<void*>(action_ids_.size() - 1));
+
+    // Register click callback
+    lv_obj_add_event_cb(btn, on_action_clicked, LV_EVENT_CLICKED, nullptr);
+
+    // Handle disabled state
+    if (!action.enabled) {
+        lv_obj_add_state(btn, LV_STATE_DISABLED);
+        if (!action.disable_reason.empty()) {
+            spdlog::debug("[{}] Action '{}' disabled: {}", get_name(), action.id,
+                          action.disable_reason);
+        }
     }
 }
 
