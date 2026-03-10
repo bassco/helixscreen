@@ -1474,11 +1474,9 @@ bool parse_metadata_line(const std::string& line, GCodeHeaderMetadata& metadata)
         } catch (...) {
         }
     } else if (key == "filament_type") {
-        // Slicers may output multiple types separated by semicolons (e.g., "PLA;PLA;PLA")
-        // Take the first type only
-        size_t semicolon = value.find(';');
-        metadata.filament_type =
-            (semicolon != std::string::npos) ? value.substr(0, semicolon) : value;
+        // Slicers output multiple types separated by semicolons (e.g., "PLA;PLA;ASA;PETG")
+        // Preserve full string for per-tool material matching
+        metadata.filament_type = value;
     } else if (key == "extruder_colour" || key == "filament_colour") {
         // Parse multi-tool colors: "#ED1C24;#00C1AE;#F4E2C1;#000000"
         // May also have spaces: "#AA0000 ; #00BB00 ; #0000CC"

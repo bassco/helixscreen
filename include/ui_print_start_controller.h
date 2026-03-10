@@ -213,6 +213,18 @@ class PrintStartController {
 
     /// Set up observer for print state to auto-restore mapping
     void observe_print_state_for_restore();
+
+    // === Crash Recovery Persistence ===
+    /// Save remap state to disk so it survives app restart
+    void persist_remap_state();
+
+    /// Delete persisted remap state (called after successful restore)
+    void clear_persisted_remap_state();
+
+public:
+    /// Check for and restore any pending remap from a previous crashed session.
+    /// Call once after AMS backends are initialized.
+    void recover_pending_remap();
 };
 
 } // namespace helix::ui

@@ -28,9 +28,13 @@
 #include "observer_factory.h"
 #include "printer_state.h"
 
+#include "hv/json.hpp"
+
 #include <spdlog/spdlog.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 
 namespace helix::ui {
 
@@ -607,6 +611,7 @@ bool PrintStartController::apply_filament_remaps() {
 
     if (remaps_sent > 0) {
         spdlog::info("[PrintStartController] Sent {} remap command(s)", remaps_sent);
+        persist_remap_state();
         return true;
     }
 
@@ -679,6 +684,90 @@ void PrintStartController::restore_filament_mapping() {
     spdlog::info("[PrintStartController] Restored {} mapping(s) on print end", restores_sent);
     saved_tool_mapping_.clear();
     saved_backend_index_ = -1;
+    clear_persisted_remap_state();
+}
+
+// ============================================================================
+// Crash Recovery Persistence
+// ============================================================================
+
+static constexpr const char* PENDING_REMAP_FILENAME = "pending_remap.json";
+
+void PrintStartController::persist_remap_state() {
+    namespace fs = std::filesystem;
+
+    if (saved_tool_mapping_.empty() || saved_backend_index_ < 0) {
+        return;
+    }
+
+    nlohmann::json j;
+    j["backend_index"] = saved_backend_index_;
+    j["tool_mapping"] = saved_tool_mapping_;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    try {
+        fs::create_directories("config");
+        std::ofstream ofs(path);
+        if (ofs.is_open()) {
+            ofs << j.dump(2);
+            spdlog::debug("[PrintStartController] Persisted remap state to {}", path.string());
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to persist remap state: {}", e.what());
+    }
+}
+
+void PrintStartController::clear_persisted_remap_state() {
+    namespace fs = std::filesystem;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    try {
+        if (fs::exists(path)) {
+            fs::remove(path);
+            spdlog::debug("[PrintStartController] Cleared persisted remap state");
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to clear remap state: {}", e.what());
+    }
+}
+
+void PrintStartController::recover_pending_remap() {
+    namespace fs = std::filesystem;
+
+    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    if (!fs::exists(path)) {
+        return;
+    }
+
+    try {
+        std::ifstream ifs(path);
+        if (!ifs.is_open()) {
+            return;
+        }
+
+        auto j = nlohmann::json::parse(ifs);
+        int backend_idx = j.value("backend_index", -1);
+        auto mapping = j.value("tool_mapping", std::vector<int>{});
+
+        if (backend_idx < 0 || mapping.empty()) {
+            spdlog::debug("[PrintStartController] Invalid pending remap file — removing");
+            clear_persisted_remap_state();
+            return;
+        }
+
+        // Load saved state and attempt restore
+        saved_tool_mapping_ = std::move(mapping);
+        saved_backend_index_ = backend_idx;
+
+        spdlog::info("[PrintStartController] Crash recovery: found pending remap "
+                     "({} tools, backend {}) — restoring",
+                     saved_tool_mapping_.size(), saved_backend_index_);
+
+        restore_filament_mapping();
+    } catch (const std::exception& e) {
+        spdlog::warn("[PrintStartController] Failed to load pending remap: {}", e.what());
+        clear_persisted_remap_state();
+    }
 }
 
 } // namespace helix::ui

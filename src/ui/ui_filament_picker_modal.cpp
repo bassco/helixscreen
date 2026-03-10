@@ -3,6 +3,7 @@
 #include "ui_filament_picker_modal.h"
 
 #include "theme_manager.h"
+#include "ui_fonts.h"
 #include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -11,11 +12,7 @@
 
 namespace helix::ui {
 
-// Layout constants for picker rows
-constexpr int PICKER_ROW_PAD = 8;
-constexpr int PICKER_ROW_GAP = 8;
-constexpr int PICKER_SWATCH_SIZE = 20;
-constexpr int PICKER_ROW_RADIUS = 6;
+// Layout constants for picker rows (opacities are fixed visual properties)
 constexpr lv_opa_t PICKER_SELECTED_BG_OPA = 40;
 constexpr lv_opa_t PICKER_SWATCH_BORDER_OPA = 30;
 
@@ -51,6 +48,42 @@ void FilamentPickerModal::set_on_select(SelectCallback cb) {
 void FilamentPickerModal::on_show() {
     wire_ok_button("btn_primary");
     wire_cancel_button("btn_secondary");
+
+    // Update title to indicate which tool is being remapped
+    lv_obj_t* title_widget = find_widget("header_title");
+    if (title_widget) {
+        char title_buf[64];
+        if (expected_material_.empty()) {
+            snprintf(title_buf, sizeof(title_buf), "T%d — %s", tool_index_,
+                     lv_tr("Select Filament"));
+        } else {
+            snprintf(title_buf, sizeof(title_buf), "T%d %s — %s", tool_index_,
+                     expected_material_.c_str(), lv_tr("Select Filament"));
+        }
+        lv_label_set_text(title_widget, title_buf);
+    }
+
+    // Add a color swatch next to the header icon to show the expected gcode color
+    lv_obj_t* header_icon = find_widget("header_icon");
+    if (header_icon) {
+        lv_obj_t* parent = lv_obj_get_parent(header_icon);
+        if (parent) {
+            // Insert swatch after the icon
+            lv_obj_t* swatch = lv_obj_create(parent);
+            lv_obj_remove_style_all(swatch);
+            lv_obj_set_size(swatch, theme_manager_get_spacing("space_xl"),
+                           theme_manager_get_spacing("space_xl"));
+            lv_obj_set_style_radius(swatch, LV_RADIUS_CIRCLE, 0);
+            lv_obj_set_style_bg_color(swatch, lv_color_hex(expected_color_), 0);
+            lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
+            lv_obj_set_style_border_width(swatch, 1, 0);
+            lv_obj_set_style_border_color(swatch, theme_manager_get_color("text_muted"), 0);
+            lv_obj_set_style_border_opa(swatch, PICKER_SWATCH_BORDER_OPA, 0);
+            lv_obj_remove_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
+            // Move after icon (index 1, icon is 0)
+            lv_obj_move_to_index(swatch, 1);
+        }
+    }
 
     slot_list_ = find_widget("picker_slot_list");
     if (!slot_list_) {
@@ -98,24 +131,29 @@ void FilamentPickerModal::populate_slot_list() {
 }
 
 lv_obj_t* FilamentPickerModal::create_auto_row(lv_obj_t* parent) {
+    int32_t row_pad = theme_manager_get_spacing("space_sm");
+    int32_t row_gap = theme_manager_get_spacing("space_sm");
+    int32_t swatch_sz = theme_manager_get_spacing("space_xl");
+    int32_t row_radius = theme_manager_get_spacing("space_sm");
+
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
     lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(row, PICKER_ROW_PAD, 0);
-    lv_obj_set_style_pad_gap(row, PICKER_ROW_GAP, 0);
+    lv_obj_set_style_pad_all(row, row_pad, 0);
+    lv_obj_set_style_pad_gap(row, row_gap, 0);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_flex_cross_place(row, LV_FLEX_ALIGN_CENTER, 0);
-    lv_obj_set_style_radius(row, PICKER_ROW_RADIUS, 0);
+    lv_obj_set_style_radius(row, row_radius, 0);
     lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     // Auto icon placeholder (a small "A" circle)
     lv_obj_t* swatch = lv_obj_create(row);
     lv_obj_remove_style_all(swatch);
-    lv_obj_set_size(swatch, PICKER_SWATCH_SIZE, PICKER_SWATCH_SIZE);
+    lv_obj_set_size(swatch, swatch_sz, swatch_sz);
     lv_obj_set_style_radius(swatch, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(swatch, theme_manager_get_color("primary_color"), 0);
+    lv_obj_set_style_bg_color(swatch, theme_manager_get_color("primary"), 0);
     lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
     lv_obj_remove_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -149,15 +187,20 @@ lv_obj_t* FilamentPickerModal::create_auto_row(lv_obj_t* parent) {
 
 lv_obj_t* FilamentPickerModal::create_slot_row(lv_obj_t* parent, int index,
                                                 const helix::AvailableSlot& slot) {
+    int32_t row_pad = theme_manager_get_spacing("space_sm");
+    int32_t row_gap = theme_manager_get_spacing("space_sm");
+    int32_t swatch_sz = theme_manager_get_spacing("space_xl");
+    int32_t row_radius = theme_manager_get_spacing("space_sm");
+
     lv_obj_t* row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
     lv_obj_set_width(row, LV_PCT(100));
     lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(row, PICKER_ROW_PAD, 0);
-    lv_obj_set_style_pad_gap(row, PICKER_ROW_GAP, 0);
+    lv_obj_set_style_pad_all(row, row_pad, 0);
+    lv_obj_set_style_pad_gap(row, row_gap, 0);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_flex_cross_place(row, LV_FLEX_ALIGN_CENTER, 0);
-    lv_obj_set_style_radius(row, PICKER_ROW_RADIUS, 0);
+    lv_obj_set_style_radius(row, row_radius, 0);
     lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     if (slot.is_empty) {
@@ -168,11 +211,11 @@ lv_obj_t* FilamentPickerModal::create_slot_row(lv_obj_t* parent, int index,
     }
 
     // Color swatch
-    create_color_swatch(row, slot.color_rgb, PICKER_SWATCH_SIZE);
+    create_color_swatch(row, slot.color_rgb, swatch_sz);
 
     // Slot label: "Slot N: Material"
     lv_obj_t* label = lv_label_create(row);
-    char buf[64];
+    char buf[128];
     if (slot.is_empty) {
         snprintf(buf, sizeof(buf), "%s %d: %s",
                  lv_tr("Slot"), slot.slot_index + 1, lv_tr("Empty"));
@@ -186,28 +229,28 @@ lv_obj_t* FilamentPickerModal::create_slot_row(lv_obj_t* parent, int index,
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
     lv_obj_set_flex_grow(label, 1);
 
-    // Material mismatch warning icon
+    // Material mismatch warning
     if (!slot.is_empty && !expected_material_.empty() && !slot.material.empty() &&
         !helix::FilamentMapper::materials_match(expected_material_, slot.material)) {
         lv_obj_t* warn_icon = lv_label_create(row);
-        lv_label_set_text(warn_icon, LV_SYMBOL_WARNING);
-        lv_obj_set_style_text_color(warn_icon, theme_manager_get_color("warning_color"), 0);
+        lv_label_set_text(warn_icon, ICON_TRIANGLE_EXCLAMATION);
+        lv_obj_set_style_text_font(warn_icon, &mdi_icons_16, 0);
+        lv_obj_set_style_text_color(warn_icon, theme_manager_get_color("warning"), 0);
+
+        lv_obj_t* warn_text = lv_label_create(row);
+        lv_label_set_text(warn_text, lv_tr("Incompatible"));
+        lv_obj_set_style_text_font(warn_text, theme_manager_get_font("font_small"), 0);
+        lv_obj_set_style_text_color(warn_text, theme_manager_get_color("warning"), 0);
     }
 
     // Click handler (dynamic content exception)
     if (!slot.is_empty) {
-        // Pack slot_index and backend_index into user_data
-        struct SlotId {
-            int slot_index;
-            int backend_index;
-        };
         // Store the index into the slots_ vector, we'll look up the actual slot from there
         lv_obj_add_event_cb(
             row,
             [](lv_event_t* e) {
                 auto* self = static_cast<FilamentPickerModal*>(lv_event_get_user_data(e));
-                // Find which slot this row represents by iterating children
-                lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
+                lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
                 int row_index =
                     static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
                 if (row_index >= 0 && row_index < static_cast<int>(self->slots_.size())) {
@@ -264,10 +307,10 @@ void FilamentPickerModal::update_row_highlights() {
         }
 
         if (is_selected) {
-            lv_obj_set_style_bg_color(row, theme_manager_get_color("primary_color"), 0);
+            lv_obj_set_style_bg_color(row, theme_manager_get_color("primary"), 0);
             lv_obj_set_style_bg_opa(row, PICKER_SELECTED_BG_OPA, 0);
             lv_obj_set_style_border_width(row, 1, 0);
-            lv_obj_set_style_border_color(row, theme_manager_get_color("primary_color"), 0);
+            lv_obj_set_style_border_color(row, theme_manager_get_color("primary"), 0);
         } else {
             lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
             lv_obj_set_style_border_width(row, 0, 0);

@@ -171,16 +171,17 @@
         </ui_card>
 
         <!-- Filament mapping card (shown when AMS/toolchanger detected) -->
-        <ui_card name="filament_mapping_card" width="100%" style_pad_all="0" flex_flow="column" hidden="true">
+        <ui_card name="filament_mapping_card" width="100%" style_pad_all="0" style_border_width="0" flex_flow="column" hidden="true">
           <text_small text="FILAMENT" translation_tag="FILAMENT"
-                      style_pad_bottom="#space_xs"/>
+                      style_pad_bottom="#space_xs" clickable="false" event_bubble="true"/>
           <lv_obj name="filament_mapping_rows"
                   width="100%" height="content" style_pad_all="0" style_pad_gap="#space_xs"
-                  flex_flow="column" scrollable="false">
+                  flex_flow="column" scrollable="false" clickable="false" event_bubble="true">
             <!-- Rows added dynamically in C++ -->
           </lv_obj>
           <lv_obj name="filament_mapping_warning" width="100%" height="content"
-                  style_pad_all="0" style_pad_top="#space_xs" hidden="true" flex_flow="column">
+                  style_pad_all="0" style_pad_top="#space_xs" hidden="true" flex_flow="column"
+                  clickable="false" event_bubble="true">
             <!-- Warning text added dynamically in C++ -->
           </lv_obj>
         </ui_card>

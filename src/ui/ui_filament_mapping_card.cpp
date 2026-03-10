@@ -4,26 +4,22 @@
 
 #include "ams_state.h"
 #include "theme_manager.h"
+#include "ui_fonts.h"
 #include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
+
+#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
 
-// Layout constants for dynamically created rows.
-// Rows are built in C++ (not XML components) because the number of rows
-// varies per file. lv_obj_add_event_cb and lv_label_set_text are used here
+// Layout constants for the compact swatch pair display.
+// Swatches are built in C++ (not XML components) because the number varies
+// per file. lv_obj_add_event_cb and lv_label_set_text are used here
 // as allowed exceptions for dynamic content.
 namespace {
-constexpr int ROW_PAD = 6;
-constexpr int ROW_GAP = 8;
-constexpr int SWATCH_SIZE = 16;
-constexpr int SMALL_SWATCH_SIZE = 14;
-constexpr int SELECTOR_PAD = 6;
-constexpr int SELECTOR_RADIUS = 6;
-constexpr int TOOL_LABEL_MIN_W = 24;
 constexpr lv_opa_t SWATCH_BORDER_OPA = 30;
 } // namespace
 
@@ -36,6 +32,18 @@ void FilamentMappingCard::create(lv_obj_t* card_widget, lv_obj_t* rows_container
     card_ = card_widget;
     rows_container_ = rows_container;
     warning_container_ = warning_container;
+
+    // Make the entire card tappable to open the mapping modal
+    if (card_) {
+        lv_obj_add_flag(card_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(
+            card_,
+            [](lv_event_t* e) {
+                auto* self = static_cast<FilamentMappingCard*>(lv_event_get_user_data(e));
+                self->open_mapping_modal();
+            },
+            LV_EVENT_CLICKED, this);
+    }
 
     spdlog::debug("[FilamentMapping] Card created");
 }
@@ -71,9 +79,8 @@ void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
     // Compute default mappings
     mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
 
-    // Build the UI
-    rebuild_rows();
-    update_warning_banner();
+    // Build the compact UI
+    rebuild_compact_view();
 
     // Show the card
     lv_obj_remove_flag(card_, LV_OBJ_FLAG_HIDDEN);
@@ -102,281 +109,175 @@ void FilamentMappingCard::on_ui_destroyed() {
 }
 
 // ============================================================================
-// Row building
+// Compact swatch pair view
 // ============================================================================
 
-void FilamentMappingCard::rebuild_rows() {
+void FilamentMappingCard::rebuild_compact_view() {
     if (!rows_container_) {
         return;
     }
 
+    auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+    helix::ui::UpdateQueue::instance().drain();
     lv_obj_clean(rows_container_);
 
-    for (size_t i = 0; i < mappings_.size(); ++i) {
-        create_row(static_cast<int>(i));
-    }
-}
+    // Responsive spacing from design tokens
+    int32_t swatch_sz = theme_manager_get_spacing("space_lg");
+    int32_t inner_gap = theme_manager_get_spacing("space_xxs");
+    int32_t pair_gap = theme_manager_get_spacing("space_sm");
+    int32_t pill_pad_h = theme_manager_get_spacing("space_sm");
+    int32_t pill_pad_v = theme_manager_get_spacing("space_xs");
+    int32_t pill_radius = theme_manager_get_spacing("space_lg");
 
-lv_obj_t* FilamentMappingCard::create_row(int tool_index) {
-    if (!rows_container_ || tool_index < 0 ||
-        tool_index >= static_cast<int>(mappings_.size())) {
-        return nullptr;
-    }
+    // Configure as a horizontal flex row of swatch pairs (wrapping)
+    lv_obj_set_flex_flow(rows_container_, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_style_flex_cross_place(rows_container_, LV_FLEX_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_gap(rows_container_, pair_gap, 0);
 
-    const auto& mapping = mappings_[static_cast<size_t>(tool_index)];
-    const auto& tool = tool_info_[static_cast<size_t>(tool_index)];
-
-    // Row container
-    lv_obj_t* row = lv_obj_create(rows_container_);
-    lv_obj_remove_style_all(row);
-    lv_obj_set_width(row, LV_PCT(100));
-    lv_obj_set_height(row, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(row, ROW_PAD, 0);
-    lv_obj_set_style_pad_gap(row, ROW_GAP, 0);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_flex_cross_place(row, LV_FLEX_ALIGN_CENTER, 0);
-    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Left side: tool label + expected color swatch
-    bool show_tool_label = tool_info_.size() > 1;
-
-    if (show_tool_label) {
-        lv_obj_t* tool_label = lv_label_create(row);
-        char tool_buf[8];
-        snprintf(tool_buf, sizeof(tool_buf), "T%d", tool_index);
-        lv_label_set_text(tool_label, tool_buf);
-        lv_obj_set_style_text_font(tool_label, theme_manager_get_font("font_small"), 0);
-        lv_obj_set_style_text_color(tool_label, theme_manager_get_color("text_muted"), 0);
-        lv_obj_set_style_min_width(tool_label, TOOL_LABEL_MIN_W, 0);
-    }
-
-    // Expected color swatch (from gcode)
-    lv_obj_t* expected_swatch = lv_obj_create(row);
-    lv_obj_remove_style_all(expected_swatch);
-    lv_obj_set_size(expected_swatch, SWATCH_SIZE, SWATCH_SIZE);
-    lv_obj_set_style_radius(expected_swatch, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(expected_swatch, lv_color_hex(tool.color_rgb), 0);
-    lv_obj_set_style_bg_opa(expected_swatch, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(expected_swatch, 1, 0);
-    lv_obj_set_style_border_color(expected_swatch, theme_manager_get_color("text_muted"), 0);
-    lv_obj_set_style_border_opa(expected_swatch, SWATCH_BORDER_OPA, 0);
-    lv_obj_remove_flag(expected_swatch, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Right side: tappable slot selector
-    lv_obj_t* selector = lv_obj_create(row);
-    lv_obj_remove_style_all(selector);
-    lv_obj_set_flex_grow(selector, 1);
-    lv_obj_set_height(selector, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(selector, SELECTOR_PAD, 0);
-    lv_obj_set_style_pad_gap(selector, SELECTOR_PAD, 0);
-    lv_obj_set_flex_flow(selector, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_flex_cross_place(selector, LV_FLEX_ALIGN_CENTER, 0);
-    lv_obj_set_style_radius(selector, SELECTOR_RADIUS, 0);
-    lv_obj_set_style_bg_color(selector, theme_manager_get_color("elevated_bg"), 0);
-    lv_obj_set_style_bg_opa(selector, LV_OPA_COVER, 0);
-    lv_obj_add_flag(selector, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(selector, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Slot color swatch (mapped slot color)
-    if (!mapping.is_auto && mapping.mapped_slot >= 0) {
-        uint32_t slot_color = 0x808080;
-        for (const auto& s : available_slots_) {
-            if (s.slot_index == mapping.mapped_slot &&
-                s.backend_index == mapping.mapped_backend) {
-                slot_color = s.color_rgb;
-                break;
-            }
-        }
-        lv_obj_t* slot_swatch = lv_obj_create(selector);
-        lv_obj_remove_style_all(slot_swatch);
-        lv_obj_set_size(slot_swatch, SMALL_SWATCH_SIZE, SMALL_SWATCH_SIZE);
-        lv_obj_set_style_radius(slot_swatch, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(slot_swatch, lv_color_hex(slot_color), 0);
-        lv_obj_set_style_bg_opa(slot_swatch, LV_OPA_COVER, 0);
-        lv_obj_remove_flag(slot_swatch, LV_OBJ_FLAG_SCROLLABLE);
-    }
-
-    // Slot text
-    lv_obj_t* slot_text = lv_label_create(selector);
-    std::string display = get_slot_display_text(mapping);
-    lv_label_set_text(slot_text, display.c_str());
-    lv_obj_set_style_text_font(slot_text, theme_manager_get_font("font_small"), 0);
-    lv_obj_set_style_text_color(slot_text, theme_manager_get_color("text"), 0);
-    lv_obj_set_flex_grow(slot_text, 1);
-
-    // Chevron
-    lv_obj_t* chevron = lv_label_create(selector);
-    lv_label_set_text(chevron, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(chevron, theme_manager_get_color("text_muted"), 0);
-
-    // Click handler (dynamic content exception — rows are rebuilt on each update)
-    lv_obj_add_event_cb(
-        selector,
-        [](lv_event_t* e) {
-            auto* self = static_cast<FilamentMappingCard*>(lv_event_get_user_data(e));
-            lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-            int idx = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-            self->on_row_tapped(idx);
-        },
-        LV_EVENT_CLICKED, this);
-    lv_obj_set_user_data(selector, reinterpret_cast<void*>(static_cast<intptr_t>(tool_index)));
-
-    // Material mismatch indicator
-    if (mapping.material_mismatch) {
-        lv_obj_t* warn = lv_label_create(row);
-        lv_label_set_text(warn, LV_SYMBOL_WARNING);
-        lv_obj_set_style_text_color(warn, theme_manager_get_color("warning_color"), 0);
-    }
-
-    return row;
-}
-
-// ============================================================================
-// Display text helpers
-// ============================================================================
-
-std::string FilamentMappingCard::get_slot_display_text(const helix::ToolMapping& mapping) const {
-    if (mapping.is_auto) {
-        return lv_tr("Auto");
-    }
-
-    if (mapping.mapped_slot < 0) {
-        return lv_tr("Unmapped");
-    }
-
-    // Find the slot info
-    for (const auto& slot : available_slots_) {
-        if (slot.slot_index == mapping.mapped_slot &&
-            slot.backend_index == mapping.mapped_backend) {
-            char buf[64];
-            if (slot.material.empty()) {
-                snprintf(buf, sizeof(buf), "%s %d",
-                         lv_tr("Slot"), slot.slot_index + 1);
-            } else {
-                snprintf(buf, sizeof(buf), "%s %d: %s",
-                         lv_tr("Slot"), slot.slot_index + 1, slot.material.c_str());
-            }
-            return buf;
-        }
-    }
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%s %d", lv_tr("Slot"), mapping.mapped_slot + 1);
-    return buf;
-}
-
-// ============================================================================
-// Warning banner — per-tool mismatch details
-// ============================================================================
-
-void FilamentMappingCard::update_warning_banner() {
-    if (!warning_container_) {
-        return;
-    }
-
-    // Collect per-tool mismatch descriptions
-    std::vector<std::string> mismatches;
-    for (size_t i = 0; i < mappings_.size(); ++i) {
-        const auto& m = mappings_[i];
-        if (!m.material_mismatch || m.mapped_slot < 0) {
-            continue;
-        }
+    size_t count = std::min(mappings_.size(), tool_info_.size());
+    for (size_t i = 0; i < count; ++i) {
+        const auto& mapping = mappings_[i];
         const auto& tool = tool_info_[i];
-        // Find the mapped slot's material
-        for (const auto& slot : available_slots_) {
-            if (slot.slot_index == m.mapped_slot &&
-                slot.backend_index == m.mapped_backend) {
-                char buf[128];
-                snprintf(buf, sizeof(buf), "T%d: %s %s, %s %d %s %s",
-                         m.tool_index,
-                         lv_tr("expects"), tool.material.c_str(),
-                         lv_tr("Slot"), slot.slot_index + 1,
-                         lv_tr("has"), slot.material.c_str());
-                mismatches.push_back(buf);
-                break;
-            }
-        }
-    }
 
-    if (mismatches.empty()) {
-        lv_obj_add_flag(warning_container_, LV_OBJ_FLAG_HIDDEN);
-        return;
-    }
+        // Create a pill container: [gcode_color] → [slot_color]
+        lv_obj_t* pair = lv_obj_create(rows_container_);
+        lv_obj_remove_style_all(pair);
+        lv_obj_set_size(pair, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(pair, LV_FLEX_FLOW_ROW);
+        lv_obj_set_style_flex_cross_place(pair, LV_FLEX_ALIGN_CENTER, 0);
+        lv_obj_set_style_pad_gap(pair, inner_gap, 0);
+        lv_obj_set_style_pad_left(pair, pill_pad_h, 0);
+        lv_obj_set_style_pad_right(pair, pill_pad_h, 0);
+        lv_obj_set_style_pad_top(pair, pill_pad_v, 0);
+        lv_obj_set_style_pad_bottom(pair, pill_pad_v, 0);
+        lv_obj_set_style_radius(pair, pill_radius, 0);
+        lv_obj_set_style_bg_color(pair, theme_manager_get_color("elevated_bg"), 0);
+        lv_obj_set_style_bg_opa(pair, LV_OPA_COVER, 0);
+        lv_obj_remove_flag(pair, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(pair, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(pair, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    lv_obj_remove_flag(warning_container_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clean(warning_container_);
+        // G-code color swatch
+        lv_obj_t* gcode_sw = lv_obj_create(pair);
+        lv_obj_remove_style_all(gcode_sw);
+        lv_obj_set_size(gcode_sw, swatch_sz, swatch_sz);
+        lv_obj_set_style_radius(gcode_sw, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(gcode_sw, lv_color_hex(tool.color_rgb), 0);
+        lv_obj_set_style_bg_opa(gcode_sw, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(gcode_sw, 1, 0);
+        lv_obj_set_style_border_color(gcode_sw, theme_manager_get_color("text_muted"), 0);
+        lv_obj_set_style_border_opa(gcode_sw, SWATCH_BORDER_OPA, 0);
+        lv_obj_remove_flag(gcode_sw, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(gcode_sw, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(gcode_sw, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    for (const auto& msg : mismatches) {
-        lv_obj_t* warn_label = lv_label_create(warning_container_);
-        lv_label_set_text(warn_label, msg.c_str());
-        lv_obj_set_width(warn_label, LV_PCT(100));
-        lv_obj_set_style_text_font(warn_label, theme_manager_get_font("font_small"), 0);
-        lv_obj_set_style_text_color(warn_label, theme_manager_get_color("warning_color"), 0);
-        lv_label_set_long_mode(warn_label, LV_LABEL_LONG_WRAP);
-    }
-}
+        // Arrow
+        lv_obj_t* arrow = lv_label_create(pair);
+        lv_label_set_text(arrow, ICON_ARROW_RIGHT);
+        lv_obj_set_style_text_font(arrow, &mdi_icons_16, 0);
+        lv_obj_set_style_text_color(arrow, theme_manager_get_color("text_muted"), 0);
+        lv_obj_remove_flag(arrow, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(arrow, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-// ============================================================================
-// Row tap -> picker modal
-// ============================================================================
-
-void FilamentMappingCard::on_row_tapped(int tool_index) {
-    if (tool_index < 0 || tool_index >= static_cast<int>(tool_info_.size())) {
-        return;
-    }
-
-    const auto& tool = tool_info_[static_cast<size_t>(tool_index)];
-    const auto& mapping = mappings_[static_cast<size_t>(tool_index)];
-
-    spdlog::debug("[FilamentMapping] Row tapped: T{}", tool_index);
-
-    picker_modal_.set_tool_info(tool_index, tool.color_rgb, tool.material);
-    picker_modal_.set_available_slots(available_slots_);
-    picker_modal_.set_current_selection(mapping.mapped_slot, mapping.mapped_backend);
-    picker_modal_.set_on_select([this, tool_index](const FilamentPickerModal::Selection& sel) {
-        on_slot_selected(tool_index, sel);
-    });
-    picker_modal_.show(lv_screen_active());
-}
-
-void FilamentMappingCard::on_slot_selected(int tool_index,
-                                            const FilamentPickerModal::Selection& selection) {
-    if (tool_index < 0 || tool_index >= static_cast<int>(mappings_.size())) {
-        return;
-    }
-
-    auto& mapping = mappings_[static_cast<size_t>(tool_index)];
-    mapping.mapped_slot = selection.slot_index;
-    mapping.mapped_backend = selection.backend_index;
-    mapping.is_auto = selection.is_auto;
-
-    if (selection.is_auto) {
-        mapping.reason = helix::ToolMapping::MatchReason::AUTO;
-        mapping.material_mismatch = false;
-    } else {
-        // Check material mismatch
-        mapping.material_mismatch = false;
-        const auto& tool = tool_info_[static_cast<size_t>(tool_index)];
-        if (!tool.material.empty()) {
-            for (const auto& slot : available_slots_) {
-                if (slot.slot_index == selection.slot_index &&
-                    slot.backend_index == selection.backend_index) {
-                    if (!slot.material.empty() &&
-                        !helix::FilamentMapper::materials_match(tool.material, slot.material)) {
-                        mapping.material_mismatch = true;
-                    }
+        // Slot color swatch
+        uint32_t slot_color = 0x808080;
+        if (!mapping.is_auto && mapping.mapped_slot >= 0) {
+            for (const auto& s : available_slots_) {
+                if (s.slot_index == mapping.mapped_slot &&
+                    s.backend_index == mapping.mapped_backend) {
+                    slot_color = s.color_rgb;
                     break;
                 }
             }
         }
+        lv_obj_t* slot_sw = lv_obj_create(pair);
+        lv_obj_remove_style_all(slot_sw);
+        lv_obj_set_size(slot_sw, swatch_sz, swatch_sz);
+        lv_obj_set_style_radius(slot_sw, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(slot_sw, lv_color_hex(slot_color), 0);
+        lv_obj_set_style_bg_opa(slot_sw, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(slot_sw, 1, 0);
+        lv_obj_set_style_border_color(slot_sw, theme_manager_get_color("text_muted"), 0);
+        lv_obj_set_style_border_opa(slot_sw, SWATCH_BORDER_OPA, 0);
+        lv_obj_remove_flag(slot_sw, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(slot_sw, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(slot_sw, LV_OBJ_FLAG_EVENT_BUBBLE);
     }
 
-    spdlog::info("[FilamentMapping] T{} mapped to: auto={}, slot={}, backend={}",
-                 tool_index, selection.is_auto, selection.slot_index, selection.backend_index);
+    // Add warning icon at the end if any mismatches
+    if (has_any_mismatch()) {
+        lv_obj_t* warn = lv_label_create(rows_container_);
+        lv_label_set_text(warn, ICON_TRIANGLE_EXCLAMATION);
+        lv_obj_set_style_text_font(warn, &mdi_icons_16, 0);
+        lv_obj_set_style_text_color(warn, theme_manager_get_color("warning"), 0);
+        lv_obj_remove_flag(warn, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(warn, LV_OBJ_FLAG_EVENT_BUBBLE);
+    }
 
-    // Rebuild UI to reflect changes
-    rebuild_rows();
-    update_warning_banner();
+    // Hide the verbose warning container (no longer needed in compact view)
+    if (warning_container_) {
+        lv_obj_add_flag(warning_container_, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+bool FilamentMappingCard::has_any_mismatch() const {
+    for (const auto& m : mappings_) {
+        if (m.material_mismatch) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ============================================================================
+// Color queries
+// ============================================================================
+
+std::vector<uint32_t> FilamentMappingCard::get_mapped_colors() const {
+    std::vector<uint32_t> colors;
+    colors.reserve(mappings_.size());
+
+    for (size_t i = 0; i < mappings_.size(); ++i) {
+        const auto& mapping = mappings_[i];
+
+        if (!mapping.is_auto && mapping.mapped_slot >= 0) {
+            // Look up chosen slot color
+            uint32_t slot_color = (i < tool_info_.size()) ? tool_info_[i].color_rgb : 0x808080;
+            for (const auto& s : available_slots_) {
+                if (s.slot_index == mapping.mapped_slot &&
+                    s.backend_index == mapping.mapped_backend) {
+                    slot_color = s.color_rgb;
+                    break;
+                }
+            }
+            colors.push_back(slot_color);
+        } else {
+            // Auto or unmapped: use gcode tool's original color
+            colors.push_back((i < tool_info_.size()) ? tool_info_[i].color_rgb : 0x808080);
+        }
+    }
+
+    return colors;
+}
+
+// ============================================================================
+// Modal interaction
+// ============================================================================
+
+void FilamentMappingCard::open_mapping_modal() {
+    spdlog::debug("[FilamentMapping] Opening mapping modal");
+
+    mapping_modal_.set_tool_info(tool_info_);
+    mapping_modal_.set_available_slots(available_slots_);
+    mapping_modal_.set_mappings(mappings_);
+    mapping_modal_.set_on_mappings_updated([this](auto mappings) {
+        mappings_ = std::move(mappings);
+        rebuild_compact_view();
+        if (on_mappings_changed_) {
+            on_mappings_changed_();
+        }
+    });
+    mapping_modal_.show(lv_screen_active());
 }
 
 // ============================================================================

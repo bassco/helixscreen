@@ -36,8 +36,10 @@ bool FilamentMapper::materials_match(const std::string& a, const std::string& b)
     if (a.size() != b.size()) {
         return false;
     }
-    return std::equal(a.begin(), a.end(), b.begin(),
-                      [](char ca, char cb) { return std::tolower(ca) == std::tolower(cb); });
+    return std::equal(a.begin(), a.end(), b.begin(), [](char ca, char cb) {
+        return std::tolower(static_cast<unsigned char>(ca)) ==
+               std::tolower(static_cast<unsigned char>(cb));
+    });
 }
 
 SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,

@@ -389,6 +389,11 @@ class PrintSelectDetailView : public OverlayBase {
     void apply_tool_colors();
 
     /**
+     * @brief Re-apply tool colors from user's filament mapping choices
+     */
+    void apply_mapped_tool_colors();
+
+    /**
      * @brief Static callback for delete confirmation
      */
     static void on_confirm_delete_static(lv_event_t* e);

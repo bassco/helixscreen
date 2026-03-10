@@ -2027,6 +2027,9 @@ void PrintSelectPanel::create_detail_view() {
         PrintStatusPanel::push_overlay(parent_screen_);
     });
 
+    // Crash recovery: restore firmware mapping if app restarted mid-print
+    print_controller_->recover_pending_remap();
+
     spdlog::debug("[{}] Detail view module initialized", get_name());
 }
 

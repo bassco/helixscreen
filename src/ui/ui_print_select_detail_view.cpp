@@ -244,6 +244,9 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     lv_obj_t* mapping_rows = lv_obj_find_by_name(overlay_root_, "filament_mapping_rows");
     lv_obj_t* mapping_warning = lv_obj_find_by_name(overlay_root_, "filament_mapping_warning");
     filament_mapping_card_.create(mapping_card, mapping_rows, mapping_warning);
+    filament_mapping_card_.set_on_mappings_changed([this]() {
+        apply_mapped_tool_colors();
+    });
 
     // Look up history status display
     history_status_row_ = lv_obj_find_by_name(overlay_root_, "history_status_row");
@@ -738,6 +741,19 @@ void PrintSelectDetailView::apply_tool_colors() {
         if (!tool_colors.empty()) {
             ui_gcode_viewer_set_tool_colors(gcode_viewer_, tool_colors);
         }
+    }
+}
+
+void PrintSelectDetailView::apply_mapped_tool_colors() {
+    if (!gcode_viewer_ || !gcode_loaded_) {
+        return;
+    }
+
+    auto colors = filament_mapping_card_.get_mapped_colors();
+    if (!colors.empty()) {
+        ui_gcode_viewer_set_tool_colors(gcode_viewer_, colors);
+        lv_obj_invalidate(gcode_viewer_);
+        spdlog::debug("[DetailView] Applied {} mapped tool colors to gcode viewer", colors.size());
     }
 }
 

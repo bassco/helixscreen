@@ -2,7 +2,7 @@
 #pragma once
 
 #include "filament_mapper.h"
-#include "ui_filament_picker_modal.h"
+#include "ui_filament_mapping_modal.h"
 
 #include <lvgl.h>
 
@@ -12,12 +12,11 @@
 namespace helix::ui {
 
 /**
- * @brief Filament mapping card for the print detail view
+ * @brief Compact filament mapping card for the print detail view
  *
- * Replaces the simple color swatches display with an interactive
- * mapping card that shows which AMS/toolchanger slot is assigned
- * to each G-code tool. Users can tap a row to open the picker modal
- * and reassign slots.
+ * Shows a compact row of color swatch pairs (gcode_color -> slot_color)
+ * for each tool mapping. Tapping the card opens the FilamentMappingModal
+ * for full interaction.
  *
  * Visibility: shown when AMS/toolchanger is detected AND the file
  * uses at least one tool. Hidden otherwise (falls back to nothing).
@@ -35,7 +34,7 @@ class FilamentMappingCard {
      * @brief Attach to XML widgets after instantiation
      *
      * @param card_widget The filament_mapping_card ui_card
-     * @param rows_container The filament_mapping_rows container
+     * @param rows_container The filament_mapping_rows container (used for compact swatch row)
      * @param warning_container The filament_mapping_warning container
      */
     void create(lv_obj_t* card_widget, lv_obj_t* rows_container, lv_obj_t* warning_container);
@@ -63,6 +62,21 @@ class FilamentMappingCard {
     [[nodiscard]] std::vector<helix::ToolMapping> get_mappings() const { return mappings_; }
 
     /**
+     * @brief Get per-tool mapped colors (RGB values from chosen slots)
+     *
+     * Returns a vector of uint32_t colors, one per tool. For auto/unmapped
+     * tools, returns the gcode tool's original color.
+     */
+    [[nodiscard]] std::vector<uint32_t> get_mapped_colors() const;
+
+    using MappingsChangedCallback = std::function<void()>;
+
+    /**
+     * @brief Register callback for when user changes mappings via the modal
+     */
+    void set_on_mappings_changed(MappingsChangedCallback cb) { on_mappings_changed_ = std::move(cb); }
+
+    /**
      * @brief Check if card is currently visible
      */
     [[nodiscard]] bool is_visible() const;
@@ -73,10 +87,14 @@ class FilamentMappingCard {
     void on_ui_destroyed();
 
   private:
-    void rebuild_rows();
-    void update_warning_banner();
-    void on_row_tapped(int tool_index);
-    void on_slot_selected(int tool_index, const FilamentPickerModal::Selection& selection);
+    /// Build compact swatch pair row in rows_container_
+    void rebuild_compact_view();
+
+    /// Check if any mappings have material mismatches
+    bool has_any_mismatch() const;
+
+    /// Open the filament mapping modal
+    void open_mapping_modal();
 
     /// Build AvailableSlot list from AmsState singleton
     std::vector<helix::AvailableSlot> collect_available_slots();
@@ -86,12 +104,6 @@ class FilamentMappingCard {
         const std::vector<std::string>& colors,
         const std::vector<std::string>& materials);
 
-    /// Create a single mapping row widget
-    lv_obj_t* create_row(int tool_index);
-
-    /// Get display text for a mapping
-    std::string get_slot_display_text(const helix::ToolMapping& mapping) const;
-
     lv_obj_t* card_ = nullptr;
     lv_obj_t* rows_container_ = nullptr;
     lv_obj_t* warning_container_ = nullptr;
@@ -100,7 +112,8 @@ class FilamentMappingCard {
     std::vector<helix::GcodeToolInfo> tool_info_;
     std::vector<helix::AvailableSlot> available_slots_;
 
-    FilamentPickerModal picker_modal_;
+    FilamentMappingModal mapping_modal_;
+    MappingsChangedCallback on_mappings_changed_;
 };
 
 } // namespace helix::ui

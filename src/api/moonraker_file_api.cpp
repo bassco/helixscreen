@@ -399,12 +399,11 @@ FileMetadata MoonrakerFileAPI::parse_file_metadata(const json& response) {
     // Filament info
     metadata.filament_total = get_double("filament_total");
     metadata.filament_weight_total = get_double("filament_weight_total");
-    // Moonraker returns "PLA;PLA;PLA;PLA" for multi-extruder - take first value
+    // Moonraker returns "PLA;PLA;ASA;PETG" for multi-extruder
+    // Preserve full string for per-tool material matching
     std::string raw_type = get_string("filament_type");
     if (!raw_type.empty()) {
-        size_t semicolon = raw_type.find(';');
-        metadata.filament_type =
-            (semicolon != std::string::npos) ? raw_type.substr(0, semicolon) : raw_type;
+        metadata.filament_type = raw_type;
     }
     // Full filament name (e.g., "PolyMaker PolyLite ABS") - similarly multi-extruder aware
     std::string raw_name = get_string("filament_name");
