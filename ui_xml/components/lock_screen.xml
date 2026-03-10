@@ -12,11 +12,8 @@
   <consts>
     <!-- Dot indicator size for PIN entry feedback -->
     <px name="dot_size" value="20"/>
-    <!-- Keypad button height — touch-friendly sizes per breakpoint -->
-    <px name="lock_btn_height_tiny"   value="44"/>
-    <px name="lock_btn_height_small"  value="52"/>
-    <px name="lock_btn_height_medium" value="60"/>
-    <px name="lock_btn_height_large"  value="68"/>
+    <!-- Keypad button height — fixed for 320px-wide card -->
+    <px name="lock_btn_height" value="52"/>
   </consts>
 
   <styles>
@@ -51,8 +48,6 @@
                style_bg_color="#error_color"
                style_pad_all="0"
                align="top_right"
-               style_pad_right="#space_md"
-               style_pad_top="#space_md"
                x="-16" y="16"
                focusable="false">
       <bind_flag_if_eq subject="estop_visible" flag="hidden" ref_value="0"/>
@@ -92,6 +87,8 @@
               flex_flow="row"
               style_pad_gap="#space_sm"
               style_pad_all="0"
+              style_bg_opa="0"
+              style_border_width="0"
               align="center">
         <lv_obj name="lock_dot_0" width="#dot_size" height="#dot_size">
           <style name="dot_empty"/>
@@ -129,6 +126,8 @@
               style_flex_track_place="center"
               style_pad_all="0"
               style_pad_gap="#space_sm"
+              style_bg_opa="0"
+              style_border_width="0"
               scrollable="false">
 
         <!-- Row 1: 1 2 3 -->

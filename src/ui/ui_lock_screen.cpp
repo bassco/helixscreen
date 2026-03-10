@@ -86,6 +86,11 @@ void LockScreenOverlay::create_overlay() {
 
 void LockScreenOverlay::destroy_overlay() {
     if (overlay_) {
+        // Cancel pending shake animations to prevent dangling pointer callbacks
+        lv_obj_t* dots = lv_obj_find_by_name(overlay_, "lock_dots_container");
+        if (dots) {
+            lv_anim_delete(dots, nullptr);
+        }
         lv_obj_delete(overlay_);
         overlay_ = nullptr;
         digit_buffer_.clear();
@@ -243,15 +248,15 @@ void LockScreenOverlay::shake_dots() {
     lv_anim_init(&a);
     lv_anim_set_var(&a, dots);
     lv_anim_set_values(&a, -10, 10);
-    lv_anim_set_time(&a, 100);
+    lv_anim_set_duration(&a, 100);
     lv_anim_set_repeat_count(&a, 3);
     lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
     lv_anim_set_exec_cb(&a, [](void* obj, int32_t v) {
-        lv_obj_set_x(static_cast<lv_obj_t*>(obj), v);
+        lv_obj_set_style_translate_x(static_cast<lv_obj_t*>(obj), v, LV_PART_MAIN);
     });
     lv_anim_set_completed_cb(&a, [](lv_anim_t* anim) {
-        // Reset X position after shake
-        lv_obj_set_x(static_cast<lv_obj_t*>(anim->var), 0);
+        // Reset translate after shake
+        lv_obj_set_style_translate_x(static_cast<lv_obj_t*>(anim->var), 0, LV_PART_MAIN);
         // Clear digit buffer after animation — deferred so it runs on main thread
         lv_async_call(
             [](void*) { LockScreenOverlay::instance().clear_digits(); }, nullptr);
