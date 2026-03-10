@@ -119,8 +119,10 @@ class CameraStream {
     std::vector<uint8_t> recv_buf_;
     std::string boundary_;
 
-    // Active HTTP request for streaming — stored for cancellation in stop()
-    std::shared_ptr<HttpRequest> active_req_;
+    // Active HTTP request — weak_ptr avoids refcount races between the stream
+    // thread and libhv's internal thread pool.  stop() locks the weak_ptr
+    // temporarily to call Cancel().
+    std::weak_ptr<HttpRequest> active_req_;
     std::mutex req_mutex_;
 
     // State — alive_ is captured as weak_ptr by http_cb closures so they

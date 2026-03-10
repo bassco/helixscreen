@@ -168,6 +168,13 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL observer debug info patch already applied$(RESET)"; \
 	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_observer_remove_null_guard.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL observer remove NULL guard patch...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_observer_remove_null_guard.patch && \
+		echo "$(GREEN)✓ Observer remove NULL guard patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL observer remove NULL guard patch already applied$(RESET)"; \
+	fi
 	$(Q)if git -C $(LVGL_DIR) diff --quiet src/widgets/slider/lv_slider.c 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL slider scroll chain patch...$(RESET)"; \
 		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_slider_scroll_chain.patch 2>/dev/null; then \

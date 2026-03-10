@@ -123,8 +123,8 @@ void CameraStream::stop() {
     // Cancel any in-flight HTTP request to unblock the stream thread
     {
         std::lock_guard<std::mutex> lock(req_mutex_);
-        if (active_req_) {
-            active_req_->Cancel();
+        if (auto req = active_req_.lock()) {
+            req->Cancel();
         }
     }
 
@@ -156,8 +156,8 @@ void CameraStream::stop() {
             // Re-cancel — thread may have started a new HTTP request
             {
                 std::lock_guard<std::mutex> lock(req_mutex_);
-                if (active_req_) {
-                    active_req_->Cancel();
+                if (auto req = active_req_.lock()) {
+                    req->Cancel();
                 }
             }
             std::this_thread::sleep_for(kCancelInterval);
@@ -257,10 +257,11 @@ void CameraStream::stream_thread_func() {
         spdlog::debug("[CameraStream] Attempting stream connection to {} (timeout={}s, attempt={})",
                       stream_url_, timeout, stream_fail_count_ + 1);
 
-        // Store the request for cancellation by stop()
+        // Store weak reference for cancellation by stop() — weak_ptr avoids
+        // the shared_ptr refcount race that caused SIGSEGV in _M_release()
         {
             std::lock_guard<std::mutex> lock(req_mutex_);
-            active_req_ = req;
+            active_req_ = req;  // weak_ptr assignment from shared_ptr
         }
 
         // Set up http_cb for incremental MJPEG parsing. The callback fires as
@@ -277,8 +278,8 @@ void CameraStream::stream_thread_func() {
             if (!running_.load()) {
                 // Cancel the request from within the callback
                 std::lock_guard<std::mutex> lock(req_mutex_);
-                if (active_req_) {
-                    active_req_->Cancel();
+                if (auto r = active_req_.lock()) {
+                    r->Cancel();
                 }
                 return;
             }
@@ -309,12 +310,8 @@ void CameraStream::stream_thread_func() {
         };
 
         auto resp = requests::request(req);
-
-        // Clear active request
-        {
-            std::lock_guard<std::mutex> lock(req_mutex_);
-            active_req_ = nullptr;
-        }
+        // No need to clear active_req_ — it's a weak_ptr that expires
+        // naturally when the local `req` goes out of scope at loop end.
 
         if (!running_.load()) {
             break;
@@ -489,10 +486,10 @@ void CameraStream::fetch_snapshot() {
     req->url = snapshot_url_;
     req->timeout = kStreamTimeoutSec;
 
-    // Store for cancellation by stop()
+    // Store weak reference for cancellation by stop()
     {
         std::lock_guard<std::mutex> lock(req_mutex_);
-        active_req_ = req;
+        active_req_ = req;  // weak_ptr assignment from shared_ptr
     }
 
     auto resp = requests::request(req);
@@ -501,12 +498,6 @@ void CameraStream::fetch_snapshot() {
     // may be destroyed (detached thread). Check alive BEFORE touching members.
     if (!thread_alive->load()) {
         return;
-    }
-
-    // Clear active request
-    {
-        std::lock_guard<std::mutex> lock(req_mutex_);
-        active_req_ = nullptr;
     }
 
     // Check running_ after blocking HTTP call — stop() may have been called

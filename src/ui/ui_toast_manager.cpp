@@ -429,13 +429,21 @@ void ToastManager::deferred_delete_toast(lv_obj_t*& toast_ptr) {
     toast_ptr = nullptr;
     // Hide immediately so the old toast isn't visible while deletion is deferred
     lv_obj_add_flag(to_delete, LV_OBJ_FLAG_HIDDEN);
-    helix::ui::queue_update("ToastManager::deferred_delete_toast", [to_delete]() {
-        if (!lv_is_initialized()) return;
-        if (!lv_obj_is_valid(to_delete)) return;
-        helix::ui::defocus_tree(to_delete);
-        lv_obj_delete(to_delete);
-        spdlog::debug("[ToastManager] Deferred toast deletion complete");
-    });
+    // Use lv_async_call instead of queue_update — deletion inside
+    // UpdateQueue::process_pending() corrupts LVGL's observer linked list
+    // when recursive obj_delete_core removes shared-subject observers.
+    // lv_async_call runs in the next lv_timer_handler tick, safely outside
+    // the event processing batch.
+    lv_async_call(
+        [](void* ptr) {
+            auto* obj = static_cast<lv_obj_t*>(ptr);
+            if (!lv_is_initialized()) return;
+            if (!lv_obj_is_valid(obj)) return;
+            helix::ui::defocus_tree(obj);
+            lv_obj_delete(obj);
+            spdlog::debug("[ToastManager] Deferred toast deletion complete");
+        },
+        to_delete);
 }
 
 void ToastManager::dismiss_timer_cb(lv_timer_t* timer) {
