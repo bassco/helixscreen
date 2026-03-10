@@ -41,7 +41,7 @@ jobs:
             libsdl2-dev clang make python3 python3-venv npm \
             libssl-dev pkg-config libfmt-dev libcairo2-dev \
             libpango1.0-dev libpng-dev libjpeg-dev \
-            libnl-3-dev libnl-genl-3-dev libxml2-utils ccache
+            libnl-3-dev libnl-genl-3-dev libxml2-utils libusb-1.0-0-dev ccache
 
     - name: Cache compiled dependencies
       uses: actions/cache@v4
@@ -225,7 +225,7 @@ jobs:
             libsdl2-dev clang make python3 python3-venv npm \
             libssl-dev pkg-config libfmt-dev libcairo2-dev \
             libpango1.0-dev libpng-dev libjpeg-dev \
-            libnl-3-dev libnl-genl-3-dev libxml2-utils ccache
+            libnl-3-dev libnl-genl-3-dev libxml2-utils libusb-1.0-0-dev ccache
 
     - name: Cache compiled dependencies
       uses: actions/cache@v4
@@ -303,7 +303,7 @@ jobs:
             libsdl2-dev clang make python3 python3-venv npm \
             libssl-dev pkg-config libfmt-dev libcairo2-dev \
             libpango1.0-dev libpng-dev libjpeg-dev \
-            libnl-3-dev libnl-genl-3-dev libxml2-utils ccache
+            libnl-3-dev libnl-genl-3-dev libxml2-utils libusb-1.0-0-dev ccache
 
     - name: Cache compiled dependencies
       uses: actions/cache@v4
@@ -397,7 +397,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      run: brew install sdl2 ccache
+      run: brew install sdl2 libusb ccache
 
     - name: Cache compiled dependencies
       uses: actions/cache@v4

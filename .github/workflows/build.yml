@@ -42,6 +42,7 @@ jobs:
             libnl-3-dev \
             libnl-genl-3-dev \
             libxml2-utils \
+            libusb-1.0-0-dev \
             ccache
 
     - name: Cache compiled dependencies
@@ -180,7 +181,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 ccache
+        brew install sdl2 libusb ccache
         # node/npm usually pre-installed on GitHub Actions macOS runners
 
     - name: Cache compiled dependencies
