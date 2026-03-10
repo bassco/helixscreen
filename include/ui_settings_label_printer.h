@@ -3,12 +3,15 @@
 
 #pragma once
 
+#include "bluetooth_plugin.h"
 #include "lvgl/lvgl.h"
 #include "mdns_discovery.h"
 #include "overlay_base.h"
 #include "usb_printer_detector.h"
 
+#include <atomic>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace helix::settings {
@@ -39,6 +42,8 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void handle_printer_selected(int index);
     void handle_type_changed(int index);
     void handle_usb_printer_selected(int index);
+    void handle_bt_printer_selected(int index);
+    void handle_bt_scan();
 
   private:
     void init_address_input();
@@ -48,10 +53,13 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void init_discovery_dropdown();
     void init_printer_type_dropdown();
     void init_usb_printer_dropdown();
+    void init_bt_printer_dropdown();
     void start_label_printer_discovery();
     void stop_label_printer_discovery();
     void start_usb_detection();
     void stop_usb_detection();
+    void start_bt_discovery();
+    void stop_bt_discovery();
     void on_printers_discovered(const std::vector<DiscoveredPrinter>& printers);
     void on_usb_printers_detected(const std::vector<helix::UsbPrinterInfo>& printers);
 
@@ -66,6 +74,26 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     std::unique_ptr<helix::UsbPrinterDetector> usb_detector_;
     std::vector<helix::UsbPrinterInfo> detected_usb_printers_;
 
+    // Bluetooth discovery
+    /// Info about a discovered BT printer (UI thread copies)
+    struct BtDeviceInfo {
+        std::string mac;
+        std::string name;
+        bool paired = false;
+        bool is_ble = false;
+    };
+
+    /// C callback safety: prevent use-after-free when overlay is destroyed during discovery
+    struct BtDiscoveryContext {
+        std::atomic<bool> alive{true};
+        LabelPrinterSettingsOverlay* overlay = nullptr;
+    };
+
+    helix_bt_context* bt_ctx_ = nullptr;
+    std::unique_ptr<BtDiscoveryContext> bt_discovery_ctx_;
+    std::vector<BtDeviceInfo> bt_devices_;
+    bool bt_discovering_ = false;
+
     // Static callbacks
     static void on_address_done(lv_event_t* e);
     static void on_port_done(lv_event_t* e);
@@ -75,6 +103,12 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     static void on_printer_selected(lv_event_t* e);
     static void on_type_changed(lv_event_t* e);
     static void on_usb_printer_selected(lv_event_t* e);
+    static void on_bt_printer_selected(lv_event_t* e);
+    static void on_bt_scan(lv_event_t* e);
+
+    // Pairing modal callbacks
+    static void on_pair_confirm(lv_event_t* e);
+    static void on_pair_cancel(lv_event_t* e);
 };
 
 LabelPrinterSettingsOverlay& get_label_printer_settings_overlay();
