@@ -39,7 +39,7 @@ std::vector<SpoolInfo> filter_spools(const std::vector<SpoolInfo>& spools,
     for (const auto& spool : spools) {
         // Build searchable text: "#ID vendor material color_name"
         std::string searchable = "#" + std::to_string(spool.id) + " " + spool.vendor + " " +
-                                 spool.material + " " + spool.color_name;
+                                 spool.material + " " + spool.color_name + " " + spool.location;
 
         // Lowercase the searchable text
         std::transform(searchable.begin(), searchable.end(), searchable.begin(),
