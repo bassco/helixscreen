@@ -124,3 +124,4 @@ config/crash_history.json
 config/tool_spools.json
 config/.crash_restart_count
 config/.helix-screen.lock
+.superpowers/
