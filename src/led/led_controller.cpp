@@ -289,6 +289,10 @@ void LedController::discover_from_hardware(const helix::PrinterDiscovery& hardwa
     // Presets (e.g. AD5M) may specify LED names that don't exist on community
     // firmware variants (Zmod names it "chamber_LED" vs stock "chamber_light").
     // After pruning, the auto-select below kicks in and picks the real hardware.
+    // NOTE: Do NOT persist the pruned list here. If all strips get pruned
+    // (e.g., firmware name mismatch, incomplete discovery), persisting the
+    // empty list makes the loss permanent across restarts (#373). Let
+    // auto-select below save if it picks new strips instead.
     if (!selected_strips_.empty()) {
         auto all_strips = all_selectable_strips();
         auto it = std::remove_if(selected_strips_.begin(), selected_strips_.end(),
@@ -306,7 +310,6 @@ void LedController::discover_from_hardware(const helix::PrinterDiscovery& hardwa
                              "discovered hardware)",
                              p);
             }
-            save_config();
         }
     }
 
