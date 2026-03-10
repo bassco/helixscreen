@@ -13,7 +13,7 @@
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 16 | **Velocity**: 5 | **Learned**: 2025-12-14 | **Last**: 2026-03-08 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 17 | **Velocity**: 6 | **Learned**: 2025-12-14 | **Last**: 2026-03-10 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|***--] No mutex in destructors
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [****-|*****] XML no recompile
-- **Uses**: 94 | **Velocity**: 74.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-08 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 96 | **Velocity**: 76.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-10 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|****-] Unique XML callback names
@@ -97,7 +97,7 @@
 > Always use lv_obj_safe_delete() instead of raw lv_obj_delete() - it guards against shutdown race conditions by checking lv_is_initialized() and lv_display_get_next() before deletion, and auto-nulls the pointer to prevent use-after-free
 
 ### [L060] [***--|*****] Interactive UI testing requires user
-- **Uses**: 46 | **Velocity**: 45.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-08 | **Category**: correction | **Type**: constraint
+- **Uses**: 48 | **Velocity**: 47.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-10 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -118,7 +118,7 @@
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [**---|*****] Commit generated translation artifacts
-- **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-02-10 | **Last**: 2026-03-08 | **Category**: i18n
+- **Uses**: 6 | **Velocity**: 6 | **Learned**: 2026-02-10 | **Last**: 2026-03-10 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
 ### [L065] [-----|-----] No test-only methods on production classes
@@ -146,7 +146,7 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [**---|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-02-17 | **Last**: 2026-03-08 | **Category**: i18n
+- **Uses**: 6 | **Velocity**: 6 | **Learned**: 2026-02-17 | **Last**: 2026-03-10 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
