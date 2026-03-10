@@ -16,6 +16,7 @@ This guide walks you through installing HelixScreen on your 3D printer's touchsc
 - [Creality K2 Series (Untested)](#creality-k2-series-untested)
 - [FlashForge Adventurer 5X (Testing)](#flashforge-adventurer-5x-testing)
 - [Elegoo Centauri Carbon 1 (Testing)](#elegoo-centauri-carbon-1-testing)
+- [Creality Sonic Pad](#creality-sonic-pad)
 - [First Boot & Setup Wizard](#first-boot--setup-wizard)
 - [Display Configuration](#display-configuration)
 - [Starting on Boot](#starting-on-boot)
@@ -219,6 +220,36 @@ On uninstall, GuppyScreen is restored.
 - No installer script support yet — manual deployment only
 
 **If you're testing on this printer**, please report your results via [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues) or [Discord](https://discord.gg/RZCT2StKhr).
+
+### Creality Sonic Pad
+
+The Creality Sonic Pad is a standalone 7" touchscreen that can run Klipper. It uses a 32-bit ARM userspace (armhf) despite having a 64-bit capable processor (Allwinner H616).
+
+HelixScreen requires Klipper and Moonraker to already be installed and working on the Sonic Pad. This is typically done via [KIAUH](https://github.com/dw-0/kiauh) or a similar tool. HelixScreen replaces whatever touchscreen UI you're currently using (e.g., KlipperScreen).
+
+- **Hardware:**
+  - Creality Sonic Pad (7" 1024x600 capacitive touchscreen)
+  - Network connection (Ethernet)
+
+- **Software:**
+  - Klipper and Moonraker installed and working (via KIAUH or similar)
+  - SSH access (`sonic@<pad-ip>`)
+  - About 100MB free disk space
+
+**Installation:**
+
+The standard installer works on Sonic Pad:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
+```
+
+The installer detects the Sonic Pad as a 32-bit ARM platform and downloads the `pi32` release binary. HelixScreen installs to `~/helixscreen/` and runs as a systemd service.
+
+**Notes:**
+- The Sonic Pad has a Goodix GT9xx touchscreen controller — the touch calibration wizard runs automatically on first boot if needed
+- Moonraker runs on `localhost:7125` (default)
+- The `display-sleep` service is automatically stopped to prevent backlight conflicts
 
 ---
 
