@@ -5,6 +5,17 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- AD5X IFS backend for FlashForge Adventurer 5X Intelligent Filament Switching (testing)
+  - Auto-detection via IFS port/motion sensors in Klipper
+  - 4-lane filament switching with tool mapping (T0-T15)
+  - Color, material, and presence tracking via save_variables
+  - Load/unload/change tool operations via IFS G-code macros
+  - Bypass (external spool) mode support
+  - Mock mode: `HELIX_MOCK_AMS=ifs`
+
 ## [0.97.5] - 2026-03-10
 
 AFC device configuration improvements with toolhead distance editing and multi-extruder support.

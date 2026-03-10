@@ -750,6 +750,8 @@ Tool names must be provided via `set_discovered_tools()` before calling `start()
 
 ## AD5X IFS (FlashForge Adventurer 5X)
 
+> **Status: TESTING** — This backend is functional but not yet fully supported. It is available for user testing and feedback. Please report issues via GitHub.
+
 The AD5X has a 4-lane Intelligent Filament Switching (IFS) system controlled by a separate STM32 MCU. HelixScreen supports it through ZMOD firmware (ghzserg's Klipper mod for FlashForge printers).
 
 ### Detection

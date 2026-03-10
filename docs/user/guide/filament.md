@@ -95,6 +95,7 @@ When multiple backends are detected:
 | **AFC** | Box Turtle, OpenAMS, ViViD |
 | **ValgACE** | ValgACE filament changer |
 | **Tool Changer** | Toolchanger-based filament routing |
+| **AD5X IFS** *(testing)* | FlashForge Adventurer 5X Intelligent Filament Switching |
 
 Each system displays its own logo in the AMS panel header. Happy Hare and AFC show their firmware logos; specific hardware variants (ERCF, Box Turtle, ViViD, etc.) show hardware-specific logos when detected.
 
