@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#include <catch2/catch_test_macros.hpp>
+#include "../catch_amalgamated.hpp"
 #include "lock_manager.h"
 
 // [L065] Use friend class pattern instead of public test-only methods
