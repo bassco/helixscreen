@@ -24,6 +24,9 @@ setup() {
     mkdir -p "$INSTALL_DIR/config"
     cp "$WORKTREE_ROOT/config/99-helixscreen-backlight.rules" "$INSTALL_DIR/config/"
     cp "$WORKTREE_ROOT/config/helixscreen-network.pkla" "$INSTALL_DIR/config/"
+
+    # Mock systemctl to prevent restarting real services (e.g., polkit) on dev machines
+    mock_command "systemctl" ""
 }
 
 # Helper: create a SUDO wrapper that rewrites system paths to tmpdir
