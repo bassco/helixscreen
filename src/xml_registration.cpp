@@ -510,7 +510,6 @@ register_xml("sound_settings_overlay.xml");
     register_xml("wizard_ams_identify.xml");
     register_xml("wizard_led_select.xml");
     register_xml("wizard_filament_sensor_select.xml");
-    register_xml("wizard_probe_sensor_select.xml");
     register_xml("wizard_input_shaper.xml");
     register_xml("wizard_language_chooser.xml");
     register_xml("wizard_summary.xml");
