@@ -2075,10 +2075,9 @@ std::vector<helix::printer::DeviceAction> AmsBackendHappyHare::get_device_action
             }
         } else if (a.id == "clog_detection") {
             // Status-backed flowguard_encoder_mode_ takes priority, else override/config
-            int mode = flowguard_encoder_mode_;
-            if (mode == 0) {
-                mode = eff_i(user_overrides_.clog_detection, config_defaults_.clog_detection);
-            }
+            int mode = (flowguard_encoder_mode_ >= 0)
+                           ? flowguard_encoder_mode_
+                           : eff_i(user_overrides_.clog_detection, config_defaults_.clog_detection);
             // Map int to display string
             switch (mode) {
             case 1:
