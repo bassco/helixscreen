@@ -83,7 +83,7 @@ void SettingsManager::init_subjects() {
                            subjects_);
 
     // Printer switcher navbar icon visibility (default: true = shown)
-    bool show_printer_switcher = config->get<bool>("/printers/show_printer_switcher", true);
+    bool show_printer_switcher = config->get<bool>("/printers/show_printer_switcher", false);
     UI_MANAGED_SUBJECT_INT(show_printer_switcher_subject_, show_printer_switcher ? 1 : 0,
                            "show_printer_switcher", subjects_);
 

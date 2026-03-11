@@ -414,7 +414,8 @@ json get_default_config(const std::string& moonraker_host, bool include_user_pre
                        {"d", 0.0},
                        {"e", 1.0},
                        {"f", 0.0}}}}},
-                   {"printers", {{printer_id, printer_data}}}};
+                   {"printers",
+                    {{"show_printer_switcher", false}, {printer_id, printer_data}}}};
 
     if (include_user_prefs) {
         config["brightness"] = 50;
