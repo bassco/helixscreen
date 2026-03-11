@@ -834,6 +834,10 @@ class TelemetryManager {
     /// Whether the initial delay has fired (switches to normal interval after)
     bool auto_send_initial_fired_{false};
 
+    /// Whether start_auto_send() has been called (discovery complete).
+    /// LVGL-thread-only (same as session trackers below).
+    bool discovery_complete_{false};
+
     // =========================================================================
     // SESSION TRACKERS (panel usage + connection stability)
     // All accessed from LVGL/main thread only — no mutex needed.

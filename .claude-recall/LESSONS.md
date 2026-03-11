@@ -13,7 +13,7 @@
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 17 | **Velocity**: 6 | **Learned**: 2025-12-14 | **Last**: 2026-03-10 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 18 | **Velocity**: 7 | **Learned**: 2025-12-14 | **Last**: 2026-03-10 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|***--] No mutex in destructors
@@ -165,8 +165,8 @@
 - **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
 > Before calling lv_obj_find_by_name(), lv_obj_get_child(), or lv_obj_get_child_count() on a cached widget pointer, ensure the pointer is not stale. Use null checks and alive guards (weak_ptr pattern) — NOT lv_obj_is_valid() which is O(n) recursive and can stack overflow on Pi (see L076). Use safe_delete_obj() instead of raw lv_obj_delete() to null pointers after deletion. For async callbacks, use alive guards to detect if the owning panel was destroyed.
 
-### [L076] [*----|****-] NEVER use lv_obj_is_valid() in hot paths
-- **Uses**: 3 | **Velocity**: 3 | **Learned**: 2026-02-22 | **Last**: 2026-02-28 | **Category**: gotcha
+### [L076] [*----|*****] NEVER use lv_obj_is_valid() in hot paths
+- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-02-22 | **Last**: 2026-03-10 | **Category**: gotcha
 > lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, or safe_delete_obj(). Use simple null pointer checks instead. Only safe in one-shot event handlers (button clicks) where tree is stable and call happens once. This caused a real user crash in v0.10.14 — HeatingIconAnimator::apply_color() called lv_obj_is_valid(icon_) from observer callback during startup, recursed infinitely, SIGSEGV after 1 second.
 
 ### [L077] [-----|-----] Dynamic subject observers MUST use SubjectLifetime tokens

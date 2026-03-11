@@ -401,8 +401,20 @@ void TelemetryManager::set_enabled(bool enabled) {
     enabled_.store(enabled);
     spdlog::info("[TelemetryManager] Telemetry {}", enabled ? "enabled" : "disabled");
 
-    // Update LVGL subject via queue to ensure thread safety — set_enabled()
-    // may be called from background threads (telemetry callbacks)
+    // Start/stop auto-send timer based on enabled state.
+    // The timer triggers DNS resolution (HTTP request to telemetry.helixscreen.org)
+    // which crashes on statically-linked platforms (AD5M/CC1) where glibc NSS
+    // modules are dynamically loaded with ABI mismatches. Only run when enabled.
+    if (enabled && discovery_complete_) {
+        start_auto_send();
+    } else if (!enabled) {
+        stop_auto_send();
+    }
+
+    // Update LVGL subject via queue to ensure thread safety.
+    // NOTE: set_enabled() must be called from the LVGL thread since it
+    // creates/deletes LVGL timers above. enabled_ is atomic for safe reads
+    // from any thread, but the function itself is LVGL-thread-only.
     if (subjects_initialized_) {
         helix::ui::queue_update(
             [this, enabled]() { lv_subject_set_int(&enabled_subject_, enabled ? 1 : 0); });
@@ -860,6 +872,13 @@ void TelemetryManager::do_send(const nlohmann::json& batch) {
 // =============================================================================
 
 void TelemetryManager::start_auto_send() {
+    discovery_complete_ = true;
+
+    if (!is_enabled()) {
+        spdlog::debug("[TelemetryManager] Telemetry disabled, skipping auto-send timer");
+        return;
+    }
+
     if (auto_send_timer_) {
         spdlog::debug("[TelemetryManager] Auto-send timer already running");
         return;
