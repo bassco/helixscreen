@@ -1805,7 +1805,102 @@ std::vector<helix::printer::DeviceSection> AmsBackendHappyHare::get_device_secti
 }
 
 std::vector<helix::printer::DeviceAction> AmsBackendHappyHare::get_device_actions() const {
-    return helix::printer::hh_default_actions();
+    using namespace helix::printer;
+    auto actions = hh_default_actions();
+
+    // If config hasn't loaded yet, disable all non-button actions
+    if (!config_defaults_.loaded) {
+        for (auto& a : actions) {
+            if (a.type != ActionType::BUTTON) {
+                a.enabled = false;
+                a.disable_reason = "Loading configuration...";
+            }
+        }
+        return actions;
+    }
+
+    // Helper: effective float value (user override > config default)
+    auto eff_f = [&](const std::optional<float>& ovr, float def) -> double {
+        return static_cast<double>(ovr.value_or(def));
+    };
+    auto eff_i = [&](const std::optional<int>& ovr, int def) -> int {
+        return ovr.value_or(def);
+    };
+
+    // Overlay effective values onto actions
+    for (auto& a : actions) {
+        // --- Speed sliders ---
+        if (a.id == "gear_from_buffer_speed") {
+            a.current_value = eff_f(user_overrides_.gear_from_buffer_speed,
+                                    config_defaults_.gear_from_buffer_speed);
+        } else if (a.id == "gear_from_spool_speed") {
+            a.current_value = eff_f(user_overrides_.gear_from_spool_speed,
+                                    config_defaults_.gear_from_spool_speed);
+        } else if (a.id == "gear_unload_speed") {
+            a.current_value =
+                eff_f(user_overrides_.gear_unload_speed, config_defaults_.gear_unload_speed);
+        } else if (a.id == "selector_speed") {
+            a.current_value =
+                eff_f(user_overrides_.selector_move_speed, config_defaults_.selector_move_speed);
+        } else if (a.id == "extruder_load_speed") {
+            a.current_value =
+                eff_f(user_overrides_.extruder_load_speed, config_defaults_.extruder_load_speed);
+        } else if (a.id == "extruder_unload_speed") {
+            a.current_value = eff_f(user_overrides_.extruder_unload_speed,
+                                    config_defaults_.extruder_unload_speed);
+        }
+        // --- Toolhead sliders ---
+        else if (a.id == "toolhead_sensor_to_nozzle") {
+            a.current_value = eff_f(user_overrides_.toolhead_sensor_to_nozzle,
+                                    config_defaults_.toolhead_sensor_to_nozzle);
+        } else if (a.id == "toolhead_extruder_to_nozzle") {
+            a.current_value = eff_f(user_overrides_.toolhead_extruder_to_nozzle,
+                                    config_defaults_.toolhead_extruder_to_nozzle);
+        } else if (a.id == "toolhead_entry_to_extruder") {
+            a.current_value = eff_f(user_overrides_.toolhead_entry_to_extruder,
+                                    config_defaults_.toolhead_entry_to_extruder);
+        } else if (a.id == "toolhead_ooze_reduction") {
+            a.current_value = eff_f(user_overrides_.toolhead_ooze_reduction,
+                                    config_defaults_.toolhead_ooze_reduction);
+        }
+        // --- Accessories ---
+        else if (a.id == "espooler_mode") {
+            // Status-backed: use live value if available
+            if (!espooler_active_.empty()) {
+                a.current_value = espooler_active_;
+            }
+        } else if (a.id == "clog_detection") {
+            // Status-backed flowguard_encoder_mode_ takes priority, else override/config
+            int mode = flowguard_encoder_mode_;
+            if (mode == 0) {
+                mode = eff_i(user_overrides_.clog_detection, config_defaults_.clog_detection);
+            }
+            // Map int to display string
+            switch (mode) {
+            case 1:
+                a.current_value = std::string("Manual");
+                break;
+            case 2:
+                a.current_value = std::string("Auto");
+                break;
+            default:
+                a.current_value = std::string("Off");
+                break;
+            }
+        } else if (a.id == "sync_to_extruder") {
+            int val = eff_i(user_overrides_.sync_to_extruder, config_defaults_.sync_to_extruder);
+            a.current_value = (val != 0);
+        }
+        // --- Setup ---
+        else if (a.id == "led_mode") {
+            // Status-backed: use live LED exit_effect if available
+            if (!led_exit_effect_.empty()) {
+                a.current_value = led_exit_effect_;
+            }
+        }
+    }
+
+    return actions;
 }
 
 AmsError AmsBackendHappyHare::execute_device_action(const std::string& action_id,

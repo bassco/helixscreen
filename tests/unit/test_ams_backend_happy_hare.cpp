@@ -134,6 +134,28 @@ class AmsBackendHappyHareTestHelper : public AmsBackendHappyHare {
         selector_type_ = type;
     }
 
+    /**
+     * @brief Set config defaults for device actions testing
+     *
+     * Populates config_defaults_ with known values so tests can verify
+     * that get_device_actions() overlays them correctly.
+     */
+    void set_config_defaults_for_test() {
+        config_defaults_.gear_from_buffer_speed = 180.0f;
+        config_defaults_.gear_from_spool_speed = 70.0f;
+        config_defaults_.gear_unload_speed = 90.0f;
+        config_defaults_.selector_move_speed = 200.0f;
+        config_defaults_.extruder_load_speed = 45.0f;
+        config_defaults_.extruder_unload_speed = 45.0f;
+        config_defaults_.toolhead_sensor_to_nozzle = 62.0f;
+        config_defaults_.toolhead_extruder_to_nozzle = 72.0f;
+        config_defaults_.toolhead_entry_to_extruder = 0.0f;
+        config_defaults_.toolhead_ooze_reduction = 2.0f;
+        config_defaults_.sync_to_extruder = 0;
+        config_defaults_.clog_detection = 0;
+        config_defaults_.loaded = true;
+    }
+
     void apply_selector_type_update() {
         update_unit_topologies();
     }
@@ -2334,5 +2356,61 @@ TEST_CASE("Happy Hare actions do NOT include calibrate_servo",
 
     for (const auto& a : actions) {
         REQUIRE(a.id != "calibrate_servo");
+    }
+}
+
+// --- Phase 11: Live value population (Task 4) ---
+
+TEST_CASE("get_device_actions returns live config values", "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.id == "gear_from_buffer_speed") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(180.0));
+        }
+        if (a.id == "gear_unload_speed") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<double>(a.current_value);
+            REQUIRE(val == Catch::Approx(90.0));
+        }
+    }
+}
+
+TEST_CASE("get_device_actions disables non-buttons when config not loaded",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    // Do NOT call set_config_defaults_for_test() — config_defaults_.loaded is false
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.type != helix::printer::ActionType::BUTTON) {
+            REQUIRE_FALSE(a.enabled);
+            REQUIRE(a.disable_reason == "Loading configuration...");
+        }
+    }
+}
+
+TEST_CASE("get_device_actions overlays sync_to_extruder as bool",
+          "[ams][happy_hare][device_actions]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+    helper.set_config_defaults_for_test();
+
+    auto actions = helper.get_device_actions();
+
+    for (const auto& a : actions) {
+        if (a.id == "sync_to_extruder") {
+            REQUIRE(a.current_value.has_value());
+            auto val = std::any_cast<bool>(a.current_value);
+            REQUIRE(val == false);
+        }
     }
 }
