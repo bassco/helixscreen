@@ -172,6 +172,7 @@ AmsSystemInfo AmsBackendAfc::get_system_info() const {
         info.units[u].hub_sensor_triggered = system_info_.units[u].hub_sensor_triggered;
         info.units[u].buffer_health = system_info_.units[u].buffer_health;
         info.units[u].topology = system_info_.units[u].topology;
+        info.units[u].lane_is_hub_routed = system_info_.units[u].lane_is_hub_routed;
         info.units[u].hub_tool_label = system_info_.units[u].hub_tool_label;
         info.units[u].has_encoder = system_info_.units[u].has_encoder;
         info.units[u].has_toolhead_sensor = system_info_.units[u].has_toolhead_sensor;
@@ -1135,6 +1136,13 @@ void AmsBackendAfc::parse_afc_stepper(const std::string& lane_name, const nlohma
         }
     }
 
+    // Parse hub routing for this lane ("direct" or hub name like "HTLF_1")
+    if (data.contains("hub") && data["hub"].is_string()) {
+        std::string hub = data["hub"].get<std::string>();
+        lane_hub_routing_[lane_name] = hub;
+        spdlog::trace("[AMS AFC] Lane {} hub routing: {}", lane_name, hub);
+    }
+
     // Parse extruder name for shared-extruder deduplication
     if (data.contains("extruder") && data["extruder"].is_string()) {
         slot.extruder_name = data["extruder"].get<std::string>();
@@ -1376,21 +1384,38 @@ void AmsBackendAfc::parse_afc_unit_object(AfcUnitInfo& unit_info, const nlohmann
         }
     }
 
-    // Derive topology from hub/extruder counts:
-    // - No hubs + multiple extruders → PARALLEL (Box Turtle: 1:1 lane-to-tool)
-    // - Hubs present + single extruder → HUB (OpenAMS: N:1 through hub)
-    // - Hubs + multiple extruders → PARALLEL (toolchanger with hub: some lanes
-    //   direct, some through hub. compute_system_tool_layout handles shared
-    //   mapped_tool values correctly — lanes sharing a tool map to the same
-    //   physical nozzle position)
-    if (unit_info.hubs.empty() && unit_info.extruders.size() > 1) {
+    // Derive topology from per-lane hub routing data.
+    // The per-lane "hub" field ("direct" vs hub name) is the authoritative source.
+    // Fallback to extruder/hub count heuristic if per-lane data unavailable.
+    bool has_direct = false;
+    bool has_hub_routed = false;
+    unit_info.lane_is_hub_routed.clear();
+
+    for (const auto& lane : unit_info.lanes) {
+        auto it = lane_hub_routing_.find(lane);
+        bool is_hub = false;
+        if (it != lane_hub_routing_.end()) {
+            is_hub = (it->second != "direct");
+        }
+        unit_info.lane_is_hub_routed.push_back(is_hub);
+        if (is_hub)
+            has_hub_routed = true;
+        else
+            has_direct = true;
+    }
+
+    if (has_direct && has_hub_routed) {
+        unit_info.topology = PathTopology::MIXED;
+    } else if (has_hub_routed) {
+        unit_info.topology = PathTopology::HUB;
+    } else if (has_direct && unit_info.extruders.size() > 1) {
         unit_info.topology = PathTopology::PARALLEL;
     } else if (!unit_info.hubs.empty() && unit_info.extruders.size() <= 1) {
         unit_info.topology = PathTopology::HUB;
-    } else if (!unit_info.hubs.empty() && unit_info.extruders.size() > 1) {
+    } else if (unit_info.extruders.size() > 1) {
         unit_info.topology = PathTopology::PARALLEL;
     } else {
-        unit_info.topology = PathTopology::HUB;
+        unit_info.topology = PathTopology::HUB; // default
     }
 
     spdlog::debug("[AMS AFC] Unit object '{}': {} lanes, {} extruders, {} hubs, {} buffers → {}",
@@ -1445,6 +1470,7 @@ void AmsBackendAfc::rebuild_unit_map_from_klipper() {
                 for (auto& sys_unit : system_info_.units) {
                     if (sys_unit.name == display_name) {
                         sys_unit.topology = ui.topology;
+                        sys_unit.lane_is_hub_routed = ui.lane_is_hub_routed;
                         // For HUB units, derive physical tool label from extruder name
                         if (ui.topology == PathTopology::HUB && ui.extruders.size() == 1) {
                             const auto& ext_name = ui.extruders[0];

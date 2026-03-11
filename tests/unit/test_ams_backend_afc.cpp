@@ -1893,6 +1893,151 @@ TEST_CASE("AFC backend unit-level object populates AfcUnitInfo", "[ams][afc][mix
     }
 }
 
+TEST_CASE("AFC HTLF mixed topology classification from per-lane hub routing",
+          "[ams][afc][topology][mixed]") {
+    // HTLF unit has 4 lanes: 2 direct to their own extruders, 2 through hub to shared extruder.
+    // Per-lane hub field: "direct" vs hub name determines MIXED topology.
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+    helper.setup_toolchanger(3);
+
+    // Feed stepper data WITH hub routing BEFORE unit object (stepper parsing happens first)
+    helper.feed_afc_stepper("lane0",
+                            {{"map", "T0"}, {"extruder", "extruder"}, {"hub", "direct"},
+                             {"status", "Ready"}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1",
+                            {{"map", "T2"}, {"extruder", "extruder1"}, {"hub", "direct"},
+                             {"status", "Ready"}, {"color", "00FF00"}});
+    helper.feed_afc_stepper("lane2",
+                            {{"map", "T1"}, {"extruder", "extruder2"}, {"hub", "HTLF_1"},
+                             {"status", "Ready"}, {"color", "0000FF"}});
+    helper.feed_afc_stepper("lane3",
+                            {{"map", "T3"}, {"extruder", "extruder2"}, {"hub", "HTLF_1"},
+                             {"status", "Ready"}, {"color", "FFFF00"}});
+
+    // Feed AFC state with unit name
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array({"HTLF HTLF_1"});
+    helper.feed_afc_state(afc_state);
+
+    // Feed unit object (triggers topology classification)
+    nlohmann::json unit_data;
+    unit_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+    unit_data["extruders"] = nlohmann::json::array({"extruder", "extruder1", "extruder2"});
+    unit_data["hubs"] = nlohmann::json::array({"HTLF_1"});
+    unit_data["buffers"] = nlohmann::json::array();
+
+    nlohmann::json params;
+    params["AFC_HTLF HTLF_1"] = unit_data;
+    helper.feed_status_update(params);
+
+    // Verify topology is MIXED (not PARALLEL or HUB)
+    const auto& unit_infos = helper.get_unit_infos();
+    REQUIRE(unit_infos.size() == 1);
+    REQUIRE(unit_infos[0].topology == PathTopology::MIXED);
+
+    // Verify per-lane hub routing data
+    REQUIRE(unit_infos[0].lane_is_hub_routed.size() == 4);
+    REQUIRE(unit_infos[0].lane_is_hub_routed[0] == false); // lane0 direct
+    REQUIRE(unit_infos[0].lane_is_hub_routed[1] == false); // lane1 direct
+    REQUIRE(unit_infos[0].lane_is_hub_routed[2] == true);  // lane2 via hub
+    REQUIRE(unit_infos[0].lane_is_hub_routed[3] == true);  // lane3 via hub
+
+    // Verify propagation to AmsUnit via get_system_info
+    auto info = helper.get_system_info();
+    REQUIRE(info.units.size() >= 1);
+    bool found = false;
+    for (const auto& unit : info.units) {
+        if (unit.name == "HTLF HTLF_1") {
+            found = true;
+            REQUIRE(unit.topology == PathTopology::MIXED);
+            REQUIRE(unit.lane_is_hub_routed.size() == 4);
+            REQUIRE(unit.lane_is_hub_routed[0] == false);
+            REQUIRE(unit.lane_is_hub_routed[1] == false);
+            REQUIRE(unit.lane_is_hub_routed[2] == true);
+            REQUIRE(unit.lane_is_hub_routed[3] == true);
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("AFC all-hub lanes classified as HUB topology", "[ams][afc][topology]") {
+    // When all lanes route through a hub, topology should be HUB (not MIXED)
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+
+    // Feed stepper data: all lanes through hub
+    helper.feed_afc_stepper("lane0", {{"hub", "Hub_1"}, {"status", "Ready"}, {"color", "FF0000"}});
+    helper.feed_afc_stepper("lane1", {{"hub", "Hub_1"}, {"status", "Ready"}, {"color", "00FF00"}});
+    helper.feed_afc_stepper("lane2", {{"hub", "Hub_1"}, {"status", "Ready"}, {"color", "0000FF"}});
+    helper.feed_afc_stepper("lane3", {{"hub", "Hub_1"}, {"status", "Ready"}, {"color", "FFFF00"}});
+
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array({"OpenAMS AMS_1"});
+    helper.feed_afc_state(afc_state);
+
+    nlohmann::json unit_data;
+    unit_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+    unit_data["extruders"] = nlohmann::json::array({"extruder"});
+    unit_data["hubs"] = nlohmann::json::array({"Hub_1"});
+    unit_data["buffers"] = nlohmann::json::array();
+
+    nlohmann::json params;
+    params["AFC_OpenAMS AMS_1"] = unit_data;
+    helper.feed_status_update(params);
+
+    const auto& unit_infos = helper.get_unit_infos();
+    REQUIRE(unit_infos.size() == 1);
+    REQUIRE(unit_infos[0].topology == PathTopology::HUB);
+    // All lanes hub-routed
+    for (bool routed : unit_infos[0].lane_is_hub_routed) {
+        REQUIRE(routed == true);
+    }
+}
+
+TEST_CASE("AFC all-direct lanes classified as PARALLEL topology", "[ams][afc][topology]") {
+    // When all lanes are direct and multiple extruders exist, topology should be PARALLEL
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(4);
+    helper.initialize_slots_from_discovery();
+    helper.setup_toolchanger(4);
+
+    // Feed stepper data: all lanes direct
+    helper.feed_afc_stepper("lane0",
+                            {{"hub", "direct"}, {"extruder", "extruder"}, {"status", "Ready"}});
+    helper.feed_afc_stepper("lane1",
+                            {{"hub", "direct"}, {"extruder", "extruder1"}, {"status", "Ready"}});
+    helper.feed_afc_stepper("lane2",
+                            {{"hub", "direct"}, {"extruder", "extruder2"}, {"status", "Ready"}});
+    helper.feed_afc_stepper("lane3",
+                            {{"hub", "direct"}, {"extruder", "extruder3"}, {"status", "Ready"}});
+
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array({"Box_Turtle Turtle_1"});
+    helper.feed_afc_state(afc_state);
+
+    nlohmann::json unit_data;
+    unit_data["lanes"] = nlohmann::json::array({"lane0", "lane1", "lane2", "lane3"});
+    unit_data["extruders"] =
+        nlohmann::json::array({"extruder", "extruder1", "extruder2", "extruder3"});
+    unit_data["hubs"] = nlohmann::json::array();
+    unit_data["buffers"] = nlohmann::json::array();
+
+    nlohmann::json params;
+    params["AFC_BoxTurtle Turtle_1"] = unit_data;
+    helper.feed_status_update(params);
+
+    const auto& unit_infos = helper.get_unit_infos();
+    REQUIRE(unit_infos.size() == 1);
+    REQUIRE(unit_infos[0].topology == PathTopology::PARALLEL);
+    // All lanes direct
+    for (bool routed : unit_infos[0].lane_is_hub_routed) {
+        REQUIRE(routed == false);
+    }
+}
+
 TEST_CASE("AFC unit with hubs AND multiple extruders gets PARALLEL topology",
           "[ams][afc][mixed][toolchanger]") {
     // Toolchanger scenario: HTLF unit has 4 lanes, 3 extruders, 1 hub.

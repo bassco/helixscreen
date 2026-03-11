@@ -78,6 +78,10 @@ struct AfcUnitInfo {
     std::vector<std::string> buffers;   ///< Buffer names for this unit
 
     PathTopology topology = PathTopology::HUB; ///< Derived topology for this unit
+
+    /// Per-lane hub routing. Parallel to `lanes` vector.
+    /// true = lane routes through hub, false = direct to extruder.
+    std::vector<bool> lane_is_hub_routed;
 };
 
 class AmsBackendAfc : public AmsSubscriptionBackend {
@@ -480,6 +484,9 @@ class AmsBackendAfc : public AmsSubscriptionBackend {
     // Version detection
     std::string afc_version_{"unknown"}; ///< Detected AFC version (e.g., "1.0.0")
     bool has_lane_data_db_{false};       ///< v1.0.32+ has lane_data in Moonraker DB
+
+    // Per-lane hub routing: lane_name → hub name ("direct" for direct lanes)
+    std::unordered_map<std::string, std::string> lane_hub_routing_;
 
     // Hub and toolhead sensors (from AFC_hub and AFC_extruder objects)
     std::unordered_map<std::string, bool> hub_sensors_; ///< Per-hub sensor state, keyed by hub name
