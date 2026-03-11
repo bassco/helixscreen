@@ -100,6 +100,24 @@ void ProbeSensorManager::discover(const std::vector<std::string>& klipper_object
         }
     }
 
+    // Remove the virtual "probe" entry when a more specific probe type exists.
+    // Many Klipper probe types (BLTouch, Cartographer, Beacon, Smart Effector)
+    // register both their own section AND a [probe] wrapper. The wrapper is
+    // redundant — keep only the specific type.
+    bool has_specific_probe = std::any_of(sensors_.begin(), sensors_.end(), [](const auto& s) {
+        return s.type != ProbeSensorType::STANDARD;
+    });
+    if (has_specific_probe) {
+        auto it = std::remove_if(sensors_.begin(), sensors_.end(), [](const auto& s) {
+            return s.type == ProbeSensorType::STANDARD;
+        });
+        if (it != sensors_.end()) {
+            spdlog::debug("[ProbeSensorManager] Removing virtual 'probe' entry "
+                          "(specific probe type present)");
+            sensors_.erase(it, sensors_.end());
+        }
+    }
+
     // Post-discovery refinement: upgrade STANDARD probes to KLICKY when
     // characteristic Klicky macros are present in the objects list.
     // Klicky probes register as a plain [probe] but include deploy/dock macros.

@@ -4,9 +4,11 @@
 #include "ui_probe_overlay.h"
 
 #include "ui_callback_helpers.h"
+#include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_bed_mesh.h"
 #include "ui_panel_calibration_zoffset.h"
+#include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "app_globals.h"
@@ -17,6 +19,10 @@
 #include "static_panel_registry.h"
 
 #include <spdlog/spdlog.h>
+
+#include "hv/json.hpp"
+
+using json = nlohmann::json;
 
 using namespace helix;
 using helix::sensors::probe_type_to_display_string;
@@ -136,6 +142,65 @@ void ui_probe_overlay_register_callbacks() {
          }},
     });
 
+    // Cartographer controls
+    lv_xml_register_event_cb(nullptr, "on_carto_calibrate", [](lv_event_t* /*e*/) {
+        send_probe_gcode("CARTOGRAPHER_CALIBRATE", "Cartographer Calibrate");
+    });
+    lv_xml_register_event_cb(nullptr, "on_carto_touch_cal", [](lv_event_t* /*e*/) {
+        send_probe_gcode("CARTOGRAPHER_TOUCH_CALIBRATE", "Cartographer Touch Calibrate");
+    });
+
+    // Beacon controls
+    lv_xml_register_event_cb(nullptr, "on_beacon_calibrate", [](lv_event_t* /*e*/) {
+        send_probe_gcode("BEACON_CALIBRATE", "Beacon Calibrate");
+    });
+    lv_xml_register_event_cb(nullptr, "on_beacon_auto_cal", [](lv_event_t* /*e*/) {
+        send_probe_gcode("BEACON_AUTO_CALIBRATE", "Beacon Auto-Calibrate");
+    });
+
+    // Klicky controls
+    lv_xml_register_event_cb(nullptr, "on_klicky_deploy", [](lv_event_t* /*e*/) {
+        send_probe_gcode("ATTACH_PROBE", "Klicky Deploy");
+    });
+    lv_xml_register_event_cb(nullptr, "on_klicky_dock", [](lv_event_t* /*e*/) {
+        send_probe_gcode("DOCK_PROBE", "Klicky Dock");
+    });
+
+    // Config edit callbacks
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_x_offset", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit("x_offset", "X Offset",
+                                                      "Horizontal offset from nozzle to probe");
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_y_offset", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit("y_offset", "Y Offset",
+                                                      "Vertical offset from nozzle to probe");
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_samples", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit("samples", "Samples",
+                                                      "Number of probe samples per point");
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_speed", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit("speed", "Probe Speed",
+                                                      "Speed (mm/s) during probing moves");
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_retract", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit("sample_retract_dist", "Retract Distance",
+                                                      "Distance (mm) to retract between samples");
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_cfg_tolerance", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_edit(
+            "samples_tolerance", "Samples Tolerance",
+            "Maximum allowed deviation between samples (mm)");
+    });
+
+    // Config edit modal buttons
+    lv_xml_register_event_cb(nullptr, "on_probe_config_save", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_save();
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_config_cancel", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_config_cancel();
+    });
+
     spdlog::trace("[Probe] Event callbacks registered");
 }
 
@@ -159,10 +224,43 @@ void ProbeOverlay::init_subjects() {
     // Overlay state (0=normal)
     UI_MANAGED_SUBJECT_INT(probe_overlay_state_, 0, "probe_overlay_state", subjects_);
 
-    // Accuracy test results
-    UI_MANAGED_SUBJECT_STRING(probe_accuracy_result_, probe_accuracy_result_buf_, "",
-                              "probe_accuracy_result", subjects_);
-    UI_MANAGED_SUBJECT_INT(probe_accuracy_visible_, 0, "probe_accuracy_visible", subjects_);
+    // Cartographer subjects
+    UI_MANAGED_SUBJECT_STRING(probe_carto_coil_temp_, probe_carto_coil_temp_buf_, "--",
+                              "probe_carto_coil_temp", subjects_);
+
+    // Beacon subjects
+    UI_MANAGED_SUBJECT_STRING(probe_beacon_temp_, probe_beacon_temp_buf_, "--", "probe_beacon_temp",
+                              subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_beacon_temp_comp_status_, probe_beacon_temp_comp_status_buf_,
+                              "--", "probe_beacon_temp_comp_status", subjects_);
+
+    // Klicky detection subject
+    UI_MANAGED_SUBJECT_INT(probe_is_klicky_, 0, "probe_is_klicky", subjects_);
+
+    // Config display subjects
+    UI_MANAGED_SUBJECT_INT(probe_config_loaded_, 0, "probe_config_loaded", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_x_offset_, probe_cfg_x_offset_buf_, "--",
+                              "probe_cfg_x_offset", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_y_offset_, probe_cfg_y_offset_buf_, "--",
+                              "probe_cfg_y_offset", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_samples_, probe_cfg_samples_buf_, "--", "probe_cfg_samples",
+                              subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_speed_, probe_cfg_speed_buf_, "--", "probe_cfg_speed",
+                              subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_retract_dist_, probe_cfg_retract_dist_buf_, "--",
+                              "probe_cfg_retract_dist", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_cfg_tolerance_, probe_cfg_tolerance_buf_, "--",
+                              "probe_cfg_tolerance", subjects_);
+
+    // Config edit modal subjects
+    UI_MANAGED_SUBJECT_STRING(probe_config_edit_title_, probe_config_edit_title_buf_, "",
+                              "probe_config_edit_title", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_config_edit_desc_, probe_config_edit_desc_buf_, "",
+                              "probe_config_edit_desc", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_config_edit_current_, probe_config_edit_current_buf_, "",
+                              "probe_config_edit_current", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_config_edit_value_, probe_config_edit_value_buf_, "",
+                              "probe_config_edit_value", subjects_);
 
     subjects_initialized_ = true;
     spdlog::trace("[Probe] Subjects initialized");
@@ -224,6 +322,9 @@ void ProbeOverlay::on_activate() {
 
     // Load type-specific panel
     load_type_panel();
+
+    // Load config values from Klipper
+    load_config_values();
 }
 
 void ProbeOverlay::on_deactivate() {
@@ -296,6 +397,24 @@ void ProbeOverlay::update_display_subjects() {
     float z_offset = mgr.get_z_offset();
     snprintf(probe_z_offset_display_buf_, sizeof(probe_z_offset_display_buf_), "%.3fmm", z_offset);
     lv_subject_copy_string(&probe_z_offset_display_, probe_z_offset_display_buf_);
+
+    // Set Klicky detection flag for generic panel visibility binding
+    lv_subject_set_int(&probe_is_klicky_, sensor.type == ProbeSensorType::KLICKY ? 1 : 0);
+
+    // Cartographer coil temperature (placeholder until live query)
+    if (sensor.type == ProbeSensorType::CARTOGRAPHER) {
+        snprintf(probe_carto_coil_temp_buf_, sizeof(probe_carto_coil_temp_buf_), "--");
+        lv_subject_copy_string(&probe_carto_coil_temp_, probe_carto_coil_temp_buf_);
+    }
+
+    // Beacon sensor temperature (placeholder until live query)
+    if (sensor.type == ProbeSensorType::BEACON) {
+        snprintf(probe_beacon_temp_buf_, sizeof(probe_beacon_temp_buf_), "--");
+        lv_subject_copy_string(&probe_beacon_temp_, probe_beacon_temp_buf_);
+        snprintf(probe_beacon_temp_comp_status_buf_, sizeof(probe_beacon_temp_comp_status_buf_),
+                 "Unknown");
+        lv_subject_copy_string(&probe_beacon_temp_comp_status_, probe_beacon_temp_comp_status_buf_);
+    }
 }
 
 // ============================================================================
@@ -353,26 +472,18 @@ void ProbeOverlay::handle_probe_accuracy() {
 
     MoonrakerClient* client = get_moonraker_client();
     if (!client) {
-        spdlog::error("[Probe] No client available for accuracy test");
+        ToastManager::instance().show(ToastSeverity::ERROR, "No printer connection");
         return;
     }
-
-    // Show that test is in progress
-    snprintf(probe_accuracy_result_buf_, sizeof(probe_accuracy_result_buf_), "Running...");
-    lv_subject_copy_string(&probe_accuracy_result_, probe_accuracy_result_buf_);
-    lv_subject_set_int(&probe_accuracy_visible_, 1);
 
     // Send PROBE_ACCURACY command (async via gcode_script)
     int result = client->gcode_script("PROBE_ACCURACY");
     if (result != 0) {
         spdlog::error("[Probe] PROBE_ACCURACY command failed: {}", result);
-        snprintf(probe_accuracy_result_buf_, sizeof(probe_accuracy_result_buf_),
-                 "Test failed (error %d)", result);
-        lv_subject_copy_string(&probe_accuracy_result_, probe_accuracy_result_buf_);
+        ToastManager::instance().show(ToastSeverity::ERROR, "Probe accuracy test failed");
     } else {
-        snprintf(probe_accuracy_result_buf_, sizeof(probe_accuracy_result_buf_),
-                 "Test started - results in console");
-        lv_subject_copy_string(&probe_accuracy_result_, probe_accuracy_result_buf_);
+        ToastManager::instance().show(ToastSeverity::INFO,
+                                      "Probe accuracy test started — results in console");
     }
 }
 
@@ -410,5 +521,198 @@ void ProbeOverlay::handle_bed_mesh() {
 
     if (panel.get_root()) {
         NavigationManager::instance().push_overlay(panel.get_root());
+    }
+}
+
+// ============================================================================
+// CONFIG VALUE LOADING
+// ============================================================================
+
+std::string ProbeOverlay::get_probe_config_section() const {
+    auto& mgr = ProbeSensorManager::instance();
+    auto sensors = mgr.get_sensors();
+    if (sensors.empty())
+        return "probe";
+
+    switch (sensors[0].type) {
+    case ProbeSensorType::BLTOUCH:
+        return "bltouch";
+    case ProbeSensorType::SMART_EFFECTOR:
+        return "smart_effector";
+    default:
+        return "probe";
+    }
+}
+
+void ProbeOverlay::load_config_values() {
+    if (!api_) {
+        spdlog::debug("[Probe] No API, skipping config load");
+        return;
+    }
+
+    probe_section_ = get_probe_config_section();
+    spdlog::debug("[Probe] Loading config values for [{}]", probe_section_);
+
+    api_->query_configfile(
+        [this](const json& config) {
+            // query_configfile returns the full config object
+            // Section names in the config JSON are lowercased
+            if (!config.contains(probe_section_)) {
+                spdlog::debug("[Probe] Section [{}] not found in config", probe_section_);
+                return;
+            }
+
+            const auto& section = config[probe_section_];
+
+            // Helper to extract string value and copy to subject buffer
+            auto set_cfg = [](const json& sec, const char* key, char* buf, size_t buf_size,
+                              lv_subject_t* subject) {
+                if (sec.contains(key)) {
+                    std::string val = sec[key].get<std::string>();
+                    snprintf(buf, buf_size, "%s", val.c_str());
+                } else {
+                    snprintf(buf, buf_size, "default");
+                }
+                lv_subject_copy_string(subject, buf);
+            };
+
+            helix::ui::queue_update([this, section, set_cfg]() {
+                set_cfg(section, "x_offset", probe_cfg_x_offset_buf_,
+                        sizeof(probe_cfg_x_offset_buf_), &probe_cfg_x_offset_);
+                set_cfg(section, "y_offset", probe_cfg_y_offset_buf_,
+                        sizeof(probe_cfg_y_offset_buf_), &probe_cfg_y_offset_);
+                set_cfg(section, "samples", probe_cfg_samples_buf_, sizeof(probe_cfg_samples_buf_),
+                        &probe_cfg_samples_);
+                set_cfg(section, "speed", probe_cfg_speed_buf_, sizeof(probe_cfg_speed_buf_),
+                        &probe_cfg_speed_);
+                set_cfg(section, "sample_retract_dist", probe_cfg_retract_dist_buf_,
+                        sizeof(probe_cfg_retract_dist_buf_), &probe_cfg_retract_dist_);
+                set_cfg(section, "samples_tolerance", probe_cfg_tolerance_buf_,
+                        sizeof(probe_cfg_tolerance_buf_), &probe_cfg_tolerance_);
+
+                lv_subject_set_int(&probe_config_loaded_, 1);
+                spdlog::debug("[Probe] Config values loaded for [{}]", probe_section_);
+            });
+        },
+        [](const MoonrakerError& err) {
+            spdlog::warn("[Probe] Failed to query configfile: {}", err.message);
+        });
+}
+
+// ============================================================================
+// CONFIG EDITING
+// ============================================================================
+
+void ProbeOverlay::handle_config_edit(const std::string& field_key, const std::string& title,
+                                      const std::string& description) {
+    spdlog::debug("[Probe] Config edit requested: {}", field_key);
+
+    editing_field_key_ = field_key;
+
+    // Set modal subjects
+    snprintf(probe_config_edit_title_buf_, sizeof(probe_config_edit_title_buf_), "Edit %s",
+             title.c_str());
+    lv_subject_copy_string(&probe_config_edit_title_, probe_config_edit_title_buf_);
+
+    snprintf(probe_config_edit_desc_buf_, sizeof(probe_config_edit_desc_buf_), "%s",
+             description.c_str());
+    lv_subject_copy_string(&probe_config_edit_desc_, probe_config_edit_desc_buf_);
+
+    // Get current value from the corresponding display subject
+    const char* current_val = "--";
+    if (field_key == "x_offset")
+        current_val = probe_cfg_x_offset_buf_;
+    else if (field_key == "y_offset")
+        current_val = probe_cfg_y_offset_buf_;
+    else if (field_key == "samples")
+        current_val = probe_cfg_samples_buf_;
+    else if (field_key == "speed")
+        current_val = probe_cfg_speed_buf_;
+    else if (field_key == "sample_retract_dist")
+        current_val = probe_cfg_retract_dist_buf_;
+    else if (field_key == "samples_tolerance")
+        current_val = probe_cfg_tolerance_buf_;
+
+    snprintf(probe_config_edit_current_buf_, sizeof(probe_config_edit_current_buf_), "%s",
+             current_val);
+    lv_subject_copy_string(&probe_config_edit_current_, probe_config_edit_current_buf_);
+
+    // Pre-fill edit value with current
+    snprintf(probe_config_edit_value_buf_, sizeof(probe_config_edit_value_buf_), "%s", current_val);
+    lv_subject_copy_string(&probe_config_edit_value_, probe_config_edit_value_buf_);
+
+    // Show the modal
+    edit_modal_ = Modal::show("probe_config_edit_modal");
+    if (!edit_modal_) {
+        spdlog::error("[Probe] Failed to show config edit modal");
+    }
+}
+
+void ProbeOverlay::handle_config_save() {
+    if (editing_field_key_.empty()) {
+        spdlog::warn("[Probe] No field being edited");
+        return;
+    }
+
+    // Read the input value from the modal
+    if (edit_modal_) {
+        auto* input = lv_obj_find_by_name(edit_modal_, "probe_config_input");
+        if (input) {
+            const char* text = lv_textarea_get_text(input);
+            if (text && text[0] != '\0') {
+                snprintf(probe_config_edit_value_buf_, sizeof(probe_config_edit_value_buf_), "%s",
+                         text);
+            }
+        }
+    }
+
+    std::string new_value = probe_config_edit_value_buf_;
+    std::string field = editing_field_key_;
+    std::string section = probe_section_;
+
+    spdlog::info("[Probe] Saving config: [{}] {} = {}", section, field, new_value);
+
+    // Close the edit modal
+    if (edit_modal_) {
+        Modal::hide(edit_modal_);
+        edit_modal_ = nullptr;
+    }
+
+    if (!api_) {
+        spdlog::error("[Probe] No API for config edit");
+        return;
+    }
+
+    // Use the safe edit flow: backup -> edit -> firmware restart -> monitor -> revert on failure
+    config_editor_.load_config_files(
+        *api_,
+        [this, section, field,
+         new_value](std::map<std::string, helix::system::SectionLocation> /*section_map*/) {
+            config_editor_.safe_edit_value(
+                *api_, section, field, new_value,
+                [this]() {
+                    spdlog::info("[Probe] Config edit saved successfully");
+                    helix::ui::queue_update([this]() {
+                        // Reload config values to reflect the change
+                        load_config_values();
+                    });
+                },
+                [](const std::string& err) {
+                    spdlog::error("[Probe] Config edit failed: {}", err);
+                    // TODO: Show error to user via modal
+                });
+        },
+        [](const std::string& err) {
+            spdlog::error("[Probe] Failed to load config files for edit: {}", err);
+        });
+}
+
+void ProbeOverlay::handle_config_cancel() {
+    spdlog::debug("[Probe] Config edit cancelled");
+    editing_field_key_.clear();
+
+    if (edit_modal_) {
+        Modal::hide(edit_modal_);
+        edit_modal_ = nullptr;
     }
 }

@@ -455,6 +455,10 @@ register_xml("sound_settings_overlay.xml");
     register_xml("sensors_overlay.xml");
     // Probe type-specific panels (registered before probe_overlay)
     register_xml("probe_bltouch_panel.xml");
+    register_xml("probe_cartographer_panel.xml");
+    register_xml("probe_beacon_panel.xml");
+    register_xml("probe_generic_panel.xml");
+    register_xml("probe_config_edit_modal.xml");
     register_xml("probe_overlay.xml");
     register_xml("macro_buttons_overlay.xml");
     register_xml("hardware_issue_row.xml");
@@ -509,7 +513,6 @@ register_xml("sound_settings_overlay.xml");
     register_xml("wizard_ams_identify.xml");
     register_xml("wizard_led_select.xml");
     register_xml("wizard_filament_sensor_select.xml");
-    register_xml("wizard_probe_sensor_select.xml");
     register_xml("wizard_input_shaper.xml");
     register_xml("wizard_language_chooser.xml");
     register_xml("wizard_summary.xml");

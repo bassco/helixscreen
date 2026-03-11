@@ -3,8 +3,8 @@
 
 namespace helix {
 
-// Total steps without any skips: 14 (steps 0-13)
-static constexpr int TOTAL_STEPS = 14;
+// Total steps without any skips: 13 (steps 0-12)
+static constexpr int TOTAL_STEPS = 13;
 
 /// Check if a given internal step is skipped
 static bool is_step_skipped(int step, const WizardSkipFlags& skips) {
@@ -30,12 +30,10 @@ static bool is_step_skipped(int step, const WizardSkipFlags& skips) {
     case 9:
         return skips.filament;
     case 10:
-        return skips.probe;
-    case 11:
         return skips.input_shaper;
-    case 12:
+    case 11:
         return skips.summary;
-    case 13:
+    case 12:
         return skips.telemetry;
     default:
         return false;

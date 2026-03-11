@@ -1795,7 +1795,6 @@ class PrinterState {
     friend void async_moonraker_version_callback(void* user_data);
     friend void async_klippy_state_callback(void* user_data);
 
-    void set_hardware_internal(const helix::PrinterDiscovery& hardware);
     void set_klipper_version_internal(const std::string& version);
     void set_moonraker_version_internal(const std::string& version);
     void set_os_version_internal(const std::string& version);

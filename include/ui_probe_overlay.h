@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "ui_modal.h"
+
+#include "klipper_config_editor.h"
 #include "overlay_base.h"
 #include "subject_managed_panel.h"
 
@@ -70,6 +73,16 @@ class ProbeOverlay : public OverlayBase {
     void handle_zoffset_cal();
     void handle_bed_mesh();
 
+    /// Open edit modal for a specific config field
+    void handle_config_edit(const std::string& field_key, const std::string& title,
+                            const std::string& description);
+
+    /// Save the currently-edited config value via KlipperConfigEditor
+    void handle_config_save();
+
+    /// Cancel config edit modal
+    void handle_config_cancel();
+
   private:
     // Subject manager for RAII cleanup
     SubjectManager subjects_;
@@ -85,10 +98,49 @@ class ProbeOverlay : public OverlayBase {
     // State subject for overlay mode
     lv_subject_t probe_overlay_state_{};
 
-    // Accuracy test result subjects
-    char probe_accuracy_result_buf_[128] = {};
-    lv_subject_t probe_accuracy_result_{};
-    lv_subject_t probe_accuracy_visible_{};
+    // Cartographer subjects
+    char probe_carto_coil_temp_buf_[32] = {};
+    lv_subject_t probe_carto_coil_temp_{};
+
+    // Beacon subjects
+    char probe_beacon_temp_buf_[32] = {};
+    lv_subject_t probe_beacon_temp_{};
+    char probe_beacon_temp_comp_status_buf_[32] = {};
+    lv_subject_t probe_beacon_temp_comp_status_{};
+
+    // Klicky subject (1 if klicky type detected, 0 otherwise)
+    lv_subject_t probe_is_klicky_{};
+
+    // Config display subjects (current values shown in setting rows)
+    lv_subject_t probe_config_loaded_{}; // 1 when config values are loaded
+    char probe_cfg_x_offset_buf_[32] = {};
+    lv_subject_t probe_cfg_x_offset_{};
+    char probe_cfg_y_offset_buf_[32] = {};
+    lv_subject_t probe_cfg_y_offset_{};
+    char probe_cfg_samples_buf_[16] = {};
+    lv_subject_t probe_cfg_samples_{};
+    char probe_cfg_speed_buf_[32] = {};
+    lv_subject_t probe_cfg_speed_{};
+    char probe_cfg_retract_dist_buf_[32] = {};
+    lv_subject_t probe_cfg_retract_dist_{};
+    char probe_cfg_tolerance_buf_[32] = {};
+    lv_subject_t probe_cfg_tolerance_{};
+
+    // Config edit modal subjects
+    char probe_config_edit_title_buf_[64] = {};
+    lv_subject_t probe_config_edit_title_{};
+    char probe_config_edit_desc_buf_[128] = {};
+    lv_subject_t probe_config_edit_desc_{};
+    char probe_config_edit_current_buf_[32] = {};
+    lv_subject_t probe_config_edit_current_{};
+    char probe_config_edit_value_buf_[32] = {};
+    lv_subject_t probe_config_edit_value_{};
+
+    // Config editor
+    helix::system::KlipperConfigEditor config_editor_;
+    std::string editing_field_key_; // Current field being edited
+    std::string probe_section_;     // Config section name (e.g., "probe", "bltouch")
+    lv_obj_t* edit_modal_ = nullptr;
 
     // Widget/client references
     lv_obj_t* parent_screen_ = nullptr;
@@ -102,6 +154,12 @@ class ProbeOverlay : public OverlayBase {
 
     // Update display subjects from ProbeSensorManager
     void update_display_subjects();
+
+    // Load probe config values from Klipper via query_configfile
+    void load_config_values();
+
+    // Get the config section name for the current probe type
+    std::string get_probe_config_section() const;
 };
 
 // Global instance accessor

@@ -142,12 +142,17 @@ class UpdateQueue {
      * @param callback Function to execute
      */
     void queue(const char* tag, UpdateCallback callback) {
-        if (frozen_.load(std::memory_order_relaxed)) return;
+        if (frozen_.load(std::memory_order_relaxed)) {
+            if (tag) spdlog::warn("[UpdateQueue] DROPPED (frozen): {}", tag);
+            return;
+        }
         std::lock_guard<std::mutex> lock(mutex_);
         if (shut_down_) {
+            if (tag) spdlog::warn("[UpdateQueue] DROPPED (shutdown): {}", tag);
             return;
         }
         pending_.push({tag, std::move(callback)});
+        if (tag) spdlog::trace("[UpdateQueue] Enqueued: {} (pending={})", tag, pending_.size());
     }
 
     /**
@@ -198,12 +203,16 @@ class UpdateQueue {
      */
     class ScopedFreeze {
     public:
-        explicit ScopedFreeze(UpdateQueue& q) : q_(q) {
+        explicit ScopedFreeze(UpdateQueue& q, const char* caller = nullptr) : q_(q), caller_(caller) {
             if (q_.freeze_depth_.fetch_add(1, std::memory_order_relaxed) == 0) {
                 q_.frozen_.store(true, std::memory_order_relaxed);
             }
+            spdlog::trace("[UpdateQueue] FREEZE depth={} caller={}",
+                         q_.freeze_depth_.load(), caller_ ? caller_ : "unknown");
         }
         ~ScopedFreeze() {
+            spdlog::trace("[UpdateQueue] THAW depth={} caller={}",
+                         q_.freeze_depth_.load() - 1, caller_ ? caller_ : "unknown");
             if (q_.freeze_depth_.fetch_sub(1, std::memory_order_relaxed) == 1) {
                 q_.frozen_.store(false, std::memory_order_relaxed);
             }
@@ -212,6 +221,7 @@ class UpdateQueue {
         ScopedFreeze& operator=(const ScopedFreeze&) = delete;
     private:
         UpdateQueue& q_;
+        const char* caller_;
     };
 
     /**
@@ -221,7 +231,9 @@ class UpdateQueue {
      * Use before drain()+destroy to close the race window where background threads
      * can enqueue callbacks targeting widgets about to be destroyed.
      */
-    [[nodiscard]] ScopedFreeze scoped_freeze() { return ScopedFreeze(*this); }
+    [[nodiscard]] ScopedFreeze scoped_freeze(const char* caller = nullptr) {
+        return ScopedFreeze(*this, caller);
+    }
 
     /**
      * @brief Pause the update queue timer

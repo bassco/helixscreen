@@ -76,6 +76,8 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
     lv_subject_set_int(&printer_has_nozzle_clean_, overrides.has_nozzle_clean() ? 1 : 0);
 
     // Hardware capabilities (no user override support yet - set directly from detection)
+    spdlog::debug("[PrinterCapabilitiesState] has_probe={} has_led={} has_accel={}",
+                  hardware.has_probe(), hardware.has_led(), hardware.has_accelerometer());
     lv_subject_set_int(&printer_has_probe_, hardware.has_probe() ? 1 : 0);
     lv_subject_set_int(&printer_has_heater_bed_, hardware.has_heater_bed() ? 1 : 0);
     lv_subject_set_int(&printer_has_led_, hardware.has_led() ? 1 : 0);

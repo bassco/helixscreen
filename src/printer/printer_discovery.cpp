@@ -15,6 +15,7 @@
 #include "standard_macros.h"
 #include "temperature_sensor_manager.h"
 #include "tool_state.h"
+#include "probe_sensor_manager.h"
 #include "width_sensor_manager.h"
 #include "width_sensor_types.h"
 
@@ -109,6 +110,11 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     // hardware.sensors() returns temperature_sensor and temperature_fan objects
     auto& tsm = helix::sensors::TemperatureSensorManager::instance();
     tsm.discover(hardware.sensors());
+
+    // Initialize probe sensor manager
+    // Probe sensors (bltouch, cartographer, beacon, etc.) are discovered from the full objects list
+    auto& psm = helix::sensors::ProbeSensorManager::instance();
+    psm.discover(hardware.printer_objects());
 
     // Initialize humidity sensor manager
     // Humidity sensors (bme280, htu21d) are discovered from the full objects list

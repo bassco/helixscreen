@@ -15,10 +15,9 @@ struct WizardSkipFlags {
     bool ams = false;              // step 7
     bool led = false;              // step 8
     bool filament = false;         // step 9
-    bool probe = false;            // step 10
-    bool input_shaper = false;     // step 11
-    bool summary = false;          // step 12
-    bool telemetry = false;        // step 13
+    bool input_shaper = false;     // step 10
+    bool summary = false;          // step 11
+    bool telemetry = false;        // step 12
 };
 
 /// Calculate display step number from internal step, accounting for skips.

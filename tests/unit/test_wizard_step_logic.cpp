@@ -7,31 +7,31 @@
 // Default flags (no skips) — baseline behavior
 // ============================================================================
 
-TEST_CASE("Default flags: all 14 steps shown", "[wizard][step_logic]") {
+TEST_CASE("Default flags: all 13 steps shown", "[wizard][step_logic]") {
     helix::WizardSkipFlags flags{};
-    REQUIRE(helix::wizard_calculate_display_total(flags) == 14);
+    REQUIRE(helix::wizard_calculate_display_total(flags) == 13);
 }
 
 TEST_CASE("Default flags: display step numbering is 1-based sequential",
           "[wizard][step_logic]") {
     helix::WizardSkipFlags flags{};
-    for (int i = 0; i < 14; ++i) {
+    for (int i = 0; i < 13; ++i) {
         REQUIRE(helix::wizard_calculate_display_step(i, flags) == i + 1);
     }
 }
 
 TEST_CASE("Default flags: next_step walks all steps", "[wizard][step_logic]") {
     helix::WizardSkipFlags flags{};
-    for (int i = 0; i < 13; ++i) {
+    for (int i = 0; i < 12; ++i) {
         REQUIRE(helix::wizard_next_step(i, flags) == i + 1);
     }
-    REQUIRE(helix::wizard_next_step(13, flags) == -1);
+    REQUIRE(helix::wizard_next_step(12, flags) == -1);
 }
 
 TEST_CASE("Default flags: prev_step walks all steps backward",
           "[wizard][step_logic]") {
     helix::WizardSkipFlags flags{};
-    for (int i = 13; i > 0; --i) {
+    for (int i = 12; i > 0; --i) {
         REQUIRE(helix::wizard_prev_step(i, flags) == i - 1);
     }
     REQUIRE(helix::wizard_prev_step(0, flags) == -1);
@@ -50,17 +50,16 @@ TEST_CASE("Preset mode: skip hardware steps", "[wizard][step_logic][preset]") {
     flags.ams = true;
     flags.led = true;
     flags.filament = true;
-    flags.probe = true;
     flags.input_shaper = true;
     flags.summary = true;
     // telemetry NOT skipped (shown in preset mode)
 
-    // Steps shown: 0(touch), 1(lang), 3(conn), 13(telemetry) = 4
+    // Steps shown: 0(touch), 1(lang), 3(conn), 12(telemetry) = 4
     REQUIRE(helix::wizard_calculate_display_total(flags) == 4);
     REQUIRE(helix::wizard_calculate_display_step(0, flags) == 1);
     REQUIRE(helix::wizard_calculate_display_step(1, flags) == 2);
     REQUIRE(helix::wizard_calculate_display_step(3, flags) == 3);
-    REQUIRE(helix::wizard_calculate_display_step(13, flags) == 4);
+    REQUIRE(helix::wizard_calculate_display_step(12, flags) == 4);
 }
 
 TEST_CASE("Preset mode: next_step skips hardware",
@@ -73,14 +72,13 @@ TEST_CASE("Preset mode: next_step skips hardware",
     flags.ams = true;
     flags.led = true;
     flags.filament = true;
-    flags.probe = true;
     flags.input_shaper = true;
     flags.summary = true;
 
     REQUIRE(helix::wizard_next_step(0, flags) == 1);
     REQUIRE(helix::wizard_next_step(1, flags) == 3);
-    REQUIRE(helix::wizard_next_step(3, flags) == 13);
-    REQUIRE(helix::wizard_next_step(13, flags) == -1);
+    REQUIRE(helix::wizard_next_step(3, flags) == 12);
+    REQUIRE(helix::wizard_next_step(12, flags) == -1);
 }
 
 TEST_CASE("Normal mode: telemetry skipped by default",
@@ -88,9 +86,9 @@ TEST_CASE("Normal mode: telemetry skipped by default",
     helix::WizardSkipFlags flags{};
     flags.telemetry = true;
 
-    // 13 steps shown (0-12, telemetry skipped)
-    REQUIRE(helix::wizard_calculate_display_total(flags) == 13);
-    REQUIRE(helix::wizard_next_step(12, flags) == -1); // Summary is last
+    // 12 steps shown (0-11, telemetry skipped)
+    REQUIRE(helix::wizard_calculate_display_total(flags) == 12);
+    REQUIRE(helix::wizard_next_step(11, flags) == -1); // Summary is last
 }
 
 TEST_CASE("Preset mode: prev_step works", "[wizard][step_logic][preset]") {
@@ -102,11 +100,10 @@ TEST_CASE("Preset mode: prev_step works", "[wizard][step_logic][preset]") {
     flags.ams = true;
     flags.led = true;
     flags.filament = true;
-    flags.probe = true;
     flags.input_shaper = true;
     flags.summary = true;
 
-    REQUIRE(helix::wizard_prev_step(13, flags) == 3);
+    REQUIRE(helix::wizard_prev_step(12, flags) == 3);
     REQUIRE(helix::wizard_prev_step(3, flags) == 1);
     REQUIRE(helix::wizard_prev_step(1, flags) == 0);
     REQUIRE(helix::wizard_prev_step(0, flags) == -1);
@@ -122,12 +119,11 @@ TEST_CASE("Preset mode: connection also skipped", "[wizard][step_logic][preset]"
     flags.ams = true;
     flags.led = true;
     flags.filament = true;
-    flags.probe = true;
     flags.input_shaper = true;
     flags.summary = true;
     // telemetry NOT skipped
 
-    // Steps: 0(touch), 1(lang), 13(telemetry) = 3
+    // Steps: 0(touch), 1(lang), 12(telemetry) = 3
     REQUIRE(helix::wizard_calculate_display_total(flags) == 3);
-    REQUIRE(helix::wizard_next_step(1, flags) == 13);  // lang -> telemetry (skip conn + all hw)
+    REQUIRE(helix::wizard_next_step(1, flags) == 12);  // lang -> telemetry (skip conn + all hw)
 }
