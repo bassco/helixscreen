@@ -340,16 +340,13 @@ static void migrate_v3_to_v4(json& config) {
     spdlog::info("[Config] Migration v4: restructured /printer to /printers/{}", slug);
 }
 
-/// Migration v4→v5: Default show_printer_switcher to false for single-printer configs.
-/// Users who upgraded from before the setting existed got it defaulting to true (always shown).
-/// For single-printer setups the switcher adds clutter, so disable it on upgrade.
-static void migrate_v4_to_v5(json& config) {
-    // Only act if the setting hasn't been explicitly set yet
+/// Default show_printer_switcher to false for single-printer configs.
+/// Shared by v4→v5 and v5→v6 migrations (v6 re-runs for fresh v5 installs that had wrong default).
+static void default_printer_switcher_off(json& config, int target_version) {
     if (config.contains("/printers/show_printer_switcher"_json_pointer)) {
         return;
     }
 
-    // Count configured printers
     int printer_count = 0;
     if (config.contains("printers") && config["printers"].is_object()) {
         for (auto& [key, val] : config["printers"].items()) {
@@ -361,9 +358,13 @@ static void migrate_v4_to_v5(json& config) {
 
     if (printer_count <= 1) {
         config["/printers/show_printer_switcher"_json_pointer] = false;
-        spdlog::info("[Config] Migration v5: disabled show_printer_switcher for single-printer config");
+        spdlog::info("[Config] Migration v{}: disabled show_printer_switcher for single-printer config",
+                     target_version);
     }
 }
+
+static void migrate_v4_to_v5(json& config) { default_printer_switcher_off(config, 5); }
+static void migrate_v5_to_v6(json& config) { default_printer_switcher_off(config, 6); }
 
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config) {
@@ -382,6 +383,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v3_to_v4(config);
     if (version < 5)
         migrate_v4_to_v5(config);
+    if (version < 6)
+        migrate_v5_to_v6(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
