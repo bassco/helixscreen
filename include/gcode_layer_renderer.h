@@ -489,7 +489,7 @@ class GCodeLayerRenderer {
      * @param index Object name index from ToolpathSegment
      * @return Resolved object name, or empty string if invalid
      */
-    const std::string& resolve_object_name(int16_t index) const;
+    std::string resolve_object_name(int16_t index) const;
 
     // Data source (exactly one should be non-null)
     const ParsedGCodeFile* gcode_ = nullptr;

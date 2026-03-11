@@ -421,7 +421,7 @@ class GCodeStreamingController {
      * @param index Object name index from ToolpathSegment
      * @return Resolved object name, or empty string if invalid
      */
-    const std::string& get_object_name(int16_t index) const;
+    std::string get_object_name(int16_t index) const;
 
   private:
     /**

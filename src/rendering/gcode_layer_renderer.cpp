@@ -1057,16 +1057,15 @@ glm::ivec2 GCodeLayerRenderer::world_to_screen(float x, float y, float z) const 
     return {raw.x + widget_offset_x_, raw.y + widget_offset_y_};
 }
 
-const std::string& GCodeLayerRenderer::resolve_object_name(int16_t index) const {
-    static const std::string empty;
-    if (index < 0) return empty;
+std::string GCodeLayerRenderer::resolve_object_name(int16_t index) const {
+    if (index < 0) return {};
     if (gcode_) {
         return gcode_->get_object_name(index);
     }
     if (streaming_controller_) {
         return streaming_controller_->get_object_name(index);
     }
-    return empty;
+    return {};
 }
 
 bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
@@ -1083,7 +1082,7 @@ bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
     static constexpr const char kSupport[] = "support";
     static constexpr size_t kSupportLen = 7; // strlen("support")
 
-    const std::string& name = resolve_object_name(seg.object_name_index);
+    const std::string name = resolve_object_name(seg.object_name_index);
     if (name.size() < kSupportLen) {
         return false;
     }

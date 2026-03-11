@@ -617,11 +617,10 @@ std::function<std::vector<ToolpathSegment>(size_t)> GCodeStreamingController::ma
     return [this](size_t layer_index) { return load_layer(layer_index); };
 }
 
-const std::string& GCodeStreamingController::get_object_name(int16_t index) const {
-    static const std::string empty;
-    if (index < 0) return empty;
+std::string GCodeStreamingController::get_object_name(int16_t index) const {
+    if (index < 0) return {};
     std::lock_guard<std::mutex> lock(name_table_mutex_);
-    if (static_cast<size_t>(index) >= merged_object_name_table_.size()) return empty;
+    if (static_cast<size_t>(index) >= merged_object_name_table_.size()) return {};
     return merged_object_name_table_[index];
 }
 
