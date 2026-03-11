@@ -87,6 +87,8 @@ GCodeLayerRenderer::~GCodeLayerRenderer() {
 // ============================================================================
 
 void GCodeLayerRenderer::set_gcode(const ParsedGCodeFile* gcode) {
+    // Cancel ghost thread before changing pointers it reads (race fix for #387)
+    cancel_background_ghost_render();
     gcode_ = gcode;
     streaming_controller_ = nullptr; // Clear streaming mode
     bounds_valid_ = false;
@@ -101,6 +103,8 @@ void GCodeLayerRenderer::set_gcode(const ParsedGCodeFile* gcode) {
 }
 
 void GCodeLayerRenderer::set_streaming_controller(GCodeStreamingController* controller) {
+    // Cancel ghost thread before changing pointers it reads (race fix for #387)
+    cancel_background_ghost_render();
     streaming_controller_ = controller;
     gcode_ = nullptr; // Clear full-file mode
     bounds_valid_ = false;
