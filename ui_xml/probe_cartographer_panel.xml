@@ -34,6 +34,13 @@
                  icon="tune">
         <event_cb trigger="clicked" callback="on_carto_touch_cal"/>
       </ui_button>
+
+      <!-- Scan Calibrate -->
+      <ui_button name="btn_carto_scan_cal"
+                 width="48%" height="#button_height_sm" variant="secondary" text="Scan Cal" translation_tag="Scan Cal"
+                 icon="magnify_scan">
+        <event_cb trigger="clicked" callback="on_carto_scan_cal"/>
+      </ui_button>
     </lv_obj>
   </view>
 </component>

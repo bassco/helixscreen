@@ -149,6 +149,9 @@ void ui_probe_overlay_register_callbacks() {
     lv_xml_register_event_cb(nullptr, "on_carto_touch_cal", [](lv_event_t* /*e*/) {
         send_probe_gcode("CARTOGRAPHER_TOUCH_CALIBRATE", "Cartographer Touch Calibrate");
     });
+    lv_xml_register_event_cb(nullptr, "on_carto_scan_cal", [](lv_event_t* /*e*/) {
+        send_probe_gcode("CARTOGRAPHER_SCAN_CALIBRATE", "Cartographer Scan Calibrate");
+    });
 
     // Beacon controls
     lv_xml_register_event_cb(nullptr, "on_beacon_calibrate", [](lv_event_t* /*e*/) {
@@ -164,6 +167,32 @@ void ui_probe_overlay_register_callbacks() {
     });
     lv_xml_register_event_cb(nullptr, "on_klicky_dock", [](lv_event_t* /*e*/) {
         send_probe_gcode("DOCK_PROBE", "Klicky Dock");
+    });
+
+    // Eddy current probe controls (BTT Eddy, Mellow Fly Eddy, etc.)
+    lv_xml_register_event_cb(nullptr, "on_eddy_calibrate", [](lv_event_t* /*e*/) {
+        auto& mgr = ProbeSensorManager::instance();
+        auto sensors = mgr.get_sensors();
+        for (const auto& s : sensors) {
+            if (s.type == ProbeSensorType::EDDY_CURRENT) {
+                std::string cmd = "PROBE_EDDY_CURRENT_CALIBRATE CHIP=" + s.sensor_name;
+                send_probe_gcode(cmd.c_str(), "Eddy Current Calibrate");
+                return;
+            }
+        }
+        spdlog::warn("[Probe] No eddy current sensor found for calibrate");
+    });
+    lv_xml_register_event_cb(nullptr, "on_eddy_drive_current", [](lv_event_t* /*e*/) {
+        auto& mgr = ProbeSensorManager::instance();
+        auto sensors = mgr.get_sensors();
+        for (const auto& s : sensors) {
+            if (s.type == ProbeSensorType::EDDY_CURRENT) {
+                std::string cmd = "LDC_CALIBRATE_DRIVE_CURRENT CHIP=" + s.sensor_name;
+                send_probe_gcode(cmd.c_str(), "Eddy Drive Current Cal");
+                return;
+            }
+        }
+        spdlog::warn("[Probe] No eddy current sensor found for drive current cal");
     });
 
     // Config edit callbacks
@@ -450,6 +479,9 @@ void ProbeOverlay::load_type_panel() {
         break;
     case ProbeSensorType::BEACON:
         component = "probe_beacon_panel";
+        break;
+    case ProbeSensorType::EDDY_CURRENT:
+        component = "probe_eddy_panel";
         break;
     default:
         component = "probe_generic_panel";
