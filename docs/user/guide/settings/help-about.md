@@ -61,7 +61,7 @@ Tap the **Current Version** row seven times in Settings → About to toggle beta
 
 When beta features are enabled:
 - **Update Channel** selector appears (Stable / Beta / Dev)
-- Additional items appear in the Advanced panel (Macro Browser, Input Shaping, Z-Offset Calibration, Timelapse, etc.)
+- Additional items appear in the Advanced panel (Macro Browser, Timelapse, etc.)
 - **Plugins** section appears in Settings
 - Tap seven more times to disable
 

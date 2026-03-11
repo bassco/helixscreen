@@ -33,7 +33,6 @@ When beta features are enabled, the following appear in the UI with an orange "B
 
 | Feature | Location | Description | Status |
 |---------|----------|-------------|--------|
-| **Z-Offset Calibration** | Advanced panel | Interactive probe-based Z calibration | Functional; requires probe (BLTouch, etc.) |
 | **HelixPrint Plugin** | Advanced panel | Install/uninstall the HelixPrint Klipper plugin for advanced print start control | Functional; plugin manages bed mesh, QGL, z-tilt skipping |
 | **Configure PRINT_START** | Advanced panel | Make bed mesh and QGL skippable in your print start macro | Functional; requires HelixPrint plugin installed |
 | **Timelapse** | Advanced panel | Configure recording settings, render videos, manage timelapse files | Functional; requires timelapse plugin |
@@ -46,7 +45,7 @@ When beta features are enabled, the following appear in the UI with an orange "B
 | **MPC Calibration** | Heater Calibration panel | Model Predictive Control calibration as an alternative to PID | Functional; requires Kalico firmware |
 | **Multi-Printer Management** | Settings panel, Navbar, Printer Manager | Add, switch between, and manage multiple Klipper printers from one touchscreen | Functional; switch/add/delete printers with one-tap switching |
 
-> **Graduated from beta:** PID Calibration, Input Shaper, the **Spool Wizard**, and the **G-code Console** are now available to all users without enabling beta features.
+> **Graduated from beta:** PID Calibration, Input Shaper, the **Spool Wizard**, the **G-code Console**, **Probe Management**, and **Z-Offset Calibration** are now available to all users without enabling beta features.
 
 ---
 
