@@ -110,7 +110,10 @@ file(GLOB FONT_SOURCES "${PROJECT_ROOT}/assets/fonts/*.c")
 # Glob generated translation source
 file(GLOB TRANS_SOURCES "${PROJECT_ROOT}/src/generated/*.c")
 
-add_library(main SHARED ${HELIX_SOURCES} ${FONT_SOURCES} ${TRANS_SOURCES})
+# Quirc QR decoder library (vendored)
+file(GLOB QUIRC_SOURCES "${PROJECT_ROOT}/lib/quirc/lib/*.c")
+
+add_library(main SHARED ${HELIX_SOURCES} ${FONT_SOURCES} ${TRANS_SOURCES} ${QUIRC_SOURCES})
 
 target_include_directories(main PRIVATE
     "${PROJECT_ROOT}/include"
@@ -127,6 +130,7 @@ target_include_directories(main PRIVATE
     "${PROJECT_ROOT}/lib/lv_markdown/src"
     "${PROJECT_ROOT}/lib/lv_markdown/deps/md4c"
     "${PROJECT_ROOT}/lib/mdns"
+    "${PROJECT_ROOT}/lib/quirc/lib"
     "${PROJECT_ROOT}/lib/cpp-terminal/include"
     "${PROJECT_ROOT}/assets/fonts"
     "${PROJECT_ROOT}/src/generated"
