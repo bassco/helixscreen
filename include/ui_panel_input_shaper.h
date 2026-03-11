@@ -11,6 +11,7 @@
 #include "platform_capabilities.h"
 #include "subject_managed_panel.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <lvgl.h>
@@ -213,9 +214,9 @@ class InputShaperPanel : public OverlayBase {
     // Private setup helper (called by create())
     void setup_widgets();
 
-    // Per-axis comparison table subjects (5 rows per axis, bound in XML)
-    static constexpr size_t MAX_SHAPERS = 5;
-    static constexpr size_t CMP_TYPE_BUF = 24;
+    // Per-axis comparison table subjects (up to MAX_SHAPERS rows per axis, bound in XML)
+    static constexpr size_t MAX_SHAPERS = 11;
+    static constexpr size_t CMP_TYPE_BUF = 32;
     static constexpr size_t CMP_VALUE_BUF = 24;
 
     struct ComparisonRow {
@@ -306,8 +307,12 @@ class InputShaperPanel : public OverlayBase {
         std::vector<ShaperResponseCurve> shaper_curves;
         ui_frequency_response_chart_t* chart = nullptr;
         int raw_series_id = -1;
-        int shaper_series_ids[MAX_SHAPERS] = {-1, -1, -1, -1, -1};
-        bool shaper_visible[MAX_SHAPERS] = {false, false, false, false, false};
+        int shaper_series_ids[MAX_SHAPERS]; // initialized to -1 in constructor
+        bool shaper_visible[MAX_SHAPERS] = {};
+
+        AxisChartData() {
+            std::fill(shaper_series_ids, shaper_series_ids + MAX_SHAPERS, -1);
+        }
     };
 
     AxisChartData x_chart_;
@@ -318,7 +323,7 @@ class InputShaperPanel : public OverlayBase {
     lv_subject_t is_y_has_freq_data_{};
 
     // Chip label subjects (dynamically set from shaper names)
-    static constexpr size_t CHIP_LABEL_BUF = 16;
+    static constexpr size_t CHIP_LABEL_BUF = 20;
     struct ChipRow {
         char label_buf[CHIP_LABEL_BUF] = {};
         lv_subject_t label{};

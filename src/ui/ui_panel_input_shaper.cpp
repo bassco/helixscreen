@@ -29,11 +29,17 @@ using namespace helix;
 
 // Shaper overlay colors (distinct, visible on dark bg) — shared by chart and legend
 static constexpr uint32_t SHAPER_OVERLAY_COLORS[] = {
-    0x4FC3F7, // ZV - light blue
-    0x66BB6A, // MZV - green
-    0xFFA726, // EI - orange
-    0xAB47BC, // 2HUMP_EI - purple
-    0xEF5350, // 3HUMP_EI - red
+    0x4FC3F7, // light blue
+    0x66BB6A, // green
+    0xFFA726, // orange
+    0xAB47BC, // purple
+    0xEF5350, // red
+    0x26C6DA, // cyan
+    0xFFEE58, // yellow
+    0xEC407A, // pink
+    0x7E57C2, // deep purple
+    0x8D6E63, // brown
+    0x78909C, // blue-grey
 };
 static constexpr size_t NUM_SHAPER_COLORS =
     sizeof(SHAPER_OVERLAY_COLORS) / sizeof(SHAPER_OVERLAY_COLORS[0]);
@@ -172,6 +178,30 @@ void ui_panel_input_shaper_register_callbacks() {
          [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(3); }},
         {"input_shaper_chip_y_4_cb",
          [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(4); }},
+        {"input_shaper_chip_x_5_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(5); }},
+        {"input_shaper_chip_x_6_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(6); }},
+        {"input_shaper_chip_x_7_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(7); }},
+        {"input_shaper_chip_x_8_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(8); }},
+        {"input_shaper_chip_x_9_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(9); }},
+        {"input_shaper_chip_x_10_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_x_clicked(10); }},
+        {"input_shaper_chip_y_5_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(5); }},
+        {"input_shaper_chip_y_6_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(6); }},
+        {"input_shaper_chip_y_7_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(7); }},
+        {"input_shaper_chip_y_8_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(8); }},
+        {"input_shaper_chip_y_9_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(9); }},
+        {"input_shaper_chip_y_10_cb",
+         [](lv_event_t*) { get_global_input_shaper_panel().handle_chip_y_clicked(10); }},
     });
 
     // Initialize subjects BEFORE XML creation
@@ -1036,6 +1066,20 @@ void InputShaperPanel::clear_results() {
 // ============================================================================
 
 const char* InputShaperPanel::get_shaper_explanation(const std::string& type) {
+    // Kalico smooth shapers
+    if (type == "smooth_zv")
+        return "Smooth ZV — continuous filtering, minimal latency";
+    if (type == "smooth_mzv")
+        return "Smooth MZV — excellent balance with continuous convolution";
+    if (type == "smooth_ei")
+        return "Smooth EI — strong continuous vibration reduction";
+    if (type == "smooth_2hump_ei")
+        return "Smooth 2-Hump EI — heavy continuous smoothing";
+    if (type == "smooth_zvd_ei")
+        return "Smooth ZVD-EI — broadband continuous smoothing";
+    if (type == "smooth_si")
+        return "Smooth SI — maximum continuous vibration suppression";
+
     if (type == "zv")
         return "Fast but minimal smoothing — best for well-built printers";
     if (type == "mzv")
@@ -1046,6 +1090,8 @@ const char* InputShaperPanel::get_shaper_explanation(const std::string& type) {
         return "Heavy smoothing — significant vibration issues detected";
     if (type == "3hump_ei")
         return "Maximum smoothing — consider checking mechanical issues";
+    if (type == "zvd")
+        return "ZVD — zero vibration derivative, moderate smoothing";
     return "Vibration compensation active";
 }
 
@@ -1416,39 +1462,58 @@ void InputShaperPanel::handle_chip_y_clicked(int index) {
 void InputShaperPanel::inject_demo_results() {
     spdlog::info("[InputShaper] Injecting demo results for screenshot mode");
 
-    // Mock shaper options (from moonraker_client_mock.cpp:3550-3553)
-    auto make_shaper_options = []() -> std::vector<ShaperOption> {
-        return {
-            {"zv", 59.0f, 5.2f, 0.045f, 13400.0f},      {"mzv", 53.8f, 1.6f, 0.130f, 4000.0f},
-            {"ei", 56.2f, 0.7f, 0.120f, 4600.0f},       {"2hump_ei", 71.8f, 0.0f, 0.076f, 8800.0f},
+    const char* kalico_env = std::getenv("INPUT_SHAPER_DEMO_KALICO");
+    bool kalico_demo = kalico_env && std::string(kalico_env) == "1";
+
+    // Mock shaper options: Kalico reports smooth shapers + discrete, standard Klipper reports 5
+    std::vector<ShaperOption> shaper_options;
+    if (kalico_demo) {
+        shaper_options = {
+            {"smooth_zv", 60.2f, 4.8f, 0.040f, 14000.0f},
+            {"smooth_mzv", 54.4f, 1.2f, 0.085f, 5200.0f},
+            {"smooth_ei", 57.0f, 0.5f, 0.095f, 5000.0f},
+            {"smooth_2hump_ei", 72.4f, 0.0f, 0.065f, 9200.0f},
+            {"smooth_zvd_ei", 68.0f, 0.1f, 0.070f, 8400.0f},
+            {"smooth_si", 52.0f, 0.0f, 0.110f, 4800.0f},
+            {"mzv", 53.8f, 1.6f, 0.130f, 4000.0f},
+            {"ei", 56.2f, 0.7f, 0.120f, 4600.0f},
+            {"2hump_ei", 71.8f, 0.0f, 0.076f, 8800.0f},
+        };
+    } else {
+        shaper_options = {
+            {"zv", 59.0f, 5.2f, 0.045f, 13400.0f},
+            {"mzv", 53.8f, 1.6f, 0.130f, 4000.0f},
+            {"ei", 56.2f, 0.7f, 0.120f, 4600.0f},
+            {"2hump_ei", 71.8f, 0.0f, 0.076f, 8800.0f},
             {"3hump_ei", 89.6f, 0.0f, 0.076f, 8800.0f},
         };
-    };
+    }
+
+    // The recommended shaper type and its parameters for the demo
+    const std::string demo_recommended = kalico_demo ? "smooth_mzv" : "mzv";
+
+    // Find the recommended shaper's parameters from the options list
+    auto rec_it = std::find_if(shaper_options.begin(), shaper_options.end(),
+                               [&](const ShaperOption& o) { return o.type == demo_recommended; });
+    if (rec_it == shaper_options.end()) {
+        spdlog::error("[InputShaper] Demo recommended shaper '{}' not found in options",
+                      demo_recommended);
+        return;
+    }
+    const auto& rec = *rec_it;
 
     // Generate frequency response data matching write_mock_shaper_csv()
-    // (moonraker_client_mock.cpp:3424-3503)
-    auto generate_freq_data = [](char axis) {
+    auto generate_freq_data = [](char axis, const std::vector<ShaperOption>& shapers) {
         std::vector<std::pair<float, float>> freq_response;
         std::vector<ShaperResponseCurve> shaper_curves;
 
-        // Shaper fitted frequencies
-        struct ShaperDef {
-            const char* name;
-            float freq;
-        };
-        static const ShaperDef shaper_defs[] = {
-            {"zv", 59.0f}, {"mzv", 53.8f}, {"ei", 56.2f}, {"2hump_ei", 71.8f}, {"3hump_ei", 89.6f},
-        };
-
-        // Initialize shaper curves
-        for (const auto& sd : shaper_defs) {
+        for (const auto& opt : shapers) {
             ShaperResponseCurve curve;
-            curve.name = sd.name;
-            curve.frequency = sd.freq;
+            curve.name = opt.type;
+            curve.frequency = opt.frequency;
             shaper_curves.push_back(curve);
         }
 
-        // Resonance peak parameters (from mock)
         const float peak_freq = (axis == 'X') ? 53.8f : 48.2f;
         const float peak_width = 8.0f;
         const float peak_amp = 0.02f;
@@ -1457,7 +1522,6 @@ void InputShaperPanel::inject_demo_results() {
         std::mt19937 rng(42 + static_cast<unsigned>(axis));
         std::uniform_real_distribution<float> noise_dist(0.8f, 1.2f);
 
-        // Generate ~50 bins from 5-200 Hz (step ~4 Hz)
         for (float freq = 5.0f; freq <= 200.0f; freq += 4.0f) {
             float df = freq - peak_freq;
             float resonance = peak_amp / (1.0f + (df * df) / (peak_width * peak_width));
@@ -1467,7 +1531,6 @@ void InputShaperPanel::inject_demo_results() {
                 base_psd *= std::exp(-(freq - 120.0f) / 60.0f);
             }
 
-            // Combined PSD (main + cross + z)
             float psd_main = base_psd;
             float psd_cross = base_psd * 0.15f * noise_dist(rng);
             float psd_z = base_psd * 0.08f * noise_dist(rng);
@@ -1475,16 +1538,12 @@ void InputShaperPanel::inject_demo_results() {
 
             freq_response.push_back({freq, psd_xyz});
 
-            // Shaper attenuation curves
-            for (size_t i = 0; i < 5; i++) {
-                float shaper_freq_val = shaper_defs[i].freq;
+            for (size_t i = 0; i < shapers.size(); i++) {
+                float shaper_freq_val = shapers[i].frequency;
                 float dist = std::abs(freq - shaper_freq_val);
-                float attenuation;
-                if (dist < 15.0f) {
-                    attenuation = 0.05f + 0.95f * (dist / 15.0f) * (dist / 15.0f);
-                } else {
-                    attenuation = 1.0f;
-                }
+                float attenuation = (dist < 15.0f)
+                                        ? 0.05f + 0.95f * (dist / 15.0f) * (dist / 15.0f)
+                                        : 1.0f;
                 shaper_curves[i].values.push_back(psd_xyz * attenuation);
             }
         }
@@ -1492,35 +1551,28 @@ void InputShaperPanel::inject_demo_results() {
         return std::make_pair(freq_response, shaper_curves);
     };
 
-    // Build X result
-    InputShaperResult x_result;
-    x_result.axis = 'X';
-    x_result.shaper_type = "mzv";
-    x_result.shaper_freq = 53.8f;
-    x_result.max_accel = 4000.0f;
-    x_result.smoothing = 0.130f;
-    x_result.vibrations = 1.6f;
-    x_result.all_shapers = make_shaper_options();
-    auto [x_freq, x_curves] = generate_freq_data('X');
-    x_result.freq_response = std::move(x_freq);
-    x_result.shaper_curves = std::move(x_curves);
+    // Build per-axis result using shared recommended shaper parameters
+    auto build_result = [&](char axis) {
+        InputShaperResult result;
+        result.axis = axis;
+        result.shaper_type = rec.type;
+        result.shaper_freq = rec.frequency;
+        result.max_accel = rec.max_accel;
+        result.smoothing = rec.smoothing;
+        result.vibrations = rec.vibrations;
+        result.all_shapers = shaper_options;
+        auto [freq, curves] = generate_freq_data(axis, shaper_options);
+        result.freq_response = std::move(freq);
+        result.shaper_curves = std::move(curves);
+        return result;
+    };
 
-    // Build Y result
-    InputShaperResult y_result;
-    y_result.axis = 'Y';
-    y_result.shaper_type = "mzv";
-    y_result.shaper_freq = 53.8f;
-    y_result.max_accel = 4000.0f;
-    y_result.smoothing = 0.130f;
-    y_result.vibrations = 1.6f;
-    y_result.all_shapers = make_shaper_options();
-    auto [y_freq, y_curves] = generate_freq_data('Y');
-    y_result.freq_response = std::move(y_freq);
-    y_result.shaper_curves = std::move(y_curves);
+    auto x_result = build_result('X');
+    auto y_result = build_result('Y');
 
     // Store recommendation for Apply button
-    recommended_type_ = "mzv";
-    recommended_freq_ = 53.8f;
+    recommended_type_ = rec.type;
+    recommended_freq_ = rec.frequency;
     x_result_ = x_result;
 
     // Populate both axes (uses existing private methods)

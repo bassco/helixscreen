@@ -23,6 +23,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <regex>
 #include <thread>
 
 #include "../catch_amalgamated.hpp"
@@ -852,4 +853,129 @@ TEST_CASE_METHOD(InputShaperTestFixture,
 
     // Y axis CSV path should use 'y'
     CHECK(captured_result.csv_path == "/tmp/calibration_data_y_mock.csv");
+}
+
+// ============================================================================
+// Kalico Smooth Shaper Parsing Tests
+// ============================================================================
+
+// These test the regex patterns used by InputShaperCollector::parse_shaper_line()
+// and parse_recommendation(). The collector is a private class in
+// moonraker_advanced_api.cpp, so we test the regexes directly.
+
+TEST_CASE("Kalico smoother regex parses bleeding-edge format", "[input_shaper][kalico]") {
+    // Same regex as InputShaperCollector::parse_shaper_line() kalico_regex
+    static const std::regex kalico_regex(
+        R"(Fitted (?:shaper|smoother) '([\w]+)' frequency = ([\d.]+) Hz \(vibration score = ([\d.]+)%, smoothing ~= ([\d.]+))");
+    // Standard Klipper regex
+    static const std::regex klipper_regex(
+        R"(Fitted shaper '(\w+)' frequency = ([\d.]+) Hz \(vibrations = ([\d.]+)%, smoothing ~= ([\d.]+)\))");
+
+    SECTION("Kalico smoother line is parsed by kalico_regex") {
+        std::string line =
+            "Fitted smoother 'smooth_mzv' frequency = 42.6 Hz "
+            "(vibration score = 1.23%, smoothing ~= 0.085, combined score = 1.234e-02)";
+
+        std::smatch match;
+        REQUIRE(std::regex_search(line, match, kalico_regex));
+        CHECK(match[1].str() == "smooth_mzv");
+        CHECK(match[2].str() == "42.6");
+        CHECK(match[3].str() == "1.23");
+        CHECK(match[4].str() == "0.085");
+
+        // Should NOT match klipper_regex (uses "vibration score" not "vibrations")
+        CHECK_FALSE(std::regex_search(line, match, klipper_regex));
+    }
+
+    SECTION("Kalico discrete shaper line is parsed by kalico_regex") {
+        std::string line =
+            "Fitted shaper 'mzv' frequency = 36.7 Hz "
+            "(vibration score = 1.23%, smoothing ~= 0.140, combined score = 2.345e-02)";
+
+        std::smatch match;
+        REQUIRE(std::regex_search(line, match, kalico_regex));
+        CHECK(match[1].str() == "mzv");
+        CHECK(match[2].str() == "36.7");
+        CHECK(match[3].str() == "1.23");
+        CHECK(match[4].str() == "0.140");
+
+        // Should NOT match klipper_regex either (uses "vibration score")
+        CHECK_FALSE(std::regex_search(line, match, klipper_regex));
+    }
+
+    SECTION("Standard Klipper line is NOT matched by kalico_regex") {
+        std::string line =
+            "Fitted shaper 'mzv' frequency = 36.7 Hz "
+            "(vibrations = 7.2%, smoothing ~= 0.140)";
+
+        std::smatch match;
+        CHECK_FALSE(std::regex_search(line, match, kalico_regex));
+
+        // Should match klipper_regex
+        REQUIRE(std::regex_search(line, match, klipper_regex));
+        CHECK(match[1].str() == "mzv");
+        CHECK(match[2].str() == "36.7");
+        CHECK(match[3].str() == "7.2");
+        CHECK(match[4].str() == "0.140");
+    }
+
+    SECTION("All Kalico smooth shaper types parse correctly") {
+        std::vector<std::pair<std::string, std::string>> smoother_lines = {
+            {"smooth_zv", "Fitted smoother 'smooth_zv' frequency = 60.2 Hz (vibration score = 4.80%, smoothing ~= 0.040, combined score = 1.0e-02)"},
+            {"smooth_mzv", "Fitted smoother 'smooth_mzv' frequency = 54.4 Hz (vibration score = 1.20%, smoothing ~= 0.085, combined score = 2.0e-02)"},
+            {"smooth_ei", "Fitted smoother 'smooth_ei' frequency = 57.0 Hz (vibration score = 0.50%, smoothing ~= 0.095, combined score = 3.0e-02)"},
+            {"smooth_2hump_ei", "Fitted smoother 'smooth_2hump_ei' frequency = 72.4 Hz (vibration score = 0.00%, smoothing ~= 0.065, combined score = 4.0e-02)"},
+            {"smooth_zvd_ei", "Fitted smoother 'smooth_zvd_ei' frequency = 68.0 Hz (vibration score = 0.10%, smoothing ~= 0.070, combined score = 5.0e-02)"},
+            {"smooth_si", "Fitted smoother 'smooth_si' frequency = 52.0 Hz (vibration score = 0.00%, smoothing ~= 0.110, combined score = 6.0e-02)"},
+        };
+
+        for (const auto& [expected_type, line] : smoother_lines) {
+            INFO("Testing: " << expected_type);
+            std::smatch match;
+            REQUIRE(std::regex_search(line, match, kalico_regex));
+            CHECK(match[1].str() == expected_type);
+        }
+    }
+}
+
+TEST_CASE("Kalico recommendation regex parses smoother format", "[input_shaper][kalico]") {
+    // Same regexes as InputShaperCollector::parse_recommendation()
+    static const std::regex rec_new(
+        R"(Recommended shaper_type_\w+ = (\w+), shaper_freq_\w+ = ([\d.]+) Hz)");
+    static const std::regex rec_smoother(
+        R"(Recommended smoother_type_\w+ = (\w+), smoother_freq_\w+ = ([\d.]+) Hz)");
+    static const std::regex rec_old(R"(Recommended shaper is (\w+) @ ([\d.]+) Hz)");
+
+    SECTION("Kalico smoother recommendation") {
+        std::string line = "Recommended smoother_type_x = smooth_mzv, smoother_freq_x = 42.6 Hz";
+
+        std::smatch match;
+        CHECK_FALSE(std::regex_search(line, match, rec_new));
+        REQUIRE(std::regex_search(line, match, rec_smoother));
+        CHECK(match[1].str() == "smooth_mzv");
+        CHECK(match[2].str() == "42.6");
+    }
+
+    SECTION("Standard Klipper recommendation (new format)") {
+        std::string line = "Recommended shaper_type_x = mzv, shaper_freq_x = 53.8 Hz";
+
+        std::smatch match;
+        REQUIRE(std::regex_search(line, match, rec_new));
+        CHECK(match[1].str() == "mzv");
+        CHECK(match[2].str() == "53.8");
+
+        // Should NOT match smoother regex
+        CHECK_FALSE(std::regex_search(line, match, rec_smoother));
+    }
+
+    SECTION("Legacy Klipper recommendation") {
+        std::string line = "Recommended shaper is mzv @ 36.7 Hz";
+
+        std::smatch match;
+        CHECK_FALSE(std::regex_search(line, match, rec_new));
+        CHECK_FALSE(std::regex_search(line, match, rec_smoother));
+        REQUIRE(std::regex_search(line, match, rec_old));
+        CHECK(match[1].str() == "mzv");
+        CHECK(match[2].str() == "36.7");
+    }
 }

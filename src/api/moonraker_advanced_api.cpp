@@ -1009,8 +1009,9 @@ class InputShaperCollector : public std::enable_shared_from_this<InputShaperColl
             return;
         }
 
-        // Parse shaper fit lines
-        if (line.find("Fitted shaper") != std::string::npos) {
+        // Parse shaper/smoother fit lines (Kalico uses "Fitted smoother" for smooth shapers)
+        if (line.find("Fitted shaper") != std::string::npos ||
+            line.find("Fitted smoother") != std::string::npos) {
             parse_shaper_line(line);
             return;
         }
@@ -1023,7 +1024,8 @@ class InputShaperCollector : public std::enable_shared_from_this<InputShaperColl
 
         // Parse recommendation line (try new format first, then old)
         // Don't complete yet — CSV path line follows immediately after
-        if (line.find("Recommended shaper") != std::string::npos) {
+        if (line.find("Recommended shaper") != std::string::npos ||
+            line.find("Recommended smoother") != std::string::npos) {
             parse_recommendation(line);
             collector_state_ = CollectorState::COMPLETE;
             return;
@@ -1081,11 +1083,22 @@ class InputShaperCollector : public std::enable_shared_from_this<InputShaperColl
     }
 
     void parse_shaper_line(const std::string& line) {
-        static const std::regex shaper_regex(
+        // Kalico bleeding-edge format (both smoothers and discrete shapers):
+        // Fitted smoother 'smooth_mzv' frequency = 42.6 Hz (vibration score = 1.23%, smoothing ~= 0.085, combined score = 1.234e-02)
+        // Fitted shaper 'mzv' frequency = 36.7 Hz (vibration score = 1.23%, smoothing ~= 0.140, combined score = 2.345e-02)
+        static const std::regex kalico_regex(
+            R"(Fitted (?:shaper|smoother) '([\w]+)' frequency = ([\d.]+) Hz \(vibration score = ([\d.]+)%, smoothing ~= ([\d.]+))");
+
+        // Standard Klipper format:
+        // Fitted shaper 'mzv' frequency = 36.7 Hz (vibrations = 7.2%, smoothing ~= 0.140)
+        static const std::regex klipper_regex(
             R"(Fitted shaper '(\w+)' frequency = ([\d.]+) Hz \(vibrations = ([\d.]+)%, smoothing ~= ([\d.]+)\))");
 
         std::smatch match;
-        if (std::regex_search(line, match, shaper_regex) && match.size() == 5) {
+        bool matched = std::regex_search(line, match, kalico_regex) ||
+                       std::regex_search(line, match, klipper_regex);
+
+        if (matched && match.size() >= 5) {
             ShaperFitData fit;
             fit.type = match[1].str();
             try {
@@ -1101,8 +1114,8 @@ class InputShaperCollector : public std::enable_shared_from_this<InputShaperColl
                           fit.frequency, fit.vibrations);
             shaper_fits_.push_back(fit);
 
-            // Emit progress in CALCULATING phase: 55-95% range, ~8% per shaper (5 shapers)
-            int calc_progress = 55 + static_cast<int>(shaper_fits_.size()) * 8;
+            // Emit progress in CALCULATING phase: 55-95% range, dynamic per shaper count
+            int calc_progress = 55 + static_cast<int>(shaper_fits_.size()) * 40 / 11;
             calc_progress = std::min(calc_progress, 95);
             char status[64];
             snprintf(status, sizeof(status), "Fitted %s at %.1f Hz", fit.type.c_str(),
@@ -1133,14 +1146,16 @@ class InputShaperCollector : public std::enable_shared_from_this<InputShaperColl
         // Try new Klipper format first: "Recommended shaper_type_x = mzv, shaper_freq_x = 53.8 Hz"
         static const std::regex rec_new(
             R"(Recommended shaper_type_\w+ = (\w+), shaper_freq_\w+ = ([\d.]+) Hz)");
+        // Kalico smoother format: "Recommended smoother_type_x = smooth_mzv, smoother_freq_x = 42.6 Hz"
+        static const std::regex rec_smoother(
+            R"(Recommended smoother_type_\w+ = (\w+), smoother_freq_\w+ = ([\d.]+) Hz)");
         // Legacy format: "Recommended shaper is mzv @ 36.7 Hz"
         static const std::regex rec_old(R"(Recommended shaper is (\w+) @ ([\d.]+) Hz)");
 
         std::smatch match;
-        bool matched = std::regex_search(line, match, rec_new);
-        if (!matched) {
-            matched = std::regex_search(line, match, rec_old);
-        }
+        bool matched = std::regex_search(line, match, rec_new) ||
+                       std::regex_search(line, match, rec_smoother) ||
+                       std::regex_search(line, match, rec_old);
 
         if (matched && match.size() == 3) {
             recommended_type_ = match[1].str();
