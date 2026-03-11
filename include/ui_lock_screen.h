@@ -47,7 +47,7 @@ private:
     void destroy_overlay();
     void update_dots();
     void shake_dots();
-    void show_error();
+    void show_error(const char* text = nullptr);
     void hide_error();
 
     lv_obj_t* overlay_ = nullptr;

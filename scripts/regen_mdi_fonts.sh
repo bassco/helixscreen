@@ -111,6 +111,7 @@ MDI_ICONS+=",0xF0328"    # layers
 MDI_ICONS+=",0xF0335"    # lightbulb
 MDI_ICONS+=",0xF0339"    # link (tool mapping)
 MDI_ICONS+=",0xF033E"    # lock
+MDI_ICONS+=",0xF0FC6"    # lock-open-variant
 MDI_ICONS+=",0xF0349"    # magnify (search/discovery)
 MDI_ICONS+=",0xF1276"    # magnify-scan (BT discovery)
 MDI_ICONS+=",0xF0369"    # message-text (discord/chat)

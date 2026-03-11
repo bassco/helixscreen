@@ -10,6 +10,7 @@
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_lock_screen.h"
+#include "ui_settings_security.h"
 
 #include <lvgl.h>
 #include <spdlog/spdlog.h>
@@ -68,9 +69,14 @@ static void lock_screen_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LockWidget] lock_screen_clicked_cb");
     (void)e;
 
-    spdlog::info("[LockWidget] Lock button clicked");
-    helix::LockManager::instance().lock();
-    helix::ui::LockScreenOverlay::instance().show();
+    if (helix::LockManager::instance().has_pin()) {
+        spdlog::info("[LockWidget] Lock button clicked — locking screen");
+        helix::LockManager::instance().lock();
+        helix::ui::LockScreenOverlay::instance().show();
+    } else {
+        spdlog::info("[LockWidget] Lock button clicked — no PIN set, opening security settings");
+        helix::settings::get_security_settings_overlay().show(lv_screen_active());
+    }
 
     LVGL_SAFE_EVENT_CB_END();
 }

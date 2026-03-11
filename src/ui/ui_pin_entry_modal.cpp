@@ -11,9 +11,12 @@
 #include "theme_manager.h"
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
+#include "ui_pin_utils.h"
 
 #include <lvgl.h>
 #include <spdlog/spdlog.h>
+
+namespace helix::ui {
 
 // ============================================================================
 // Static state
@@ -48,10 +51,16 @@ void PinEntryModal::dismiss() {
     auto* modal = g_active_modal;
     g_active_modal = nullptr;
     if (modal->on_complete_) {
-        modal->on_complete_("");
+        modal->on_complete_("");  // Return value ignored on dismiss
     }
-    modal->destroy();
-    delete modal;
+    // Defer destruction to avoid deleting objects in input event handler
+    lv_async_call(
+        [](void* user_data) {
+            auto* m = static_cast<PinEntryModal*>(user_data);
+            m->destroy();
+            delete m;
+        },
+        modal);
 }
 
 // ============================================================================
@@ -139,9 +148,16 @@ void PinEntryModal::on_digit(int digit) {
     update_dots();
     hide_error();
 
-    // Auto-submit at max digits
+    // Auto-submit at max digits — defer via lv_async_call so on_digit() returns
+    // before on_confirm() can delete this modal (avoids UB from delete-this-in-member)
     if (static_cast<int>(digit_buffer_.size()) == kMaxDigits) {
-        on_confirm();
+        lv_async_call(
+            [](void*) {
+                if (g_active_modal) {
+                    g_active_modal->on_confirm();
+                }
+            },
+            nullptr);
     }
 }
 
@@ -160,26 +176,49 @@ void PinEntryModal::on_confirm() {
         return;
     }
     if (static_cast<int>(digit_buffer_.size()) < kMinDigits) {
-        spdlog::debug("[PinEntryModal] PIN too short ({} of {} required), ignoring",
+        spdlog::debug("[PinEntryModal] PIN too short ({} of {} required)",
                       digit_buffer_.size(), kMinDigits);
+        clear_digits();
+        show_error("PIN must be at least 4 digits");
         return;
     }
 
     std::string pin = digit_buffer_;
     spdlog::debug("[PinEntryModal] Confirm with {} digit PIN", pin.size());
 
-    // Complete — hand off to caller
-    auto callback = std::move(on_complete_);
-    on_complete_ = nullptr;
+    if (on_complete_) {
+        // Callback may call show_pin_entry() which destroys this modal and
+        // creates a new one. Check g_active_modal after callback returns.
+        auto callback = std::move(on_complete_);
+        on_complete_ = nullptr;
+        std::string error = callback(pin);
+        if (!error.empty()) {
+            // Callback rejected the PIN — show error and clear for retry.
+            // But only if we're still the active modal (callback didn't replace us).
+            if (g_active_modal == this) {
+                spdlog::debug("[PinEntryModal] PIN rejected: {}", error);
+                on_complete_ = std::move(callback);
+                clear_digits();
+                show_error(error.c_str());
+            }
+            return;
+        }
+        // If callback called show_pin_entry(), we've already been destroyed
+        if (g_active_modal != this) {
+            return;  // We were replaced — don't double-delete
+        }
+    }
 
+    // Accepted — defer destruction to avoid deleting objects in input event handler
     auto* modal = this;
     g_active_modal = nullptr;
-    modal->destroy();
-    delete modal;
-
-    if (callback) {
-        callback(pin);
-    }
+    lv_async_call(
+        [](void* user_data) {
+            auto* m = static_cast<PinEntryModal*>(user_data);
+            m->destroy();
+            delete m;
+        },
+        modal);
 }
 
 void PinEntryModal::on_cancel() {
@@ -190,12 +229,19 @@ void PinEntryModal::on_cancel() {
 
     auto* modal = this;
     g_active_modal = nullptr;
-    modal->destroy();
-    delete modal;
 
     if (callback) {
-        callback("");
+        callback("");  // Return value ignored on cancel
     }
+
+    // Defer destruction to avoid deleting objects in input event handler
+    lv_async_call(
+        [](void* user_data) {
+            auto* m = static_cast<PinEntryModal*>(user_data);
+            m->destroy();
+            delete m;
+        },
+        modal);
 }
 
 // ============================================================================
@@ -203,31 +249,8 @@ void PinEntryModal::on_cancel() {
 // ============================================================================
 
 void PinEntryModal::update_dots() {
-    if (!dialog_) {
-        return;
-    }
-
-    lv_color_t primary_color = theme_manager_get_color("primary_color");
-    lv_color_t muted_color = theme_manager_get_color("text_muted");
-
-    for (int i = 0; i < kMaxDigits; i++) {
-        char name[16];
-        snprintf(name, sizeof(name), "pin_dot_%d", i);
-        lv_obj_t* dot = lv_obj_find_by_name(dialog_, name);
-        if (!dot) {
-            continue;
-        }
-        if (i < static_cast<int>(digit_buffer_.size())) {
-            lv_obj_set_style_bg_color(dot, primary_color, 0);
-            lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(dot, 0, 0);
-        } else {
-            lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
-            lv_obj_set_style_border_width(dot, 2, 0);
-            lv_obj_set_style_border_color(dot, muted_color, 0);
-            lv_obj_set_style_border_opa(dot, LV_OPA_COVER, 0);
-        }
-    }
+    update_pin_dots(dialog_, "pin_dot_", kMaxDigits,
+                    static_cast<int>(digit_buffer_.size()));
 }
 
 void PinEntryModal::clear_digits() {
@@ -241,26 +264,11 @@ void PinEntryModal::clear_digits() {
 // ============================================================================
 
 void PinEntryModal::show_error(const char* text) {
-    if (!dialog_) {
-        return;
-    }
-    lv_obj_t* label = lv_obj_find_by_name(dialog_, "pin_error_label");
-    if (label) {
-        if (text) {
-            lv_label_set_text(label, text);
-        }
-        lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
+    show_pin_error(dialog_, "pin_error_label", text);
 }
 
 void PinEntryModal::hide_error() {
-    if (!dialog_) {
-        return;
-    }
-    lv_obj_t* label = lv_obj_find_by_name(dialog_, "pin_error_label");
-    if (label) {
-        lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
+    hide_pin_error(dialog_, "pin_error_label");
 }
 
 // ============================================================================
@@ -332,3 +340,5 @@ void PinEntryModal::register_callbacks() {
     });
     spdlog::debug("[PinEntryModal] Callbacks registered");
 }
+
+}  // namespace helix::ui

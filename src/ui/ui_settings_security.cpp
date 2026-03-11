@@ -23,6 +23,8 @@
 
 namespace helix::settings {
 
+using helix::ui::PinEntryModal;
+
 // ============================================================================
 // SINGLETON ACCESSOR
 // ============================================================================
@@ -165,31 +167,31 @@ void SecuritySettingsOverlay::init_auto_lock_toggle() {
  * On match, the PIN is saved. On mismatch, error toast is shown.
  */
 void SecuritySettingsOverlay::run_set_pin_flow() {
-    PinEntryModal::show_pin_entry("Enter New PIN", [](const std::string& pin1) {
+    PinEntryModal::show_pin_entry("Enter New PIN", [](const std::string& pin1) -> std::string {
         if (pin1.empty()) {
             spdlog::debug("[SecuritySettings] Set PIN cancelled at step 1");
-            return;
+            return "";
         }
         // Second entry for confirmation
-        PinEntryModal::show_pin_entry("Confirm PIN", [pin1](const std::string& pin2) {
+        PinEntryModal::show_pin_entry("Confirm PIN", [pin1](const std::string& pin2) -> std::string {
             if (pin2.empty()) {
                 spdlog::debug("[SecuritySettings] Set PIN cancelled at step 2");
-                return;
+                return "";
             }
-            if (pin1 == pin2) {
-                if (helix::LockManager::instance().set_pin(pin1)) {
-                    spdlog::info("[SecuritySettings] PIN set successfully");
-                    ToastManager::instance().show(ToastSeverity::SUCCESS, "PIN set");
-                } else {
-                    spdlog::warn("[SecuritySettings] set_pin() failed (invalid length?)");
-                    ToastManager::instance().show(ToastSeverity::ERROR,
-                                                  "PIN must be 4-6 digits");
-                }
-            } else {
+            if (pin1 != pin2) {
                 spdlog::info("[SecuritySettings] PIN confirmation mismatch");
-                ToastManager::instance().show(ToastSeverity::ERROR, "PINs don't match");
+                return "PINs don't match";
             }
+            if (helix::LockManager::instance().set_pin(pin1)) {
+                spdlog::info("[SecuritySettings] PIN set successfully");
+                ToastManager::instance().show(ToastSeverity::SUCCESS, "PIN set");
+            } else {
+                spdlog::warn("[SecuritySettings] set_pin() failed (invalid length?)");
+                ToastManager::instance().show(ToastSeverity::ERROR, "PIN must be 4-6 digits");
+            }
+            return "";
         });
+        return "";
     });
 }
 
@@ -205,37 +207,37 @@ void SecuritySettingsOverlay::handle_set_pin_clicked() {
 void SecuritySettingsOverlay::handle_change_pin_clicked() {
     spdlog::info("[{}] Change PIN clicked", get_name());
 
-    PinEntryModal::show_pin_entry("Enter Current PIN", [this](const std::string& current) {
+    PinEntryModal::show_pin_entry("Enter Current PIN", [](const std::string& current) -> std::string {
         if (current.empty()) {
             spdlog::debug("[SecuritySettings] Change PIN cancelled at current PIN step");
-            return;
+            return "";
         }
         if (!helix::LockManager::instance().verify_pin(current)) {
             spdlog::info("[SecuritySettings] Change PIN: wrong current PIN");
-            ToastManager::instance().show(ToastSeverity::ERROR, "Wrong PIN");
-            return;
+            return "Wrong PIN";
         }
         // Current PIN verified — proceed to set new PIN
-        run_set_pin_flow();
+        get_security_settings_overlay().run_set_pin_flow();
+        return "";
     });
 }
 
 void SecuritySettingsOverlay::handle_remove_pin_clicked() {
     spdlog::info("[{}] Remove PIN clicked", get_name());
 
-    PinEntryModal::show_pin_entry("Enter Current PIN", [](const std::string& current) {
+    PinEntryModal::show_pin_entry("Enter Current PIN", [](const std::string& current) -> std::string {
         if (current.empty()) {
             spdlog::debug("[SecuritySettings] Remove PIN cancelled");
-            return;
+            return "";
         }
         if (!helix::LockManager::instance().verify_pin(current)) {
             spdlog::info("[SecuritySettings] Remove PIN: wrong PIN");
-            ToastManager::instance().show(ToastSeverity::ERROR, "Wrong PIN");
-            return;
+            return "Wrong PIN";
         }
         helix::LockManager::instance().remove_pin();
         spdlog::info("[SecuritySettings] PIN removed");
         ToastManager::instance().show(ToastSeverity::SUCCESS, "PIN removed");
+        return "";
     });
 }
 

@@ -66,6 +66,7 @@ class SecuritySettingsOverlay : public OverlayBase {
     void handle_change_pin_clicked();
     void handle_remove_pin_clicked();
     void handle_auto_lock_changed(bool enabled);
+    void run_set_pin_flow();
 
   private:
     //
@@ -73,7 +74,6 @@ class SecuritySettingsOverlay : public OverlayBase {
     //
 
     void init_auto_lock_toggle();
-    void run_set_pin_flow();
 
     //
     // === Static Callbacks ===

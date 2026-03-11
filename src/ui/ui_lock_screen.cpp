@@ -3,9 +3,9 @@
 #include "ui_lock_screen.h"
 
 #include "lock_manager.h"
-#include "theme_manager.h"
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
+#include "ui_pin_utils.h"
 #include "ui_utils.h"
 
 #include <lvgl.h>
@@ -118,9 +118,11 @@ void LockScreenOverlay::on_digit(int digit) {
     update_dots();
     hide_error();
 
-    // Auto-submit when max digits reached
+    // Auto-submit when max digits reached — defer to avoid UB if on_confirm()
+    // destroys the overlay while we're still in on_digit()
     if (static_cast<int>(digit_buffer_.size()) == kMaxDigits) {
-        on_confirm();
+        lv_async_call(
+            [](void*) { LockScreenOverlay::instance().on_confirm(); }, nullptr);
     }
 }
 
@@ -142,8 +144,10 @@ void LockScreenOverlay::on_confirm() {
     }
 
     if (static_cast<int>(digit_buffer_.size()) < kMinDigits) {
-        spdlog::debug("[LockScreen] PIN too short ({} digits, need {}), ignoring confirm",
+        spdlog::debug("[LockScreen] PIN too short ({} digits, need {})",
                       digit_buffer_.size(), kMinDigits);
+        clear_digits();
+        show_error("PIN must be at least 4 digits");
         return;
     }
 
@@ -151,10 +155,11 @@ void LockScreenOverlay::on_confirm() {
 
     if (helix::LockManager::instance().try_unlock(digit_buffer_)) {
         spdlog::info("[LockScreen] Unlock successful");
-        hide();
+        // Defer hide() to avoid deleting objects in input event handler
+        lv_async_call([](void*) { LockScreenOverlay::instance().hide(); }, nullptr);
     } else {
         spdlog::info("[LockScreen] Wrong PIN entered");
-        show_error();
+        show_error("Wrong PIN");
         shake_dots();
         // clear_digits() is called from shake_dots() completed callback
     }
@@ -165,34 +170,8 @@ void LockScreenOverlay::on_confirm() {
 // ============================================================================
 
 void LockScreenOverlay::update_dots() {
-    if (!overlay_) {
-        return;
-    }
-
-    lv_color_t primary_color = theme_manager_get_color("primary_color");
-
-    for (int i = 0; i < kMaxDigits; i++) {
-        char name[16];
-        snprintf(name, sizeof(name), "lock_dot_%d", i);
-        lv_obj_t* dot = lv_obj_find_by_name(overlay_, name);
-        if (!dot) {
-            spdlog::warn("[LockScreen] Dot widget '{}' not found", name);
-            continue;
-        }
-
-        if (i < static_cast<int>(digit_buffer_.size())) {
-            // Filled — digit entered at this position
-            lv_obj_set_style_bg_color(dot, primary_color, 0);
-            lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-            lv_obj_set_style_border_width(dot, 0, 0);
-        } else {
-            // Empty — not yet entered
-            lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
-            lv_obj_set_style_border_width(dot, 2, 0);
-            lv_obj_set_style_border_color(dot, theme_manager_get_color("text_muted"), 0);
-            lv_obj_set_style_border_opa(dot, LV_OPA_COVER, 0);
-        }
-    }
+    update_pin_dots(overlay_, "lock_dot_", kMaxDigits,
+                    static_cast<int>(digit_buffer_.size()));
 }
 
 void LockScreenOverlay::clear_digits() {
@@ -206,24 +185,12 @@ void LockScreenOverlay::clear_digits() {
 // Error label visibility
 // ============================================================================
 
-void LockScreenOverlay::show_error() {
-    if (!overlay_) {
-        return;
-    }
-    lv_obj_t* label = lv_obj_find_by_name(overlay_, "lock_error_label");
-    if (label) {
-        lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
+void LockScreenOverlay::show_error(const char* text) {
+    show_pin_error(overlay_, "lock_error_label", text);
 }
 
 void LockScreenOverlay::hide_error() {
-    if (!overlay_) {
-        return;
-    }
-    lv_obj_t* label = lv_obj_find_by_name(overlay_, "lock_error_label");
-    if (label) {
-        lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
-    }
+    hide_pin_error(overlay_, "lock_error_label");
 }
 
 // ============================================================================

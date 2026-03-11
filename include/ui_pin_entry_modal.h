@@ -28,6 +28,8 @@
 #include <functional>
 #include <string>
 
+namespace helix::ui {
+
 /**
  * @brief PIN entry modal with numeric keypad.
  *
@@ -39,7 +41,10 @@
  */
 class PinEntryModal {
   public:
-    using PinCallback = std::function<void(const std::string& pin)>;
+    /// Callback receives entered PIN (or "" on cancel).
+    /// Return empty string to accept/dismiss. Return non-empty string to show as
+    /// error message and clear the entry for retry.
+    using PinCallback = std::function<std::string(const std::string& pin)>;
 
     /**
      * @brief Show a PIN entry dialog with the given heading.
@@ -103,3 +108,5 @@ class PinEntryModal {
     static void on_confirm_clicked(lv_event_t* e);
     static void on_cancel_clicked(lv_event_t* e);
 };
+
+}  // namespace helix::ui

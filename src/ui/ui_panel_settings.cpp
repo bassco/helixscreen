@@ -315,6 +315,7 @@ void SettingsPanel::init_subjects() {
         {"on_led_settings_clicked", on_led_settings_clicked},
         // Note: on_retraction_row_clicked is registered by RetractionSettingsOverlay
         {"on_sound_settings_clicked", on_sound_settings_clicked},
+        {"on_security_clicked", on_security_clicked},
         {"on_estop_confirm_changed", on_estop_confirm_changed},
         {"on_cancel_escalation_changed", on_cancel_escalation_changed},
         {"on_cancel_escalation_timeout_changed", on_cancel_escalation_timeout_changed},

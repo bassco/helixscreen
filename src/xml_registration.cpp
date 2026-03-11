@@ -177,7 +177,9 @@ static void on_toggle_password_visibility(lv_event_t* e) {
 static void register_xml(const char* filename) {
     auto& lm = helix::LayoutManager::instance();
     std::string path = "A:" + lm.resolve_xml_path(filename);
-    lv_xml_register_component_from_file(path.c_str());
+    if (lv_xml_register_component_from_file(path.c_str()) != LV_RESULT_OK) {
+        spdlog::error("[XML Registration] Failed to register: {}", path);
+    }
 }
 
 void register_xml_components() {
@@ -285,7 +287,7 @@ void register_xml_components() {
     register_xml("components/lock_screen.xml");
 
     // PIN entry modal (numeric keypad for security settings PIN set/change/remove)
-    PinEntryModal::register_callbacks();
+    helix::ui::PinEntryModal::register_callbacks();
     register_xml("components/pin_entry_modal.xml");
 
     // emergency_stop_button.xml removed - E-Stop buttons are now embedded in panels

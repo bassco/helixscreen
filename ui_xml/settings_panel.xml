@@ -166,16 +166,16 @@
                             bind_selected="settings_cancel_escalation_timeout"
                             callback="on_cancel_escalation_timeout_changed"/>
     </lv_obj>
+    <!-- ================================================================== -->
+    <!-- SYSTEM SECTION -->
+    <!-- ================================================================== -->
+    <setting_section_header title="SYSTEM" title_tag="SYSTEM" icon="sysinfo"/>
     <!-- Security Settings (PIN lock and auto-lock) -->
     <setting_action_row name="row_security"
                         label="Security" label_tag="Security" icon="lock"
                         description="Screen lock and PIN settings"
                         description_tag="Screen lock and PIN settings"
                         callback="on_security_clicked"/>
-    <!-- ================================================================== -->
-    <!-- SYSTEM SECTION -->
-    <!-- ================================================================== -->
-    <setting_section_header title="SYSTEM" title_tag="SYSTEM" icon="sysinfo"/>
     <!-- Network Settings (hidden on Android where OS manages WiFi) -->
     <lv_obj name="container_network_settings" width="100%" style_pad_all="0" scrollable="false">
       <bind_flag_if_eq subject="show_network_settings" flag="hidden" ref_value="0"/>
