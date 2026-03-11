@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 
 namespace ams_draw {
 
@@ -380,7 +381,33 @@ SystemToolLayout compute_system_tool_layout(const AmsSystemInfo& info, const Ams
         utl.min_virtual_tool = min_tool;
         utl.hub_tool_label = unit.hub_tool_label;
 
-        if (topo != PathTopology::PARALLEL) {
+        if (topo == PathTopology::MIXED) {
+            // MIXED: count unique extruders/nozzles, not lanes.
+            // Hub lanes sharing a mapped_tool value share a physical nozzle.
+            // Direct lanes each get their own physical nozzle.
+            std::set<int> unique_tools;
+            for (int s = 0; s < unit.slot_count; s++) {
+                int gi = unit.first_slot_global_index + s;
+                auto slot = backend ? backend->get_slot_info(gi) : SlotInfo{};
+                if (slot.mapped_tool >= 0)
+                    unique_tools.insert(slot.mapped_tool);
+                else
+                    unique_tools.insert(gi); // fallback: treat each slot as unique
+            }
+            utl.tool_count =
+                unique_tools.empty() ? unit.slot_count : static_cast<int>(unique_tools.size());
+            utl.first_physical_tool = total_physical;
+
+            // Map each unique tool to a physical position (sorted order)
+            int idx = 0;
+            for (int t : unique_tools) {
+                result.virtual_to_physical[t] = total_physical + idx;
+                physical_label_overrides[total_physical + idx] = t;
+                ++idx;
+            }
+
+            total_physical += utl.tool_count;
+        } else if (topo != PathTopology::PARALLEL) {
             // HUB/LINEAR: all lanes converge to a single physical nozzle.
             // Multiple HUB units sharing the same hub_tool_label (e.g., all feeding
             // into T0 on a single-toolhead printer) share one physical nozzle.

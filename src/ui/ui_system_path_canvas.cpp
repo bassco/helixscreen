@@ -687,8 +687,10 @@ static void system_path_draw_cb(lv_event_t* e) {
             int first_tool = data->unit_first_tool[i];
             bool is_active = (i == data->active_unit);
 
-            if (topology == 2) {
-                // PARALLEL: one route per tool, spread start positions
+            if (topology == 2 || topology == 3) {
+                // PARALLEL / MIXED: one route per unique tool position.
+                // For MIXED, tool_count already reflects unique nozzles (not lanes),
+                // so hub lanes sharing a mapped_tool produce a single route.
                 int32_t spread = LV_MIN(width / 6, tool_count > 1 ? 60 : 0);
                 for (int t = 0; t < tool_count && (first_tool + t) < data->total_tools; ++t) {
                     int tool_idx = first_tool + t;
