@@ -905,3 +905,16 @@ void ui_bed_mesh_request_async_render(lv_obj_t* widget) {
         data->render_thread->request_render();
     }
 }
+
+bool ui_bed_mesh_has_data(lv_obj_t* widget) {
+    if (!widget) {
+        return false;
+    }
+
+    bed_mesh_widget_data_t* data = (bed_mesh_widget_data_t*)lv_obj_get_user_data(widget);
+    if (!data || !data->renderer) {
+        return false;
+    }
+
+    return bed_mesh_renderer_has_data(data->renderer);
+}

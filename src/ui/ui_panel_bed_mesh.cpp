@@ -364,6 +364,14 @@ void BedMeshPanel::on_activate() {
 
     spdlog::debug("[{}] on_activate()", get_name());
 
+    // Force layout computation so the canvas has valid dimensions before loading data.
+    // on_activate() is called from push_overlay() right after removing HIDDEN,
+    // but LVGL may not have computed the flex layout yet, leaving the canvas
+    // at 0x0. Without valid dimensions, the render thread won't start.
+    if (canvas_) {
+        lv_obj_update_layout(canvas_);
+    }
+
     // Refresh mesh data when panel becomes visible
     MoonrakerAPI* api = get_moonraker_api();
     if (api && api->advanced().has_bed_mesh()) {
@@ -378,24 +386,31 @@ void BedMeshPanel::on_activate() {
         update_profile_list_subjects();
     }
 
-    // Enable async rendering when panel is visible (render thread produces
-    // frames in background, DRAW_POST blits the ready buffer).
-    // Must happen AFTER mesh data is loaded so the renderer has data to work with.
-    if (canvas_) {
-        // Force layout computation so the canvas has valid dimensions.
-        // on_activate() is called from push_overlay() right after removing HIDDEN,
-        // but LVGL may not have computed the flex layout yet, leaving the canvas
-        // at 0x0. Without valid dimensions, the render thread won't start and
-        // the initial frame will never be produced.
-        lv_obj_update_layout(canvas_);
+    // Enable async rendering ONLY if the renderer has mesh data.
+    // When no mesh is loaded, the "No mesh loaded" overlay is shown instead.
+    // Async mode will be started later when mesh data arrives (via subscription
+    // or profile load).
+    ensure_async_rendering();
+}
 
-        ui_bed_mesh_set_async_mode(canvas_, true);
-        // Force an initial paint so the widget is not blank on re-entry.
-        // The render thread's frame-ready callback will trigger a full redraw,
-        // but we need at least a placeholder visible immediately.
-        lv_obj_invalidate(canvas_);
-        ui_bed_mesh_request_async_render(canvas_);
+void BedMeshPanel::ensure_async_rendering() {
+    if (!canvas_) {
+        return;
     }
+
+    // Don't start the render thread if there's no mesh data — it would just
+    // fail and show "Rendering..." on top of the "No mesh loaded" overlay.
+    if (!ui_bed_mesh_has_data(canvas_)) {
+        return;
+    }
+
+    if (!ui_bed_mesh_is_async_mode(canvas_)) {
+        lv_obj_update_layout(canvas_);
+        ui_bed_mesh_set_async_mode(canvas_, true);
+    }
+
+    lv_obj_invalidate(canvas_);
+    ui_bed_mesh_request_async_render(canvas_);
 }
 
 void BedMeshPanel::on_deactivate() {
@@ -632,6 +647,8 @@ void BedMeshPanel::refresh_bed_bounds() {
         set_mesh_data(pending_mesh_data_);
         pending_mesh_data_.clear();
         has_pending_mesh_data_ = false;
+        // Start async rendering now that data is available
+        ensure_async_rendering();
     }
 }
 
@@ -761,6 +778,9 @@ void BedMeshPanel::on_mesh_update_internal(const BedMeshProfile& mesh) {
         // Build volume available - set bounds and render immediately
         refresh_bed_bounds();
         set_mesh_data(normalized_matrix);
+        // Start async rendering now that renderer has data (may be first data arrival
+        // while panel is already visible — e.g. profile load or WebSocket update)
+        ensure_async_rendering();
     } else {
         // Build volume not yet available - defer rendering until it arrives
         pending_mesh_data_ = std::move(normalized_matrix);

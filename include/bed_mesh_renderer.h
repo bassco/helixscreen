@@ -197,6 +197,14 @@ bool bed_mesh_renderer_set_mesh_data(bed_mesh_renderer_t* renderer, const float*
                                      int rows, int cols);
 
 /**
+ * @brief Check if the renderer has mesh data loaded
+ *
+ * @param renderer Renderer instance
+ * @return true if mesh data has been set via set_mesh_data(), false otherwise
+ */
+bool bed_mesh_renderer_has_data(const bed_mesh_renderer_t* renderer);
+
+/**
  * @brief Set coordinate bounds for bed and mesh
  *
  * The bed bounds define the full print bed area (used for grid/walls).

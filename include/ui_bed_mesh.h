@@ -174,6 +174,14 @@ bool ui_bed_mesh_is_async_mode(lv_obj_t* widget);
  */
 void ui_bed_mesh_request_async_render(lv_obj_t* widget);
 
+/**
+ * @brief Check if the renderer has mesh data loaded
+ *
+ * @param widget The bed_mesh widget
+ * @return true if mesh data has been set, false otherwise
+ */
+bool ui_bed_mesh_has_data(lv_obj_t* widget);
+
 #ifdef __cplusplus
 }
 #endif

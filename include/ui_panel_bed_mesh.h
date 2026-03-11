@@ -205,6 +205,7 @@ class BedMeshPanel : public OverlayBase {
     void on_mesh_update_internal(const BedMeshProfile& mesh);
     void update_profile_list_subjects();
     void update_info_subjects(const std::vector<std::vector<float>>& mesh_data, int cols, int rows);
+    void ensure_async_rendering();
 
     // Calculate range (variance) for a profile
     float calculate_profile_range(const std::string& profile_name);

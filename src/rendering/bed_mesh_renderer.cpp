@@ -246,6 +246,10 @@ bool bed_mesh_renderer_set_mesh_data(bed_mesh_renderer_t* renderer, const float*
     return true;
 }
 
+bool bed_mesh_renderer_has_data(const bed_mesh_renderer_t* renderer) {
+    return renderer && renderer->has_mesh_data;
+}
+
 void bed_mesh_renderer_set_rotation(bed_mesh_renderer_t* renderer, double angle_x, double angle_z) {
     if (!renderer) {
         return;
