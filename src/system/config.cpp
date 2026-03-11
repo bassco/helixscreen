@@ -486,8 +486,8 @@ void Config::init(const std::string& config_path) {
         // Recovery: restore config from rolling backups if missing.
         // Backups are maintained by Config::save() and survive Moonraker's
         // shutil.rmtree() wipe of the install directory.
-        restore_from_backup(config_path, "Config",
-                            {CONFIG_BACKUP_PRIMARY, config_backup_fallback()});
+        restored_from_backup_ = restore_from_backup(
+            config_path, "Config", {CONFIG_BACKUP_PRIMARY, config_backup_fallback()});
     }
 
     // Restore helixscreen.env independently — it can be lost even if config survived
@@ -540,6 +540,26 @@ void Config::init(const std::string& config_path) {
         spdlog::info("[Config] Creating default config at {}", config_path);
         data = get_default_config("127.0.0.1", false);
         config_modified = true;
+    }
+
+    // If config was restored from backup, re-run the wizard so the user can
+    // verify their setup.  The backup preserves all other settings (printer IP,
+    // display prefs, etc.) so the wizard can pre-populate from existing values.
+    if (restored_from_backup_) {
+        if (data.contains("wizard_completed")) {
+            data["wizard_completed"] = false;
+            config_modified = true;
+        }
+        // Also reset per-printer wizard_completed flags
+        if (data.contains("printers") && data["printers"].is_object()) {
+            for (auto& [id, printer] : data["printers"].items()) {
+                if (printer.contains("wizard_completed")) {
+                    printer["wizard_completed"] = false;
+                    config_modified = true;
+                }
+            }
+        }
+        spdlog::info("[Config] Config restored from backup — wizard will re-run for verification");
     }
 
     // Load active printer ID from config (must happen before df() is used)
