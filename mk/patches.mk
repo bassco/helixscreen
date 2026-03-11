@@ -39,7 +39,16 @@ LVGL_PATCHED_FILES := \
 	src/drivers/display/drm/lv_linux_drm_egl.c \
 	src/drivers/evdev/lv_evdev.c \
 	src/draw/lv_draw_arc.c \
-	src/widgets/arc/lv_arc.c
+	src/widgets/arc/lv_arc.c \
+	src/draw/opengles/lv_draw_opengles.c \
+	src/draw/sdl/lv_draw_sdl.c \
+	src/display/lv_display.c \
+	src/display/lv_display.h \
+	src/display/lv_display_private.h \
+	src/lv_conf_internal.h \
+	src/misc/lv_event.c \
+	src/misc/lv_event.h \
+	lv_conf_template.h
 
 # Files modified by libhv patches
 LIBHV_PATCHED_FILES := \
@@ -339,6 +348,34 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 		fi \
 	else \
 		echo "$(GREEN)✓ LVGL arc draw guard patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_draw_sw_img_buf_height_guard.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL draw_sw_img buf_h guard patch (upstream ca18403)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_draw_sw_img_buf_height_guard.patch && \
+		echo "$(GREEN)✓ draw_sw_img buf_h guard patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL draw_sw_img buf_h guard patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_drm_egl_render_mode_fix.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL DRM EGL render mode fix (upstream ce112eb)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_drm_egl_render_mode_fix.patch && \
+		echo "$(GREEN)✓ DRM EGL render mode fix applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL DRM EGL render mode fix already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_texture_cache_null_guard.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL texture cache NULL guard patch (upstream ec053a0)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_texture_cache_null_guard.patch && \
+		echo "$(GREEN)✓ Texture cache NULL guard patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL texture cache NULL guard patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_display_sync_cb.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL display sync callback patch (upstream 4170bcb)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_display_sync_cb.patch && \
+		echo "$(GREEN)✓ Display sync callback patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL display sync callback patch already applied$(RESET)"; \
 	fi
 	$(ECHO) "$(CYAN)Checking libhv patches...$(RESET)"
 	$(Q)if git -C $(LIBHV_DIR) diff --quiet Makefile.in 2>/dev/null; then \
