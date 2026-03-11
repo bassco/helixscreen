@@ -926,6 +926,121 @@ TEST_CASE("Production: mixed topology total tool count is 6", "[ams][production]
  *
  * Bug guarded: dist_hub stored as float must handle both 60.0 and 2230.0.
  */
+// ============================================================================
+// HTLF + Toolchanger mixed topology tests
+//
+// Simulates real HTLF hardware: HTLF_1 (4 lanes, MIXED — 2 direct + 2 hub)
+// and Toolchanger Tools (3 standalone toolheads, PARALLEL).
+// ============================================================================
+
+TEST_CASE("HTLF+TC mock creates 2 units with correct topology", "[ams][mock][htlf_tc]") {
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    auto info = backend.get_system_info();
+
+    // System totals
+    REQUIRE(info.units.size() == 2);
+    CHECK(info.total_slots == 7);
+
+    // Unit 0: HTLF with MIXED topology
+    const auto& u0 = info.units[0];
+    CHECK(u0.name.find("HTLF") != std::string::npos);
+    CHECK(u0.slot_count == 4);
+    CHECK(u0.topology == PathTopology::MIXED);
+    REQUIRE(u0.lane_is_hub_routed.size() == 4);
+    CHECK(u0.lane_is_hub_routed[0] == false);
+    CHECK(u0.lane_is_hub_routed[1] == false);
+    CHECK(u0.lane_is_hub_routed[2] == true);
+    CHECK(u0.lane_is_hub_routed[3] == true);
+
+    // Unit 1: Toolchanger with PARALLEL topology
+    const auto& u1 = info.units[1];
+    CHECK(u1.name.find("Toolchanger") != std::string::npos);
+    CHECK(u1.slot_count == 3);
+    CHECK(u1.topology == PathTopology::PARALLEL);
+    CHECK(u1.lane_is_hub_routed.empty());
+}
+
+TEST_CASE("HTLF+TC mock tool mapping matches AFC layout", "[ams][mock][htlf_tc]") {
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    auto info = backend.get_system_info();
+
+    // HTLF lanes: slot 0→T0, slot 1→T2, slot 2→T1, slot 3→T3
+    const auto* s0 = info.get_slot_global(0);
+    const auto* s1 = info.get_slot_global(1);
+    const auto* s2 = info.get_slot_global(2);
+    const auto* s3 = info.get_slot_global(3);
+    REQUIRE(s0 != nullptr);
+    REQUIRE(s1 != nullptr);
+    REQUIRE(s2 != nullptr);
+    REQUIRE(s3 != nullptr);
+    CHECK(s0->mapped_tool == 0);
+    CHECK(s1->mapped_tool == 2);
+    CHECK(s2->mapped_tool == 1);
+    CHECK(s3->mapped_tool == 3);
+
+    // Toolchanger: slot 4→T4, slot 5→T5, slot 6→T6
+    const auto* s4 = info.get_slot_global(4);
+    const auto* s5 = info.get_slot_global(5);
+    const auto* s6 = info.get_slot_global(6);
+    REQUIRE(s4 != nullptr);
+    REQUIRE(s5 != nullptr);
+    REQUIRE(s6 != nullptr);
+    CHECK(s4->mapped_tool == 4);
+    CHECK(s5->mapped_tool == 5);
+    CHECK(s6->mapped_tool == 6);
+}
+
+TEST_CASE("HTLF+TC get_system_info propagates lane_is_hub_routed", "[ams][mock][htlf_tc]") {
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    // This was the bug: get_system_info() must copy lane_is_hub_routed
+    auto info = backend.get_system_info();
+
+    // Unit 0 (HTLF): lane_is_hub_routed must survive the copy through get_system_info()
+    REQUIRE(info.units[0].lane_is_hub_routed.size() == 4);
+    CHECK(info.units[0].lane_is_hub_routed == std::vector<bool>{false, false, true, true});
+
+    // Unit 1 (Toolchanger): no hub routing info
+    CHECK(info.units[1].lane_is_hub_routed.empty());
+}
+
+TEST_CASE("HTLF+TC mock slot materials and colors", "[ams][mock][htlf_tc]") {
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    auto info = backend.get_system_info();
+
+    // Slot 0: ABS, White, LOADED
+    const auto* s0 = info.get_slot_global(0);
+    REQUIRE(s0 != nullptr);
+    CHECK(s0->material == "ABS");
+    CHECK(s0->color_name == "White");
+    CHECK(s0->status == SlotStatus::LOADED);
+
+    // Slot 1: ABS, Navy, LOADED
+    const auto* s1 = info.get_slot_global(1);
+    REQUIRE(s1 != nullptr);
+    CHECK(s1->material == "ABS");
+    CHECK(s1->color_name == "Navy");
+    CHECK(s1->status == SlotStatus::LOADED);
+
+    // Slot 2: ASA Sparkle, AVAILABLE
+    const auto* s2 = info.get_slot_global(2);
+    REQUIRE(s2 != nullptr);
+    CHECK(s2->material == "ASA Sparkle");
+    CHECK(s2->status == SlotStatus::AVAILABLE);
+
+    // Slot 3: EMPTY
+    const auto* s3 = info.get_slot_global(3);
+    REQUIRE(s3 != nullptr);
+    CHECK(s3->status == SlotStatus::EMPTY);
+}
+
 TEST_CASE("Production: dist_hub values differ between unit types", "[ams][production]") {
     AmsBackendMock backend(4);
     backend.set_mixed_topology_mode(true);

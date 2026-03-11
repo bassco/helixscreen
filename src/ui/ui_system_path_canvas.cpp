@@ -714,7 +714,7 @@ static void system_path_draw_cb(lv_event_t* e) {
                         hub_start_x =
                             unit_x - spread / 2 + (spread * hub_t) / (tool_count - 1);
                     }
-                    int32_t mhw = data->hub_width / 2;
+                    int32_t mhw = data->hub_width * 2 / 5;
                     int32_t mhh = hub_h * 2 / 3;
                     int32_t mhy = entry_y + mhh / 2 + 4;
                     bool hub_has_filament =

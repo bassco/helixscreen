@@ -789,3 +789,133 @@ TEST_CASE("SystemToolLayout: 2 HUB units with different hub_tool_labels stay sep
     CHECK(layout.physical_to_virtual_label[0] == 0);
     CHECK(layout.physical_to_virtual_label[1] == 1);
 }
+
+// ============================================================================
+// MIXED topology tests (lane_is_hub_routed)
+// ============================================================================
+
+TEST_CASE("SystemToolLayout: MIXED topology hub lanes share single nozzle position",
+          "[ams][tool_layout][mixed]") {
+    // 1 MIXED unit: 4 slots, lanes 0,1 direct, lanes 2,3 hub-routed
+    // Should produce 3 physical tools (2 direct + 1 hub group), NOT 4
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    AmsUnit unit;
+    unit.unit_index = 0;
+    unit.slot_count = 4;
+    unit.first_slot_global_index = 0;
+    unit.topology = PathTopology::MIXED;
+    unit.lane_is_hub_routed = {false, false, true, true};
+
+    int tool_map[] = {0, 2, 1, 3};
+    for (int s = 0; s < 4; ++s) {
+        SlotInfo slot;
+        slot.slot_index = s;
+        slot.global_index = s;
+        slot.mapped_tool = tool_map[s];
+        unit.slots.push_back(slot);
+    }
+    info.units.push_back(unit);
+    info.total_slots = 4;
+
+    // Need a backend that returns correct slot info for mapped_tool lookup
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    auto layout = compute_system_tool_layout(info, &backend);
+
+    // 2 direct lanes + 1 hub group = 3 physical tools, NOT 4
+    CHECK(layout.total_physical_tools == 3);
+    REQUIRE(layout.units.size() == 1);
+    CHECK(layout.units[0].tool_count == 3);
+}
+
+TEST_CASE("SystemToolLayout: HTLF MIXED + Toolchanger PARALLEL total tools",
+          "[ams][tool_layout][mixed][htlf]") {
+    AmsBackendMock backend(4);
+    backend.set_htlf_toolchanger_mode(true);
+
+    auto info = backend.get_system_info();
+
+    auto layout = compute_system_tool_layout(info, &backend);
+
+    // HTLF: 2 direct + 1 hub group = 3, Toolchanger: 3 parallel = 3, total = 6
+    CHECK(layout.total_physical_tools == 6);
+    REQUIRE(layout.units.size() == 2);
+    CHECK(layout.units[0].tool_count == 3); // HTLF MIXED
+    CHECK(layout.units[1].tool_count == 3); // Toolchanger PARALLEL
+
+    // Virtual→physical mapping:
+    // HTLF direct lanes sorted: T0→phys0, T2→phys1, hub group (T1)→phys2
+    CHECK(layout.virtual_to_physical.at(0) == 0);  // T0 direct → phys 0
+    CHECK(layout.virtual_to_physical.at(2) == 1);  // T2 direct → phys 1
+    CHECK(layout.virtual_to_physical.at(1) == 2);  // T1 hub → phys 2
+
+    // Toolchanger: T4→phys3, T5→phys4, T6→phys5
+    CHECK(layout.virtual_to_physical.at(4) == 3);
+    CHECK(layout.virtual_to_physical.at(5) == 4);
+    CHECK(layout.virtual_to_physical.at(6) == 5);
+}
+
+TEST_CASE("SystemToolLayout: MIXED with no hub lanes gives tool_count == slot_count",
+          "[ams][tool_layout][mixed][edge]") {
+    // MIXED unit with lane_is_hub_routed all false — degenerates to PARALLEL-like
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    AmsUnit unit;
+    unit.unit_index = 0;
+    unit.slot_count = 4;
+    unit.first_slot_global_index = 0;
+    unit.topology = PathTopology::MIXED;
+    unit.lane_is_hub_routed = {false, false, false, false}; // All direct
+
+    for (int s = 0; s < 4; ++s) {
+        SlotInfo slot;
+        slot.slot_index = s;
+        slot.global_index = s;
+        slot.mapped_tool = s;
+        unit.slots.push_back(slot);
+    }
+    info.units.push_back(unit);
+    info.total_slots = 4;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // All 4 lanes direct → 4 physical tools (same as PARALLEL)
+    CHECK(layout.total_physical_tools == 4);
+    REQUIRE(layout.units.size() == 1);
+    CHECK(layout.units[0].tool_count == 4);
+}
+
+TEST_CASE("SystemToolLayout: MIXED with all hub lanes gives tool_count 1",
+          "[ams][tool_layout][mixed][edge]") {
+    // MIXED unit with lane_is_hub_routed all true — degenerates to HUB-like
+    AmsSystemInfo info;
+    info.type = AmsType::AFC;
+
+    AmsUnit unit;
+    unit.unit_index = 0;
+    unit.slot_count = 4;
+    unit.first_slot_global_index = 0;
+    unit.topology = PathTopology::MIXED;
+    unit.lane_is_hub_routed = {true, true, true, true}; // All hub
+
+    for (int s = 0; s < 4; ++s) {
+        SlotInfo slot;
+        slot.slot_index = s;
+        slot.global_index = s;
+        slot.mapped_tool = s;
+        unit.slots.push_back(slot);
+    }
+    info.units.push_back(unit);
+    info.total_slots = 4;
+
+    auto layout = compute_system_tool_layout(info, nullptr);
+
+    // All 4 lanes hub → 1 physical tool (same as HUB)
+    CHECK(layout.total_physical_tools == 1);
+    REQUIRE(layout.units.size() == 1);
+    CHECK(layout.units[0].tool_count == 1);
+}
