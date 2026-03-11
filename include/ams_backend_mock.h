@@ -308,9 +308,24 @@ class AmsBackendMock : public AmsBackend {
     void set_ifs_mode(bool enabled);
 
     /**
+     * @brief Set HTLF + Toolchanger mixed topology mode
+     *
+     * Simulates the user's real HTLF+TC setup: HTLF_1 (4 lanes, MIXED — 2 direct + 2 hub-routed)
+     * and Toolchanger Tools (3 standalone toolheads, PARALLEL).
+     *
+     * @param enabled true to enable HTLF+Toolchanger mode
+     */
+    void set_htlf_toolchanger_mode(bool enabled);
+
+    /**
      * @brief Check if ViViD mixed mode is active
      */
     [[nodiscard]] bool is_vivid_mixed_mode() const;
+
+    /**
+     * @brief Check if HTLF+Toolchanger mode is active
+     */
+    [[nodiscard]] bool is_htlf_toolchanger_mode() const;
 
     /**
      * @brief Set whether endless spool is supported
@@ -513,7 +528,8 @@ class AmsBackendMock : public AmsBackend {
     bool multi_unit_mode_ = false;              ///< Simulate multi-unit AFC (2x Box Turtle)
     bool mixed_topology_mode_ = false;          ///< Simulate mixed topology (BT + 2x OpenAMS)
     bool vivid_mixed_mode_ = false;             ///< Simulate 2x BoxTurtle + 1x ViViD
-    bool ifs_mode_ = false;                     ///< Simulate AD5X IFS (4 slots, LINEAR)
+    bool ifs_mode_ = false;                          ///< Simulate AD5X IFS (4 slots, LINEAR)
+    bool htlf_toolchanger_mode_ = false;             ///< Simulate HTLF + Toolchanger mixed topology
     std::vector<PathTopology> unit_topologies_; ///< Per-unit topology storage
 
     // Endless spool simulation state

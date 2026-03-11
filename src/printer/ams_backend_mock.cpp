@@ -1963,6 +1963,152 @@ void AmsBackendMock::set_ifs_mode(bool enabled) {
     }
 }
 
+void AmsBackendMock::set_htlf_toolchanger_mode(bool enabled) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    htlf_toolchanger_mode_ = enabled;
+
+    if (enabled) {
+        // Disable conflicting modes
+        tool_changer_mode_ = false;
+        multi_unit_mode_ = false;
+        mixed_topology_mode_ = false;
+        vivid_mixed_mode_ = false;
+
+        // Configure as AFC system
+        system_info_.type = AmsType::AFC;
+        system_info_.type_name = "AFC (Mock HTLF+TC)";
+        system_info_.version = "1.0.32-mock";
+        system_info_.total_slots = 7;
+
+        auto afc_caps = helix::printer::afc_default_capabilities();
+        system_info_.supports_endless_spool = afc_caps.supports_endless_spool;
+        system_info_.supports_tool_mapping = afc_caps.supports_tool_mapping;
+        system_info_.supports_bypass = afc_caps.supports_bypass;
+        system_info_.supports_purge = afc_caps.supports_purge;
+        system_info_.tip_method = afc_caps.tip_method;
+        system_info_.has_hardware_bypass_sensor = false;
+
+        topology_ = PathTopology::PARALLEL;
+
+        // Per-unit topologies
+        unit_topologies_.clear();
+        unit_topologies_.push_back(PathTopology::MIXED);    // HTLF unit
+        unit_topologies_.push_back(PathTopology::PARALLEL); // Tools unit
+
+        // Initialize registry with 2 units (4+3=7 slots)
+        slots_.clear();
+        slots_.initialize_units({
+            {"HTLF HTLF_1", {"lane1", "lane2", "lane3", "lane4"}},
+            {"Toolchanger Tools", {"extruder3", "extruder4", "extruder5"}},
+        });
+
+        // Helper to populate a slot
+        auto populate_slot = [this](int gi, int si, const char* material, uint32_t color,
+                                    const char* color_name, SlotStatus status, int tool,
+                                    int spoolman_id, float remaining) {
+            auto* entry = slots_.get_mut(gi);
+            if (!entry)
+                return;
+            entry->info.slot_index = si;
+            entry->info.global_index = gi;
+            entry->info.material = material;
+            entry->info.color_rgb = color;
+            entry->info.color_name = color_name;
+            entry->info.status = status;
+            entry->info.mapped_tool = tool;
+            entry->info.spoolman_id = spoolman_id;
+            entry->info.total_weight_g = 1000.0f;
+            entry->info.remaining_weight_g = remaining;
+            auto mat_info = filament::find_material(material);
+            if (mat_info) {
+                entry->info.nozzle_temp_min = mat_info->nozzle_min;
+                entry->info.nozzle_temp_max = mat_info->nozzle_max;
+                entry->info.bed_temp = mat_info->bed_temp;
+            }
+        };
+
+        // Unit 0: HTLF_1 — 4 lanes, MIXED topology (alphabetical: HTLF before Toolchanger)
+        // lane1→T0 direct, lane2→T2 direct, lane3→T1 hub, lane4→T3 hub
+        populate_slot(0, 0, "ABS", 0xFCFBFB, "White", SlotStatus::LOADED, 0, 39, 493.0f);
+        populate_slot(1, 1, "ABS", 0x0D2441, "Navy", SlotStatus::LOADED, 2, 4, 430.0f);
+        populate_slot(2, 2, "ASA Sparkle", 0x0F274E, "Navy Sparkle", SlotStatus::AVAILABLE, 1, 28,
+                      581.0f);
+        populate_slot(3, 3, "", 0x000000, "", SlotStatus::EMPTY, 3, -1, 0.0f);
+
+        // Unit 1: Toolchanger Tools — 3 lanes, PARALLEL
+        // extruder3→T4, extruder4→T5, extruder5→T6
+        populate_slot(4, 0, "PLA", 0xFFFFFF, "White", SlotStatus::LOADED, 4, 11, 30.0f);
+        populate_slot(5, 1, "", 0x000000, "", SlotStatus::EMPTY, 5, -1, 0.0f);
+        populate_slot(6, 2, "", 0x000000, "", SlotStatus::EMPTY, 6, -1, 0.0f);
+
+        // Tool mapping: 7 slots → tools T0-T6 (non-sequential per AFC map)
+        slots_.set_tool_map({0, 2, 1, 3, 4, 5, 6});
+
+        // Unit-level metadata
+        system_info_.units.clear();
+        {
+            AmsUnit u;
+            u.unit_index = 0;
+            u.name = "HTLF HTLF_1";
+            u.display_name = "HTLF_1";
+            u.slot_count = 4;
+            u.first_slot_global_index = 0;
+            u.connected = true;
+            u.has_toolhead_sensor = true;
+            u.has_slot_sensors = true;
+            u.has_hub_sensor = true;
+            u.hub_sensor_triggered = false;
+            u.topology = PathTopology::MIXED;
+            u.lane_is_hub_routed = {false, false, true, true};
+            BufferHealth health;
+            health.state = "Advancing";
+            health.fault_detection_enabled = false;
+            u.buffer_health = health;
+            system_info_.units.push_back(u);
+        }
+        {
+            AmsUnit u;
+            u.unit_index = 1;
+            u.name = "Toolchanger Tools";
+            u.display_name = "Tools";
+            u.slot_count = 3;
+            u.first_slot_global_index = 4;
+            u.connected = true;
+            u.has_toolhead_sensor = true;
+            u.has_slot_sensors = true;
+            u.has_hub_sensor = false;
+            u.topology = PathTopology::PARALLEL;
+            system_info_.units.push_back(u);
+        }
+
+        // Start with HTLF lane1 loaded (slot 0, tool T0)
+        system_info_.current_slot = 0;
+        system_info_.current_tool = 0;
+        system_info_.filament_loaded = true;
+        filament_segment_ = PathSegment::NOZZLE;
+
+        // AFC device sections and actions
+        mock_device_sections_ = helix::printer::afc_default_sections();
+        mock_device_actions_ = helix::printer::afc_default_actions();
+
+        spdlog::info(
+            "[AmsBackendMock] HTLF+Toolchanger mode: HTLF_1 (4, MIXED) + Tools (3, PARALLEL) = 7 slots");
+    } else {
+        htlf_toolchanger_mode_ = false;
+        unit_topologies_.clear();
+        system_info_.type = AmsType::HAPPY_HARE;
+        system_info_.type_name = "Happy Hare (Mock)";
+        system_info_.version = "2.7.0-mock";
+        topology_ = PathTopology::LINEAR;
+        spdlog::info("[AmsBackendMock] HTLF+Toolchanger mode disabled");
+    }
+}
+
+bool AmsBackendMock::is_htlf_toolchanger_mode() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return htlf_toolchanger_mode_;
+}
+
 PathTopology AmsBackendMock::get_unit_topology(int unit_index) const {
     std::lock_guard<std::mutex> lock(mutex_);
     if (unit_index >= 0 && unit_index < static_cast<int>(unit_topologies_.size())) {

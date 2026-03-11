@@ -502,6 +502,7 @@ Select the mock AMS topology/type.
 | `toolchanger` / `tc` | Tool Changer, PARALLEL topology |
 | `mixed` | Box Turtle + 2x OpenAMS, 6 tools |
 | `multi` | Box Turtle (4 slots) + Night Owl (2 slots), single toolhead |
+| `htlf_toolchanger` | AFC HTLF + Toolchanger: 4 HTLF lanes (2 direct, 2 hub→shared extruder) + 3 standalone toolheads. Tests MIXED topology. Aliases: `htlf_tc`, `htlf` |
 
 ```bash
 # Simulate AFC Box Turtle
