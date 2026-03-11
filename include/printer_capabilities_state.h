@@ -48,7 +48,7 @@ class PrinterCapabilitiesState {
     /**
      * @brief Update capabilities from hardware discovery with overrides applied
      *
-     * Called from PrinterState::set_hardware_internal() when hardware is detected.
+     * Called from PrinterState::set_hardware() when hardware is detected.
      * Uses effective values from capability_overrides (auto-detect + user overrides).
      *
      * @param hardware Auto-detected hardware capabilities
