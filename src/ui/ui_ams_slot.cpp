@@ -542,6 +542,39 @@ static void ams_slot_event_cb(lv_event_t* e) {
 // Widget Creation (Internal)
 // ============================================================================
 
+// Draw a dashed circle using segmented arcs (LVGL 9.5 has no dashed border API)
+static void draw_dashed_circle_cb(lv_event_t* e) {
+    auto* obj = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    auto* layer = static_cast<lv_layer_t*>(lv_event_get_layer(e));
+
+    int32_t w = lv_obj_get_width(obj);
+    int32_t h = lv_obj_get_height(obj);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    int32_t cx = coords.x1 + w / 2;
+    int32_t cy = coords.y1 + h / 2;
+    int32_t radius = LV_MIN(w, h) / 2 - 1;
+
+    lv_draw_arc_dsc_t arc_dsc;
+    lv_draw_arc_dsc_init(&arc_dsc);
+    arc_dsc.center.x = cx;
+    arc_dsc.center.y = cy;
+    arc_dsc.radius = static_cast<uint16_t>(radius);
+    arc_dsc.width = 2;
+    arc_dsc.color = theme_manager_get_color("text_muted");
+    arc_dsc.opa = LV_OPA_20;
+
+    // Draw 16 dashes of 15 degrees each with 7.5 degree gaps
+    constexpr int DASH_COUNT = 16;
+    constexpr int DASH_ANGLE = 15;
+    constexpr int GAP_ANGLE = 7;  // 16 * (15 + 7) = 352 ≈ 360
+    for (int d = 0; d < DASH_COUNT; d++) {
+        arc_dsc.start_angle = static_cast<uint16_t>(d * (DASH_ANGLE + GAP_ANGLE));
+        arc_dsc.end_angle = static_cast<uint16_t>(arc_dsc.start_angle + DASH_ANGLE);
+        lv_draw_arc(layer, &arc_dsc);
+    }
+}
+
 /**
  * @brief Create spool visualization inside spool_container
  *
@@ -650,9 +683,8 @@ static void create_spool_visualization(AmsSlotData* data) {
         lv_obj_align(ph, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_style_radius(ph, LV_RADIUS_CIRCLE, LV_PART_MAIN);
         lv_obj_set_style_bg_opa(ph, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_border_width(ph, 2, LV_PART_MAIN);
-        lv_obj_set_style_border_color(ph, theme_manager_get_color("text_muted"), LV_PART_MAIN);
-        lv_obj_set_style_border_opa(ph, LV_OPA_60, LV_PART_MAIN);
+        lv_obj_set_style_border_width(ph, 0, LV_PART_MAIN);
+        lv_obj_add_event_cb(ph, draw_dashed_circle_cb, LV_EVENT_DRAW_MAIN, nullptr);
         lv_obj_remove_flag(ph, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(ph, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_add_flag(ph, LV_OBJ_FLAG_HIDDEN);
@@ -664,7 +696,7 @@ static void create_spool_visualization(AmsSlotData* data) {
             lv_label_set_text(plus, plus_glyph);
             lv_obj_set_style_text_font(plus, &mdi_icons_24, LV_PART_MAIN);
             lv_obj_set_style_text_color(plus, theme_manager_get_color("text_muted"), LV_PART_MAIN);
-            lv_obj_set_style_text_opa(plus, LV_OPA_60, LV_PART_MAIN);
+            lv_obj_set_style_text_opa(plus, LV_OPA_20, LV_PART_MAIN);
             lv_obj_align(plus, LV_ALIGN_CENTER, 0, 0);
             lv_obj_add_flag(plus, LV_OBJ_FLAG_EVENT_BUBBLE);
         }

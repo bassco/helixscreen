@@ -1595,12 +1595,12 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
     int32_t x_off = obj_coords.x1;
     int32_t y_off = obj_coords.y1;
 
-    // Layout ratios (same as parallel topology for consistency)
+    // Layout ratios — more vertical spread than parallel to fit hub + nozzles
     constexpr float ENTRY_Y = -0.12f;   // Top entry (connects to spool)
-    constexpr float SENSOR_Y = 0.20f;   // Sensor dot position
-    constexpr float HUB_Y = 0.42f;      // Hub box center Y
+    constexpr float SENSOR_Y = 0.15f;   // Sensor dot position
+    constexpr float HUB_Y = 0.32f;      // Hub box center Y
     constexpr float HUB_H = 0.08f;      // Hub box height ratio
-    constexpr float TOOLHEAD_Y = 0.55f;  // Nozzle/toolhead position
+    constexpr float TOOLHEAD_Y = 0.62f;  // Nozzle/toolhead position
 
     int32_t entry_y = y_off + (int32_t)(height * ENTRY_Y);
     int32_t sensor_y = y_off + (int32_t)(height * SENSOR_Y);
@@ -1714,22 +1714,25 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
         bool at_nozzle = has_filament && (slot_segment >= PathSegment::NOZZLE);
 
         if (is_hub) {
-            // Hub-routed lane: angled path from sensor to hub top
-            int32_t mid_y = sensor_y + (hub_top - sensor_y) / 2;
+            // Hub-routed lane: smooth curve from sensor to hub top
+            int32_t start_y = sensor_y + sensor_r;
+            int32_t end_y = hub_top;
+            int32_t drop = end_y - start_y;
+            int32_t cp1_x = slot_x;
+            int32_t cp1_y = start_y + drop * 2 / 5;
+            int32_t cp2_x = hub_cx;
+            int32_t cp2_y = end_y - drop * 2 / 5;
+
             if (has_filament) {
-                // Sensor → midpoint (vertical)
-                draw_glow_line(layer, slot_x, sensor_y + sensor_r, slot_x, mid_y, tool_color,
-                               line_active);
-                draw_vertical_line(layer, slot_x, sensor_y + sensor_r, mid_y, tool_color,
-                                   line_active);
-                // Midpoint → hub top (angled)
-                draw_glow_line(layer, slot_x, mid_y, hub_cx, hub_top, tool_color, line_active);
-                draw_line(layer, slot_x, mid_y, hub_cx, hub_top, tool_color, line_active);
+                draw_glow_curve(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
+                                hub_cx, end_y, tool_color, line_active);
+                draw_curved_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
+                                 hub_cx, end_y, tool_color, line_active,
+                                 /*cap_start=*/false, /*cap_end=*/true);
             } else {
-                draw_hollow_vertical_line(layer, slot_x, sensor_y + sensor_r, mid_y, idle_color,
-                                          bg_color, line_active);
-                draw_hollow_line(layer, slot_x, mid_y, hub_cx, hub_top, idle_color, bg_color,
-                                 line_active);
+                draw_curved_hollow_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
+                                        hub_cx, end_y, idle_color, bg_color, line_active,
+                                        /*cap_start=*/false);
             }
 
             // Hub output line + shared nozzle (draw only once)

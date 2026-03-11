@@ -703,6 +703,29 @@ static void system_path_draw_cb(lv_event_t* e) {
                     all_routes[total_routes++] = {i,      tool_idx, start_x, entry_y,
                                                   tool_x, tools_y,  dist,    false};
                 }
+
+                // For MIXED topology, save hub info for the last tool (hub group)
+                if (topology == 3 && tool_count > 1) {
+                    int hub_tool_idx = first_tool + tool_count - 1;
+                    int hub_t = tool_count - 1;
+                    // Use the same start_x math as the route above
+                    int32_t hub_start_x = unit_x;
+                    if (tool_count > 1) {
+                        hub_start_x =
+                            unit_x - spread / 2 + (spread * hub_t) / (tool_count - 1);
+                    }
+                    int32_t mhw = data->hub_width / 2;
+                    int32_t mhh = hub_h * 2 / 3;
+                    int32_t mhy = entry_y + mhh / 2 + 4;
+                    bool hub_has_filament =
+                        is_active && data->filament_loaded &&
+                        (data->active_tool == hub_tool_idx);
+                    lv_color_t mini_bg = hub_bg;
+                    if (hub_has_filament) {
+                        mini_bg = sp_blend(hub_bg, active_color_lv, 0.33f);
+                    }
+                    hub_infos[i] = {hub_start_x, mhy, mhw, mhh, mini_bg, hub_tool_idx, true};
+                }
             } else {
                 // HUB: one route from unit to mini-hub position
                 if (tool_count > 0 && first_tool < data->total_tools) {
@@ -873,16 +896,20 @@ static void system_path_draw_cb(lv_event_t* e) {
             auto& hi = hub_infos[i];
             bool is_active = (i == data->active_unit);
 
+            int topology = data->unit_topology[i];
+            const char* hub_label = (topology == 3) ? "H" : "Hub";
             draw_hub_box(layer, hi.tool_x, hi.mini_hub_y, hi.mini_hub_w, hi.mini_hub_h,
                          hi.hub_bg_color, hub_border, data->color_text, data->label_font,
-                         data->border_radius, "Hub");
+                         data->border_radius, hub_label);
 
-            // Line from mini hub to tool
-            bool tool_active = is_active && (hi.first_tool == data->active_tool);
-            lv_color_t out_color = tool_active ? active_color_lv : idle_color;
-            int32_t out_w = tool_active ? line_active : line_idle;
-            draw_vertical_line(layer, hi.tool_x, hi.mini_hub_y + hi.mini_hub_h / 2, tools_y,
-                               out_color, out_w);
+            // Line from mini hub to tool (skip for MIXED — route already covers full path)
+            if (topology != 3) {
+                bool tool_active = is_active && (hi.first_tool == data->active_tool);
+                lv_color_t out_color = tool_active ? active_color_lv : idle_color;
+                int32_t out_w = tool_active ? line_active : line_idle;
+                draw_vertical_line(layer, hi.tool_x, hi.mini_hub_y + hi.mini_hub_h / 2, tools_y,
+                                   out_color, out_w);
+            }
         }
 
         // Draw tool nozzles at the bottom
