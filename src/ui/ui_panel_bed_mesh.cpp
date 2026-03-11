@@ -31,6 +31,7 @@
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_detector.h"
+#include "standard_macros.h"
 #include "static_panel_registry.h"
 
 #include <spdlog/spdlog.h>
@@ -1151,10 +1152,19 @@ void BedMeshPanel::execute_calibration(const std::string& profile_name) {
     if (!api)
         return;
 
-    spdlog::info("[{}] Starting calibration for profile: {}", get_name(), profile_name);
+    // Resolve the calibration macro via StandardMacros (user-configurable,
+    // defaults to auto-detected BED_MESH_CALIBRATE or G29)
+    const auto& macro_info = StandardMacros::instance().get(StandardMacroSlot::BedMesh);
+    std::string macro_name = macro_info.get_macro();
+    if (macro_name.empty()) {
+        macro_name = "BED_MESH_CALIBRATE"; // Fallback if nothing configured/detected
+    }
+
+    spdlog::info("[{}] Starting calibration for profile: {} (macro: {})", get_name(), profile_name,
+                 macro_name);
     lv_subject_set_int(&bed_mesh_calibrating_, 1);
 
-    std::string cmd = "BED_MESH_CALIBRATE PROFILE=" + profile_name;
+    std::string cmd = macro_name + " PROFILE=" + profile_name;
     api->execute_gcode(
         cmd,
         [this, profile_name]() {
