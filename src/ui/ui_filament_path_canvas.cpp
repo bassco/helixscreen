@@ -153,6 +153,14 @@ struct FilamentPathData {
     // Per-slot prep sensor capability (true = slot has prep/pre-gate sensor)
     bool slot_has_prep_sensor[MAX_SLOTS] = {};
 
+    // Per-slot tool mapping (actual AFC map values, not slot index)
+    int mapped_tool[MAX_SLOTS];      // -1 = use slot index as fallback
+    bool slot_is_hub_routed[MAX_SLOTS] = {}; // true = lane routes through hub (MIXED topology)
+
+    FilamentPathData() {
+        std::fill(std::begin(mapped_tool), std::end(mapped_tool), -1);
+    }
+
     // Animation state
     int prev_segment = 0; // Previous segment (for smooth transition)
     AnimDirection anim_direction = AnimDirection::NONE;
@@ -1526,7 +1534,8 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
         // Tool badge (T0, T1, etc.) below nozzle — matches system_path_canvas style
         if (data->label_font) {
             char tool_label[16];
-            snprintf(tool_label, sizeof(tool_label), "T%d", i);
+            int tool = (data->mapped_tool[i] >= 0) ? data->mapped_tool[i] : i;
+            snprintf(tool_label, sizeof(tool_label), "T%d", tool);
 
             int32_t font_h = lv_font_get_line_height(data->label_font);
             int32_t label_len = (int32_t)strlen(tool_label);
@@ -2807,6 +2816,26 @@ void ui_filament_path_canvas_set_slot_prep_sensor(lv_obj_t* obj, int slot, bool 
     if (data->slot_has_prep_sensor[slot] != has_sensor) {
         data->slot_has_prep_sensor[slot] = has_sensor;
         spdlog::trace("[FilamentPath] Slot {} prep sensor: {}", slot, has_sensor);
+        lv_obj_invalidate(obj);
+    }
+}
+
+void ui_filament_path_canvas_set_slot_mapped_tool(lv_obj_t* obj, int slot, int tool) {
+    auto* data = get_data(obj);
+    if (!data || slot < 0 || slot >= FilamentPathData::MAX_SLOTS)
+        return;
+    if (data->mapped_tool[slot] != tool) {
+        data->mapped_tool[slot] = tool;
+        lv_obj_invalidate(obj);
+    }
+}
+
+void ui_filament_path_canvas_set_slot_hub_routed(lv_obj_t* obj, int slot, bool is_hub) {
+    auto* data = get_data(obj);
+    if (!data || slot < 0 || slot >= FilamentPathData::MAX_SLOTS)
+        return;
+    if (data->slot_is_hub_routed[slot] != is_hub) {
+        data->slot_is_hub_routed[slot] = is_hub;
         lv_obj_invalidate(obj);
     }
 }

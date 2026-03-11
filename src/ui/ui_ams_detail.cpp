@@ -497,6 +497,19 @@ void ams_detail_setup_path_canvas(lv_obj_t* canvas, lv_obj_t* slot_grid, int uni
         ui_filament_path_canvas_set_slot_prep_sensor(canvas, i, has_prep);
     }
 
+    // Plumb per-slot metadata (mapped_tool, hub routing) to path canvas
+    if (unit_index >= 0 && unit_index < static_cast<int>(info.units.size())) {
+        const auto& unit = info.units[unit_index];
+        for (int i = 0; i < slot_count; ++i) {
+            int gi = slot_offset + i;
+            SlotInfo slot = backend->get_slot_info(gi);
+            ui_filament_path_canvas_set_slot_mapped_tool(canvas, i, slot.mapped_tool);
+            if (i < static_cast<int>(unit.lane_is_hub_routed.size())) {
+                ui_filament_path_canvas_set_slot_hub_routed(canvas, i, unit.lane_is_hub_routed[i]);
+            }
+        }
+    }
+
     // Set per-slot filament states (using local indices for unit-scoped views)
     ui_filament_path_canvas_clear_slot_filaments(canvas);
     for (int i = 0; i < slot_count; ++i) {

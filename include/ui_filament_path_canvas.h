@@ -371,6 +371,31 @@ void ui_filament_path_canvas_set_bypass_color(lv_obj_t* obj, uint32_t color);
  */
 void ui_filament_path_canvas_set_bypass_has_spool(lv_obj_t* obj, bool has_spool);
 
+/**
+ * @brief Set the mapped tool index for a slot
+ *
+ * Overrides the default slot-index-as-tool-number with the actual AFC map value.
+ * Used to show correct T-labels (e.g., T0,T2,T1,T3) in parallel/mixed topologies.
+ *
+ * @param obj The filament_path_canvas widget
+ * @param slot Slot index (0-15)
+ * @param tool Mapped tool number, or -1 to fall back to slot index
+ */
+void ui_filament_path_canvas_set_slot_mapped_tool(lv_obj_t* obj, int slot, int tool);
+
+/**
+ * @brief Set whether a slot's lane routes through the hub (MIXED topology)
+ *
+ * In MIXED topology (e.g., Box Turtle + OpenAMS), some lanes go through the
+ * shared hub while others connect directly to an extruder. This flag drives
+ * the draw_mixed_topology() rendering decision per lane.
+ *
+ * @param obj The filament_path_canvas widget
+ * @param slot Slot index (0-15)
+ * @param is_hub true if lane routes through hub, false for direct-to-extruder
+ */
+void ui_filament_path_canvas_set_slot_hub_routed(lv_obj_t* obj, int slot, bool is_hub);
+
 #ifdef __cplusplus
 }
 #endif
