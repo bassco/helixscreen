@@ -27,6 +27,8 @@
 #include "ui_switch.h"
 #include "ui_text.h"
 #include "ui_text_input.h"
+#include "ui_lock_screen.h"
+#include "ui_pin_entry_modal.h"
 #include "ui_z_offset_indicator.h"
 
 #include "layout_manager.h"
@@ -175,7 +177,9 @@ static void on_toggle_password_visibility(lv_event_t* e) {
 static void register_xml(const char* filename) {
     auto& lm = helix::LayoutManager::instance();
     std::string path = "A:" + lm.resolve_xml_path(filename);
-    lv_xml_register_component_from_file(path.c_str());
+    if (lv_xml_register_component_from_file(path.c_str()) != LV_RESULT_OK) {
+        spdlog::error("[XML Registration] Failed to register: {}", path);
+    }
 }
 
 void register_xml_components() {
@@ -278,6 +282,14 @@ void register_xml_components() {
     register_xml("beta_badge.xml");
     register_xml("beta_feature.xml");
 
+    // Lock screen overlay (full-screen PIN entry on lv_layer_top)
+    helix::ui::register_lock_screen_callbacks();
+    register_xml("components/lock_screen.xml");
+
+    // PIN entry modal (numeric keypad for security settings PIN set/change/remove)
+    helix::ui::PinEntryModal::register_callbacks();
+    register_xml("components/pin_entry_modal.xml");
+
     // emergency_stop_button.xml removed - E-Stop buttons are now embedded in panels
     register_xml("estop_confirmation_dialog.xml");
     register_xml("klipper_recovery_dialog.xml");
@@ -339,6 +351,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_tips.xml");
     register_xml("components/panel_widget_print_status.xml");
     register_xml("components/panel_widget_shutdown.xml");
+    register_xml("components/panel_widget_lock.xml");
     register_xml("components/panel_widget_job_queue.xml");
     register_xml("components/clog_meter_page.xml");
     register_xml("components/panel_widget_clog_detection.xml");
@@ -446,7 +459,8 @@ void register_xml_components() {
 
     // Settings overlay panels
     register_xml("display_settings_overlay.xml");
-register_xml("sound_settings_overlay.xml");
+    register_xml("sound_settings_overlay.xml");
+    register_xml("security_settings_overlay.xml");
     register_xml("label_printer_settings.xml");
     register_xml("led_settings_overlay.xml");
     register_xml("theme_editor_overlay.xml");
