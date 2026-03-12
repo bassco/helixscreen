@@ -1,0 +1,38 @@
+// Copyright (C) 2025-2026 356C LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "timelapse_thumbnailer.h"
+
+#include <algorithm>
+#include <functional>
+
+namespace helix::timelapse {
+
+std::string TimelapseThumbnailer::cache_key(const std::string& video_filename) {
+    auto hash = std::hash<std::string>{}(video_filename);
+    return "tl_" + std::to_string(hash);
+}
+
+std::string TimelapseThumbnailer::companion_filename(const std::string& video_filename) {
+    auto dot = video_filename.rfind('.');
+    if (dot == std::string::npos) return video_filename + ".thumb.jpg";
+    return video_filename.substr(0, dot) + ".thumb.jpg";
+}
+
+std::string TimelapseThumbnailer::ffmpeg_extract_command(const std::string& input_path,
+                                                          const std::string& output_path) {
+    return "ffmpeg -y -i \"" + input_path + "\" -vframes 1 -q:v 3 \"" + output_path + "\"";
+}
+
+bool TimelapseThumbnailer::is_video_file(const std::string& filename) {
+    if (filename.size() < 5) return false;
+    if (filename.find(".thumb.") != std::string::npos) return false;
+
+    auto dot = filename.rfind('.');
+    if (dot == std::string::npos) return false;
+    auto ext = filename.substr(dot);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".mp4" || ext == ".mkv" || ext == ".avi";
+}
+
+}  // namespace helix::timelapse
