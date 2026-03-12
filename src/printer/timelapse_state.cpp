@@ -115,6 +115,8 @@ void TimelapseState::handle_timelapse_event(const nlohmann::json& event) {
             spdlog::debug("[TimelapseState] Render progress: {}%", progress);
 
         } else if (status == "success") {
+            last_rendered_filename_ = filename;
+
             helix::ui::queue_update([this]() {
                 lv_subject_set_int(&timelapse_render_progress_, 0);
                 lv_subject_copy_string(&timelapse_render_status_, "complete");
@@ -123,6 +125,10 @@ void TimelapseState::handle_timelapse_event(const nlohmann::json& event) {
             last_notified_progress_ = -1;
             ToastManager::instance().show(ToastSeverity::SUCCESS,
                                           lv_tr("Timelapse rendered successfully"), 5000);
+
+            if (on_render_complete_) {
+                on_render_complete_(filename);
+            }
 
             spdlog::info("[TimelapseState] Render complete: {}", filename);
 
@@ -157,6 +163,7 @@ void TimelapseState::reset() {
     });
 
     last_notified_progress_ = -1;
+    last_rendered_filename_.clear();
     spdlog::debug("[TimelapseState] State reset");
 }
 

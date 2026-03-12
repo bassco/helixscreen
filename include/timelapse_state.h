@@ -9,6 +9,9 @@
 
 #include "hv/json.hpp"
 
+#include <functional>
+#include <string>
+
 namespace helix {
 
 /**
@@ -74,6 +77,23 @@ class TimelapseState {
         return &timelapse_frame_count_;
     }
 
+    /// Last rendered video filename (set on render success)
+    const std::string& get_last_rendered_filename() const { return last_rendered_filename_; }
+
+    /// Callback type for render completion: receives the rendered filename
+    using RenderCompleteCallback = std::function<void(const std::string& filename)>;
+
+    /**
+     * @brief Register a callback for render completion
+     *
+     * Called on the background (WebSocket) thread when a render succeeds.
+     * The callback receives the rendered filename and can trigger
+     * follow-up actions (e.g., thumbnail extraction via Moonraker API).
+     */
+    void set_on_render_complete(RenderCompleteCallback callback) {
+        on_render_complete_ = std::move(callback);
+    }
+
   private:
     TimelapseState() = default;
 
@@ -93,6 +113,12 @@ class TimelapseState {
 
     // Notification throttling: last progress value that triggered a notification
     int last_notified_progress_ = -1;
+
+    // Last successfully rendered filename
+    std::string last_rendered_filename_;
+
+    // Optional callback fired on render success
+    RenderCompleteCallback on_render_complete_;
 };
 
 } // namespace helix
