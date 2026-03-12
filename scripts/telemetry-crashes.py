@@ -454,6 +454,8 @@ def load_events(
         # Include the entire "until" day
         until_dt = until_dt.replace(hour=23, minute=59, second=59)
 
+    seen_crashes: set[tuple] = set()  # (device_id, timestamp, backtrace_key)
+
     for fpath in sorted(data_path.rglob("*.json")):
         file_count += 1
         try:
@@ -477,7 +479,15 @@ def load_events(
                     pass
 
             if ev.get("event") == "crash":
-                crashes.append(ev)
+                # Deduplicate: same device + timestamp + backtrace = same crash
+                dedup_key = (
+                    ev.get("device_id", ""),
+                    ev.get("timestamp", ""),
+                    tuple(ev.get("backtrace", [])),
+                )
+                if dedup_key not in seen_crashes:
+                    seen_crashes.add(dedup_key)
+                    crashes.append(ev)
             elif ev.get("event") == "session":
                 sessions.append(ev)
 

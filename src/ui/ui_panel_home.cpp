@@ -192,6 +192,11 @@ void HomePanel::populate_widgets(bool force) {
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
 
+    // Flush any pending layout before destroying children. If a previous
+    // frame invalidated layout, layout_update_core would traverse stale
+    // children after lv_obj_clean() freed them (SIGSEGV in get_prop_core).
+    lv_obj_update_layout(container);
+
     // Destroy LVGL children BEFORE destroying C++ widget instances.
     // Must happen here (not in the manager) to ensure correct ordering:
     // drain → clean LVGL → clear C++. Manager's lv_obj_clean is a no-op.
