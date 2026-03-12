@@ -70,6 +70,7 @@ class DisplayBackendFbdev : public DisplayBackend {
 
     // Input device creation
     lv_indev_t* create_input_pointer() override;
+    lv_indev_t* create_input_keyboard() override;
 
     // Backend info
     DisplayBackendType type() const override {
@@ -146,6 +147,7 @@ class DisplayBackendFbdev : public DisplayBackend {
     std::string touch_device_; // Empty = auto-detect
     lv_display_t* display_ = nullptr;
     lv_indev_t* touch_ = nullptr;
+    lv_indev_t* keyboard_ = nullptr;
 
     /// Affine touch calibration coefficients
     helix::TouchCalibration calibration_;

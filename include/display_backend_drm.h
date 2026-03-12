@@ -61,6 +61,7 @@ class DisplayBackendDRM : public DisplayBackend {
 
     // Input device creation
     lv_indev_t* create_input_pointer() override;
+    lv_indev_t* create_input_keyboard() override;
 
     // Display rotation via DRM plane property
     void set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) override;
@@ -100,6 +101,7 @@ class DisplayBackendDRM : public DisplayBackend {
     std::string drm_device_;
     lv_display_t* display_ = nullptr;
     lv_indev_t* pointer_ = nullptr;
+    lv_indev_t* keyboard_ = nullptr;
     int tty_fd_ = -1;           ///< TTY fd for KD_GRAPHICS console suppression
     bool using_egl_ = false;    ///< Track if GPU-accelerated path is active
 

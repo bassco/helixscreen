@@ -517,6 +517,83 @@ lv_indev_t* DisplayBackendFbdev::create_input_pointer() {
     return touch_;
 }
 
+lv_indev_t* DisplayBackendFbdev::create_input_keyboard() {
+    // Priority 1: Environment variable override
+    const char* env_device = std::getenv("HELIX_KEYBOARD_DEVICE");
+    if (env_device && env_device[0] != '\0') {
+        keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, env_device);
+        if (keyboard_) {
+            spdlog::info("[Fbdev Backend] Keyboard created on {} (env override)", env_device);
+            return keyboard_;
+        }
+        spdlog::warn("[Fbdev Backend] Could not open specified keyboard device: {}", env_device);
+    }
+
+    // Priority 2: Auto-detect by scanning /dev/input/event* for EV_KEY with letter keys
+    DIR* dir = opendir("/dev/input");
+    if (!dir) {
+        spdlog::debug("[Fbdev Backend] Cannot open /dev/input for keyboard scan");
+        return nullptr;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (strncmp(entry->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        int event_num = -1;
+        if (sscanf(entry->d_name, "event%d", &event_num) != 1 || event_num < 0) {
+            continue;
+        }
+
+        std::string device_path = std::string("/dev/input/") + entry->d_name;
+        if (access(device_path.c_str(), R_OK) != 0) {
+            continue;
+        }
+
+        // Check if device has EV_KEY capability with keyboard keys (KEY_A..KEY_Z)
+        std::string cap_path =
+            "/sys/class/input/event" + std::to_string(event_num) + "/device/capabilities/key";
+        std::ifstream cap_file(cap_path);
+        if (!cap_file.good()) {
+            continue;
+        }
+
+        // Read the key capability bitmask. A real keyboard has KEY_A (30) set.
+        // The bitmask is printed as space-separated hex words, LSB last.
+        // KEY_A=30 is in the first (rightmost) word, bit 30 (0x40000000).
+        std::string cap_line;
+        std::getline(cap_file, cap_line);
+        if (cap_line.empty()) {
+            continue;
+        }
+
+        // Parse the last hex word (lowest bits including KEY_A=30)
+        auto last_space = cap_line.rfind(' ');
+        std::string last_word =
+            (last_space != std::string::npos) ? cap_line.substr(last_space + 1) : cap_line;
+        unsigned long key_bits = strtoul(last_word.c_str(), nullptr, 16);
+
+        // KEY_A = 30, check bit 30
+        if (!(key_bits & (1UL << KEY_A))) {
+            continue;
+        }
+
+        std::string name = get_device_name(event_num);
+        keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, device_path.c_str());
+        if (keyboard_) {
+            spdlog::info("[Fbdev Backend] Keyboard created on {} ({})", device_path, name);
+            closedir(dir);
+            return keyboard_;
+        }
+    }
+
+    closedir(dir);
+    spdlog::debug("[Fbdev Backend] No keyboard device found");
+    return nullptr;
+}
+
 std::string DisplayBackendFbdev::auto_detect_touch_device() const {
     // Priority 1: Environment variable override
     const char* env_device = std::getenv("HELIX_TOUCH_DEVICE");

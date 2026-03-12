@@ -399,6 +399,33 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
     return nullptr;
 }
 
+lv_indev_t* DisplayBackendDRM::create_input_keyboard() {
+    // Priority 1: Environment variable override
+    const char* env_device = std::getenv("HELIX_KEYBOARD_DEVICE");
+    if (env_device && env_device[0] != '\0') {
+        keyboard_ = lv_libinput_create(LV_INDEV_TYPE_KEYPAD, env_device);
+        if (keyboard_) {
+            spdlog::info("[DRM Backend] Keyboard created on {} (env override)", env_device);
+            return keyboard_;
+        }
+        spdlog::warn("[DRM Backend] Could not open specified keyboard device: {}", env_device);
+    }
+
+    // Priority 2: Auto-discover via libinput
+    char* kb_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_KEYBOARD, true);
+    if (kb_path) {
+        keyboard_ = lv_libinput_create(LV_INDEV_TYPE_KEYPAD, kb_path);
+        if (keyboard_) {
+            spdlog::info("[DRM Backend] Keyboard created on {}", kb_path);
+            return keyboard_;
+        }
+        spdlog::warn("[DRM Backend] Failed to create keyboard device on {}", kb_path);
+    }
+
+    spdlog::debug("[DRM Backend] No keyboard device found");
+    return nullptr;
+}
+
 void DisplayBackendDRM::set_display_rotation(lv_display_rotation_t rot, int phys_w, int phys_h) {
     (void)phys_w;
     (void)phys_h;
