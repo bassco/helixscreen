@@ -62,11 +62,34 @@ Tap to open the retraction overlay. Configure G10/G11 firmware retraction parame
 
 ## Macro Buttons
 
-Tap to open the Macro Buttons overlay. Configure quick-action buttons that appear on the Controls panel and standard macros:
+Tap to open the Macro Buttons overlay. Configure quick-action buttons and standard macro assignments.
+
+### Quick Buttons
+
+Configure the macro buttons that appear on the Controls panel:
 
 - **Cooldown** — G-code command for the cooldown button
 - **Load / Unload Filament** — Label and G-code for filament operations
 - **Custom Macros** — Up to two custom macro buttons with configurable labels and G-code
+
+### Standard Macros
+
+HelixScreen auto-detects common macros from your Klipper configuration (e.g., it recognizes `CLEAN_NOZZLE`, `NOZZLE_CLEAN`, and similar naming patterns). You can override any auto-detected assignment:
+
+| Slot | What it controls | Common auto-detected macros |
+|------|------------------|-----------------------------|
+| **Load Filament** | Filament load operations | LOAD_FILAMENT, M701 |
+| **Unload Filament** | Filament unload operations | UNLOAD_FILAMENT, M702 |
+| **Purge** | Nozzle purge/prime | PURGE, PURGE_LINE, LINE_PURGE, PRIME_LINE |
+| **Pause** | Print pause | PAUSE, M600 |
+| **Resume** | Print resume | RESUME |
+| **Cancel** | Print cancel | CANCEL_PRINT |
+| **Bed Mesh** | Bed mesh calibration | BED_MESH_CALIBRATE |
+| **Bed Level** | Manual bed leveling | BED_SCREWS_ADJUST, SCREWS_TILT_CALCULATE |
+| **Clean Nozzle** | Nozzle cleaning | CLEAN_NOZZLE, NOZZLE_CLEAN |
+| **Heat Soak** | Chamber heat soak | HEAT_SOAK |
+
+If your printer doesn't have a matching macro, some slots fall back to HelixScreen helper macros (installed via **Settings > Advanced > Install HelixScreen Macros**). Leave a slot empty to disable that function.
 
 ---
 

@@ -49,17 +49,38 @@ A full-featured G-code terminal for sending commands directly to your printer an
 
 ![Macro Panel](../../images/user/advanced-macros.png)
 
-Execute custom Klipper macros:
+Browse and execute all of your Klipper macros.
 
-1. Navigate to **Advanced > Macros**
-2. Browse available macros (alphabetically sorted)
-3. Tap a macro to execute
+**Opening the Macros panel:**
 
-**Notes:**
+- Navigate to **Advanced > Macros**, or
+- Add the **Macros** widget to your home panel for one-tap access
 
-- System macros (starting with `_`) are hidden by default
-- Names are prettified: `CLEAN_NOZZLE` becomes "Clean Nozzle"
-- Dangerous macros (`SAVE_CONFIG`, etc.) require confirmation
+**Browsing macros:**
+
+1. All macros from your Klipper configuration are listed alphabetically
+2. Names are prettified for readability: `CLEAN_NOZZLE` becomes "Clean Nozzle"
+3. System macros (starting with `_`) are hidden by default — use the toggle to show them
+4. Tap any macro to execute it
+
+**Macro parameters:**
+
+Some macros accept parameters (variables or arguments defined in your Klipper config). When you tap a macro that has parameters:
+
+- A **parameter input form** appears showing each parameter with its default value
+- Edit the values you want to change, then tap **Run** to execute
+- Parameters are pre-detected when HelixScreen connects to your printer, so there's no loading delay
+
+If HelixScreen can't determine the parameters (e.g., complex Jinja2 templates), a freeform text field lets you type raw parameters.
+
+**Dangerous macro protection:**
+
+These macros show a confirmation dialog before executing:
+
+- `SAVE_CONFIG` — writes configuration changes to disk
+- `FIRMWARE_RESTART` / `RESTART` — restarts Klipper
+- `SHUTDOWN` — shuts down the printer host
+- `M112` / `EMERGENCY_STOP` — emergency stop
 
 ---
 
