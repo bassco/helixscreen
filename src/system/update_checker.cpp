@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
+#include <fstream>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/wait.h>
@@ -1401,35 +1402,27 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     TelemetryManager::write_update_success_flag("config", version, HELIX_VERSION,
                                                 get_platform_key());
 
+    // Write restart marker so watchdog knows this exit is expected.
+    // Safety net: even if _exit(0) below doesn't execute (e.g., SIGABRT from
+    // stale CWD), the watchdog sees the marker and skips the crash dialog.
+    {
+        std::string marker = AppConstants::Update::update_restart_marker_path();
+        std::ofstream ofs(marker);
+        if (ofs) {
+            spdlog::info("[UpdateChecker] Wrote update restart marker: {}", marker);
+        } else {
+            spdlog::warn("[UpdateChecker] Failed to write update restart marker: {}", marker);
+        }
+    }
+
     report_download_status(DownloadStatus::Complete, 100,
                            "v" + version + " installed! Restarting...");
 
-    // Trigger self-restart: _exit(0) causes the watchdog to restart helix-screen
-    // with the newly installed binary ("Normal exit (code 0) — restart silently").
-    // install.sh skips systemctl restart under NoNewPrivileges, so we own the restart.
-    //
-    // _exit() not exit(): calling exit() from a background thread races with
-    // destructors on other threads (LVGL loop, WebSocket threads) and causes
-    // SIGSEGV (code 139). The watchdog treats that as a crash, shows the recovery
-    // dialog, and Config::init() recreates helixconfig.json from defaults — wiping
-    // dev_url and channel settings. _exit() terminates immediately at the OS level
-    // with no C++ cleanup, so exit code 0 reaches the watchdog cleanly.
-    std::thread([this, version] {
-        // Show "Complete" state for 2 seconds
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        // Transition to static "Restarting" screen — no spinner, friendly message
-        if (!shutting_down_.load()) {
-            report_download_status(DownloadStatus::Restarting, 100,
-                                   "v" + version + " installed!");
-        }
-        // 1s gives the LVGL tick loop at least one full frame (~16ms) to
-        // process the queued subject update and render the Restarting container
-        // before _exit(0) tears down the process.
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        spdlog::info("[UpdateChecker] Restarting to apply update");
-        spdlog::default_logger()->flush();
-        ::_exit(0);
-    }).detach();
+    // Exit immediately — watchdog restarts us with the new binary.
+    // _exit() not exit(): avoids racing with destructors on other threads.
+    spdlog::info("[UpdateChecker] Restarting to apply update");
+    spdlog::default_logger()->flush();
+    ::_exit(0);
 }
 
 // Done with flush-on-write macros — only needed in do_install()
