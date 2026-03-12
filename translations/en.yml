@@ -660,6 +660,7 @@ translations:
   Learn More: Learn More
   'Length:': 'Length:'
   Leveling Gantry...: Leveling Gantry...
+  Library: Library
   Lifetime Print Stats: Lifetime Print Stats
   Light: Light
   Load: Load
@@ -933,6 +934,7 @@ translations:
   Print File: Print File
   Print Files: Print Files
   Print History: Print History
+  Print Last: Print Last
   Print Hours: Print Hours
   Print Label: Print Label
   Print Objects: Print Objects
@@ -994,6 +996,8 @@ translations:
   Reboot: Reboot
   Rebooting...: Rebooting...
   Recalibrate or view detailed results anytime in Settings.: Recalibrate or view detailed results anytime in Settings.
+  Recent: Recent
+  Recently Printed: Recently Printed
   Record Timelapse: Record Timelapse
   Record timelapses of your prints: Record timelapses of your prints
   Recorded Videos: Recorded Videos

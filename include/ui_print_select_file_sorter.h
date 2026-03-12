@@ -26,6 +26,11 @@ class PrintSelectFileSorter {
     void sort_by(SortColumn column);
 
     /**
+     * @brief Force sort column and direction without toggling.
+     */
+    void set_sort(SortColumn column, SortDirection direction);
+
+    /**
      * @brief Apply current sort settings to a file list.
      */
     void apply_sort(std::vector<PrintFileData>& files);

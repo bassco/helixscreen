@@ -659,6 +659,7 @@
   <translation tag="Learn More" de="Mehr erfahren" en="Learn More" es="Más información" fr="En savoir plus" it="Scopri di più" ja="詳細を見る" pt="Saiba Mais" ru="Подробнее" zh="了解更多"/>
   <translation tag="Length:" de="Länge:" en="Length:" es="Longitud:" fr="Longueur :" it="Lunghezza:" ja="長さ:" pt="Comprimento:" ru="Длина:" zh="长度："/>
   <translation tag="Leveling Gantry..." de="Gantry nivellieren..." en="Leveling Gantry..." es="Nivelando pórtico..." fr="Nivellement du portique..." it="Livellamento gantry..." ja="ガントリーレベリング中..." pt="Nivelando pórtico..." ru="Выравнивание портала..." zh="正在调平龙门..."/>
+  <translation tag="Library" en="Library"/>
   <translation tag="Lifetime Print Stats" de="Gesamte Druckstatistik" en="Lifetime Print Stats" es="Estadísticas de impresión totales" fr="Statistiques d&apos;impression totales" it="Statistiche stampe totali" ja="累計印刷統計" pt="Estatísticas de Impressão Totais" ru="Статистика за всё время" zh="累计打印统计"/>
   <translation tag="Light" de="Hell" en="Light" es="Claro" fr="Clair" it="Chiaro" ja="ライト" pt="Claro" ru="Подсветка" zh="浅色"/>
   <translation tag="Load" de="Laden" en="Load" es="Cargar" fr="Charger" it="Carica" ja="装填" pt="Carregar" ru="Загрузить" zh="加载"/>
@@ -933,6 +934,7 @@
   <translation tag="Print History" de="Druckverlauf" en="Print History" es="Historial de Impresión" fr="Historique d&apos;impression" it="Cronologia stampe" ja="印刷履歴" pt="Histórico de Impressão" ru="История печати" zh="打印历史"/>
   <translation tag="Print Hours" de="Druckstunden" en="Print Hours" es="Horas de Impresión" fr="Heures d&apos;impression" it="Ore di stampa" ja="印刷時間" pt="Horas de Impressão" ru="Часы печати" zh="打印时长"/>
   <translation tag="Print Label" de="Etikett drucken" en="Print Label" es="Imprimir etiqueta" fr="Imprimer l&apos;étiquette" it="Stampa etichetta" ja="ラベルを印刷" pt="Imprimir Etiqueta" ru="Печать этикетки" zh="打印标签"/>
+  <translation tag="Print Last" en="Print Last"/>
   <translation tag="Print Objects" de="Druckobjekte" en="Print Objects" es="Objetos de impresión" fr="Objets d&apos;impression" it="Oggetti di Stampa" ja="印刷オブジェクト" pt="Objetos de Impressão" ru="Объекты печати" zh="打印对象"/>
   <translation tag="Print Speed" de="Druckgeschwindigkeit" en="Print Speed" es="Velocidad de Impresión" fr="Vitesse d&apos;impression" it="Velocità stampa" ja="印刷速度" pt="Velocidade de Impressão" ru="Скорость печати" zh="打印速度"/>
   <translation tag="Print Status" de="Druckstatus" en="Print Status" es="Estado de Impresión" fr="État de l&apos;impression" it="Stato stampa" ja="印刷ステータス" pt="Status da Impressão" ru="Статус печати" zh="打印状态"/>
@@ -992,6 +994,8 @@
   <translation tag="Reboot" de="Neustart" en="Reboot" es="Reiniciar" fr="Redémarrer" it="Riavvia" ja="再起動" pt="Reiniciar" ru="Перезагрузка" zh="重启"/>
   <translation tag="Rebooting..." de="Wird neu gestartet..." en="Rebooting..." es="Reiniciando..." fr="Redémarrage..." it="Riavvio in corso..." ja="再起動中..." pt="Reiniciando..." ru="Перезагрузка..." zh="正在重启..."/>
   <translation tag="Recalibrate or view detailed results anytime in Settings." de="Jederzeit in den Einstellungen neu kalibrieren oder detaillierte Ergebnisse anzeigen." en="Recalibrate or view detailed results anytime in Settings." es="Recalibre o vea resultados detallados en cualquier momento en Ajustes." fr="Recalibrez ou consultez les résultats détaillés à tout moment dans les paramètres." it="Ricalibra o visualizza i risultati dettagliati in qualsiasi momento nelle Impostazioni." ja="設定からいつでも再キャリブレーションや詳細結果の確認ができます。" pt="Recalibre ou veja resultados detalhados a qualquer momento em Configurações." ru="Перекалибруйте или просмотрите подробные результаты в любое время в Настройках." zh="可随时在设置中重新校准或查看详细结果。"/>
+  <translation tag="Recent" en="Recent"/>
+  <translation tag="Recently Printed" en="Recently Printed"/>
   <translation tag="Record Timelapse" de="Zeitraffer aufnehmen" en="Record Timelapse" es="Grabar Timelapse" fr="Enregistrer le timelapse" it="Registra timelapse" ja="タイムラプスを録画" pt="Gravar Timelapse" ru="Записать таймлапс" zh="录制延时摄影"/>
   <translation tag="Record timelapses of your prints" de="Zeitraffer Ihrer Drucke aufnehmen" en="Record timelapses of your prints" es="Grabe timelapses de sus impresiones" fr="Enregistrer des timelapses de vos impressions" it="Registra timelapse delle tue stampe" ja="印刷のタイムラプスを録画" pt="Gravar timelapses das suas impressões" ru="Записывайте таймлапсы ваших печатей" zh="录制打印延时摄影"/>
   <translation tag="Recorded Videos" de="Aufgezeichnete Videos" en="Recorded Videos" es="Videos Grabados" fr="Vidéos enregistrées" it="Video registrati" ja="録画された動画" pt="Vídeos Gravados" ru="Записанные видео" zh="已录制视频"/>

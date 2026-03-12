@@ -766,7 +766,52 @@ void PrintSelectPanel::sort_by(PrintSelectSortColumn column) {
                   static_cast<int>(current_sort_direction_));
 }
 
+void PrintSelectPanel::set_return_to_home_on_close() {
+    return_to_home_on_close_ = true;
+    return_home_activation_count_ = 0;
+    spdlog::debug("[{}] Will return to home when detail view closes", get_name());
+}
+
+void PrintSelectPanel::set_sort_recent() {
+    // Force MODIFIED descending without toggle
+    auto sorter_column = static_cast<helix::ui::SortColumn>(
+        static_cast<int>(PrintSelectSortColumn::MODIFIED));
+    file_sorter_.set_sort(sorter_column, helix::ui::SortDirection::DESCENDING);
+
+    current_sort_column_ = PrintSelectSortColumn::MODIFIED;
+    current_sort_direction_ = PrintSelectSortDirection::DESCENDING;
+
+    apply_sort();
+    update_sort_indicators();
+
+    if (current_view_mode_ == PrintSelectViewMode::CARD) {
+        populate_card_view();
+    } else {
+        populate_list_view();
+    }
+
+    // Show "Recently Printed" context banner
+    if (panel_) {
+        auto* banner = lv_obj_find_by_name(panel_, "context_banner");
+        if (banner) {
+            lv_obj_remove_flag(banner, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    spdlog::info("[{}] Sort set to recent (MODIFIED descending)", get_name());
+}
+
+void PrintSelectPanel::hide_context_banner() {
+    if (panel_) {
+        auto* banner = lv_obj_find_by_name(panel_, "context_banner");
+        if (banner && !lv_obj_has_flag(banner, LV_OBJ_FLAG_HIDDEN)) {
+            lv_obj_add_flag(banner, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 void PrintSelectPanel::refresh_files() {
+    hide_context_banner();
     if (!file_provider_) {
         spdlog::warn("[{}] Cannot refresh files: file provider not initialized", get_name());
         return;
@@ -1356,6 +1401,36 @@ void PrintSelectPanel::check_moonraker_usb_symlink() {
 }
 
 void PrintSelectPanel::on_activate() {
+    // "Print Last" flow: suppress panel flash while detail view is pending/open
+    if (return_to_home_on_close_) {
+        bool detail_open = detail_view_ && detail_view_->is_visible();
+        bool pending = !pending_file_selection_.empty();
+
+        if ((detail_open || pending) && ++return_home_activation_count_ <= 3) {
+            // Hide panel content to prevent flash while detail view is pending/open
+            if (panel_) {
+                lv_obj_set_style_opa(panel_, LV_OPA_0, 0);
+            }
+            spdlog::debug("[{}] Print Last flow: hiding panel (detail_open={}, pending={}, count={})",
+                          get_name(), detail_open, pending, return_home_activation_count_);
+        } else {
+            // Detail view closed OR safety timeout — restore opacity and go home
+            if (return_home_activation_count_ > 3) {
+                spdlog::warn("[{}] Print Last flow: safety timeout after {} activations",
+                             get_name(), return_home_activation_count_);
+                pending_file_selection_.clear();
+            }
+            if (panel_) {
+                lv_obj_set_style_opa(panel_, LV_OPA_100, 0);
+            }
+            return_to_home_on_close_ = false;
+            return_home_activation_count_ = 0;
+            spdlog::info("[{}] Returning to home panel (Print Last flow)", get_name());
+            NavigationManager::instance().set_active(PanelId::Home);
+            return;
+        }
+    }
+
     // On first activation: skip refresh if files already loaded (connection observer did it)
     // On subsequent activations: refresh to pick up external changes
     bool is_usb_active = usb_source_ && usb_source_->is_usb_active();
@@ -1413,6 +1488,15 @@ void PrintSelectPanel::on_activate() {
 }
 
 void PrintSelectPanel::on_deactivate() {
+    // Restore opacity if we were in "Print Last" pass-through mode
+    if (return_to_home_on_close_) {
+        if (panel_) {
+            lv_obj_set_style_opa(panel_, LV_OPA_100, 0);
+        }
+        return_to_home_on_close_ = false;
+        return_home_activation_count_ = 0;
+    }
+
     // Pause file list polling while panel is hidden — no point polling when not visible
     if (file_poll_timer_) {
         lv_timer_pause(file_poll_timer_);
@@ -1421,6 +1505,8 @@ void PrintSelectPanel::on_deactivate() {
 }
 
 void PrintSelectPanel::navigate_to_directory(const std::string& dirname) {
+    hide_context_banner();
+
     // Increment generation counter to invalidate in-flight metadata callbacks
     uint32_t gen = ++nav_generation_;
     spdlog::debug("[{}] Navigation generation incremented to {} (entering {})", get_name(), gen,

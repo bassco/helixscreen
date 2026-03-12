@@ -315,6 +315,22 @@ class PrintSelectPanel : public PanelBase {
     void set_pending_file_selection(const std::string& filename);
 
     /**
+     * @brief Set sort to "recently modified" (MODIFIED descending)
+     *
+     * Unlike sort_by(), this doesn't toggle — it forces MODIFIED descending.
+     * Used by the home panel Library "Recent" action.
+     */
+    void set_sort_recent();
+
+    /**
+     * @brief Request navigation back to home when the detail view closes.
+     *
+     * Used by "Print Last" to skip the file browser on back navigation.
+     * Consumed on next on_activate() after the detail overlay closes.
+     */
+    void set_return_to_home_on_close();
+
+    /**
      * @brief Hide detail view overlay
      */
     void hide_detail_view();
@@ -460,6 +476,8 @@ class PrintSelectPanel : public PanelBase {
     int selected_success_count_ = 0;      ///< Success count of selected file
     std::string
         pending_file_selection_; ///< File to auto-select when list is populated (--select-file)
+    bool return_to_home_on_close_ = false;
+    int return_home_activation_count_ = 0;
     PrintSelectViewMode current_view_mode_ = PrintSelectViewMode::CARD;
     PrintSelectSortColumn current_sort_column_ = PrintSelectSortColumn::MODIFIED;
     PrintSelectSortDirection current_sort_direction_ = PrintSelectSortDirection::DESCENDING;
@@ -585,6 +603,11 @@ class PrintSelectPanel : public PanelBase {
      * @brief Apply current sort settings to file_list_
      */
     void apply_sort();
+
+    /**
+     * @brief Hide the "Recently Printed" context banner if visible
+     */
+    void hide_context_banner();
 
     /**
      * @brief Update empty state visibility based on file_list_ size

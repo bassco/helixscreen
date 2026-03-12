@@ -36,6 +36,11 @@ class PrintStatusWidget : public PanelWidget {
     /// XML event callback — opens print status panel or file browser
     static void print_card_clicked_cb(lv_event_t* e);
 
+    /// Library row callbacks
+    static void library_files_cb(lv_event_t* e);
+    static void library_last_cb(lv_event_t* e);
+    static void library_recent_cb(lv_event_t* e);
+
   private:
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
@@ -43,10 +48,20 @@ class PrintStatusWidget : public PanelWidget {
     // Cached widget references (looked up after XML creation)
     lv_obj_t* print_card_thumb_ = nullptr;        // Idle state thumbnail
     lv_obj_t* print_card_active_thumb_ = nullptr; // Active print thumbnail
-    lv_obj_t* print_card_label_ = nullptr;        // Dynamic text label
     lv_obj_t* print_card_layout_ = nullptr;       // Row/column layout container
     lv_obj_t* print_card_thumb_wrap_ = nullptr;   // Thumbnail wrapper
     lv_obj_t* print_card_info_ = nullptr;         // Info section (filename/progress)
+
+    // Library idle state widgets
+    lv_obj_t* print_card_idle_ = nullptr;         // Full library idle card
+    lv_obj_t* print_card_idle_compact_ = nullptr; // Compact idle card (1x2)
+    lv_obj_t* print_card_thumb_compact_ = nullptr; // Compact thumbnail
+    lv_obj_t* library_row_last_ = nullptr;        // Print Last row (for graying out)
+    lv_obj_t* compact_row_last_ = nullptr;        // Compact Print Last row (for graying out)
+
+    // Compact mode and state tracking
+    bool is_compact_ = false;
+    bool last_print_available_ = false;
 
     // PrinterState reference for subject access
     PrinterState& printer_state_;
@@ -77,6 +92,13 @@ class PrintStatusWidget : public PanelWidget {
     void update_print_card_from_state();
     void update_print_card_label(int progress, int time_left_secs);
     void reset_print_card_to_idle();
+    void update_idle_compact_mode();
+    void update_last_print_availability();
+
+    // Library action handlers
+    void handle_library_files();
+    void handle_library_last();
+    void handle_library_recent();
 
     // Filament runout handling
     void check_and_show_idle_runout_modal();

@@ -55,6 +55,15 @@
     </lv_obj>
     <!-- header -->
 
+    <!-- Context banner (shown when entering via Library > Recent) -->
+    <lv_obj name="context_banner" width="100%" height="content"
+            style_pad_left="#space_md" style_pad_right="#space_md"
+            style_pad_top="#space_xxs" style_pad_bottom="#space_xxs"
+            hidden="true" scrollable="false">
+      <text_small name="context_banner_text" text="Recently Printed" translation_tag="Recently Printed"
+                  variant="muted"/>
+    </lv_obj>
+
     <!-- Card view container (visible when view_mode == 0) -->
     <!-- Note: style_pad_gap controls spacing between cards, used by C++ layout calculations -->
     <lv_obj name="card_view_container"

@@ -17,6 +17,11 @@ void PrintSelectFileSorter::sort_by(SortColumn column) {
     }
 }
 
+void PrintSelectFileSorter::set_sort(SortColumn column, SortDirection direction) {
+    current_column_ = column;
+    current_direction_ = direction;
+}
+
 void PrintSelectFileSorter::apply_sort(std::vector<PrintFileData>& files) {
     auto sort_column = current_column_;
     auto sort_direction = current_direction_;

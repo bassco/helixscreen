@@ -6,6 +6,7 @@
 #include "app_constants.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
+#include "ui_panel_print_select.h"
 #include "ui_panel_print_status.h"
 #include "ui_update_queue.h"
 
@@ -16,6 +17,7 @@
 #include "print_history_manager.h"
 #include "printer_state.h"
 #include "runtime_config.h"
+#include "theme_manager.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_load_context.h"
 #include "thumbnail_processor.h"
@@ -27,10 +29,13 @@
 namespace helix {
 void register_print_status_widget() {
     register_widget_factory("print_status", []() { return std::make_unique<PrintStatusWidget>(); });
-    // No init_subjects needed — this widget uses subjects owned by PrinterState
 
     // Register XML event callbacks at startup (before any XML is parsed)
-    lv_xml_register_event_cb(nullptr, "print_card_clicked_cb", PrintStatusWidget::print_card_clicked_cb);
+    lv_xml_register_event_cb(nullptr, "print_card_clicked_cb",
+                             PrintStatusWidget::print_card_clicked_cb);
+    lv_xml_register_event_cb(nullptr, "library_files_cb", PrintStatusWidget::library_files_cb);
+    lv_xml_register_event_cb(nullptr, "library_last_cb", PrintStatusWidget::library_last_cb);
+    lv_xml_register_event_cb(nullptr, "library_recent_cb", PrintStatusWidget::library_recent_cb);
 }
 } // namespace helix
 
@@ -57,10 +62,16 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     // Cache widget references from XML
     print_card_thumb_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb");
     print_card_active_thumb_ = lv_obj_find_by_name(widget_obj_, "print_card_active_thumb");
-    print_card_label_ = lv_obj_find_by_name(widget_obj_, "print_card_label");
     print_card_layout_ = lv_obj_find_by_name(widget_obj_, "print_card_layout");
     print_card_thumb_wrap_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_wrap");
     print_card_info_ = lv_obj_find_by_name(widget_obj_, "print_card_info");
+
+    // Library idle state widgets
+    print_card_idle_ = lv_obj_find_by_name(widget_obj_, "print_card_idle");
+    print_card_idle_compact_ = lv_obj_find_by_name(widget_obj_, "print_card_idle_compact");
+    print_card_thumb_compact_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_compact");
+    library_row_last_ = lv_obj_find_by_name(widget_obj_, "library_row_last");
+    compact_row_last_ = lv_obj_find_by_name(widget_obj_, "compact_row_last");
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -131,21 +142,19 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     spdlog::debug("[PrintStatusWidget] Subscribed to print state/progress/time/thumbnail/runout");
 
     // Check initial print state
-    if (print_card_thumb_ && print_card_active_thumb_ && print_card_label_) {
+    if (print_card_thumb_ && print_card_active_thumb_) {
         auto state = static_cast<PrintJobState>(
             lv_subject_get_int(printer_state_.get_print_state_enum_subject()));
         if (state == PrintJobState::PRINTING || state == PrintJobState::PAUSED) {
             on_print_state_changed(state);
         } else {
-            // Set idle thumbnail (last print or benchy fallback)
             reset_print_card_to_idle();
         }
         spdlog::debug("[PrintStatusWidget] Found print card widgets for dynamic updates");
     } else {
         spdlog::warn("[PrintStatusWidget] Could not find all print card widgets "
-                     "(thumb={}, active_thumb={}, label={})",
-                     print_card_thumb_ != nullptr, print_card_active_thumb_ != nullptr,
-                     print_card_label_ != nullptr);
+                     "(thumb={}, active_thumb={})",
+                     print_card_thumb_ != nullptr, print_card_active_thumb_ != nullptr);
     }
 
     spdlog::debug("[PrintStatusWidget] Attached");
@@ -170,10 +179,14 @@ void PrintStatusWidget::detach() {
     // Clear widget references
     print_card_thumb_ = nullptr;
     print_card_active_thumb_ = nullptr;
-    print_card_label_ = nullptr;
     print_card_layout_ = nullptr;
     print_card_thumb_wrap_ = nullptr;
     print_card_info_ = nullptr;
+    print_card_idle_ = nullptr;
+    print_card_idle_compact_ = nullptr;
+    print_card_thumb_compact_ = nullptr;
+    library_row_last_ = nullptr;
+    compact_row_last_ = nullptr;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -190,6 +203,13 @@ void PrintStatusWidget::detach() {
 
 void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/,
                                         int /*height_px*/) {
+    // Compact mode: 1-column — not enough horizontal space for thumbnail + action rows
+    bool compact = (colspan <= 1);
+    if (compact != is_compact_) {
+        is_compact_ = compact;
+        update_idle_compact_mode();
+    }
+
     if (!print_card_layout_ || !print_card_thumb_wrap_ || !print_card_info_) {
         return;
     }
@@ -215,8 +235,26 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
         lv_obj_set_style_flex_grow(print_card_info_, 1, 0);
     }
 
-    spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {}", colspan, rowspan,
-                  use_column ? "column" : "row");
+    spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {} (compact={})", colspan, rowspan,
+                  use_column ? "column" : "row", is_compact_);
+}
+
+void PrintStatusWidget::update_idle_compact_mode() {
+    // Toggle between full library card and compact card based on widget size
+    if (print_card_idle_ && lv_obj_is_valid(print_card_idle_)) {
+        if (is_compact_) {
+            lv_obj_add_flag(print_card_idle_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_remove_flag(print_card_idle_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (print_card_idle_compact_ && lv_obj_is_valid(print_card_idle_compact_)) {
+        if (is_compact_) {
+            lv_obj_remove_flag(print_card_idle_compact_, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(print_card_idle_compact_, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 }
 
 // ============================================================================
@@ -243,9 +281,73 @@ void PrintStatusWidget::handle_print_card_clicked() {
             spdlog::error("[PrintStatusWidget] Failed to push print status overlay");
         }
     } else {
-        // No print in progress - navigate to print select panel
-        spdlog::info("[PrintStatusWidget] Print card clicked - navigating to print select panel");
-        NavigationManager::instance().set_active(PanelId::PrintSelect);
+        // No print in progress - navigate to print select panel (same as "Print Files")
+        handle_library_files();
+    }
+}
+
+// ============================================================================
+// Library Action Handlers
+// ============================================================================
+
+void PrintStatusWidget::handle_library_files() {
+    spdlog::info("[PrintStatusWidget] Library: Print Files");
+    NavigationManager::instance().set_active(PanelId::PrintSelect);
+}
+
+void PrintStatusWidget::handle_library_last() {
+    if (!last_print_available_) {
+        return;
+    }
+
+    auto* history = get_print_history_manager();
+    if (!history || !history->is_loaded()) {
+        spdlog::info("[PrintStatusWidget] Library: Print Last - no history available");
+        return;
+    }
+
+    const auto& jobs = history->get_jobs();
+    if (jobs.empty()) {
+        spdlog::info("[PrintStatusWidget] Library: Print Last - no jobs in history");
+        return;
+    }
+
+    // Find most recent job where the file still exists
+    const PrintHistoryJob* last_job = nullptr;
+    for (const auto& job : jobs) {
+        if (job.exists) {
+            last_job = &job;
+            break;
+        }
+    }
+
+    if (!last_job) {
+        spdlog::info("[PrintStatusWidget] Library: Print Last - no files exist on disk");
+        return;
+    }
+
+    spdlog::info("[PrintStatusWidget] Library: Print Last -> {}", last_job->filename);
+
+    // Navigate to PrintSelectPanel, select the file, and return to home on back
+    NavigationManager::instance().set_active(PanelId::PrintSelect);
+
+    auto* panel = get_print_select_panel(printer_state_, get_moonraker_api());
+    if (panel) {
+        panel->set_return_to_home_on_close();
+        if (!panel->select_file_by_name(last_job->filename)) {
+            panel->set_pending_file_selection(last_job->filename);
+        }
+    }
+}
+
+void PrintStatusWidget::handle_library_recent() {
+    spdlog::info("[PrintStatusWidget] Library: Recent");
+
+    NavigationManager::instance().set_active(PanelId::PrintSelect);
+
+    auto* panel = get_print_select_panel(printer_state_, get_moonraker_api());
+    if (panel) {
+        panel->set_sort_recent();
     }
 }
 
@@ -254,7 +356,7 @@ void PrintStatusWidget::handle_print_card_clicked() {
 // ============================================================================
 
 void PrintStatusWidget::on_print_state_changed(PrintJobState state) {
-    if (!widget_obj_ || !print_card_thumb_ || !print_card_label_) {
+    if (!widget_obj_ || !print_card_thumb_) {
         return;
     }
     if (!lv_obj_is_valid(widget_obj_)) {
@@ -262,6 +364,18 @@ void PrintStatusWidget::on_print_state_changed(PrintJobState state) {
     }
 
     bool is_active = (state == PrintJobState::PRINTING || state == PrintJobState::PAUSED);
+
+    // Hide both idle cards when printing, show the right one when idle
+    if (is_active) {
+        if (print_card_idle_ && lv_obj_is_valid(print_card_idle_)) {
+            lv_obj_add_flag(print_card_idle_, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (print_card_idle_compact_ && lv_obj_is_valid(print_card_idle_compact_)) {
+            lv_obj_add_flag(print_card_idle_compact_, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        update_idle_compact_mode();
+    }
 
     if (is_active) {
         spdlog::debug("[PrintStatusWidget] Print active - updating card progress display");
@@ -291,38 +405,13 @@ void PrintStatusWidget::on_print_thumbnail_path_changed(const char* path) {
 }
 
 void PrintStatusWidget::update_print_card_from_state() {
-    auto state = static_cast<PrintJobState>(
-        lv_subject_get_int(printer_state_.get_print_state_enum_subject()));
-
-    // Only update if actively printing
-    if (state != PrintJobState::PRINTING && state != PrintJobState::PAUSED) {
-        return;
-    }
-
-    int progress = lv_subject_get_int(printer_state_.get_print_progress_subject());
-    int time_left = lv_subject_get_int(printer_state_.get_print_time_left_subject());
-
-    update_print_card_label(progress, time_left);
+    // Printing state display is driven by subject bindings in the XML:
+    // print_display_filename, print_progress, print_progress_text
+    // No manual widget updates needed from this widget.
 }
 
-void PrintStatusWidget::update_print_card_label(int progress, int time_left_secs) {
-    if (!print_card_label_ || !lv_obj_is_valid(print_card_label_)) {
-        return;
-    }
-
-    char buf[64];
-    int hours = time_left_secs / 3600;
-    int minutes = (time_left_secs % 3600) / 60;
-
-    if (hours > 0) {
-        std::snprintf(buf, sizeof(buf), "%d%% \u2022 %dh %02dm left", progress, hours, minutes);
-    } else if (minutes > 0) {
-        std::snprintf(buf, sizeof(buf), "%d%% \u2022 %dm left", progress, minutes);
-    } else {
-        std::snprintf(buf, sizeof(buf), "%d%% \u2022 < 1m left", progress);
-    }
-
-    lv_label_set_text(print_card_label_, buf);
+void PrintStatusWidget::update_print_card_label(int /*progress*/, int /*time_left_secs*/) {
+    // Kept for interface compatibility — printing state display is subject-driven
 }
 
 std::string PrintStatusWidget::get_last_print_thumbnail_path() const {
@@ -369,18 +458,27 @@ std::string PrintStatusWidget::get_last_print_thumbnail_path() const {
 }
 
 void PrintStatusWidget::reset_print_card_to_idle() {
-    if (print_card_label_ && lv_obj_is_valid(print_card_label_)) {
-        lv_label_set_text(print_card_label_, "Print Files");
-    }
+    // Update "Print Last" row availability
+    update_last_print_availability();
 
     if (!print_card_thumb_ || !lv_obj_is_valid(print_card_thumb_)) {
         return;
     }
 
+    // Also update compact thumbnail
+    auto set_thumb_on_widgets = [this](const char* src) {
+        if (print_card_thumb_ && lv_obj_is_valid(print_card_thumb_)) {
+            lv_image_set_src(print_card_thumb_, src);
+        }
+        if (print_card_thumb_compact_ && lv_obj_is_valid(print_card_thumb_compact_)) {
+            lv_image_set_src(print_card_thumb_compact_, src);
+        }
+    };
+
     // Try to show the last printed file's thumbnail instead of benchy
     std::string thumb_rel_path = get_last_print_thumbnail_path();
     if (thumb_rel_path.empty()) {
-        lv_image_set_src(print_card_thumb_, "A:assets/images/benchy_thumbnail_white.png");
+        set_thumb_on_widgets("A:assets/images/benchy_thumbnail_white.png");
         spdlog::debug("[PrintStatusWidget] Idle thumbnail: benchy (no history)");
         return;
     }
@@ -394,13 +492,13 @@ void PrintStatusWidget::reset_print_card_to_idle() {
     // Check if we already have a pre-scaled BIN version
     auto cached = get_thumbnail_cache().get_if_optimized(thumb_rel_path, target);
     if (!cached.empty()) {
-        lv_image_set_src(print_card_thumb_, cached.c_str());
+        set_thumb_on_widgets(cached.c_str());
         spdlog::debug("[PrintStatusWidget] Idle thumbnail from cache: {}", cached);
         return;
     }
 
     // Set benchy as placeholder while we fetch
-    lv_image_set_src(print_card_thumb_, "A:assets/images/benchy_thumbnail_white.png");
+    set_thumb_on_widgets("A:assets/images/benchy_thumbnail_white.png");
 
     // Fetch async from Moonraker
     auto* api = get_moonraker_api();
@@ -411,24 +509,56 @@ void PrintStatusWidget::reset_print_card_to_idle() {
 
     // Use alive guard to prevent use-after-free if widget is destroyed during fetch [L072]
     lv_obj_t* thumb_widget = print_card_thumb_;
+    lv_obj_t* thumb_compact = print_card_thumb_compact_;
     std::weak_ptr<std::atomic<bool>> weak_alive = alive_;
 
     get_thumbnail_cache().fetch_optimized(
         api, thumb_rel_path, target,
-        [thumb_widget, weak_alive](const std::string& lvgl_path) {
+        [thumb_widget, thumb_compact, weak_alive](const std::string& lvgl_path) {
             if (weak_alive.expired()) return;
             helix::ui::queue_update<std::string>(
                 std::make_unique<std::string>(lvgl_path),
-                [thumb_widget](std::string* path) {
+                [thumb_widget, thumb_compact](std::string* path) {
                     if (lv_obj_is_valid(thumb_widget)) {
                         lv_image_set_src(thumb_widget, path->c_str());
-                        spdlog::info("[PrintStatusWidget] Idle thumbnail loaded: {}", *path);
                     }
+                    if (thumb_compact && lv_obj_is_valid(thumb_compact)) {
+                        lv_image_set_src(thumb_compact, path->c_str());
+                    }
+                    spdlog::info("[PrintStatusWidget] Idle thumbnail loaded: {}", *path);
                 });
         },
         [](const std::string& error) {
             spdlog::debug("[PrintStatusWidget] Idle thumbnail fetch failed: {}", error);
         });
+}
+
+void PrintStatusWidget::update_last_print_availability() {
+    auto* history = get_print_history_manager();
+    last_print_available_ = false;
+
+    if (history && history->is_loaded()) {
+        const auto& jobs = history->get_jobs();
+        for (const auto& job : jobs) {
+            if (job.exists) {
+                last_print_available_ = true;
+                break;
+            }
+        }
+    }
+
+    // Apply to both full and compact "Print Last" rows
+    lv_obj_t* rows[] = {library_row_last_, compact_row_last_};
+    for (auto* row : rows) {
+        if (!row || !lv_obj_is_valid(row)) continue;
+        if (last_print_available_) {
+            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_style_opa(row, LV_OPA_100, 0);
+        } else {
+            lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_style_opa(row, LV_OPA_40, 0);
+        }
+    }
 }
 
 // ============================================================================
@@ -507,6 +637,18 @@ void PrintStatusWidget::show_idle_runout_modal() {
 // Static Trampolines
 // ============================================================================
 
+static PrintStatusWidget* recover_widget_from_event(lv_event_t* e) {
+    // Walk up from the clicked element to find the widget root with user_data
+    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    auto* obj = target;
+    while (obj) {
+        auto* self = static_cast<PrintStatusWidget*>(lv_obj_get_user_data(obj));
+        if (self) return self;
+        obj = lv_obj_get_parent(obj);
+    }
+    return nullptr;
+}
+
 void PrintStatusWidget::print_card_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] print_card_clicked_cb");
 
@@ -517,6 +659,42 @@ void PrintStatusWidget::print_card_clicked_cb(lv_event_t* e) {
     } else {
         spdlog::warn(
             "[PrintStatusWidget] print_card_clicked_cb: could not recover widget instance");
+    }
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::library_files_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] library_files_cb");
+    lv_event_stop_bubbling(e);
+
+    auto* self = recover_widget_from_event(e);
+    if (self) {
+        self->handle_library_files();
+    }
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::library_last_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] library_last_cb");
+    lv_event_stop_bubbling(e);
+
+    auto* self = recover_widget_from_event(e);
+    if (self) {
+        self->handle_library_last();
+    }
+
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStatusWidget::library_recent_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] library_recent_cb");
+    lv_event_stop_bubbling(e);
+
+    auto* self = recover_widget_from_event(e);
+    if (self) {
+        self->handle_library_recent();
     }
 
     LVGL_SAFE_EVENT_CB_END();
