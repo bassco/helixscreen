@@ -16,6 +16,7 @@ Macro browser, toolhead renderer, touch and filament fixes, and internationaliza
 - JabberWocky V80 toolhead renderer
 - Client-side crash report deduplication to prevent repeated uploads
 - Default display brightness raised to 80% with automatic migration for existing users
+- USB keyboard support for DRM and fbdev backends on Pi builds
 
 ### Fixed
 - AFC direct_load hub field treated as direct instead of hub-routed (#392, #364)
