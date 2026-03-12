@@ -920,6 +920,7 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
 
         if (system.contains("extruders") && system["extruders"].is_object()) {
             extruders_.clear();
+            toolhead_led_state_.clear();
             const auto& extruders_json = system["extruders"];
 
             // Collect extruder names and sort for deterministic ordering
@@ -2109,17 +2110,9 @@ AmsError AmsBackendAfc::unload_filament(int slot_index) {
         }
     }
 
+    (void)slot_index; // AFC_UNSELECT_TOOL / TOOL_UNLOAD do not take a slot parameter
+
     if (num_extruders_ > 1) {
-        // Resolve which extruder to unselect from the slot's mapped_tool
-        if (slot_index >= 0) {
-            const auto* entry = slots_.get(slot_index);
-            int tool = entry ? entry->info.mapped_tool : slot_index;
-            if (tool >= 0 && tool < static_cast<int>(extruders_.size())) {
-                std::string cmd = "AFC_UNSELECT_TOOL TOOL=" + extruders_[tool].name;
-                spdlog::info("[AMS AFC] Unloading slot {} via toolchanger: {}", slot_index, cmd);
-                return execute_gcode(cmd);
-            }
-        }
         spdlog::info("[AMS AFC] Unloading via toolchanger: AFC_UNSELECT_TOOL");
         return execute_gcode("AFC_UNSELECT_TOOL");
     }
@@ -2844,6 +2837,32 @@ std::vector<helix::printer::DeviceAction> AmsBackendAfc::get_device_actions() co
         }
     }
 
+    // Multi-extruder: replace single led_extruder with per-extruder LED toggles
+    if (num_extruders_ > 1 && !extruders_.empty()) {
+        actions.erase(std::remove_if(actions.begin(), actions.end(),
+                                     [](const DeviceAction& a) { return a.id == "led_extruder"; }),
+                      actions.end());
+        for (int i = 0; i < static_cast<int>(extruders_.size()); ++i) {
+            auto it = toolhead_led_state_.find(i);
+            bool led_on = (it != toolhead_led_state_.end()) && it->second;
+            actions.push_back(
+                DeviceAction{fmt::format("led_extruder_T{}", i),
+                             fmt::format("{} Toolhead LED (T{})", led_on ? "Turn Off" : "Turn On", i),
+                             led_on ? "lightbulb-off" : "lightbulb-on",
+                             "setup",
+                             fmt::format("Toggle toolhead LED for T{}", i),
+                             ActionType::BUTTON,
+                             {},
+                             {},
+                             0,
+                             0,
+                             "",
+                             -1,
+                             true,
+                             ""});
+        }
+    }
+
     // Per-lane dist_hub actions in the hub section
     for (int i = 0; i < slots_.slot_count(); ++i) {
         const auto* entry = slots_.get(i);
@@ -3125,6 +3144,26 @@ AmsError AmsBackendAfc::execute_device_action(const std::string& action_id, cons
         return execute_gcode(afc_led_state_ ? "TURN_OFF_AFC_LED" : "TURN_ON_AFC_LED");
     } else if (action_id == "quiet_mode") {
         return execute_gcode("AFC_QUIET_MODE");
+    } else if (action_id.rfind("led_extruder_T", 0) == 0) {
+        // Per-extruder toolhead LED toggle: led_extruder_T0, led_extruder_T1, etc.
+        try {
+            int tool_idx = std::stoi(action_id.substr(14));
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (tool_idx < 0 || tool_idx >= static_cast<int>(extruders_.size())) {
+                return AmsErrorHelper::not_supported("Invalid extruder index: " +
+                                                     std::to_string(tool_idx));
+            }
+            bool currently_on = toolhead_led_state_[tool_idx];
+            int turn_on = currently_on ? 0 : 1;
+            auto err = execute_gcode(fmt::format("AFC_SET_EXTRUDER_LED EXTRUDER={} TURN_ON={}",
+                                                 extruders_[tool_idx].name, turn_on));
+            if (err) {
+                toolhead_led_state_[tool_idx] = !currently_on;
+            }
+            return err;
+        } catch (const std::exception&) {
+            return AmsErrorHelper::not_supported("Invalid LED action: " + action_id);
+        }
     }
 
     // Per-lane dist_hub actions

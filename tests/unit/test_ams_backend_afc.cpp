@@ -2981,7 +2981,7 @@ TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL in toolchanger mode (no s
     REQUIRE_FALSE(helper.has_gcode("TOOL_UNLOAD"));
 }
 
-TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL TOOL=name for specific slot",
+TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL without params for specific slot",
           "[ams][afc][toolchanger]") {
     AmsBackendAfcTestHelper helper;
     helper.initialize_test_lanes_with_slots(4);
@@ -2989,22 +2989,25 @@ TEST_CASE("AFC unload_filament sends AFC_UNSELECT_TOOL TOOL=name for specific sl
     helper.set_filament_loaded(true);
     helper.setup_toolchanger(4);
 
-    SECTION("slot 0 maps to extruder") {
+    SECTION("slot 0 still sends plain AFC_UNSELECT_TOOL") {
         auto result = helper.unload_filament(0);
         REQUIRE(result);
-        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder"));
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL"));
+        REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_UNSELECT_TOOL TOOL="));
     }
 
-    SECTION("slot 1 maps to extruder1") {
+    SECTION("slot 1 still sends plain AFC_UNSELECT_TOOL") {
         auto result = helper.unload_filament(1);
         REQUIRE(result);
-        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder1"));
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL"));
+        REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_UNSELECT_TOOL TOOL="));
     }
 
-    SECTION("slot 3 maps to extruder3") {
+    SECTION("slot 3 still sends plain AFC_UNSELECT_TOOL") {
         auto result = helper.unload_filament(3);
         REQUIRE(result);
-        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL TOOL=extruder3"));
+        REQUIRE(helper.has_gcode("AFC_UNSELECT_TOOL"));
+        REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_UNSELECT_TOOL TOOL="));
     }
 }
 
@@ -3034,6 +3037,103 @@ TEST_CASE("AFC unload_filament ignores slot_index in single-extruder mode",
     REQUIRE(result);
     REQUIRE(helper.has_gcode("TOOL_UNLOAD"));
     REQUIRE_FALSE(helper.has_gcode_starting_with("AFC_UNSELECT_TOOL"));
+}
+
+// ============================================================================
+// LED device actions (multi-extruder toolchanger mode)
+// ============================================================================
+
+TEST_CASE("AFC get_device_actions includes per-extruder LED toggles in toolchanger mode",
+          "[ams][afc][toolchanger][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.setup_toolchanger(2);
+
+    auto actions = helper.get_device_actions();
+
+    // Should have per-extruder LED actions
+    bool found_t0 = false, found_t1 = false;
+    for (const auto& a : actions) {
+        if (a.id == "led_extruder_T0") found_t0 = true;
+        if (a.id == "led_extruder_T1") found_t1 = true;
+    }
+    REQUIRE(found_t0);
+    REQUIRE(found_t1);
+
+    // Should NOT have the generic led_extruder action
+    bool found_generic = false;
+    for (const auto& a : actions) {
+        if (a.id == "led_extruder") found_generic = true;
+    }
+    REQUIRE_FALSE(found_generic);
+}
+
+TEST_CASE("AFC get_device_actions does not include LED toggles in single-extruder mode",
+          "[ams][afc][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+
+    auto actions = helper.get_device_actions();
+
+    bool found_per_extruder = false;
+    for (const auto& a : actions) {
+        if (a.id.rfind("led_extruder_T", 0) == 0) found_per_extruder = true;
+    }
+    REQUIRE_FALSE(found_per_extruder);
+}
+
+TEST_CASE("AFC execute_device_action led_extruder_T0 sends AFC_SET_EXTRUDER_LED",
+          "[ams][afc][toolchanger][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.setup_toolchanger(2);
+
+    auto result = helper.execute_device_action("led_extruder_T0");
+
+    REQUIRE(result);
+    REQUIRE(helper.has_gcode("AFC_SET_EXTRUDER_LED EXTRUDER=extruder TURN_ON=1"));
+}
+
+TEST_CASE("AFC execute_device_action led_extruder_T1 sends AFC_SET_EXTRUDER_LED",
+          "[ams][afc][toolchanger][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.setup_toolchanger(2);
+
+    auto result = helper.execute_device_action("led_extruder_T1");
+
+    REQUIRE(result);
+    REQUIRE(helper.has_gcode("AFC_SET_EXTRUDER_LED EXTRUDER=extruder1 TURN_ON=1"));
+}
+
+TEST_CASE("AFC execute_device_action led_extruder toggles state",
+          "[ams][afc][toolchanger][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.setup_toolchanger(2);
+
+    // First call turns ON
+    auto result1 = helper.execute_device_action("led_extruder_T0");
+    REQUIRE(result1);
+    REQUIRE(helper.has_gcode("AFC_SET_EXTRUDER_LED EXTRUDER=extruder TURN_ON=1"));
+
+    helper.clear_captured_gcodes();
+
+    // Second call turns OFF
+    auto result2 = helper.execute_device_action("led_extruder_T0");
+    REQUIRE(result2);
+    REQUIRE(helper.has_gcode("AFC_SET_EXTRUDER_LED EXTRUDER=extruder TURN_ON=0"));
+}
+
+TEST_CASE("AFC execute_device_action led_extruder rejects invalid tool index",
+          "[ams][afc][toolchanger][led]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.setup_toolchanger(2);
+
+    auto result = helper.execute_device_action("led_extruder_T5");
+
+    REQUIRE_FALSE(result);
 }
 
 // ============================================================================

@@ -520,6 +520,9 @@ class AmsBackendAfc : public AmsSubscriptionBackend {
     // Extruder names from top-level AFC.extruders array (for multi-extruder iteration)
     std::vector<std::string> extruder_names_; ///< e.g., {"extruder", "extruder1", ...}
 
+    // Per-extruder toolhead LED state (for multi-extruder mode)
+    std::unordered_map<int, bool> toolhead_led_state_; ///< tool_index → LED on/off
+
     // Path visualization state
     PathSegment error_segment_{PathSegment::NONE}; ///< Inferred error location
 

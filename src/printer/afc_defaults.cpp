@@ -247,6 +247,23 @@ std::vector<DeviceAction> afc_default_actions() {
     });
 
     actions.push_back({
+        .id = "led_extruder",
+        .label = "Toolhead LED",
+        .icon = "lightbulb-on",
+        .section = "setup",
+        .description = "Toggle toolhead LED for an extruder",
+        .type = ActionType::BUTTON,
+        .current_value = {},
+        .options = {},
+        .min_value = 0,
+        .max_value = 0,
+        .unit = "",
+        .slot_index = -1,
+        .enabled = true,
+        .disable_reason = "",
+    });
+
+    actions.push_back({
         .id = "quiet_mode",
         .label = "Toggle Quiet Mode",
         .icon = "volume-off",
