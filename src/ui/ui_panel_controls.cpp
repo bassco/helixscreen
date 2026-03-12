@@ -279,7 +279,7 @@ void ControlsPanel::deinit_subjects() {
         return;
     }
 
-    // SubjectManager handles deinitialization of all registered subjects (28 total)
+    temp_observers_.clear();
     subjects_.deinit_all();
 
     subjects_initialized_ = false;

@@ -361,6 +361,7 @@ void PrintStatusPanel::deinit_subjects() {
     set_global_light_timelapse_controls(nullptr);
     light_timelapse_controls_.deinit_subjects();
 
+    temp_observers_.clear();
     subjects_.deinit_all();
 
     subjects_initialized_ = false;

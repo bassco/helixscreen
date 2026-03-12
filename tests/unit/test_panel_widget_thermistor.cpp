@@ -26,8 +26,7 @@ class ThermistorConfigFixture {
 
     void setup_with_widgets(const json& widgets_json) {
         config.data = json::object();
-        config.data["panel_widgets"] = json::object();
-        config.data["panel_widgets"]["home"] = widgets_json;
+        config.data["printers"]["default"]["panel_widgets"]["home"] = widgets_json;
     }
 
     json& get_data() {
@@ -127,7 +126,7 @@ TEST_CASE_METHOD(helix::ThermistorConfigFixture,
     REQUIRE(cfg["sensor"].get<std::string>() == "temperature_sensor chamber");
 
     // Verify persisted in underlying JSON
-    auto& saved = get_data()["panel_widgets"]["home"];
+    auto& saved = get_data()["printers"]["default"]["panel_widgets"]["home"];
     bool found = false;
     for (const auto& item : saved) {
         if (item["id"] == "thermistor" && item.contains("config")) {
@@ -147,7 +146,7 @@ TEST_CASE_METHOD(helix::ThermistorConfigFixture,
     wc.save();
 
     // No widget should have a "config" key since none was set
-    auto& saved = get_data()["panel_widgets"]["home"];
+    auto& saved = get_data()["printers"]["default"]["panel_widgets"]["home"];
     for (const auto& item : saved) {
         CAPTURE(item["id"].get<std::string>());
         REQUIRE_FALSE(item.contains("config"));

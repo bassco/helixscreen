@@ -29,7 +29,7 @@ TEST_CASE("PhomemoPrinter::build_raster_commands header has speed, density, medi
     REQUIRE(commands[4] == 0x1B);
     REQUIRE(commands[5] == 0x4E);
     REQUIRE(commands[6] == 0x04);
-    REQUIRE(commands[7] == 0x08); // default density
+    REQUIRE(commands[7] == 0x0A); // default density
 
     // Media type: 1F 11 0A
     REQUIRE(commands[8] == 0x1F);

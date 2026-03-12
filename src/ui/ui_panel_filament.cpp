@@ -232,6 +232,7 @@ void FilamentPanel::init_subjects() {
 
 void FilamentPanel::deinit_subjects() {
     external_spool_observer_.reset();
+    temp_observers_.clear();
     deinit_subjects_base(subjects_);
 }
 

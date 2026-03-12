@@ -7,6 +7,7 @@
 #include "led/led_controller.h"
 
 #include "../catch_amalgamated.hpp"
+#include "../test_helpers/update_queue_test_access.h"
 #include "../ui_test_utils.h"
 
 using namespace helix::led;
@@ -229,6 +230,10 @@ TEST_CASE("setup_default_mappings includes all 6 state keys", "[led][auto_state]
 
 /// Helper: set up LedController with a native strip selected, init LedAutoState
 static void setup_auto_state_with_strip() {
+    // Deinit LedAutoState first to ensure clean state (no stale enabled_ or
+    // deferred observer callbacks from a previous test)
+    LedAutoState::instance().deinit();
+
     auto& ctrl = LedController::instance();
     ctrl.deinit();
     ctrl.init(nullptr, nullptr);
@@ -265,6 +270,9 @@ TEST_CASE("LedAutoState apply_action 'off' sets light_is_on false", "[led][autos
 
     // Force evaluate to "idle" (no printer state subjects → idle)
     state.evaluate();
+    // Drain deferred observer callbacks from subscribe_observers() so they
+    // cannot re-apply a stale mapping after we check the assertion
+    helix::ui::UpdateQueueTestAccess::drain_all(helix::ui::UpdateQueue::instance());
     REQUIRE_FALSE(ctrl.light_is_on());
 
     teardown_auto_state();
@@ -283,6 +291,7 @@ TEST_CASE("LedAutoState apply_action 'color' sets light_is_on true", "[led][auto
     state.set_enabled(true);
 
     state.evaluate();
+    helix::ui::UpdateQueueTestAccess::drain_all(helix::ui::UpdateQueue::instance());
     REQUIRE(ctrl.light_is_on());
 
     teardown_auto_state();
@@ -301,6 +310,7 @@ TEST_CASE("LedAutoState apply_action 'brightness' sets light_is_on based on valu
     state.set_enabled(true);
 
     state.evaluate();
+    helix::ui::UpdateQueueTestAccess::drain_all(helix::ui::UpdateQueue::instance());
     REQUIRE(ctrl.light_is_on());
 
     teardown_auto_state();
@@ -316,6 +326,7 @@ TEST_CASE("LedAutoState apply_action 'brightness' sets light_is_on based on valu
     state2.set_enabled(true);
 
     state2.evaluate();
+    helix::ui::UpdateQueueTestAccess::drain_all(helix::ui::UpdateQueue::instance());
     REQUIRE_FALSE(ctrl2.light_is_on());
 
     teardown_auto_state();

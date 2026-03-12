@@ -2476,8 +2476,8 @@ TEST_CASE("MoonrakerClientMock - file metadata includes filament_type",
 
         const json& result = response["result"];
         REQUIRE(result.contains("filament_type"));
-        // Should extract just "PLA", not "PLA;PLA;PLA;PLA"
-        REQUIRE(result["filament_type"].get<std::string>() == "PLA");
+        // Full semicolon-separated string is preserved; consumers split it
+        REQUIRE(result["filament_type"].get<std::string>() == "PLA;PLA;PLA;PLA");
     }
 
     SECTION("Filament type is empty for files without filament_type header") {

@@ -738,7 +738,7 @@ TEST_CASE("extract_header_metadata - Filament type parsing", "[gcode][metadata][
         std::remove(temp_path.c_str());
     }
 
-    SECTION("Parse semicolon-separated multi-extruder filament_type (extracts first type)") {
+    SECTION("Parse semicolon-separated multi-extruder filament_type (preserves full string)") {
         // OrcaSlicer/PrusaSlicer format for multi-extruder: "PLA;PLA;PLA;PLA"
         std::string temp_path = "/tmp/test_filament_type_multi.gcode";
         std::ofstream out(temp_path);
@@ -749,8 +749,8 @@ TEST_CASE("extract_header_metadata - Filament type parsing", "[gcode][metadata][
 
         auto metadata = extract_header_metadata(temp_path);
 
-        // Should extract just the first type "PLA", not the full string
-        REQUIRE(metadata.filament_type == "PLA");
+        // Preserves full semicolon-separated string; consumers split as needed
+        REQUIRE(metadata.filament_type == "PLA;PLA;PLA;PLA");
 
         std::remove(temp_path.c_str());
     }
@@ -855,7 +855,7 @@ TEST_CASE("extract_header_metadata - Filament type parsing", "[gcode][metadata][
         std::remove(temp_path.c_str());
     }
 
-    SECTION("Parse mixed multi-extruder filament types (extracts first type)") {
+    SECTION("Parse mixed multi-extruder filament types (preserves full string)") {
         // Different materials for different extruders
         std::string temp_path = "/tmp/test_filament_type_mixed.gcode";
         std::ofstream out(temp_path);
@@ -866,8 +866,8 @@ TEST_CASE("extract_header_metadata - Filament type parsing", "[gcode][metadata][
 
         auto metadata = extract_header_metadata(temp_path);
 
-        // Should extract just the first type "PETG"
-        REQUIRE(metadata.filament_type == "PETG");
+        // Preserves full semicolon-separated string; consumers split as needed
+        REQUIRE(metadata.filament_type == "PETG;PLA;ABS");
 
         std::remove(temp_path.c_str());
     }
@@ -887,9 +887,9 @@ TEST_CASE("extract_header_metadata - Real multi-extruder file", "[gcode][metadat
 
     SECTION("Parses filament type from multi-extruder file") {
         // File has "; filament_type = PLA;PLA;PLA;PLA"
-        // Should extract just "PLA"
+        // Preserves full semicolon-separated string; consumers split as needed
         REQUIRE_FALSE(metadata.filament_type.empty());
-        REQUIRE(metadata.filament_type == "PLA");
+        REQUIRE(metadata.filament_type == "PLA;PLA;PLA;PLA");
     }
 }
 

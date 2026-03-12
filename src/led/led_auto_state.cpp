@@ -18,6 +18,11 @@ LedAutoState& LedAutoState::instance() {
 }
 
 void LedAutoState::init(PrinterState& printer_state) {
+    // Clean up any stale observers from a previous init() call to prevent
+    // deferred callbacks from firing with outdated state
+    unsubscribe_observers();
+    last_applied_key_.clear();
+
     printer_state_ = &printer_state;
 
     load_config();
