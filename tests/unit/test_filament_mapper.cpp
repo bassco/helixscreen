@@ -675,6 +675,58 @@ TEST_CASE("compute_defaults handles many tools (12+)",
     }
 }
 
+// =============================================================================
+// find_unresolved_tools
+// =============================================================================
+
+TEST_CASE("find_unresolved_tools", "[filament_mapper]") {
+    using helix::FilamentMapper;
+    using helix::ToolMapping;
+
+    SECTION("returns empty when all tools are mapped") {
+        std::vector<ToolMapping> mappings = {
+            {0, 0, 0, false, false, ToolMapping::MatchReason::COLOR_MATCH},
+            {1, 1, 0, false, false, ToolMapping::MatchReason::FIRMWARE_MAPPING},
+        };
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.empty());
+    }
+
+    SECTION("returns auto tools with AUTO reason") {
+        std::vector<ToolMapping> mappings = {
+            {0, -1, -1, false, true, ToolMapping::MatchReason::AUTO},
+            {1, 1, 0, false, false, ToolMapping::MatchReason::COLOR_MATCH},
+            {2, -1, -1, false, true, ToolMapping::MatchReason::AUTO},
+        };
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.size() == 2);
+        REQUIRE(unresolved[0] == 0);
+        REQUIRE(unresolved[1] == 2);
+    }
+
+    SECTION("returns empty when no mappings") {
+        std::vector<ToolMapping> mappings = {};
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.empty());
+    }
+
+    SECTION("firmware-mapped tools are not unresolved") {
+        std::vector<ToolMapping> mappings = {
+            {0, 0, 0, false, false, ToolMapping::MatchReason::FIRMWARE_MAPPING},
+        };
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.empty());
+    }
+
+    SECTION("color-matched tools are not unresolved") {
+        std::vector<ToolMapping> mappings = {
+            {0, 2, 0, false, false, ToolMapping::MatchReason::COLOR_MATCH},
+        };
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.empty());
+    }
+}
+
 TEST_CASE("compute_defaults all slots are empty",
           "[filament_mapper][compute]") {
     std::vector<GcodeToolInfo> tools = {{0, 0xFF0000, "PLA"}};

@@ -70,6 +70,10 @@ public:
                                            const std::vector<AvailableSlot>& slots,
                                            const std::vector<SlotKey>& already_used);
 
+    /// Find tool indices that have no resolved mapping (auto with no match).
+    /// These are the tools that would trigger a color mismatch warning.
+    static std::vector<int> find_unresolved_tools(const std::vector<ToolMapping>& mappings);
+
     /// Weighted RGB distance between two colors (luminance-weighted).
     /// Matches the algorithm in ui_color_distance() from ui_utils.cpp.
     static int color_distance(uint32_t a, uint32_t b);

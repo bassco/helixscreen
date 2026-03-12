@@ -143,4 +143,14 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
     return mappings;
 }
 
+std::vector<int> FilamentMapper::find_unresolved_tools(const std::vector<ToolMapping>& mappings) {
+    std::vector<int> unresolved;
+    for (const auto& m : mappings) {
+        if (m.is_auto && m.reason == ToolMapping::MatchReason::AUTO) {
+            unresolved.push_back(m.tool_index);
+        }
+    }
+    return unresolved;
+}
+
 } // namespace helix
