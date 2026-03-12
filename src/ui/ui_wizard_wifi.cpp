@@ -585,7 +585,7 @@ void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
                         spdlog::info("[{}] Connected to {}", self->get_name(), self->current_ssid_);
                     } else {
                         char msg[128];
-                        snprintf(msg, sizeof(msg), "Failed to connect: %s", error.c_str());
+                        snprintf(msg, sizeof(msg), lv_tr("Failed to connect: %s"), error.c_str());
                         self->update_wifi_status(msg);
                         self->update_wifi_ip(""); // Clear IP on failure
                         NOTIFY_ERROR("Failed to connect to '{}': {}", self->current_ssid_, error);
@@ -645,7 +645,7 @@ void WizardWifiStep::handle_modal_connect_clicked() {
     }
 
     char status_buf[128];
-    snprintf(status_buf, sizeof(status_buf), "Connecting to %s...", current_ssid_);
+    snprintf(status_buf, sizeof(status_buf), lv_tr("Connecting to %s..."), current_ssid_);
     update_wifi_status(status_buf);
 
     if (wifi_manager_) {
@@ -685,13 +685,13 @@ void WizardWifiStep::handle_modal_connect_clicked() {
                         lv_obj_find_by_name(self->password_modal_, "modal_status");
                     if (modal_status) {
                         char error_msg[256];
-                        snprintf(error_msg, sizeof(error_msg), "Connection failed: %s",
+                        snprintf(error_msg, sizeof(error_msg), lv_tr("Connection failed: %s"),
                                  error.c_str());
                         lv_label_set_text(modal_status, error_msg);
                         lv_obj_remove_flag(modal_status, LV_OBJ_FLAG_HIDDEN);
                     }
 
-                    self->update_wifi_status("Connection failed");
+                    self->update_wifi_status(lv_tr("Connection failed"));
                     NOTIFY_ERROR("Failed to connect to '{}': {}", self->current_ssid_, error);
                 }
             });

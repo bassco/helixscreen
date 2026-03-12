@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': '%lu ч. назад'
   '%lu min ago': '%lu мин. назад'
   '%u layers': '%u слоёв'
+  '%zu changes': '%zu изменений'
   + Add: + Добавить
   + Add Preset: + Добавить пресет
   + Add Printer: + Добавить принтер
@@ -111,6 +112,7 @@ translations:
   App Background: Фон приложения
   Apply: Применить
   Apply Changes: Применить изменения
+  Applying Changes: Применение изменений
   Applying...: Применение...
   Are you sure you want to cancel this print? All progress will be lost.: Вы уверены, что хотите отменить печать? Весь прогресс будет потерян.
   Are you sure? This will power off or restart the printer host.: Вы уверены? Это выключит или перезагрузит хост принтера.
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: 'Изменить сохранённую катушку'
   Changes apply immediately. Adjust during print for tuning.: Изменения применяются немедленно. Корректируйте во время печати.
   Changes are temporary and reset on printer reboot: Изменения временные и сбрасываются при перезагрузке принтера
+  Changes can be reversed anytime using the Macro Viewer.: Изменения можно отменить в любое время через Macro Viewer.
   Check Again: Проверить снова
   Check for Updates: Проверить обновления
   Check the filament path and try again.: Проверьте путь филамента и попробуйте снова.
@@ -282,10 +285,14 @@ translations:
   'Connected to ': 'Подключен к '
   Connected! Discovering printer...: Подключен! Обнаружение принтера...
   Connected, discovering...: Подключен, обнаружение...
+  Connecting to %s...: Подключение к %s...
   Connecting to network...: Подключение к сети...
   Connecting...: Подключение...
   Connection: Соединение
+  Connection failed: Ошибка подключения
+  Connection failed. Check IP/port and try again.: Ошибка подключения. Проверьте IP/порт и попробуйте снова.
   Connection failed. Check password.: Ошибка подключения. Проверьте пароль.
+  'Connection failed: %s': 'Ошибка подключения: %s'
   Connection must be tested successfully to continue: Для продолжения соединение должно быть успешно проверено
   Connection successful!: Соединение успешно!
   Console: Консоль
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: Создать нового производителя
   Create Spool: Создать катушку
   Create a 4-6 digit security PIN: Создайте PIN-код из 4-6 цифр
+  Create backup of %s before applying: Создать резервную копию %s перед применением
   Create video when print completes: Создать видео после завершения печати
   Creating spool...: Создание катушки...
   Current / Target: Текущая / Цель
@@ -384,6 +392,7 @@ translations:
   Duplicate: Дублировать
   Duplicated: Дублировано
   Duration: Длительность
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: Подтверждение аварийной остановки
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: АВАРИЙНОЕ УПРАВЛЕНИЕ
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: Не удалось проанализировать макрос PRINT_START
   Failed to apply limits: Не удалось применить ограничения
   Failed to apply settings: Не удалось применить настройки
+  'Failed to connect: %s': 'Не удалось подключиться: %s'
   Failed to delete spool: Не удалось удалить катушку
   Failed to download moonraker.conf.\nCheck printer connection.: Не удалось скачать moonraker.conf.\nПроверьте подключение принтера.
   Failed to duplicate spool: Не удалось дублировать катушку
@@ -510,6 +520,7 @@ translations:
   Flowguard: 'Flowguard'
   Flying Toasters: 'Летающие тостеры'
   Forming tip...: Формирование кончика...
+  Found %zu printers: Найдено %zu принтеров
   Found 1 printer: Найден 1 принтер
   Framerate: Частота кадров
   Front: Спереди
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: Макрос для выгрузки филамента из экструдера
   Macros: Макросы
   Main LED Strip: Основная LED-лента
+  Make %s Optional?: Сделать %s необязательным?
   Make Optional: Сделать опциональным
   Make bed mesh and QGL skippable: Сделать сетку стола и QGL пропускаемыми
   Manage: Управление
@@ -774,6 +786,7 @@ translations:
   No Spools: Нет катушек
   No USB printers found: USB-принтеры не найдены
   No buffer data available: 'Данные буфера недоступны'
+  No changes selected.\n\nClick Cancel to close.: Изменения не выбраны.\n\nНажмите «Отмена», чтобы закрыть.
   No changes to revert: Нет изменений для отката
   No effects available: Нет доступных эффектов
   No events queued: Нет событий в очереди
@@ -977,6 +990,7 @@ translations:
   'RSS:': 'RSS:'
   Re-probe: Перепроверить
   Ready: Готов
+  Ready to Apply: Готово к применению
   Reboot: Перезагрузка
   Rebooting...: Перезагрузка...
   Recalibrate or view detailed results anytime in Settings.: Перекалибруйте или просмотрите подробные результаты в любое время в Настройках.
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: 'Настройте принтер этикеток в Настройках'
   Settings: Настройки
   Settings reset to defaults. Restarting...: Настройки сброшены к значениям по умолчанию. Перезапуск...
+  Setup Complete!: Настройка завершена!
   Setup Timelapse: Настроить таймлапс
   Shadow Intensity: Интенсивность тени
   Share Usage Data: Делиться данными использования
@@ -1184,6 +1199,7 @@ translations:
   Status icons: Иконки статуса
   Stealthburner: Stealthburner
   Step: Шаг
+  Step 1 of 3: Шаг 1 из 3
   Step Progress Widget Test: Тест виджета пошагового прогресса
   Stop: Стоп
   Stop Drying: Остановить сушку
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: Определение цвета филамента TD-1
   TEMPERATURE SENSORS: ДАТЧИКИ ТЕМПЕРАТУРЫ
   THEME COLORS: ЦВЕТА ТЕМЫ
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: Занимает 3-5 мин. Не прерывайте.
   Tap again to confirm this orientation: Нажмите ещё раз для подтверждения ориентации
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Данные о весе синхронизируются из Spoolman для отображения оставшегося филамента. Изменения также синхронизируются при начале, паузе или завершении печати.
   What We Collect: Что мы собираем
+  "When starting a print, you'll be able to choose whether to run %s. ": 'При запуске печати вы сможете выбрать, запускать ли %s. '
   White: Белый
   WiFi: WiFi
   WiFi Network: Сеть WiFi
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Смещение Y
   'Y:': 'Y:'
   Year: Год
+  You can now skip these operations when starting prints.\n\n: Теперь вы можете пропускать эти операции при запуске печати.\n\n
   You can skip this and calibrate later in Settings.: Вы можете пропустить это и откалибровать позже в настройках.
   You have unsaved changes. Discard them?: У вас есть несохранённые изменения. Отменить их?
+  Your PRINT_START macro will be updated to give you control over:\n\n: Ваш макрос PRINT_START будет обновлён, чтобы дать вам контроль над:\n\n
   Your completed prints will appear here: Ваши завершённые печати появятся здесь
   Your print start is already fully configured!: Ваш старт печати уже полностью настроен!
   Z: Z

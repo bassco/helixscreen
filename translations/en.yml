@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': '%lu hours ago'
   '%lu min ago': '%lu min ago'
   '%u layers': '%u layers'
+  '%zu changes': '%zu changes'
   + Add: + Add
   + Add Preset: + Add Preset
   + Add Printer: + Add Printer
@@ -111,6 +112,7 @@ translations:
   App Background: App Background
   Apply: Apply
   Apply Changes: Apply Changes
+  Applying Changes: Applying Changes
   Applying...: Applying...
   Are you sure you want to cancel this print? All progress will be lost.: Are you sure you want to cancel this print? All progress will be lost.
   Are you sure? This will power off or restart the printer host.: Are you sure? This will power off or restart the printer host.
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: Change Saved Spool
   Changes apply immediately. Adjust during print for tuning.: Changes apply immediately. Adjust during print for tuning.
   Changes are temporary and reset on printer reboot: Changes are temporary and reset on printer reboot
+  Changes can be reversed anytime using the Macro Viewer.: Changes can be reversed anytime using the Macro Viewer.
   Check Again: Check Again
   Check for Updates: Check for Updates
   Check the filament path and try again.: Check the filament path and try again.
@@ -282,10 +285,14 @@ translations:
   'Connected to ': 'Connected to '
   Connected! Discovering printer...: Connected! Discovering printer...
   Connected, discovering...: Connected, discovering...
+  Connecting to %s...: Connecting to %s...
   Connecting to network...: Connecting to network...
   Connecting...: Connecting...
   Connection: Connection
+  Connection failed: Connection failed
+  Connection failed. Check IP/port and try again.: Connection failed. Check IP/port and try again.
   Connection failed. Check password.: Connection failed. Check password.
+  'Connection failed: %s': 'Connection failed: %s'
   Connection must be tested successfully to continue: Connection must be tested successfully to continue
   Connection successful!: Connection successful!
   Console: Console
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: Create New Vendor
   Create Spool: Create Spool
   Create a 4-6 digit security PIN: Create a 4-6 digit security PIN
+  Create backup of %s before applying: Create backup of %s before applying
   Create video when print completes: Create video when print completes
   Creating spool...: Creating spool...
   Current / Target: Current / Target
@@ -384,6 +392,7 @@ translations:
   Duplicate: Duplicate
   Duplicated: Duplicated
   Duration: Duration
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: E-Stop Confirmation
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: EMERGENCY CONTROLS
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: Failed to analyze PRINT_START macro
   Failed to apply limits: Failed to apply limits
   Failed to apply settings: Failed to apply settings
+  'Failed to connect: %s': 'Failed to connect: %s'
   Failed to delete spool: Failed to delete spool
   Failed to download moonraker.conf.\nCheck printer connection.: Failed to download moonraker.conf.\nCheck printer connection.
   Failed to duplicate spool: Failed to duplicate spool
@@ -510,6 +520,7 @@ translations:
   Flowguard: Flowguard
   Flying Toasters: Flying Toasters
   Forming tip...: Forming tip...
+  Found %zu printers: Found %zu printers
   Found 1 printer: Found 1 printer
   Framerate: Framerate
   Front: Front
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: Macro to unload filament from extruder
   Macros: Macros
   Main LED Strip: Main LED Strip
+  Make %s Optional?: Make %s Optional?
   Make Optional: Make Optional
   Make bed mesh and QGL skippable: Make bed mesh and QGL skippable
   Manage: Manage
@@ -774,6 +786,7 @@ translations:
   No Spools: No Spools
   No USB printers found: No USB printers found
   No buffer data available: No buffer data available
+  No changes selected.\n\nClick Cancel to close.: No changes selected.\n\nClick Cancel to close.
   No changes to revert: No changes to revert
   No effects available: No effects available
   No events queued: No events queued
@@ -977,6 +990,7 @@ translations:
   'RSS:': 'RSS:'
   Re-probe: Re-probe
   Ready: Ready
+  Ready to Apply: Ready to Apply
   Reboot: Reboot
   Rebooting...: Rebooting...
   Recalibrate or view detailed results anytime in Settings.: Recalibrate or view detailed results anytime in Settings.
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: Set up your label printer in Settings
   Settings: Settings
   Settings reset to defaults. Restarting...: Settings reset to defaults. Restarting...
+  Setup Complete!: Setup Complete!
   Setup Timelapse: Setup Timelapse
   Shadow Intensity: Shadow Intensity
   Share Usage Data: Share Usage Data
@@ -1184,6 +1199,7 @@ translations:
   Status icons: Status icons
   Stealthburner: Stealthburner
   Step: Step
+  Step 1 of 3: Step 1 of 3
   Step Progress Widget Test: Step Progress Widget Test
   Stop: Stop
   Stop Drying: Stop Drying
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: TD-1 filament color detection
   TEMPERATURE SENSORS: TEMPERATURE SENSORS
   THEME COLORS: THEME COLORS
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: Takes 3-5 min. Do not interrupt.
   Tap again to confirm this orientation: Tap again to confirm this orientation
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   What We Collect: What We Collect
+  "When starting a print, you'll be able to choose whether to run %s. ": "When starting a print, you'll be able to choose whether to run %s. "
   White: White
   WiFi: WiFi
   WiFi Network: WiFi Network
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Y Offset
   'Y:': 'Y:'
   Year: Year
+  You can now skip these operations when starting prints.\n\n: You can now skip these operations when starting prints.\n\n
   You can skip this and calibrate later in Settings.: You can skip this and calibrate later in Settings.
   You have unsaved changes. Discard them?: You have unsaved changes. Discard them?
+  Your PRINT_START macro will be updated to give you control over:\n\n: Your PRINT_START macro will be updated to give you control over:\n\n
   Your completed prints will appear here: Your completed prints will appear here
   Your print start is already fully configured!: Your print start is already fully configured!
   Z: Z

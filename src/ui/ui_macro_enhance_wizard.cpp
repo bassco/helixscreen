@@ -9,6 +9,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <algorithm>
 #include <cstring>
 
@@ -176,7 +178,8 @@ bool MacroEnhanceWizard::show(lv_obj_t* parent) {
     lv_subject_set_int(&show_error_subject_, 0);
 
     // Set dynamic backup checkbox text using source file from analysis
-    snprintf(backup_text_buf_, sizeof(backup_text_buf_), "Create backup of %s before applying",
+    snprintf(backup_text_buf_, sizeof(backup_text_buf_),
+             lv_tr("Create backup of %s before applying"),
              analysis_.source_file.empty() ? "printer.cfg" : analysis_.source_file.c_str());
     lv_subject_set_pointer(&backup_text_subject_, backup_text_buf_);
 
@@ -326,16 +329,16 @@ void MacroEnhanceWizard::show_current_operation() {
     std::string friendly_name;
     switch (op->category) {
     case helix::PrintStartOpCategory::BED_MESH:
-        friendly_name = "Bed Mesh";
+        friendly_name = "Bed Mesh"; // i18n: do not translate, universal 3D printing term
         break;
     case helix::PrintStartOpCategory::QGL:
-        friendly_name = "Quad Gantry Leveling";
+        friendly_name = "Quad Gantry Leveling"; // i18n: do not translate, universal 3D printing term
         break;
     case helix::PrintStartOpCategory::Z_TILT:
-        friendly_name = "Z-Tilt Adjustment";
+        friendly_name = "Z-Tilt Adjustment"; // i18n: do not translate, universal 3D printing term
         break;
     case helix::PrintStartOpCategory::NOZZLE_CLEAN:
-        friendly_name = "Nozzle Cleaning";
+        friendly_name = "Nozzle Cleaning"; // i18n: do not translate, universal 3D printing term
         break;
     default:
         friendly_name = op->name;
@@ -343,7 +346,8 @@ void MacroEnhanceWizard::show_current_operation() {
     }
 
     // Update title
-    snprintf(step_title_buf_, sizeof(step_title_buf_), "Make %s Optional?", friendly_name.c_str());
+    snprintf(step_title_buf_, sizeof(step_title_buf_), lv_tr("Make %s Optional?"),
+             friendly_name.c_str());
     lv_subject_set_pointer(&step_title_subject_, step_title_buf_);
 
     // Update progress
@@ -353,9 +357,9 @@ void MacroEnhanceWizard::show_current_operation() {
 
     // Update description with user-friendly text
     snprintf(description_buf_, sizeof(description_buf_),
-             "When starting a print, you'll be able to choose whether to run %s. "
-             "This saves time when you've already done it recently or want more "
-             "control over your print preparation.",
+             lv_tr("When starting a print, you'll be able to choose whether to run %s. "
+                    "This saves time when you've already done it recently or want more "
+                    "control over your print preparation."),
              friendly_name.c_str());
     lv_subject_set_pointer(&description_subject_, description_buf_);
 
@@ -368,36 +372,37 @@ void MacroEnhanceWizard::show_summary() {
     size_t approved_count = get_approved_count();
 
     // Update title
-    snprintf(step_title_buf_, sizeof(step_title_buf_), "Ready to Apply");
+    snprintf(step_title_buf_, sizeof(step_title_buf_), "%s", lv_tr("Ready to Apply"));
     lv_subject_set_pointer(&step_title_subject_, step_title_buf_);
 
     // Update progress
-    snprintf(step_progress_buf_, sizeof(step_progress_buf_), "%zu changes", approved_count);
+    snprintf(step_progress_buf_, sizeof(step_progress_buf_), lv_tr("%zu changes"), approved_count);
     lv_subject_set_pointer(&step_progress_subject_, step_progress_buf_);
 
     // Build summary list with friendly copy
     std::string summary;
     if (approved_count == 0) {
-        summary = "No changes selected.\n\nClick Cancel to close.";
+        summary = lv_tr("No changes selected.\n\nClick Cancel to close.");
     } else {
-        summary = "Your PRINT_START macro will be updated to give you control over:\n\n";
+        summary = lv_tr("Your PRINT_START macro will be updated to give you control over:\n\n");
         for (const auto& e : enhancements_) {
             if (e.user_approved) {
                 // Use friendly names in the summary too
                 std::string friendly = e.operation_name;
                 if (e.category == helix::PrintStartOpCategory::BED_MESH) {
-                    friendly = "Bed Mesh";
+                    friendly = "Bed Mesh"; // i18n: do not translate
                 } else if (e.category == helix::PrintStartOpCategory::QGL) {
-                    friendly = "Quad Gantry Leveling";
+                    friendly = "Quad Gantry Leveling"; // i18n: do not translate
                 } else if (e.category == helix::PrintStartOpCategory::Z_TILT) {
-                    friendly = "Z-Tilt Adjustment";
+                    friendly = "Z-Tilt Adjustment"; // i18n: do not translate
                 } else if (e.category == helix::PrintStartOpCategory::NOZZLE_CLEAN) {
-                    friendly = "Nozzle Cleaning";
+                    friendly = "Nozzle Cleaning"; // i18n: do not translate
                 }
                 summary += "  \xE2\x80\xA2 " + friendly + "\n"; // UTF-8 bullet
             }
         }
-        summary += "\nChanges can be reversed anytime using the Macro Viewer.";
+        summary += "\n";
+        summary += lv_tr("Changes can be reversed anytime using the Macro Viewer.");
     }
 
     snprintf(summary_buf_, sizeof(summary_buf_), "%s", summary.c_str());
@@ -409,7 +414,7 @@ void MacroEnhanceWizard::show_summary() {
 void MacroEnhanceWizard::show_applying(const std::string& status) {
     state_ = MacroEnhanceState::APPLYING;
 
-    snprintf(step_title_buf_, sizeof(step_title_buf_), "Applying Changes");
+    snprintf(step_title_buf_, sizeof(step_title_buf_), "%s", lv_tr("Applying Changes"));
     lv_subject_set_pointer(&step_title_subject_, step_title_buf_);
 
     step_progress_buf_[0] = '\0'; // Clear progress text
@@ -424,17 +429,17 @@ void MacroEnhanceWizard::show_applying(const std::string& status) {
 void MacroEnhanceWizard::show_success(const std::string& /* message */) {
     state_ = MacroEnhanceState::SUCCESS;
 
-    snprintf(step_title_buf_, sizeof(step_title_buf_), "Setup Complete!");
+    snprintf(step_title_buf_, sizeof(step_title_buf_), "%s", lv_tr("Setup Complete!"));
     lv_subject_set_pointer(&step_title_subject_, step_title_buf_);
 
     step_progress_buf_[0] = '\0'; // Clear progress text
     lv_subject_set_pointer(&step_progress_subject_, step_progress_buf_);
 
     // Use friendly success message instead of technical details
-    snprintf(description_buf_, sizeof(description_buf_),
-             "You can now skip these operations when starting prints.\n\n"
-             "Look for the new options in the print details before starting each print.\n\n"
-             "A backup of your config was saved automatically.");
+    snprintf(description_buf_, sizeof(description_buf_), "%s",
+             lv_tr("You can now skip these operations when starting prints.\n\n"
+                    "Look for the new options in the print details before starting each print.\n\n"
+                    "A backup of your config was saved automatically."));
     lv_subject_set_pointer(&description_subject_, description_buf_);
 
     update_ui();
@@ -443,7 +448,7 @@ void MacroEnhanceWizard::show_success(const std::string& /* message */) {
 void MacroEnhanceWizard::show_error(const std::string& message) {
     state_ = MacroEnhanceState::ERROR;
 
-    snprintf(step_title_buf_, sizeof(step_title_buf_), "Error");
+    snprintf(step_title_buf_, sizeof(step_title_buf_), "%s", lv_tr("Error"));
     lv_subject_set_pointer(&step_title_subject_, step_title_buf_);
 
     step_progress_buf_[0] = '\0'; // Clear progress text

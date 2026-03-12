@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': '%lu時間前'
   '%lu min ago': '%lu分前'
   '%u layers': '%uレイヤー'
+  '%zu changes': '%zu件の変更'
   + Add: + 追加
   + Add Preset: + プリセットを追加
   + Add Printer: + プリンターを追加
@@ -111,6 +112,7 @@ translations:
   App Background: アプリ背景
   Apply: 適用
   Apply Changes: 変更を適用
+  Applying Changes: 変更を適用中
   Applying...: 適用中...
   Are you sure you want to cancel this print? All progress will be lost.: この印刷をキャンセルしますか？すべての進行状況が失われます。
   Are you sure? This will power off or restart the printer host.: よろしいですか？プリンターホストの電源がオフまたは再起動されます。
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: '保存済みスプールを変更'
   Changes apply immediately. Adjust during print for tuning.: 変更は即座に適用されます。印刷中に調整して最適化できます。
   Changes are temporary and reset on printer reboot: 変更は一時的で、プリンター再起動時にリセットされます
+  Changes can be reversed anytime using the Macro Viewer.: 変更はいつでも Macro Viewer を使って元に戻せます。
   Check Again: 再確認
   Check for Updates: 更新を確認
   Check the filament path and try again.: フィラメント経路を確認して、もう一度お試しください。
@@ -282,10 +285,14 @@ translations:
   'Connected to ': '接続先: '
   Connected! Discovering printer...: 接続完了！プリンターを検出中...
   Connected, discovering...: 接続済み、検出中...
+  Connecting to %s...: '%sに接続中...'
   Connecting to network...: ネットワークに接続中...
   Connecting...: 接続中...
   Connection: 接続
+  Connection failed: 接続に失敗しました
+  Connection failed. Check IP/port and try again.: 接続に失敗しました。IPアドレス/ポートを確認して再試行してください。
   Connection failed. Check password.: 接続に失敗しました。パスワードを確認してください。
+  'Connection failed: %s': '接続に失敗しました: %s'
   Connection must be tested successfully to continue: 続行するには接続テストに成功する必要があります
   Connection successful!: 接続成功！
   Console: コンソール
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: 新しいベンダーを作成
   Create Spool: スプールを作成
   Create a 4-6 digit security PIN: 4〜6桁のセキュリティ PIN を作成
+  Create backup of %s before applying: 適用前に %s のバックアップを作成
   Create video when print completes: 印刷完了時に動画を作成
   Creating spool...: スプールを作成中...
   Current / Target: 現在 / 目標
@@ -384,6 +392,7 @@ translations:
   Duplicate: 複製
   Duplicated: 複製しました
   Duration: 時間
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: 緊急停止の確認
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: 緊急コントロール
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: PRINT_START マクロの解析に失敗しました
   Failed to apply limits: 制限の適用に失敗しました
   Failed to apply settings: 設定の適用に失敗しました
+  'Failed to connect: %s': '接続に失敗: %s'
   Failed to delete spool: スプールの削除に失敗しました
   Failed to download moonraker.conf.\nCheck printer connection.: moonraker.confのダウンロードに失敗しました。\nプリンター接続を確認してください。
   Failed to duplicate spool: スプールの複製に失敗しました
@@ -510,6 +520,7 @@ translations:
   Flowguard: 'フローガード'
   Flying Toasters: 'フライングトースター'
   Forming tip...: チップを形成中...
+  Found %zu printers: '%zu台のプリンターを検出'
   Found 1 printer: プリンター1台を検出
   Framerate: フレームレート
   Front: 正面
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: エクストルーダーからフィラメントを排出するマクロ
   Macros: マクロ
   Main LED Strip: メインLEDストリップ
+  Make %s Optional?: '%sをオプションにしますか？'
   Make Optional: オプションにする
   Make bed mesh and QGL skippable: ベッドメッシュと QGL をスキップ可能にする
   Manage: 管理
@@ -774,6 +786,7 @@ translations:
   No Spools: スプールなし
   No USB printers found: USBプリンターが見つかりません
   No buffer data available: 'バッファーデータがありません'
+  No changes selected.\n\nClick Cancel to close.: '変更が選択されていません。\n\n「キャンセル」をクリックして閉じてください。'
   No changes to revert: 元に戻す変更はありません
   No effects available: 利用可能なエフェクトがありません
   No events queued: キューにイベントはありません
@@ -977,6 +990,7 @@ translations:
   'RSS:': 'RSS:'
   Re-probe: 再プローブ
   Ready: 準備完了
+  Ready to Apply: 適用の準備完了
   Reboot: 再起動
   Rebooting...: 再起動中...
   Recalibrate or view detailed results anytime in Settings.: 設定からいつでも再キャリブレーションや詳細結果の確認ができます。
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: '設定でラベルプリンターをセットアップしてください'
   Settings: 設定
   Settings reset to defaults. Restarting...: 設定をデフォルトにリセットしました。再起動中...
+  Setup Complete!: セットアップ完了！
   Setup Timelapse: タイムラプスを設定
   Shadow Intensity: 影の強度
   Share Usage Data: 使用データを共有
@@ -1184,6 +1199,7 @@ translations:
   Status icons: ステータスアイコン
   Stealthburner: Stealthburner
   Step: ステップ
+  Step 1 of 3: ステップ 1/3
   Step Progress Widget Test: ステッププログレスウィジェットテスト
   Stop: 停止
   Stop Drying: 乾燥を停止
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: TD-1 フィラメント色検出
   TEMPERATURE SENSORS: 温度センサー
   THEME COLORS: テーマカラー
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: 3〜5分かかります。中断しないでください。
   Tap again to confirm this orientation: もう一度タップしてこの向きを確定
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : 残りのフィラメントを表示するために、重量データが Spoolman から同期されます。印刷の開始、一時停止、完了時にも変更が同期されます。
   What We Collect: 収集する情報
+  "When starting a print, you'll be able to choose whether to run %s. ": '印刷開始時に %s を実行するかどうかを選択できます。 '
   White: ホワイト
   WiFi: WiFi
   WiFi Network: WiFi ネットワーク
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Yオフセット
   'Y:': 'Y:'
   Year: 年
+  You can now skip these operations when starting prints.\n\n: '印刷開始時にこれらの操作をスキップできるようになりました。\n\n'
   You can skip this and calibrate later in Settings.: スキップして後で設定でキャリブレーションできます。
   You have unsaved changes. Discard them?: 保存されていない変更があります。破棄しますか？
+  Your PRINT_START macro will be updated to give you control over:\n\n: 'PRINT_START マクロが更新され、以下を制御できるようになります:\n\n'
   Your completed prints will appear here: 完了した印刷がここに表示されます
   Your print start is already fully configured!: 印刷開始設定はすでに完全に構成されています！
   Z: Z

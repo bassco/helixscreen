@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': 'hace %lu horas'
   '%lu min ago': 'hace %lu min'
   '%u layers': '%u capas'
+  '%zu changes': '%zu cambios'
   + Add: + Agregar
   + Add Preset: + Agregar Preajuste
   + Add Printer: '+ Agregar Impresora'
@@ -111,6 +112,7 @@ translations:
   App Background: Fondo de la Aplicación
   Apply: Aplicar
   Apply Changes: Aplicar Cambios
+  Applying Changes: Aplicando Cambios
   Applying...: Aplicando...
   Are you sure you want to cancel this print? All progress will be lost.: ¿Está seguro de que desea cancelar esta impresión? Todo el progreso se perderá.
   Are you sure? This will power off or restart the printer host.: ¿Está seguro? Esto apagará o reiniciará el host de la impresora.
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: 'Cambiar bobina guardada'
   Changes apply immediately. Adjust during print for tuning.: Los cambios se aplican inmediatamente. Ajuste durante la impresión para afinar.
   Changes are temporary and reset on printer reboot: Los cambios son temporales y se reinician al reiniciar la impresora
+  Changes can be reversed anytime using the Macro Viewer.: Los cambios se pueden revertir en cualquier momento usando el Macro Viewer.
   Check Again: Verificar de nuevo
   Check for Updates: Buscar actualizaciones
   Check the filament path and try again.: Verifique la ruta del filamento e intente de nuevo.
@@ -282,10 +285,14 @@ translations:
   'Connected to ': 'Conectado a '
   Connected! Discovering printer...: ¡Conectado! Descubriendo impresora...
   Connected, discovering...: Conectado, descubriendo...
+  Connecting to %s...: Conectando a %s...
   Connecting to network...: Conectando a la red...
   Connecting...: Conectando...
   Connection: Conexión
+  Connection failed: Conexión fallida
+  Connection failed. Check IP/port and try again.: Conexión fallida. Verifique la IP/puerto e intente de nuevo.
   Connection failed. Check password.: Conexión fallida. Verifique la contraseña.
+  'Connection failed: %s': 'Conexión fallida: %s'
   Connection must be tested successfully to continue: La conexión debe probarse exitosamente para continuar
   Connection successful!: ¡Conexión exitosa!
   Console: Consola
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: Crear Nuevo Proveedor
   Create Spool: Crear Bobina
   Create a 4-6 digit security PIN: Cree un PIN de seguridad de 4-6 dígitos
+  Create backup of %s before applying: Crear respaldo de %s antes de aplicar
   Create video when print completes: Crear video cuando termine la impresión
   Creating spool...: Creando bobina...
   Current / Target: Actual / Objetivo
@@ -384,6 +392,7 @@ translations:
   Duplicate: Duplicar
   Duplicated: Duplicado
   Duration: Duración
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: Confirmación de Parada de Emergencia
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: CONTROLES DE EMERGENCIA
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: Error al analizar macro PRINT_START
   Failed to apply limits: Error al aplicar límites
   Failed to apply settings: Error al aplicar ajustes
+  'Failed to connect: %s': 'Error al conectar: %s'
   Failed to delete spool: Error al eliminar bobina
   Failed to download moonraker.conf.\nCheck printer connection.: Error al descargar moonraker.conf.\nCompruebe la conexión.
   Failed to duplicate spool: Error al duplicar el carrete
@@ -510,6 +520,7 @@ translations:
   Flowguard: Flowguard
   Flying Toasters: Flying Toasters
   Forming tip...: Formando punta...
+  Found %zu printers: '%zu impresoras encontradas'
   Found 1 printer: 1 impresora encontrada
   Framerate: Cuadros por segundo
   Front: Frente
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: Macro para descargar filamento del extrusor
   Macros: Macros
   Main LED Strip: Tira LED Principal
+  Make %s Optional?: '¿Hacer %s Opcional?'
   Make Optional: Hacer Opcional
   Make bed mesh and QGL skippable: Hacer que la malla de cama y QGL sean omitibles
   Manage: Administrar
@@ -774,6 +786,7 @@ translations:
   No Spools: Sin Bobinas
   No USB printers found: No se encontraron impresoras USB
   No buffer data available: 'Sin datos de búfer disponibles'
+  No changes selected.\n\nClick Cancel to close.: No se seleccionaron cambios.\n\nHaga clic en Cancelar para cerrar.
   No changes to revert: No hay cambios para revertir
   No effects available: No hay efectos disponibles
   No events queued: No hay eventos en cola
@@ -977,6 +990,7 @@ translations:
   'RSS:': 'RSS:'
   Re-probe: Re-sondear
   Ready: Listo
+  Ready to Apply: Listo para Aplicar
   Reboot: Reiniciar
   Rebooting...: Reiniciando...
   Recalibrate or view detailed results anytime in Settings.: Recalibre o vea resultados detallados en cualquier momento en Ajustes.
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: 'Configure su impresora de etiquetas en Ajustes'
   Settings: Ajustes
   Settings reset to defaults. Restarting...: Ajustes restablecidos a valores predeterminados. Reiniciando...
+  Setup Complete!: '¡Configuración Completa!'
   Setup Timelapse: Configurar Timelapse
   Shadow Intensity: Intensidad de Sombra
   Share Usage Data: Compartir datos de uso
@@ -1184,6 +1199,7 @@ translations:
   Status icons: Iconos de estado
   Stealthburner: 'Stealthburner'
   Step: Paso
+  Step 1 of 3: Paso 1 de 3
   Step Progress Widget Test: Prueba de Widget de Progreso por Pasos
   Stop: Detener
   Stop Drying: Detener Secado
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: Detección de color de filamento TD-1
   TEMPERATURE SENSORS: 'SENSORES DE TEMPERATURA'
   THEME COLORS: COLORES DEL TEMA
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: Tarda 3-5 min. No interrumpa.
   Tap again to confirm this orientation: Toque de nuevo para confirmar esta orientación
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Los datos de peso se sincronizan desde Spoolman para mostrar el filamento restante. Los cambios también se sincronizan cuando las impresiones inician, pausan o completan.
   What We Collect: Lo que recopilamos
+  "When starting a print, you'll be able to choose whether to run %s. ": "Al iniciar una impresión, podrá elegir si ejecutar %s. "
   White: Blanco
   WiFi: WiFi
   WiFi Network: Red WiFi
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Desfase Y
   'Y:': 'Y:'
   Year: Año
+  You can now skip these operations when starting prints.\n\n: Ahora puede omitir estas operaciones al iniciar impresiones.\n\n
   You can skip this and calibrate later in Settings.: Puede omitir esto y calibrar más tarde en Ajustes.
   You have unsaved changes. Discard them?: Tiene cambios sin guardar. ¿Descartarlos?
+  Your PRINT_START macro will be updated to give you control over:\n\n: Su macro PRINT_START se actualizará para darle control sobre:\n\n
   Your completed prints will appear here: Sus impresiones completadas aparecerán aquí
   Your print start is already fully configured!: ¡Su inicio de impresión ya está completamente configurado!
   Z: Z

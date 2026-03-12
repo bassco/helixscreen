@@ -94,7 +94,7 @@ void SpoolWizardOverlay::init_subjects() {
         UI_MANAGED_SUBJECT_INT(can_proceed_subject_, 0, "spool_wizard_can_proceed", subjects_);
 
         // Step label string — "Step 1 of 3"
-        std::snprintf(step_label_buf_, sizeof(step_label_buf_), "Step 1 of 3");
+        std::snprintf(step_label_buf_, sizeof(step_label_buf_), "%s", lv_tr("Step 1 of 3"));
         UI_MANAGED_SUBJECT_STRING(step_label_subject_, step_label_buf_, step_label_buf_,
                                   "spool_wizard_step_label", subjects_);
 

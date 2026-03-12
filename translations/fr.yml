@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': 'il y a %lu heures'
   '%lu min ago': 'il y a %lu min'
   '%u layers': '%u couches'
+  '%zu changes': '%zu modifications'
   + Add: + Ajouter
   + Add Preset: + Ajouter un préréglage
   + Add Printer: + Ajouter une imprimante
@@ -111,6 +112,7 @@ translations:
   App Background: Arrière-plan de l'application
   Apply: Appliquer
   Apply Changes: Appliquer les modifications
+  Applying Changes: Application des modifications
   Applying...: Application...
   Are you sure you want to cancel this print? All progress will be lost.: Êtes-vous sûr de vouloir annuler cette impression ? Toute la progression sera perdue.
   Are you sure? This will power off or restart the printer host.: Êtes-vous sûr ? Cela va éteindre ou redémarrer l'hôte de l'imprimante.
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: 'Changer la bobine enregistrée'
   Changes apply immediately. Adjust during print for tuning.: Les modifications s'appliquent immédiatement. Ajustez pendant l'impression pour le réglage.
   Changes are temporary and reset on printer reboot: Les modifications sont temporaires et réinitialisées au redémarrage de l'imprimante
+  Changes can be reversed anytime using the Macro Viewer.: Les modifications peuvent être annulées à tout moment via le Macro Viewer.
   Check Again: Revérifier
   Check for Updates: Vérifier les mises à jour
   Check the filament path and try again.: Vérifiez le chemin du filament et réessayez.
@@ -282,10 +285,14 @@ translations:
   'Connected to ': 'Connecté à '
   Connected! Discovering printer...: Connecté ! Découverte de l'imprimante...
   Connected, discovering...: Connecté, découverte...
+  Connecting to %s...: Connexion à %s...
   Connecting to network...: Connexion au réseau...
   Connecting...: Connexion...
   Connection: Connexion
+  Connection failed: Connexion échouée
+  Connection failed. Check IP/port and try again.: Connexion échouée. Vérifiez l'adresse IP/port et réessayez.
   Connection failed. Check password.: Connexion échouée. Vérifiez le mot de passe.
+  'Connection failed: %s': 'Connexion échouée : %s'
   Connection must be tested successfully to continue: La connexion doit être testée avec succès pour continuer
   Connection successful!: Connexion réussie !
   Console: Console
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: Créer un nouveau fournisseur
   Create Spool: Créer une bobine
   Create a 4-6 digit security PIN: Créez un PIN de sécurité de 4 à 6 chiffres
+  Create backup of %s before applying: Créer une sauvegarde de %s avant d'appliquer
   Create video when print completes: Créer une vidéo à la fin de l'impression
   Creating spool...: Création de la bobine...
   Current / Target: Actuel / Cible
@@ -384,6 +392,7 @@ translations:
   Duplicate: Dupliquer
   Duplicated: Dupliqué
   Duration: Durée
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: Confirmation arrêt d'urgence
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: CONTRÔLES D'URGENCE
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: Échec de l'analyse de la macro PRINT_START
   Failed to apply limits: Échec de l'application des limites
   Failed to apply settings: Échec de l'application des paramètres
+  'Failed to connect: %s': 'Échec de la connexion : %s'
   Failed to delete spool: Échec de la suppression de la bobine
   Failed to download moonraker.conf.\nCheck printer connection.: Échec du téléchargement de moonraker.conf.\nVérifiez la connexion.
   Failed to duplicate spool: Échec de la duplication de la bobine
@@ -510,6 +520,7 @@ translations:
   Flowguard: Flowguard
   Flying Toasters: Flying Toasters
   Forming tip...: Formation de la pointe...
+  Found %zu printers: '%zu imprimantes trouvées'
   Found 1 printer: 1 imprimante trouvée
   Framerate: Fréquence d'images
   Front: Avant
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: Macro pour décharger le filament de l'extrudeur
   Macros: Macros
   Main LED Strip: Bandeau LED principal
+  Make %s Optional?: Rendre %s optionnel ?
   Make Optional: Rendre optionnel
   Make bed mesh and QGL skippable: Rendre le maillage du plateau et QGL ignorables
   Manage: Gérer
@@ -774,6 +786,7 @@ translations:
   No Spools: Aucune bobine
   No USB printers found: Aucune imprimante USB trouvée
   No buffer data available: 'Aucune donnée de tampon disponible'
+  No changes selected.\n\nClick Cancel to close.: Aucune modification sélectionnée.\n\nCliquez sur Annuler pour fermer.
   No changes to revert: Aucune modification à annuler
   No effects available: Aucun effet disponible
   No events queued: Aucun événement en file
@@ -977,6 +990,7 @@ translations:
   'RSS:': 'RSS :'
   Re-probe: Re-palper
   Ready: Prêt
+  Ready to Apply: Prêt à appliquer
   Reboot: Redémarrer
   Rebooting...: Redémarrage...
   Recalibrate or view detailed results anytime in Settings.: Recalibrez ou consultez les résultats détaillés à tout moment dans les paramètres.
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: 'Configurez votre imprimante d''étiquettes dans les Paramètres'
   Settings: Paramètres
   Settings reset to defaults. Restarting...: Paramètres réinitialisés par défaut. Redémarrage...
+  Setup Complete!: Configuration terminée !
   Setup Timelapse: Configurer le timelapse
   Shadow Intensity: Intensité de l'ombre
   Share Usage Data: Partager les données d'utilisation
@@ -1184,6 +1199,7 @@ translations:
   Status icons: Icônes d'état
   Stealthburner: Stealthburner
   Step: Étape
+  Step 1 of 3: Étape 1 sur 3
   Step Progress Widget Test: Test du widget de progression par étapes
   Stop: Arrêter
   Stop Drying: Arrêter le séchage
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: Détection de couleur de filament TD-1
   TEMPERATURE SENSORS: 'CAPTEURS DE TEMPÉRATURE'
   THEME COLORS: COULEURS DU THÈME
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: Prend 3-5 min. Ne pas interrompre.
   Tap again to confirm this orientation: Appuyez à nouveau pour confirmer cette orientation
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : Les données de poids sont synchronisées depuis Spoolman pour afficher le filament restant. Les modifications sont également synchronisées au démarrage, à la pause ou à la fin des impressions.
   What We Collect: Ce que nous collectons
+  "When starting a print, you'll be able to choose whether to run %s. ": "Au démarrage d'une impression, vous pourrez choisir d'exécuter %s ou non. "
   White: Blanc
   WiFi: WiFi
   WiFi Network: Réseau WiFi
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Décalage Y
   'Y:': 'Y :'
   Year: Année
+  You can now skip these operations when starting prints.\n\n: Vous pouvez maintenant ignorer ces opérations au démarrage des impressions.\n\n
   You can skip this and calibrate later in Settings.: Vous pouvez ignorer cette étape et calibrer plus tard dans les paramètres.
   You have unsaved changes. Discard them?: Vous avez des modifications non enregistrées. Les abandonner ?
+  Your PRINT_START macro will be updated to give you control over:\n\n: Votre macro PRINT_START sera mise à jour pour vous donner le contrôle sur :\n\n
   Your completed prints will appear here: Vos impressions terminées apparaîtront ici
   Your print start is already fully configured!: Votre démarrage d'impression est déjà entièrement configuré !
   Z: Z

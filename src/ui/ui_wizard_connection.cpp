@@ -129,7 +129,7 @@ void WizardConnectionStep::init_subjects() {
     UI_SUBJECT_INIT_AND_REGISTER_INT(connection_discovering_, 0, "connection_discovering");
 
     // mDNS discovery subjects
-    UI_SUBJECT_INIT_AND_REGISTER_STRING(mdns_status_, mdns_status_buffer_, "Scanning...",
+    UI_SUBJECT_INIT_AND_REGISTER_STRING(mdns_status_, mdns_status_buffer_, lv_tr("Scanning..."),
                                         "mdns_status");
 
     // Set connection_test_passed to 0 (disabled) for this step
@@ -467,7 +467,7 @@ void WizardConnectionStep::on_connection_failure() {
                 spdlog::error("[Wizard Connection] Connection failed");
 
                 self->set_status("icon_xmark_circle", StatusVariant::Danger,
-                                 "Connection failed. Check IP/port and try again.");
+                                 lv_tr("Connection failed. Check IP/port and try again."));
                 lv_subject_set_int(&self->connection_testing_, 0);
                 self->connection_validated_ = false;
                 lv_subject_set_int(&connection_test_passed, 0);
@@ -1037,7 +1037,7 @@ void WizardConnectionStep::on_printers_discovered(const std::vector<DiscoveredPr
         lv_subject_copy_string(&mdns_status_, lv_tr("Found 1 printer"));
     } else {
         char buf[32];
-        snprintf(buf, sizeof(buf), "Found %zu printers", printers.size());
+        snprintf(buf, sizeof(buf), lv_tr("Found %zu printers"), printers.size());
         lv_subject_copy_string(&mdns_status_, buf);
     }
 

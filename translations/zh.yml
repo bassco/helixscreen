@@ -7,6 +7,7 @@ translations:
   '%lu hours ago': '%lu小时前'
   '%lu min ago': '%lu分钟前'
   '%u layers': '%u 层'
+  '%zu changes': '%zu 项更改'
   + Add: + 添加
   + Add Preset: + 添加预设
   + Add Printer: + 添加打印机
@@ -111,6 +112,7 @@ translations:
   App Background: 应用背景
   Apply: 应用
   Apply Changes: 应用更改
+  Applying Changes: 正在应用更改
   Applying...: 正在应用...
   Are you sure you want to cancel this print? All progress will be lost.: 确定要取消此打印吗？所有进度将丢失。
   Are you sure? This will power off or restart the printer host.: 确定吗？这将关闭或重启打印机主机。
@@ -219,6 +221,7 @@ translations:
   Change Saved Spool: '更改已保存的料盘'
   Changes apply immediately. Adjust during print for tuning.: 更改立即生效。可在打印时调整进行调优。
   Changes are temporary and reset on printer reboot: 更改是临时的，打印机重启后会重置
+  Changes can be reversed anytime using the Macro Viewer.: 可随时使用 Macro Viewer 恢复更改。
   Check Again: 重新检查
   Check for Updates: 检查更新
   Check the filament path and try again.: 检查耗材路径并重试。
@@ -282,10 +285,14 @@ translations:
   'Connected to ': '已连接到 '
   Connected! Discovering printer...: 已连接！正在发现打印机...
   Connected, discovering...: 已连接，正在发现...
+  Connecting to %s...: '正在连接 %s...'
   Connecting to network...: 正在连接网络...
   Connecting...: 正在连接...
   Connection: 连接
+  Connection failed: 连接失败
+  Connection failed. Check IP/port and try again.: 连接失败。请检查 IP/端口并重试。
   Connection failed. Check password.: 连接失败。请检查密码。
+  'Connection failed: %s': '连接失败：%s'
   Connection must be tested successfully to continue: 必须成功测试连接才能继续
   Connection successful!: 连接成功！
   Console: 控制台
@@ -306,6 +313,7 @@ translations:
   Create New Vendor: 创建新供应商
   Create Spool: 创建料盘
   Create a 4-6 digit security PIN: 创建 4-6 位安全 PIN
+  Create backup of %s before applying: '应用前创建 %s 的备份'
   Create video when print completes: 打印完成时创建视频
   Creating spool...: 正在创建料盘…
   Current / Target: 当前 / 目标
@@ -384,6 +392,7 @@ translations:
   Duplicate: 复制
   Duplicated: 已复制
   Duration: 持续时间
+  E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: 急停确认
   EDDY CURRENT: EDDY CURRENT
   EMERGENCY CONTROLS: 紧急控制
@@ -456,6 +465,7 @@ translations:
   Failed to analyze PRINT_START macro: 分析 PRINT_START 宏失败
   Failed to apply limits: 应用限制失败
   Failed to apply settings: 应用设置失败
+  'Failed to connect: %s': '连接失败：%s'
   Failed to delete spool: 删除料盘失败
   Failed to download moonraker.conf.\nCheck printer connection.: 下载 moonraker.conf 失败。\n请检查打印机连接。
   Failed to duplicate spool: 复制线轴失败
@@ -510,6 +520,7 @@ translations:
   Flowguard: '流量保护'
   Flying Toasters: '飞行烤面包机'
   Forming tip...: 正在成型尖端...
+  Found %zu printers: '找到 %zu 台打印机'
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
   Front: 前
@@ -696,6 +707,7 @@ translations:
   Macro to unload filament from extruder: 从挤出机卸载耗材的宏
   Macros: 宏
   Main LED Strip: 主 LED 灯带
+  Make %s Optional?: '将 %s 设为可选？'
   Make Optional: 设为可选
   Make bed mesh and QGL skippable: 使热床网格和 QGL 可跳过
   Manage: 管理
@@ -774,6 +786,7 @@ translations:
   No Spools: 无料盘
   No USB printers found: 未找到 USB 打印机
   No buffer data available: '无可用缓冲区数据'
+  No changes selected.\n\nClick Cancel to close.: '未选择任何更改。\n\n点击取消以关闭。'
   No changes to revert: 没有可撤销的更改
   No effects available: 无可用特效
   No events queued: 无排队事件
@@ -977,6 +990,7 @@ translations:
   'RSS:': RSS：
   Re-probe: 重新探测
   Ready: 就绪
+  Ready to Apply: 准备应用
   Reboot: 重启
   Rebooting...: 正在重启...
   Recalibrate or view detailed results anytime in Settings.: 可随时在设置中重新校准或查看详细结果。
@@ -1121,6 +1135,7 @@ translations:
   Set up your label printer in Settings: '在设置中配置标签打印机'
   Settings: 设置
   Settings reset to defaults. Restarting...: 设置已重置为默认值。正在重启...
+  Setup Complete!: 设置完成！
   Setup Timelapse: 设置延时摄影
   Shadow Intensity: 阴影强度
   Share Usage Data: 共享使用数据
@@ -1184,6 +1199,7 @@ translations:
   Status icons: 状态图标
   Stealthburner: Stealthburner
   Step: 步骤
+  Step 1 of 3: 第 1 步，共 3 步
   Step Progress Widget Test: 步骤进度组件测试
   Stop: 停止
   Stop Drying: 停止干燥
@@ -1206,6 +1222,7 @@ translations:
   TD-1 filament color detection: TD-1 耗材颜色检测
   TEMPERATURE SENSORS: '温度传感器'
   THEME COLORS: 主题颜色
+  TOOLS: TOOLS
   TPU: TPU
   Takes 3-5 min. Do not interrupt.: 需要 3-5 分钟。请勿中断。
   Tap again to confirm this orientation: 再次点击确认此方向
@@ -1364,6 +1381,7 @@ translations:
   ? Weight data is synced from Spoolman to display remaining filament. Changes are also synced when prints start, pause, or complete.
   : 重量数据从 Spoolman 同步以显示剩余耗材。打印开始、暂停或完成时也会同步更改。
   What We Collect: 我们收集的内容
+  "When starting a print, you'll be able to choose whether to run %s. ": '开始打印时，您可以选择是否运行 %s。 '
   White: 白色
   WiFi: WiFi
   WiFi Network: WiFi 网络
@@ -1384,8 +1402,10 @@ translations:
   Y Offset: Y 偏移
   'Y:': Y：
   Year: 年
+  You can now skip these operations when starting prints.\n\n: '现在开始打印时可以跳过这些操作。\n\n'
   You can skip this and calibrate later in Settings.: 您可以跳过此步骤，稍后在设置中进行校准。
   You have unsaved changes. Discard them?: 您有未保存的更改。是否丢弃？
+  Your PRINT_START macro will be updated to give you control over:\n\n: '您的 PRINT_START 宏将被更新，以便您控制以下内容：\n\n'
   Your completed prints will appear here: 您完成的打印将显示在此处
   Your print start is already fully configured!: 您的打印启动已完全配置！
   Z: Z
