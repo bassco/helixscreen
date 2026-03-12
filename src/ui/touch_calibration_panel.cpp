@@ -118,6 +118,10 @@ void TouchCalibrationPanel::capture_point(Point raw) {
             break;
         }
 
+        // Detect and correct swapped touch axes (e.g., Ender 5 Max screens)
+        // This swaps touch_points_ in-place and recomputes calibration_ if needed
+        detect_and_correct_axis_swap(calibration_, screen_points_, touch_points_);
+
         // Validate the matrix produces reasonable results
         if (!validate_calibration_result(calibration_, screen_points_, touch_points_, screen_width_,
                                          screen_height_)) {

@@ -1137,6 +1137,182 @@ TEST_CASE("TouchCalibration: device_needs_calibration with MT-detected devices",
     }
 }
 
-// Axis swap detection was removed — the affine transform's cross-coupling
-// terms handle axis swaps implicitly without needing lv_evdev_set_swap_axes(),
-// which had a coordinate space mismatch bug on non-square screens.
+// ============================================================================
+// Axis Swap Detection and Correction Tests
+// ============================================================================
+
+TEST_CASE("TouchCalibration: detect_and_correct_axis_swap with swapped 800x480 screen",
+          "[touch-calibration][axis-swap]") {
+    // Simulate a touchscreen where the controller reports X/Y swapped.
+    // Screen targets are at the standard calibration positions for 800x480.
+    Point screen_points[3] = {
+        {120, 96},  // 15% from left, 20% from top
+        {400, 374}, // center X, 78% from top
+        {680, 96}   // 85% from left, 20% from top
+    };
+
+    // Touch points with X/Y swapped: what would be (120,96) in correct space
+    // comes in as (96,120) from the swapped controller.
+    // Use values in the LVGL-mapped range (post linear mapping, screen-ish coords).
+    Point touch_points[3] = {
+        {96, 120},  // Swapped version of (120, 96)
+        {374, 400}, // Swapped version of (400, 374)
+        {96, 680}   // Swapped version of (680, 96)
+    };
+
+    // First compute calibration from the swapped data
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen_points, touch_points, cal));
+
+    // The original calibration should have high cross-coupling
+    float orig_diagonal = std::abs(cal.a) + std::abs(cal.e);
+    float orig_off_diag = std::abs(cal.b) + std::abs(cal.d);
+    REQUIRE(orig_off_diag / orig_diagonal > 0.5f);
+
+    // Now detect and correct
+    bool swapped = detect_and_correct_axis_swap(cal, screen_points, touch_points);
+    REQUIRE(swapped == true);
+    REQUIRE(cal.axes_swapped == true);
+
+    // After correction, diagonal should dominate
+    float new_diagonal = std::abs(cal.a) + std::abs(cal.e);
+    float new_off_diag = std::abs(cal.b) + std::abs(cal.d);
+    REQUIRE(new_off_diag / new_diagonal < 0.5f);
+
+    // The corrected calibration should produce correct screen coordinates
+    // touch_points were swapped in-place, so transform them
+    Point p0 = transform_point(cal, touch_points[0]);
+    REQUIRE(p0.x == Approx(screen_points[0].x).margin(2));
+    REQUIRE(p0.y == Approx(screen_points[0].y).margin(2));
+
+    Point p1 = transform_point(cal, touch_points[1]);
+    REQUIRE(p1.x == Approx(screen_points[1].x).margin(2));
+    REQUIRE(p1.y == Approx(screen_points[1].y).margin(2));
+}
+
+TEST_CASE("TouchCalibration: detect_and_correct_axis_swap with non-swapped screen",
+          "[touch-calibration][axis-swap]") {
+    // Normal (non-swapped) calibration — should NOT trigger swap
+    Point screen_points[3] = {
+        {120, 96},
+        {400, 374},
+        {680, 96}
+    };
+
+    // Touch points match screen points with slight offset (typical for cap screens)
+    Point touch_points[3] = {
+        {125, 100},
+        {405, 378},
+        {685, 100}
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen_points, touch_points, cal));
+
+    // Should NOT detect swap — diagonal is already dominant
+    Point original_touch[3] = {touch_points[0], touch_points[1], touch_points[2]};
+    bool swapped = detect_and_correct_axis_swap(cal, screen_points, touch_points);
+    REQUIRE(swapped == false);
+    REQUIRE(cal.axes_swapped == false);
+
+    // Touch points should be unchanged
+    for (int i = 0; i < 3; i++) {
+        REQUIRE(touch_points[i].x == original_touch[i].x);
+        REQUIRE(touch_points[i].y == original_touch[i].y);
+    }
+}
+
+TEST_CASE("TouchCalibration: detect_and_correct_axis_swap with ADC-range swapped axes",
+          "[touch-calibration][axis-swap]") {
+    // Simulate resistive touchscreen with 12-bit ADC and swapped axes
+    // on 800x480 screen
+    Point screen_points[3] = {
+        {120, 96},
+        {400, 374},
+        {680, 96}
+    };
+
+    // Raw ADC values (0-4095 range) but X/Y swapped
+    Point touch_points[3] = {
+        {820, 614},   // Swapped: should be (614, 820)
+        {3190, 2048}, // Swapped: should be (2048, 3190)
+        {820, 3482}   // Swapped: should be (3482, 820)
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen_points, touch_points, cal));
+
+    bool swapped = detect_and_correct_axis_swap(cal, screen_points, touch_points);
+    REQUIRE(swapped == true);
+    REQUIRE(cal.axes_swapped == true);
+
+    // Verify the corrected calibration maps correctly
+    Point p = transform_point(cal, touch_points[0]);
+    REQUIRE(p.x == Approx(screen_points[0].x).margin(2));
+    REQUIRE(p.y == Approx(screen_points[0].y).margin(2));
+}
+
+TEST_CASE("TouchCalibration: axis swap with Ender 5 Max-like coefficients",
+          "[touch-calibration][axis-swap]") {
+    // Reproduce the actual broken calibration from the Ender 5 Max user
+    // The original coefficients (d=1.187, e=2.367) indicate heavy cross-coupling
+    // Simulate the touch input that would produce these coefficients
+
+    Point screen_points[3] = {
+        {120, 96},
+        {400, 374},
+        {680, 96}
+    };
+
+    // These touch points produce high cross-coupling when not swapped
+    // (representing a screen where touch X/Y are transposed)
+    Point touch_points[3] = {
+        {50, 100},
+        {250, 350},
+        {50, 600}
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen_points, touch_points, cal));
+
+    // Check if this triggers swap detection
+    float diag = std::abs(cal.a) + std::abs(cal.e);
+    float off_diag = std::abs(cal.b) + std::abs(cal.d);
+    float ratio = off_diag / diag;
+
+    if (ratio > 0.5f) {
+        bool swapped = detect_and_correct_axis_swap(cal, screen_points, touch_points);
+        REQUIRE(swapped == true);
+
+        // After swap, the calibration should produce valid screen coords
+        Point p = transform_point(cal, touch_points[0]);
+        REQUIRE(p.x == Approx(screen_points[0].x).margin(2));
+        REQUIRE(p.y == Approx(screen_points[0].y).margin(2));
+    }
+}
+
+TEST_CASE("TouchCalibration: axis swap detection does not trigger on slight rotation",
+          "[touch-calibration][axis-swap]") {
+    // A slightly rotated touchscreen has small cross-coupling but diagonal still dominates
+    Point screen_points[3] = {
+        {120, 96},
+        {400, 374},
+        {680, 96}
+    };
+
+    // Slight clockwise rotation (~5 degrees) in touch coordinates
+    // cos(5°)≈0.996, sin(5°)≈0.087
+    Point touch_points[3] = {
+        {static_cast<int>(120 * 0.996 + 96 * 0.087), static_cast<int>(-120 * 0.087 + 96 * 0.996)},
+        {static_cast<int>(400 * 0.996 + 374 * 0.087),
+         static_cast<int>(-400 * 0.087 + 374 * 0.996)},
+        {static_cast<int>(680 * 0.996 + 96 * 0.087),
+         static_cast<int>(-680 * 0.087 + 96 * 0.996)},
+    };
+
+    TouchCalibration cal;
+    REQUIRE(compute_calibration(screen_points, touch_points, cal));
+
+    bool swapped = detect_and_correct_axis_swap(cal, screen_points, touch_points);
+    REQUIRE(swapped == false);
+}

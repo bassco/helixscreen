@@ -105,6 +105,7 @@ struct TouchCalibration {
     bool valid = false;
     float a = 1.0f, b = 0.0f, c = 0.0f; // screen_x = a*x + b*y + c
     float d = 0.0f, e = 1.0f, f = 0.0f; // screen_y = d*x + e*y + f
+    bool axes_swapped = false;            // true if axis swap was auto-corrected
 };
 
 /**
@@ -159,6 +160,28 @@ bool is_calibration_valid(const TouchCalibration& cal);
 bool validate_calibration_result(const TouchCalibration& cal, const Point screen_points[3],
                                  const Point touch_points[3], int screen_width, int screen_height,
                                  float max_residual = 10.0f);
+
+/**
+ * @brief Detect and correct swapped touch axes in calibration data
+ *
+ * After computing calibration, checks if the off-diagonal (cross-coupling)
+ * terms dominate the diagonal (scaling) terms. This indicates the touch
+ * controller reports X where Y is expected and vice versa.
+ *
+ * If swap is detected, swaps X/Y in touch_points and recomputes calibration,
+ * producing clean diagonal-dominant coefficients. The swap is handled entirely
+ * in the affine matrix — no runtime evdev swap is needed.
+ *
+ * Safe for non-swapped screens: only triggers when cross-coupling ratio > 0.5
+ * AND swapping produces a measurably better (lower cross-coupling) result.
+ *
+ * @param[in,out] cal Calibration to check/fix (recomputed if swap detected)
+ * @param[in] screen_points 3 screen coordinate targets
+ * @param[in,out] touch_points 3 raw touch coordinates (swapped in-place if needed)
+ * @return true if axes were swapped and calibration was recomputed
+ */
+bool detect_and_correct_axis_swap(TouchCalibration& cal, const Point screen_points[3],
+                                  Point touch_points[3]);
 
 /// Maximum reasonable coefficient value for validation
 constexpr float MAX_CALIBRATION_COEFFICIENT = 1000.0f;

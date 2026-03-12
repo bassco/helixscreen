@@ -673,6 +673,59 @@ TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
     REQUIRE(failure_called_ == false);
 }
 
+// ============================================================================
+// Axis Swap Integration Tests (panel-level)
+// ============================================================================
+
+TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
+                 "TouchCalibrationPanel: swapped axes produce clean calibration via capture_point",
+                 "[touch-calibration][axis-swap][panel]") {
+    panel_->start();
+
+    // Simulate a touchscreen with X/Y swapped.
+    // Screen targets (800x480): (120,96), (400,374), (680,96)
+    // Touch reports swapped coords: (96,120), (374,400), (96,680)
+    panel_->capture_point(Point{96, 120});
+    panel_->capture_point(Point{374, 400});
+    panel_->capture_point(Point{96, 680});
+
+    // Should reach VERIFY (not restart due to failure)
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::VERIFY);
+    REQUIRE(failure_called_ == false);
+
+    const TouchCalibration* cal = panel_->get_calibration();
+    REQUIRE(cal != nullptr);
+    REQUIRE(cal->valid == true);
+    REQUIRE(cal->axes_swapped == true);
+
+    // Diagonal should dominate (clean matrix, not cross-coupled)
+    float diagonal = std::abs(cal->a) + std::abs(cal->e);
+    float off_diagonal = std::abs(cal->b) + std::abs(cal->d);
+    REQUIRE(off_diagonal / diagonal < 0.5f);
+}
+
+TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
+                 "TouchCalibrationPanel: non-swapped axes do not set axes_swapped flag",
+                 "[touch-calibration][axis-swap][panel]") {
+    panel_->start();
+
+    // Normal (non-swapped) touch points close to screen targets
+    panel_->capture_point(Point{125, 100});
+    panel_->capture_point(Point{405, 378});
+    panel_->capture_point(Point{685, 100});
+
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::VERIFY);
+
+    const TouchCalibration* cal = panel_->get_calibration();
+    REQUIRE(cal != nullptr);
+    REQUIRE(cal->valid == true);
+    REQUIRE(cal->axes_swapped == false);
+}
+
+// ============================================================================
+// Recovery Tests
+// ============================================================================
+
 TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
                  "TouchCalibrationPanel: recovery after degenerate points",
                  "[touch-calibration][degenerate][recovery]") {

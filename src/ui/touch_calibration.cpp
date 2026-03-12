@@ -120,6 +120,71 @@ bool is_calibration_valid(const TouchCalibration& cal) {
     return true;
 }
 
+bool detect_and_correct_axis_swap(TouchCalibration& cal, const Point screen_points[3],
+                                  Point touch_points[3]) {
+    // Compute cross-coupling ratio: off-diagonal vs diagonal dominance
+    // For a well-aligned screen: a,e are large (scaling), b,d are ~0 (no cross-coupling)
+    // For swapped axes: b,d are large, a,e may be small or the matrix is chaotic
+    float diagonal = std::abs(cal.a) + std::abs(cal.e);
+    float off_diagonal = std::abs(cal.b) + std::abs(cal.d);
+
+    // Avoid division by zero
+    if (diagonal < 0.001f) {
+        diagonal = 0.001f;
+    }
+
+    float cross_coupling_ratio = off_diagonal / diagonal;
+
+    // Only consider swap if cross-coupling is significant
+    if (cross_coupling_ratio <= 0.5f) {
+        return false;
+    }
+
+    spdlog::info("[TouchCalibration] High cross-coupling detected (ratio={:.2f}, "
+                 "a={:.3f} b={:.3f} d={:.3f} e={:.3f}), testing axis swap",
+                 cross_coupling_ratio, cal.a, cal.b, cal.d, cal.e);
+
+    // Try swapping X/Y in touch points and recomputing
+    Point swapped_points[3];
+    for (int i = 0; i < 3; i++) {
+        swapped_points[i] = {touch_points[i].y, touch_points[i].x};
+    }
+
+    TouchCalibration swapped_cal;
+    if (!compute_calibration(screen_points, swapped_points, swapped_cal)) {
+        spdlog::debug("[TouchCalibration] Axis-swapped calibration failed (degenerate)");
+        return false;
+    }
+
+    // Check if swapped version has better (lower) cross-coupling
+    float swapped_diagonal = std::abs(swapped_cal.a) + std::abs(swapped_cal.e);
+    float swapped_off_diagonal = std::abs(swapped_cal.b) + std::abs(swapped_cal.d);
+    if (swapped_diagonal < 0.001f) {
+        swapped_diagonal = 0.001f;
+    }
+    float swapped_ratio = swapped_off_diagonal / swapped_diagonal;
+
+    if (swapped_ratio >= cross_coupling_ratio) {
+        spdlog::debug("[TouchCalibration] Swap did not improve cross-coupling "
+                      "(original={:.2f}, swapped={:.2f}), keeping original",
+                      cross_coupling_ratio, swapped_ratio);
+        return false;
+    }
+
+    spdlog::info("[TouchCalibration] Axis swap corrected cross-coupling "
+                 "(ratio {:.2f} -> {:.2f}, a={:.3f} b={:.3f} d={:.3f} e={:.3f})",
+                 cross_coupling_ratio, swapped_ratio, swapped_cal.a, swapped_cal.b, swapped_cal.d,
+                 swapped_cal.e);
+
+    // Apply the swap: update touch points in-place and use the swapped calibration
+    for (int i = 0; i < 3; i++) {
+        touch_points[i] = swapped_points[i];
+    }
+    swapped_cal.axes_swapped = true;
+    cal = swapped_cal;
+    return true;
+}
+
 bool validate_calibration_result(const TouchCalibration& cal, const Point screen_points[3],
                                  const Point touch_points[3], int screen_width, int screen_height,
                                  float max_residual) {
