@@ -10,7 +10,6 @@
 
 #include "ui_print_start_controller.h"
 
-#include "color_utils.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_modal.h"
@@ -18,7 +17,6 @@
 #include "ui_panel_print_status.h"
 #include "ui_print_select_detail_view.h"
 #include "ui_update_queue.h"
-#include "ui_utils.h"
 
 #include "active_print_media_manager.h"
 #include "ams_state.h"
@@ -154,13 +152,11 @@ void PrintStartController::initiate() {
         return;
     }
 
-    // Check if G-code requires colors not loaded in AMS
-    auto missing_tools = check_ams_color_match();
-    if (!missing_tools.empty()) {
-        // Button stays disabled - dialog will handle continuation or re-enable on cancel
-        spdlog::info("[PrintStartController] G-code requires {} tool colors not found in AMS slots",
-                     missing_tools.size());
-        show_color_mismatch_warning(missing_tools);
+    // Check if any tools have no matching AMS slot (uses FilamentMapper results)
+    auto unresolved = find_unresolved_tools();
+    if (!unresolved.empty()) {
+        auto tool_info = detail_view_->get_filament_tool_info();
+        show_color_mismatch_warning(unresolved, tool_info);
         return;
     }
 
@@ -363,89 +359,60 @@ void PrintStartController::on_filament_warning_cancel_static(lv_event_t* e) {
 // AMS Color Mismatch Detection
 // ============================================================================
 
-std::vector<int> PrintStartController::check_ams_color_match() {
-    std::vector<int> missing_tools;
-
-    // Skip check if no multi-color G-code (single color or no colors)
+std::vector<int> PrintStartController::find_unresolved_tools() {
+    // Skip check for single-color prints (no mapping needed)
     if (filament_colors_.size() <= 1) {
-        return missing_tools;
+        return {};
     }
 
-    // Skip check if AMS not available
-    if (!AmsState::instance().is_available()) {
-        spdlog::debug("[PrintStartController] AMS not available, skipping color match check");
-        return missing_tools;
+    // Use the already-computed FilamentMapper results from the mapping card
+    if (!detail_view_) {
+        spdlog::debug("[PrintStartController] No detail view, skipping mismatch check");
+        return {};
     }
 
-    // Get slot count from AMS
-    int slot_count = lv_subject_get_int(AmsState::instance().get_slot_count_subject());
-    if (slot_count <= 0) {
-        spdlog::debug("[PrintStartController] No AMS slots available");
-        return missing_tools;
+    auto mappings = detail_view_->get_filament_mappings();
+    if (mappings.empty()) {
+        // No mappings = AMS not available or card not shown
+        spdlog::debug("[PrintStartController] No filament mappings available");
+        return {};
     }
 
-    // Collect all slot colors
-    std::vector<uint32_t> slot_colors;
-    for (int i = 0; i < slot_count && i < AmsState::MAX_SLOTS; ++i) {
-        lv_subject_t* color_subject = AmsState::instance().get_slot_color_subject(i);
-        if (color_subject) {
-            uint32_t color = static_cast<uint32_t>(lv_subject_get_int(color_subject));
-            slot_colors.push_back(color);
-        }
+    auto unresolved = helix::FilamentMapper::find_unresolved_tools(mappings);
+    if (!unresolved.empty()) {
+        spdlog::info("[PrintStartController] {} tools have no matching AMS slot",
+                     unresolved.size());
     }
-
-    // Color match tolerance (0-255 scale)
-    // Value of 40 allows ~15% variance per RGB channel, accounting for
-    // differences between slicer color palettes and Spoolman/AMS colors
-    constexpr int COLOR_MATCH_TOLERANCE = 40;
-
-    // Check each required tool color
-    for (size_t tool_idx = 0; tool_idx < filament_colors_.size(); ++tool_idx) {
-        auto required_color = helix::parse_hex_color(filament_colors_[tool_idx]);
-        if (!required_color) {
-            continue; // Skip invalid/empty colors (but NOT black #000000!)
-        }
-
-        // Look for a matching slot
-        bool found_match = false;
-        for (uint32_t slot_color : slot_colors) {
-            if (ui_color_distance(*required_color, slot_color) <= COLOR_MATCH_TOLERANCE) {
-                found_match = true;
-                break;
-            }
-        }
-
-        if (!found_match) {
-            missing_tools.push_back(static_cast<int>(tool_idx));
-            spdlog::debug("[PrintStartController] Tool T{} color #{:06X} not found in AMS slots",
-                          tool_idx, *required_color);
-        }
-    }
-
-    return missing_tools;
+    return unresolved;
 }
 
-void PrintStartController::show_color_mismatch_warning(const std::vector<int>& missing_tools) {
+void PrintStartController::show_color_mismatch_warning(
+    const std::vector<int>& unresolved_tools,
+    const std::vector<helix::GcodeToolInfo>& tool_info) {
     // Close any existing dialog first
     if (color_mismatch_modal_) {
         helix::ui::modal_hide(color_mismatch_modal_);
         color_mismatch_modal_ = nullptr;
     }
 
-    // Build message listing missing tools and their colors
-    std::string message = "This print requires colors not loaded in the AMS:\n\n";
-    for (int tool_idx : missing_tools) {
-        if (tool_idx < static_cast<int>(filament_colors_.size())) {
-            const std::string& color = filament_colors_[tool_idx];
-            message += "  " + std::string(LV_SYMBOL_BULLET) + " T" + std::to_string(tool_idx) +
-                       ": " + color + "\n";
+    // Build message with human-readable color names
+    std::string message = lv_tr("These tools have no matching filament loaded:");
+    message += "\n\n";
+    for (int tool_idx : unresolved_tools) {
+        if (tool_idx < static_cast<int>(tool_info.size())) {
+            const auto& tool = tool_info[tool_idx];
+            std::string color_name = helix::describe_color(tool.color_rgb);
+            message += "  " + std::string(LV_SYMBOL_BULLET) + " T" +
+                       std::to_string(tool_idx) + ": " + color_name;
+            if (!tool.material.empty()) {
+                message += " (" + tool.material + ")";
+            }
+            message += "\n";
         }
     }
-    message += "\nLoad the required filaments or start anyway?";
+    message += "\n";
+    message += lv_tr("Load the required filaments or start anyway?");
 
-    // Static buffer for message - must persist during modal lifetime.
-    // Safe because we always close any existing dialog first above,
-    // preventing concurrent access to this buffer.
     static char message_buffer[512];
     snprintf(message_buffer, sizeof(message_buffer), "%s", message.c_str());
 
@@ -455,15 +422,14 @@ void PrintStartController::show_color_mismatch_warning(const std::vector<int>& m
 
     if (!color_mismatch_modal_) {
         spdlog::error("[PrintStartController] Failed to create color mismatch warning dialog");
-        // Re-enable print button since we couldn't show the dialog
         if (update_print_button_) {
             update_print_button_();
         }
         return;
     }
 
-    spdlog::debug("[PrintStartController] Color mismatch warning dialog shown for {} tools",
-                  missing_tools.size());
+    spdlog::debug("[PrintStartController] Color mismatch warning shown for {} tools",
+                  unresolved_tools.size());
 }
 
 void PrintStartController::on_color_mismatch_proceed_static(lv_event_t* e) {

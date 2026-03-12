@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "color_utils.h"
 #include "filament_mapper.h"
 #include "ui_observer_guard.h"
 
@@ -151,20 +152,12 @@ class PrintStartController {
      */
     void show_filament_warning();
 
-    /**
-     * @brief Check if G-code tool colors match available AMS slot colors
-     *
-     * @return Vector of tool indices (T0, T1, etc.) that have no matching slot color.
-     *         Empty vector if all colors match or AMS is not available.
-     */
-    std::vector<int> check_ams_color_match();
+    /// Check FilamentMapper results for unresolved tools (replaces raw color comparison)
+    std::vector<int> find_unresolved_tools();
 
-    /**
-     * @brief Show color mismatch warning dialog
-     *
-     * @param missing_tools Tool indices without matching slot colors
-     */
-    void show_color_mismatch_warning(const std::vector<int>& missing_tools);
+    /// Show improved mismatch warning with color names and slot context
+    void show_color_mismatch_warning(const std::vector<int>& unresolved_tools,
+                                     const std::vector<helix::GcodeToolInfo>& tool_info);
 
     // Static callbacks for LVGL modal
     static void on_filament_warning_proceed_static(lv_event_t* e);
