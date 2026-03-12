@@ -725,6 +725,16 @@ TEST_CASE("find_unresolved_tools", "[filament_mapper]") {
         auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
         REQUIRE(unresolved.empty());
     }
+
+    SECTION("is_auto with non-AUTO reason is not unresolved") {
+        // is_auto and reason are always set together in practice, but verify
+        // the AND condition is correct — both must be true to flag as unresolved
+        std::vector<ToolMapping> mappings = {
+            {0, 0, 0, false, true, ToolMapping::MatchReason::COLOR_MATCH},
+        };
+        auto unresolved = FilamentMapper::find_unresolved_tools(mappings);
+        REQUIRE(unresolved.empty());
+    }
 }
 
 TEST_CASE("compute_defaults all slots are empty",
