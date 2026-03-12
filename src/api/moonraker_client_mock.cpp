@@ -1321,6 +1321,27 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
         }
     }
 
+    // Parse Tn tool change commands (T0, T1, T2, ...)
+    // Klipper maps Tn to ACTIVATE_EXTRUDER for multi-extruder setups;
+    // toolchanger plugins override Tn with physical tool change logic.
+    // The mock simulates the result: dispatch toolhead.extruder status update.
+    if (gcode.length() >= 2 && gcode[0] == 'T' && std::isdigit(gcode[1])) {
+        try {
+            int tool_index = std::stoi(gcode.substr(1));
+            // Build extruder name: T0 -> "extruder", T1 -> "extruder1", T2 -> "extruder2", ...
+            std::string extruder_name =
+                (tool_index == 0) ? "extruder" : ("extruder" + std::to_string(tool_index));
+            spdlog::info("[MoonrakerClientMock] Tool change {} -> active extruder: {}", gcode,
+                         extruder_name);
+
+            // Dispatch toolhead.extruder update (same as real Klipper)
+            json status = {{"toolhead", {{"extruder", extruder_name}}}};
+            dispatch_status_update(status);
+        } catch (...) {
+            spdlog::warn("[MoonrakerClientMock] Failed to parse tool index from: {}", gcode);
+        }
+    }
+
     // Parse print job commands (delegate to unified internal handlers)
     // SDCARD_PRINT_FILE FILENAME=xxx - Start printing a file
     if (gcode.find("SDCARD_PRINT_FILE") != std::string::npos) {

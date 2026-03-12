@@ -7,6 +7,8 @@
  */
 
 #include "../ui_test_utils.h"
+#include "ams_backend_mock.h"
+#include "ams_state.h"
 #include "printer_discovery.h"
 #include "tool_state.h"
 
@@ -708,6 +710,158 @@ TEST_CASE("ToolState: request_tool_change with no API calls error",
 
     REQUIRE(error_called);
 
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: request_tool_change delegates to AMS backend when it manages the tool",
+          "[tool][tool-state][tool-change][toolchanger]") {
+    lv_init_safe();
+
+    ToolState& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    helix::PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "tool T2", "extruder", "extruder1", "extruder2",
+         "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+    REQUIRE(ts.tool_count() == 3);
+
+    // Set up mock AMS backend with tool-to-slot map (3 tools → 3 slots)
+    auto mock = std::make_unique<AmsBackendMock>(3);
+    mock->set_tool_changer_mode(true);
+    mock->set_operation_delay(0);
+    REQUIRE(mock->start());
+    auto* mock_ptr = mock.get();
+    AmsState::instance().deinit_subjects();
+    AmsState::instance().init_subjects(false);
+    AmsState::instance().set_backend(std::move(mock));
+    REQUIRE(AmsState::instance().get_backend() != nullptr);
+
+    SECTION("tool change to T1 goes through AMS backend") {
+        // Verify T1 is not currently active
+        REQUIRE(ts.active_tool_index() == 0);
+
+        bool success_called = false;
+        // Pass nullptr for API — backend handles tool change without needing MoonrakerAPI.
+        // If it fell through to gcode path, we'd get "No API connection" error.
+        ts.request_tool_change(1, nullptr, [&]() { success_called = true; },
+                               [](const std::string& err) { FAIL("Unexpected error: " << err); });
+
+        CHECK(success_called);
+
+        // Backend's change_tool is async (schedule_completion), so we verify
+        // the action was initiated rather than checking current_slot
+        auto action = mock_ptr->get_current_action();
+        CHECK(action != AmsAction::IDLE); // Should be UNLOADING or LOADING
+    }
+
+    SECTION("tool change to T2 via backend works") {
+        bool success_called = false;
+        ts.request_tool_change(2, nullptr, [&]() { success_called = true; },
+                               [](const std::string& err) { FAIL("Unexpected error: " << err); });
+
+        CHECK(success_called);
+    }
+
+    mock_ptr->stop();
+    AmsState::instance().deinit_subjects();
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: request_tool_change falls back to gcode when AMS backend has no tool map",
+          "[tool][tool-state][tool-change][toolchanger]") {
+    lv_init_safe();
+
+    ToolState& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    helix::PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+    REQUIRE(ts.tool_count() == 2);
+
+    // Set up AMS backend with 0 slots (loaded but no hardware configured)
+    auto mock = std::make_unique<AmsBackendMock>(0);
+    mock->set_operation_delay(0);
+    AmsState::instance().init_subjects(false);
+    AmsState::instance().set_backend(std::move(mock));
+
+    // With 0 slots, backend_manages_tool is false → falls through to gcode path.
+    // Since we pass nullptr as API, the gcode path should hit the null-API check
+    // and call on_error. This proves the backend was skipped.
+    bool error_called = false;
+    ts.request_tool_change(1, nullptr, nullptr, [&](const std::string& msg) {
+        error_called = true;
+        CHECK(msg.find("No API") != std::string::npos);
+    });
+
+    CHECK(error_called);
+
+    AmsState::instance().deinit_subjects();
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: request_tool_change with negative tool index",
+          "[tool][tool-state][tool-change][toolchanger]") {
+    lv_init_safe();
+
+    ToolState& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    helix::PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+
+    bool error_called = false;
+    ts.request_tool_change(-1, nullptr, nullptr, [&](const std::string& msg) {
+        error_called = true;
+        CHECK(msg.find("Invalid") != std::string::npos);
+    });
+
+    CHECK(error_called);
+
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: request_tool_change for toolchanger with no AMS backend uses gcode fallback",
+          "[tool][tool-state][tool-change][toolchanger]") {
+    lv_init_safe();
+
+    ToolState& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    // Clear any AMS backend from previous tests
+    AmsState::instance().init_subjects(false);
+    AmsState::instance().set_backend(nullptr);
+
+    helix::PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+    REQUIRE(ts.tool_count() == 2);
+
+    // No AMS backend → gcode path. Pass nullptr API to verify we reach the gcode
+    // path (which will error on null API).
+    bool error_called = false;
+    ts.request_tool_change(1, nullptr, nullptr, [&](const std::string& msg) {
+        error_called = true;
+        CHECK(msg.find("No API") != std::string::npos);
+    });
+
+    CHECK(error_called);
+
+    AmsState::instance().deinit_subjects();
     ts.deinit_subjects();
 }
 

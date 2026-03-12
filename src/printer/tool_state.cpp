@@ -321,13 +321,8 @@ void ToolState::request_tool_change(int tool_index, MoonrakerAPI* api,
         return;
     }
 
-    if (!api) {
-        if (on_error)
-            on_error("No API connection");
-        return;
-    }
-
-    // Try AMS backend if it manages this tool (AFC, Happy Hare, etc.)
+    // Try AMS backend first — it handles tool changes independently of the API
+    // (e.g., AFC, Happy Hare, toolchanger backends).
     // Skip the backend if it has no slots configured (e.g., AFC module loaded but no hardware)
     // or if this tool isn't in the backend's tool-to-slot map.
     auto* backend = AmsState::instance().get_backend();
@@ -354,11 +349,18 @@ void ToolState::request_tool_change(int tool_index, MoonrakerAPI* api,
                       tool_index);
     }
 
-    // Fallback: ACTIVATE_EXTRUDER for simple multi-extruder setups
-    const auto& extruder_name = tools_[tool_index].extruder_name.value_or("extruder");
-    std::string gcode = ::fmt::format("ACTIVATE_EXTRUDER EXTRUDER={}", extruder_name);
-    spdlog::info("[ToolState] Requesting tool change to T{} via ACTIVATE_EXTRUDER ({})", tool_index,
-                 extruder_name);
+    if (!api) {
+        if (on_error)
+            on_error("No API connection");
+        return;
+    }
+
+    // Fallback: Tn gcode for multi-extruder and toolchanger setups.
+    // Klipper auto-defines Tn → ACTIVATE_EXTRUDER for plain multi-extruder,
+    // and toolchanger plugins (ktcc, tapchanger, etc.) override Tn with
+    // proper physical tool change logic.
+    std::string gcode = ::fmt::format("T{}", tool_index);
+    spdlog::info("[ToolState] Requesting tool change to T{} via gcode", tool_index);
 
     api->execute_gcode(
         gcode,

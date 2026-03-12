@@ -1141,14 +1141,12 @@ void FilamentPanel::handle_extruder_changed() {
         return;
     }
 
-    const auto& extruder_name = ts.tools()[selected].extruder_name.value_or("extruder");
-    std::string gcode = ::fmt::format("ACTIVATE_EXTRUDER EXTRUDER={}", extruder_name);
-    spdlog::info("[{}] User selected extruder T{}: {}", get_name(), selected, gcode);
+    spdlog::info("[{}] User selected tool T{}", get_name(), selected);
 
-    api_->execute_gcode(
-        gcode, [selected]() { NOTIFY_SUCCESS("Switched to T{}", selected); },
-        [this](const MoonrakerError& error) {
-            NOTIFY_ERROR("Tool change failed: {}", error.user_message());
+    ts.request_tool_change(
+        selected, api_, [selected]() { NOTIFY_SUCCESS("Switched to T{}", selected); },
+        [this](const std::string& error) {
+            NOTIFY_ERROR("Tool change failed: {}", error);
             // Revert dropdown to actual active tool on UI thread
             helix::ui::async_call(
                 [](void* ctx) {

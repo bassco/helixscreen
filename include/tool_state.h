@@ -89,7 +89,7 @@ class ToolState {
     /// Returns "Nozzle" for single-tool, "Nozzle T0" for multi-tool (active tool).
     [[nodiscard]] std::string nozzle_label() const;
 
-    /// Request a tool change, delegating to AMS backend or falling back to ACTIVATE_EXTRUDER.
+    /// Request a tool change, delegating to AMS backend or falling back to Tn gcode.
     /// Callbacks are invoked asynchronously from the API response.
     void request_tool_change(int tool_index, MoonrakerAPI* api,
                              std::function<void()> on_success = nullptr,
