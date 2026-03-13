@@ -4,6 +4,7 @@
   <translation tag=" frames" en=" frames"/>
   <translation tag=" frames captured" de=" Bilder aufgenommen" en=" frames captured" es=" fotogramas capturados" fr=" images capturées" it=" fotogrammi acquisiti" ja=" フレームをキャプチャしました" pt=" frames capturados" ru=" кадров захвачено" zh=" 帧已捕获"/>
   <translation tag=" left" de=" übrig" en=" left" es=" restante" fr=" restant" it=" rimanente" ja=" 残り" pt=" restante" ru=" осталось" zh=" 剩余"/>
+  <translation tag="%d more sensors" de="%d weitere Sensoren" en="%d more sensors" es="%d sensores más" fr="%d capteurs supplémentaires" it="%d altri sensori" ja="他%d個のセンサー" pt="%d sensores adicionais" ru="Ещё %d датчиков" zh="还有%d个传感器"/>
   <translation tag="%lu days ago" de="vor %lu Tagen" en="%lu days ago" es="hace %lu días" fr="il y a %lu jours" it="%lu giorni fa" ja="%lu日前" pt="há %lu dias" ru="%lu дн. назад" zh="%lu天前"/>
   <translation tag="%lu hours ago" de="vor %lu Stunden" en="%lu hours ago" es="hace %lu horas" fr="il y a %lu heures" it="%lu ore fa" ja="%lu時間前" pt="há %lu horas" ru="%lu ч. назад" zh="%lu小时前"/>
   <translation tag="%lu min ago" de="vor %lu Min." en="%lu min ago" es="hace %lu min" fr="il y a %lu min" it="%lu min fa" ja="%lu分前" pt="há %lu min" ru="%lu мин. назад" zh="%lu分钟前"/>

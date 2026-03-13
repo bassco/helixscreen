@@ -4,6 +4,7 @@ translations:
   ' frames': ''
   ' frames captured': ' fotogrammi acquisiti'
   ' left': ' rimanente'
+  '%d more sensors': '%d altri sensori'
   '%lu days ago': '%lu giorni fa'
   '%lu hours ago': '%lu ore fa'
   '%lu min ago': '%lu min fa'

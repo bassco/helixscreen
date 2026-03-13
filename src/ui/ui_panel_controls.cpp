@@ -660,7 +660,7 @@ void ControlsPanel::update_fan_display() {
     if (fan_pct > 0) {
         helix::format::format_percent(fan_pct, fan_speed_buf_, sizeof(fan_speed_buf_));
     } else {
-        std::snprintf(fan_speed_buf_, sizeof(fan_speed_buf_), "Off");
+        std::snprintf(fan_speed_buf_, sizeof(fan_speed_buf_), "%s", lv_tr("Off"));
     }
     lv_subject_copy_string(&fan_speed_subject_, fan_speed_buf_);
     lv_subject_set_int(&fan_pct_subject_, fan_pct);
@@ -682,7 +682,7 @@ void ControlsPanel::update_macro_button(StandardMacros& macros,
                       info.slot_name);
     } else {
         lv_subject_set_int(&visible_subject, 1);
-        lv_subject_copy_string(&name_subject, info.display_name.c_str());
+        lv_subject_copy_string(&name_subject, info.translated_name());
         spdlog::trace("[{}] Macro {}: '{}' → {}", get_name(), button_num, info.display_name,
                       info.get_macro());
     }
@@ -792,7 +792,7 @@ void ControlsPanel::populate_secondary_fans() {
         if (fan->speed_percent > 0) {
             helix::format::format_percent(fan->speed_percent, speed_buf, sizeof(speed_buf));
         } else {
-            std::snprintf(speed_buf, sizeof(speed_buf), "Off");
+            std::snprintf(speed_buf, sizeof(speed_buf), "%s", lv_tr("Off"));
         }
         lv_obj_t* speed_label = lv_label_create(row);
         lv_label_set_text(speed_label, speed_buf);
@@ -1266,13 +1266,16 @@ void ControlsPanel::execute_macro(size_t index) {
     spdlog::debug("[{}] Macro {} clicked, executing slot '{}' → {}", get_name(), button_num,
                   info.slot_name, info.get_macro());
 
-    NOTIFY_INFO("Running {}...", info.display_name);
+    NOTIFY_INFO("Running {}...", info.translated_name());
     if (!StandardMacros::instance().execute(
-            *slot, api_, [name = info.display_name]() { NOTIFY_SUCCESS("{} complete", name); },
+            *slot, api_,
+            [name = std::string(info.translated_name())]() {
+                NOTIFY_SUCCESS("{} complete", name);
+            },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR("Macro failed: {}", err.user_message());
             })) {
-        NOTIFY_WARNING("{} macro not configured", info.display_name);
+        NOTIFY_WARNING("{} macro not configured", info.translated_name());
     }
 }
 
@@ -1426,7 +1429,7 @@ void ControlsPanel::handle_fan_slider_changed(int value) {
     if (value > 0) {
         helix::format::format_percent(value, fan_speed_buf_, sizeof(fan_speed_buf_));
     } else {
-        std::snprintf(fan_speed_buf_, sizeof(fan_speed_buf_), "Off");
+        std::snprintf(fan_speed_buf_, sizeof(fan_speed_buf_), "%s", lv_tr("Off"));
     }
     lv_subject_copy_string(&fan_speed_subject_, fan_speed_buf_);
     lv_subject_set_int(&fan_pct_subject_, value);
@@ -1614,7 +1617,7 @@ void ControlsPanel::update_secondary_fan_speed(const std::string& object_name, i
             if (speed_pct > 0) {
                 helix::format::format_percent(speed_pct, speed_buf, sizeof(speed_buf));
             } else {
-                std::snprintf(speed_buf, sizeof(speed_buf), "Off");
+                std::snprintf(speed_buf, sizeof(speed_buf), "%s", lv_tr("Off"));
             }
             lv_label_set_text(row.speed_label, speed_buf);
             spdlog::trace("[{}] Updated secondary fan '{}' speed to {}", get_name(), object_name,
@@ -1728,8 +1731,7 @@ void ControlsPanel::populate_secondary_temps() {
                               LV_FLEX_ALIGN_CENTER);
 
         char more_buf[48];
-        std::snprintf(more_buf, sizeof(more_buf), "%d more sensor%s", additional,
-                      additional == 1 ? "" : "s");
+        std::snprintf(more_buf, sizeof(more_buf), lv_tr("%d more sensors"), additional);
         lv_obj_t* more_label = lv_label_create(more_row);
         lv_label_set_text(more_label, more_buf);
         lv_obj_set_style_text_color(more_label, theme_manager_get_color("text_muted"), 0);

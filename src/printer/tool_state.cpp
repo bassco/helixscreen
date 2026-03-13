@@ -11,6 +11,7 @@
 
 #include "tool_state.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
@@ -284,13 +285,13 @@ const ToolInfo* ToolState::active_tool() const {
 
 std::string ToolState::nozzle_label() const {
     if (!is_multi_tool()) {
-        return "Nozzle";
+        return lv_tr("Nozzle");
     }
     const auto* tool = active_tool();
     if (tool) {
-        return "Nozzle " + tool->name;
+        return std::string(lv_tr("Nozzle")) + " " + tool->name;
     }
-    return "Nozzle";
+    return lv_tr("Nozzle");
 }
 
 // Tool badge formatting moved to UI layer (ui_ams_tool_text.cpp)

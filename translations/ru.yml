@@ -4,6 +4,7 @@ translations:
   ' frames': ''
   ' frames captured': ' кадров захвачено'
   ' left': ' осталось'
+  '%d more sensors': 'Ещё %d датчиков'
   '%lu days ago': '%lu дн. назад'
   '%lu hours ago': '%lu ч. назад'
   '%lu min ago': '%lu мин. назад'

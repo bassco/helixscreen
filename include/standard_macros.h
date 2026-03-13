@@ -71,7 +71,10 @@ struct StandardMacroInfo {
     StandardMacroSlot slot; ///< The slot enum value
 
     std::string slot_name;    ///< Machine name: "load_filament"
-    std::string display_name; ///< Human name: "Load Filament"
+    std::string display_name; ///< English key for translation: "Load Filament"
+
+    /// @brief Get translated display name for current locale
+    [[nodiscard]] const char* translated_name() const;
 
     std::string configured_macro; ///< User override (or empty)
     std::string detected_macro;   ///< Auto-detected (or empty)

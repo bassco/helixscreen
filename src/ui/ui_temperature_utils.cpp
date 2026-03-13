@@ -144,11 +144,11 @@ HeaterDisplayResult heater_display(int current_centi, int target_centi) {
 
     // Determine status using shared tolerance constant
     if (target_centi <= 0) {
-        result.status = "Off";
+        result.status = lv_tr("Off");
     } else if (current_deg < target_deg - DEFAULT_AT_TEMP_TOLERANCE) {
         result.status = lv_tr("Heating...");
     } else if (current_deg > target_deg + DEFAULT_AT_TEMP_TOLERANCE) {
-        result.status = "Cooling";
+        result.status = lv_tr("Cooling");
     } else {
         result.status = lv_tr("Ready");
     }

@@ -7,11 +7,16 @@
 #include "moonraker_api.h"
 #include "printer_discovery.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 
 using namespace helix;
+
+const char* StandardMacroInfo::translated_name() const {
+    return lv_tr(display_name.c_str());
+}
 
 // ============================================================================
 // Slot Definition Data

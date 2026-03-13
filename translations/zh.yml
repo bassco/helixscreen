@@ -4,6 +4,7 @@ translations:
   ' frames': ''
   ' frames captured': ' 帧已捕获'
   ' left': ' 剩余'
+  '%d more sensors': '还有%d个传感器'
   '%lu days ago': '%lu天前'
   '%lu hours ago': '%lu小时前'
   '%lu min ago': '%lu分钟前'

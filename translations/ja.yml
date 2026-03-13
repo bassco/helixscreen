@@ -4,6 +4,7 @@ translations:
   ' frames': ''
   ' frames captured': ' フレームをキャプチャしました'
   ' left': ' 残り'
+  '%d more sensors': '他%d個のセンサー'
   '%lu days ago': '%lu日前'
   '%lu hours ago': '%lu時間前'
   '%lu min ago': '%lu分前'
