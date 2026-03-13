@@ -6,7 +6,7 @@ This document provides a comprehensive reference for all environment variables u
 
 | Category | Count | Prefix |
 |----------|-------|--------|
-| [Display & Backend](#display--backend-configuration) | 11 | `HELIX_` |
+| [Display & Backend](#display--backend-configuration) | 13 | `HELIX_` |
 | [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
 | [G-Code Viewer](#g-code-viewer) | 3 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
@@ -133,6 +133,44 @@ Override automatic touch input device detection.
 # Specify touch device explicitly
 HELIX_TOUCH_DEVICE=/dev/input/event2 ./build/bin/helix-screen
 ```
+
+### `HELIX_MOUSE_DEVICE`
+
+Override automatic USB mouse device detection. When set, skips sysfs capability scanning and uses the specified device directly.
+
+| Property | Value |
+|----------|-------|
+| **Values** | Device path (e.g., `/dev/input/event4`) |
+| **Default** | Auto-detect (scans for `REL_X` + `REL_Y` + `BTN_LEFT` capabilities) |
+| **Files** | `src/api/display_backend_drm.cpp`, `src/api/display_backend_fbdev.cpp` |
+
+```bash
+# Specify mouse device explicitly
+HELIX_MOUSE_DEVICE=/dev/input/event4 ./build/bin/helix-screen
+```
+
+**Auto-detection:** When unset, HelixScreen scans `/sys/class/input/event*/device/capabilities/` for devices with relative axes (`REL_X`, `REL_Y`) and a left mouse button (`BTN_LEFT`). Devices with absolute axes (`ABS_X`, `ABS_Y`) are skipped — those are touchscreens. The first matching device is used.
+
+**Mouse cursor:** When a mouse is detected (manually or via auto-detection), a 12px white circular cursor is displayed. The mouse works alongside the touchscreen — both are active simultaneously.
+
+**Combo devices:** USB devices that combine keyboard and trackpad (e.g., Logitech K400) present as a single evdev node. The same device path can be used by both mouse and keyboard input — LVGL filters events by type internally.
+
+### `HELIX_KEYBOARD_DEVICE`
+
+Override automatic USB keyboard device detection.
+
+| Property | Value |
+|----------|-------|
+| **Values** | Device path (e.g., `/dev/input/event5`) |
+| **Default** | Auto-detect (scans for `KEY_A` capability) |
+| **Files** | `src/api/display_backend_drm.cpp`, `src/api/display_backend_fbdev.cpp` |
+
+```bash
+# Specify keyboard device explicitly
+HELIX_KEYBOARD_DEVICE=/dev/input/event5 ./build/bin/helix-screen
+```
+
+**Auto-detection:** When unset, HelixScreen scans `/sys/class/input/event*/device/capabilities/key` for devices with `KEY_A` (bit 30) set. This distinguishes real keyboards from power buttons and other key-like devices.
 
 ### `HELIX_BACKLIGHT_DEVICE`
 
@@ -1109,6 +1147,8 @@ HELIX_BENCHMARK=1 HELIX_AUTO_QUIT_MS=10000 ./build/bin/helix-screen --test -p ho
 HELIX_DISPLAY_BACKEND=drm \
 HELIX_DRM_DEVICE=/dev/dri/card1 \
 HELIX_TOUCH_DEVICE=/dev/input/event2 \
+HELIX_MOUSE_DEVICE=/dev/input/event4 \
+HELIX_KEYBOARD_DEVICE=/dev/input/event5 \
 HELIX_BACKLIGHT_DEVICE=/sys/class/backlight/lcd \
 ./build/bin/helix-screen
 ```
