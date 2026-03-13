@@ -377,6 +377,17 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL display sync callback patch already applied$(RESET)"; \
 	fi
+	$(Q)if git -C $(LVGL_DIR) diff --quiet src/widgets/label/lv_label.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL label text transform patch...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_label_text_transform.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl_label_text_transform.patch && \
+			echo "$(GREEN)✓ Label text transform patch applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL label text transform patch already applied$(RESET)"; \
+	fi
 	$(ECHO) "$(CYAN)Checking libhv patches...$(RESET)"
 	$(Q)if git -C $(LIBHV_DIR) diff --quiet Makefile.in 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying libhv OpenSSL/static build hook patch...$(RESET)"; \

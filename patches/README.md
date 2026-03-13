@@ -68,6 +68,7 @@ Applied in order by `mk/patches.mk`. Grouped by subsystem.
 
 | Patch | File(s) | Purpose |
 |-------|---------|---------|
+| `lvgl_label_text_transform.patch` | `lv_label.c`, `lv_label.h`, `lv_label_private.h` | text_transform_upper flag for i18n-safe uppercase at text-set time |
 | `lvgl_sdl_window.patch` | `lv_sdl_window.c` | Multi-display positioning, Android support, macOS crash fix |
 | `lvgl_sdl_sw_android_debug.patch` | SDL files | SDL software renderer Android debug support |
 | `lvgl_theme_breakpoints.patch` | `lv_theme_default.c` | Custom breakpoint tuning for 480-800px |
