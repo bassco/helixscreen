@@ -8,8 +8,8 @@
 
 ## Active Lessons
 
-### [L008] [**---|****-] Design tokens and semantic widgets
-- **Uses**: 9 | **Velocity**: 2 | **Learned**: 2025-12-14 | **Last**: 2026-03-08 | **Category**: pattern | **Type**: informational
+### [L008] [***--|*****] Design tokens and semantic widgets
+- **Uses**: 11 | **Velocity**: 4 | **Learned**: 2025-12-14 | **Last**: 2026-03-13 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
@@ -32,20 +32,20 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2025-12-14 | **Last**: 2025-12-31 | **Category**: pattern | **Type**: informational
 > Use centidegrees (int) for temperature subjects to preserve 0.1C resolution. Float subjects lose precision in LVGL binding
 
-### [L025] [**---|-----] Button content centering
-- **Uses**: 8 | **Velocity**: 0 | **Learned**: 2025-12-21 | **Last**: 2026-01-30 | **Category**: pattern | **Type**: constraint
+### [L025] [**---|***--] Button content centering
+- **Uses**: 9 | **Velocity**: 1 | **Learned**: 2025-12-21 | **Last**: 2026-03-13 | **Category**: pattern | **Type**: constraint
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 80.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-12 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 100.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|****-] Unique XML callback names
 - **Uses**: 4 | **Velocity**: 2 | **Learned**: 2025-12-30 | **Last**: 2026-03-07 | **Category**: pattern | **Type**: constraint
 > All XML event_cb callback names must be globally unique using on_<component>_<action> pattern. LVGL's XML callback registry is a flat global namespace with no scoping. Generic names like on_modal_ok_clicked cause collisions when multiple components register handlers.
 
-### [L040] [**---|****-] Inline XML attrs override bind_style
-- **Uses**: 6 | **Velocity**: 3 | **Learned**: 2025-12-30 | **Last**: 2026-02-24 | **Category**: gotcha | **Type**: constraint
+### [L040] [**---|*****] Inline XML attrs override bind_style
+- **Uses**: 7 | **Velocity**: 4 | **Learned**: 2025-12-30 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
 > When using bind_style for reactive visual changes, inline style attributes (style_bg_color, style_text_color, etc.) have higher priority in LVGL's style cascade. bind_style cannot override them. Solution: use TWO bind_styles (one per state) with NO inline styling for properties you want to change reactively.
 
 ### [L042] [**---|*****] XML bind_flag exclusive visibility
@@ -80,8 +80,8 @@
 - **Uses**: 6 | **Velocity**: 2 | **Learned**: 2026-01-10 | **Last**: 2026-02-25 | **Category**: gotcha | **Type**: constraint
 > Singleton queues (like UpdateQueue) MUST clear pending callbacks in shutdown(), not just null the timer. Without clearing, stale callbacks remain queued and execute on next init() with pointers to destroyed objects → use-after-free. Pattern: std::queue<T>().swap(pending_) to clear, then null timer.
 
-### [L055] [*----|****-] LVGL pad_all excludes flex gaps
-- **Uses**: 3 | **Velocity**: 2 | **Learned**: 2026-01-10 | **Last**: 2026-02-28 | **Category**: gotcha | **Type**: constraint
+### [L055] [**---|*****] LVGL pad_all excludes flex gaps
+- **Uses**: 5 | **Velocity**: 4 | **Learned**: 2026-01-10 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
 > `style_pad_all` only sets edge padding (top/bottom/left/right), NOT inter-item spacing. For zero-gap flex layouts, also need `style_pad_row="0"` (column) or `style_pad_column="0"` (row), or `style_pad_gap="0"` for both.
 
 ### [L056] [*----|-----] lv_subject_t no shallow copy
@@ -92,12 +92,19 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-14 | **Last**: 2026-01-16 | **Category**: gotcha | **Type**: constraint
 > Classes owning lv_subject_t members must call lv_subject_deinit() in their destructor. Without deinit, observers attached to the subject leak and may fire after destruction causing use-after-free.
 
-### [L059] [*----|-----] Use lv_obj_safe_delete for LVGL cleanup
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-20 | **Last**: 2026-01-20 | **Category**: pattern | **Type**: constraint
-> Always use lv_obj_safe_delete() instead of raw lv_obj_delete() - it guards against shutdown race conditions by checking lv_is_initialized() and lv_display_get_next() before deletion, and auto-nulls the pointer to prevent use-after-free
+### [L059] [**---|*****] LVGL object deletion: pick the RIGHT strategy
+- **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-01-20 | **Last**: 2026-03-13 | **Category**: pattern | **Type**: constraint
+> **Four deletion strategies, each for a specific scenario:**
+> 1. **`helix::ui::safe_delete(obj)`** — SYNCHRONOUS, guards shutdown races, auto-nulls pointer. Use for: normal cleanup in destructors, panel teardown, anywhere you own the pointer and are NOT inside an UpdateQueue/async callback batch.
+> 2. **`helix::ui::safe_delete_deferred(obj)`** — Queues via UpdateQueue. Use for: deletion inside async callbacks where you can't delete synchronously (e.g., timer callbacks, network response handlers). Nulls pointer immediately; actual delete happens next queue drain.
+> 3. **`lv_obj_delete_async(obj)`** — LVGL's built-in deferred delete. Use for: deferred deletion where the object MAY be deleted by another path before the async fires. LVGL's `obj_delete_core()` automatically cancels pending `lv_obj_delete_async` calls. **Custom `lv_async_call` lambdas are NOT cancelled** — this was crash #399.
+> 4. **`lv_obj_delete(obj)`** — Raw immediate delete, no guards. Use for: LVGL internals only, or when you're 100% certain LVGL is initialized and no concurrent access.
+> **NEVER** use custom `lv_async_call` lambdas with `lv_obj_delete` — LVGL can't cancel them. Always use `lv_obj_delete_async()` for deferred deletion.
+> **NEVER** use `safe_delete()` inside `queue_update()`/`async_call()` lambdas — multiple synchronous deletions in the same batch corrupt LVGL's event linked list (#356).
+> **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 52 | **Velocity**: 51.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-12 | **Category**: correction | **Type**: constraint
+- **Uses**: 56 | **Velocity**: 55.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-13 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -117,8 +124,8 @@
 - **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-02-07 | **Last**: 2026-02-25 | **Category**: build
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
-### [L064] [**---|*****] Commit generated translation artifacts
-- **Uses**: 9 | **Velocity**: 9 | **Learned**: 2026-02-10 | **Last**: 2026-03-12 | **Category**: i18n
+### [L064] [***--|*****] Commit generated translation artifacts
+- **Uses**: 14 | **Velocity**: 14 | **Learned**: 2026-02-10 | **Last**: 2026-03-13 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
 ### [L065] [-----|-----] No test-only methods on production classes
@@ -129,12 +136,12 @@
 - **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-02-11 | **Last**: 2026-02-28 | **Category**: lvgl
 > When using flex_grow on a container with flex_flow=row_wrap, LVGL calculates wrap points based on the container's natural (content) width, NOT the flex-allocated width. Fix: set width="1" + flex_grow="1" — forces LVGL to use the grown width for wrapping. Without this, children overflow instead of wrapping.
 
-### [L067] [*----|*****] Wrap C++ UI strings in lv_tr()
-- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-02-14 | **Last**: 2026-03-08 | **Category**: ui
+### [L067] [**---|*****] Wrap C++ UI strings in lv_tr()
+- **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-02-14 | **Last**: 2026-03-13 | **Category**: ui
 > All user-visible English strings in C++ code must be wrapped in lv_tr() for i18n. Dropdown options are concatenated strings so they're harder to translate - but labels, help text, toasts, etc. must use lv_tr().
 
-### [L068] [-----|-----] Cancel LVGL animations before object deletion
-- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-02-15 | **Last**: 2026-02-15 | **Category**: lvgl
+### [L068] [*----|***--] Cancel LVGL animations before object deletion
+- **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-02-15 | **Last**: 2026-03-12 | **Category**: lvgl
 > When deleting LVGL objects that have animations with completion callbacks, ALWAYS cancel animations FIRST (lv_anim_delete) before lv_obj_delete/lv_obj_safe_delete. The completion callback may fire synchronously during lv_anim_delete, causing use-after-free if the object is already freed. Pattern: (1) nullify member pointer, (2) clear state flags, (3) lv_anim_delete, (4) lv_obj_delete. For animations using 'this' as var: set guard flags to false BEFORE lv_anim_delete so callbacks become no-ops.
 
 ### [L069] [**---|*****] Never assume lv_obj user_data ownership — it may already be set
@@ -146,11 +153,11 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [**---|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 6 | **Velocity**: 6 | **Learned**: 2026-02-17 | **Last**: 2026-03-10 | **Category**: i18n
+- **Uses**: 9 | **Velocity**: 9 | **Learned**: 2026-02-17 | **Last**: 2026-03-13 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
-- **Uses**: 7 | **Velocity**: 7 | **Learned**: 2026-02-22 | **Last**: 2026-03-08 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 8 | **Velocity**: 8 | **Learned**: 2026-02-22 | **Last**: 2026-03-12 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
 ### [L073] [*----|****-] ObserverGuard release vs reset
@@ -165,9 +172,9 @@
 - **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
 > Before calling lv_obj_find_by_name(), lv_obj_get_child(), or lv_obj_get_child_count() on a cached widget pointer, ensure the pointer is not stale. Use null checks and alive guards (weak_ptr pattern) — NOT lv_obj_is_valid() which is O(n) recursive and can stack overflow on Pi (see L076). Use safe_delete_obj() instead of raw lv_obj_delete() to null pointers after deletion. For async callbacks, use alive guards to detect if the owning panel was destroyed.
 
-### [L076] [*----|*****] NEVER use lv_obj_is_valid() in hot paths
-- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-02-22 | **Last**: 2026-03-10 | **Category**: gotcha
-> lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, or safe_delete_obj(). Use simple null pointer checks instead. Only safe in one-shot event handlers (button clicks) where tree is stable and call happens once. This caused a real user crash in v0.10.14 — HeatingIconAnimator::apply_color() called lv_obj_is_valid(icon_) from observer callback during startup, recursed infinitely, SIGSEGV after 1 second.
+### [L076] [**---|*****] NEVER use lv_obj_is_valid() in hot paths or async guards
+- **Uses**: 8 | **Velocity**: 8 | **Learned**: 2026-02-22 | **Last**: 2026-03-13 | **Category**: gotcha
+> lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, safe_delete_obj(), or async deletion guards. Use simple null pointer checks instead. For deferred deletion guards, use **application-level tracking** (e.g., ModalStack membership check) or `lv_obj_delete_async()` which self-cancels. `lv_obj_is_valid()` can return TRUE on recycled memory — if LVGL reuses the address, you delete a live object (crash #399). Only safe in one-shot user-initiated event handlers (button clicks) where tree is stable and call happens once.
 
 ### [L077] [-----|-----] Dynamic subject observers MUST use SubjectLifetime tokens
 - **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha
