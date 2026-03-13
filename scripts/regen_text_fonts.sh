@@ -8,7 +8,8 @@
 # Includes:
 # - Latin (ASCII, Western European, Central European)
 # - Cyrillic (Russian, Ukrainian, etc.)
-# - CJK subset (Chinese + Japanese from translation files)
+# - CJK wizard subset (12 codepoints compiled into .c fonts)
+# - CJK runtime (full Chinese + Japanese as .bin files for runtime loading)
 #
 # Source fonts:
 # - assets/fonts/NotoSans-*.ttf (Latin/Cyrillic)
@@ -79,6 +80,10 @@ fi
 
 echo "CJK fonts found - will include Chinese and Japanese support"
 
+# Wizard welcome page CJK codepoints — always compiled into .c fonts
+# 欢迎！中文ようこそ！日本語
+WIZARD_CJK="0x3046,0x3053,0x305d,0x3088,0x4e2d,0x6587,0x65e5,0x672c,0x6b22,0x8a9e,0x8fce,0xff01"
+
 # Unicode ranges for Latin/Cyrillic
 UNICODE_RANGES=""
 UNICODE_RANGES+="0x20-0x7F"      # Basic Latin (ASCII)
@@ -92,9 +97,9 @@ UNICODE_RANGES+=",0x2026"        # Ellipsis
 UNICODE_RANGES+=",0x20AC"        # Euro sign
 UNICODE_RANGES+=",0x2122"        # Trademark
 
-# Extract CJK characters from translations and C++ sources
+# Extract ALL CJK characters from translations and C++ sources
 echo "Extracting CJK characters from translations and C++ sources..."
-CJKCHARS=$(python3 << 'EOF'
+ALL_CJKCHARS=$(python3 << 'EOF'
 import glob
 import re
 
@@ -138,11 +143,19 @@ if chars:
     print(','.join(f'0x{ord(c):04x}' for c in sorted(chars)))
 EOF
 )
-if [ -n "$CJKCHARS" ]; then
-    CJK_COUNT=$(echo "$CJKCHARS" | tr ',' '\n' | wc -l | tr -d ' ')
-    echo "Found $CJK_COUNT unique CJK characters"
+if [ -n "$ALL_CJKCHARS" ]; then
+    ALL_CJK_COUNT=$(echo "$ALL_CJKCHARS" | tr ',' '\n' | wc -l | tr -d ' ')
+    echo "Found $ALL_CJK_COUNT unique CJK characters total"
 else
     echo "WARNING: No CJK characters found in translations or source files"
+fi
+
+# Runtime CJK = full extracted set (for .bin files)
+RUNTIME_CJKCHARS="$ALL_CJKCHARS"
+echo "Wizard CJK: 12 codepoints (compiled into .c fonts)"
+if [ -n "$RUNTIME_CJKCHARS" ]; then
+    RUNTIME_CJK_COUNT=$(echo "$RUNTIME_CJKCHARS" | tr ',' '\n' | wc -l | tr -d ' ')
+    echo "Runtime CJK: $RUNTIME_CJK_COUNT codepoints (generated as .bin files)"
 fi
 
 # Font sizes
@@ -160,21 +173,13 @@ for SIZE in $SIZES_REGULAR; do
     OUTPUT="assets/fonts/noto_sans_${SIZE}.c"
     echo "  Generating noto_sans_${SIZE} -> $OUTPUT"
 
-    if [ -n "$CJKCHARS" ]; then
-        lv_font_conv \
-            --font "$FONT_REGULAR" --size "$SIZE" --range "$UNICODE_RANGES" \
-            --font "$FONT_CJK_SC" --size "$SIZE" --range "$CJKCHARS" \
-            --font "$FONT_CJK_JP" --size "$SIZE" --range "$CJKCHARS" \
-            --bpp 4 --format lvgl \
-            --no-compress \
-            -o "$OUTPUT"
-    else
-        lv_font_conv \
-            --font "$FONT_REGULAR" --size "$SIZE" --bpp 4 --format lvgl \
-            --range "$UNICODE_RANGES" \
-            --no-compress \
-            -o "$OUTPUT"
-    fi
+    lv_font_conv \
+        --font "$FONT_REGULAR" --size "$SIZE" --range "$UNICODE_RANGES" \
+        --font "$FONT_CJK_SC" --size "$SIZE" --range "$WIZARD_CJK" \
+        --font "$FONT_CJK_JP" --size "$SIZE" --range "$WIZARD_CJK" \
+        --bpp 4 --format lvgl \
+        --no-compress \
+        -o "$OUTPUT"
 done
 
 # Generate Light weight
@@ -184,21 +189,13 @@ for SIZE in $SIZES_LIGHT; do
     OUTPUT="assets/fonts/noto_sans_light_${SIZE}.c"
     echo "  Generating noto_sans_light_${SIZE} -> $OUTPUT"
 
-    if [ -n "$CJKCHARS" ]; then
-        lv_font_conv \
-            --font "$FONT_LIGHT" --size "$SIZE" --range "$UNICODE_RANGES" \
-            --font "$FONT_CJK_SC" --size "$SIZE" --range "$CJKCHARS" \
-            --font "$FONT_CJK_JP" --size "$SIZE" --range "$CJKCHARS" \
-            --bpp 4 --format lvgl \
-            --no-compress \
-            -o "$OUTPUT"
-    else
-        lv_font_conv \
-            --font "$FONT_LIGHT" --size "$SIZE" --bpp 4 --format lvgl \
-            --range "$UNICODE_RANGES" \
-            --no-compress \
-            -o "$OUTPUT"
-    fi
+    lv_font_conv \
+        --font "$FONT_LIGHT" --size "$SIZE" --range "$UNICODE_RANGES" \
+        --font "$FONT_CJK_SC" --size "$SIZE" --range "$WIZARD_CJK" \
+        --font "$FONT_CJK_JP" --size "$SIZE" --range "$WIZARD_CJK" \
+        --bpp 4 --format lvgl \
+        --no-compress \
+        -o "$OUTPUT"
 done
 
 # Generate Bold weight
@@ -208,21 +205,13 @@ for SIZE in $SIZES_BOLD; do
     OUTPUT="assets/fonts/noto_sans_bold_${SIZE}.c"
     echo "  Generating noto_sans_bold_${SIZE} -> $OUTPUT"
 
-    if [ -n "$CJKCHARS" ]; then
-        lv_font_conv \
-            --font "$FONT_BOLD" --size "$SIZE" --range "$UNICODE_RANGES" \
-            --font "$FONT_CJK_SC" --size "$SIZE" --range "$CJKCHARS" \
-            --font "$FONT_CJK_JP" --size "$SIZE" --range "$CJKCHARS" \
-            --bpp 4 --format lvgl \
-            --no-compress \
-            -o "$OUTPUT"
-    else
-        lv_font_conv \
-            --font "$FONT_BOLD" --size "$SIZE" --bpp 4 --format lvgl \
-            --range "$UNICODE_RANGES" \
-            --no-compress \
-            -o "$OUTPUT"
-    fi
+    lv_font_conv \
+        --font "$FONT_BOLD" --size "$SIZE" --range "$UNICODE_RANGES" \
+        --font "$FONT_CJK_SC" --size "$SIZE" --range "$WIZARD_CJK" \
+        --font "$FONT_CJK_JP" --size "$SIZE" --range "$WIZARD_CJK" \
+        --bpp 4 --format lvgl \
+        --no-compress \
+        -o "$OUTPUT"
 done
 
 # Generate Source Code Pro Monospace (for console/terminal)
@@ -248,6 +237,55 @@ else
     echo "Download from: https://github.com/adobe-fonts/source-code-pro/tree/release/TTF"
 fi
 
+# Generate CJK runtime .bin files (full character set, loaded at runtime)
+if [ -n "$RUNTIME_CJKCHARS" ]; then
+    echo ""
+    echo "CJK runtime .bin files (full character set):"
+    mkdir -p assets/fonts/cjk
+
+    echo "  Regular weight:"
+    for SIZE in $SIZES_REGULAR; do
+        OUTPUT="assets/fonts/cjk/noto_sans_cjk_${SIZE}.bin"
+        echo "    Generating noto_sans_cjk_${SIZE}.bin"
+        lv_font_conv \
+            --font "$FONT_CJK_SC" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --font "$FONT_CJK_JP" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --bpp 4 --format bin \
+            --no-compress \
+            -o "$OUTPUT"
+    done
+
+    echo "  Bold weight:"
+    for SIZE in $SIZES_BOLD; do
+        OUTPUT="assets/fonts/cjk/noto_sans_cjk_bold_${SIZE}.bin"
+        echo "    Generating noto_sans_cjk_bold_${SIZE}.bin"
+        lv_font_conv \
+            --font "$FONT_CJK_SC" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --font "$FONT_CJK_JP" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --bpp 4 --format bin \
+            --no-compress \
+            -o "$OUTPUT"
+    done
+
+    echo "  Light weight:"
+    for SIZE in $SIZES_LIGHT; do
+        OUTPUT="assets/fonts/cjk/noto_sans_cjk_light_${SIZE}.bin"
+        echo "    Generating noto_sans_cjk_light_${SIZE}.bin"
+        lv_font_conv \
+            --font "$FONT_CJK_SC" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --font "$FONT_CJK_JP" --size "$SIZE" --range "$RUNTIME_CJKCHARS" \
+            --bpp 4 --format bin \
+            --no-compress \
+            -o "$OUTPUT"
+    done
+
+    BIN_COUNT=$(ls -1 assets/fonts/cjk/*.bin 2>/dev/null | wc -l)
+    echo "  Generated $BIN_COUNT .bin files"
+else
+    echo ""
+    echo "WARNING: No CJK characters extracted - skipping .bin generation"
+fi
+
 echo ""
 echo "Done! Generated text fonts with extended Unicode support."
 echo ""
@@ -256,7 +294,7 @@ echo "  - ASCII (0x20-0x7F)"
 echo "  - Western European: é, è, ê, ñ, ü, ö, ß, etc."
 echo "  - Central European: ą, ę, ł, ő, etc."
 echo "  - Cyrillic: А-Яа-я (Russian, Ukrainian, etc.)"
-echo "  - Chinese: Simplified Chinese characters (from translations + C++ sources)"
-echo "  - Japanese: Hiragana, Katakana, Kanji (from translations + C++ sources)"
+echo "  - CJK wizard (compiled .c): 12 codepoints for welcome page"
+echo "  - CJK runtime (.bin): Full Chinese + Japanese character set"
 echo ""
 echo "Rebuild the project: make -j"
