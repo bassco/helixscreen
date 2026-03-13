@@ -6,6 +6,7 @@
 #include <cstring>
 #include <dirent.h>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <unistd.h>
 #include <vector>
@@ -59,27 +60,18 @@ bool check_capability_bit(const std::string& hex_bitmask, int bit) {
     }
 
     // Each word is an unsigned long printed in hex. The kernel strips leading
-    // zeros, so "0" could be 32-bit or 64-bit. For single-word bitmasks, we
-    // use the actual digit count. For multi-word bitmasks, we infer the arch
-    // word width from the longest word and apply it uniformly.
-    int bits_per_word = 0;
-    if (words.size() == 1) {
-        bits_per_word = static_cast<int>(words[0].size()) * 4;
-    } else {
-        // Find max hex digit count to infer arch word width
-        size_t max_digits = 0;
-        for (const auto& w : words) {
-            if (w.size() > max_digits) {
-                max_digits = w.size();
-            }
-        }
-        // Round up to 32-bit (8 digits) or 64-bit (16 digits) boundary
-        if (max_digits <= 8) {
-            bits_per_word = 32;
-        } else {
-            bits_per_word = 64;
+    // zeros, so "0" could be 32-bit or 64-bit. Infer arch word width from the
+    // longest word's digit count and apply uniformly. This ensures short words
+    // like "1" are treated as 32-bit (not 4-bit), making all 32 bit positions
+    // addressable.
+    size_t max_digits = 0;
+    for (const auto& w : words) {
+        if (w.size() > max_digits) {
+            max_digits = w.size();
         }
     }
+    // Round up to 32-bit (8 digits) or 64-bit (16 digits) boundary
+    int bits_per_word = (max_digits <= 8) ? 32 : 64;
 
     // Determine which word contains our bit (right-to-left, 0-indexed)
     int word_index_from_right = bit / bits_per_word;
@@ -97,14 +89,14 @@ bool check_capability_bit(const std::string& hex_bitmask, int bit) {
 
 std::optional<ScannedDevice> find_mouse_device(const std::string& dev_base,
                                                 const std::string& sysfs_base) {
-    DIR* dir = opendir(dev_base.c_str());
+    auto dir = std::unique_ptr<DIR, decltype(&closedir)>(opendir(dev_base.c_str()), closedir);
     if (!dir) {
         spdlog::debug("[InputScanner] Cannot open {}", dev_base);
         return std::nullopt;
     }
 
     struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
+    while ((entry = readdir(dir.get())) != nullptr) {
         if (strncmp(entry->d_name, "event", 5) != 0) {
             continue;
         }
@@ -139,12 +131,9 @@ std::optional<ScannedDevice> find_mouse_device(const std::string& dev_base,
 
         std::string name = read_device_name(sysfs_base, event_num);
         spdlog::info("[InputScanner] Found mouse: {} ({})", device_path, name);
-
-        closedir(dir);
         return ScannedDevice{device_path, name, event_num};
     }
 
-    closedir(dir);
     return std::nullopt;
 }
 
@@ -154,14 +143,14 @@ std::optional<ScannedDevice> find_mouse_device() {
 
 std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
                                                    const std::string& sysfs_base) {
-    DIR* dir = opendir(dev_base.c_str());
+    auto dir = std::unique_ptr<DIR, decltype(&closedir)>(opendir(dev_base.c_str()), closedir);
     if (!dir) {
         spdlog::debug("[InputScanner] Cannot open {}", dev_base);
         return std::nullopt;
     }
 
     struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
+    while ((entry = readdir(dir.get())) != nullptr) {
         if (strncmp(entry->d_name, "event", 5) != 0) {
             continue;
         }
@@ -184,12 +173,9 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 
         std::string name = read_device_name(sysfs_base, event_num);
         spdlog::info("[InputScanner] Found keyboard: {} ({})", device_path, name);
-
-        closedir(dir);
         return ScannedDevice{device_path, name, event_num};
     }
 
-    closedir(dir);
     return std::nullopt;
 }
 
