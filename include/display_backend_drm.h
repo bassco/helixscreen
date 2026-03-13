@@ -101,6 +101,7 @@ class DisplayBackendDRM : public DisplayBackend {
     std::string drm_device_;
     lv_display_t* display_ = nullptr;
     lv_indev_t* pointer_ = nullptr;
+    lv_indev_t* mouse_ = nullptr;
     lv_indev_t* keyboard_ = nullptr;
     int tty_fd_ = -1;           ///< TTY fd for KD_GRAPHICS console suppression
     bool using_egl_ = false;    ///< Track if GPU-accelerated path is active

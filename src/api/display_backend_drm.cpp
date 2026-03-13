@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "drm_rotation_strategy.h"
+#include "input_device_scanner.h"
 
 #include <spdlog/spdlog.h>
 
@@ -336,11 +337,10 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
         spdlog::warn("[DRM Backend] Could not open specified touch device: {}", device_override);
     }
 
-    // Priority 3: Auto-discover using libinput
-    // Look for touch or pointer capability devices
+    // Priority 3: Auto-discover touch using libinput
+    // Look for touch capability devices (touchscreens like DSI displays)
     spdlog::info("[DRM Backend] Auto-detecting touch/pointer device via libinput...");
 
-    // Try to find a touch device first (for touchscreens like DSI displays)
     // Use evdev driver for touch devices — it supports multi-touch gesture
     // recognition (pinch-to-zoom) while the libinput driver does not.
     char* touch_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_TOUCH, true);
@@ -359,44 +359,111 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
             lv_indev_set_pinch_down_threshold(pointer_, 0.85f);
             lv_indev_set_rotation_rad_threshold(pointer_, 3.14f);
 #endif
-            return pointer_;
-        }
-        // Fall back to libinput if evdev fails
-        pointer_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, touch_path);
-        if (pointer_ != nullptr) {
-            spdlog::info("[DRM Backend] Libinput touch device created on {}", touch_path);
-            return pointer_;
-        }
-        spdlog::warn("[DRM Backend] Failed to create input device for: {}", touch_path);
-    }
-
-    // Try pointer devices (mouse, trackpad)
-    char* pointer_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, false);
-    if (pointer_path) {
-        spdlog::info("[DRM Backend] Found pointer device: {}", pointer_path);
-        pointer_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, pointer_path);
-        if (pointer_ != nullptr) {
-            spdlog::info("[DRM Backend] Libinput pointer device created on {}", pointer_path);
-            return pointer_;
-        }
-        spdlog::warn("[DRM Backend] Failed to create libinput device for: {}", pointer_path);
-    }
-
-    // Priority 4: Fallback to evdev on common device paths
-    spdlog::warn("[DRM Backend] Libinput auto-detection failed, trying evdev fallback");
-
-    // Try event1 first (common for touchscreens on Pi)
-    const char* fallback_devices[] = {"/dev/input/event1", "/dev/input/event0"};
-    for (const char* dev : fallback_devices) {
-        pointer_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, dev);
-        if (pointer_ != nullptr) {
-            spdlog::info("[DRM Backend] Evdev pointer device created on {}", dev);
-            return pointer_;
+        } else {
+            // Fall back to libinput if evdev fails
+            pointer_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, touch_path);
+            if (pointer_ != nullptr) {
+                spdlog::info("[DRM Backend] Libinput touch device created on {}", touch_path);
+            } else {
+                spdlog::warn("[DRM Backend] Failed to create input device for: {}", touch_path);
+            }
         }
     }
 
-    spdlog::error("[DRM Backend] Failed to create any input device");
-    return nullptr;
+    // If no touch was found, try evdev fallback on common device paths
+    if (!pointer_) {
+        // Try pointer devices via libinput (mouse, trackpad)
+        char* pointer_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, false);
+        if (pointer_path) {
+            spdlog::info("[DRM Backend] Found pointer device: {}", pointer_path);
+            pointer_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, pointer_path);
+            if (pointer_ != nullptr) {
+                spdlog::info("[DRM Backend] Libinput pointer device created on {}", pointer_path);
+            } else {
+                spdlog::warn("[DRM Backend] Failed to create libinput device for: {}",
+                             pointer_path);
+            }
+        }
+    }
+
+    if (!pointer_) {
+        // Fallback to evdev on common device paths
+        spdlog::warn("[DRM Backend] Libinput auto-detection failed, trying evdev fallback");
+
+        // Try event1 first (common for touchscreens on Pi)
+        const char* fallback_devices[] = {"/dev/input/event1", "/dev/input/event0"};
+        for (const char* dev : fallback_devices) {
+            pointer_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, dev);
+            if (pointer_ != nullptr) {
+                spdlog::info("[DRM Backend] Evdev pointer device created on {}", dev);
+                break;
+            }
+        }
+    }
+
+    // --- Mouse detection (independent of touch) ---
+    // A USB HID mouse can coexist with the touchscreen as a separate input device.
+    std::string mouse_override;
+    const char* env_mouse = std::getenv("HELIX_MOUSE_DEVICE");
+    if (env_mouse && env_mouse[0] != '\0') {
+        mouse_override = env_mouse;
+        spdlog::info("[DRM Backend] Using mouse device from HELIX_MOUSE_DEVICE: {}",
+                     mouse_override);
+    }
+
+    if (!mouse_override.empty()) {
+        mouse_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, mouse_override.c_str());
+        if (mouse_) {
+            spdlog::info("[DRM Backend] Mouse created on {} (env override)", mouse_override);
+        } else {
+            spdlog::warn("[DRM Backend] Could not open specified mouse device: {}", mouse_override);
+        }
+    }
+
+    if (!mouse_ && !pointer_) {
+        // No touch found — try libinput pointer discovery for mouse
+        char* pointer_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_POINTER, false);
+        if (pointer_path) {
+            mouse_ = lv_libinput_create(LV_INDEV_TYPE_POINTER, pointer_path);
+            if (mouse_) {
+                spdlog::info("[DRM Backend] Mouse created on {} via libinput", pointer_path);
+            }
+        }
+    }
+
+    if (!mouse_) {
+        // Fall back to sysfs evdev scanning
+        auto mouse_dev = helix::input::find_mouse_device();
+        if (mouse_dev) {
+            mouse_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, mouse_dev->path.c_str());
+            if (mouse_) {
+                spdlog::info("[DRM Backend] Mouse created on {} via evdev ({})",
+                             mouse_dev->path, mouse_dev->name);
+            } else {
+                spdlog::warn("[DRM Backend] Failed to create evdev mouse on {}", mouse_dev->path);
+            }
+        }
+    }
+
+    // Set up a cursor for the mouse so it is visible on screen
+    if (mouse_) {
+        lv_obj_t* cursor_obj = lv_obj_create(lv_screen_active());
+        lv_obj_set_size(cursor_obj, 12, 12);
+        lv_obj_set_style_radius(cursor_obj, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(cursor_obj, lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(cursor_obj, LV_OPA_80, 0);
+        lv_obj_set_style_border_width(cursor_obj, 1, 0);
+        lv_obj_set_style_border_color(cursor_obj, lv_color_black(), 0);
+        lv_obj_clear_flag(cursor_obj, LV_OBJ_FLAG_CLICKABLE);
+        lv_indev_set_cursor(mouse_, cursor_obj);
+        spdlog::info("[DRM Backend] Mouse cursor enabled");
+    }
+
+    if (!pointer_ && !mouse_) {
+        spdlog::error("[DRM Backend] Failed to create any input device");
+    }
+
+    return pointer_;
 }
 
 lv_indev_t* DisplayBackendDRM::create_input_keyboard() {
@@ -420,6 +487,18 @@ lv_indev_t* DisplayBackendDRM::create_input_keyboard() {
             return keyboard_;
         }
         spdlog::warn("[DRM Backend] Failed to create keyboard device on {}", kb_path);
+    }
+
+    // Priority 3: Fall back to sysfs evdev scanning
+    auto kb_dev = helix::input::find_keyboard_device();
+    if (kb_dev) {
+        keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, kb_dev->path.c_str());
+        if (keyboard_) {
+            spdlog::info("[DRM Backend] Keyboard created on {} via evdev ({})",
+                         kb_dev->path, kb_dev->name);
+            return keyboard_;
+        }
+        spdlog::warn("[DRM Backend] Failed to create evdev keyboard on {}", kb_dev->path);
     }
 
     spdlog::debug("[DRM Backend] No keyboard device found");
