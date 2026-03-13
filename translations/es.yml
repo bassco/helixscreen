@@ -1,7 +1,7 @@
 locale: es
 translations:
   ' elapsed · ': ' transcurrido · '
-  ' frames': ''
+  ' frames': ' fotogramas'
   ' frames captured': ' fotogramas capturados'
   ' left': ' restante'
   '%d more sensors': '%d sensores más'
@@ -14,12 +14,12 @@ translations:
   + Add Preset: + Agregar Preajuste
   + Add Printer: '+ Agregar Impresora'
   + New: + Nuevo
-  +0.5 Hz: ''
+  +0.5 Hz: '+0,5 Hz'
   '- Check [resonance_tester] in printer.cfg': '- Verifique [resonance_tester] en printer.cfg'
   '- Ensure ADXL345 is connected': '- Asegúrese de que el ADXL345 esté conectado'
   '- Try Measure Noise first': '- Intente Medir Ruido primero'
   --°C: --°C
-  -0.5 Hz: ''
+  -0.5 Hz: '-0,5 Hz'
   0 = computed: '0 = calculado'
   0 slots: 0 ranuras
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm extrusión directa, 4-6mm bowden
@@ -82,6 +82,7 @@ translations:
   About: Acerca de
   Accel to Decel: Acel a Desacel
   Acceleration to deceleration limit (mm/s²): Límite de aceleración a desaceleración (mm/s²)
+  Accelerometer: 'Acelerómetro'
   Accept: Aceptar
   'Accepted Z Position: 0.000': 'Posición Z aceptada: 0.000'
   Action Required: Acción Requerida
@@ -95,6 +96,7 @@ translations:
   Address: 'Dirección'
   Adjust screen brightness level: Ajustar el nivel de brillo de la pantalla
   Adjust screws, then re-probe.: Ajuste los tornillos, luego vuelva a sondear.
+  Adjust until belt appears frozen: 'Ajustar hasta que la correa parezca congelada'
   Adjustments stay active until restart. Save after print completes.: Los ajustes permanecen activos hasta reiniciar. Guarde después de que termine la impresión.
   Adjusts individual characteristics of your heaters for optimal control: Ajusta las características individuales de sus calentadores para un control óptimo
   Advanced Setting: Configuración Avanzada
@@ -112,7 +114,7 @@ translations:
   Animations: Animaciones
   Anonymous data to help improve HelixScreen: Datos anónimos para mejorar HelixScreen
   Anonymous stats — no personal data, ever.: Estadísticas anónimas — sin datos personales, nunca.
-  AntHead: ''
+  AntHead: 'AntHead'
   Any notes...: Notas...
   App Background: Fondo de la Aplicación
   Apply: Aplicar
@@ -144,6 +146,7 @@ translations:
   BLTouch Controls: Controles BLTouch
   BLUETOOTH PRINTERS: IMPRESORAS BLUETOOTH
   Back: Volver
+  Back to Results: 'Volver a resultados'
   Bed: Cama
   Bed Heater: Calentador de Cama
   Bed Level: Nivel de Cama
@@ -158,7 +161,9 @@ translations:
   Bed is Level!: ¡La Cama está Nivelada!
   Bed °C: Cama °C
   'Bed:': 'Cama:'
-  Belt tension looks good!: ''
+  Belt Tension: 'Tensión de correa'
+  Belt Tension Check: 'Verificación de tensión de correa'
+  Belt tension looks good!: '¡La tensión de la correa se ve bien!'
   Beta: Beta
   'Beta features: OFF': 'Funciones Beta: OFF'
   'Beta features: ON': 'Funciones Beta: ON'
@@ -173,14 +178,14 @@ translations:
   Border Width: Ancho del Borde
   Border transparency (0 = invisible, 255 = solid): Transparencia del borde (0 = invisible, 255 = sólido)
   Both: Ambos
-  Both belts are overtightened.: ''
-  Both belts need tightening.: ''
+  Both belts are overtightened.: 'Ambas correas están demasiado tensas.'
+  Both belts need tightening.: 'Ambas correas necesitan ser tensadas.'
   Brightness: Brillo
   Brightness level when LEDs turn on at startup: Nivel de brillo cuando los LEDs se encienden al iniciar
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Explorar
-  Browse and play recorded timelapses: ''
+  Browse and play recorded timelapses: 'Explorar y reproducir timelapses grabados'
   'Browse guides, configuration references, and troubleshooting ': 'Consulte guías, referencias de configuración y solución de problemas '
   Buffer Status: 'Estado del búfer'
   Bundle Uploaded: Paquete subido
@@ -266,6 +271,7 @@ translations:
   Color: Color
   Color Mismatch: Color No Coincide
   Compact: 'Compacto'
+  Comparison: 'Comparación'
   Complete: Completo
   Complete!: "¡Completo!"
   Completed: Completado
@@ -327,6 +333,7 @@ translations:
   Creating spool...: Creando bobina...
   Current / Target: Actual / Objetivo
   Current Configuration: Configuración Actual
+  Current Frequency: 'Frecuencia actual'
   Current Mesh: Malla Actual
   Current Temperature: Temperatura Actual
   Current Version: Versión actual
@@ -373,6 +380,7 @@ translations:
   Dev: Dev
   Dev channel requires dev_url in config: Canal de desarrollo requiere dev_url en la configuración
   Device name is required: El nombre del dispositivo es requerido
+  'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.': 'Diferencia entre Ruta A y B. Idealmente menor a 5 Hz; más de 15 Hz requiere ajuste.'
   Disable: Desactivar
   Disable Motors?: ¿Desactivar Motores?
   Disable the security PIN: Desactivar el PIN de seguridad
@@ -532,6 +540,8 @@ translations:
   Found %zu printers: '%zu impresoras encontradas'
   Found 1 printer: 1 impresora encontrada
   Framerate: Cuadros por segundo
+  Frequency Delta: 'Delta de frecuencia'
+  'Frequency Delta: Difference between Path A and B. ': 'Delta de frecuencia: Diferencia entre Ruta A y B. '
   Front: Frente
   G-code Console: Consola G-code
   G-code Preview: Vista Previa de G-code
@@ -539,7 +549,7 @@ translations:
   Gear sync: Sincronización de engranaje
   Get help and share feedback: Obtén ayuda y comparte comentarios
   'Ghost:': 'Fantasma:'
-  Good: ''
+  Good: 'Bueno'
   Got it: Entendido
   Gray: Gris
   Guides and reference: Guías y referencia
@@ -591,6 +601,7 @@ translations:
   Hotend Fan: Ventilador de Hotend
   Hotend Heater: Calentador de Hotend
   How Z-axis movement is displayed: Cómo se muestra el movimiento del eje Z
+  'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.': 'Qué tan similares son los perfiles de vibración. Más del 90% es excelente; menos del 70% sugiere tensión desigual.'
   How often to check Spoolman for weight updates: Con qué frecuencia verificar Spoolman para actualizaciones de peso
   How the toolhead icon appears: 'Cómo se muestra el icono del cabezal'
   Humidity: Humedad
@@ -637,6 +648,7 @@ translations:
   Keep Printing: Continuar Imprimiendo
   Keep Required: Mantener Requerido
   Keyboard Test (Gboard-style): Prueba de Teclado (estilo Gboard)
+  Kinematics: 'Cinemática'
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'El firmware de Klipper se ha desconectado del host. '
   'Klipper has entered an error state. This is typically caused by an MCU ': Klipper ha entrado en un estado de error. Esto generalmente es causado por un MCU
@@ -658,6 +670,7 @@ translations:
   Label Size: 'Tamaño de Etiqueta'
   Label printed: 'Etiqueta impresa'
   Language: Idioma
+  Last: 'Última'
   Last print cancelled: Última impresión cancelada
   Last print failed: Última impresión fallida
   Later: Más Tarde
@@ -670,6 +683,7 @@ translations:
   Learn More: Más información
   'Length:': 'Longitud:'
   Leveling Gantry...: Nivelando pórtico...
+  Library: 'Biblioteca'
   Lifetime Print Stats: 'Estadísticas de impresión totales'
   Light: Claro
   Load: Cargar
@@ -686,10 +700,12 @@ translations:
   Loading vendors...: Cargando proveedores...
   Loading...: Cargando...
   Location: Ubicación
+  Lock A: 'Bloquear A'
+  Lock B: 'Bloquear B'
   Lock screen after idle timeout: Bloquear pantalla tras inactividad
   Locked during print: Bloqueado durante impresión
-  Loosen Path A belt.: ''
-  Loosen Path B belt.: ''
+  Loosen Path A belt.: 'Aflojar correa de Ruta A.'
+  Loosen Path B belt.: 'Aflojar correa de Ruta B.'
   'Lot # (optional)': 'Lote # (opcional)'
   Lot/Batch Nr: Nº de lote
   M to toggle: M para alternar
@@ -742,8 +758,10 @@ translations:
   Max speed through corners (mm/s): Velocidad máxima en esquinas (mm/s)
   Maximum acceleration (mm/s²): Aceleración máxima (mm/s²)
   Maximum toolhead speed (mm/s): Velocidad máxima del cabezal (mm/s)
-  Measure and compare belt path frequencies: ''
+  Measure and compare belt path frequencies: 'Medir y comparar frecuencias de rutas de correa'
+  Measure belt path frequencies: 'Medir frecuencias de rutas de correa'
   Measured: Medido
+  Measurement Failed: 'Medición fallida'
   Measuring thermal response...: Midiendo respuesta térmica...
   Memory (MB): Memoria (MB)
   Mesh Complete: Malla Completa
@@ -763,7 +781,7 @@ translations:
   : Mueve el cabezal para medir frecuencias de vibración en cada eje. Tarda 2-3 minutos. La impresora hará ruido — esto es normal.
   Multi Filament System Overview: Vista general del sistema multi-filamento
   Multi-Filament: Multi-Filamento
-  Multi-Filament Overview: ''
+  Multi-Filament Overview: 'Vista general multi-filamento'
   'Multi-Filament:': 'Multi-Filamento:'
   Multi-Material: Multi-Material
   My Custom Theme: Mi Tema Personalizado
@@ -773,7 +791,7 @@ translations:
   Name: Nombre
   Name (optional): Nombre (opcional)
   Named actions in the LED control panel (long-press).: Acciones con nombre en el panel de control LED (presión larga).
-  Needs adjustment: ''
+  Needs adjustment: 'Necesita ajuste'
   Net Weight (g): Peso Neto (g)
   Network: Red
   Network Address: Dirección de Red
@@ -826,6 +844,7 @@ translations:
   No print history yet: Aún no hay historial de impresión
   No print start macro found: No se encontró macro de inicio de impresión
   No printers found: No se encontraron impresoras
+  No prints yet: 'Sin impresiones aún'
   No profiles available: No hay perfiles disponibles
   No sensors detected: No se detectaron sensores
   No spool assigned: Sin bobina asignada
@@ -868,7 +887,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Optimiza el control de temperatura para un calentamiento estable y consistente.
   Or Enter Manually: O Ingrese Manualmente
   Oscillating around target...: Oscilando alrededor del objetivo...
-  Out of range: ''
+  Out of range: 'Fuera de rango'
   Output Mode: Modo de Salida
   P: P
   PA: PA
@@ -894,6 +913,9 @@ translations:
   Part Fan: Ventilador de Pieza
   Password: Contraseña
   Password cannot be empty: La contraseña no puede estar vacía
+  Path A: 'Ruta A'
+  Path B: 'Ruta B'
+  Path Similarity: 'Similitud de ruta'
   Pause: Pausar
   Paused: Pausado
   Paused (attention needed): Pausado (requiere atención)
@@ -951,6 +973,8 @@ translations:
   Print History: Historial de Impresión
   Print Hours: Horas de Impresión
   Print Label: Imprimir etiqueta
+  Print Last: 'Reimprimir última'
+  Print Library: 'Biblioteca de impresión'
   Print Objects: Objetos de impresión
   Print Speed: Velocidad de Impresión
   Print Status: Estado de Impresión
@@ -1010,10 +1034,13 @@ translations:
   Reboot: Reiniciar
   Rebooting...: Reiniciando...
   Recalibrate or view detailed results anytime in Settings.: Recalibre o vea resultados detallados en cualquier momento en Ajustes.
+  Recent: 'Recientes'
+  Recent Prints: 'Impresiones recientes'
+  Recently Printed: 'Impresas recientemente'
   Record Timelapse: Grabar Timelapse
   Record timelapses of your prints: Grabe timelapses de sus impresiones
   Recorded Videos: Videos Grabados
-  Recorded timelapses will appear here: ''
+  Recorded timelapses will appear here: 'Los timelapses grabados aparecerán aquí'
   Recording Mode: Modo de Grabación
   Recover: Recuperar
   Recovering AFC system...: Recuperando sistema AFC...
@@ -1031,9 +1058,10 @@ translations:
   Rename: Renombrar
   Rename Mesh Profile: Renombrar Perfil de Malla
   Render Now: Renderizar Ahora
-  Rendering timelapse...: ''
+  Rendering timelapse...: 'Renderizando timelapse...'
   Report saved to crash_report.txt: Reporte guardado en crash_report.txt
   Reprint: Reimprimir
+  Reprint Last: 'Reimprimir última'
   Require confirmation before emergency stop: Requerir confirmación antes de parada de emergencia
   Requires Moonraker-Timelapse plugin: Requiere plugin Moonraker-Timelapse
   Reset: Restablecer
@@ -1160,6 +1188,7 @@ translations:
   Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: 'Comparta estadísticas de uso anónimas para ayudarnos a mejorar HelixScreen. Nunca se recopilan datos personales.'
   'Share this code in Discord or support:': 'Comparte este código en Discord o soporte:'
   'Shininess:': 'Brillo:'
+  Show Frequency Graph: 'Mostrar gráfico de frecuencia'
   Show Printer Switcher: Mostrar selector de impresora
   Show detailed print preparation status: Mostrar estado detallado de preparación de impresión
   Show instead of dimming: 'Mostrar en lugar de atenuar'
@@ -1205,6 +1234,7 @@ translations:
   Start: Iniciar
   Start Anyway: Iniciar de Todos Modos
   Start Calibration: Iniciar Calibración
+  Start Check: 'Iniciar verificación'
   Start Print: Iniciar Impresión
   Start Probing: Iniciar Sondeo
   Started: Iniciado
@@ -1224,6 +1254,7 @@ translations:
   Stop Print?: ¿Detener Impresión?
   Stops all motion. Requires firmware restart.: Detiene todo movimiento. Requiere reinicio de firmware.
   Stow: Guardar
+  Strobe LED: 'LED estroboscópico'
   Success: 'Éxito'
   Success Rate: Tasa de Éxito
   Success!: ¡Éxito!
@@ -1250,6 +1281,7 @@ translations:
   Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: Toca la cruz (punto %1$d de 3) \xe2\x80\x94 toque %2$d de %3$d
   Tap to assign: Toca para asignar
   Tap to show keyboard...: Toque para mostrar teclado...
+  Target Frequency: 'Frecuencia objetivo'
   Target Temperature: Temperatura Objetivo
   Telemetry Data: Datos de telemetría
   Telemetry queue cleared: Cola de telemetría limpiada
@@ -1258,6 +1290,7 @@ translations:
   Temperatures: Temperaturas
   Temporary adjustment for this print, unless saved on Controls panel: Ajuste temporal para esta impresión, a menos que se guarde en el panel de Controles
   Tertiary: Terciario
+  Test Again: 'Probar de nuevo'
   Test Connection: Probar Conexión
   Test Network: Probar Red
   Test Print: 'Impresión de Prueba'
@@ -1269,6 +1302,9 @@ translations:
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : El plugin HelixPrint permite modificaciones rápidas de G-code directamente en su impresora, como omitir la malla de cama para reimpresiones rápidas.
   The heater will cycle on and off several times.: El calentador se encenderá y apagará varias veces.
+  'The motor vibrates the belt while a strobe light flashes at the ': 'El motor hace vibrar la correa mientras una luz estroboscópica parpadea a la '
+  ? 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
+  : 'El motor hace vibrar la correa mientras una luz estroboscópica parpadea a la misma frecuencia. Cuando la correa parezca estar quieta (congelada), habrás encontrado la frecuencia de resonancia. Usa los botones de abajo para barrer las frecuencias.'
   'The runout sensor indicates no filament is loaded. ': 'El sensor de agotamiento indica que no hay filamento cargado. '
   'The toolhead sensor indicates filament is already loaded. ': 'El sensor del cabezal indica que ya hay filamento cargado. '
   'The toolhead sensor indicates no filament is present. ': 'El sensor del cabezal indica que no hay filamento presente. '
@@ -1298,15 +1334,15 @@ translations:
   This will restart Klipper.: Esto reiniciará Klipper.
   Thorough: Exhaustivo
   Thumbnail Only: Solo miniatura
-  Tighten Path A belt.: ''
-  Tighten Path B belt.: ''
+  Tighten Path A belt.: 'Tensar correa de Ruta A.'
+  Tighten Path B belt.: 'Tensar correa de Ruta B.'
   Time: Hora
   Time Format: Formato de Hora
   Time to wait before escalating to emergency stop: Tiempo de espera antes de escalar a parada de emergencia
   Timelapse: Timelapse
   Timelapse Available: Timelapse Disponible
   Timelapse Settings: Configuración de Timelapse
-  Timelapse Videos: ''
+  Timelapse Videos: 'Videos timelapse'
   Timelapse plugin installed successfully!: ¡Plugin de timelapse instalado correctamente!
   Timelapse plugin installed!: ¡Plugin de timelapse instalado!
   Timelapse plugin is already installed!: ¡El plugin de timelapse ya está instalado!
@@ -1340,6 +1376,10 @@ translations:
   Type to preview input field...: Escriba para previsualizar campo de entrada...
   UI Sounds: Sonidos de interfaz
   USB: USB
+  Understanding Results: 'Entender resultados'
+  'Uneven belt tension causes print artifacts like layer shifts, ': 'La tensión desigual de la correa causa artefactos de impresión como desplazamiento de capas, '
+  ? "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
+  : 'La tensión desigual de la correa causa artefactos de impresión como desplazamiento de capas, VFAs (artefactos finos verticales) y ringing. Esta herramienta vibra cada ruta de correa y mide la frecuencia de resonancia — frecuencias coincidentes significan tensión equilibrada. Para CoreXY, Ruta A y B deben estar dentro de unos pocos Hz entre sí.'
   Uninstall HelixPrint Plugin: Desinstalar Plugin HelixPrint
   'Uninstall: Coming soon': 'Desinstalar: Próximamente'
   Unit: Unidad
@@ -1387,6 +1427,8 @@ translations:
   View Timelapse: Ver Timelapse
   View installed plugins and status: Ver plugins instalados y estado
   View print statistics and job history: Ver estadísticas de impresión e historial de trabajos
+  Visual Fine-Tune (Strobe): 'Ajuste fino visual (estroboscopio)'
+  Visual Fine-Tuning: 'Ajuste fino visual'
   Volume: Volumen
   Volume, themes, and UI sounds: Volumen, temas y sonidos de interfaz
   WIDTH SENSORS: 'SENSORES DE ANCHO'

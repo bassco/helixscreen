@@ -1,7 +1,7 @@
 locale: ja
 translations:
   ' elapsed · ': ' 経過 · '
-  ' frames': ''
+  ' frames': ' フレーム'
   ' frames captured': ' フレームをキャプチャしました'
   ' left': ' 残り'
   '%d more sensors': '他%d個のセンサー'
@@ -14,12 +14,12 @@ translations:
   + Add Preset: + プリセットを追加
   + Add Printer: + プリンターを追加
   + New: + 新規
-  +0.5 Hz: ''
+  +0.5 Hz: '+0.5 Hz'
   '- Check [resonance_tester] in printer.cfg': '- printer.cfg の [resonance_tester] を確認してください'
   '- Ensure ADXL345 is connected': '- ADXL345 が接続されていることを確認してください'
   '- Try Measure Noise first': '- まず「ノイズ測定」をお試しください'
   --°C: --°C
-  -0.5 Hz: ''
+  -0.5 Hz: '-0.5 Hz'
   0 = computed: '0 = 自動計算'
   0 slots: '{0} スロット'
   0.4-2mm direct drive, 4-6mm bowden: 0.4-2mm ダイレクトドライブ、4-6mm ボーデン
@@ -82,6 +82,7 @@ translations:
   About: バージョン情報
   Accel to Decel: 加速から減速
   Acceleration to deceleration limit (mm/s²): 加速から減速の制限値 (mm/s²)
+  Accelerometer: '加速度センサー'
   Accept: 承認
   'Accepted Z Position: 0.000': '確定Z位置: 0.000'
   Action Required: 対応が必要です
@@ -95,6 +96,7 @@ translations:
   Address: 'アドレス'
   Adjust screen brightness level: 画面の明るさを調整します
   Adjust screws, then re-probe.: ネジを調整して、再度プローブしてください。
+  Adjust until belt appears frozen: 'ベルトが静止して見えるまで調整'
   Adjustments stay active until restart. Save after print completes.: 調整は再起動まで有効です。印刷完了後に保存してください。
   Adjusts individual characteristics of your heaters for optimal control: ヒーターの個別特性を調整して最適な制御を実現します
   Advanced Setting: 詳細設定
@@ -112,7 +114,7 @@ translations:
   Animations: アニメーション
   Anonymous data to help improve HelixScreen: HelixScreen改善のための匿名データ
   Anonymous stats — no personal data, ever.: 匿名の統計情報 — 個人データは一切収集しません。
-  AntHead: ''
+  AntHead: 'AntHead'
   Any notes...: メモ...
   App Background: アプリ背景
   Apply: 適用
@@ -144,6 +146,7 @@ translations:
   BLTouch Controls: BLTouchコントロール
   BLUETOOTH PRINTERS: BLUETOOTH PRINTERS
   Back: 戻る
+  Back to Results: '結果に戻る'
   Bed: ベッド
   Bed Heater: ベッドヒーター
   Bed Level: ベッドレベル
@@ -158,7 +161,9 @@ translations:
   Bed is Level!: ベッドが水平です！
   Bed °C: ベッド °C
   'Bed:': 'ベッド:'
-  Belt tension looks good!: ''
+  Belt Tension: 'ベルトテンション'
+  Belt Tension Check: 'ベルトテンション確認'
+  Belt tension looks good!: 'ベルトテンションは良好です！'
   Beta: ベータ
   'Beta features: OFF': 'ベータ機能: OFF'
   'Beta features: ON': 'ベータ機能: ON'
@@ -173,14 +178,14 @@ translations:
   Border Width: 境界線の幅
   Border transparency (0 = invisible, 255 = solid): 境界線の透明度 (0 = 透明、255 = 不透明)
   Both: 両方
-  Both belts are overtightened.: ''
-  Both belts need tightening.: ''
+  Both belts are overtightened.: '両方のベルトが張りすぎています。'
+  Both belts need tightening.: '両方のベルトを張る必要があります。'
   Brightness: 明るさ
   Brightness level when LEDs turn on at startup: 起動時にLEDが点灯する際の明るさレベル
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: 参照
-  Browse and play recorded timelapses: ''
+  Browse and play recorded timelapses: '録画済みタイムラプスを閲覧・再生'
   'Browse guides, configuration references, and troubleshooting ': 'ガイド、設定リファレンス、トラブルシューティングを参照 '
   Buffer Status: 'バッファーステータス'
   Bundle Uploaded: バンドルをアップロードしました
@@ -266,6 +271,7 @@ translations:
   Color: 色
   Color Mismatch: 色の不一致
   Compact: 'コンパクト'
+  Comparison: '比較'
   Complete: 完了
   Complete!: 完了！
   Completed: 完了
@@ -327,6 +333,7 @@ translations:
   Creating spool...: スプールを作成中...
   Current / Target: 現在 / 目標
   Current Configuration: 現在の設定
+  Current Frequency: '現在の周波数'
   Current Mesh: 現在のメッシュ
   Current Temperature: 現在の温度
   Current Version: 現在のバージョン
@@ -373,6 +380,7 @@ translations:
   Dev: 開発版
   Dev channel requires dev_url in config: 開発チャンネルには設定にdev_urlが必要です
   Device name is required: デバイス名は必須です
+  'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.': 'パスAとBの差。理想は5 Hz以下、15 Hz以上は調整が必要です。'
   Disable: 無効化
   Disable Motors?: モーターを無効にしますか？
   Disable the security PIN: セキュリティ PIN を無効化
@@ -532,6 +540,8 @@ translations:
   Found %zu printers: '%zu台のプリンターを検出'
   Found 1 printer: プリンター1台を検出
   Framerate: フレームレート
+  Frequency Delta: '周波数差'
+  'Frequency Delta: Difference between Path A and B. ': '周波数差：パスAとBの差。'
   Front: 正面
   G-code Console: G-code コンソール
   G-code Preview: G-code プレビュー
@@ -539,7 +549,7 @@ translations:
   Gear sync: ギア同期
   Get help and share feedback: ヘルプとフィードバック
   'Ghost:': 'Ghost:'
-  Good: ''
+  Good: '良好'
   Got it: 了解
   Gray: グレー
   Guides and reference: ガイドとリファレンス
@@ -591,6 +601,7 @@ translations:
   Hotend Fan: ホットエンドファン
   Hotend Heater: ホットエンドヒーター
   How Z-axis movement is displayed: Z軸の移動表示方法
+  'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.': '振動プロファイルの一致度。90%以上は優秀、70%以下はテンションの不均一を示唆します。'
   How often to check Spoolman for weight updates: Spoolman の重量更新をチェックする頻度
   How the toolhead icon appears: ツールヘッドアイコンの表示スタイル
   Humidity: 湿度
@@ -637,6 +648,7 @@ translations:
   Keep Printing: 印刷を続行
   Keep Required: 必須を維持
   Keyboard Test (Gboard-style): キーボードテスト（Gboard風）
+  Kinematics: 'キネマティクス'
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'Klipper ファームウェアがホストから切断されました。 '
   'Klipper has entered an error state. This is typically caused by an MCU ': Klipperがエラー状態になりました。これは通常MCU
@@ -658,6 +670,7 @@ translations:
   Label Size: 'ラベルサイズ'
   Label printed: 'ラベル印刷完了'
   Language: 言語
+  Last: '最後'
   Last print cancelled: 前回の印刷がキャンセルされました
   Last print failed: 前回の印刷が失敗しました
   Later: 後で
@@ -670,6 +683,7 @@ translations:
   Learn More: 詳細を見る
   'Length:': '長さ:'
   Leveling Gantry...: ガントリーレベリング中...
+  Library: 'ライブラリ'
   Lifetime Print Stats: '累計印刷統計'
   Light: ライト
   Load: 装填
@@ -686,10 +700,12 @@ translations:
   Loading vendors...: ベンダーを読み込み中...
   Loading...: 読み込み中...
   Location: 場所
+  Lock A: 'ロック A'
+  Lock B: 'ロック B'
   Lock screen after idle timeout: アイドルタイムアウト後に画面をロック
   Locked during print: 印刷中はロックされています
-  Loosen Path A belt.: ''
-  Loosen Path B belt.: ''
+  Loosen Path A belt.: 'パスAのベルトを緩めてください。'
+  Loosen Path B belt.: 'パスBのベルトを緩めてください。'
   'Lot # (optional)': ロット番号（オプション）
   Lot/Batch Nr: ロット/バッチ番号
   M to toggle: M で切り替え
@@ -742,8 +758,10 @@ translations:
   Max speed through corners (mm/s): コーナー通過時の最大速度 (mm/s)
   Maximum acceleration (mm/s²): 最大加速度 (mm/s²)
   Maximum toolhead speed (mm/s): ツールヘッドの最大速度 (mm/s)
-  Measure and compare belt path frequencies: ''
+  Measure and compare belt path frequencies: 'ベルトパスの周波数を測定・比較'
+  Measure belt path frequencies: 'ベルトパスの周波数を測定'
   Measured: 測定値
+  Measurement Failed: '測定失敗'
   Measuring thermal response...: 熱応答を測定中...
   Memory (MB): メモリ (MB)
   Mesh Complete: メッシュ完了
@@ -763,7 +781,7 @@ translations:
   : プリントヘッドを移動させて各軸の振動周波数を測定します。2〜3分かかります。プリンターから音がしますが、これは正常です。
   Multi Filament System Overview: マルチフィラメントシステム概要
   Multi-Filament: マルチフィラメント
-  Multi-Filament Overview: ''
+  Multi-Filament Overview: 'マルチフィラメント概要'
   'Multi-Filament:': マルチフィラメント：
   Multi-Material: マルチマテリアル
   My Custom Theme: マイカスタムテーマ
@@ -773,7 +791,7 @@ translations:
   Name: 名前
   Name (optional): 名前（オプション）
   Named actions in the LED control panel (long-press).: LEDコントロールパネルの名前付きアクション（長押し）。
-  Needs adjustment: ''
+  Needs adjustment: '調整が必要'
   Net Weight (g): 正味重量（g）
   Network: ネットワーク
   Network Address: ネットワークアドレス
@@ -826,6 +844,7 @@ translations:
   No print history yet: 印刷履歴がありません
   No print start macro found: 印刷開始マクロが見つかりません
   No printers found: プリンターが見つかりません
+  No prints yet: '印刷履歴なし'
   No profiles available: 利用可能なプロファイルがありません
   No sensors detected: センサーが検出されませんでした
   No spool assigned: スプール未割当
@@ -868,7 +887,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: 安定した一貫性のある加熱のために温度制御を最適化します。
   Or Enter Manually: または手動で入力
   Oscillating around target...: 目標値付近で振動中...
-  Out of range: ''
+  Out of range: '範囲外'
   Output Mode: 出力モード
   P: P
   PA: PA
@@ -894,6 +913,9 @@ translations:
   Part Fan: パーツファン
   Password: パスワード
   Password cannot be empty: パスワードを入力してください
+  Path A: 'パス A'
+  Path B: 'パス B'
+  Path Similarity: 'パス類似度'
   Pause: 一時停止
   Paused: 一時停止
   Paused (attention needed): 一時停止（対応が必要）
@@ -951,6 +973,8 @@ translations:
   Print History: 印刷履歴
   Print Hours: 印刷時間
   Print Label: ラベルを印刷
+  Print Last: '前回を再印刷'
+  Print Library: '印刷ライブラリ'
   Print Objects: 印刷オブジェクト
   Print Speed: 印刷速度
   Print Status: 印刷ステータス
@@ -1010,10 +1034,13 @@ translations:
   Reboot: 再起動
   Rebooting...: 再起動中...
   Recalibrate or view detailed results anytime in Settings.: 設定からいつでも再キャリブレーションや詳細結果の確認ができます。
+  Recent: '最近'
+  Recent Prints: '最近の印刷'
+  Recently Printed: '最近印刷されたもの'
   Record Timelapse: タイムラプスを録画
   Record timelapses of your prints: 印刷のタイムラプスを録画
   Recorded Videos: 録画された動画
-  Recorded timelapses will appear here: ''
+  Recorded timelapses will appear here: '録画済みタイムラプスがここに表示されます'
   Recording Mode: 録画モード
   Recover: 回復
   Recovering AFC system...: AFCシステムを復旧中...
@@ -1031,9 +1058,10 @@ translations:
   Rename: 名前を変更
   Rename Mesh Profile: メッシュプロファイルの名前を変更
   Render Now: 今すぐレンダリング
-  Rendering timelapse...: ''
+  Rendering timelapse...: 'タイムラプスをレンダリング中...'
   Report saved to crash_report.txt: crash_report.txt にレポートを保存しました
   Reprint: 再印刷
+  Reprint Last: '前回を再印刷'
   Require confirmation before emergency stop: 緊急停止前に確認を求める
   Requires Moonraker-Timelapse plugin: Moonraker-Timelapse プラグインが必要です
   Reset: リセット
@@ -1160,6 +1188,7 @@ translations:
   Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: '匿名の使用統計を共有して、HelixScreen の改善にご協力ください。個人データは一切収集されません。'
   'Share this code in Discord or support:': 'このコードをDiscordまたはサポートで共有してください:'
   'Shininess:': '光沢:'
+  Show Frequency Graph: '周波数グラフを表示'
   Show Printer Switcher: プリンター切替を表示
   Show detailed print preparation status: 詳細な印刷準備ステータスを表示
   Show instead of dimming: '暗くする代わりに表示'
@@ -1205,6 +1234,7 @@ translations:
   Start: 開始
   Start Anyway: このまま開始
   Start Calibration: キャリブレーション開始
+  Start Check: 'チェック開始'
   Start Print: 印刷を開始
   Start Probing: プローブ開始
   Started: 開始
@@ -1224,6 +1254,7 @@ translations:
   Stop Print?: 印刷を停止しますか？
   Stops all motion. Requires firmware restart.: すべての動作を停止します。ファームウェアの再起動が必要です。
   Stow: 格納
+  Strobe LED: 'ストロボLED'
   Success: '成功'
   Success Rate: 成功率
   Success!: 成功！
@@ -1250,6 +1281,7 @@ translations:
   Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: 十字をタップ（ポイント %1$d / 3）\xe2\x80\x94 タッチ %2$d / %3$d
   Tap to assign: タップして割当
   Tap to show keyboard...: タップしてキーボードを表示...
+  Target Frequency: '目標周波数'
   Target Temperature: 目標温度
   Telemetry Data: テレメトリデータ
   Telemetry queue cleared: テレメトリキューをクリアしました
@@ -1258,6 +1290,7 @@ translations:
   Temperatures: 温度
   Temporary adjustment for this print, unless saved on Controls panel: コントロールパネルで保存しない限り、この印刷のみの一時的な調整です
   Tertiary: ターシャリ
+  Test Again: '再テスト'
   Test Connection: 接続テスト
   Test Network: ネットワークテスト
   Test Print: 'テスト印刷'
@@ -1269,6 +1302,9 @@ translations:
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : HelixPrint プラグインは、クイック再印刷のためのベッドメッシュスキップなど、プリンター上で直接高速 G-code 修正を可能にします。
   The heater will cycle on and off several times.: ヒーターは数回オン/オフを繰り返します。
+  'The motor vibrates the belt while a strobe light flashes at the ': 'モーターがベルトを振動させ、ストロボライトが同じ'
+  ? 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
+  : 'モーターがベルトを振動させ、ストロボライトが同じ周波数で点滅します。ベルトが静止して見える（フリーズ）とき、共振周波数が見つかったことになります。下のボタンで周波数をスイープしてください。'
   'The runout sensor indicates no filament is loaded. ': 'フィラメント切れセンサーがフィラメント未装填を検出しました。 '
   'The toolhead sensor indicates filament is already loaded. ': 'ツールヘッドセンサーがフィラメント装填済みを検出しました。 '
   'The toolhead sensor indicates no filament is present. ': 'ツールヘッドセンサーがフィラメント未検出を報告しました。 '
@@ -1298,15 +1334,15 @@ translations:
   This will restart Klipper.: これにより Klipper が再起動します。
   Thorough: 徹底的
   Thumbnail Only: サムネイルのみ
-  Tighten Path A belt.: ''
-  Tighten Path B belt.: ''
+  Tighten Path A belt.: 'パスAのベルトを張ってください。'
+  Tighten Path B belt.: 'パスBのベルトを張ってください。'
   Time: 時間
   Time Format: 時間形式
   Time to wait before escalating to emergency stop: 緊急停止にエスカレートするまでの待機時間
   Timelapse: タイムラプス
   Timelapse Available: タイムラプス利用可能
   Timelapse Settings: タイムラプス設定
-  Timelapse Videos: ''
+  Timelapse Videos: 'タイムラプス動画'
   Timelapse plugin installed successfully!: タイムラプスプラグインのインストール成功！
   Timelapse plugin installed!: タイムラプスプラグインをインストールしました！
   Timelapse plugin is already installed!: タイムラプスプラグインは既にインストール済みです！
@@ -1340,6 +1376,10 @@ translations:
   Type to preview input field...: 入力フィールドをプレビューするには入力してください...
   UI Sounds: UIサウンド
   USB: USB
+  Understanding Results: '結果の理解'
+  'Uneven belt tension causes print artifacts like layer shifts, ': '不均一なベルトテンションはレイヤーシフトなどの印刷不良を引き起こします。'
+  ? "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
+  : '不均一なベルトテンションはレイヤーシフト、VFA（垂直微細アーティファクト）、リンギングなどの印刷不良を引き起こします。このツールは各ベルトパスを振動させ共振周波数を測定します — 周波数が一致すればテンションが均一です。CoreXYではパスAとBが数Hz以内に収まるべきです。'
   Uninstall HelixPrint Plugin: HelixPrint プラグインをアンインストール
   'Uninstall: Coming soon': 'アンインストール: 近日公開'
   Unit: ユニット
@@ -1387,6 +1427,8 @@ translations:
   View Timelapse: タイムラプスを表示
   View installed plugins and status: インストール済みプラグインとステータスを表示
   View print statistics and job history: 印刷統計とジョブ履歴を表示
+  Visual Fine-Tune (Strobe): '視覚的微調整（ストロボ）'
+  Visual Fine-Tuning: '視覚的微調整'
   Volume: 音量
   Volume, themes, and UI sounds: 音量、テーマ、UIサウンド
   WIDTH SENSORS: '幅センサー'

@@ -1,7 +1,7 @@
 locale: zh
 translations:
   ' elapsed · ': ' 已用 · '
-  ' frames': ''
+  ' frames': ' 帧'
   ' frames captured': ' 帧已捕获'
   ' left': ' 剩余'
   '%d more sensors': '还有%d个传感器'
@@ -14,12 +14,12 @@ translations:
   + Add Preset: + 添加预设
   + Add Printer: + 添加打印机
   + New: + 新建
-  +0.5 Hz: ''
+  +0.5 Hz: '+0.5 Hz'
   '- Check [resonance_tester] in printer.cfg': '- 检查 printer.cfg 中的 [resonance_tester]'
   '- Ensure ADXL345 is connected': '- 确保 ADXL345 已连接'
   '- Try Measure Noise first': '- 先尝试测量噪声'
   --°C: --°C
-  -0.5 Hz: ''
+  -0.5 Hz: '-0.5 Hz'
   0 = computed: '0 = 自动计算'
   0 slots: '{0} 个料仓'
   0.4-2mm direct drive, 4-6mm bowden: 直驱 0.4-2mm，远程挤出 4-6mm
@@ -82,6 +82,7 @@ translations:
   About: 关于
   Accel to Decel: 加速到减速
   Acceleration to deceleration limit (mm/s²): 加速到减速限制 (mm/s²)
+  Accelerometer: '加速度传感器'
   Accept: 接受
   'Accepted Z Position: 0.000': '已接受 Z 位置: 0.000'
   Action Required: 需要操作
@@ -95,6 +96,7 @@ translations:
   Address: '地址'
   Adjust screen brightness level: 调整屏幕亮度
   Adjust screws, then re-probe.: 调整螺丝，然后重新探测。
+  Adjust until belt appears frozen: '调整直到皮带看起来静止'
   Adjustments stay active until restart. Save after print completes.: 调整在重启前保持有效。打印完成后保存。
   Adjusts individual characteristics of your heaters for optimal control: 调整加热器的各项参数以实现最佳控制
   Advanced Setting: 高级设置
@@ -112,7 +114,7 @@ translations:
   Animations: 动画
   Anonymous data to help improve HelixScreen: 匿名数据以帮助改进 HelixScreen
   Anonymous stats — no personal data, ever.: 匿名统计 — 绝不收集个人数据。
-  AntHead: ''
+  AntHead: 'AntHead'
   Any notes...: 备注...
   App Background: 应用背景
   Apply: 应用
@@ -144,6 +146,7 @@ translations:
   BLTouch Controls: BLTouch 控制
   BLUETOOTH PRINTERS: 蓝牙打印机
   Back: 返回
+  Back to Results: '返回结果'
   Bed: 热床
   Bed Heater: 热床加热器
   Bed Level: 热床调平
@@ -158,7 +161,9 @@ translations:
   Bed is Level!: 热床已水平！
   Bed °C: 热床 °C
   'Bed:': 热床：
-  Belt tension looks good!: ''
+  Belt Tension: '皮带张力'
+  Belt Tension Check: '皮带张力检查'
+  Belt tension looks good!: '皮带张力良好！'
   Beta: 测试版
   'Beta features: OFF': '测试版功能: 关'
   'Beta features: ON': '测试版功能: 开'
@@ -173,14 +178,14 @@ translations:
   Border Width: 边框宽度
   Border transparency (0 = invisible, 255 = solid): 边框透明度（0 = 不可见，255 = 实心）
   Both: 两者
-  Both belts are overtightened.: ''
-  Both belts need tightening.: ''
+  Both belts are overtightened.: '两条皮带都过紧。'
+  Both belts need tightening.: '两条皮带都需要拉紧。'
   Brightness: 亮度
   Brightness level when LEDs turn on at startup: 启动时 LED 开启的亮度级别
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL（蓝牙）
   Browse: 浏览
-  Browse and play recorded timelapses: ''
+  Browse and play recorded timelapses: '浏览和播放录制的延时摄影'
   'Browse guides, configuration references, and troubleshooting ': 浏览指南、配置参考和故障排除
   Buffer Status: '缓冲区状态'
   Bundle Uploaded: 捆绑包已上传
@@ -266,6 +271,7 @@ translations:
   Color: 颜色
   Color Mismatch: 颜色不匹配
   Compact: '紧凑'
+  Comparison: '比较'
   Complete: 完成
   Complete!: 完成！
   Completed: 已完成
@@ -327,6 +333,7 @@ translations:
   Creating spool...: 正在创建料盘…
   Current / Target: 当前 / 目标
   Current Configuration: 当前配置
+  Current Frequency: '当前频率'
   Current Mesh: 当前网格
   Current Temperature: 当前温度
   Current Version: 当前版本
@@ -373,6 +380,7 @@ translations:
   Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
   Device name is required: 设备名称为必填项
+  'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.': '路径A和B的差异。理想情况下低于5 Hz；超过15 Hz需要调整。'
   Disable: 禁用
   Disable Motors?: 关闭电机？
   Disable the security PIN: 禁用安全 PIN
@@ -532,6 +540,8 @@ translations:
   Found %zu printers: '找到 %zu 台打印机'
   Found 1 printer: 找到 1 台打印机
   Framerate: 帧率
+  Frequency Delta: '频率差'
+  'Frequency Delta: Difference between Path A and B. ': '频率差：路径A和B的差异。'
   Front: 前
   G-code Console: G-code 控制台
   G-code Preview: G-code 预览
@@ -539,7 +549,7 @@ translations:
   Gear sync: 齿轮同步
   Get help and share feedback: 获取帮助和反馈
   'Ghost:': 残影：
-  Good: ''
+  Good: '良好'
   Got it: 知道了
   Gray: 灰色
   Guides and reference: 指南与参考
@@ -591,6 +601,7 @@ translations:
   Hotend Fan: 热端风扇
   Hotend Heater: 热端加热器
   How Z-axis movement is displayed: Z 轴移动的显示方式
+  'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.': '振动曲线的匹配程度。90%以上为优秀；低于70%表示张力不均。'
   How often to check Spoolman for weight updates: 检查 Spoolman 重量更新的频率
   How the toolhead icon appears: 工具头图标的显示方式
   Humidity: 湿度
@@ -637,6 +648,7 @@ translations:
   Keep Printing: 继续打印
   Keep Required: 保持必需
   Keyboard Test (Gboard-style): 键盘测试（Gboard 风格）
+  Kinematics: '运动学'
   Klipper: Klipper
   'Klipper firmware has disconnected from the host. ': 'Klipper 固件已与主机断开连接。 '
   'Klipper has entered an error state. This is typically caused by an MCU ': Klipper已进入错误状态。这通常是由MCU
@@ -658,6 +670,7 @@ translations:
   Label Size: '标签尺寸'
   Label printed: '标签已打印'
   Language: 语言
+  Last: 最近
   Last print cancelled: 上次打印已取消
   Last print failed: 上次打印失败
   Later: 稍后
@@ -670,6 +683,7 @@ translations:
   Learn More: 了解更多
   'Length:': 长度：
   Leveling Gantry...: 正在调平龙门...
+  Library: '文件库'
   Lifetime Print Stats: '累计打印统计'
   Light: 浅色
   Load: 加载
@@ -686,10 +700,12 @@ translations:
   Loading vendors...: 正在加载供应商…
   Loading...: 正在加载...
   Location: 位置
+  Lock A: '锁定 A'
+  Lock B: '锁定 B'
   Lock screen after idle timeout: 空闲超时后锁定屏幕
   Locked during print: 打印期间锁定
-  Loosen Path A belt.: ''
-  Loosen Path B belt.: ''
+  Loosen Path A belt.: '松开路径A的皮带。'
+  Loosen Path B belt.: '松开路径B的皮带。'
   'Lot # (optional)': 批号（可选）
   Lot/Batch Nr: 批次号
   M to toggle: 按 M 切换
@@ -742,8 +758,10 @@ translations:
   Max speed through corners (mm/s): 转角最大速度 (mm/s)
   Maximum acceleration (mm/s²): 最大加速度 (mm/s²)
   Maximum toolhead speed (mm/s): 打印头最大速度 (mm/s)
-  Measure and compare belt path frequencies: ''
+  Measure and compare belt path frequencies: '测量和比较皮带路径频率'
+  Measure belt path frequencies: '测量皮带路径频率'
   Measured: 已测量
+  Measurement Failed: '测量失败'
   Measuring thermal response...: 正在测量热响应...
   Memory (MB): 内存 (MB)
   Mesh Complete: 网格完成
@@ -763,7 +781,7 @@ translations:
   : 移动打印头以测量每个轴上的振动频率。需要 2-3 分钟。打印机会发出噪音——这是正常的。
   Multi Filament System Overview: 多耗材系统概览
   Multi-Filament: 多耗材
-  Multi-Filament Overview: ''
+  Multi-Filament Overview: '多耗材概览'
   'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
   My Custom Theme: 我的自定义主题
@@ -773,7 +791,7 @@ translations:
   Name: 名称
   Name (optional): 名称（可选）
   Named actions in the LED control panel (long-press).: LED 控制面板中的命名操作（长按）。
-  Needs adjustment: ''
+  Needs adjustment: '需要调整'
   Net Weight (g): 净重（克）
   Network: 网络
   Network Address: 网络地址
@@ -826,6 +844,7 @@ translations:
   No print history yet: 暂无打印历史
   No print start macro found: 未找到打印启动宏
   No printers found: 未找到打印机
+  No prints yet: 暂无打印记录
   No profiles available: 无可用配置
   No sensors detected: 未检测到传感器
   No spool assigned: 未分配料盘
@@ -868,7 +887,7 @@ translations:
   Optimizes temperature control for stable, consistent heating.: 优化温度控制，实现稳定一致的加热。
   Or Enter Manually: 或手动输入
   Oscillating around target...: 正在围绕目标振荡...
-  Out of range: ''
+  Out of range: '超出范围'
   Output Mode: 输出模式
   P: 件
   PA: PA
@@ -894,6 +913,9 @@ translations:
   Part Fan: 零件风扇
   Password: 密码
   Password cannot be empty: 密码不能为空
+  Path A: '路径 A'
+  Path B: '路径 B'
+  Path Similarity: '路径相似度'
   Pause: 暂停
   Paused: 已暂停
   Paused (attention needed): 已暂停（需要处理）
@@ -951,6 +973,8 @@ translations:
   Print History: 打印历史
   Print Hours: 打印时长
   Print Label: 打印标签
+  Print Last: '重打上次'
+  Print Library: 打印库
   Print Objects: 打印对象
   Print Speed: 打印速度
   Print Status: 打印状态
@@ -1010,10 +1034,13 @@ translations:
   Reboot: 重启
   Rebooting...: 正在重启...
   Recalibrate or view detailed results anytime in Settings.: 可随时在设置中重新校准或查看详细结果。
+  Recent: '最近'
+  Recent Prints: 最近打印
+  Recently Printed: '最近打印过的'
   Record Timelapse: 录制延时摄影
   Record timelapses of your prints: 录制打印延时摄影
   Recorded Videos: 已录制视频
-  Recorded timelapses will appear here: ''
+  Recorded timelapses will appear here: '录制的延时摄影将显示在此处'
   Recording Mode: 录制模式
   Recover: 恢复
   Recovering AFC system...: AFC系统恢复中...
@@ -1031,9 +1058,10 @@ translations:
   Rename: 重命名
   Rename Mesh Profile: 重命名网格配置
   Render Now: 立即渲染
-  Rendering timelapse...: ''
+  Rendering timelapse...: '正在渲染延时摄影...'
   Report saved to crash_report.txt: 报告已保存到 crash_report.txt
   Reprint: 重新打印
+  Reprint Last: 重印上次
   Require confirmation before emergency stop: 紧急停止前需要确认
   Requires Moonraker-Timelapse plugin: 需要 Moonraker-Timelapse 插件
   Reset: 重置
@@ -1160,6 +1188,7 @@ translations:
   Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: '分享匿名使用统计数据，帮助我们改进 HelixScreen。绝不会收集任何个人数据。'
   'Share this code in Discord or support:': 请将此代码分享至 Discord 或支持渠道：
   'Shininess:': 光泽度：
+  Show Frequency Graph: '显示频率图'
   Show Printer Switcher: '显示打印机切换器'
   Show detailed print preparation status: 显示详细的打印准备状态
   Show instead of dimming: '显示而非变暗'
@@ -1205,6 +1234,7 @@ translations:
   Start: 开始
   Start Anyway: 仍然开始
   Start Calibration: 开始校准
+  Start Check: '开始检查'
   Start Print: 开始打印
   Start Probing: 开始探测
   Started: 已开始
@@ -1224,6 +1254,7 @@ translations:
   Stop Print?: 停止打印？
   Stops all motion. Requires firmware restart.: 停止所有运动。需要固件重启。
   Stow: 收回
+  Strobe LED: '频闪LED'
   Success: '成功'
   Success Rate: 成功率
   Success!: 成功！
@@ -1250,6 +1281,7 @@ translations:
   Tap the crosshair (point %1$d of 3) \xe2\x80\x94 touch %2$d of %3$d: 点击十字准星（第 %1$d 个点，共 3 个）\xe2\x80\x94 触摸 %2$d / %3$d
   Tap to assign: 点击分配
   Tap to show keyboard...: 点击显示键盘...
+  Target Frequency: '目标频率'
   Target Temperature: 目标温度
   Telemetry Data: 遥测数据
   Telemetry queue cleared: 遥测队列已清除
@@ -1258,6 +1290,7 @@ translations:
   Temperatures: 温度
   Temporary adjustment for this print, unless saved on Controls panel: 此打印的临时调整，除非在控制面板上保存
   Tertiary: 第三
+  Test Again: '再次测试'
   Test Connection: 测试连接
   Test Network: 测试网络
   Test Print: '测试打印'
@@ -1269,6 +1302,9 @@ translations:
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : HelixPrint 插件可在打印机上直接进行快速 G-code 修改——例如跳过热床网格以快速重新打印。
   The heater will cycle on and off several times.: 加热器将多次开关循环。
+  'The motor vibrates the belt while a strobe light flashes at the ': '电机振动皮带，同时频闪灯以相同的'
+  ? 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
+  : '电机振动皮带，同时频闪灯以相同频率闪烁。当皮带看起来静止不动（冻结）时，您就找到了共振频率。使用下方按钮扫描各频率。'
   'The runout sensor indicates no filament is loaded. ': '断料传感器显示未装载耗材。 '
   'The toolhead sensor indicates filament is already loaded. ': '工具头传感器显示耗材已装载。 '
   'The toolhead sensor indicates no filament is present. ': '工具头传感器显示无耗材。 '
@@ -1298,15 +1334,15 @@ translations:
   This will restart Klipper.: 这将重启 Klipper。
   Thorough: 全面
   Thumbnail Only: 仅缩略图
-  Tighten Path A belt.: ''
-  Tighten Path B belt.: ''
+  Tighten Path A belt.: '拉紧路径A的皮带。'
+  Tighten Path B belt.: '拉紧路径B的皮带。'
   Time: 时间
   Time Format: 时间格式
   Time to wait before escalating to emergency stop: 升级为紧急停止前的等待时间
   Timelapse: 延时摄影
   Timelapse Available: 延时摄影可用
   Timelapse Settings: 延时摄影设置
-  Timelapse Videos: ''
+  Timelapse Videos: '延时摄影视频'
   Timelapse plugin installed successfully!: 延时摄影插件安装成功！
   Timelapse plugin installed!: 延时摄影插件已安装！
   Timelapse plugin is already installed!: 延时摄影插件已安装！
@@ -1340,6 +1376,10 @@ translations:
   Type to preview input field...: 输入以预览输入框...
   UI Sounds: 界面声音
   USB: USB
+  Understanding Results: '了解结果'
+  'Uneven belt tension causes print artifacts like layer shifts, ': '不均匀的皮带张力会导致层偏移等打印缺陷，'
+  ? "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
+  : '不均匀的皮带张力会导致层偏移、VFA（垂直细纹）和振纹等打印缺陷。此工具振动每条皮带路径并测量共振频率——匹配的频率意味着平衡的张力。对于CoreXY，路径A和B应在几Hz之内。'
   Uninstall HelixPrint Plugin: 卸载 HelixPrint 插件
   'Uninstall: Coming soon': '卸载: 即将推出'
   Unit: 单元
@@ -1387,6 +1427,8 @@ translations:
   View Timelapse: 查看延时摄影
   View installed plugins and status: 查看已安装的插件和状态
   View print statistics and job history: 查看打印统计和作业历史
+  Visual Fine-Tune (Strobe): '视觉微调（频闪）'
+  Visual Fine-Tuning: '视觉微调'
   Volume: 音量
   Volume, themes, and UI sounds: 音量、主题和界面声音
   WIDTH SENSORS: '宽度传感器'

@@ -300,10 +300,10 @@ void PrintStatsWidget::update_stats() {
         case PrintJobStatus::ERROR: status_icon = "!"; break;
         default: break;
         }
-        std::snprintf(s_last_print_buf, sizeof(s_last_print_buf), "Last: %s %s", name.c_str(),
-                      status_icon);
+        std::snprintf(s_last_print_buf, sizeof(s_last_print_buf), "%s: %s %s",
+                      lv_tr("Last"), name.c_str(), status_icon);
     } else {
-        std::snprintf(s_last_print_buf, sizeof(s_last_print_buf), "No prints yet");
+        std::snprintf(s_last_print_buf, sizeof(s_last_print_buf), "%s", lv_tr("No prints yet"));
     }
     lv_subject_copy_string(&s_last_print, s_last_print_buf);
 

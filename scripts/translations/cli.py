@@ -114,6 +114,23 @@ def run_sync(
         result.keys_added = merge_result.keys_added
         result.files_modified = merge_result.files_modified
 
+    # Ensure all base locale keys exist in every other language file.
+    # Keys can be present in en.yml but missing from other files if they were
+    # added manually or by a previous sync that only checked the base locale.
+    all_base_keys = existing_keys | truly_new
+    for yaml_path in yaml_dir.glob("*.yml"):
+        if yaml_path.stem == base_locale:
+            continue
+        lang_data = load_yaml_file(yaml_path)
+        lang_translations = lang_data.get("translations") or {}
+        lang_keys = set(lang_translations.keys())
+        missing_in_lang = all_base_keys - lang_keys
+        if missing_in_lang:
+            backfill_result = merge_new_keys(yaml_dir, missing_in_lang, dry_run=dry_run)
+            result.keys_added += backfill_result.keys_added
+            if backfill_result.files_modified > 0:
+                result.files_modified += backfill_result.files_modified
+
     # Check for obsolete keys (include C++ sources for accurate count)
     obsolete = find_obsolete_keys(xml_dir, yaml_dir, base_locale, cpp_dir=cpp_dir)
     result.obsolete_keys_found = len(obsolete)

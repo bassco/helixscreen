@@ -182,9 +182,7 @@ def generate_coverage_report(
             lines.append("-" * 40)
             for locale, keys in sorted(missing.items()):
                 lines.append(f"\n{locale} ({len(keys)} missing):")
-                for key in keys[:10]:  # Show first 10
+                for key in keys:
                     lines.append(f"  - {key}")
-                if len(keys) > 10:
-                    lines.append(f"  ... and {len(keys) - 10} more")
 
     return "\n".join(lines)

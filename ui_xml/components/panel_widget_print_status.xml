@@ -15,7 +15,7 @@
               style_pad_left="#space_sm" style_pad_right="#space_sm" style_pad_top="#space_xs"
               style_pad_bottom="0" style_pad_gap="#space_xxs"
               clickable="false" event_bubble="true">
-        <text_small text="Library" translation_tag="Library" variant="muted"
+        <text_small text="Print Library" translation_tag="Print Library" variant="muted"
                     clickable="false" event_bubble="true"/>
         <divider_horizontal/>
       </lv_obj>
@@ -49,7 +49,7 @@
                   scrollbar_mode="off" scrollable="false">
             <event_cb trigger="clicked" callback="library_last_cb"/>
             <icon src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-            <text_small name="library_last_label" text="Print Last" translation_tag="Print Last"
+            <text_small name="library_last_label" text="Reprint Last" translation_tag="Reprint Last"
                         clickable="false" event_bubble="true"/>
           </lv_obj>
           <!-- Recent row -->
@@ -59,7 +59,7 @@
                   scrollbar_mode="off" scrollable="false">
             <event_cb trigger="clicked" callback="library_recent_cb"/>
             <icon src="star" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-            <text_small text="Recent" translation_tag="Recent"
+            <text_small text="Recent Prints" translation_tag="Recent Prints"
                         clickable="false" event_bubble="true"/>
           </lv_obj>
         </lv_obj>
@@ -92,7 +92,7 @@
               scrollbar_mode="off" scrollable="false">
         <event_cb trigger="clicked" callback="library_last_cb"/>
         <icon src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-        <text_small name="compact_last_label" text="Print Last" translation_tag="Print Last"
+        <text_small name="compact_last_label" text="Reprint Last" translation_tag="Reprint Last"
                     clickable="false" event_bubble="true"/>
       </lv_obj>
     </lv_obj>
