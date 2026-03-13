@@ -1,3 +1,4 @@
+// Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
@@ -25,11 +26,11 @@ class CjkFontManager {
     bool load();
     void unload();
 
-    static void set_fallback(const lv_font_t* compiled, lv_font_t* cjk);
-    static void clear_fallback(const lv_font_t* compiled);
+    static void set_fallback(lv_font_t* compiled, lv_font_t* cjk);
+    static void clear_fallback(lv_font_t* compiled);
 
     struct FontEntry {
-        const lv_font_t* compiled_font;
+        lv_font_t* compiled_font;
         lv_font_t* cjk_font;
     };
 

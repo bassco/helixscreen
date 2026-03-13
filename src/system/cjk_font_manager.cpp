@@ -1,3 +1,4 @@
+// Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "cjk_font_manager.h"
@@ -8,7 +9,7 @@
 namespace helix::system {
 
 struct FontMapping {
-    const lv_font_t* compiled;
+    lv_font_t* compiled;
     const char* bin_filename;
 };
 
@@ -72,12 +73,12 @@ void CjkFontManager::on_language_changed(const std::string& lang) {
     }
 }
 
-void CjkFontManager::set_fallback(const lv_font_t* compiled, lv_font_t* cjk) {
-    const_cast<lv_font_t*>(compiled)->fallback = cjk;
+void CjkFontManager::set_fallback(lv_font_t* compiled, lv_font_t* cjk) {
+    compiled->fallback = cjk;
 }
 
-void CjkFontManager::clear_fallback(const lv_font_t* compiled) {
-    const_cast<lv_font_t*>(compiled)->fallback = nullptr;
+void CjkFontManager::clear_fallback(lv_font_t* compiled) {
+    compiled->fallback = nullptr;
 }
 
 bool CjkFontManager::load() {
@@ -115,6 +116,7 @@ void CjkFontManager::unload() {
 
     spdlog::info("[CjkFontManager] Unloading {} CJK fonts", loaded_fonts_.size());
 
+    // Clear fallback first so no render call can follow a dangling pointer
     for (auto& entry : loaded_fonts_) {
         clear_fallback(entry.compiled_font);
         lv_binfont_destroy(entry.cjk_font);
