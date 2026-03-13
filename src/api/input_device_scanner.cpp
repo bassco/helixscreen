@@ -154,7 +154,42 @@ std::optional<ScannedDevice> find_mouse_device() {
 
 std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
                                                    const std::string& sysfs_base) {
-    // STUB: will be implemented in Phase 3
+    DIR* dir = opendir(dev_base.c_str());
+    if (!dir) {
+        spdlog::debug("[InputScanner] Cannot open {}", dev_base);
+        return std::nullopt;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (strncmp(entry->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        int event_num = -1;
+        if (sscanf(entry->d_name, "event%d", &event_num) != 1 || event_num < 0) {
+            continue;
+        }
+
+        std::string device_path = dev_base + "/" + entry->d_name;
+        if (access(device_path.c_str(), R_OK) != 0) {
+            continue;
+        }
+
+        // Require KEY_A (bit 30) — distinguishes real keyboards from power buttons etc.
+        std::string key_caps = read_sysfs_capability(sysfs_base, event_num, "key");
+        if (!check_capability_bit(key_caps, 30)) {
+            continue;
+        }
+
+        std::string name = read_device_name(sysfs_base, event_num);
+        spdlog::info("[InputScanner] Found keyboard: {} ({})", device_path, name);
+
+        closedir(dir);
+        return ScannedDevice{device_path, name, event_num};
+    }
+
+    closedir(dir);
     return std::nullopt;
 }
 
