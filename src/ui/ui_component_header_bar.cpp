@@ -137,6 +137,16 @@ void ui_component_header_bar_setup(lv_obj_t* header, lv_obj_t* screen) {
     lv_obj_t* back_btn = lv_obj_find_by_name(header, "back_button");
     if (back_btn) {
         lv_obj_set_ext_click_area(back_btn, header_height / 2);
+
+        // Apply pressed style so back button has visual touch feedback
+        static lv_style_t back_pressed;
+        static bool inited = false;
+        if (!inited) {
+            lv_style_init(&back_pressed);
+            lv_style_set_opa(&back_pressed, LV_OPA_50);
+            inited = true;
+        }
+        lv_obj_add_style(back_btn, &back_pressed, LV_PART_MAIN | LV_STATE_PRESSED);
     }
 
     spdlog::trace("[HeaderBar] Setup complete: height={}px", header_height);

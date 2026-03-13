@@ -165,6 +165,19 @@ void ui_overlay_panel_setup_standard(lv_obj_t* panel, lv_obj_t* parent_screen,
         spdlog::warn("[PanelCommon] Header '{}' not found in overlay panel", header_name);
     }
 
+    // Apply pressed style to back button for visual touch feedback
+    lv_obj_t* back_btn = header ? lv_obj_find_by_name(header, "back_button") : nullptr;
+    if (back_btn) {
+        static lv_style_t back_pressed;
+        static bool inited = false;
+        if (!inited) {
+            lv_style_init(&back_pressed);
+            lv_style_set_opa(&back_pressed, LV_OPA_50);
+            inited = true;
+        }
+        lv_obj_add_style(back_btn, &back_pressed, LV_PART_MAIN | LV_STATE_PRESSED);
+    }
+
     // 2. Setup content padding (responsive vertical, fixed horizontal)
     // Note: overlay_panel.xml already sets style_pad_all="#space_lg"
     // This is a no-op unless we need to override for specific screen sizes
