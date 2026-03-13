@@ -8,6 +8,7 @@
 #include "display_backend_fbdev.h"
 
 #include "config.h"
+#include "input_device_scanner.h"
 #include "touch_calibration.h"
 
 #include <spdlog/spdlog.h>
@@ -514,6 +515,40 @@ lv_indev_t* DisplayBackendFbdev::create_input_pointer() {
     lv_indev_set_read_cb(touch_, calibrated_read_cb);
 
     spdlog::info("[Fbdev Backend] Evdev touch input created on {}", touch_path);
+
+    // Detect USB HID mouse (in addition to touchscreen)
+    const char* mouse_env = std::getenv("HELIX_MOUSE_DEVICE");
+    if (mouse_env && mouse_env[0] != '\0') {
+        mouse_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, mouse_env);
+        if (mouse_) {
+            spdlog::info("[Fbdev Backend] Mouse created on {} (env override)", mouse_env);
+        }
+    }
+
+    if (!mouse_) {
+        auto mouse_dev = helix::input::find_mouse_device();
+        if (mouse_dev) {
+            mouse_ = lv_evdev_create(LV_INDEV_TYPE_POINTER, mouse_dev->path.c_str());
+            if (mouse_) {
+                spdlog::info("[Fbdev Backend] Mouse created on {} ({})",
+                             mouse_dev->path, mouse_dev->name);
+            }
+        }
+    }
+
+    if (mouse_) {
+        lv_obj_t* cursor_obj = lv_obj_create(lv_screen_active());
+        lv_obj_set_size(cursor_obj, 12, 12);
+        lv_obj_set_style_radius(cursor_obj, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(cursor_obj, lv_color_white(), 0);
+        lv_obj_set_style_bg_opa(cursor_obj, LV_OPA_80, 0);
+        lv_obj_set_style_border_width(cursor_obj, 1, 0);
+        lv_obj_set_style_border_color(cursor_obj, lv_color_black(), 0);
+        lv_obj_clear_flag(cursor_obj, LV_OBJ_FLAG_CLICKABLE);
+        lv_indev_set_cursor(mouse_, cursor_obj);
+        spdlog::info("[Fbdev Backend] Mouse cursor enabled");
+    }
+
     return touch_;
 }
 
@@ -529,67 +564,17 @@ lv_indev_t* DisplayBackendFbdev::create_input_keyboard() {
         spdlog::warn("[Fbdev Backend] Could not open specified keyboard device: {}", env_device);
     }
 
-    // Priority 2: Auto-detect by scanning /dev/input/event* for EV_KEY with letter keys
-    DIR* dir = opendir("/dev/input");
-    if (!dir) {
-        spdlog::debug("[Fbdev Backend] Cannot open /dev/input for keyboard scan");
-        return nullptr;
-    }
-
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (strncmp(entry->d_name, "event", 5) != 0) {
-            continue;
-        }
-
-        int event_num = -1;
-        if (sscanf(entry->d_name, "event%d", &event_num) != 1 || event_num < 0) {
-            continue;
-        }
-
-        std::string device_path = std::string("/dev/input/") + entry->d_name;
-        if (access(device_path.c_str(), R_OK) != 0) {
-            continue;
-        }
-
-        // Check if device has EV_KEY capability with keyboard keys (KEY_A..KEY_Z)
-        std::string cap_path =
-            "/sys/class/input/event" + std::to_string(event_num) + "/device/capabilities/key";
-        std::ifstream cap_file(cap_path);
-        if (!cap_file.good()) {
-            continue;
-        }
-
-        // Read the key capability bitmask. A real keyboard has KEY_A (30) set.
-        // The bitmask is printed as space-separated hex words, LSB last.
-        // KEY_A=30 is in the first (rightmost) word, bit 30 (0x40000000).
-        std::string cap_line;
-        std::getline(cap_file, cap_line);
-        if (cap_line.empty()) {
-            continue;
-        }
-
-        // Parse the last hex word (lowest bits including KEY_A=30)
-        auto last_space = cap_line.rfind(' ');
-        std::string last_word =
-            (last_space != std::string::npos) ? cap_line.substr(last_space + 1) : cap_line;
-        unsigned long key_bits = strtoul(last_word.c_str(), nullptr, 16);
-
-        // KEY_A = 30, check bit 30
-        if (!(key_bits & (1UL << KEY_A))) {
-            continue;
-        }
-
-        std::string name = get_device_name(event_num);
-        keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, device_path.c_str());
+    // Priority 2: Auto-detect via sysfs scanning
+    auto kb_dev = helix::input::find_keyboard_device();
+    if (kb_dev) {
+        keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, kb_dev->path.c_str());
         if (keyboard_) {
-            spdlog::info("[Fbdev Backend] Keyboard created on {} ({})", device_path, name);
-            closedir(dir);
+            spdlog::info("[Fbdev Backend] Keyboard created on {} ({})",
+                         kb_dev->path, kb_dev->name);
             return keyboard_;
         }
     }
 
-    closedir(dir);
     spdlog::debug("[Fbdev Backend] No keyboard device found");
     return nullptr;
 }
