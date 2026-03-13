@@ -32,14 +32,14 @@
           <!-- Overview mode title (hidden in detail mode) -->
           <text_heading name="header_title"
                         text="Multi-Filament Overview" translation_tag="Multi-Filament Overview"
-                        style_text_align="left"
+                        long_mode="dots" style_text_align="left"
                         clickable="false" event_bubble="true" scrollable="false"/>
           <!-- Detail mode: unit logo + name (hidden in overview mode) -->
           <lv_image name="detail_logo" width="#ams_logo_size" height="#ams_logo_size"
                     inner_align="contain" hidden="true"
                     clickable="false" event_bubble="true"/>
           <text_heading name="detail_unit_name" text="" hidden="true"
-                        clickable="false" event_bubble="true" scrollable="false"/>
+                        long_mode="dots" clickable="false" event_bubble="true" scrollable="false"/>
         </lv_obj>
       </lv_obj>
       <!-- Left column content (cards + canvas OR detail slot view) -->
