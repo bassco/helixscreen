@@ -14,9 +14,9 @@
 # Per Catch2 best practices, use more shards than cores to avoid long-tailed
 # execution from uneven test distribution.
 
-# Detect CPU count for parallel sharding (2x cores recommended by Catch2)
+# Detect CPU count for parallel sharding (3x cores to avoid fat shards)
 # Supports: Linux (nproc), macOS (sysctl), fallback to 4 cores
-NPROCS := $(shell echo $$(( $$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) * 2 )))
+NPROCS := $(shell echo $$(( $$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) * 3 )))
 
 # Per-shard timeout in seconds — safety net for infinite hangs only.
 # Must be generous: some shards with threading tests take 60-90s under load.

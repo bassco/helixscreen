@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <future>
 
 namespace helix {
 namespace mesh {
@@ -47,7 +48,12 @@ void BedMeshRenderThread::stop() {
     cv_.notify_all();
 
     if (thread_.joinable()) {
-        thread_.join();
+        // Timed join: detach if the render thread is stuck to prevent infinite blocking
+        auto future = std::async(std::launch::async, [this]() { thread_.join(); });
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+            spdlog::error("[BedMeshRenderThread] Thread join timed out after 5s — detaching");
+            thread_.detach();
+        }
     }
 
     spdlog::info("[BedMeshRenderThread] Stopped");
