@@ -245,13 +245,13 @@ static const IconMapping ICON_MAP[] = {
     {"thermometer",        "\xF3\xB0\x94\x8F"},  // F050F thermometer
     {"thermometer_minus",  "\xF3\xB0\xB8\x84"},  // F0E04 thermometer-minus
     {"thermometer_plus",   "\xF3\xB0\xB8\x85"},  // F0E05 thermometer-plus
+    {"toolbox_outline",    "\xF3\xB0\xA6\xAD"},  // F09AD toolbox-outline (tools section)
     {"tortoise",           "\xF3\xB0\xB4\xBB"},  // F0D3B tortoise (AFC/Box Turtle logo)
     {"toy_brick_outline",  "\xF3\xB1\x8A\x8D"},  // F128D toy-brick-outline (building block)
     {"train_flatbed",      "\xF3\xB1\xAC\xB5"},  // F1B35 train-car-flatbed (print bed base)
     {"translate",          "\xF3\xB0\x97\x8A"},  // F05CA translate (language selection)
     {"trash_can_outline",  "\xF3\xB0\xA9\xBA"},  // F0A7A trash-can-outline (delete)
     {"tray_arrow_up",      "\xF3\xB0\x84\x9D"},  // F011D tray-arrow-up (unload/eject)
-    {"toolbox_outline",    "\xF3\xB0\xA6\xAD"},  // F09AD toolbox-outline (tools section)
     {"triangle_exclamation", "\xF3\xB0\x80\xA6"}, // F0026 alert (alias for FontAwesome compat)
     {"tune",               "\xF3\xB0\x98\xAE"},  // F062E tune
     {"tune_variant",       "\xF3\xB1\x95\x82"},  // F1542 tune-variant
