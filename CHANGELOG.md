@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.98.5] - 2026-03-13
+
+### Added
+- Belt tension tuning panel with resonant frequency measurement, strobe fine-tuning, and hardware auto-detection [BETA]
+- Belt tension tuning guide in user documentation
+
+### Fixed
+- Print cancel now uses `printer.print.cancel` RPC instead of raw CANCEL_PRINT gcode
+- Belt tension panel crash from missing JSON `result` wrapper, incorrect icon name, and missing translations
+- False mouse cursor appearing on Allwinner SoCs due to MCE IR receiver detected as USB mouse
+- Header bar back buttons missing pressed opacity feedback
+- Controls panel missing translations for Nozzle, Off, Cooling, fan speeds, macro names, and sensor count
+- Content-sized metadata overlays and non-responsive filament mapping pills
+- Startup touch grace period reduced from 5s to 1s
+- Installer now handles turbojpeg package name differences across distros
+
+### Changed
+- Belt tension help text uses progressive disclosure (help icon modals) to reduce scrolling
+- CJK fonts regenerated with 1073 characters covering new translation strings
+- Translation sync improved: 60 missing keys translated, backfill and coverage truncation fixed
+
 ## [0.98.4] - 2026-03-12
 
 Timelapse video browser, USB mouse support, runtime CJK fonts, and filament system improvements.
@@ -1915,6 +1936,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.98.5]: https://github.com/prestonbrown/helixscreen/compare/v0.98.4...v0.98.5
 [0.98.4]: https://github.com/prestonbrown/helixscreen/compare/v0.98.3...v0.98.4
 [0.98.3]: https://github.com/prestonbrown/helixscreen/compare/v0.98.2...v0.98.3
 [0.98.2]: https://github.com/prestonbrown/helixscreen/compare/v0.98.1...v0.98.2
