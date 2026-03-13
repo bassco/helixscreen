@@ -395,10 +395,10 @@ void CameraStream::stream_thread_func() {
         spdlog::warn("[CameraStream] Stream failed {} times, falling back to snapshot mode",
                      stream_fail_count_);
         if (!snapshot_url_.empty()) {
-            if (on_error_) on_error_("Stream failed, trying snapshots...");
+            if (thread_alive->load() && on_error_) on_error_("Stream failed, trying snapshots...");
             snapshot_poll_loop();
         } else {
-            if (on_error_) on_error_("Stream unavailable");
+            if (thread_alive->load() && on_error_) on_error_("Stream unavailable");
         }
     }
 
@@ -709,7 +709,7 @@ bool CameraStream::decode_jpeg_stb(const uint8_t* data, size_t len) {
 // ============================================================================
 
 void CameraStream::deliver_frame() {
-    if (!on_frame_ || !back_buf_) {
+    if (!alive_ || !alive_->load() || !on_frame_ || !back_buf_) {
         return;
     }
 

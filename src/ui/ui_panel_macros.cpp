@@ -130,8 +130,18 @@ void MacrosPanel::on_activate() {
 
     spdlog::debug("[{}] on_activate()", get_name());
 
-    // Refresh macro list when panel becomes visible
-    populate_macro_list();
+    // Defer list rebuild to the next LVGL tick — on_activate() fires inside
+    // overlay_slide_out_complete_cb() while LVGL is still processing the
+    // animation tick.  Synchronous lv_obj_clean() here would delete children
+    // whose events LVGL still references → SIGSEGV in lv_event_mark_deleted.
+    lv_async_call(
+        [](void* ud) {
+            auto* self = static_cast<MacrosPanel*>(ud);
+            // Panel may have been destroyed between scheduling and execution
+            if (!self->alive_ || !*self->alive_) return;
+            self->populate_macro_list();
+        },
+        this);
 }
 
 void MacrosPanel::on_deactivate() {
