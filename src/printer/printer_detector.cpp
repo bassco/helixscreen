@@ -1126,6 +1126,7 @@ PrinterDetector::get_print_start_capabilities(const std::string& printer_name) {
 
             const auto& caps = printer["print_start_capabilities"];
             result.macro_name = caps.value("macro_name", "");
+            result.pre_start_gcode = caps.value("pre_start_gcode", "");
 
             if (caps.contains("params") && caps["params"].is_object()) {
                 for (const auto& [key, value] : caps["params"].items()) {

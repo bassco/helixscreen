@@ -626,6 +626,19 @@
       "name": "Creality K1",
       "manufacturer": "Creality",
       "image": "creality-k1.png",
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "pre_start_gcode": "PRINT_PREPARED",
+        "params": {
+          "bed_mesh": {
+            "param": "PREPARE",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Full calibration (home, nozzle clean, bed mesh)"
+          }
+        }
+      },
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -693,6 +706,19 @@
       "name": "Creality K1 Max",
       "manufacturer": "Creality",
       "image": "creality-k1-max.png",
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "pre_start_gcode": "PRINT_PREPARED",
+        "params": {
+          "bed_mesh": {
+            "param": "PREPARE",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Full calibration (home, nozzle clean, bed mesh)"
+          }
+        }
+      },
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -810,6 +836,19 @@
       "name": "Creality K1C",
       "manufacturer": "Creality",
       "image": "creality-k1c.png",
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "pre_start_gcode": "PRINT_PREPARED",
+        "params": {
+          "bed_mesh": {
+            "param": "PREPARE",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Full calibration (home, nozzle clean, bed mesh)"
+          }
+        }
+      },
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -860,6 +899,19 @@
       "name": "Creality K1 SE",
       "manufacturer": "Creality",
       "image": "creality-k1-se.png",
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "pre_start_gcode": "PRINT_PREPARED",
+        "params": {
+          "bed_mesh": {
+            "param": "PREPARE",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Full calibration (home, nozzle clean, bed mesh)"
+          }
+        }
+      },
       "heuristics": [
         {
           "type": "kinematics_match",

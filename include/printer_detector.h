@@ -20,9 +20,9 @@ class PrinterDiscovery;
  */
 struct PrinterDetectionResult {
     std::string type_name; ///< Printer type name (e.g., "FlashForge AD5M Pro", "Voron 2.4")
-    int confidence;      ///< Confidence score 0-100 (≥70 = high confidence, <70 = low confidence)
-    std::string reason;  ///< Human-readable detection reasoning
-    int match_count = 1; ///< Number of matching heuristics (for combined scoring)
+    int confidence;        ///< Confidence score 0-100 (≥70 = high confidence, <70 = low confidence)
+    std::string reason;    ///< Human-readable detection reasoning
+    int match_count = 1;   ///< Number of matching heuristics (for combined scoring)
     int best_single_confidence = 0; ///< Highest individual heuristic confidence (tiebreaker)
 
     /**
@@ -64,7 +64,9 @@ struct PrintStartParamCapability {
  * Contains the macro name and all supported skip/control parameters.
  */
 struct PrintStartCapabilities {
-    std::string macro_name; ///< Macro name (e.g., "START_PRINT", "PRINT_START")
+    std::string macro_name;      ///< Macro name (e.g., "START_PRINT", "PRINT_START")
+    std::string pre_start_gcode; ///< Gcode to execute before print when skipping ops (e.g.,
+                                 ///< "PRINT_PREPARED" for K1)
     std::map<std::string, PrintStartParamCapability>
         params; ///< Map of capability name to param info
 

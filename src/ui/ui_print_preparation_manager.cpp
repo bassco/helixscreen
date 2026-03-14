@@ -12,8 +12,8 @@
 #include "app_globals.h"
 #include "macro_modification_manager.h"
 #include "memory_monitor.h"
-#include "moonraker_manager.h"
 #include "memory_utils.h"
+#include "moonraker_manager.h"
 #include "observer_factory.h"
 #include "operation_registry.h"
 
@@ -139,7 +139,8 @@ void PrintPreparationManager::analyze_print_start_macro() {
         if (auto* macro_mgr = mgr->macro_analysis()) {
             const auto& cached = macro_mgr->get_cached_analysis();
             if (cached.found) {
-                spdlog::debug("[PrintPreparationManager] Reusing MacroModificationManager analysis");
+                spdlog::debug(
+                    "[PrintPreparationManager] Reusing MacroModificationManager analysis");
                 macro_analysis_ = cached;
                 if (on_macro_analysis_complete_) {
                     on_macro_analysis_complete_(cached);
@@ -868,6 +869,53 @@ void PrintPreparationManager::start_print(const std::string& filename,
     // These need skip params appended to the PRINT_START call
     std::vector<std::pair<std::string, std::string>> macro_skip_params =
         collect_macro_skip_params();
+
+    // Pre-start gcode mechanism (K1/K1C: PRINT_PREPARED)
+    // When pre_start_gcode is set and user disabled operations, execute the
+    // pre-gcode command instead of appending skip params to START_PRINT.
+    // K1's "prepare" is a macro variable (not a passed parameter), so
+    // START_PRINT PREPARE=1 does nothing — PRINT_PREPARED must be called first.
+    // The PREPARE param in printer_database.json serves as a sentinel: it makes
+    // the checkbox visible and causes collect_macro_skip_params() to return
+    // non-empty, gating entry into this path. The param value is never sent.
+    const auto& caps = get_cached_capabilities();
+    if (!macro_skip_params.empty() && !caps.pre_start_gcode.empty()) {
+        spdlog::info("[PrintPreparationManager] Executing pre-start gcode: {}",
+                     caps.pre_start_gcode);
+
+        auto alive = alive_guard_;
+        api_->execute_gcode(
+            caps.pre_start_gcode,
+            [this, alive, filename_to_print, ops_to_disable, on_navigate_to_status,
+             wrapped_completion]() {
+                if (!*alive)
+                    return;
+                helix::ui::queue_update([this, alive, filename_to_print, ops_to_disable,
+                                         on_navigate_to_status, wrapped_completion]() {
+                    if (!*alive)
+                        return;
+                    spdlog::info("[PrintPreparationManager] Pre-start gcode executed");
+                    if (!ops_to_disable.empty()) {
+                        modify_and_print(filename_to_print, ops_to_disable, {},
+                                         on_navigate_to_status);
+                    } else {
+                        start_print_directly(filename_to_print, on_navigate_to_status,
+                                             wrapped_completion);
+                    }
+                });
+            },
+            [alive, wrapped_completion](const MoonrakerError& err) {
+                if (!*alive)
+                    return;
+                helix::ui::queue_update([wrapped_completion, msg = err.message]() {
+                    spdlog::error("[PrintPreparationManager] Pre-start gcode failed: {}", msg);
+                    NOTIFY_ERROR("Pre-print command failed: {}", msg);
+                    if (wrapped_completion)
+                        wrapped_completion(false, msg);
+                });
+            });
+        return;
+    }
 
     // Determine if we need to modify the G-code file
     bool needs_file_modification = !ops_to_disable.empty();
