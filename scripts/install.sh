@@ -471,9 +471,9 @@ detect_ad5m_firmware() {
     echo "forge_x"
 }
 
-# Detect K1 firmware variant (Simple AF vs other)
+# Detect K1 firmware variant (Simple AF, Guilouz helper-script, or stock)
 # Only called when platform is "k1"
-# Returns: "simple_af" or "stock_klipper"
+# Returns: "simple_af", "guilouz", or "stock_klipper"
 detect_k1_firmware() {
     # Simple AF (pellcorp/creality) indicators
     if [ -d "/usr/data/pellcorp" ]; then
@@ -484,6 +484,12 @@ detect_k1_firmware() {
     # Check for GuppyScreen which Simple AF installs
     if [ -d "/usr/data/guppyscreen" ] && [ -f "/etc/init.d/S99guppyscreen" ]; then
         echo "simple_af"
+        return
+    fi
+
+    # Guilouz Helper Script (community firmware mod for K1 series)
+    if [ -d "/usr/data/helper-script" ]; then
+        echo "guilouz"
         return
     fi
 
@@ -628,15 +634,24 @@ set_install_paths() {
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
         # Creality K1 series - uses /usr/data structure
+        # Common paths for all K1 variants
+        INSTALL_DIR="/usr/data/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         case "$firmware" in
-            simple_af|*)
-                INSTALL_DIR="/usr/data/helixscreen"
-                INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+            simple_af)
                 PREVIOUS_UI_SCRIPT="/etc/init.d/S99guppyscreen"
                 log_info "K1 firmware: Simple AF"
-                log_info "Install directory: ${INSTALL_DIR}"
+                ;;
+            guilouz)
+                PREVIOUS_UI_SCRIPT=""
+                log_info "K1 firmware: Guilouz Helper Script"
+                ;;
+            stock_klipper|*)
+                PREVIOUS_UI_SCRIPT=""
+                log_info "K1 firmware: Stock Klipper"
                 ;;
         esac
+        log_info "Install directory: ${INSTALL_DIR}"
     else
         # Pi and other platforms — detect klipper user, then auto-detect install dir
         INIT_SCRIPT_DEST="/etc/init.d/S90helixscreen"
@@ -1723,6 +1738,27 @@ stop_kmod_competing_uis() {
     done
 }
 
+# Stop stock Creality UI on K1 series (display-server, Monitor, master-server, etc.)
+# S99start_app launches the entire stock Creality UI stack
+stop_k1_stock_competing_uis() {
+    if [ -x /etc/init.d/S99start_app ]; then
+        log_info "Stopping stock Creality UI (S99start_app)..."
+        /etc/init.d/S99start_app stop 2>/dev/null || true
+        # Disable so it doesn't restart on reboot (reversible)
+        chmod -x /etc/init.d/S99start_app 2>/dev/null || true
+        record_disabled_service "sysv-chmod" "/etc/init.d/S99start_app"
+        found_any=true
+    fi
+
+    # Kill any remaining stock Creality UI processes
+    for proc in display-server Monitor master-server audio-server wifi-server app-server upgrade-server web-server; do
+        if kill_process_by_name "$proc"; then
+            log_info "Killed remaining $proc process"
+            found_any=true
+        fi
+    done
+}
+
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
@@ -1739,7 +1775,7 @@ stop_competing_uis() {
     found_any=false
 
     # Platform-specific competing UI handling
-    case "$AD5M_FIRMWARE" in
+    case "${AD5M_FIRMWARE:-}" in
         forge_x)    stop_forgex_competing_uis ;;
         klipper_mod) stop_kmod_competing_uis ;;
         zmod)
@@ -1748,6 +1784,11 @@ stop_competing_uis() {
             log_info "ZMOD platform: skipping generic UI disabling (ZMOD-managed)"
             return 0
             ;;
+    esac
+
+    # K1 platform: stop stock Creality UI
+    case "${K1_FIRMWARE:-}" in
+        stock_klipper|guilouz) stop_k1_stock_competing_uis ;;
     esac
 
     # Handle the specific previous UI if we know it (for clean reversibility)
@@ -1814,6 +1855,9 @@ stop_competing_uis() {
 : "${R2_BASE_URL:=https://releases.helixscreen.org}"
 : "${R2_CHANNEL:=stable}"
 
+# Plain HTTP endpoint for systems without SSL (K1, AD5M BusyBox wget)
+: "${HTTP_BASE_URL:=http://dl.helixscreen.org}"
+
 # Cached manifest from R2 (set by get_latest_version, consumed by download_release)
 _R2_MANIFEST=""
 
@@ -1825,6 +1869,38 @@ fetch_url() {
         curl -sSL --connect-timeout 10 "$url" 2>/dev/null
     elif command -v wget >/dev/null 2>&1; then
         wget -qO- --timeout=10 "$url" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Fetch a URL via plain HTTP (for systems without SSL support)
+# Prefers wget (BusyBox wget handles HTTP fine but not HTTPS)
+fetch_url_http() {
+    local url=$1
+    if command -v wget >/dev/null 2>&1; then
+        wget -qO- --timeout=10 "$url" 2>/dev/null
+    elif command -v curl >/dev/null 2>&1; then
+        curl -sSL --connect-timeout 10 "$url" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Download a file via plain HTTP (for systems without SSL support)
+# Args: url dest [max_seconds]
+download_file_http() {
+    local url=$1 dest=$2 max_secs=${3:-300}
+    if command -v wget >/dev/null 2>&1; then
+        if [ -t 2 ]; then
+            wget --timeout="$max_secs" -O "$dest" "$url" && \
+                [ -f "$dest" ] && [ -s "$dest" ]
+        else
+            wget -q --timeout="$max_secs" -O "$dest" "$url" && \
+                [ -f "$dest" ] && [ -s "$dest" ]
+        fi
+    elif command -v curl >/dev/null 2>&1; then
+        download_file "$url" "$dest" "$max_secs"
     else
         return 1
     fi
@@ -1997,47 +2073,62 @@ get_latest_version() {
     local platform=${1:-unknown}
     local version=""
 
-    # Check HTTPS capability first
-    if ! check_https_capability; then
-        show_manual_install_instructions "$platform" "latest"
-    fi
+    # Try HTTPS sources first (R2 CDN → GitHub API)
+    if check_https_capability; then
+        # Try R2 manifest first (faster CDN, no API rate limits)
+        local manifest_url="${R2_BASE_URL}/${R2_CHANNEL}/manifest.json"
+        log_info "Fetching latest version from CDN..."
 
-    # Try R2 manifest first (faster CDN, no API rate limits)
-    local manifest_url="${R2_BASE_URL}/${R2_CHANNEL}/manifest.json"
-    log_info "Fetching latest version from CDN..."
+        _R2_MANIFEST=$(fetch_url "$manifest_url") || true
+        if [ -n "$_R2_MANIFEST" ]; then
+            version=$(echo "$_R2_MANIFEST" | parse_manifest_version)
+            if [ -n "$version" ]; then
+                # Manifest has bare version (e.g., "0.9.5"), we need the tag (e.g., "v0.9.5")
+                version="v${version}"
+                log_info "Latest version (CDN): ${version}"
+                echo "$version"
+                return 0
+            fi
+            log_warn "CDN manifest found but version could not be parsed, trying GitHub..."
+            _R2_MANIFEST=""
+        else
+            log_warn "CDN unavailable, trying GitHub..."
+        fi
 
-    _R2_MANIFEST=$(fetch_url "$manifest_url") || true
-    if [ -n "$_R2_MANIFEST" ]; then
-        version=$(echo "$_R2_MANIFEST" | parse_manifest_version)
+        # Fallback: GitHub API
+        local url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+        log_info "Fetching latest version from GitHub..."
+
+        # Use basic sed regex (no -E flag) for BusyBox compatibility
+        version=$(fetch_url "$url" | grep '"tag_name"' | sed 's/.*"\([^"][^"]*\)".*/\1/')
+
         if [ -n "$version" ]; then
-            # Manifest has bare version (e.g., "0.9.5"), we need the tag (e.g., "v0.9.5")
-            version="v${version}"
-            log_info "Latest version (CDN): ${version}"
             echo "$version"
             return 0
         fi
-        log_warn "CDN manifest found but version could not be parsed, trying GitHub..."
-        _R2_MANIFEST=""
+        log_warn "HTTPS sources failed, trying HTTP fallback..."
     else
-        log_warn "CDN unavailable, trying GitHub..."
+        log_warn "HTTPS not available, trying HTTP fallback..."
     fi
 
-    # Fallback: GitHub API
-    local url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-    log_info "Fetching latest version from GitHub..."
+    # HTTP fallback for systems without SSL (K1, AD5M BusyBox wget)
+    local http_manifest_url="${HTTP_BASE_URL}/${R2_CHANNEL}/manifest.json"
+    log_info "Fetching latest version via HTTP..."
 
-    # Use basic sed regex (no -E flag) for BusyBox compatibility
-    version=$(fetch_url "$url" | grep '"tag_name"' | sed 's/.*"\([^"][^"]*\)".*/\1/')
-
-    if [ -z "$version" ]; then
-        log_error "Failed to fetch latest version."
-        log_error "Check your network connection and try again."
-        log_error "Tried: $manifest_url"
-        log_error "Tried: $url"
-        exit 1
+    _R2_MANIFEST=$(fetch_url_http "$http_manifest_url") || true
+    if [ -n "$_R2_MANIFEST" ]; then
+        version=$(echo "$_R2_MANIFEST" | parse_manifest_version)
+        if [ -n "$version" ]; then
+            version="v${version}"
+            log_info "Latest version (HTTP): ${version}"
+            echo "$version"
+            return 0
+        fi
     fi
 
-    echo "$version"
+    # All sources exhausted — show manual instructions
+    log_error "Failed to fetch latest version from any source."
+    show_manual_install_instructions "$platform" "latest"
 }
 
 # Download release tarball (tries R2 CDN first, falls back to GitHub)
@@ -2092,9 +2183,35 @@ download_release() {
         return 0
     fi
 
+    # HTTP fallback for systems without SSL (K1, AD5M BusyBox wget)
+    local http_url="${HTTP_BASE_URL}/${R2_CHANNEL}/${filename}"
+    # If we got the manifest via HTTP, try to use its URL (rewritten to HTTP)
+    if [ -n "$_R2_MANIFEST" ]; then
+        local http_manifest_url
+        http_manifest_url=$(echo "$_R2_MANIFEST" | parse_manifest_platform_url "$platform")
+        if [ -n "$http_manifest_url" ]; then
+            http_url=$(echo "$http_manifest_url" | sed "s|${R2_BASE_URL}|${HTTP_BASE_URL}|")
+        fi
+    fi
+
+    log_info "Trying HTTP fallback..."
+    log_info "URL: $http_url"
+
+    if download_file_http "$http_url" "$dest" 300; then
+        if gunzip -t "$dest" 2>/dev/null; then
+            local size
+            size=$(ls -lh "$dest" | awk '{print $5}')
+            log_success "Downloaded ${filename} (${size}) via HTTP"
+            return 0
+        fi
+        log_warn "HTTP download incomplete or corrupt"
+        rm -f "$dest"
+    fi
+
     log_error "Failed to download release."
     log_error "Tried: $r2_url"
     log_error "Tried: $gh_url"
+    log_error "Tried: $http_url"
     if [ -n "$_DOWNLOAD_HTTP_CODE" ] && [ "$_DOWNLOAD_HTTP_CODE" != "200" ]; then
         log_error "HTTP status: $_DOWNLOAD_HTTP_CODE"
     fi
@@ -2102,7 +2219,7 @@ download_release() {
     log_error "Possible causes:"
     log_error "  - Version ${version} may not exist for platform ${platform}"
     log_error "  - Network connectivity issues"
-    log_error "  - CDN and GitHub may be unavailable"
+    log_error "  - CDN, GitHub, and HTTP mirror may be unavailable"
     log_error ""
     log_error "To install manually, download on another machine and use:"
     log_error "  ./install.sh --local /path/to/${filename}"
