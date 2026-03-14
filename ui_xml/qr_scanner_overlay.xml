@@ -82,8 +82,8 @@
     <!-- Success flash overlay (hidden by default, shown on scan success) -->
     <lv_obj name="success_flash"
             width="100%" height="100%"
-            style_bg_color="#00C853"
-            style_bg_opa="160"
+            style_bg_color="#FFFFFF"
+            style_bg_opa="255"
             style_border_width="0"
             clickable="false">
       <bind_flag_if_eq subject="qr_scanner_success" flag="hidden" ref_value="0"/>

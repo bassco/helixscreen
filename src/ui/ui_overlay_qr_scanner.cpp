@@ -17,6 +17,7 @@
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
+#include "display_settings_manager.h"
 
 #if HELIX_HAS_CAMERA
 #include "camera_stream.h"
@@ -441,7 +442,25 @@ void QrScannerOverlay::on_spool_found(const SpoolInfo& spool) {
 }
 
 void QrScannerOverlay::show_success_flash() {
+    // Show the flash overlay
     lv_subject_set_int(&success_subject_, 1);
+
+    if (!success_flash_) return;
+
+    if (DisplaySettingsManager::instance().get_animations_enabled()) {
+        // Animate opacity: full white → transparent (flash-bulb effect)
+        lv_anim_t anim;
+        lv_anim_init(&anim);
+        lv_anim_set_var(&anim, success_flash_);
+        lv_anim_set_values(&anim, LV_OPA_COVER, LV_OPA_TRANSP);
+        lv_anim_set_duration(&anim, 400);
+        lv_anim_set_path_cb(&anim, lv_anim_path_ease_out);
+        lv_anim_set_exec_cb(&anim, [](void* obj, int32_t value) {
+            lv_obj_set_style_bg_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
+                                    LV_PART_MAIN);
+        });
+        lv_anim_start(&anim);
+    }
 }
 
 void QrScannerOverlay::update_status(const std::string& text) {
