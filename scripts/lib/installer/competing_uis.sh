@@ -1,9 +1,9 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Module: competing_uis
-# Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, stock FlashForge UI)
+# Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, stock Creality/FlashForge UI)
 #
-# Reads: AD5M_FIRMWARE, INIT_SYSTEM, PREVIOUS_UI_SCRIPT, SUDO, INSTALL_DIR
+# Reads: AD5M_FIRMWARE, K1_FIRMWARE, INIT_SYSTEM, PREVIOUS_UI_SCRIPT, SUDO, INSTALL_DIR
 
 # Source guard
 [ -n "${_HELIX_COMPETING_UIS_SOURCED:-}" ] && return 0
@@ -70,6 +70,27 @@ stop_kmod_competing_uis() {
     done
 }
 
+# Stop stock Creality UI on K1 series (display-server, Monitor, master-server, etc.)
+# S99start_app launches the entire stock Creality UI stack
+stop_k1_stock_competing_uis() {
+    if [ -x /etc/init.d/S99start_app ]; then
+        log_info "Stopping stock Creality UI (S99start_app)..."
+        /etc/init.d/S99start_app stop 2>/dev/null || true
+        # Disable so it doesn't restart on reboot (reversible)
+        chmod -x /etc/init.d/S99start_app 2>/dev/null || true
+        record_disabled_service "sysv-chmod" "/etc/init.d/S99start_app"
+        found_any=true
+    fi
+
+    # Kill any remaining stock Creality UI processes
+    for proc in display-server Monitor master-server audio-server wifi-server app-server upgrade-server web-server; do
+        if kill_process_by_name "$proc"; then
+            log_info "Killed remaining $proc process"
+            found_any=true
+        fi
+    done
+}
+
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
@@ -86,7 +107,7 @@ stop_competing_uis() {
     found_any=false
 
     # Platform-specific competing UI handling
-    case "$AD5M_FIRMWARE" in
+    case "${AD5M_FIRMWARE:-}" in
         forge_x)    stop_forgex_competing_uis ;;
         klipper_mod) stop_kmod_competing_uis ;;
         zmod)
@@ -95,6 +116,11 @@ stop_competing_uis() {
             log_info "ZMOD platform: skipping generic UI disabling (ZMOD-managed)"
             return 0
             ;;
+    esac
+
+    # K1 platform: stop stock Creality UI
+    case "${K1_FIRMWARE:-}" in
+        stock_klipper|guilouz) stop_k1_stock_competing_uis ;;
     esac
 
     # Handle the specific previous UI if we know it (for clean reversibility)

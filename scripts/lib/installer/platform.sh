@@ -240,9 +240,9 @@ detect_ad5m_firmware() {
     echo "forge_x"
 }
 
-# Detect K1 firmware variant (Simple AF vs other)
+# Detect K1 firmware variant (Simple AF, Guilouz helper-script, or stock)
 # Only called when platform is "k1"
-# Returns: "simple_af" or "stock_klipper"
+# Returns: "simple_af", "guilouz", or "stock_klipper"
 detect_k1_firmware() {
     # Simple AF (pellcorp/creality) indicators
     if [ -d "/usr/data/pellcorp" ]; then
@@ -253,6 +253,12 @@ detect_k1_firmware() {
     # Check for GuppyScreen which Simple AF installs
     if [ -d "/usr/data/guppyscreen" ] && [ -f "/etc/init.d/S99guppyscreen" ]; then
         echo "simple_af"
+        return
+    fi
+
+    # Guilouz Helper Script (community firmware mod for K1 series)
+    if [ -d "/usr/data/helper-script" ]; then
+        echo "guilouz"
         return
     fi
 
@@ -397,15 +403,24 @@ set_install_paths() {
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
         # Creality K1 series - uses /usr/data structure
+        # Common paths for all K1 variants
+        INSTALL_DIR="/usr/data/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         case "$firmware" in
-            simple_af|*)
-                INSTALL_DIR="/usr/data/helixscreen"
-                INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+            simple_af)
                 PREVIOUS_UI_SCRIPT="/etc/init.d/S99guppyscreen"
                 log_info "K1 firmware: Simple AF"
-                log_info "Install directory: ${INSTALL_DIR}"
+                ;;
+            guilouz)
+                PREVIOUS_UI_SCRIPT=""
+                log_info "K1 firmware: Guilouz Helper Script"
+                ;;
+            stock_klipper|*)
+                PREVIOUS_UI_SCRIPT=""
+                log_info "K1 firmware: Stock Klipper"
                 ;;
         esac
+        log_info "Install directory: ${INSTALL_DIR}"
     else
         # Pi and other platforms — detect klipper user, then auto-detect install dir
         INIT_SCRIPT_DEST="/etc/init.d/S90helixscreen"
