@@ -43,7 +43,7 @@
                     style_text_color="#text_muted"/>
         <!-- Connect button -->
         <ui_button name="connect_btn" variant="primary" width="100%"
-                   label="Connect" label_tag="Connect">
+                   text="Connect" translation_tag="Connect">
           <event_cb trigger="clicked" callback="on_spoolman_connect_clicked"/>
         </ui_button>
       </ui_card>
@@ -67,11 +67,11 @@
         <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="row"
                 style_pad_gap="#space_sm" scrollable="false">
           <ui_button name="change_btn" variant="outline" flex_grow="1"
-                     label="Change" label_tag="Change">
+                     text="Change" translation_tag="Change">
             <event_cb trigger="clicked" callback="on_spoolman_change_clicked"/>
           </ui_button>
           <ui_button name="remove_btn" variant="outline" flex_grow="1"
-                     label="Remove" label_tag="Remove">
+                     text="Remove" translation_tag="Remove">
             <event_cb trigger="clicked" callback="on_spoolman_remove_clicked"/>
           </ui_button>
         </lv_obj>
