@@ -33,8 +33,19 @@ std::string MoonrakerConfigManager::add_section(const std::string& content,
     const std::string& section_name,
     const std::vector<std::pair<std::string, std::string>>& entries,
     const std::string& comment) {
-    // Stub — implemented in Task 2
-    return content;
+    if (has_section(content, section_name)) return content;
+
+    std::string result = content;
+    // Ensure content ends with a newline before appending
+    if (!result.empty() && result.back() != '\n') result += '\n';
+
+    result += '\n';
+    if (!comment.empty()) result += "# " + comment + "\n";
+    result += "[" + section_name + "]\n";
+    for (const auto& [key, value] : entries) {
+        result += key + ": " + value + "\n";
+    }
+    return result;
 }
 
 std::string MoonrakerConfigManager::remove_section(
