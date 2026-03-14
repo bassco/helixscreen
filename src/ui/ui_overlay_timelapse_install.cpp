@@ -435,13 +435,44 @@ void TimelapseInstallOverlay::download_and_modify_config() {
         [this, alive](const MoonrakerError& err) {
             if (!alive || !*alive || !wizard_active_)
                 return;
-            spdlog::error("[{}] Failed to download config: {}", get_name(), err.message);
-            helix::ui::queue_update([this, alive]() {
-                if (!alive || !*alive || !wizard_active_)
-                    return;
-                set_status(lv_tr("Failed to download moonraker.conf.\nCheck printer connection."));
-                show_action_button(lv_tr("Retry"), [this]() { download_and_modify_config(); });
-            });
+            if (err.type == MoonrakerErrorType::FILE_NOT_FOUND) {
+                // moonraker.conf not found (e.g. mock mode) — proceed with empty content
+                spdlog::info("[{}] moonraker.conf not found, proceeding with empty", get_name());
+                // Download helixscreen.conf (may also not exist)
+                auto alive2 = alive;
+                api_->transfers().download_file(
+                    "config", "helixscreen.conf",
+                    [this, alive2](const std::string& helix_content) {
+                        if (!alive2 || !*alive2 || !wizard_active_)
+                            return;
+                        write_timelapse_config(helix_content, "");
+                    },
+                    [this, alive2](const MoonrakerError& err2) {
+                        if (!alive2 || !*alive2 || !wizard_active_)
+                            return;
+                        if (err2.type == MoonrakerErrorType::FILE_NOT_FOUND) {
+                            write_timelapse_config("", "");
+                        } else {
+                            helix::ui::queue_update([this, alive2]() {
+                                if (!alive2 || !*alive2 || !wizard_active_)
+                                    return;
+                                set_status(lv_tr("Failed to read config."));
+                                show_action_button(lv_tr("Retry"),
+                                                   [this]() { download_and_modify_config(); });
+                            });
+                        }
+                    });
+            } else {
+                spdlog::error("[{}] Failed to download config: {}", get_name(), err.message);
+                helix::ui::queue_update([this, alive]() {
+                    if (!alive || !*alive || !wizard_active_)
+                        return;
+                    set_status(
+                        lv_tr("Failed to download moonraker.conf.\nCheck printer connection."));
+                    show_action_button(lv_tr("Retry"),
+                                       [this]() { download_and_modify_config(); });
+                });
+            }
         });
 }
 

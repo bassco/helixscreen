@@ -21,6 +21,7 @@
 #include "ams_state.h"
 #include "moonraker_api.h"
 #include "moonraker_config_manager.h"
+#include "runtime_config.h"
 #include "static_panel_registry.h"
 
 #include "hv/requests.h"
@@ -502,6 +503,15 @@ void SpoolmanOverlay::on_connect_clicked(lv_event_t* /*e*/) {
 }
 
 void SpoolmanOverlay::probe_spoolman_server(const std::string& host, const std::string& port) {
+    // In mock mode, skip the real HTTP probe and simulate success
+    if (get_runtime_config() && get_runtime_config()->should_mock_moonraker()) {
+        spdlog::info("[{}] Mock mode — skipping HTTP probe, simulating Spoolman at {}:{}",
+                     get_name(), host, port);
+        set_setup_status(lv_tr("Spoolman found! Configuring..."));
+        configure_spoolman(host, port);
+        return;
+    }
+
     auto alive = alive_guard_;
     std::string probe_url = SpoolmanSetup::build_probe_url(host, port);
     std::string host_copy = host;
@@ -607,12 +617,29 @@ void SpoolmanOverlay::ensure_moonraker_include() {
                     });
                 });
         },
-        [this, alive](const MoonrakerError&) {
+        [this, alive](const MoonrakerError& err) {
             if (!alive || !*alive) return;
-            helix::ui::queue_update([this, alive]() {
-                if (!alive || !*alive) return;
-                set_setup_status(lv_tr("Failed to read moonraker.conf."), true);
-            });
+            if (err.type == MoonrakerErrorType::FILE_NOT_FOUND) {
+                // moonraker.conf not found (e.g. mock mode) — create with just the include
+                std::string fresh = helix::MoonrakerConfigManager::add_include_line("");
+                api_->transfers().upload_file("config", "moonraker.conf", fresh,
+                    [this, alive]() {
+                        if (!alive || !*alive) return;
+                        restart_and_verify();
+                    },
+                    [this, alive](const MoonrakerError&) {
+                        if (!alive || !*alive) return;
+                        helix::ui::queue_update([this, alive]() {
+                            if (!alive || !*alive) return;
+                            set_setup_status(lv_tr("Failed to update moonraker.conf."), true);
+                        });
+                    });
+            } else {
+                helix::ui::queue_update([this, alive]() {
+                    if (!alive || !*alive) return;
+                    set_setup_status(lv_tr("Failed to read moonraker.conf."), true);
+                });
+            }
         });
 }
 
