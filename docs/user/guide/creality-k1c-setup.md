@@ -72,15 +72,31 @@ From the menu, install **Moonraker** at minimum. Optionally install Fluidd or Ma
 
 ## Step 4: Install HelixScreen
 
-With Moonraker running, install HelixScreen with one command:
+The K1 series uses BusyBox without SSL library support, so `curl https://...` won't work directly on the printer. Use a two-step process — download on your computer, then copy to the printer.
+
+**On your computer:**
+
+Go to the [latest release page](https://github.com/prestonbrown/helixscreen/releases/latest) and download:
+- `helixscreen-k1-vX.Y.Z.tar.gz` (the K1 release archive)
+- `install.sh` (the installer script, under "Assets")
+
+Or use the command line (replace `vX.Y.Z` with the actual version):
+```bash
+VERSION=vX.Y.Z  # Check latest at https://github.com/prestonbrown/helixscreen/releases/latest
+wget "https://github.com/prestonbrown/helixscreen/releases/download/${VERSION}/helixscreen-k1-${VERSION}.tar.gz"
+wget https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh
+```
+
+**Copy to the printer and install:**
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
+scp helixscreen-k1-vX.Y.Z.tar.gz install.sh root@<PRINTER_IP>:/usr/data/
+ssh root@<PRINTER_IP>    # password: creality_2023
+sh /usr/data/install.sh --local /usr/data/helixscreen-k1-vX.Y.Z.tar.gz
 ```
 
 The installer automatically:
 - Detects your K1C platform
-- Downloads the correct MIPS binary
 - Stops GuppyScreen (or whatever screen UI is running)
 - Installs to `/usr/data/helixscreen/`
 - Creates the boot service (`/etc/init.d/S99helixscreen`)
@@ -123,7 +139,13 @@ If you have Fluidd or Mainsail installed, HelixScreen appears in the update mana
 ### From SSH
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --update
+# On your computer (replace vX.Y.Z with actual version):
+VERSION=vX.Y.Z
+wget "https://github.com/prestonbrown/helixscreen/releases/download/${VERSION}/helixscreen-k1-${VERSION}.tar.gz"
+scp helixscreen-k1-${VERSION}.tar.gz root@<PRINTER_IP>:/usr/data/
+
+# On the printer (use the bundled install.sh - no need to download it again):
+/usr/data/helixscreen/install.sh --local /usr/data/helixscreen-k1-*.tar.gz --update
 ```
 
 ---
@@ -131,7 +153,7 @@ curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/script
 ## Uninstalling
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --uninstall
+/usr/data/helixscreen/install.sh --uninstall
 ```
 
 This restores GuppyScreen automatically.
@@ -143,7 +165,7 @@ This restores GuppyScreen automatically.
 | Problem | Fix |
 |---------|-----|
 | Can't SSH in | Make sure root is enabled (Step 1). Password is `creality_2023` |
-| `curl` not found | Use `wget -O - https://...install.sh \| sh` instead |
+| `curl` or SSL error | K1 doesn't support HTTPS downloads. Use the two-step install (Step 4) — download on your computer, then `scp` to the printer |
 | Installer says "Moonraker not found" | Complete Step 3 first — Moonraker must be running |
 | Blank screen after install | Check logs: `cat /tmp/helixscreen.log` |
 | Touch not responding | Reboot: `reboot` |

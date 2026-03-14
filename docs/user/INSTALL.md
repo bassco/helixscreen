@@ -32,12 +32,14 @@ This guide walks you through installing HelixScreen on your 3D printer's touchsc
 >
 > SSH into your Raspberry Pi, BTT CB1/Manta, or similar host. For all-in-one printers (Creality K1, K2 series, Flashforge Adventurer 5M/Pro), SSH directly into the printer itself as root.
 
-**Raspberry Pi (MainsailOS) or Creality K1:**
+**Raspberry Pi (MainsailOS):**
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
 ```
 
 The installer automatically detects your platform and downloads the correct release.
+
+**Creality K1/K1C/K1 Max:** The K1 environment has no SSL library support (like the AD5M), so `curl https://...` won't work. See the [Creality K1 Series](#creality-k1-series) section for the two-step install process, or follow the complete [K1C Setup Guide](guide/creality-k1c-setup.md).
 
 **Flashforge Adventurer 5M:** The easiest option is our [ready-made firmware image](https://github.com/prestonbrown/ff5m) — just flash from a USB drive. For manual installation on existing Forge-X or Klipper Mod setups, see [Flashforge Adventurer 5M Installation](#flashforge-adventurer-5m-installation).
 
@@ -129,9 +131,27 @@ See the **[Creality K1C Setup Guide](guide/creality-k1c-setup.md)** for complete
 
 **Quick version** (if you already have root + Moonraker running):
 
+The K1 series uses BusyBox without SSL library support, so HTTPS downloads don't work directly on the printer (same as the AD5M). Use a two-step process:
+
+**Step 1: Download on your computer**
+
+Go to the [latest release page](https://github.com/prestonbrown/helixscreen/releases/latest) and download:
+- `helixscreen-k1-vX.Y.Z.tar.gz` (the K1 release archive)
+- `install.sh` (the installer script, under "Assets")
+
+Or use the command line (replace `vX.Y.Z` with the actual version):
 ```bash
+VERSION=vX.Y.Z  # Check latest at https://github.com/prestonbrown/helixscreen/releases/latest
+wget "https://github.com/prestonbrown/helixscreen/releases/download/${VERSION}/helixscreen-k1-${VERSION}.tar.gz"
+wget https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh
+```
+
+**Step 2: Copy to your printer and install**
+
+```bash
+scp helixscreen-k1-vX.Y.Z.tar.gz install.sh root@<printer-ip>:/usr/data/
 ssh root@<printer-ip>   # password: creality_2023
-curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
+sh /usr/data/install.sh --local /usr/data/helixscreen-k1-vX.Y.Z.tar.gz
 ```
 
 Installs to `/usr/data/helixscreen/`, boot service at `/etc/init.d/S99helixscreen`.
@@ -743,9 +763,20 @@ If you installed via the installer script, it automatically configures Moonraker
 
 The easiest way to update is using the install script with `--update`:
 
-**Raspberry Pi / Creality K1:**
+**Raspberry Pi:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --update
+```
+
+**Creality K1** (no HTTPS support - two-step process):
+```bash
+# On your computer (replace vX.Y.Z with actual version):
+VERSION=vX.Y.Z  # Check latest at https://github.com/prestonbrown/helixscreen/releases/latest
+wget "https://github.com/prestonbrown/helixscreen/releases/download/${VERSION}/helixscreen-k1-${VERSION}.tar.gz"
+scp helixscreen-k1-${VERSION}.tar.gz root@<printer-ip>:/usr/data/
+
+# On the printer (use the bundled install.sh - no need to download it again):
+/usr/data/helixscreen/install.sh --local /usr/data/helixscreen-k1-*.tar.gz --update
 ```
 
 **Flashforge Adventurer 5M** (no HTTPS support - two-step process):
@@ -767,12 +798,12 @@ This preserves your configuration and updates to the latest version.
 
 ### Update to Specific Version
 
-**Raspberry Pi / Creality K1:**
+**Raspberry Pi:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --update --version v1.2.0
 ```
 
-**Flashforge Adventurer 5M:** Download the specific version tarball from [GitHub Releases](https://github.com/prestonbrown/helixscreen/releases), then use `--local` as shown above.
+**Creality K1 / Flashforge Adventurer 5M:** Download the specific version tarball from [GitHub Releases](https://github.com/prestonbrown/helixscreen/releases), then use `--local` as shown above.
 
 ### Preserving Configuration
 
@@ -818,9 +849,14 @@ sudo systemctl restart moonraker
 
 The install script with `--uninstall` removes HelixScreen and **restores your previous UI** (GuppyScreen, KlipperScreen, etc.):
 
-**Raspberry Pi / Creality K1:**
+**Raspberry Pi:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --uninstall
+```
+
+**Creality K1** (use the bundled install.sh):
+```bash
+/usr/data/helixscreen/install.sh --uninstall
 ```
 
 **Flashforge Adventurer 5M** (use the bundled install.sh):
