@@ -50,8 +50,68 @@ std::string MoonrakerConfigManager::add_section(const std::string& content,
 
 std::string MoonrakerConfigManager::remove_section(
     const std::string& content, const std::string& section_name) {
-    // Stub — implemented in Task 3
-    return content;
+    if (!has_section(content, section_name)) return content;
+
+    const std::string target = "[" + section_name + "]";
+    std::istringstream stream(content);
+    std::string line;
+
+    // Lines before target section (excluding its preceding comment block)
+    std::vector<std::string> result_lines;
+    // Pending lines that may be a comment block just before the target section
+    std::vector<std::string> pending_comment;
+    bool in_target = false;
+
+    while (std::getline(stream, line)) {
+        std::string t = trim(line);
+
+        if (in_target) {
+            // Skip lines until the next section header
+            if (!t.empty() && t[0] == '[') {
+                in_target = false;
+                // Start collecting this new section
+                pending_comment.clear();
+                result_lines.push_back(line);
+            }
+            // else: skip this line (it belongs to the removed section)
+            continue;
+        }
+
+        // Detect target section header
+        if (t == target) {
+            in_target = true;
+            // Discard any pending comment block that preceded this section
+            pending_comment.clear();
+            continue;
+        }
+
+        // Track comment lines as potentially belonging to the next section
+        if (t.empty() || t[0] == '#') {
+            pending_comment.push_back(line);
+        } else {
+            // Non-comment, non-target line: flush pending comments into result
+            for (const auto& cl : pending_comment) result_lines.push_back(cl);
+            pending_comment.clear();
+            result_lines.push_back(line);
+        }
+    }
+
+    // If we never entered the target, just flush pending (shouldn't happen due to has_section check)
+    if (!in_target) {
+        for (const auto& cl : pending_comment) result_lines.push_back(cl);
+    }
+    // If we ended inside the target, discard pending_comment (already cleared when entering target)
+
+    // Build result string, stripping trailing blank lines
+    while (!result_lines.empty() && trim(result_lines.back()).empty()) {
+        result_lines.pop_back();
+    }
+
+    std::string result;
+    for (const auto& l : result_lines) {
+        result += l + "\n";
+    }
+    return result;
 }
 
 bool MoonrakerConfigManager::has_include_line(const std::string& moonraker_content) {
