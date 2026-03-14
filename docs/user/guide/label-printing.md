@@ -6,13 +6,14 @@ Print spool labels directly from HelixScreen to a compatible thermal label print
 
 ## Supported Printers
 
-HelixScreen supports three families of label printers:
+HelixScreen supports four families of label printers:
 
 | Brand | Connection | Models |
 |-------|------------|--------|
 | **Brother QL** | Network (TCP) or Bluetooth | QL-820NWB, QL-810W, QL-800, PT-*, TD-*, RJ-* |
 | **Phomemo** | USB or Bluetooth | M110, M120, M02, Q199, and other M*/Q* series |
 | **Niimbot** | Bluetooth only | B21, D11, D110 |
+| **MakeID** | Bluetooth only | E1, L1, M1 *(beta — ready for testing)* |
 
 > **Note:** Bluetooth label printing requires a Bluetooth adapter on your HelixScreen device (Raspberry Pi 4/5 have built-in Bluetooth). Devices without Bluetooth hardware will only see Network and USB options. If Bluetooth is disabled for UART, see the [Bluetooth Setup Guide](bluetooth-setup.md).
 
@@ -65,6 +66,8 @@ Select the label size that matches your loaded label roll:
 **Niimbot B21 sizes:** 50x30mm, 40x30mm, 50x50mm, 40x20mm, 50x80mm (203 DPI)
 
 **Niimbot D11/D110 sizes:** 12x40mm, 12x22mm, 12x30mm, 12x50mm, 12x60mm, 12x70mm (203 DPI)
+
+**MakeID E1 sizes:** 9x30mm, 12x30mm, 12x40mm, 16x30mm, 16x40mm (203 DPI)
 
 > **Tip:** The size list updates automatically based on the detected printer model. A Niimbot D11 shows different sizes than a B21.
 
@@ -126,6 +129,13 @@ A toast notification confirms success or shows an error message.
 
 - The first print after connecting takes a few extra seconds — HelixScreen needs to initialize the BLE connection and warm up the printer's thermal subsystem
 - Subsequent prints are faster because the connection stays alive between jobs
+
+### MakeID printer not working (beta)
+
+- MakeID support is in beta — if you have issues, please report them so we can improve it
+- Make sure no other app (like the MakeID phone app) is connected to the printer
+- MakeID printers use BLE, so the same Bluetooth requirements as Niimbot apply
+- Power cycle the printer and try again if the first attempt fails
 
 ---
 
