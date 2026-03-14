@@ -758,7 +758,15 @@ void SpoolmanOverlay::on_change_clicked(lv_event_t* /*e*/) {
 
 void SpoolmanOverlay::on_cancel_setup_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SpoolmanOverlay] on_cancel_setup_clicked");
-    NavigationManager::instance().go_back();
+
+    // Restore default visibility — let the subject bindings take over again
+    auto& overlay = get_spoolman_overlay();
+    if (overlay.setup_card_)
+        lv_obj_add_flag(overlay.setup_card_, LV_OBJ_FLAG_HIDDEN);
+    if (overlay.status_card_)
+        lv_obj_remove_flag(overlay.status_card_, LV_OBJ_FLAG_HIDDEN);
+    overlay.set_setup_status("");
+
     LVGL_SAFE_EVENT_CB_END();
 }
 
