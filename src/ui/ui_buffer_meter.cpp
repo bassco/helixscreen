@@ -55,11 +55,15 @@ UiBufferMeter::UiBufferMeter(lv_obj_t* parent) {
 }
 
 UiBufferMeter::~UiBufferMeter() {
-    // Remove SIZE_CHANGED callback to prevent dangling this pointer
+    // Remove callbacks to prevent dangling this pointer after C++ object destruction.
+    // The LVGL objects (canvas_obj_, labels) are children of root_ and may outlive
+    // this C++ object if root_ isn't deleted at the same time (e.g. detach patterns).
+    if (canvas_obj_) {
+        lv_obj_remove_event_cb_with_user_data(canvas_obj_, on_draw, this);
+    }
     if (root_) {
         lv_obj_remove_event_cb_with_user_data(root_, on_size_changed, this);
     }
-    // Labels and canvas_obj_ are children of root_ — LVGL handles cleanup
 }
 
 void UiBufferMeter::set_bias(float bias) {
