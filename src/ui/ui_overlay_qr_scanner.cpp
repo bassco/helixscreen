@@ -313,9 +313,13 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
 
     // Display the frame on the UI thread, then release it.
     // frame pointer stays valid until frame_consumed() is called.
+    // Must also check scan_active_ — if stop_scanning() ran between queueing
+    // and execution, camera_->stop() already freed the frame buffer.
+    // The alive_ check alone is insufficient because alive_ isn't set false
+    // until on_deactivate() (up to 500ms after stop_scanning frees buffers).
     auto weak = std::weak_ptr<bool>(alive_);
     helix::ui::queue_update([this, weak, frame]() {
-        if (auto alive = weak.lock(); alive && *alive) {
+        if (auto alive = weak.lock(); alive && *alive && scan_active_.load()) {
             if (viewfinder_) {
                 lv_image_set_src(viewfinder_, frame);
             }
