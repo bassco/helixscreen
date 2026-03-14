@@ -6,6 +6,7 @@
 #include <string>
 
 #include "../catch_amalgamated.hpp"
+#include "moonraker_config_manager.h"
 
 // ============================================================================
 // has_timelapse_section
@@ -153,4 +154,43 @@ TEST_CASE("append_timelapse_config: result is valid with has_timelapse_section",
     // After appending, it should
     std::string result = TimelapseInstallOverlay::append_timelapse_config(config);
     REQUIRE(TimelapseInstallOverlay::has_timelapse_section(result) == true);
+}
+
+TEST_CASE("MoonrakerConfigManager produces valid timelapse config", "[timelapse][config_manager]") {
+    std::string content = "";
+    auto result = helix::MoonrakerConfigManager::add_section(
+        content, "timelapse", {}, "Timelapse - added by HelixScreen");
+    result = helix::MoonrakerConfigManager::add_section(
+        result, "update_manager timelapse",
+        {{"type", "git_repo"},
+         {"primary_branch", "main"},
+         {"path", "~/moonraker-timelapse"},
+         {"origin", "https://github.com/mainsail-crew/moonraker-timelapse.git"},
+         {"managed_services", "klipper moonraker"}});
+
+    REQUIRE(helix::MoonrakerConfigManager::has_section(result, "timelapse") == true);
+    REQUIRE(helix::MoonrakerConfigManager::has_section(result, "update_manager timelapse") == true);
+    REQUIRE(result.find("type: git_repo") != std::string::npos);
+    REQUIRE(result.find("path: ~/moonraker-timelapse") != std::string::npos);
+    REQUIRE(result.find("# Timelapse - added by HelixScreen") != std::string::npos);
+}
+
+TEST_CASE("Timelapse config can coexist with spoolman config", "[timelapse][config_manager]") {
+    std::string content = "";
+    content = helix::MoonrakerConfigManager::add_section(
+        content, "spoolman", {{"server", "http://1.2.3.4:7912"}}, "Spoolman");
+    content = helix::MoonrakerConfigManager::add_section(
+        content, "timelapse", {}, "Timelapse");
+    content = helix::MoonrakerConfigManager::add_section(
+        content, "update_manager timelapse",
+        {{"type", "git_repo"}, {"path", "~/moonraker-timelapse"}});
+
+    REQUIRE(helix::MoonrakerConfigManager::has_section(content, "spoolman") == true);
+    REQUIRE(helix::MoonrakerConfigManager::has_section(content, "timelapse") == true);
+    REQUIRE(helix::MoonrakerConfigManager::has_section(content, "update_manager timelapse") == true);
+
+    auto without_spoolman = helix::MoonrakerConfigManager::remove_section(content, "spoolman");
+    REQUIRE(helix::MoonrakerConfigManager::has_section(without_spoolman, "spoolman") == false);
+    REQUIRE(helix::MoonrakerConfigManager::has_section(without_spoolman, "timelapse") == true);
+    REQUIRE(helix::MoonrakerConfigManager::has_section(without_spoolman, "update_manager timelapse") == true);
 }

@@ -14,6 +14,7 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "moonraker_config_manager.h"
 #include "moonraker_types.h"
 #include "static_panel_registry.h"
 
@@ -369,15 +370,16 @@ void TimelapseInstallOverlay::download_and_modify_config() {
 
     auto alive = alive_guard_;
 
-    // Download moonraker.conf
+    // Download moonraker.conf — check for existing [timelapse] section (migration: leave it alone)
     api_->transfers().download_file(
         "config", "moonraker.conf",
-        [this, alive](const std::string& content) {
+        [this, alive](const std::string& moonraker_content) {
             if (!alive || !*alive || !wizard_active_)
                 return;
 
-            // Check if [timelapse] section already exists (pure computation, safe on bg thread)
-            if (has_timelapse_section(content)) {
+            // If [timelapse] already exists in moonraker.conf, config is done
+            if (has_timelapse_section(moonraker_content) ||
+                helix::MoonrakerConfigManager::has_section(moonraker_content, "timelapse")) {
                 spdlog::info("[{}] moonraker.conf already has [timelapse] section", get_name());
                 helix::ui::queue_update([this, alive]() {
                     if (!alive || !*alive || !wizard_active_)
@@ -388,35 +390,46 @@ void TimelapseInstallOverlay::download_and_modify_config() {
                 return;
             }
 
-            // Append timelapse configuration (pure computation, safe on bg thread)
-            std::string modified = append_timelapse_config(content);
-
-            // Upload modified config (API call, fine on bg thread)
-            api_->transfers().upload_file(
-                "config", "moonraker.conf", modified,
-                [this, alive]() {
-                    if (!alive || !*alive || !wizard_active_)
+            // Download helixscreen.conf to add our timelapse config there
+            auto alive2 = alive;
+            api_->transfers().download_file(
+                "config", "helixscreen.conf",
+                [this, alive2, moonraker_content](const std::string& helix_content) {
+                    if (!alive2 || !*alive2 || !wizard_active_)
                         return;
-                    spdlog::info("[{}] moonraker.conf updated successfully", get_name());
-                    helix::ui::queue_update([this, alive]() {
-                        if (!alive || !*alive || !wizard_active_)
-                            return;
-                        set_status(lv_tr("Configuration added successfully."));
-                        step_restart_moonraker();
-                    });
+                    // Check if helixscreen.conf already has [timelapse]
+                    if (helix::MoonrakerConfigManager::has_section(helix_content, "timelapse")) {
+                        spdlog::info("[{}] helixscreen.conf already has [timelapse] section",
+                                     get_name());
+                        helix::ui::queue_update([this, alive2, moonraker_content]() {
+                            if (!alive2 || !*alive2 || !wizard_active_)
+                                return;
+                            set_status(lv_tr("Configuration already present."));
+                            step_restart_moonraker();
+                        });
+                        return;
+                    }
+                    write_timelapse_config(helix_content, moonraker_content);
                 },
-                [this, alive](const MoonrakerError& err) {
-                    if (!alive || !*alive || !wizard_active_)
+                [this, alive2, moonraker_content](const MoonrakerError& err) {
+                    if (!alive2 || !*alive2 || !wizard_active_)
                         return;
-                    spdlog::error("[{}] Failed to upload config: {}", get_name(), err.message);
-                    helix::ui::queue_update([this, alive]() {
-                        if (!alive || !*alive || !wizard_active_)
-                            return;
-                        set_status(
-                            lv_tr("Failed to update configuration.\nCheck printer connection."));
-                        show_action_button(lv_tr("Retry"),
-                                           [this]() { download_and_modify_config(); });
-                    });
+                    if (err.type == MoonrakerErrorType::FILE_NOT_FOUND) {
+                        // helixscreen.conf doesn't exist yet — start fresh
+                        spdlog::info("[{}] helixscreen.conf not found, creating new", get_name());
+                        write_timelapse_config("", moonraker_content);
+                    } else {
+                        spdlog::error("[{}] Failed to download helixscreen.conf: {}", get_name(),
+                                      err.message);
+                        helix::ui::queue_update([this, alive2]() {
+                            if (!alive2 || !*alive2 || !wizard_active_)
+                                return;
+                            set_status(lv_tr(
+                                "Failed to download helixscreen.conf.\nCheck printer connection."));
+                            show_action_button(lv_tr("Retry"),
+                                               [this]() { download_and_modify_config(); });
+                        });
+                    }
                 });
         },
         [this, alive](const MoonrakerError& err) {
@@ -427,6 +440,87 @@ void TimelapseInstallOverlay::download_and_modify_config() {
                 if (!alive || !*alive || !wizard_active_)
                     return;
                 set_status(lv_tr("Failed to download moonraker.conf.\nCheck printer connection."));
+                show_action_button(lv_tr("Retry"), [this]() { download_and_modify_config(); });
+            });
+        });
+}
+
+void TimelapseInstallOverlay::write_timelapse_config(const std::string& helix_content,
+                                                     const std::string& moonraker_content) {
+    // Add [timelapse] and [update_manager timelapse] sections to helixscreen.conf
+    std::string new_helix = helix::MoonrakerConfigManager::add_section(
+        helix_content, "timelapse", {}, "Timelapse - added by HelixScreen");
+    new_helix = helix::MoonrakerConfigManager::add_section(
+        new_helix, "update_manager timelapse",
+        {{"type", "git_repo"},
+         {"primary_branch", "main"},
+         {"path", "~/moonraker-timelapse"},
+         {"origin", "https://github.com/mainsail-crew/moonraker-timelapse.git"},
+         {"managed_services", "klipper moonraker"}});
+
+    auto alive = alive_guard_;
+
+    // Upload helixscreen.conf
+    api_->transfers().upload_file(
+        "config", "helixscreen.conf", new_helix,
+        [this, alive, moonraker_content]() {
+            if (!alive || !*alive || !wizard_active_)
+                return;
+            spdlog::info("[{}] helixscreen.conf updated with timelapse config", get_name());
+
+            // Ensure [include helixscreen.conf] is in moonraker.conf
+            if (helix::MoonrakerConfigManager::has_include_line(moonraker_content)) {
+                spdlog::info("[{}] moonraker.conf already has include line", get_name());
+                helix::ui::queue_update([this, alive]() {
+                    if (!alive || !*alive || !wizard_active_)
+                        return;
+                    set_status(lv_tr("Configuration added successfully."));
+                    step_restart_moonraker();
+                });
+                return;
+            }
+
+            // Add include line and upload moonraker.conf
+            std::string updated_moonraker =
+                helix::MoonrakerConfigManager::add_include_line(moonraker_content);
+            auto alive2 = alive;
+            api_->transfers().upload_file(
+                "config", "moonraker.conf", updated_moonraker,
+                [this, alive2]() {
+                    if (!alive2 || !*alive2 || !wizard_active_)
+                        return;
+                    spdlog::info("[{}] moonraker.conf updated with include line", get_name());
+                    helix::ui::queue_update([this, alive2]() {
+                        if (!alive2 || !*alive2 || !wizard_active_)
+                            return;
+                        set_status(lv_tr("Configuration added successfully."));
+                        step_restart_moonraker();
+                    });
+                },
+                [this, alive2](const MoonrakerError& err) {
+                    if (!alive2 || !*alive2 || !wizard_active_)
+                        return;
+                    spdlog::error("[{}] Failed to upload moonraker.conf: {}", get_name(),
+                                  err.message);
+                    helix::ui::queue_update([this, alive2]() {
+                        if (!alive2 || !*alive2 || !wizard_active_)
+                            return;
+                        set_status(
+                            lv_tr("Failed to update moonraker.conf.\nCheck printer connection."));
+                        show_action_button(lv_tr("Retry"),
+                                           [this]() { download_and_modify_config(); });
+                    });
+                });
+        },
+        [this, alive](const MoonrakerError& err) {
+            if (!alive || !*alive || !wizard_active_)
+                return;
+            spdlog::error("[{}] Failed to upload helixscreen.conf: {}", get_name(), err.message);
+            helix::ui::queue_update([this, alive]() {
+                if (!alive || !*alive || !wizard_active_)
+                    return;
+                set_status(
+                    lv_tr("Failed to update configuration.\nCheck printer connection."));
                 show_action_button(lv_tr("Retry"), [this]() { download_and_modify_config(); });
             });
         });

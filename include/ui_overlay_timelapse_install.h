@@ -95,6 +95,8 @@ class TimelapseInstallOverlay : public OverlayBase {
 
     // Config file modification (private: requires API)
     void download_and_modify_config();
+    void write_timelapse_config(const std::string& helix_content,
+                                const std::string& moonraker_content);
 
     // Static event callbacks
     static void on_action_clicked(lv_event_t* e);
