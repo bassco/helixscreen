@@ -24,8 +24,11 @@ _INSTALL_PATHS = [
 def find_install_dir() -> Optional[Path]:
     """Find the actual HelixScreen install directory."""
     for path in _INSTALL_PATHS:
-        if path.exists() and path.joinpath("helix-screen").exists():
-            return path
+        try:
+            if path.exists() and path.joinpath("helix-screen").exists():
+                return path
+        except PermissionError:
+            continue
     # Also scan /home/*/helixscreen
     home = Path("/home")
     if home.is_dir():
