@@ -33,6 +33,20 @@ void LabelBitmap::blit(const LabelBitmap& src, int dst_x, int dst_y) {
     }
 }
 
+LabelBitmap LabelBitmap::rotate_90_cw() const {
+    // 90° CW: src(x, y) → dst(height-1-y, x)
+    // New dimensions: width=height_, height=width_
+    LabelBitmap dst(height_, width_);
+    for (int y = 0; y < height_; y++) {
+        for (int x = 0; x < width_; x++) {
+            if (get_pixel(x, y)) {
+                dst.set_pixel(height_ - 1 - y, x, true);
+            }
+        }
+    }
+    return dst;
+}
+
 LabelBitmap generate_qr_bitmap(const std::string& data, int target_size_px) {
     if (data.empty() || target_size_px <= 0) {
         spdlog::warn("[LabelBitmap] generate_qr_bitmap: invalid parameters");

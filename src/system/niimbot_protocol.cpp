@@ -2,6 +2,8 @@
 
 #include "niimbot_protocol.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <cstring>
 
@@ -116,13 +118,16 @@ NiimbotPrintJob niimbot_build_print_job(const LabelBitmap& bitmap, const LabelSi
     job.packets.push_back(niimbot_build_packet(NiimbotCmd::SetLabelType,
                                                 static_cast<uint8_t>(label_type)));
 
-    // 3. PrintStart (1 byte: 0x01)
+    // 3. PrintStart
     job.packets.push_back(niimbot_build_packet(NiimbotCmd::PrintStart, uint8_t(0x01)));
 
-    // 4. PageStart (empty payload)
-    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PageStart, nullptr, 0));
+    // 4. PrintClear (required by D110 before PageStart)
+    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PrintClear, uint8_t(0x01)));
 
-    // 5. SetPageSize (4-byte: height u16be, width u16be)
+    // 5. PageStart (payload 0x01 for D110)
+    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PageStart, uint8_t(0x01)));
+
+    // 6. SetPageSize (4-byte: height_u16be, width_u16be)
     {
         uint8_t page_size[4];
         page_size[0] = static_cast<uint8_t>((height_px >> 8) & 0xFF);
@@ -132,7 +137,16 @@ NiimbotPrintJob niimbot_build_print_job(const LabelBitmap& bitmap, const LabelSi
         job.packets.push_back(niimbot_build_packet(NiimbotCmd::SetPageSize, page_size, 4));
     }
 
-    // 6. Image rows — pad each row to printhead width if needed
+    // 7. SetPrintQuantity (1 copy — D110 requires this to avoid double-printing)
+    {
+        uint8_t qty[2] = {0x00, 0x01};
+        job.packets.push_back(niimbot_build_packet(NiimbotCmd::SetQuantity, qty, 2));
+    }
+
+    spdlog::info("Niimbot job: bitmap {}x{}, bytes_per_row={}, printhead_bytes={}, density={}",
+                 width_px, height_px, bytes_per_row, printhead_bytes, density);
+
+    // 8. Image rows — pad each row to printhead width if needed
     int bmp_row_bytes = bitmap.row_byte_width();
     std::vector<uint8_t> padded_row(bytes_per_row, 0x00);
 
@@ -172,12 +186,13 @@ NiimbotPrintJob niimbot_build_print_job(const LabelBitmap& bitmap, const LabelSi
                 blank_count++;
             }
 
-            // PrintEmptyRow with repeat count (u16 big-endian)
-            uint8_t empty_data[2] = {
-                static_cast<uint8_t>((blank_count >> 8) & 0xFF),
-                static_cast<uint8_t>(blank_count & 0xFF)
+            // PrintEmptyRow: [row_hi, row_lo, repeat]
+            uint8_t empty_data[3] = {
+                static_cast<uint8_t>((row >> 8) & 0xFF),
+                static_cast<uint8_t>(row & 0xFF),
+                static_cast<uint8_t>(blank_count)
             };
-            job.packets.push_back(niimbot_build_packet(NiimbotCmd::PrintEmptyRow, empty_data, 2));
+            job.packets.push_back(niimbot_build_packet(NiimbotCmd::PrintEmptyRow, empty_data, 3));
             row += blank_count;
         } else {
             // Copy current row for stable comparison (get_row reuses padded_row buffer)
@@ -200,11 +215,12 @@ NiimbotPrintJob niimbot_build_print_job(const LabelBitmap& bitmap, const LabelSi
 
     job.total_rows = height_px;
 
-    // 7. PageEnd
-    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PageEnd, nullptr, 0));
+    // PageEnd (payload 0x01 for D110)
+    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PageEnd, uint8_t(0x01)));
 
-    // 8. PrintEnd
-    job.packets.push_back(niimbot_build_packet(NiimbotCmd::PrintEnd, uint8_t(0x01)));
+    // NOTE: PrintEnd is NOT included in the packet list.
+    // It must be sent AFTER polling PrintStatus confirms the page is complete.
+    // See niimbot_bt_printer.cpp for the post-loop PrintEnd handling.
 
     return job;
 }
@@ -222,11 +238,15 @@ std::vector<LabelSize> niimbot_b21_sizes() {
 
 std::vector<LabelSize> niimbot_d11_sizes() {
     // D11/D110: 96px (12mm) wide printhead, 203 DPI
+    // All labels are 12mm wide; common lengths vary by label stock
+    // 12x40mm is the default stock that ships with the printer
     return {
-        {"15x30mm", 96, 231, 203, 0x01, 15, 30},
         {"12x40mm", 96, 307, 203, 0x01, 12, 40},
+        {"12x22mm", 96, 169, 203, 0x01, 12, 22},
         {"12x30mm", 96, 231, 203, 0x01, 12, 30},
-        {"15x50mm", 96, 384, 203, 0x01, 15, 50},
+        {"12x50mm", 96, 384, 203, 0x01, 12, 50},
+        {"12x60mm", 96, 461, 203, 0x01, 12, 60},
+        {"12x70mm", 96, 538, 203, 0x01, 12, 70},
     };
 }
 

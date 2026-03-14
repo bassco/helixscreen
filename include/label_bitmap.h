@@ -71,6 +71,9 @@ class LabelBitmap {
     /// Composite src bitmap onto this bitmap at (dst_x, dst_y), clipping at boundaries
     void blit(const LabelBitmap& src, int dst_x, int dst_y);
 
+    /// Rotate 90° clockwise: (x,y) → (height-1-y, x). Returns new bitmap.
+    [[nodiscard]] LabelBitmap rotate_90_cw() const;
+
     /// Factory method (dpi parameter stored for metadata but doesn't affect pixel storage)
     static LabelBitmap create(int width, int height, int /*dpi*/ = 300) {
         return LabelBitmap(width, height);

@@ -60,6 +60,7 @@ MDI_ICONS+=",0xF009A"    # bell (notifications)
 MDI_ICONS+=",0xF00AD"    # block-helper (prohibited)
 MDI_ICONS+=",0xF00E4"    # bug (debug bundle)
 MDI_ICONS+=",0xF00AF"    # bluetooth
+MDI_ICONS+=",0xF00B1"    # bluetooth-connect
 MDI_ICONS+=",0xF0B5C"    # backspace-outline
 MDI_ICONS+=",0xF05DA"    # book-open-page-variant (documentation)
 MDI_ICONS+=",0xF0625"    # help-circle-outline (help & support)

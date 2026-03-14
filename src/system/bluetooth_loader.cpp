@@ -115,9 +115,11 @@ bool BluetoothLoader::try_load() {
     stop_discovery = reinterpret_cast<helix_bt_stop_discovery_fn>(resolve(HELIX_BT_SYM_STOP_DISCOVERY));
     pair           = reinterpret_cast<helix_bt_pair_fn>(resolve(HELIX_BT_SYM_PAIR));
     is_paired      = reinterpret_cast<helix_bt_is_paired_fn>(resolve(HELIX_BT_SYM_IS_PAIRED));
+    is_connected   = reinterpret_cast<helix_bt_is_connected_fn>(resolve(HELIX_BT_SYM_IS_CONNECTED));
     connect_rfcomm = reinterpret_cast<helix_bt_connect_rfcomm_fn>(resolve(HELIX_BT_SYM_CONNECT_RFCOMM));
     connect_ble    = reinterpret_cast<helix_bt_connect_ble_fn>(resolve(HELIX_BT_SYM_CONNECT_BLE));
     ble_write      = reinterpret_cast<helix_bt_ble_write_fn>(resolve(HELIX_BT_SYM_BLE_WRITE));
+    ble_read       = reinterpret_cast<helix_bt_ble_read_fn>(resolve(HELIX_BT_SYM_BLE_READ));
     disconnect     = reinterpret_cast<helix_bt_disconnect_fn>(resolve(HELIX_BT_SYM_DISCONNECT));
     last_error     = reinterpret_cast<helix_bt_last_error_fn>(resolve(HELIX_BT_SYM_LAST_ERROR));
 

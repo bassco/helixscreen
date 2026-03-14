@@ -44,6 +44,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void handle_usb_printer_selected(int index);
     void handle_bt_printer_selected(int index);
     void handle_bt_scan();
+    void handle_bt_connect();
 
   private:
     void init_address_input();
@@ -80,6 +81,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
         std::string mac;
         std::string name;
         bool paired = false;
+        bool connected = false;
         bool is_ble = false;
     };
 
@@ -105,6 +107,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     static void on_usb_printer_selected(lv_event_t* e);
     static void on_bt_printer_selected(lv_event_t* e);
     static void on_bt_scan(lv_event_t* e);
+    static void on_bt_connect(lv_event_t* e);
 
     // Pairing modal callbacks
     static void on_pair_confirm(lv_event_t* e);

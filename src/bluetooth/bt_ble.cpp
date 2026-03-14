@@ -15,6 +15,7 @@
 #include "bt_context.h"
 #include "bluetooth_plugin.h"
 
+#include <poll.h>
 #include <unistd.h>
 
 #include <cerrno>
@@ -206,6 +207,65 @@ static int try_acquire_write(sd_bus* bus, const char* char_path, uint16_t* out_m
     return owned_fd;
 }
 
+/// Try AcquireNotify on a GATT characteristic (BlueZ 5.46+)
+/// Returns fd on success, -1 on failure
+static int try_acquire_notify(sd_bus* bus, const char* char_path)
+{
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    sd_bus_message* reply = nullptr;
+
+    int r = sd_bus_call_method(bus,
+                               "org.bluez",
+                               char_path,
+                               "org.bluez.GattCharacteristic1",
+                               "AcquireNotify",
+                               &error,
+                               &reply,
+                               "a{sv}", 0);  // empty options dict
+    if (r < 0) {
+        fprintf(stderr, "[bt] AcquireNotify failed: %s (falling back to StartNotify)\n",
+                error.message ? error.message : strerror(-r));
+        sd_bus_error_free(&error);
+
+        // Fallback: try StartNotify (older BlueZ / different characteristic flags)
+        error = SD_BUS_ERROR_NULL;
+        r = sd_bus_call_method(bus,
+                               "org.bluez",
+                               char_path,
+                               "org.bluez.GattCharacteristic1",
+                               "StartNotify",
+                               &error,
+                               nullptr,
+                               "");
+        sd_bus_error_free(&error);
+        if (r < 0) {
+            fprintf(stderr, "[bt] StartNotify also failed: %s\n", strerror(-r));
+        } else {
+            fprintf(stderr, "[bt] StartNotify succeeded (no direct fd — use D-Bus signals)\n");
+        }
+        return -1;
+    }
+
+    int fd = -1;
+    uint16_t mtu = 20;
+    r = sd_bus_message_read(reply, "hq", &fd, &mtu);
+    if (r < 0) {
+        sd_bus_message_unref(reply);
+        sd_bus_error_free(&error);
+        return -1;
+    }
+
+    // fd from sd-bus is borrowed — dup it to own it
+    int owned_fd = dup(fd);
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+
+    if (owned_fd < 0) return -1;
+
+    fprintf(stderr, "[bt] AcquireNotify succeeded (fd=%d, mtu=%u)\n", owned_fd, mtu);
+    return owned_fd;
+}
+
 /// Read MTU property from the device (fallback value if not available)
 static uint16_t read_mtu(sd_bus* bus, const char* device_path)
 {
@@ -298,6 +358,9 @@ extern "C" int helix_bt_connect_ble(helix_bt_context* ctx, const char* mac,
         fprintf(stderr, "[bt] AcquireWrite unavailable, using WriteValue (mtu=%u)\n", mtu);
     }
 
+    // Try AcquireNotify for read capability (same characteristic may support notify)
+    int notify_fd = try_acquire_notify(ctx->bus, char_path.c_str());
+
     // Store the connection
     std::lock_guard<std::mutex> lock(ctx->ble_mutex);
     int index = static_cast<int>(ctx->ble_connections.size());
@@ -306,13 +369,14 @@ extern "C" int helix_bt_connect_ble(helix_bt_context* ctx, const char* mac,
     conn.device_path = device_path;
     conn.char_path = char_path;
     conn.acquired_fd = acquired_fd;
+    conn.notify_fd = notify_fd;
     conn.mtu = mtu;
     conn.active = true;
     ctx->ble_connections.push_back(std::move(conn));
 
     int handle = BLE_HANDLE_OFFSET + index;
-    fprintf(stderr, "[bt] BLE connected to %s (handle=%d, fd=%d, mtu=%u)\n",
-            mac, handle, acquired_fd, mtu);
+    fprintf(stderr, "[bt] BLE connected to %s (handle=%d, write_fd=%d, notify_fd=%d, mtu=%u)\n",
+            mac, handle, acquired_fd, notify_fd, mtu);
     return handle;
 }
 
@@ -443,6 +507,62 @@ extern "C" int helix_bt_ble_write(helix_bt_context* ctx, int handle,
 }
 
 // ---------------------------------------------------------------------------
+// Public API: BLE Read (from notify fd)
+// ---------------------------------------------------------------------------
+
+extern "C" int helix_bt_ble_read(helix_bt_context* ctx, int handle,
+                                   uint8_t* buf, int buf_len, int timeout_ms)
+{
+    if (!ctx) return -EINVAL;
+    if (!buf || buf_len <= 0) return -EINVAL;
+    if (handle < BLE_HANDLE_OFFSET) return -EINVAL;
+
+    int index = handle - BLE_HANDLE_OFFSET;
+
+    std::lock_guard<std::mutex> lock(ctx->ble_mutex);
+    if (index < 0 || index >= static_cast<int>(ctx->ble_connections.size())) {
+        return -EINVAL;
+    }
+
+    auto& conn = ctx->ble_connections[static_cast<size_t>(index)];
+    if (!conn.active) return -ENOTCONN;
+    if (conn.notify_fd < 0) {
+        fprintf(stderr, "[bt] BLE read: no notify fd available\n");
+        return -ENOTSUP;
+    }
+
+    struct pollfd pfd;
+    pfd.fd = conn.notify_fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
+    int ret = poll(&pfd, 1, timeout_ms);
+    if (ret < 0) {
+        int err = errno;
+        fprintf(stderr, "[bt] BLE read poll failed: %s\n", strerror(err));
+        return -err;
+    }
+    if (ret == 0) {
+        // Timeout — no data available
+        return 0;
+    }
+
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        fprintf(stderr, "[bt] BLE read: poll error on notify fd (revents=0x%x)\n", pfd.revents);
+        return -EIO;
+    }
+
+    ssize_t n = read(conn.notify_fd, buf, static_cast<size_t>(buf_len));
+    if (n < 0) {
+        int err = errno;
+        fprintf(stderr, "[bt] BLE read failed: %s\n", strerror(err));
+        return -err;
+    }
+
+    return static_cast<int>(n);
+}
+
+// ---------------------------------------------------------------------------
 // Public API: Disconnect (unified for RFCOMM and BLE)
 // ---------------------------------------------------------------------------
 
@@ -462,10 +582,14 @@ extern "C" void helix_bt_disconnect(helix_bt_context* ctx, int handle)
         auto& conn = ctx->ble_connections[static_cast<size_t>(index)];
         if (!conn.active) return;
 
-        // Close acquired fd if held
+        // Close acquired fds if held
         if (conn.acquired_fd >= 0) {
             close(conn.acquired_fd);
             conn.acquired_fd = -1;
+        }
+        if (conn.notify_fd >= 0) {
+            close(conn.notify_fd);
+            conn.notify_fd = -1;
         }
 
         // Disconnect the device via D-Bus

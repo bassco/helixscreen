@@ -25,9 +25,11 @@ class BluetoothLoader {
     helix_bt_stop_discovery_fn stop_discovery = nullptr;
     helix_bt_pair_fn pair = nullptr;
     helix_bt_is_paired_fn is_paired = nullptr;
+    helix_bt_is_connected_fn is_connected = nullptr;
     helix_bt_connect_rfcomm_fn connect_rfcomm = nullptr;
     helix_bt_connect_ble_fn connect_ble = nullptr;
     helix_bt_ble_write_fn ble_write = nullptr;
+    helix_bt_ble_read_fn ble_read = nullptr;
     helix_bt_disconnect_fn disconnect = nullptr;
     helix_bt_last_error_fn last_error = nullptr;
 

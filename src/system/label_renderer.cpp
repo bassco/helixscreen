@@ -302,7 +302,85 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
         return label;
     }
 
-    // --- STANDARD / COMPACT: QR left, text right ---
+    // Build text content
+    std::string vendor =
+        to_upper(spool.vendor.empty() ? "UNKNOWN" : spool.vendor);
+    std::string material =
+        to_upper(spool.material.empty() ? "FILAMENT" : spool.material);
+    std::string color = to_upper(spool.color_name);
+
+    // --- NARROW labels (< 150px wide): render landscape, rotate 90° CW ---
+    // Narrow labels like Niimbot D110 (96px wide × 307px tall) have the
+    // printhead along the short edge. Render content in landscape orientation
+    // (height_px wide × width_px tall) with QR left + text right, then rotate
+    // 90° CW so the final bitmap is width_px × height_px for the printer.
+    if (label_width < 150) {
+        int m = 6;  // margin
+        int gap = 8;
+
+        // Landscape dimensions: long edge is width, short edge is height
+        int lw = size.height_px > 0 ? size.height_px : 307;  // landscape width
+        int lh = label_width;  // landscape height (96px for D110)
+
+        // QR: fit to landscape height minus margins
+        int qr_target = lh - 2 * m;
+        auto qr = generate_qr_bitmap(qr_data, qr_target);
+        if (qr.empty()) {
+            spdlog::warn("label_renderer: QR generation failed for spool {}",
+                         spool.id);
+            return LabelBitmap::create(label_width, lw);
+        }
+
+        // Font scale: 96px height gives room for scale 2 (14px line height)
+        int scale = 2;
+        int line_h = FONT_H * scale + 2;
+        int text_x = m + qr.width() + gap;
+        int text_area_width = lw - text_x - m;
+
+        auto label = LabelBitmap::create(lw, lh);
+
+        // QR: left side, vertically centered
+        int qr_x = m;
+        int qr_y = (lh - qr.height()) / 2;
+        label.blit(qr, qr_x, qr_y);
+
+        // Text: right side of QR, slightly lower for visual balance
+        int text_y = m + 4;
+
+        // Line 1: Vendor (large)
+        draw_text(label, truncate_to_fit(vendor, text_area_width, scale),
+                  text_x, text_y, scale);
+        text_y += line_h;
+
+        // Line 2: Material + Color
+        std::string line2 = color.empty() ? material : material + " " + color;
+        draw_text(label, truncate_to_fit(line2, text_area_width, scale),
+                  text_x, text_y, scale);
+        text_y += line_h;
+
+        // Line 3: Weight + Spool ID
+        std::string weight_str =
+            std::to_string(static_cast<int>(spool.remaining_weight_g)) + "G";
+        std::string line3 = weight_str + " #" + std::to_string(spool.id);
+        draw_text(label, truncate_to_fit(line3, text_area_width, scale),
+                  text_x, text_y, scale);
+        text_y += line_h;
+
+        // Line 4: Temps (if fits)
+        if (spool.nozzle_temp_recommended > 0 &&
+            text_y + line_h <= lh - m) {
+            std::string temps = std::to_string(spool.nozzle_temp_recommended) + "C";
+            if (spool.bed_temp_recommended > 0)
+                temps += "/" + std::to_string(spool.bed_temp_recommended) + "C";
+            draw_text(label, truncate_to_fit(temps, text_area_width, scale),
+                      text_x, text_y, scale);
+        }
+
+        // Rotate 90° CW: landscape (lw × lh) → portrait (lh × lw) for printer
+        return label.rotate_90_cw();
+    }
+
+    // --- STANDARD / COMPACT: QR left, text right (wide labels) ---
     int qr_target = (preset == LabelPreset::STANDARD)
                         ? std::min(label_width * 40 / 100, 250)
                         : std::min(label_width * 30 / 100, 200);
@@ -316,13 +394,6 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
     int gap = 16;
     int text_x = margin + qr.width() + gap;
     int text_area_width = label_width - text_x - margin;
-
-    // Build text content
-    std::string vendor =
-        to_upper(spool.vendor.empty() ? "UNKNOWN" : spool.vendor);
-    std::string material =
-        to_upper(spool.material.empty() ? "FILAMENT" : spool.material);
-    std::string color = to_upper(spool.color_name);
 
     // Scale selection based on label width and preset
     int scale_lg, scale_md, scale_sm;

@@ -74,6 +74,9 @@ typedef int (*helix_bt_pair_fn)(helix_bt_context*, const char* mac);
 /// Check if device is paired. Returns 1=paired, 0=not paired, negative=error.
 typedef int (*helix_bt_is_paired_fn)(helix_bt_context*, const char* mac);
 
+/// Check if device is connected. Returns 1=connected, 0=not connected, negative=error.
+typedef int (*helix_bt_is_connected_fn)(helix_bt_context*, const char* mac);
+
 /// Connect via RFCOMM (SPP). Returns fd on success, negative on error.
 typedef int (*helix_bt_connect_rfcomm_fn)(helix_bt_context*, const char* mac, int channel);
 
@@ -85,6 +88,11 @@ typedef int (*helix_bt_connect_ble_fn)(helix_bt_context*, const char* mac,
 /// Returns 0 on success, negative on error.
 typedef int (*helix_bt_ble_write_fn)(helix_bt_context*, int handle,
                                      const uint8_t* data, int len);
+
+/// Read data from BLE GATT notifications. Blocks up to timeout_ms.
+/// Returns bytes read on success, 0 on timeout, negative on error.
+typedef int (*helix_bt_ble_read_fn)(helix_bt_context*, int handle,
+                                     uint8_t* buf, int buf_len, int timeout_ms);
 
 /// Disconnect a connection (RFCOMM fd or BLE handle).
 typedef void (*helix_bt_disconnect_fn)(helix_bt_context*, int handle);
@@ -103,9 +111,11 @@ typedef const char* (*helix_bt_last_error_fn)(helix_bt_context*);
 #define HELIX_BT_SYM_STOP_DISCOVERY "helix_bt_stop_discovery"
 #define HELIX_BT_SYM_PAIR           "helix_bt_pair"
 #define HELIX_BT_SYM_IS_PAIRED      "helix_bt_is_paired"
+#define HELIX_BT_SYM_IS_CONNECTED   "helix_bt_is_connected"
 #define HELIX_BT_SYM_CONNECT_RFCOMM "helix_bt_connect_rfcomm"
 #define HELIX_BT_SYM_CONNECT_BLE    "helix_bt_connect_ble"
 #define HELIX_BT_SYM_BLE_WRITE      "helix_bt_ble_write"
+#define HELIX_BT_SYM_BLE_READ       "helix_bt_ble_read"
 #define HELIX_BT_SYM_DISCONNECT     "helix_bt_disconnect"
 #define HELIX_BT_SYM_LAST_ERROR     "helix_bt_last_error"
 

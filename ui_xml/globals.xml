@@ -420,6 +420,7 @@
     <str name="icon_bell" value="󰂚"/>
     <str name="icon_block_helper" value="󰂭"/>
     <str name="icon_bluetooth" value="󰂯"/>
+    <str name="icon_bluetooth_connect" value="󰂱"/>
     <str name="icon_book" value="󰗚"/>
     <str name="icon_bug" value="󰃤"/>
     <str name="icon_camera_timer" value="󰄉"/>

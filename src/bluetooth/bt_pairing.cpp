@@ -79,14 +79,13 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac)
         return 0;
     }
 
-    // BLE devices often don't support Pair() — fall back to Connect()
-    // which implicitly bonds on BLE devices
-    bool pair_method_missing =
-        sd_bus_error_has_name(&error, "org.freedesktop.DBus.Error.UnknownMethod") ||
-        sd_bus_error_has_name(&error, "org.bluez.Error.NotAvailable");
-
-    if (pair_method_missing) {
-        fprintf(stderr, "[bt] Pair() not available for %s, trying Connect() (BLE)\n", mac);
+    // BLE devices often don't support traditional Pair() — fall back to Connect()
+    // which implicitly bonds on BLE devices. Different BlueZ versions return different
+    // errors (UnknownMethod, NotAvailable, BadMessage, ConnectionTimeout), so try
+    // Connect() on any Pair() failure.
+    {
+        fprintf(stderr, "[bt] Pair() failed for %s (%s), trying Connect() (BLE)\n",
+                mac, error.message ? error.message : strerror(-r));
         sd_bus_error_free(&error);
 
         sd_bus_error error2 = SD_BUS_ERROR_NULL;
@@ -122,16 +121,47 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac)
         sd_bus_error_free(&error2);
         return r;
     }
+}
 
-    // Pair() failed for other reasons
-    fprintf(stderr, "[bt] pair failed for %s: %s\n", mac,
-            error.message ? error.message : strerror(-r));
-    {
+extern "C" int helix_bt_is_connected(helix_bt_context* ctx, const char* mac)
+{
+    if (!ctx) return -EINVAL;
+    if (!mac) {
         std::lock_guard<std::mutex> lock(ctx->mutex);
-        ctx->last_error = error.message ? error.message : "pairing failed";
+        ctx->last_error = "null MAC address";
+        return -EINVAL;
     }
+    if (!ctx->bus) {
+        std::lock_guard<std::mutex> lock(ctx->mutex);
+        ctx->last_error = "bus not initialized";
+        return -ENODEV;
+    }
+
+    std::string path = mac_to_dbus_path(mac);
+
+    sd_bus_error error = SD_BUS_ERROR_NULL;
+    int connected = 0;
+    int r = sd_bus_get_property_trivial(ctx->bus,
+                                         "org.bluez",
+                                         path.c_str(),
+                                         "org.bluez.Device1",
+                                         "Connected",
+                                         &error,
+                                         'b',
+                                         &connected);
+    if (r < 0) {
+        fprintf(stderr, "[bt] is_connected check failed for %s: %s\n", mac,
+                error.message ? error.message : strerror(-r));
+        {
+            std::lock_guard<std::mutex> lock(ctx->mutex);
+            ctx->last_error = error.message ? error.message : "failed to read Connected property";
+        }
+        sd_bus_error_free(&error);
+        return r;
+    }
+
     sd_bus_error_free(&error);
-    return r;
+    return connected ? 1 : 0;
 }
 
 extern "C" int helix_bt_is_paired(helix_bt_context* ctx, const char* mac)

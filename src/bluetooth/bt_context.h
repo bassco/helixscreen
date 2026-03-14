@@ -39,6 +39,7 @@ struct helix_bt_context {
         std::string device_path;
         std::string char_path;
         int acquired_fd = -1;
+        int notify_fd = -1;
         uint16_t mtu = 20;
         bool active = false;
     };

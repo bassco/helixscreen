@@ -67,6 +67,7 @@ static const IconMapping ICON_MAP[] = {
     {"bell",               "\xF3\xB0\x82\x9A"},  // F009A bell/notifications
     {"block_helper",       "\xF3\xB0\x82\xAD"},  // F00AD block-helper/prohibited
     {"bluetooth",          "\xF3\xB0\x82\xAF"},  // F00AF bluetooth
+    {"bluetooth_connect",  "\xF3\xB0\x82\xB1"},  // F00B1 bluetooth-connect
     {"book",               "\xF3\xB0\x97\x9A"},  // F05DA book-open-page-variant (documentation)
     {"bug",                "\xF3\xB0\x83\xA4"},  // F00E4 bug (debug bundle)
 

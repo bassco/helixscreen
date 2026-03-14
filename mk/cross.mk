@@ -1073,10 +1073,10 @@ help-cross:
 
 # Rsync flags for asset sync: delete stale files, checksum-based skip, exclude junk
 DEPLOY_RSYNC_FLAGS := -avz --delete --checksum
-DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='helixconfig*.json' --exclude='.claude-recall' --exclude='._*' \
+DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
 # Tar-compatible excludes (same patterns, different syntax)
-DEPLOY_TAR_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='helixconfig*.json' --exclude='.claude-recall' --exclude='._*' \
+DEPLOY_TAR_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
 DEPLOY_ASSET_DIRS := ui_xml assets config moonraker-plugin
 
@@ -1102,13 +1102,20 @@ define deploy-common
 		$(MAKE) gen-splash-3d; \
 	fi
 	@# Stop running processes and prepare directory
-	@# Stop systemd service first (prevents respawning), then kill any stragglers
-	ssh $(1) "sudo systemctl stop helixscreen 2>/dev/null; systemctl --user stop helix-screen 2>/dev/null; killall helix-watchdog helix-screen helix-splash 2>/dev/null; sleep 0.5; killall -9 helix-watchdog helix-screen helix-splash 2>/dev/null; while pidof helix-screen helix-splash helix-watchdog >/dev/null 2>&1; do sleep 0.2; done; true"
+	@# Stop update watcher first (prevents PathChanged restart during file sync),
+	@# then stop the main service and kill any stragglers
+	ssh $(1) "sudo systemctl stop helixscreen-update.path 2>/dev/null; sudo systemctl stop helixscreen 2>/dev/null; systemctl --user stop helix-screen 2>/dev/null; killall helix-watchdog helix-screen helix-splash 2>/dev/null; sleep 0.5; killall -9 helix-watchdog helix-screen helix-splash 2>/dev/null; while pidof helix-screen helix-splash helix-watchdog >/dev/null 2>&1; do sleep 0.2; done; true"
 	ssh $(1) "mkdir -p $(2)/bin"
 	ssh $(1) "rm -f $(2)/*.xml 2>/dev/null || true"
 	@# Sync binaries and launcher to bin/
 	rsync -avz --progress $(3)/helix-screen $(3)/helix-splash $(1):$(2)/bin/
 	@if [ -f $(3)/helix-watchdog ]; then rsync -avz $(3)/helix-watchdog $(1):$(2)/bin/; fi
+	@# Sync Bluetooth plugin if built (runtime-loaded via dlopen, same dir as binary)
+	@BT_SO_DIR=$$(dirname $(3))"/lib/libhelix-bluetooth.so"; \
+	if [ -f "$$BT_SO_DIR" ]; then \
+		echo "$(DIM)Deploying Bluetooth plugin...$(RESET)"; \
+		rsync -avz "$$BT_SO_DIR" $(1):$(2)/bin/; \
+	fi
 	rsync -avz scripts/helix-launcher.sh $(1):$(2)/bin/
 	@# Sync installer script (needed for auto-updates)
 	rsync -avz scripts/$(INSTALLER_FILENAME) $(1):$(2)/
@@ -1159,8 +1166,10 @@ deploy-pi:
 	@echo "$(GREEN)✓ Deployed to $(PI_HOST):$(PI_DEPLOY_DIR)$(RESET)"
 	@echo "$(CYAN)Restarting helix-screen on $(PI_HOST)...$(RESET)"
 	@# Prefer systemd restart (picks up Environment= vars like HELIX_DISPLAY_BACKEND)
-	@ssh $(PI_SSH_TARGET) "sudo systemctl restart helixscreen 2>/dev/null" \
+	@ssh $(PI_SSH_TARGET) "sudo systemctl start helixscreen 2>/dev/null" \
 		|| ssh $(PI_SSH_TARGET) "cd $(PI_DEPLOY_DIR) && setsid ./bin/helix-launcher.sh </dev/null >/dev/null 2>&1 &"
+	@# Re-arm update watcher (stopped by deploy-common to prevent double restart)
+	@ssh $(PI_SSH_TARGET) "sudo systemctl start helixscreen-update.path 2>/dev/null" || true
 	@echo "$(GREEN)✓ helix-screen restarted$(RESET)"
 	@echo "$(DIM)Logs: ssh $(PI_SSH_TARGET) 'journalctl -u helixscreen -f'$(RESET)"
 

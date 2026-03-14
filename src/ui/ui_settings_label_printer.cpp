@@ -7,8 +7,10 @@
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 
+#include "bt_discovery_utils.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
+#include "niimbot_protocol.h"
 #include "phomemo_printer.h"
 #include "brother_ql_printer.h"
 #include "spoolman_types.h"
@@ -28,6 +30,50 @@
 #include <memory>
 
 namespace helix::settings {
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/// Build dropdown label for a BT device showing paired/connected status.
+static std::string bt_device_label(const std::string& name, bool paired, bool connected) {
+    std::string label = name;
+    if (paired && connected) {
+        label += " (Paired, Connected)";
+    } else if (paired) {
+        label += " (Paired)";
+    }
+    return label;
+}
+
+/// Check BLE connection state for a device via BlueZ D-Bus.
+static bool check_bt_connected(helix_bt_context* ctx, const std::string& mac) {
+    auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    if (!ctx || !loader.is_connected) return false;
+    return loader.is_connected(ctx, mac.c_str()) == 1;
+}
+
+/// Return the correct label sizes for the current printer configuration.
+/// Mirrors the logic in label_printer_utils.cpp print_spool_label().
+static std::vector<helix::LabelSize> get_sizes_for_current_printer() {
+    auto& settings = LabelPrinterSettingsManager::instance();
+    const auto type = settings.get_printer_type();
+
+    if (type == "usb") {
+        return helix::PhomemoPrinter::supported_sizes_static();
+    }
+    if (type == "bluetooth") {
+        const auto bt_name = settings.get_bt_name();
+        if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
+            return BrotherQLPrinter::supported_sizes_static();
+        }
+        if (helix::bluetooth::is_niimbot_printer(bt_name.c_str())) {
+            return helix::label::niimbot_sizes_for_model(bt_name);
+        }
+        return helix::PhomemoPrinter::supported_sizes_static();
+    }
+    return BrotherQLPrinter::supported_sizes_static();
+}
 
 // ============================================================================
 // SINGLETON ACCESSOR
@@ -101,6 +147,7 @@ void LabelPrinterSettingsOverlay::register_callbacks() {
         {"on_lp_usb_printer_selected", on_usb_printer_selected},
         {"on_lp_bt_printer_selected", on_bt_printer_selected},
         {"on_lp_bt_scan", on_bt_scan},
+        {"on_lp_bt_connect", on_bt_connect},
     });
 
     spdlog::debug("[{}] Callbacks registered", get_name());
@@ -245,13 +292,7 @@ void LabelPrinterSettingsOverlay::init_label_size_dropdown() {
     lv_obj_t* dropdown = lv_obj_find_by_name(size_row, "dropdown");
     if (dropdown) {
         auto& settings = LabelPrinterSettingsManager::instance();
-        const auto type = settings.get_printer_type();
-        std::vector<helix::LabelSize> sizes;
-        if (type == "usb" || (type == "bluetooth" && settings.get_bt_transport() == "ble")) {
-            sizes = helix::PhomemoPrinter::supported_sizes_static();
-        } else {
-            sizes = BrotherQLPrinter::supported_sizes_static();
-        }
+        auto sizes = get_sizes_for_current_printer();
 
         std::string options;
         for (size_t i = 0; i < sizes.size(); i++) {
@@ -459,8 +500,9 @@ void LabelPrinterSettingsOverlay::init_printer_type_dropdown() {
 
     lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
     if (dropdown) {
+        const bool bt_available = helix::bluetooth::BluetoothLoader::instance().is_available();
         std::string options;
-        if (helix::bluetooth::BluetoothLoader::instance().is_available()) {
+        if (bt_available) {
             options = fmt::format("{}\n{}\n{}", lv_tr("Network"), lv_tr("USB"), lv_tr("Bluetooth"));
         } else {
             options = fmt::format("{}\n{}", lv_tr("Network"), lv_tr("USB"));
@@ -471,7 +513,12 @@ void LabelPrinterSettingsOverlay::init_printer_type_dropdown() {
         const auto type = settings.get_printer_type();
         int type_idx = 0;
         if (type == "usb") type_idx = 1;
-        else if (type == "bluetooth") type_idx = 2;
+        else if (type == "bluetooth" && bt_available) type_idx = 2;
+        else if (type == "bluetooth" && !bt_available) {
+            spdlog::warn("[{}] Saved type is bluetooth but BT unavailable, falling back to network",
+                         get_name());
+            settings.set_printer_type("network");
+        }
         lv_dropdown_set_selected(dropdown, static_cast<uint32_t>(type_idx));
     }
 }
@@ -659,13 +706,7 @@ void LabelPrinterSettingsOverlay::handle_port_changed() {
 
 void LabelPrinterSettingsOverlay::handle_label_size_changed(int index) {
     auto& settings = LabelPrinterSettingsManager::instance();
-    const auto type = settings.get_printer_type();
-    std::vector<helix::LabelSize> sizes;
-    if (type == "usb" || (type == "bluetooth" && settings.get_bt_transport() == "ble")) {
-        sizes = helix::PhomemoPrinter::supported_sizes_static();
-    } else {
-        sizes = BrotherQLPrinter::supported_sizes_static();
-    }
+    auto sizes = get_sizes_for_current_printer();
     if (index >= 0 && index < static_cast<int>(sizes.size())) {
         spdlog::info("[{}] Label size changed: {} (index {})", get_name(), sizes[index].name,
                      index);
@@ -721,7 +762,8 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
 
     ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing test label..."), 2000);
 
-    helix::print_spool_label(mock_spool, [](bool success, const std::string& error) {
+    auto alive = alive_;
+    helix::print_spool_label(mock_spool, [alive](bool success, const std::string& error) {
         if (success) {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Test label printed"),
                                           2000);
@@ -729,6 +771,10 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
             spdlog::error("[LabelPrinterSettings] Test print failed: {}", error);
             ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
         }
+
+        // Note: Don't refresh BT connection state here — the overlay's bt_ctx_
+        // is separate from the print thread's persistent connection and may be
+        // invalid. The user can re-open the overlay or press Scan to refresh.
     });
 }
 
@@ -761,12 +807,28 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
         saved_dev.paired = true;
         saved_dev.is_ble = (settings.get_bt_transport() == "ble");
 
+        // Check current connection state (need a BT context)
+        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+        if (!bt_ctx_ && loader.is_available() && loader.init) {
+            bt_ctx_ = loader.init();
+        }
+        saved_dev.connected = check_bt_connected(bt_ctx_, saved_addr);
+
         bt_devices_.clear();
         bt_devices_.push_back(saved_dev);
 
-        std::string label = saved_dev.name + " (Paired)";
-        lv_dropdown_set_options(dropdown, label.c_str());
+        lv_dropdown_set_options(dropdown, bt_device_label(saved_dev.name, saved_dev.paired, saved_dev.connected).c_str());
         lv_dropdown_set_selected(dropdown, 0);
+
+        // Enable connect button if paired but not connected
+        lv_obj_t* btn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect");
+        if (btn) {
+            if (saved_dev.paired && !saved_dev.connected) {
+                lv_obj_remove_state(btn, LV_STATE_DISABLED);
+            } else {
+                lv_obj_add_state(btn, LV_STATE_DISABLED);
+            }
+        }
     } else {
         lv_dropdown_set_options(dropdown, lv_tr("Press Scan to search"));
     }
@@ -833,6 +895,7 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
             info.mac = dev->mac ? dev->mac : "";
             info.name = dev->name ? dev->name : "Unknown";
             info.paired = dev->paired;
+            info.connected = false; // updated on UI thread below
             info.is_ble = dev->is_ble;
 
             // Marshal to UI thread
@@ -863,8 +926,7 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                 std::string options;
                                 for (const auto& d : overlay->bt_devices_) {
                                     if (!options.empty()) options += "\n";
-                                    options += d.name;
-                                    if (d.paired) options += " (Paired)";
+                                    options += bt_device_label(d.name, d.paired, d.connected);
                                 }
                                 lv_dropdown_set_options(dropdown, options.c_str());
                             }
@@ -882,12 +944,25 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
             auto* overlay = disc_ctx->overlay;
             overlay->bt_discovering_ = false;
 
-            if (overlay->bt_devices_.empty() && overlay->overlay_root_) {
+            if (overlay->overlay_root_) {
                 lv_obj_t* row = lv_obj_find_by_name(overlay->overlay_root_, "row_bt_printers");
                 if (row) {
                     lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
                     if (dropdown) {
-                        lv_dropdown_set_options(dropdown, lv_tr("No Bluetooth printers found"));
+                        if (overlay->bt_devices_.empty()) {
+                            lv_dropdown_set_options(dropdown,
+                                                    lv_tr("No Bluetooth printers found"));
+                        } else {
+                            // Refresh dropdown with final device list (handles case where
+                            // all discovered devices were already known — dropdown still
+                            // shows "Scanning..." without this)
+                            std::string options;
+                            for (const auto& d : overlay->bt_devices_) {
+                                if (!options.empty()) options += "\n";
+                                options += bt_device_label(d.name, d.paired, d.connected);
+                            }
+                            lv_dropdown_set_options(dropdown, options.c_str());
+                        }
                     }
                 }
             }
@@ -947,6 +1022,18 @@ void LabelPrinterSettingsOverlay::handle_bt_printer_selected(int index) {
     settings.set_bt_address(device.mac);
     settings.set_bt_name(device.name);
     settings.set_bt_transport(device.is_ble ? "ble" : "spp");
+
+    // Enable/disable connect button based on connection state
+    if (overlay_root_) {
+        lv_obj_t* btn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect");
+        if (btn) {
+            if (device.paired && !device.connected) {
+                lv_obj_remove_state(btn, LV_STATE_DISABLED);
+            } else {
+                lv_obj_add_state(btn, LV_STATE_DISABLED);
+            }
+        }
+    }
 
     // Refresh label size dropdown for the selected printer's transport
     init_label_size_dropdown();
@@ -1036,6 +1123,99 @@ void LabelPrinterSettingsOverlay::on_bt_scan(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void LabelPrinterSettingsOverlay::handle_bt_connect() {
+    auto& settings = LabelPrinterSettingsManager::instance();
+    std::string mac = settings.get_bt_address();
+    if (mac.empty()) return;
+
+    auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    if (!loader.is_available()) return;
+
+    // Ensure BT context
+    if (!bt_ctx_ && loader.init) {
+        bt_ctx_ = loader.init();
+    }
+    if (!bt_ctx_) return;
+
+    // Disable button while connecting
+    if (overlay_root_) {
+        lv_obj_t* btn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect");
+        if (btn) lv_obj_add_state(btn, LV_STATE_DISABLED);
+    }
+
+    auto alive = alive_;
+    auto* ctx = bt_ctx_;
+
+    std::thread([mac, ctx, alive, &loader]() {
+        // BlueZ Device1.Connect() — establishes BLE connection
+        auto* init_ctx = ctx;
+        int ret = -1;
+        if (loader.pair) {
+            // pair() already does Connect() for BLE devices
+            ret = loader.pair(init_ctx, mac.c_str());
+        }
+
+        bool connected = (ret == 0);
+        if (connected && loader.is_connected) {
+            connected = (loader.is_connected(init_ctx, mac.c_str()) == 1);
+        }
+
+        helix::ui::queue_update([mac, connected, alive]() {
+            if (!alive->load()) return;
+
+            auto& ov = get_label_printer_settings_overlay();
+
+            // Update device state
+            for (auto& dev : ov.bt_devices_) {
+                if (dev.mac == mac) {
+                    dev.connected = connected;
+                    break;
+                }
+            }
+
+            // Refresh dropdown labels
+            if (ov.overlay_root_) {
+                lv_obj_t* row = lv_obj_find_by_name(ov.overlay_root_, "row_bt_printers");
+                if (row) {
+                    lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
+                    if (dropdown) {
+                        std::string options;
+                        for (const auto& d : ov.bt_devices_) {
+                            if (!options.empty()) options += "\n";
+                            options += bt_device_label(d.name, d.paired, d.connected);
+                        }
+                        lv_dropdown_set_options(dropdown, options.c_str());
+                    }
+                }
+
+                // Update connect button state
+                lv_obj_t* btn = lv_obj_find_by_name(ov.overlay_root_, "btn_bt_connect");
+                if (btn) {
+                    if (connected) {
+                        lv_obj_add_state(btn, LV_STATE_DISABLED);
+                    } else {
+                        lv_obj_remove_state(btn, LV_STATE_DISABLED);
+                    }
+                }
+            }
+
+            if (connected) {
+                ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                              lv_tr("Connected"), 2000);
+            } else {
+                ToastManager::instance().show(ToastSeverity::ERROR,
+                                              lv_tr("Connection failed"), 2000);
+            }
+        });
+    }).detach();
+}
+
+void LabelPrinterSettingsOverlay::on_bt_connect(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_bt_connect");
+    get_label_printer_settings_overlay().handle_bt_connect();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_pair_confirm");
 
@@ -1082,6 +1262,7 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                 for (auto& dev : ov.bt_devices_) {
                     if (dev.mac == mac) {
                         dev.paired = true;
+                        dev.connected = check_bt_connected(ov.bt_ctx_, mac);
                         auto& settings = LabelPrinterSettingsManager::instance();
                         settings.set_bt_address(mac);
                         settings.set_bt_name(dev.name);
@@ -1100,8 +1281,7 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                             std::string options;
                             for (const auto& d : ov.bt_devices_) {
                                 if (!options.empty()) options += "\n";
-                                options += d.name;
-                                if (d.paired) options += " (Paired)";
+                                options += bt_device_label(d.name, d.paired, d.connected);
                             }
                             lv_dropdown_set_options(dropdown, options.c_str());
                         }

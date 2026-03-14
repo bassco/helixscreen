@@ -20,6 +20,8 @@
     "text_subtle": "#b8c2d1",
     "warning": "#ebcb8b"
   },
+  "handle_color": "primary",
+  "handle_style": "round",
   "light": {
     "border": "#cbd5e1",
     "card_bg": "#ffffff",

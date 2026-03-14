@@ -4,7 +4,7 @@
 # Builds libhelix-bluetooth.so from src/bluetooth/*.cpp.
 # Links against libsystemd (sd-bus for BlueZ D-Bus) and libbluetooth (RFCOMM).
 #
-# NOT part of the 'all' target — build explicitly with 'make bluetooth-plugin'.
+# Built as part of 'all' when dependencies are available, silently skipped otherwise.
 
 BT_SRCS := $(wildcard src/bluetooth/*.cpp)
 BT_OBJS := $(BT_SRCS:src/bluetooth/%.cpp=$(OBJ_DIR)/bluetooth/%.o)
