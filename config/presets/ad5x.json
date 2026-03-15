@@ -4,7 +4,8 @@
   "display": {
     "backlight_enable_ioctl": false,
     "hardware_blank": 0,
-    "sleep_backlight_off": true
+    "sleep_backlight_off": true,
+    "animations_enabled": false
   },
   "input": {
     "calibration": {

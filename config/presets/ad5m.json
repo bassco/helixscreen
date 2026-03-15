@@ -1,6 +1,9 @@
 {
   "preset": "ad5m",
   "wizard_completed": false,
+  "display": {
+    "animations_enabled": false
+  },
   "input": {
     "calibration": {
       "a": 1.1666666269302368,

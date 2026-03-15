@@ -3,7 +3,8 @@
   "wizard_completed": false,
   "display": {
     "rotate": 270,
-    "rotation_probed": true
+    "rotation_probed": true,
+    "animations_enabled": false
   },
   "printer": {
     "moonraker_host": "127.0.0.1",
