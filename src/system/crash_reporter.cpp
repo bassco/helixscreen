@@ -128,6 +128,27 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     if (crash_data.contains("queue_callback"))
         report.queue_callback = crash_data["queue_callback"];
 
+    // Stack dump (ARM32/MIPS: raw stack words for offline analysis)
+    if (crash_data.contains("stack_base"))
+        report.stack_base = crash_data["stack_base"];
+    if (crash_data.contains("stack_dump") && crash_data["stack_dump"].is_array()) {
+        for (const auto& word : crash_data["stack_dump"]) {
+            report.stack_dump.push_back(word.get<std::string>());
+        }
+    }
+
+    // Extra registers (reg_r0, reg_r1, ..., reg_fp, reg_ip, etc.)
+    static const std::vector<std::string> extra_reg_names = {
+        "reg_r0",  "reg_r1",  "reg_r2",  "reg_r3", "reg_r4", "reg_r5",
+        "reg_r6",  "reg_r7",  "reg_r8",  "reg_r9", "reg_r10",
+        "reg_fp",  "reg_ip",  "reg_ra",
+    };
+    for (const auto& reg : extra_reg_names) {
+        if (crash_data.contains(reg)) {
+            report.extra_registers.emplace_back(reg.substr(4), crash_data[reg].get<std::string>());
+        }
+    }
+
     // Collect additional system context
     report.platform = UpdateChecker::get_platform_key();
 #ifdef HELIX_BINARY_VARIANT
@@ -261,18 +282,26 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
         j["queue_callback"] = report.queue_callback;
     }
 
-    // Memory map (executable mappings only — filter to keep payload small)
+    // Memory map (all mappings — worker needs full map to identify crash address regions)
     if (!report.memory_map.empty()) {
-        json maps = json::array();
-        for (const auto& line : report.memory_map) {
-            // Only include executable mappings (r-xp) to keep payload reasonable
-            if (line.find("r-xp") != std::string::npos) {
-                maps.push_back(line);
-            }
+        j["memory_map"] = report.memory_map;
+    }
+
+    // Stack dump (raw stack words for return-address scanning)
+    if (!report.stack_base.empty()) {
+        j["stack_base"] = report.stack_base;
+    }
+    if (!report.stack_dump.empty()) {
+        j["stack_dump"] = report.stack_dump;
+    }
+
+    // Extra registers (ARM32: r0-r12, fp, ip)
+    if (!report.extra_registers.empty()) {
+        json extra_regs = json::object();
+        for (const auto& [name, value] : report.extra_registers) {
+            extra_regs[name] = value;
         }
-        if (!maps.empty()) {
-            j["memory_map"] = maps;
-        }
+        j["extra_registers"] = extra_regs;
     }
 
     // Worker expects log_tail as an array of lines
@@ -341,13 +370,28 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
     }
 
     if (!report.memory_map.empty()) {
-        ss << "--- Memory Map (executable) ---\n";
+        ss << "--- Memory Map ---\n";
         for (const auto& line : report.memory_map) {
-            if (line.find("r-xp") != std::string::npos) {
-                ss << line << "\n";
-            }
+            ss << line << "\n";
         }
         ss << "\n";
+    }
+
+    if (!report.extra_registers.empty()) {
+        ss << "--- Extra Registers ---\n";
+        for (const auto& [name, value] : report.extra_registers) {
+            ss << "  " << name << ": " << value << "\n";
+        }
+        ss << "\n";
+    }
+
+    if (!report.stack_dump.empty()) {
+        ss << "--- Stack Dump (" << report.stack_dump.size() << " words from "
+           << report.stack_base << ") ---\n";
+        for (size_t i = 0; i < report.stack_dump.size(); ++i) {
+            ss << "  [SP+0x" << std::hex << (i * 4) << "] " << report.stack_dump[i] << "\n";
+        }
+        ss << std::dec << "\n";
     }
 
     if (!report.log_tail.empty()) {

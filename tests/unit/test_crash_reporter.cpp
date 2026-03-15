@@ -706,3 +706,101 @@ TEST_CASE_METHOD(CrashReporterTestFixture, "CrashReporter: generate_github_url i
     // Still under 2000 chars
     REQUIRE(url.size() <= 2000);
 }
+
+// ============================================================================
+// Phase 3: Stack Dump, Extra Registers, Full Memory Map [crash_reporter]
+// ============================================================================
+
+/// Helper to write a V3 crash file with stack dump, extra registers, and memory map
+void write_crash_file_v3(const fs::path& dir) {
+    std::string crash_path = (dir / "crash.txt").string();
+    std::ofstream ofs(crash_path);
+    ofs << "signal:11\n";
+    ofs << "name:SIGSEGV\n";
+    ofs << "version:0.98.6\n";
+    ofs << "timestamp:1710451217\n";
+    ofs << "uptime:65\n";
+    ofs << "fault_addr:0x62\n";
+    ofs << "fault_code:1\n";
+    ofs << "fault_code_name:SEGV_MAPERR\n";
+    ofs << "reg_pc:0xb1e9b2ec\n";
+    ofs << "reg_sp:0xb1c6b070\n";
+    ofs << "reg_lr:0xb1ddd180\n";
+    ofs << "reg_r0:0x00000000\n";
+    ofs << "reg_r1:0x00000062\n";
+    ofs << "reg_r4:0x009a1234\n";
+    ofs << "reg_fp:0xb1c6b0a0\n";
+    ofs << "load_base:0x0\n";
+    ofs << "queue_callback:discovery_complete\n";
+    ofs << "bt:0xb1e9b2ec\n";
+    ofs << "bt:0xb1ddd180\n";
+    ofs << "bt:0x14508a\n";
+    ofs << "bt:0x52d990\n";
+    ofs << "stack_base:0xb1c6b070\n";
+    ofs << "stk:0x009a1234\n";
+    ofs << "stk:0x00144bd0\n";
+    ofs << "stk:0xb1ddd180\n";
+    ofs << "stk:0x000be16c\n";
+    ofs << "map:00010000-0057c000 r-xp 00000000 b3:02 1234 /opt/helixscreen/helix-screen\n";
+    ofs << "map:0057c000-009e9000 rw-p 0056c000 b3:02 1234 /opt/helixscreen/helix-screen\n";
+    ofs << "map:b1b6a000-b1f6a000 rw-p 00000000 00:00 0 [stack:1234]\n";
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: collect_report extracts stack_dump and stack_base",
+                 "[crash_reporter]") {
+    write_crash_file_v3(temp_dir_);
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    REQUIRE(report.stack_base == "0xb1c6b070");
+    REQUIRE(report.stack_dump.size() == 4);
+    REQUIRE(report.stack_dump[0] == "0x009a1234");
+    REQUIRE(report.stack_dump[1] == "0x00144bd0");
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: collect_report extracts extra ARM32 registers",
+                 "[crash_reporter]") {
+    write_crash_file_v3(temp_dir_);
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    REQUIRE_FALSE(report.extra_registers.empty());
+    bool found_r0 = false;
+    for (const auto& [name, value] : report.extra_registers) {
+        if (name == "r0") {
+            found_r0 = true;
+            REQUIRE(value == "0x00000000");
+        }
+    }
+    REQUIRE(found_r0);
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: report_to_json includes stack_dump and extra_registers",
+                 "[crash_reporter]") {
+    write_crash_file_v3(temp_dir_);
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    json j = cr.report_to_json(report);
+
+    REQUIRE(j.contains("stack_base"));
+    REQUIRE(j["stack_base"] == "0xb1c6b070");
+    REQUIRE(j.contains("stack_dump"));
+    REQUIRE(j["stack_dump"].is_array());
+    REQUIRE(j["stack_dump"].size() == 4);
+    REQUIRE(j.contains("extra_registers"));
+    REQUIRE(j["extra_registers"].contains("r0"));
+    REQUIRE(j["extra_registers"]["r0"] == "0x00000000");
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: report_to_json includes all memory map lines not just r-xp",
+                 "[crash_reporter]") {
+    write_crash_file_v3(temp_dir_);
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+    json j = cr.report_to_json(report);
+
+    REQUIRE(j.contains("memory_map"));
+    REQUIRE(j["memory_map"].size() == 3);
+}

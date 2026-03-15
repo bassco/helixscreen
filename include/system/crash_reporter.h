@@ -77,6 +77,14 @@ class CrashReporter {
         // Memory map (/proc/self/maps lines, for mapping addresses to libraries)
         std::vector<std::string> memory_map;
 
+        // Stack dump (ARM32/MIPS: 128 raw stack words for return-address scanning)
+        std::string stack_base;
+        std::vector<std::string> stack_dump;
+
+        // Extra registers (ARM32: r0-r12, fp, ip; MIPS: ra, etc.)
+        // Key = register name (e.g., "r0", "fp"), value = hex string
+        std::vector<std::pair<std::string, std::string>> extra_registers;
+
         // Additional context (collected at startup)
         std::string platform;
         std::string printer_model;
