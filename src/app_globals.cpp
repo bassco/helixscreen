@@ -287,6 +287,11 @@ void app_request_restart_service() {
     }
 }
 
+char** app_get_stored_argv() {
+    if (g_stored_argv.empty()) return nullptr;
+    return g_stored_argv.data();
+}
+
 bool app_quit_requested() {
     return g_quit_requested != 0;
 }

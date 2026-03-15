@@ -1418,9 +1418,40 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     report_download_status(DownloadStatus::Complete, 100,
                            "v" + version + " installed! Restarting...");
 
-    // Exit immediately — watchdog restarts us with the new binary.
-    // _exit() not exit(): avoids racing with destructors on other threads.
-    spdlog::info("[UpdateChecker] Restarting to apply update");
+    // Restart strategy depends on whether we're supervised.
+    // _exit(0) is used in all cases to avoid racing with destructors on other
+    // threads — the binary on disk has been replaced and normal shutdown may
+    // touch stale resources.
+    bool supervised = getenv("INVOCATION_ID") || getenv("HELIX_SUPERVISED");
+
+    if (!supervised) {
+        // No watchdog/systemd — fork+exec the new binary before exiting,
+        // otherwise _exit(0) just kills the process with nothing to restart it.
+        // Use the filesystem path (not /proc/self/exe) because install.sh has
+        // replaced the binary at this path — /proc/self/exe still points to
+        // the old (deleted) inode.
+        char** argv = app_get_stored_argv();
+        std::string bin_path = install_root + "/bin/helix-screen";
+
+        spdlog::info("[UpdateChecker] Not supervised — fork+exec restart: {}", bin_path);
+        spdlog::default_logger()->flush();
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            spdlog::error("[UpdateChecker] Fork failed: {} — falling back to _exit(0)",
+                          strerror(errno));
+            spdlog::default_logger()->flush();
+        } else if (pid == 0) {
+            // Child: brief delay for parent to exit, then exec new binary
+            usleep(200000); // 200ms
+            execv(bin_path.c_str(), argv);
+            // execv failed — nothing we can do
+            ::_exit(127);
+        }
+        // Parent: fall through to _exit(0)
+    }
+
+    spdlog::info("[UpdateChecker] Restarting to apply update (supervised={})", supervised);
     spdlog::default_logger()->flush();
     ::_exit(0);
 }

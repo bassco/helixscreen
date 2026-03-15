@@ -734,6 +734,11 @@ void app_request_restart_service() {
     spdlog::debug("[Test Stub] app_request_restart_service called - no-op in tests");
 }
 
+// Stub for app_get_stored_argv (tests don't have real argv)
+char** app_get_stored_argv() {
+    return nullptr;
+}
+
 // Stub for get_helix_cache_dir (tests use temp directory)
 // Respects HELIX_CACHE_DIR env var for testing the override, falls back to /tmp
 #include "app_globals.h"

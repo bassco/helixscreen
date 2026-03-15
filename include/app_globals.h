@@ -207,6 +207,14 @@ void app_request_restart();
 void app_request_restart_service();
 
 /**
+ * @brief Get stored argv for use with execv()
+ *
+ * Returns the NULL-terminated argv array stored by app_store_argv().
+ * Returns nullptr if app_store_argv() was not called.
+ */
+char** app_get_stored_argv();
+
+/**
  * @brief Check if quit has been requested
  * @return true if app_request_quit() or app_request_restart() was called
  */
