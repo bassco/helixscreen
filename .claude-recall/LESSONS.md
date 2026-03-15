@@ -21,7 +21,7 @@
 > Avoid mutex locks in destructors during static destruction phase. Other objects may already be destroyed, causing deadlock or crash on exit
 
 ### [L014] [***--|*****] Register all XML components
-- **Uses**: 35 | **Velocity**: 9 | **Learned**: 2025-12-14 | **Last**: 2026-03-10 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 36 | **Velocity**: 10 | **Learned**: 2025-12-14 | **Last**: 2026-03-14 | **Category**: gotcha | **Type**: constraint
 > When adding new XML components, must add lv_xml_component_register_from_file() call in main.cpp. Forgetting causes silent failures
 
 ### [L020] [***--|***--] ObserverGuard for cleanup
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 101.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 103.0075 | **Learned**: 2025-12-27 | **Last**: 2026-03-14 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|****-] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 56 | **Velocity**: 55.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-13 | **Category**: correction | **Type**: constraint
+- **Uses**: 57 | **Velocity**: 56.01 | **Learned**: 2026-02-01 | **Last**: 2026-03-14 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
