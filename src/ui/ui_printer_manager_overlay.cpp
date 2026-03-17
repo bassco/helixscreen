@@ -5,7 +5,6 @@
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_fan_control_overlay.h"
-#include "ui_printer_list_overlay.h"
 #include "ui_keyboard_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_overlay_printer_image.h"
@@ -16,6 +15,7 @@
 #include "ui_panel_input_shaper.h"
 #include "ui_panel_screws_tilt.h"
 #include "ui_panel_spoolman.h"
+#include "ui_printer_list_overlay.h"
 #include "ui_settings_sound.h"
 #include "ui_toast_manager.h"
 

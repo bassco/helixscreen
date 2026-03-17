@@ -12,11 +12,11 @@
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_notification.h"
+#include "ui_overlay_temp_graph.h"
 #include "ui_panel_bed_mesh.h"
 #include "ui_panel_calibration_zoffset.h"
 #include "ui_panel_motion.h"
 #include "ui_panel_screws_tilt.h"
-#include "ui_overlay_temp_graph.h"
 #include "ui_position_utils.h"
 #include "ui_settings_sensors.h"
 #include "ui_subject_registry.h"
@@ -501,37 +501,41 @@ void ControlsPanel::register_observers() {
         });
 
     // Subscribe to fan updates (skip formatting when hidden)
-    fan_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_fan_speed_subject(), this, [](ControlsPanel* self, int /* value */) {
-            if (self->active_)
-                self->update_fan_display();
-        });
+    fan_observer_ = observe_int_sync<ControlsPanel>(printer_state_.get_fan_speed_subject(), this,
+                                                    [](ControlsPanel* self, int /* value */) {
+                                                        if (self->active_)
+                                                            self->update_fan_display();
+                                                    });
 
     // Subscribe to multi-fan list changes (fires when fans are discovered/updated)
     // Skip widget rebuilds when hidden; on_activate() calls populate_secondary_fans()
     fans_version_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_fans_version_subject(), this, [](ControlsPanel* self, int /* version */) {
-            if (!self->active_) return;
+        printer_state_.get_fans_version_subject(), this,
+        [](ControlsPanel* self, int /* version */) {
+            if (!self->active_)
+                return;
             // Use lv_async_call to defer the rebuild outside process_pending(), preventing
             // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
             if (!self->fans_rebuild_pending_) {
                 self->fans_rebuild_pending_ = true;
-                lv_async_call([](void* data) {
-                    auto* panel = static_cast<ControlsPanel*>(data);
-                    panel->fans_rebuild_pending_ = false;
-                    if (panel->active_ && panel->secondary_fans_list_)
-                        panel->populate_secondary_fans();
-                }, self);
+                lv_async_call(
+                    [](void* data) {
+                        auto* panel = static_cast<ControlsPanel*>(data);
+                        panel->fans_rebuild_pending_ = false;
+                        if (panel->active_ && panel->secondary_fans_list_)
+                            panel->populate_secondary_fans();
+                    },
+                    self);
             }
         });
 
     // Subscribe to active tool changes for dynamic nozzle label
-    active_tool_observer_ = observe_int_sync<ControlsPanel>(
-        helix::ToolState::instance().get_active_tool_subject(), this,
-        [](ControlsPanel* self, int /* tool_idx */) {
-            if (self->active_)
-                self->update_nozzle_label();
-        });
+    active_tool_observer_ =
+        observe_int_sync<ControlsPanel>(helix::ToolState::instance().get_active_tool_subject(),
+                                        this, [](ControlsPanel* self, int /* tool_idx */) {
+                                            if (self->active_)
+                                                self->update_nozzle_label();
+                                        });
     update_nozzle_label(); // Set initial value
 
     // Subscribe to temperature sensor count changes
@@ -539,17 +543,20 @@ void ControlsPanel::register_observers() {
     temp_sensor_count_observer_ = observe_int_sync<ControlsPanel>(
         helix::sensors::TemperatureSensorManager::instance().get_sensor_count_subject(), this,
         [](ControlsPanel* self, int /* count */) {
-            if (!self->active_) return;
+            if (!self->active_)
+                return;
             // Use lv_async_call to defer the rebuild outside process_pending(), preventing
             // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
             if (!self->temps_rebuild_pending_) {
                 self->temps_rebuild_pending_ = true;
-                lv_async_call([](void* data) {
-                    auto* panel = static_cast<ControlsPanel*>(data);
-                    panel->temps_rebuild_pending_ = false;
-                    if (panel->active_ && panel->secondary_temps_list_)
-                        panel->populate_secondary_temps();
-                }, self);
+                lv_async_call(
+                    [](void* data) {
+                        auto* panel = static_cast<ControlsPanel*>(data);
+                        panel->temps_rebuild_pending_ = false;
+                        if (panel->active_ && panel->secondary_temps_list_)
+                            panel->populate_secondary_temps();
+                    },
+                    self);
             }
         });
 
@@ -592,12 +599,12 @@ void ControlsPanel::register_observers() {
         });
 
     // Subscribe to gcode Z-offset for live tuning display (skip formatting when hidden)
-    gcode_z_offset_observer_ =
-        observe_int_sync<ControlsPanel>(printer_state_.get_gcode_z_offset_subject(), this,
-                                        [](ControlsPanel* self, int offset_microns) {
-                                            if (self->active_)
-                                                self->update_controls_z_offset_display(offset_microns);
-                                        });
+    gcode_z_offset_observer_ = observe_int_sync<ControlsPanel>(
+        printer_state_.get_gcode_z_offset_subject(), this,
+        [](ControlsPanel* self, int offset_microns) {
+            if (self->active_)
+                self->update_controls_z_offset_display(offset_microns);
+        });
 
     spdlog::trace("[{}] Observers registered for dashboard live data", get_name());
 }
@@ -1269,9 +1276,7 @@ void ControlsPanel::execute_macro(size_t index) {
     NOTIFY_INFO("Running {}...", info.translated_name());
     if (!StandardMacros::instance().execute(
             *slot, api_,
-            [name = std::string(info.translated_name())]() {
-                NOTIFY_SUCCESS("{} complete", name);
-            },
+            [name = std::string(info.translated_name())]() { NOTIFY_SUCCESS("{} complete", name); },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR("Macro failed: {}", err.user_message());
             })) {

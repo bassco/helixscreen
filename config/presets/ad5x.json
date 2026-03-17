@@ -3,7 +3,7 @@
   "wizard_completed": false,
   "display": {
     "backlight_enable_ioctl": false,
-    "hardware_blank": 0,
+    "hardware_blank": 1,
     "sleep_backlight_off": true,
     "animations_enabled": false
   },
