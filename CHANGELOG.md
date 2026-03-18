@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.98.9] - 2026-03-17
+
+### Fixed
+- Multiple crash-causing synchronous object deletions inside UpdateQueue timer callbacks (#422, #423, #429, #430, #435, #436, #437)
+- Overlay animation crash when panel is freed mid-animation (#428, #436, #439, #440)
+- Bluetooth thread capturing loader reference that could dangle after thread detach
+- GCode viewer using unsafe custom async deletion instead of LVGL's built-in cancellable delete
+- Screws tilt adjust panel not initializing API before lazy panel creation (#402)
+- AD5X backlight staying on during sleep mode (#431)
+
 ## [0.98.8] - 2026-03-15
 
 ### Added
@@ -2002,6 +2012,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.98.9]: https://github.com/prestonbrown/helixscreen/compare/v0.98.8...v0.98.9
 [0.98.8]: https://github.com/prestonbrown/helixscreen/compare/v0.98.7...v0.98.8
 [0.98.7]: https://github.com/prestonbrown/helixscreen/compare/v0.98.6...v0.98.7
 [0.98.6]: https://github.com/prestonbrown/helixscreen/compare/v0.98.5...v0.98.6
