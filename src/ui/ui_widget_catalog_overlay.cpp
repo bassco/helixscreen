@@ -392,7 +392,7 @@ void WidgetCatalogOverlay::show(lv_obj_t* parent_screen, const PanelWidgetConfig
     NavigationManager::instance().register_overlay_close_callback(overlay, [overlay]() {
         if (g_catalog_state.overlay_root == overlay) {
             if (g_catalog_state.backdrop) {
-                lv_obj_delete(g_catalog_state.backdrop);
+                lv_obj_delete_async(g_catalog_state.backdrop);
                 g_catalog_state.backdrop = nullptr;
             }
             auto on_close_cb = std::move(g_catalog_state.on_close);

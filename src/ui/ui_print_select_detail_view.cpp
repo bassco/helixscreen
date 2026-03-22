@@ -250,8 +250,7 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     filament_mapping_card_.create(mapping_card, mapping_rows, mapping_warning);
     filament_mapping_card_.set_on_mappings_changed([this]() {
         apply_mapped_tool_colors();
-        lv_subject_set_int(&filament_mismatch_,
-                           filament_mapping_card_.has_mismatch() ? 1 : 0);
+        lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
     });
 
     // Look up history status display
@@ -334,8 +333,7 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     filament_mapping_card_.update(filament_colors, filament_materials);
 
     // Update mismatch warning icon via subject binding
-    lv_subject_set_int(&filament_mismatch_,
-                       filament_mapping_card_.has_mismatch() ? 1 : 0);
+    lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
     // Show either the interactive mapping card OR the simple color swatches, never both
     if (filament_mapping_card_.is_visible()) {
@@ -910,50 +908,62 @@ void PrintSelectDetailView::load_gcode_for_preview() {
                     if (!alive->load()) {
                         return;
                     }
-                    temp_gcode_path_ = path;
+                    // Marshal to main thread — this callback runs on HTTP thread
+                    helix::ui::queue_update([this, alive, path]() {
+                        if (!alive->load()) {
+                            return;
+                        }
+                        temp_gcode_path_ = path;
 
-                    spdlog::debug("[DetailView] G-code downloaded, loading into viewer: {}", path);
+                        spdlog::debug("[DetailView] G-code downloaded, loading into viewer: {}",
+                                      path);
 
-                    // Set up load callback
-                    ui_gcode_viewer_set_load_callback(
-                        gcode_viewer_,
-                        [](lv_obj_t* viewer, void* user_data, bool success) {
-                            auto* self = static_cast<PrintSelectDetailView*>(user_data);
-                            if (!self->alive_->load()) {
-                                return;
-                            }
-                            if (!success) {
-                                spdlog::warn("[DetailView] G-code load failed after download");
-                                self->show_gcode_viewer(false);
-                                return;
-                            }
-                            self->gcode_loaded_ = true;
+                        // Set up load callback
+                        ui_gcode_viewer_set_load_callback(
+                            gcode_viewer_,
+                            [](lv_obj_t* viewer, void* user_data, bool success) {
+                                auto* self = static_cast<PrintSelectDetailView*>(user_data);
+                                if (!self->alive_->load()) {
+                                    return;
+                                }
+                                if (!success) {
+                                    spdlog::warn("[DetailView] G-code load failed after download");
+                                    self->show_gcode_viewer(false);
+                                    return;
+                                }
+                                self->gcode_loaded_ = true;
 
-                            // Show all layers, no ghost (preview = full model)
-                            ui_gcode_viewer_set_print_progress(viewer, -1);
+                                // Show all layers, no ghost (preview = full model)
+                                ui_gcode_viewer_set_print_progress(viewer, -1);
 
-                            // Apply AMS or slicer tool colors
-                            self->apply_tool_colors();
+                                // Apply AMS or slicer tool colors
+                                self->apply_tool_colors();
 
-                            // Unpause, show, then reset camera (must be visible for layout)
-                            ui_gcode_viewer_set_paused(viewer, false);
-                            self->show_gcode_viewer(true);
-                            lv_obj_update_layout(viewer);
-                            ui_gcode_viewer_reset_camera(viewer);
+                                // Unpause, show, then reset camera (must be visible for layout)
+                                ui_gcode_viewer_set_paused(viewer, false);
+                                self->show_gcode_viewer(true);
+                                lv_obj_update_layout(viewer);
+                                ui_gcode_viewer_reset_camera(viewer);
 
-                            spdlog::debug("[DetailView] G-code preview loaded successfully");
-                        },
-                        this);
+                                spdlog::debug("[DetailView] G-code preview loaded successfully");
+                            },
+                            this);
 
-                    // Load into viewer
-                    ui_gcode_viewer_load_file(gcode_viewer_, path.c_str());
+                        // Load into viewer
+                        ui_gcode_viewer_load_file(gcode_viewer_, path.c_str());
+                    });
                 },
                 [this, alive](const MoonrakerError& err) {
                     if (!alive->load()) {
                         return;
                     }
                     spdlog::warn("[DetailView] Failed to download G-code: {}", err.message);
-                    show_gcode_viewer(false);
+                    // Marshal to main thread — this callback runs on HTTP thread
+                    helix::ui::queue_update([this, alive]() {
+                        if (!alive->load())
+                            return;
+                        show_gcode_viewer(false);
+                    });
                 });
         },
         [this, alive](const MoonrakerError& err) {

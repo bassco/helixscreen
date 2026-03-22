@@ -160,10 +160,11 @@ std::string format_timestamp(double timestamp) {
     } else {
         t = std::time(nullptr);
     }
-    struct tm tm_buf {};
+    struct tm tm_buf{};
     localtime_r(&t, &tm_buf);
     char buf[12];
-    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d ", tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
+    std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d ", tm_buf.tm_hour, tm_buf.tm_min,
+                  tm_buf.tm_sec);
     return std::string(buf);
 }
 
@@ -189,15 +190,12 @@ ConsolePanel::~ConsolePanel() {
 void ConsolePanel::init_subjects() {
     init_subjects_guarded([this]() {
         // Initialize status subject for reactive binding
-        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_,
-                                  lv_tr("Loading history..."), "console_status",
-                                  subjects_);
+        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_, lv_tr("Loading history..."),
+                                  "console_status", subjects_);
         // Status label visibility (1 = visible, 0 = hidden)
-        UI_MANAGED_SUBJECT_INT(status_visible_subject_, 1, "console_status_visible",
-                               subjects_);
+        UI_MANAGED_SUBJECT_INT(status_visible_subject_, 1, "console_status_visible", subjects_);
         // Entry presence (1 = has entries, 0 = empty/show empty state)
-        UI_MANAGED_SUBJECT_INT(has_entries_subject_, 0, "console_has_entries",
-                               subjects_);
+        UI_MANAGED_SUBJECT_INT(has_entries_subject_, 0, "console_has_entries", subjects_);
     });
 }
 
@@ -233,8 +231,7 @@ void ConsolePanel::register_callbacks() {
          [](lv_event_t* /*e*/) {
              spdlog::debug("[Console] Clear button clicked");
              helix::ui::modal_show_confirmation(
-                 lv_tr("Clear Console?"),
-                 lv_tr("This will remove all entries from the display."),
+                 lv_tr("Clear Console?"), lv_tr("This will remove all entries from the display."),
                  ModalSeverity::Info, lv_tr("Clear"),
                  [](lv_event_t* /*e*/) {
                      Modal::hide(Modal::get_top());
@@ -247,8 +244,7 @@ void ConsolePanel::register_callbacks() {
              spdlog::debug("[Console] Filter toggle clicked");
              auto& panel = get_global_console_panel();
              panel.filter_temps_ = !panel.filter_temps_;
-             spdlog::debug("[Console] Temperature filter: {}",
-                           panel.filter_temps_ ? "ON" : "OFF");
+             spdlog::debug("[Console] Temperature filter: {}", panel.filter_temps_ ? "ON" : "OFF");
              // Update button visual to indicate state
              auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
              lv_obj_set_style_opa(btn, panel.filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
@@ -272,9 +268,8 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
     lv_obj_t* overlay_content = lv_obj_find_by_name(overlay_root_, "overlay_content");
     if (overlay_content) {
         console_container_ = lv_obj_find_by_name(overlay_content, "console_container");
-        empty_state_ = console_container_
-                           ? lv_obj_find_by_name(console_container_, "empty_state")
-                           : nullptr;
+        empty_state_ =
+            console_container_ ? lv_obj_find_by_name(console_container_, "empty_state") : nullptr;
         status_label_ = lv_obj_find_by_name(overlay_content, "status_message");
 
         // Find the input row and get the text input
@@ -313,8 +308,7 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
         lv_obj_add_event_cb(
             gcode_input_,
             [](lv_event_t* e) {
-                auto* panel =
-                    static_cast<ConsolePanel*>(lv_event_get_user_data(e));
+                auto* panel = static_cast<ConsolePanel*>(lv_event_get_user_data(e));
                 panel->send_gcode_command();
             },
             LV_EVENT_READY, this);
@@ -323,8 +317,7 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
         lv_obj_add_event_cb(
             gcode_input_,
             [](lv_event_t* e) {
-                auto* panel =
-                    static_cast<ConsolePanel*>(lv_event_get_user_data(e));
+                auto* panel = static_cast<ConsolePanel*>(lv_event_get_user_data(e));
                 uint32_t key = lv_event_get_key(e);
 
                 if (key == LV_KEY_UP) {
@@ -333,8 +326,7 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
                     }
                     // Save current input on first press into history
                     if (panel->history_index_ == -1) {
-                        const char* cur =
-                            lv_textarea_get_text(panel->gcode_input_);
+                        const char* cur = lv_textarea_get_text(panel->gcode_input_);
                         panel->saved_input_ = cur ? cur : "";
                     }
                     // Move to older command (increment index)
@@ -343,8 +335,7 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
                         panel->history_index_ = next;
                         lv_textarea_set_text(
                             panel->gcode_input_,
-                            panel->command_history_[static_cast<size_t>(next)]
-                                .c_str());
+                            panel->command_history_[static_cast<size_t>(next)].c_str());
                     }
                 } else if (key == LV_KEY_DOWN) {
                     if (panel->history_index_ < 0) {
@@ -356,13 +347,11 @@ lv_obj_t* ConsolePanel::create(lv_obj_t* parent) {
                         panel->history_index_ = next;
                         lv_textarea_set_text(
                             panel->gcode_input_,
-                            panel->command_history_[static_cast<size_t>(next)]
-                                .c_str());
+                            panel->command_history_[static_cast<size_t>(next)].c_str());
                     } else {
                         // Restore saved input
                         panel->history_index_ = -1;
-                        lv_textarea_set_text(panel->gcode_input_,
-                                             panel->saved_input_.c_str());
+                        lv_textarea_set_text(panel->gcode_input_, panel->saved_input_.c_str());
                     }
                 }
             },
@@ -401,8 +390,7 @@ void ConsolePanel::on_activate() {
         if (input_row) {
             lv_obj_t* filter_btn = lv_obj_find_by_name(input_row, "filter_btn");
             if (filter_btn) {
-                lv_obj_set_style_opa(filter_btn,
-                                     filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
+                lv_obj_set_style_opa(filter_btn, filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
             }
         }
     }
@@ -444,8 +432,7 @@ void ConsolePanel::fetch_history() {
     MoonrakerAPI* api = get_moonraker_api();
     if (!api) {
         spdlog::warn("[{}] No MoonrakerAPI available", get_name());
-        std::snprintf(status_buf_, sizeof(status_buf_), "%s",
-                      lv_tr("Not connected to printer"));
+        std::snprintf(status_buf_, sizeof(status_buf_), "%s", lv_tr("Not connected to printer"));
         lv_subject_copy_string(&status_subject_, status_buf_);
         update_visibility();
         return;
@@ -486,8 +473,7 @@ void ConsolePanel::fetch_history() {
                 std::weak_ptr<std::atomic<bool>> alive;
                 std::vector<GcodeEntry> entries;
             };
-            auto ctx =
-                std::make_unique<Ctx>(Ctx{this, alive_weak, std::move(converted)});
+            auto ctx = std::make_unique<Ctx>(Ctx{this, alive_weak, std::move(converted)});
             helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
                 auto alive = c->alive.lock();
                 if (!alive || !alive->load())
@@ -496,8 +482,7 @@ void ConsolePanel::fetch_history() {
                 c->panel->populate_entries(c->entries);
             });
         },
-        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](
-            const MoonrakerError& err) {
+        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](const MoonrakerError& err) {
             spdlog::error("[Console] Failed to fetch gcode store: {}", err.message);
 
             // Defer LVGL operations to main thread with alive guard
@@ -512,10 +497,9 @@ void ConsolePanel::fetch_history() {
                 if (!alive || !alive->load())
                     return;
                 c->panel->fetch_in_flight_ = false;
-                std::snprintf(c->panel->status_buf_, sizeof(c->panel->status_buf_),
-                              "%s", lv_tr("Failed to load history"));
-                lv_subject_copy_string(&c->panel->status_subject_,
-                                       c->panel->status_buf_);
+                std::snprintf(c->panel->status_buf_, sizeof(c->panel->status_buf_), "%s",
+                              lv_tr("Failed to load history"));
+                lv_subject_copy_string(&c->panel->status_subject_, c->panel->status_buf_);
                 c->panel->update_visibility();
             });
         });
@@ -632,13 +616,18 @@ void ConsolePanel::clear_entries() {
     }
 
     // Delete all children except the empty_state_ widget (which lives inside
-    // the container to share its dark background)
-    uint32_t count = lv_obj_get_child_count(console_container_);
-    for (int32_t i = static_cast<int32_t>(count) - 1; i >= 0; i--) {
-        lv_obj_t* child = lv_obj_get_child(console_container_, i);
-        if (child != empty_state_) {
-            lv_obj_delete(child);
-        }
+    // the container to share its dark background).
+    // Re-parent the empty state, clean the container, then re-parent it back.
+    // This avoids synchronous lv_obj_delete during child list iteration which
+    // corrupts LVGL's event linked list (lv_event_mark_deleted crashes).
+    if (empty_state_) {
+        lv_obj_set_parent(empty_state_, lv_obj_get_parent(console_container_));
+        lv_obj_add_flag(empty_state_, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_clean(console_container_);
+    if (empty_state_) {
+        lv_obj_set_parent(empty_state_, console_container_);
+        lv_obj_remove_flag(empty_state_, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -727,8 +716,7 @@ void ConsolePanel::subscribe_to_gcode_responses() {
     // Guard with alive_ weak_ptr in case panel is destroyed before unsubscribe [L072]
     api->register_method_callback(
         "notify_gcode_response", gcode_handler_name_,
-        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](
-            const nlohmann::json& msg) {
+        [this, alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](const nlohmann::json& msg) {
             auto alive = alive_weak.lock();
             if (!alive || !alive->load())
                 return;
@@ -869,8 +857,7 @@ void ConsolePanel::send_gcode_command() {
     if (api) {
         api->execute_gcode(
             command, nullptr, // success: no-op, response comes via WS subscription
-            [alive_weak =
-                 std::weak_ptr<std::atomic<bool>>(alive_)](const MoonrakerError& err) {
+            [alive_weak = std::weak_ptr<std::atomic<bool>>(alive_)](const MoonrakerError& err) {
                 auto alive = alive_weak.lock();
                 if (!alive || !alive->load())
                     return;

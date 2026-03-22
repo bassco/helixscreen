@@ -158,6 +158,8 @@ void update_button_text_contrast(lv_obj_t* btn) {
         uint32_t count = lv_obj_get_child_count(btn);
         for (uint32_t i = 0; i < count; i++) {
             lv_obj_t* child = lv_obj_get_child(btn, i);
+            if (!child)
+                continue;
             if (!lv_obj_check_type(child, &lv_label_class))
                 continue;
             const lv_font_t* font = lv_obj_get_style_text_font(child, LV_PART_MAIN);

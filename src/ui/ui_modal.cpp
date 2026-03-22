@@ -217,8 +217,10 @@ void ModalStack::animate_entrance(lv_obj_t* dialog) {
     lv_anim_set_duration(&backdrop_anim, MODAL_ENTRANCE_DURATION_MS);
     lv_anim_set_path_cb(&backdrop_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&backdrop_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&backdrop_anim);
 
@@ -230,8 +232,10 @@ void ModalStack::animate_entrance(lv_obj_t* dialog) {
     lv_anim_set_duration(&scale_anim, MODAL_ENTRANCE_DURATION_MS);
     lv_anim_set_path_cb(&scale_anim, lv_anim_path_overshoot);
     lv_anim_set_exec_cb(&scale_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_transform_scale(static_cast<lv_obj_t*>(obj), static_cast<int16_t>(value),
-                                         LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_transform_scale(o, static_cast<int16_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&scale_anim);
 
@@ -243,8 +247,10 @@ void ModalStack::animate_entrance(lv_obj_t* dialog) {
     lv_anim_set_duration(&fade_anim, MODAL_ENTRANCE_DURATION_MS);
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&fade_anim);
 
@@ -253,6 +259,12 @@ void ModalStack::animate_entrance(lv_obj_t* dialog) {
 
 void ModalStack::exit_animation_done(lv_anim_t* anim) {
     lv_obj_t* backdrop = static_cast<lv_obj_t*>(anim->var);
+
+    // Guard against freed backdrop - animation may fire after object deletion
+    if (!backdrop || !lv_obj_is_valid(backdrop)) {
+        spdlog::debug("[ModalStack] Exit animation complete - backdrop already freed");
+        return;
+    }
 
     // Safety check: if backdrop was already removed from stack (e.g., by
     // Modal::~Modal or clear()), it's already been deleted — nothing to do.
@@ -312,8 +324,10 @@ void ModalStack::animate_exit(lv_obj_t* backdrop, lv_obj_t* dialog) {
     lv_anim_set_duration(&backdrop_anim, MODAL_EXIT_DURATION_MS);
     lv_anim_set_path_cb(&backdrop_anim, lv_anim_path_ease_in);
     lv_anim_set_exec_cb(&backdrop_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_set_completed_cb(&backdrop_anim, exit_animation_done);
     lv_anim_start(&backdrop_anim);
@@ -326,8 +340,10 @@ void ModalStack::animate_exit(lv_obj_t* backdrop, lv_obj_t* dialog) {
     lv_anim_set_duration(&scale_anim, MODAL_EXIT_DURATION_MS);
     lv_anim_set_path_cb(&scale_anim, lv_anim_path_ease_in);
     lv_anim_set_exec_cb(&scale_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_transform_scale(static_cast<lv_obj_t*>(obj), static_cast<int16_t>(value),
-                                         LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_transform_scale(o, static_cast<int16_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&scale_anim);
 
@@ -339,8 +355,10 @@ void ModalStack::animate_exit(lv_obj_t* backdrop, lv_obj_t* dialog) {
     lv_anim_set_duration(&fade_anim, MODAL_EXIT_DURATION_MS);
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_in);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o))
+            return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&fade_anim);
 

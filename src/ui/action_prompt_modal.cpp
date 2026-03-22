@@ -23,8 +23,11 @@ ActionPromptModal::ActionPromptModal() {
 }
 
 ActionPromptModal::~ActionPromptModal() {
-    // Signal destruction to any pending button event callbacks
-    alive_->store(false);
+    // Signal destruction to any pending button event callbacks.
+    // Guard against moved-from state where alive_ is null.
+    if (alive_) {
+        alive_->store(false);
+    }
     // Modal destructor will call hide() if visible
     // Note: No spdlog here - logger may be destroyed before us during shutdown [L010]
 }
