@@ -530,7 +530,8 @@ const GCodeHeaderMetadata* GCodeStreamingController::get_header_metadata() const
 std::vector<ToolpathSegment> GCodeStreamingController::load_layer(size_t layer_index) {
     std::vector<ToolpathSegment> segments;
 
-    if (!data_source_ || !index_.is_valid()) {
+    // Guard against close() being called between prefetch iterations
+    if (!is_open_.load() || !data_source_ || !index_.is_valid()) {
         return segments;
     }
 
@@ -618,16 +619,16 @@ std::function<std::vector<ToolpathSegment>(size_t)> GCodeStreamingController::ma
 }
 
 std::string GCodeStreamingController::get_object_name(int16_t index) const {
-    if (index < 0) return {};
+    if (index < 0)
+        return {};
     std::lock_guard<std::mutex> lock(name_table_mutex_);
-    if (static_cast<size_t>(index) >= merged_object_name_table_.size()) return {};
+    if (static_cast<size_t>(index) >= merged_object_name_table_.size())
+        return {};
     return merged_object_name_table_[index];
 }
 
 void GCodeStreamingController::remap_object_name_indices(
-    std::vector<ToolpathSegment>& segments,
-    const std::vector<std::string>& local_table) {
-
+    std::vector<ToolpathSegment>& segments, const std::vector<std::string>& local_table) {
     // Build mapping from local indices to merged indices
     std::lock_guard<std::mutex> lock(name_table_mutex_);
 

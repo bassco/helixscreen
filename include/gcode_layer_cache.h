@@ -99,7 +99,7 @@ class GCodeLayerCache {
      *       Copy the data if you need to keep it longer.
      */
     CacheResult get_or_load(size_t layer_index,
-                            std::function<std::vector<ToolpathSegment>(size_t)> loader);
+                            const std::function<std::vector<ToolpathSegment>(size_t)>& loader);
 
     /**
      * @brief Check if a layer is currently cached
@@ -120,7 +120,8 @@ class GCodeLayerCache {
      * @param max_layer Maximum valid layer index (to avoid out-of-bounds)
      */
     void prefetch(size_t center_layer, size_t radius,
-                  std::function<std::vector<ToolpathSegment>(size_t)> loader, size_t max_layer);
+                  const std::function<std::vector<ToolpathSegment>(size_t)>& loader,
+                  size_t max_layer);
 
     /**
      * @brief Insert pre-loaded layer data into cache

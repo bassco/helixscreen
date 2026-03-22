@@ -37,7 +37,7 @@ size_t GCodeLayerCache::estimate_memory(const std::vector<ToolpathSegment>& segm
 
 GCodeLayerCache::CacheResult
 GCodeLayerCache::get_or_load(size_t layer_index,
-                             std::function<std::vector<ToolpathSegment>(size_t)> loader) {
+                             const std::function<std::vector<ToolpathSegment>(size_t)>& loader) {
     // Periodically check memory pressure and adapt budget (rate-limited internally)
     check_memory_pressure();
 
@@ -118,7 +118,7 @@ bool GCodeLayerCache::is_cached(size_t layer_index) const {
 }
 
 void GCodeLayerCache::prefetch(size_t center_layer, size_t radius,
-                               std::function<std::vector<ToolpathSegment>(size_t)> loader,
+                               const std::function<std::vector<ToolpathSegment>(size_t)>& loader,
                                size_t max_layer) {
     // Calculate range
     size_t start = (center_layer > radius) ? (center_layer - radius) : 0;
@@ -326,27 +326,23 @@ void GCodeLayerCache::set_adaptive_mode(bool enabled, int target_percent, size_t
 bool GCodeLayerCache::check_memory_pressure() {
     auto now = std::chrono::steady_clock::now();
 
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
 
-        if (!adaptive_enabled_) {
-            return false;
-        }
-
-        // Rate limit checks to avoid overhead
-        auto elapsed =
-            std::chrono::duration_cast<std::chrono::milliseconds>(now - last_pressure_check_);
-        if (elapsed.count() < PRESSURE_CHECK_INTERVAL_MS) {
-            return false;
-        }
-
-        last_pressure_check_ = now;
+    if (!adaptive_enabled_) {
+        return false;
     }
 
-    // Query system memory (outside lock since it may be slow)
-    MemoryInfo mem = get_system_memory_info();
+    // Rate limit checks to avoid overhead
+    auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now - last_pressure_check_);
+    if (elapsed.count() < PRESSURE_CHECK_INTERVAL_MS) {
+        return false;
+    }
 
-    std::lock_guard<std::mutex> lock(mutex_);
+    last_pressure_check_ = now;
+
+    // Query system memory (reading /proc/meminfo is fast enough to hold the lock)
+    MemoryInfo mem = get_system_memory_info();
 
     size_t new_budget = calculate_adaptive_budget(mem);
 
