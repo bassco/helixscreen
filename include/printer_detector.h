@@ -352,6 +352,15 @@ class PrinterDetector {
                                      helix::Config* config);
 
     /**
+     * @brief Strip heuristics data from the database to reclaim memory
+     *
+     * Call after detection is complete. Removes heuristic arrays from all printer
+     * entries while preserving kinematics info needed for filtered list building.
+     * Safe to call multiple times (no-op after first). Use reload() to restore.
+     */
+    static void compact_database();
+
+    /**
      * @brief Check if the configured printer type is a Voron variant
      *
      * Reads the printer type from config and does a case-insensitive check

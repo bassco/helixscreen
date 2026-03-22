@@ -92,6 +92,9 @@ void DisplaySettingsOverlay::register_callbacks() {
 #ifdef HELIX_ENABLE_SCREENSAVER
         // Screensaver toggle
         {"on_screensaver_changed", on_screensaver_changed},
+#else
+        // Register no-op so XML parser doesn't warn about missing callback
+        {"on_screensaver_changed", [](lv_event_t*) {}},
 #endif
         // Theme explorer callbacks (primary panel)
         {"on_theme_preset_changed", on_theme_preset_changed},

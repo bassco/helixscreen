@@ -885,7 +885,8 @@ void theme_manager_refresh_layout_constants(lv_display_t* display) {
     int32_t ver_res = lv_display_get_vertical_resolution(display);
 
     lv_xml_component_scope_t* scope = lv_xml_component_get_scope("globals");
-    if (!scope) return;
+    if (!scope)
+        return;
 
     // Update nav_width for new horizontal resolution
     const char* nav_suffix;
@@ -915,7 +916,8 @@ void theme_manager_refresh_layout_constants(lv_display_t* display) {
     for (const auto& [base_name, small_val] : small_tokens) {
         auto medium_it = medium_tokens.find(base_name);
         auto large_it = large_tokens.find(base_name);
-        if (medium_it == medium_tokens.end() || large_it == large_tokens.end()) continue;
+        if (medium_it == medium_tokens.end() || large_it == large_tokens.end())
+            continue;
 
         const char* value = nullptr;
         if (strcmp(size_suffix, "_tiny") == 0) {
@@ -973,8 +975,7 @@ void theme_manager_refresh_layout_constants(lv_display_t* display) {
 
     spdlog::info("[Theme] Layout refreshed after rotation: {}x{} → nav={}px, "
                  "overlay={}px, overlay_full={}px (breakpoint={})",
-                 hor_res, ver_res, nav_width, overlay_width, overlay_width_full,
-                 bp_index);
+                 hor_res, ver_res, nav_width, overlay_width, overlay_width_full, bp_index);
 }
 
 /**
@@ -1323,6 +1324,14 @@ void theme_manager_init(lv_display_t* display, bool use_dark_mode_param) {
     char font_variant_name[64];
     snprintf(font_variant_name, sizeof(font_variant_name), "font_body%s", size_suffix);
     const char* font_body_name = lv_xml_get_const(nullptr, font_variant_name);
+
+    // Fallback: _xlarge → _large, _tiny → _small (matching responsive token behavior)
+    if (!font_body_name && strcmp(size_suffix, "_xlarge") == 0) {
+        font_body_name = lv_xml_get_const(nullptr, "font_body_large");
+    } else if (!font_body_name && strcmp(size_suffix, "_tiny") == 0) {
+        font_body_name = lv_xml_get_const(nullptr, "font_body_small");
+    }
+
     const lv_font_t* base_font =
         font_body_name ? lv_xml_get_font(nullptr, font_body_name) : nullptr;
     if (!base_font) {

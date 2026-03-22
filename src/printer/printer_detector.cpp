@@ -91,6 +91,7 @@ struct PrinterDatabase {
 
     void reload() {
         loaded = false;
+        compacted = false;
         loaded_files.clear();
         load_errors.clear();
         user_overrides = 0;
@@ -98,6 +99,33 @@ struct PrinterDatabase {
         data = json();
         load();
     }
+
+    // Strip heuristics arrays after detection to reclaim memory.
+    // Heuristics are the bulk of the database and only needed during detect().
+    // Preserves kinematics info needed for filtered list building.
+    void compact() {
+        if (compacted || !loaded)
+            return;
+        if (data.contains("printers") && data["printers"].is_array()) {
+            for (auto& printer : data["printers"]) {
+                // Extract kinematics before stripping heuristics (needed for filtered lists)
+                if (!printer.contains("_kinematics") && printer.contains("heuristics") &&
+                    printer["heuristics"].is_array()) {
+                    for (const auto& h : printer["heuristics"]) {
+                        if (h.value("type", "") == "kinematics_match") {
+                            printer["_kinematics"] = h.value("pattern", "");
+                            break;
+                        }
+                    }
+                }
+                printer.erase("heuristics");
+            }
+        }
+        compacted = true;
+        spdlog::debug("[PrinterDetector] Database compacted (heuristics stripped)");
+    }
+
+    bool compacted = false;
 
   private:
     void merge_user_extensions() {
@@ -358,11 +386,10 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
     std::string field = heuristic.value("field", "");
     int confidence = heuristic.value("confidence", 0);
 
-    auto field_data = get_field_data(hardware, field);
-
     if (type == "sensor_match" || type == "fan_match" || type == "hostname_match" ||
         type == "led_match") {
         // Simple pattern matching in specified field
+        auto field_data = get_field_data(hardware, field);
         std::string pattern = heuristic.value("pattern", "");
         if (has_pattern(field_data, pattern)) {
             spdlog::debug("[PrinterDetector] Matched {} pattern '{}' (confidence: {})", type,
@@ -371,6 +398,7 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
         }
     } else if (type == "hostname_exclude") {
         // If hostname matches this pattern, exclude this printer entirely
+        auto field_data = get_field_data(hardware, field);
         std::string pattern = heuristic.value("pattern", "");
         if (has_pattern(field_data, pattern)) {
             spdlog::debug("[PrinterDetector] Excluded by {} pattern '{}'", type, pattern);
@@ -378,6 +406,7 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
         }
     } else if (type == "fan_combo") {
         // Multiple patterns must all be present
+        auto field_data = get_field_data(hardware, field);
         if (heuristic.contains("patterns") && heuristic["patterns"].is_array()) {
             if (has_all_patterns(field_data, heuristic["patterns"])) {
                 spdlog::debug("[PrinterDetector] Matched fan combo (confidence: {})", confidence);
@@ -782,9 +811,17 @@ std::string PrinterDetector::get_image_for_printer_id(const std::string& printer
 
 namespace {
 
-// Extract kinematics type from a printer's heuristics array
+// Extract kinematics type from a printer's heuristics array or compacted _kinematics field
 // Returns the pattern value from the first kinematics_match heuristic, or ""
 std::string extract_kinematics(const json& printer) {
+    // Check compacted field first (available after compact())
+    if (printer.contains("_kinematics") && printer["_kinematics"].is_string()) {
+        std::string pattern = printer["_kinematics"].get<std::string>();
+        std::transform(pattern.begin(), pattern.end(), pattern.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return pattern;
+    }
+
     if (!printer.contains("heuristics") || !printer["heuristics"].is_array()) {
         return "";
     }
@@ -1250,6 +1287,14 @@ std::string PrinterDetector::get_print_start_profile(const std::string& printer_
 }
 
 // ============================================================================
+// Memory Management
+// ============================================================================
+
+void PrinterDetector::compact_database() {
+    g_database.compact();
+}
+
+// ============================================================================
 // Reload and Status Functions
 // ============================================================================
 
@@ -1321,6 +1366,8 @@ bool PrinterDetector::auto_detect_and_save(const helix::PrinterDiscovery& discov
     if (!saved_type.empty()) {
         spdlog::debug("[PrinterDetector] Printer type already set: '{}', skipping auto-detection",
                       saved_type);
+        // Still compact if database was loaded (e.g., by list building)
+        compact_database();
         return false;
     }
 
@@ -1338,10 +1385,17 @@ bool PrinterDetector::auto_detect_and_save(const helix::PrinterDiscovery& discov
         // Update PrinterState so home panel gets correct image and capabilities
         get_printer_state().set_printer_type_sync(result.type_name);
 
+        // Strip heuristics to reclaim memory — detection is a one-time operation
+        compact_database();
+
         return true;
     }
 
     spdlog::info("[PrinterDetector] No printer type detected from hardware fingerprints");
+
+    // Strip heuristics to reclaim memory — detection is a one-time operation
+    compact_database();
+
     return false;
 }
 

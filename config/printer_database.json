@@ -2532,13 +2532,6 @@
           "max_y": 310,
           "confidence": 70,
           "reason": "Build volume ~300mm diameter (Venture Delta size)"
-        },
-        {
-          "type": "config_match",
-          "field": "max_velocity",
-          "pattern": "1200",
-          "confidence": 50,
-          "reason": "Max velocity 1200mm/s (Venture Delta spec)"
         }
       ]
     },
