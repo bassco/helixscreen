@@ -14,6 +14,7 @@
 #include "application.h"
 
 // Private LVGL header needed to read display->flush_cb for splash no-op swap
+#include "ui_overlay_timelapse_videos.h"
 #include "ui_update_queue.h"
 
 #include "asset_manager.h"
@@ -24,12 +25,12 @@
 #include "environment_config.h"
 #include "hardware_validator.h"
 #include "helix_version.h"
+#include "job_queue_state.h"
 #include "keyboard_shortcuts.h"
 #include "layout_manager.h"
 #include "led/led_controller.h"
 #include "moonraker_manager.h"
 #include "panel_factory.h"
-#include "job_queue_state.h"
 #include "print_history_manager.h"
 #include "screenshot.h"
 #include "sound_manager.h"
@@ -39,7 +40,6 @@
 #include "subject_initializer.h"
 #include "temperature_history_manager.h"
 #include "timelapse_state.h"
-#include "ui_overlay_timelapse_videos.h"
 #include "wizard_config_paths.h"
 
 // UI headers
@@ -50,7 +50,6 @@
 #include "ui_crash_report_modal.h"
 #include "ui_dialog.h"
 #include "ui_emergency_stop.h"
-#include "ui_modal.h"
 #include "ui_error_reporting.h"
 #include "ui_fan_control_overlay.h"
 #include "ui_gcode_viewer.h"
@@ -58,6 +57,7 @@
 #include "ui_icon.h"
 #include "ui_icon_loader.h"
 #include "ui_keyboard_manager.h"
+#include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_notification.h"
 #include "ui_notification_history.h"
@@ -67,6 +67,7 @@
 #include "ui_panel_ams.h"
 #include "ui_panel_ams_overview.h"
 #include "ui_panel_bed_mesh.h"
+#include "ui_panel_belt_tension.h"
 #include "ui_panel_calibration_pid.h"
 #include "ui_panel_calibration_zoffset.h"
 #include "ui_panel_filament.h"
@@ -74,7 +75,6 @@
 #include "ui_panel_glyphs.h"
 #include "ui_panel_history_dashboard.h"
 #include "ui_panel_home.h"
-#include "ui_panel_belt_tension.h"
 #include "ui_panel_input_shaper.h"
 #include "ui_panel_macros.h"
 #include "ui_panel_memory_stats.h"
@@ -83,7 +83,6 @@
 #include "ui_panel_print_status.h"
 #include "ui_panel_screws_tilt.h"
 #include "ui_panel_settings.h"
-#include "ui_settings_about.h"
 #include "ui_panel_spoolman.h"
 #include "ui_panel_step_test.h"
 #include "ui_panel_temp_control.h"
@@ -91,6 +90,7 @@
 #include "ui_print_tune_overlay.h"
 #include "ui_printer_status_icon.h"
 #include "ui_probe_overlay.h"
+#include "ui_settings_about.h"
 #include "ui_settings_display.h"
 #include "ui_settings_hardware_health.h"
 #include "ui_settings_sensors.h"
@@ -171,11 +171,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <unistd.h>
 
 #ifdef __APPLE__
@@ -1307,8 +1307,7 @@ bool Application::init_moonraker() {
     spdlog::debug("[Application] PrintHistoryManager created");
 
     // Create job queue state manager
-    m_job_queue_state =
-        std::make_unique<JobQueueState>(m_moonraker->api(), get_moonraker_client());
+    m_job_queue_state = std::make_unique<JobQueueState>(m_moonraker->api(), get_moonraker_client());
     m_job_queue_state->init_subjects();
     set_job_queue_state(m_job_queue_state.get());
     spdlog::debug("[Application] JobQueueState created");
@@ -2471,7 +2470,8 @@ int Application::main_loop() {
         if (!loop_config.benchmark_mode) {
             uint32_t max_sleep = m_display->is_display_sleeping() ? 200 : 33;
             uint32_t sleep_ms = std::min(time_till_next, max_sleep);
-            if (sleep_ms < 5) sleep_ms = 5;
+            if (sleep_ms < 5)
+                sleep_ms = 5;
             DisplayManager::delay(sleep_ms);
         } else {
             DisplayManager::delay(1);
@@ -2545,7 +2545,8 @@ void Application::handle_keyboard_shortcuts() {
                     switch_printer(next);
                 } else {
                     // Create a second test printer so we can test switching
-                    spdlog::info("[Application] P key - creating test printer for multi-printer testing");
+                    spdlog::info(
+                        "[Application] P key - creating test printer for multi-printer testing");
                     nlohmann::json test_data;
                     test_data["printer_name"] = "Voron 2.4";
                     test_data["type"] = "Voron 2.4 350mm";
@@ -2698,10 +2699,9 @@ void Application::add_printer_via_wizard() {
     // Do NOT call run_wizard() again here — that creates a duplicate wizard container.
     tear_down_printer_state();
 
-    // Register cancel callback AFTER tear_down (which clears it) but BEFORE init (which runs wizard)
-    set_wizard_cancel_callback([this]() {
-        cancel_add_printer_wizard();
-    });
+    // Register cancel callback AFTER tear_down (which clears it) but BEFORE init (which runs
+    // wizard)
+    set_wizard_cancel_callback([this]() { cancel_add_printer_wizard(); });
 
     init_printer_state();
 
@@ -3033,8 +3033,10 @@ void Application::shutdown() {
     }
 
     // Reset managers in reverse order (MoonrakerManager handles print_start_collector cleanup)
-    // Job queue and history managers MUST be reset before moonraker (use client for unregistration)
-    m_job_queue_state.reset();
+    // History managers MUST be reset before moonraker (use client for unregistration).
+    // JobQueueState is reset AFTER StaticSubjectRegistry::deinit_all() because it owns
+    // LVGL subjects that panels still observe — destroying it early frees the subject
+    // memory while panel ObserverGuards still hold observer pointers into those lists.
     m_history_manager.reset();
     m_temp_history_manager.reset();
 
@@ -3092,6 +3094,11 @@ void Application::shutdown() {
     // After this, widgets have no observer callbacks, so lv_deinit() deletes them
     // cleanly without firing stale unsubscribe callbacks on corrupted linked lists.
     StaticSubjectRegistry::instance().deinit_all();
+
+    // Destroy JobQueueState AFTER deinit_all() so its registered cleanup lambda runs
+    // while the object is still alive. Must still be before m_moonraker.reset() so
+    // client unregistration works. (Mirrors soft-restart path ordering.)
+    m_job_queue_state.reset();
 
     // Destroy runtime CJK fonts before LVGL shutdown
     helix::system::CjkFontManager::instance().shutdown();
