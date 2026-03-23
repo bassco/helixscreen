@@ -78,9 +78,12 @@ void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     lock_icon_ = lv_obj_find_by_name(widget_obj_, "power_lock_icon");
 
     if (!device_name_.empty()) {
-        // Observe the device status subject
+        // Observe the device status subject. Use a LOCAL lifetime variable
+        // so the ObserverGuard's weak_ptr expires when deinit_subjects()
+        // destroys the PowerDeviceState's copy (shutdown safety).
+        SubjectLifetime lifetime;
         lv_subject_t* subj =
-            PowerDeviceState::instance().get_status_subject(device_name_, subject_lifetime_);
+            PowerDeviceState::instance().get_status_subject(device_name_, lifetime);
         if (subj) {
             std::weak_ptr<bool> weak_alive = alive_;
             status_observer_ = helix::ui::observe_int_sync<PowerDeviceWidget>(
@@ -90,7 +93,7 @@ void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                         return;
                     self->update_display(status);
                 },
-                subject_lifetime_);
+                lifetime);
 
             // Set initial display name
             if (name_label_) {
@@ -116,7 +119,6 @@ void PowerDeviceWidget::detach() {
     dismiss_device_picker();
 
     status_observer_.reset();
-    subject_lifetime_ = {};
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -209,9 +211,9 @@ void PowerDeviceWidget::handle_clicked() {
         return;
     }
 
-    // Check current status from observer
-    lv_subject_t* subj =
-        PowerDeviceState::instance().get_status_subject(device_name_, subject_lifetime_);
+    // Check current status
+    SubjectLifetime lt;
+    lv_subject_t* subj = PowerDeviceState::instance().get_status_subject(device_name_, lt);
     if (subj) {
         int status = lv_subject_get_int(subj);
         if (status == 2) {
@@ -472,13 +474,13 @@ void PowerDeviceWidget::select_device(const std::string& name) {
 
     // Re-attach to start observing the new device
     if (widget_obj_ && parent_screen_) {
-        // Reset observer state before re-attaching
+        // Reset observer before re-attaching
         status_observer_.reset();
-        subject_lifetime_ = {};
 
-        // Observe the new device status
+        // Observe the new device status (local lifetime — see attach() comment)
+        SubjectLifetime lifetime;
         lv_subject_t* subj =
-            PowerDeviceState::instance().get_status_subject(device_name_, subject_lifetime_);
+            PowerDeviceState::instance().get_status_subject(device_name_, lifetime);
         if (subj) {
             std::weak_ptr<bool> weak_alive = alive_;
             status_observer_ = helix::ui::observe_int_sync<PowerDeviceWidget>(
@@ -488,7 +490,7 @@ void PowerDeviceWidget::select_device(const std::string& name) {
                         return;
                     self->update_display(status);
                 },
-                subject_lifetime_);
+                lifetime);
         }
 
         // Update display name

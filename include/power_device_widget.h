@@ -53,7 +53,6 @@ class PowerDeviceWidget : public PanelWidget {
     lv_obj_t* status_label_ = nullptr;
     lv_obj_t* lock_icon_ = nullptr;
 
-    SubjectLifetime subject_lifetime_;
     ObserverGuard status_observer_;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(false);
 
