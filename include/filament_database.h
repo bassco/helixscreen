@@ -43,6 +43,8 @@ struct MaterialOverride {
     std::optional<int> nozzle_min;
     std::optional<int> nozzle_max;
     std::optional<int> bed_temp;
+    std::optional<std::string> preheat_macro;        ///< Klipper macro name (uppercase canonical form)
+    std::optional<bool> macro_handles_heating;       ///< true = macro replaces SET_HEATER_TEMPERATURE
 };
 
 /**
