@@ -120,6 +120,16 @@ class EnvironmentConfig {
     static bool get_benchmark_mode();
 
     /**
+     * @brief Get screen size override from HELIX_SCREEN_SIZE
+     *
+     * Accepts named presets (micro, tiny, small, medium, large, xlarge)
+     * or WxH format (e.g., "480x400", "1920x1080").
+     *
+     * @return Size string, or nullopt if not set
+     */
+    static std::optional<std::string> get_screen_size();
+
+    /**
      * @brief Get data directory override from HELIX_DATA_DIR
      *
      * When set, the application uses this directory as the root for

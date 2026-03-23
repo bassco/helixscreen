@@ -695,6 +695,22 @@ bool Application::parse_args(int argc, char** argv) {
     // Apply environment variable overrides using type-safe EnvironmentConfig
     using EnvConfig = helix::config::EnvironmentConfig;
 
+    // HELIX_SCREEN_SIZE: screen size override (alternative to -s flag)
+    // Only applies if -s was not passed on the command line
+    if (m_screen_width == 0 && m_screen_height == 0) {
+        if (auto size_str = EnvConfig::get_screen_size()) {
+            if (helix::parse_screen_size_string(size_str->c_str(), m_screen_width, m_screen_height,
+                                                m_args.screen_size)) {
+                spdlog::info("[Application] Screen size from HELIX_SCREEN_SIZE: {}x{}", m_screen_width,
+                             m_screen_height);
+            } else {
+                spdlog::warn("[Application] Invalid HELIX_SCREEN_SIZE='{}' — use named size "
+                             "(micro/tiny/small/medium/large/xlarge) or WxH (e.g. 480x400)",
+                             *size_str);
+            }
+        }
+    }
+
     // HELIX_AUTO_QUIT_MS: auto-quit timeout (100ms - 1hr)
     if (m_args.timeout_sec == 0) {
         if (auto timeout = EnvConfig::get_auto_quit_seconds()) {

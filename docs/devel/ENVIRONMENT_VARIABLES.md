@@ -6,7 +6,7 @@ This document provides a comprehensive reference for all environment variables u
 
 | Category | Count | Prefix |
 |----------|-------|--------|
-| [Display & Backend](#display--backend-configuration) | 13 | `HELIX_` |
+| [Display & Backend](#display--backend-configuration) | 14 | `HELIX_` |
 | [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
 | [G-Code Viewer](#g-code-viewer) | 3 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
@@ -246,6 +246,41 @@ HELIX_FORCE_ROTATION_PROBE=1 ./build/bin/helix-screen
 - Sets `/display/rotation_probed` flag so it doesn't re-run on subsequent boots
 - Skips entirely if: rotation is already configured (config, env var, or CLI), or the probe has already run
 - Runs after translations are loaded (Phase 8c) so probe strings are translatable via `lv_tr()`
+
+### `HELIX_SCREEN_SIZE`
+
+Override the screen resolution. Alternative to the `-s` / `--size` command-line flag, useful for persistent configuration via `helixscreen.env` or systemd `EnvironmentFile`.
+
+| Property | Value |
+|----------|-------|
+| **Values** | Named preset: `micro`, `tiny`, `small`, `medium`, `large`, `xlarge` — or custom `WxH` format (e.g., `480x400`, `1920x1080`) |
+| **Default** | Auto-detected from display hardware |
+| **File** | `src/application/application.cpp` (via `EnvironmentConfig::get_screen_size()`) |
+| **Priority** | The `-s` command-line flag takes precedence over this variable |
+
+Named presets and their resolutions:
+
+| Preset | Width | Height |
+|--------|-------|--------|
+| `micro` | 480 | 272 |
+| `tiny` | 480 | 320 |
+| `small` | 480 | 400 |
+| `medium` | 800 | 480 |
+| `large` | 1024 | 600 |
+| `xlarge` | 1280 | 720 |
+
+Custom `WxH` values are automatically classified into the nearest breakpoint based on height.
+
+```bash
+# Force small screen layout
+HELIX_SCREEN_SIZE=small ./build/bin/helix-screen --test
+
+# Custom resolution
+HELIX_SCREEN_SIZE=1920x1080 ./build/bin/helix-screen --test
+
+# In helixscreen.env (persistent):
+HELIX_SCREEN_SIZE=medium
+```
 
 ### `HELIX_DPI`
 

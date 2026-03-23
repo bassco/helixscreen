@@ -105,6 +105,10 @@ bool EnvironmentConfig::get_benchmark_mode() {
     return exists("HELIX_BENCHMARK");
 }
 
+std::optional<std::string> EnvironmentConfig::get_screen_size() {
+    return get_string("HELIX_SCREEN_SIZE");
+}
+
 std::optional<std::string> EnvironmentConfig::get_data_dir() {
     return get_string("HELIX_DATA_DIR");
 }

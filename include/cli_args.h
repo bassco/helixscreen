@@ -149,6 +149,21 @@ struct CliArgs {
 bool parse_cli_args(int argc, char** argv, CliArgs& args, int& screen_width, int& screen_height);
 
 /**
+ * @brief Parse a screen size string (named preset or WxH format)
+ *
+ * Accepts named sizes: micro, tiny, small, medium, large, xlarge
+ * Or custom WxH format: "480x400", "1920x1080"
+ *
+ * @param size_str The size string to parse
+ * @param out_width Output: parsed width
+ * @param out_height Output: parsed height
+ * @param out_size Output: corresponding ScreenSize breakpoint
+ * @return true on success, false if format is invalid
+ */
+bool parse_screen_size_string(const char* size_str, int& out_width, int& out_height,
+                              ScreenSize& out_size);
+
+/**
  * @brief Convert panel name string to panel ID
  *
  * Consolidates duplicated panel name mapping logic.
