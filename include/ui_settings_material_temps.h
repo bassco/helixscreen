@@ -70,15 +70,14 @@ class MaterialTempsOverlay : public OverlayBase {
     lv_obj_t* list_view_ = nullptr;
     lv_obj_t* edit_view_ = nullptr;
 
-    // Macro picker state
+    // Macro dropdown state
     lv_subject_t has_macro_subject_;  // 0=no macro, 1=has macro (controls toggle visibility)
-    lv_obj_t* macro_picker_btn_ = nullptr;
+    lv_obj_t* macro_dropdown_ = nullptr;
     lv_obj_t* macro_heating_switch_ = nullptr;
-    std::string selected_macro_;  // Currently selected macro name (empty = none)
+    std::vector<std::string> macro_names_;  // Parallel to dropdown options (index 0 = "None")
 
-    void populate_macro_picker_btn();
-    void show_macro_picker();
-    void handle_macro_selected(const std::string& macro_name);
+    void populate_macro_dropdown();
+    void handle_macro_dropdown_changed();
 
     // === Static Callbacks ===
 
@@ -86,8 +85,7 @@ class MaterialTempsOverlay : public OverlayBase {
     static void on_material_save(lv_event_t* e);
     static void on_material_reset_defaults(lv_event_t* e);
     static void on_back_clicked(lv_event_t* e);
-    static void on_open_macro_picker(lv_event_t* e);
-    static void on_macro_picker_row_clicked(lv_event_t* e);
+    static void on_macro_dropdown_changed(lv_event_t* e);
 };
 
 /**

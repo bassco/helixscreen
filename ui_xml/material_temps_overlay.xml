@@ -56,9 +56,9 @@
         <!-- Preheat Macro section -->
         <lv_obj width="100%" flex_flow="column" style_pad_all="0" style_pad_top="#space_lg" scrollable="false">
           <text_body style_pad_bottom="#space_xs" text="Preheat Macro" text_tag="Preheat Macro"/>
-          <ui_button name="macro_picker_btn" variant="secondary" width="100%" text="None" text_tag="None">
-            <event_cb trigger="clicked" callback="on_open_macro_picker"/>
-          </ui_button>
+          <lv_dropdown name="macro_dropdown" width="100%" options="None">
+            <event_cb trigger="value_changed" callback="on_macro_dropdown_changed"/>
+          </lv_dropdown>
         </lv_obj>
         <!-- Macro handles heating toggle (hidden when no macro assigned) -->
         <lv_obj name="macro_heating_row" width="100%" flex_flow="row" style_pad_all="0" style_pad_top="#space_md" scrollable="false"
