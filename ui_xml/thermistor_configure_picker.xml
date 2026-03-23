@@ -9,10 +9,11 @@
     <event_cb trigger="clicked" callback="thermistor_picker_backdrop_cb"/>
     <!-- Context menu card - positioned by C++ -->
     <lv_obj name="context_menu"
-            width="content" height="content" style_bg_color="#elevated_bg" style_bg_opa="255"
+            width="content" height="content" style_max_height="85%"
+            style_bg_color="#elevated_bg" style_bg_opa="255"
             style_radius="#border_radius" style_pad_all="#space_sm" style_pad_gap="#space_xs"
             flex_flow="column" style_flex_main_place="start" style_flex_cross_place="start"
-            scrollable="false" clickable="true">
+            scrollable="true" clickable="true">
       <!-- Header row: title + Done button -->
       <lv_obj width="100%" height="content"
               flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"

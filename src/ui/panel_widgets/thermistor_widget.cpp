@@ -732,7 +732,7 @@ void ThermistorWidget::show_sensor_picker() {
     int space_xs = resolve_space_token("space_xs", 4);
     int space_sm = resolve_space_token("space_sm", 6);
     int screen_h = lv_obj_get_height(parent_screen_);
-    lv_obj_set_style_max_height(sensor_list, screen_h * 2 / 3, 0);
+    lv_obj_set_style_max_height(sensor_list, screen_h * 35 / 100, 0);
 
     for (const auto& sensor : sensors) {
         bool is_selected = (sensor.klipper_name == selected_sensor_);
@@ -838,7 +838,7 @@ void ThermistorWidget::show_configure_picker() {
     int space_xs = resolve_space_token("space_xs", 4);
     int space_sm = resolve_space_token("space_sm", 6);
     int screen_h = lv_obj_get_height(parent_screen_);
-    lv_obj_set_style_max_height(sensor_list, screen_h * 2 / 3, 0);
+    lv_obj_set_style_max_height(sensor_list, screen_h * 35 / 100, 0);
 
     // Build set of currently selected sensors
     std::set<std::string> selected_set(sensors_.begin(), sensors_.end());
