@@ -1375,7 +1375,7 @@ configure_forgex_display() {
     # Disable GuppyScreen init script (remove execute permission)
     if [ -x "$guppy_init" ]; then
         log_info "Disabling GuppyScreen init script..."
-        $SUDO chmod -x "$guppy_init"
+        $SUDO chmod a-x "$guppy_init"
         changed=true
     fi
 
@@ -1383,7 +1383,7 @@ configure_forgex_display() {
     # HelixScreen uses its own input handling
     if [ -x "$tslib_init" ]; then
         log_info "Disabling tslib init script..."
-        $SUDO chmod -x "$tslib_init"
+        $SUDO chmod a-x "$tslib_init"
         changed=true
     fi
 
@@ -1816,7 +1816,7 @@ stop_kmod_competing_uis() {
         log_info "Stopping Xorg (Klipper Mod display server)..."
         $SUDO /etc/init.d/S40xorg stop 2>/dev/null || true
         # Disable Xorg init script (non-destructive, reversible)
-        $SUDO chmod -x /etc/init.d/S40xorg 2>/dev/null || true
+        $SUDO chmod a-x /etc/init.d/S40xorg 2>/dev/null || true
         record_disabled_service "sysv-chmod" "/etc/init.d/S40xorg"
         # Kill any remaining Xorg processes
         kill_process_by_name Xorg X || true
@@ -1840,7 +1840,7 @@ stop_k1_stock_competing_uis() {
         log_info "Stopping stock Creality UI (S99start_app)..."
         /etc/init.d/S99start_app stop 2>/dev/null || true
         # Disable so it doesn't restart on reboot (reversible)
-        chmod -x /etc/init.d/S99start_app 2>/dev/null || true
+        chmod a-x /etc/init.d/S99start_app 2>/dev/null || true
         record_disabled_service "sysv-chmod" "/etc/init.d/S99start_app"
         found_any=true
     fi
@@ -1891,7 +1891,7 @@ stop_competing_uis() {
         log_info "Stopping previous UI: $PREVIOUS_UI_SCRIPT"
         $SUDO "$PREVIOUS_UI_SCRIPT" stop 2>/dev/null || true
         # Disable by removing execute permission (non-destructive, reversible)
-        $SUDO chmod -x "$PREVIOUS_UI_SCRIPT" 2>/dev/null || true
+        $SUDO chmod a-x "$PREVIOUS_UI_SCRIPT" 2>/dev/null || true
         record_disabled_service "sysv-chmod" "$PREVIOUS_UI_SCRIPT"
         found_any=true
     fi
@@ -1920,7 +1920,7 @@ stop_competing_uis() {
                 log_info "Stopping $ui ($initscript)..."
                 $SUDO "$initscript" stop 2>/dev/null || true
                 # Disable by removing execute permission (non-destructive)
-                $SUDO chmod -x "$initscript" 2>/dev/null || true
+                $SUDO chmod a-x "$initscript" 2>/dev/null || true
                 record_disabled_service "sysv-chmod" "$initscript"
                 found_any=true
             fi

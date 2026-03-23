@@ -36,7 +36,7 @@ configure_forgex_display() {
     # Disable GuppyScreen init script (remove execute permission)
     if [ -x "$guppy_init" ]; then
         log_info "Disabling GuppyScreen init script..."
-        $SUDO chmod -x "$guppy_init"
+        $SUDO chmod a-x "$guppy_init"
         changed=true
     fi
 
@@ -44,7 +44,7 @@ configure_forgex_display() {
     # HelixScreen uses its own input handling
     if [ -x "$tslib_init" ]; then
         log_info "Disabling tslib init script..."
-        $SUDO chmod -x "$tslib_init"
+        $SUDO chmod a-x "$tslib_init"
         changed=true
     fi
 
