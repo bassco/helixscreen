@@ -30,7 +30,9 @@ class ExcludeObjectMapView {
 
     class CoordMapper {
       public:
-        CoordMapper(float bed_w_mm, float bed_h_mm, int viewport_w_px, int viewport_h_px);
+        /// Map coordinate range (origin_x..origin_x+bed_w) to viewport
+        CoordMapper(float bed_w_mm, float bed_h_mm, int viewport_w_px, int viewport_h_px,
+                    float origin_x = 0.0f, float origin_y = 0.0f);
         std::pair<float, float> mm_to_px(float x_mm, float y_mm) const;
         PixelRect bbox_to_rect(glm::vec2 bbox_min, glm::vec2 bbox_max) const;
         float scale() const { return scale_; }
@@ -39,6 +41,8 @@ class ExcludeObjectMapView {
         float scale_{1.0f};
         float offset_x_{0.0f};
         float offset_y_{0.0f};
+        float origin_x_{0.0f};
+        float origin_y_{0.0f};
         int viewport_h_{0};
     };
 

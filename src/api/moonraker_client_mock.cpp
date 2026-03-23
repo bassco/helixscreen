@@ -2356,9 +2356,10 @@ bool MoonrakerClientMock::start_print_internal(const std::string& filename) {
         }
     }
 
-    // Parse EXCLUDE_OBJECT_DEFINE lines from gcode to populate defined objects
-    // This simulates what Klipper does when it processes the gcode file
+    // Parse EXCLUDE_OBJECT_DEFINE lines from gcode to populate defined objects.
+    // Extracts NAME, CENTER, and POLYGON to match real Moonraker behavior.
     {
+        json objects_array = json::array();
         std::vector<std::string> defined_objects;
         std::ifstream gcode_file(full_path);
         if (gcode_file.is_open()) {
@@ -2367,33 +2368,79 @@ bool MoonrakerClientMock::start_print_internal(const std::string& filename) {
                 if (line.find("EXCLUDE_OBJECT_DEFINE") != std::string::npos) {
                     // Extract NAME= parameter
                     auto name_pos = line.find("NAME=");
-                    if (name_pos != std::string::npos) {
-                        std::string name;
-                        size_t start = name_pos + 5;
-                        if (start < line.size() && line[start] == '"') {
-                            // Quoted name
-                            size_t end = line.find('"', start + 1);
-                            if (end != std::string::npos) {
-                                name = line.substr(start + 1, end - start - 1);
-                            }
-                        } else if (start < line.size() && line[start] == '\'') {
-                            // Single-quoted name
-                            size_t end = line.find('\'', start + 1);
-                            if (end != std::string::npos) {
-                                name = line.substr(start + 1, end - start - 1);
-                            }
-                        } else {
-                            // Unquoted: ends at space or end of line
-                            size_t end = line.find(' ', start);
-                            name = line.substr(start, end - start);
-                        }
-                        if (!name.empty()) {
-                            defined_objects.push_back(name);
-                            if (mock_state_) {
-                                mock_state_->add_object_name(name);
-                            }
+                    if (name_pos == std::string::npos) continue;
+                    std::string name;
+                    size_t start = name_pos + 5;
+                    if (start < line.size() && line[start] == '"') {
+                        size_t end = line.find('"', start + 1);
+                        if (end != std::string::npos) name = line.substr(start + 1, end - start - 1);
+                    } else if (start < line.size() && line[start] == '\'') {
+                        size_t end = line.find('\'', start + 1);
+                        if (end != std::string::npos) name = line.substr(start + 1, end - start - 1);
+                    } else {
+                        size_t end = line.find(' ', start);
+                        name = line.substr(start, end - start);
+                    }
+                    if (name.empty()) continue;
+
+                    defined_objects.push_back(name);
+                    if (mock_state_) mock_state_->add_object_name(name);
+
+                    // Build JSON object entry with CENTER and POLYGON if present
+                    json obj_entry = {{"name", name}};
+
+                    // Parse CENTER=x,y
+                    auto center_pos = line.find("CENTER=");
+                    if (center_pos != std::string::npos) {
+                        size_t cs = center_pos + 7;
+                        size_t ce = line.find(' ', cs);
+                        std::string center_str = line.substr(cs, ce - cs);
+                        auto comma = center_str.find(',');
+                        if (comma != std::string::npos) {
+                            try {
+                                float cx = std::stof(center_str.substr(0, comma));
+                                float cy = std::stof(center_str.substr(comma + 1));
+                                obj_entry["center"] = {cx, cy};
+                            } catch (...) {}
                         }
                     }
+
+                    // Parse POLYGON=[[x,y],[x,y],...]
+                    auto poly_pos = line.find("POLYGON=");
+                    if (poly_pos != std::string::npos) {
+                        size_t ps = poly_pos + 8;
+                        // Find matching closing bracket
+                        int depth = 0;
+                        size_t pe = ps;
+                        for (; pe < line.size(); ++pe) {
+                            if (line[pe] == '[') depth++;
+                            else if (line[pe] == ']') { depth--; if (depth == 0) { pe++; break; } }
+                        }
+                        std::string poly_str = line.substr(ps, pe - ps);
+
+                        // Parse the polygon array: [[x,y],[x,y],...]
+                        json polygon = json::array();
+                        size_t pos = 0;
+                        while ((pos = poly_str.find('[', pos)) != std::string::npos) {
+                            size_t end = poly_str.find(']', pos);
+                            if (end == std::string::npos) break;
+                            std::string pair = poly_str.substr(pos + 1, end - pos - 1);
+                            auto c = pair.find(',');
+                            if (c != std::string::npos) {
+                                try {
+                                    float px = std::stof(pair.substr(0, c));
+                                    float py = std::stof(pair.substr(c + 1));
+                                    polygon.push_back({px, py});
+                                } catch (...) {}
+                            }
+                            pos = end + 1;
+                        }
+                        if (!polygon.empty()) {
+                            obj_entry["polygon"] = polygon;
+                        }
+                    }
+
+                    objects_array.push_back(std::move(obj_entry));
                 }
                 // Stop scanning after first layer to avoid reading the entire file
                 if (line.find(";LAYER_CHANGE") != std::string::npos ||
@@ -2408,13 +2455,6 @@ bool MoonrakerClientMock::start_print_internal(const std::string& filename) {
                          defined_objects.size(), lookup_filename);
             if (mock_state_) {
                 mock_state_->set_available_objects(defined_objects);
-            }
-
-            // Dispatch exclude_object status update so PrinterState knows about them
-            json objects_array = json::array();
-            for (int i = 0; i < static_cast<int>(defined_objects.size()); i++) {
-                objects_array.push_back(mock_object_entry(
-                    defined_objects[i], i, static_cast<int>(defined_objects.size())));
             }
             json eo_status = {{"exclude_object",
                                {{"objects", objects_array},
@@ -2671,20 +2711,15 @@ void MoonrakerClientMock::dispatch_enhanced_print_status() {
                    {"virtual_sdcard",
                     {{"file_path", filename}, {"progress", progress}, {"is_active", is_active}}}};
 
-    // Build exclude_object status with defined objects and excluded state
+    // Build exclude_object status — only send excluded_objects + current_object
+    // (objects list with geometry was sent once at print start from GCode parsing)
     {
-        json objects_array = json::array();
         json excluded_array = json::array();
         std::string current;
 
         if (mock_state_) {
-            // Use shared state (thread-safe copies via internal mutex)
             auto names = mock_state_->get_object_names();
             auto excl = mock_state_->get_excluded_objects();
-            for (int i = 0; i < static_cast<int>(names.size()); i++) {
-                objects_array.push_back(
-                    mock_object_entry(names[i], i, static_cast<int>(names.size())));
-            }
             for (const auto& obj : excl) {
                 excluded_array.push_back(obj);
             }
@@ -2700,14 +2735,9 @@ void MoonrakerClientMock::dispatch_enhanced_print_status() {
         } else {
             // Fallback to local state for backward compatibility
             std::lock_guard<std::mutex> lock(excluded_objects_mutex_);
-            for (int i = 0; i < static_cast<int>(object_names_.size()); i++) {
-                objects_array.push_back(
-                    mock_object_entry(object_names_[i], i, static_cast<int>(object_names_.size())));
-            }
             for (const auto& obj : excluded_objects_) {
                 excluded_array.push_back(obj);
             }
-            // Pick first non-excluded object as current during active printing
             if (!object_names_.empty() && is_active) {
                 for (const auto& n : object_names_) {
                     if (excluded_objects_.count(n) == 0) {
@@ -2718,8 +2748,9 @@ void MoonrakerClientMock::dispatch_enhanced_print_status() {
             }
         }
 
+        // Only send excluded_objects + current_object in periodic updates
+        // (objects list with geometry was sent once at print start)
         status["exclude_object"] = {
-            {"objects", objects_array},
             {"excluded_objects", excluded_array},
             {"current_object", current.empty() ? json(nullptr) : json(current)}};
     }
@@ -3558,19 +3589,14 @@ void MoonrakerClientMock::temperature_simulation_loop() {
             }
         }
 
-        // Add exclude_object status with defined objects and excluded state
+        // Add exclude_object status (excluded + current only, objects sent at start)
         {
-            json objects_array = json::array();
             json excluded_array = json::array();
             std::string current_obj;
 
             if (mock_state_) {
                 auto names = mock_state_->get_object_names();
                 auto excl = mock_state_->get_excluded_objects();
-                for (int i = 0; i < static_cast<int>(names.size()); i++) {
-                    objects_array.push_back(
-                        mock_object_entry(names[i], i, static_cast<int>(names.size())));
-                }
                 for (const auto& obj : excl) {
                     excluded_array.push_back(obj);
                 }
@@ -3585,10 +3611,6 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 }
             } else {
                 std::lock_guard<std::mutex> lock(excluded_objects_mutex_);
-                for (int i = 0; i < static_cast<int>(object_names_.size()); i++) {
-                    objects_array.push_back(
-                        mock_object_entry(object_names_[i], i, static_cast<int>(object_names_.size())));
-                }
                 for (const auto& obj : excluded_objects_) {
                     excluded_array.push_back(obj);
                 }
@@ -3603,8 +3625,8 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 }
             }
 
+            // Only send excluded_objects + current_object (objects sent at start)
             status_obj["exclude_object"] = {
-                {"objects", objects_array},
                 {"excluded_objects", excluded_array},
                 {"current_object", current_obj.empty() ? json(nullptr) : json(current_obj)}};
         }

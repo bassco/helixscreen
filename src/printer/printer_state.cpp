@@ -401,6 +401,7 @@ void PrinterState::update_from_status(const json& state) {
                         if (pt.is_array() && pt.size() >= 2 &&
                             pt[0].is_number() && pt[1].is_number()) {
                             float x = pt[0].get<float>(), y = pt[1].get<float>();
+                            info.polygon.push_back({x, y});
                             min_x = std::min(min_x, x);
                             min_y = std::min(min_y, y);
                             max_x = std::max(max_x, x);

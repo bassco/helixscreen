@@ -38,6 +38,7 @@ class PrinterExcludedObjectsState {
         glm::vec2 center{0.0f, 0.0f};
         glm::vec2 bbox_min{0.0f, 0.0f};
         glm::vec2 bbox_max{0.0f, 0.0f};
+        std::vector<glm::vec2> polygon;  ///< Outline polygon from slicer (may be empty)
         bool has_center{true};
         bool has_bbox{true};
     };

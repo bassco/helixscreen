@@ -23,8 +23,9 @@ static ExcludeObjectMapView* g_active_map_view = nullptr;
 // ============================================================================
 
 ExcludeObjectMapView::CoordMapper::CoordMapper(
-    float bed_w_mm, float bed_h_mm, int viewport_w_px, int viewport_h_px)
-    : viewport_h_(viewport_h_px) {
+    float bed_w_mm, float bed_h_mm, int viewport_w_px, int viewport_h_px,
+    float origin_x, float origin_y)
+    : origin_x_(origin_x), origin_y_(origin_y), viewport_h_(viewport_h_px) {
     float scale_x = static_cast<float>(viewport_w_px) / bed_w_mm;
     float scale_y = static_cast<float>(viewport_h_px) / bed_h_mm;
     scale_ = std::min(scale_x, scale_y);
@@ -36,9 +37,10 @@ ExcludeObjectMapView::CoordMapper::CoordMapper(
 
 std::pair<float, float> ExcludeObjectMapView::CoordMapper::mm_to_px(
     float x_mm, float y_mm) const {
-    float px = offset_x_ + x_mm * scale_;
+    // Subtract origin to handle non-zero-based coordinate systems
+    float px = offset_x_ + (x_mm - origin_x_) * scale_;
     float bed_h_px = static_cast<float>(viewport_h_) - 2.0f * offset_y_;
-    float py = offset_y_ + bed_h_px - y_mm * scale_;
+    float py = offset_y_ + bed_h_px - (y_mm - origin_y_) * scale_;
     return {px, py};
 }
 
@@ -119,12 +121,26 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
         return;
     }
 
+    // Disable scrolling on root view
+    lv_obj_remove_flag(root_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(root_, LV_SCROLLBAR_MODE_OFF);
+
     // Force layout so children have valid sizes
     lv_obj_update_layout(root_);
 
     // Find named children
     plate_area_ = lv_obj_find_by_name(root_, "plate_area");
     key_bar_ = lv_obj_find_by_name(root_, "key_bar");
+
+    // Disable scrolling on plate area and key bar
+    if (plate_area_) {
+        lv_obj_remove_flag(plate_area_, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scrollbar_mode(plate_area_, LV_SCROLLBAR_MODE_OFF);
+    }
+    if (key_bar_) {
+        lv_obj_remove_flag(key_bar_, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scrollbar_mode(key_bar_, LV_SCROLLBAR_MODE_OFF);
+    }
 
     if (!plate_area_) {
         spdlog::error("[ExcludeObjectMapView] Could not find plate_area");
@@ -147,21 +163,43 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
         lv_obj_set_pos(object_container_, 0, 0);
     }
 
-    // Derive bed dimensions from object bounding boxes if none supplied
-    if (bed_w_mm <= 0.0f && state_) {
+    // Compute actual coordinate extents from all object geometry.
+    // Objects may have negative coordinates (e.g., bed centered at 0,0).
+    float coord_min_x = 0.0f, coord_min_y = 0.0f;
+    float coord_max_x = bed_w_mm_, coord_max_y = bed_h_mm_;
+    bool have_extents = false;
+
+    if (state_) {
         const auto& defined = state_->get_defined_objects();
-        float max_x = 0.0f, max_y = 0.0f;
         for (const auto& name : defined) {
             auto info = state_->get_object_geometry(name);
-            if (info && info->has_bbox) {
-                max_x = std::max(max_x, info->bbox_max.x);
-                max_y = std::max(max_y, info->bbox_max.y);
+            if (!info || !info->has_bbox) continue;
+            if (!have_extents) {
+                coord_min_x = info->bbox_min.x;
+                coord_min_y = info->bbox_min.y;
+                coord_max_x = info->bbox_max.x;
+                coord_max_y = info->bbox_max.y;
+                have_extents = true;
+            } else {
+                coord_min_x = std::min(coord_min_x, info->bbox_min.x);
+                coord_min_y = std::min(coord_min_y, info->bbox_min.y);
+                coord_max_x = std::max(coord_max_x, info->bbox_max.x);
+                coord_max_y = std::max(coord_max_y, info->bbox_max.y);
             }
         }
-        if (max_x > 0.0f) {
-            bed_w_mm_ = max_x * 1.1f;
-            bed_h_mm_ = max_y * 1.1f;
-        }
+    }
+
+    if (have_extents) {
+        // Add 10% padding around the extents
+        float range_x = coord_max_x - coord_min_x;
+        float range_y = coord_max_y - coord_min_y;
+        float pad_x = range_x * 0.1f, pad_y = range_y * 0.1f;
+        coord_min_x -= pad_x;
+        coord_min_y -= pad_y;
+        coord_max_x += pad_x;
+        coord_max_y += pad_y;
+        bed_w_mm_ = coord_max_x - coord_min_x;
+        bed_h_mm_ = coord_max_y - coord_min_y;
     }
 
     // Update plate dimensions label
@@ -177,7 +215,8 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
         lv_obj_update_layout(root_);
         int vw = lv_obj_get_width(plate_area_);
         int vh = lv_obj_get_height(plate_area_);
-        mapper_ = std::make_unique<CoordMapper>(bed_w_mm_, bed_h_mm_, vw, vh);
+        mapper_ = std::make_unique<CoordMapper>(bed_w_mm_, bed_h_mm_, vw, vh,
+                                                coord_min_x, coord_min_y);
 
         // Create canvas for first-layer outline rendering
         if (vw > 0 && vh > 0) {
@@ -187,6 +226,8 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
                 lv_canvas_set_draw_buf(canvas_, canvas_buf_);
                 lv_canvas_fill_bg(canvas_, lv_color_black(), LV_OPA_TRANSP);
                 lv_obj_remove_flag(canvas_, LV_OBJ_FLAG_CLICKABLE);
+                lv_obj_remove_flag(canvas_, LV_OBJ_FLAG_SCROLLABLE);
+                lv_obj_set_scrollbar_mode(canvas_, LV_SCROLLBAR_MODE_OFF);
                 lv_obj_add_flag(canvas_, LV_OBJ_FLAG_EVENT_BUBBLE);
                 lv_obj_set_pos(canvas_, 0, 0);
             }
@@ -339,8 +380,8 @@ void ExcludeObjectMapView::build_object_rects() {
         }
     }
 
-    // Draw first-layer outlines on canvas if available
-    if (parsed_file_ && canvas_) {
+    // Draw polygon outlines on canvas (from parsed GCode or Moonraker data)
+    if (canvas_) {
         draw_first_layer_outlines();
 
         // Make bounding box rects invisible — outlines replace them visually
@@ -394,51 +435,76 @@ static std::vector<glm::vec2> convex_hull(std::vector<glm::vec2>& pts) {
 }
 
 void ExcludeObjectMapView::draw_first_layer_outlines() {
-    if (!canvas_ || !parsed_file_ || !mapper_) return;
+    if (!canvas_ || !mapper_ || !state_) return;
 
     // Clear canvas to transparent
     lv_canvas_fill_bg(canvas_, lv_color_black(), LV_OPA_TRANSP);
 
-    // Get first layer
-    const auto* first_layer = parsed_file_->get_layer(0);
-    if (!first_layer || first_layer->segments.empty()) return;
+    // Collect polygon data per object. Priority:
+    // 1. Convex hull from ParsedGCodeFile layer 0 segments
+    // 2. Polygon from Moonraker ObjectInfo (slicer-provided outline)
+    std::unordered_map<std::string, std::vector<glm::vec2>> object_polygons;
 
-    // Collect extrusion points per object (in mm coordinates)
-    std::unordered_map<std::string, std::vector<glm::vec2>> object_points;
-    for (const auto& seg : first_layer->segments) {
-        if (!seg.is_extrusion) continue;
-        const auto& obj_name = parsed_file_->get_object_name(seg.object_name_index);
-        if (obj_name.empty()) continue;
-        auto& pts = object_points[obj_name];
-        pts.push_back({seg.start.x, seg.start.y});
-        pts.push_back({seg.end.x, seg.end.y});
+    if (parsed_file_) {
+        // Source 1: compute convex hulls from first layer extrusion segments
+        const auto* first_layer = parsed_file_->get_layer(0);
+        if (first_layer && !first_layer->segments.empty()) {
+            std::unordered_map<std::string, std::vector<glm::vec2>> object_points;
+            for (const auto& seg : first_layer->segments) {
+                if (!seg.is_extrusion) continue;
+                const auto& obj_name = parsed_file_->get_object_name(seg.object_name_index);
+                if (obj_name.empty()) continue;
+                auto& pts = object_points[obj_name];
+                pts.push_back({seg.start.x, seg.start.y});
+                pts.push_back({seg.end.x, seg.end.y});
+            }
+            for (auto& [name, pts] : object_points) {
+                auto hull = convex_hull(pts);
+                if (hull.size() >= 3) {
+                    object_polygons[name] = std::move(hull);
+                }
+            }
+        }
     }
 
-    // Build object name -> color index mapping
+    // Source 2: use Moonraker polygon data for any objects not covered by source 1
+    const auto& defined = state_->get_defined_objects();
+    for (const auto& name : defined) {
+        if (object_polygons.count(name) > 0) continue;  // already have outline
+        auto geom = state_->get_object_geometry(name);
+        if (geom && !geom->polygon.empty()) {
+            object_polygons[name] = geom->polygon;
+        }
+    }
+
+    if (object_polygons.empty()) return;
+
+    for (const auto& [name, poly] : object_polygons) {
+        spdlog::info("[ExcludeObjectMapView] Object '{}' polygon has {} points", name, poly.size());
+    }
+
+    // Build name -> color index mapping
     std::unordered_map<std::string, int> name_to_index;
-    const auto& defined = state_ ? state_->get_defined_objects() : std::vector<std::string>{};
     for (int i = 0; i < static_cast<int>(defined.size()); ++i) {
         name_to_index[defined[i]] = i;
     }
 
-    // Draw convex hull outline for each object
+    // Draw polygon outlines on canvas
     lv_layer_t layer;
     lv_canvas_init_layer(canvas_, &layer);
 
-    for (auto& [obj_name, pts] : object_points) {
+    for (const auto& [obj_name, polygon] : object_polygons) {
         auto it = name_to_index.find(obj_name);
         if (it == name_to_index.end()) continue;
-
-        auto hull = convex_hull(pts);
-        if (hull.size() < 3) continue;
+        if (polygon.size() < 3) continue;
 
         lv_color_t color = get_object_color(it->second);
 
-        // Draw hull edges as closed polygon
-        for (size_t i = 0; i < hull.size(); ++i) {
-            size_t j = (i + 1) % hull.size();
-            auto [px1, py1] = mapper_->mm_to_px(hull[i].x, hull[i].y);
-            auto [px2, py2] = mapper_->mm_to_px(hull[j].x, hull[j].y);
+        // Draw closed polygon edges
+        for (size_t i = 0; i < polygon.size(); ++i) {
+            size_t j = (i + 1) % polygon.size();
+            auto [px1, py1] = mapper_->mm_to_px(polygon[i].x, polygon[i].y);
+            auto [px2, py2] = mapper_->mm_to_px(polygon[j].x, polygon[j].y);
 
             lv_draw_line_dsc_t dsc;
             lv_draw_line_dsc_init(&dsc);
@@ -458,8 +524,8 @@ void ExcludeObjectMapView::draw_first_layer_outlines() {
 
     lv_canvas_finish_layer(canvas_, &layer);
 
-    spdlog::debug("[ExcludeObjectMapView] Drew convex hull outlines for {} objects",
-                  object_points.size());
+    spdlog::debug("[ExcludeObjectMapView] Drew polygon outlines for {} objects",
+                  object_polygons.size());
 }
 
 // ============================================================================
@@ -529,6 +595,7 @@ void ExcludeObjectMapView::update_visual_states() {
 
     const auto& excluded = state_->get_excluded_objects();
     const auto& current_obj = state_->get_current_object();
+    bool have_canvas_outlines = (canvas_ != nullptr);
 
     lv_color_t primary_color = theme_manager_get_color("primary");
     lv_color_t danger_color = theme_manager_get_color("danger");
@@ -541,27 +608,39 @@ void ExcludeObjectMapView::update_visual_states() {
         bool is_excluded = excluded.count(entry.name) > 0;
         bool is_current = (entry.name == current_obj);
 
-        if (is_excluded) {
-            // Excluded: danger color border, semi-transparent, not clickable
+        if (have_canvas_outlines) {
+            // Canvas handles visuals — rects are invisible tap targets only
+            lv_obj_set_style_border_width(rect, 0, 0);
+            lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
+            lv_obj_set_style_opa(rect, is_excluded ? LV_OPA_30 : LV_OPA_COVER, 0);
+            if (is_excluded) {
+                lv_obj_remove_flag(rect, LV_OBJ_FLAG_CLICKABLE);
+            } else {
+                lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICKABLE);
+            }
+        } else if (is_excluded) {
             lv_obj_set_style_border_color(rect, danger_color, 0);
             lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
             lv_obj_set_style_opa(rect, LV_OPA_30, 0);
             lv_obj_remove_flag(rect, LV_OBJ_FLAG_CLICKABLE);
         } else if (is_current) {
-            // Currently printing: primary_color border + light bg fill
             lv_obj_set_style_border_color(rect, primary_color, 0);
             lv_obj_set_style_bg_color(rect, primary_color, 0);
             lv_obj_set_style_bg_opa(rect, LV_OPA_20, 0);
             lv_obj_set_style_opa(rect, LV_OPA_COVER, 0);
             lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICKABLE);
         } else {
-            // Normal: unique color border, transparent bg, full opacity
             lv_color_t color = get_object_color(i);
             lv_obj_set_style_border_color(rect, color, 0);
             lv_obj_set_style_bg_opa(rect, LV_OPA_TRANSP, 0);
             lv_obj_set_style_opa(rect, LV_OPA_COVER, 0);
             lv_obj_add_flag(rect, LV_OBJ_FLAG_CLICKABLE);
         }
+    }
+
+    // Redraw canvas outlines to reflect excluded/current state
+    if (have_canvas_outlines) {
+        draw_first_layer_outlines();
     }
 }
 
