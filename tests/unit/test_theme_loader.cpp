@@ -248,12 +248,16 @@ TEST_CASE("has_default_theme returns false for user-created themes", "[theme]") 
 TEST_CASE("reset_theme_to_default deletes user file and returns default", "[theme]") {
     std::string themes_dir = helix::get_themes_directory();
 
-    // Create a user override for nord
+    // Use "gruvbox" instead of "nord" to avoid interference from
+    // ensure_themes_directory() which auto-creates config/themes/nord.json.
+    // When another test in the shard uses a fixture that calls
+    // theme_manager_init(), ensure_themes_directory() recreates nord.json,
+    // causing the stat() check below to fail.
     helix::ThemeData user_override = helix::get_default_nord_theme();
-    user_override.name = "Modified Nord";
+    user_override.name = "Modified Gruvbox";
     user_override.dark.screen_bg = "#222222";
 
-    std::string user_path = themes_dir + "/nord.json";
+    std::string user_path = themes_dir + "/gruvbox.json";
     REQUIRE(helix::save_theme_to_file(user_override, user_path));
 
     // Verify user file exists
@@ -261,10 +265,10 @@ TEST_CASE("reset_theme_to_default deletes user file and returns default", "[them
     REQUIRE(stat(user_path.c_str(), &st) == 0);
 
     // Reset to default
-    auto result = helix::reset_theme_to_default("nord");
+    auto result = helix::reset_theme_to_default("gruvbox");
 
     REQUIRE(result.has_value());
-    REQUIRE(result->name == "Nord");              // Should be original default
+    REQUIRE(result->name == "Gruvbox");           // Should be original default
     REQUIRE(result->dark.screen_bg != "#222222"); // Should not be user override
 
     // User file should be deleted

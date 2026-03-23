@@ -71,6 +71,23 @@ class TempCwdGuard {
 };
 
 // ============================================================================
+// Helper: count of widget defs that build_default_grid() includes
+// ============================================================================
+//
+// build_default_grid() skips multi_instance widgets (they use dynamic IDs like
+// "favorite_macro:0"), so the expected entry count is grid_widget_count() minus
+// the number of multi_instance defs.
+
+static size_t grid_widget_count() {
+    size_t count = 0;
+    for (const auto& def : get_all_widget_defs()) {
+        if (!def.multi_instance)
+            ++count;
+    }
+    return count;
+}
+
+// ============================================================================
 // Helper: find entry by ID in a vector
 // ============================================================================
 
@@ -114,7 +131,7 @@ TEST_CASE("default_layout: valid JSON with tiny breakpoint produces correct anch
     })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     auto* pi = find_entry(entries, "printer_image");
     REQUIRE(pi);
@@ -186,7 +203,7 @@ TEST_CASE("default_layout: missing file falls back to hardcoded defaults", "[def
     // No layout file written — config/default_layout.json does not exist
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // Hardcoded fallback anchors: printer_image, print_status, tips
     auto* pi = find_entry(entries, "printer_image");
@@ -222,7 +239,7 @@ TEST_CASE("default_layout: malformed JSON falls back gracefully", "[default_layo
     guard.write_layout("{ this is not valid json }}}}");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // Should get hardcoded fallback anchors
     auto* pi = find_entry(entries, "printer_image");
@@ -246,7 +263,7 @@ TEST_CASE("default_layout: empty anchors array falls back to hardcoded defaults"
     guard.write_layout(R"({ "anchors": [] })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // Empty anchors array -> no anchors loaded -> hardcoded fallback triggered
     auto* pi = find_entry(entries, "printer_image");
@@ -286,7 +303,7 @@ TEST_CASE("default_layout: unknown widget ID in JSON is ignored", "[default_layo
     })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // The bogus widget should not appear in entries
     auto* bogus = find_entry(entries, "totally_bogus_widget");
@@ -300,8 +317,7 @@ TEST_CASE("default_layout: unknown widget ID in JSON is ignored", "[default_layo
     CHECK(pi->row == 0);
 }
 
-TEST_CASE("default_layout: missing breakpoint in placements causes fallback",
-          "[default_layout]") {
+TEST_CASE("default_layout: missing breakpoint in placements causes fallback", "[default_layout]") {
     TempCwdGuard guard;
     // Only define "large" placements — runtime breakpoint is "tiny", so no match.
     // With no anchors matched, the empty vector triggers hardcoded fallback.
@@ -317,7 +333,7 @@ TEST_CASE("default_layout: missing breakpoint in placements causes fallback",
     })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // No anchors matched for tiny breakpoint -> empty anchors -> hardcoded fallback
     auto* pi = find_entry(entries, "printer_image");
@@ -351,7 +367,7 @@ TEST_CASE("default_layout: partial breakpoint match does not trigger fallback",
     })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // printer_image has tiny placement -> anchored from JSON
     auto* pi = find_entry(entries, "printer_image");
@@ -367,18 +383,15 @@ TEST_CASE("default_layout: partial breakpoint match does not trigger fallback",
     CHECK_FALSE(tips->has_grid_position());
 }
 
-TEST_CASE("default_layout: result always has at least some enabled widgets",
-          "[default_layout]") {
+TEST_CASE("default_layout: result always has at least some enabled widgets", "[default_layout]") {
     TempCwdGuard guard;
     guard.write_layout(R"({ "anchors": [] })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
     REQUIRE_FALSE(entries.empty());
 
-    bool any_enabled =
-        std::any_of(entries.begin(), entries.end(), [](const PanelWidgetEntry& e) {
-            return e.enabled;
-        });
+    bool any_enabled = std::any_of(entries.begin(), entries.end(),
+                                   [](const PanelWidgetEntry& e) { return e.enabled; });
     CHECK(any_enabled);
 }
 
@@ -390,10 +403,8 @@ TEST_CASE("default_layout: result always has at least some enabled widgets even 
     auto entries = PanelWidgetConfig::build_default_grid();
     REQUIRE_FALSE(entries.empty());
 
-    bool any_enabled =
-        std::any_of(entries.begin(), entries.end(), [](const PanelWidgetEntry& e) {
-            return e.enabled;
-        });
+    bool any_enabled = std::any_of(entries.begin(), entries.end(),
+                                   [](const PanelWidgetEntry& e) { return e.enabled; });
     CHECK(any_enabled);
 }
 
@@ -442,7 +453,7 @@ TEST_CASE("default_layout: anchor with empty id is skipped", "[default_layout]")
     })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // Should not crash, printer_image should still be anchored
     auto* pi = find_entry(entries, "printer_image");
@@ -456,7 +467,7 @@ TEST_CASE("default_layout: JSON with missing anchors key falls back to hardcoded
     guard.write_layout(R"({ "something_else": true })");
 
     auto entries = PanelWidgetConfig::build_default_grid();
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == grid_widget_count());
 
     // anchors key missing -> .value("anchors", json::array()) returns empty ->
     // no anchors loaded -> hardcoded fallback
@@ -538,14 +549,16 @@ TEST_CASE("default_layout: all registry widgets present in result regardless of 
 
     auto entries = PanelWidgetConfig::build_default_grid();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(entries.size() == defs.size());
+    REQUIRE(entries.size() == grid_widget_count());
 
-    // Every registry widget must appear exactly once
+    // Every non-multi-instance registry widget must appear exactly once
     std::set<std::string> entry_ids;
     for (const auto& e : entries) {
         entry_ids.insert(e.id);
     }
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         CHECK(entry_ids.count(def.id) == 1);
     }
 }

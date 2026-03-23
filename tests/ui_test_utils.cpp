@@ -62,6 +62,10 @@ uint32_t lv_timer_handler_safe() {
             lv_timer_t* next = lv_timer_get_next(t); // Save next before potential deletion
             if (t->repeat_count > 0 && (now - t->last_run >= t->period)) {
                 if (t->timer_cb) {
+                    t->last_run = now;
+                    if (t->repeat_count > 0) {
+                        t->repeat_count--;
+                    }
                     t->timer_cb(t);
                     found = true;
                     break; // Restart iteration since list may have changed

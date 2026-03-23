@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "app_globals.h"
-#include "printer_state.h"
-
-#include "led/led_auto_state.h"
-#include "led/led_controller.h"
-
-#include "../catch_amalgamated.hpp"
 #include "../test_helpers/update_queue_test_access.h"
 #include "../ui_test_utils.h"
+#include "app_globals.h"
+#include "led/led_auto_state.h"
+#include "led/led_controller.h"
+#include "printer_state.h"
+
+#include "../catch_amalgamated.hpp"
 
 using namespace helix::led;
 
@@ -263,12 +262,19 @@ TEST_CASE("LedAutoState apply_action 'off' sets light_is_on false", "[led][autos
     ctrl.light_set(true);
     REQUIRE(ctrl.light_is_on());
 
-    // init() first (loads config, resets enabled), then configure and enable
+    // init() first (loads config, resets enabled), then configure and enable.
+    // Map ALL possible states to "off" since shared PrinterState singleton
+    // may retain subject values from earlier tests in the same shard.
     state.init(get_printer_state());
-    state.set_mapping("idle", {"off", 0xFFFFFF, 100, "", 0, ""});
+    LedStateAction off_action{"off", 0xFFFFFF, 100, "", 0, ""};
+    state.set_mapping("idle", off_action);
+    state.set_mapping("printing", off_action);
+    state.set_mapping("paused", off_action);
+    state.set_mapping("heating", off_action);
+    state.set_mapping("error", off_action);
+    state.set_mapping("complete", off_action);
     state.set_enabled(true);
 
-    // Force evaluate to "idle" (no printer state subjects → idle)
     state.evaluate();
     // Drain deferred observer callbacks from subscribe_observers() so they
     // cannot re-apply a stale mapping after we check the assertion

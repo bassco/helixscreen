@@ -14,12 +14,11 @@
 #include "config.h"
 #include "display_manager.h"
 
-#include "hv/json.hpp"
-
 #include <filesystem>
 #include <fstream>
 
 #include "../../catch_amalgamated.hpp"
+#include "hv/json.hpp"
 
 // ============================================================================
 // DisplayManager Configuration Tests
@@ -361,8 +360,8 @@ TEST_CASE("AD5X preset has required display sleep config", "[application][displa
     auto& display = preset["display"];
     REQUIRE(display.value("backlight_enable_ioctl", true) == false);
 
-    // AD5X must use software overlay (hardware_blank = 0)
-    REQUIRE(display.value("hardware_blank", -1) == 0);
+    // AD5X must use hardware blank to turn off backlight during sleep (#431)
+    REQUIRE(display.value("hardware_blank", -1) == 1);
 
     // AD5X turns backlight off during sleep (software overlay handles blanking)
     REQUIRE(display.value("sleep_backlight_off", false) == true);
@@ -384,8 +383,7 @@ TEST_CASE("CC1 preset has required display sleep config", "[application][display
     REQUIRE(display.value("sleep_backlight_off", true) == false);
 }
 
-TEST_CASE("AD5M preset does NOT disable backlight during sleep",
-          "[application][display][ad5m]") {
+TEST_CASE("AD5M preset does NOT disable backlight during sleep", "[application][display][ad5m]") {
     // Verify the AD5M preset does NOT set sleep_backlight_off=false
     // (AD5M sleep/wake works correctly with current hardware blank path)
     std::string preset_path = get_project_root() + "/config/presets/ad5m.json";

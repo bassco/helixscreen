@@ -25,7 +25,9 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     lv_obj_add_flag(card_root, LV_OBJ_FLAG_USER_1);
     struct Guard {
         lv_obj_t* obj;
-        ~Guard() { lv_obj_remove_flag(obj, LV_OBJ_FLAG_USER_1); }
+        ~Guard() {
+            lv_obj_remove_flag(obj, LV_OBJ_FLAG_USER_1);
+        }
     } guard{card_root};
 
     lv_obj_t* arc = lv_obj_find_by_name(card_root, "dial_arc");
@@ -49,14 +51,15 @@ void fan_arc_resize_to_fit(lv_obj_t* card_root) {
     int32_t arc_size = LV_MIN(content_w, container_h);
     arc_size = LV_MAX(arc_size, MIN_ARC_SIZE);
 
-    // Skip if already at target size (avoids layout churn)
-    if (lv_obj_get_width(arc) == arc_size && lv_obj_get_height(arc) == arc_size)
+    // Scale arc track width proportionally (ratio matches all original breakpoints)
+    int32_t track_w = LV_MAX(arc_size / ARC_TO_TRACK_RATIO, MIN_TRACK_WIDTH);
+
+    // Skip if already at target size and track width (avoids layout churn)
+    if (lv_obj_get_width(arc) == arc_size && lv_obj_get_height(arc) == arc_size &&
+        lv_obj_get_style_arc_width(arc, LV_PART_MAIN) == track_w)
         return;
 
     lv_obj_set_size(arc, arc_size, arc_size);
-
-    // Scale arc track width (ratio matches all original breakpoints)
-    int32_t track_w = LV_MAX(arc_size / ARC_TO_TRACK_RATIO, MIN_TRACK_WIDTH);
     lv_obj_set_style_arc_width(arc, track_w, LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc, track_w, LV_PART_INDICATOR);
 
