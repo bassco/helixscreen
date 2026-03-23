@@ -297,7 +297,12 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                      devices.size());
                         get_printer_state().set_power_device_count(
                             static_cast<int>(devices.size()));
-                        helix::PowerDeviceState::instance().set_devices(devices);
+                        // Marshal to UI thread — set_devices creates LVGL subjects
+                        auto devices_copy =
+                            std::make_shared<std::vector<PowerDevice>>(std::move(devices));
+                        helix::ui::queue_update("PowerDeviceState::set_devices", [devices_copy]() {
+                            helix::PowerDeviceState::instance().set_devices(*devices_copy);
+                        });
                     },
                     [](const MoonrakerError& err) {
                         spdlog::debug("[Moonraker Client] Power device detection failed: {}",
