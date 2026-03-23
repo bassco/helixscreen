@@ -1313,8 +1313,8 @@ void PrintStatusPanel::on_objects_clicked(lv_event_t* e) {
 
     int mode = lv_subject_get_int(&panel.gcode_viewer_mode_subject_);
 
-    if (true) {  // TODO: restore mode == 0 check after testing
-        // Toggle the overhead map view
+    if (mode == 0) {
+        // Thumbnail-only mode: toggle the overhead map view
         if (panel.map_view_ && panel.map_view_->is_active()) {
             panel.hide_exclude_map_view();
         } else {
