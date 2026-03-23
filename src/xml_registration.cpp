@@ -401,6 +401,7 @@ void register_xml_components() {
     register_xml("led_color_swatch.xml");
     register_xml("led_control_overlay.xml");
     register_xml("ams_current_tool.xml");
+    register_xml("components/exclude_object_map.xml");
     register_xml("exclude_objects_list_overlay.xml");
     register_xml("print_status_panel.xml");
     register_xml("print_tune_panel.xml");
