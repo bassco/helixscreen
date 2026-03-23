@@ -61,6 +61,23 @@ void PanelWidgetConfig::load() {
         }
 
         std::string id = item["id"].get<std::string>();
+
+        // Migration: favorite_macro_N -> favorite_macro:N
+        {
+            static const std::string prefix = "favorite_macro_";
+            if (id.size() > prefix.size() && id.substr(0, prefix.size()) == prefix) {
+                auto suffix = id.substr(prefix.size());
+                bool all_digits =
+                    !suffix.empty() && std::all_of(suffix.begin(), suffix.end(),
+                                                   [](char c) { return c >= '0' && c <= '9'; });
+                if (all_digits) {
+                    std::string new_id = "favorite_macro:" + suffix;
+                    spdlog::info("[PanelWidgetConfig] Migrating '{}' -> '{}'", id, new_id);
+                    id = new_id;
+                }
+            }
+        }
+
         bool enabled = item["enabled"].get<bool>();
 
         // Skip duplicates
@@ -106,6 +123,8 @@ void PanelWidgetConfig::load() {
     // Append any new widgets from registry that are not in saved config
     for (const auto& def : get_all_widget_defs()) {
         if (seen_ids.count(def.id) == 0) {
+            if (def.multi_instance)
+                continue;
             spdlog::debug("[PanelWidgetConfig] Appending new widget: {} (default_enabled={})",
                           def.id, def.default_enabled);
             entries_.push_back({def.id, def.default_enabled, {}, -1, -1, def.colspan, def.rowspan});
@@ -201,11 +220,16 @@ void PanelWidgetConfig::set_widget_config(const std::string& id, const nlohmann:
 
 // Breakpoint name to index mapping for default_layout.json
 static int breakpoint_name_to_index(const std::string& name) {
-    if (name == "tiny") return 0;
-    if (name == "small") return 1;
-    if (name == "medium") return 2;
-    if (name == "large") return 3;
-    if (name == "xlarge") return 4;
+    if (name == "tiny")
+        return 0;
+    if (name == "small")
+        return 1;
+    if (name == "medium")
+        return 2;
+    if (name == "large")
+        return 3;
+    if (name == "xlarge")
+        return 4;
     return -1;
 }
 
@@ -279,12 +303,14 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
     for (const auto& def : defs) {
         if (fixed_ids.count(def.id) > 0)
             continue;
+        if (def.multi_instance)
+            continue;
         result.push_back({def.id, def.default_enabled, {}, -1, -1, def.colspan, def.rowspan});
     }
 
     // Safety: ensure at least some widgets are enabled
     bool any_enabled = std::any_of(result.begin(), result.end(),
-                                    [](const PanelWidgetEntry& e) { return e.enabled; });
+                                   [](const PanelWidgetEntry& e) { return e.enabled; });
     if (!any_enabled) {
         spdlog::warn("[PanelWidgetConfig] No widgets enabled — enabling registry defaults");
         for (auto& entry : result) {

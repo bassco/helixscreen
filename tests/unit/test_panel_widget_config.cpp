@@ -11,6 +11,16 @@
 
 using namespace helix;
 
+/// Count of widget defs that are NOT multi_instance (i.e., those included in defaults)
+static size_t single_instance_def_count() {
+    size_t count = 0;
+    for (const auto& def : get_all_widget_defs()) {
+        if (!def.multi_instance)
+            ++count;
+    }
+    return count;
+}
+
 // ============================================================================
 // Test fixture — access Config internals via friend declaration
 // ============================================================================
@@ -86,20 +96,24 @@ TEST_CASE("PanelWidgetRegistry: widget_def_count matches vector size",
 // Config tests — default behavior
 // ============================================================================
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: default config produces all widgets with correct enabled state",
-                 "[panel_widget][widget_config]") {
+TEST_CASE_METHOD(
+    PanelWidgetConfigFixture,
+    "PanelWidgetConfig: default config produces all widgets with correct enabled state",
+    "[panel_widget][widget_config]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
     wc.load();
 
     const auto& entries = wc.entries();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(entries.size() == defs.size());
+    REQUIRE(entries.size() == single_instance_def_count());
 
     // Default grid places anchors first, then remaining widgets.
-    // Verify all widgets are present with correct enabled state (order may differ from registry).
+    // Verify all single-instance widgets are present with correct enabled state.
+    // Multi-instance defs are excluded from defaults (they are user-created).
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         bool found = false;
         for (const auto& entry : entries) {
             if (entry.id == def.id) {
@@ -132,7 +146,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     const auto& entries = wc.entries();
     // 3 explicit + remaining from registry appended
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == single_instance_def_count());
 
     // First 3 should match our explicit order
     REQUIRE(entries[0].id == "temperature");
@@ -168,7 +182,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     // Check the JSON was written to config under per-panel path
     auto& saved = get_printer_data()["panel_widgets"]["home"];
     REQUIRE(saved.is_array());
-    REQUIRE(saved.size() == widget_def_count());
+    REQUIRE(saved.size() == single_instance_def_count());
 
     // Each entry should have id and enabled
     for (const auto& item : saved) {
@@ -327,7 +341,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // Should have all registry widgets
-    REQUIRE(wc.entries().size() == widget_def_count());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
 
     // First two should match saved order/state
     REQUIRE(wc.entries()[0].id == "power");
@@ -362,7 +376,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // bogus_widget should be dropped, so total is still widget_def_count
-    REQUIRE(wc.entries().size() == widget_def_count());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
 
     // First should be power, second should be network (bogus skipped)
     REQUIRE(wc.entries()[0].id == "power");
@@ -390,10 +404,12 @@ TEST_CASE_METHOD(
 
     const auto& entries = wc.entries();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(entries.size() == defs.size());
+    REQUIRE(entries.size() == single_instance_def_count());
 
-    // All widgets present with correct enabled state (order may differ from registry)
+    // All single-instance widgets present with correct enabled state
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         bool found = false;
         for (const auto& entry : entries) {
             if (entry.id == def.id) {
@@ -425,7 +441,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     PanelWidgetConfig wc("home", config);
     wc.load();
 
-    REQUIRE(wc.entries().size() == widget_def_count());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
 
     // power should appear once, with enabled=true (first occurrence)
     REQUIRE(wc.entries()[0].id == "power");
@@ -475,7 +491,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // Bad entries skipped, good entries kept, rest appended
-    REQUIRE(wc.entries().size() == widget_def_count());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
     REQUIRE(wc.entries()[0].id == "power");
     REQUIRE(wc.entries()[0].enabled == true);
     REQUIRE(wc.entries()[1].id == "temperature");
@@ -491,9 +507,11 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == defs.size());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
     // build_default_grid() reorders anchors first, so check by content not position
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
@@ -576,7 +594,7 @@ TEST_CASE("PanelWidgetRegistry: hardware_gate_hint consistent with hardware_gate
 TEST_CASE("PanelWidgetRegistry: known hardware-gated widgets have gate subjects",
           "[panel_widget][widget_config]") {
     // These widgets require specific hardware
-    const char* gated[] = {"power",        "ams",   "led",      "humidity",
+    const char* gated[] = {"power",        "ams",      "led",       "humidity",
                            "width_sensor", "filament", "thermistor"};
     for (const auto* id : gated) {
         CAPTURE(id);
@@ -709,9 +727,11 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == defs.size());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
     // build_default_grid() reorders anchors first, so check by content not position
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
@@ -763,8 +783,10 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     // Should get defaults from registry (build_default_grid reorders anchors first)
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == defs.size());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
     for (const auto& def : defs) {
+        if (def.multi_instance)
+            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
@@ -833,7 +855,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     // After pre-grid reset, entries match default grid (all registry widgets present)
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == defs.size());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
@@ -854,7 +876,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     // Controls should get defaults
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == defs.size());
+    REQUIRE(wc.entries().size() == single_instance_def_count());
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
@@ -1071,7 +1093,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
                  "[panel_widget][widget_config][grid]") {
     auto grid = PanelWidgetConfig::build_default_grid();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(grid.size() == defs.size());
+    REQUIRE(grid.size() == single_instance_def_count());
 
     // Anchor widgets (printer_image, print_status, tips) get explicit grid positions.
     // All other widgets get col=-1, row=-1 (auto-place).
@@ -1092,7 +1114,7 @@ TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
     auto entries = PanelWidgetConfig::build_default_grid();
 
     // Should include all registry widgets
-    REQUIRE(entries.size() == widget_def_count());
+    REQUIRE(entries.size() == single_instance_def_count());
 
     // Collect enabled entries with grid positions
     std::vector<PanelWidgetEntry> placed;

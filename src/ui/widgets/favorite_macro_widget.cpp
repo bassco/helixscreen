@@ -26,11 +26,9 @@
 
 namespace helix {
 void register_favorite_macro_widgets() {
-    for (int i = 1; i <= kMaxFavoriteMacroSlots; ++i) {
-        std::string id = "favorite_macro_" + std::to_string(i);
-        register_widget_factory(
-            id, [id](const std::string&) { return std::make_unique<FavoriteMacroWidget>(id); });
-    }
+    register_widget_factory("favorite_macro", [](const std::string& id) {
+        return std::make_unique<FavoriteMacroWidget>(id);
+    });
     // Register XML callbacks early — before any XML is parsed
     lv_xml_register_event_cb(nullptr, "favorite_macro_clicked_cb", FavoriteMacroWidget::clicked_cb);
     lv_xml_register_event_cb(nullptr, "fav_macro_picker_backdrop_cb",

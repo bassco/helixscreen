@@ -61,7 +61,7 @@ class Config {
   private:
     static Config* instance;
     std::string path;
-    std::string active_printer_id_; ///< Currently active printer slug ID
+    std::string active_printer_id_;     ///< Currently active printer slug ID
     bool restored_from_backup_ = false; ///< Config was restored from backup during init
 
   protected:
@@ -74,6 +74,7 @@ class Config {
     friend class MmuDetectionFixture;
     friend class PanelWidgetConfigFixture;
     friend class ThermistorConfigFixture;
+    friend class MultiInstanceMigrationFixture;
 
   public:
     /**
