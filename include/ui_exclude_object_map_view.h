@@ -88,8 +88,6 @@ class ExcludeObjectMapView {
     float bed_w_mm_{235.0f};
     float bed_h_mm_{235.0f};
 
-    lv_subject_t map_has_objects_subject_{};
-
     std::unique_ptr<CoordMapper> mapper_;
     ObserverGuard excluded_version_obs_;
     ObserverGuard defined_version_obs_;

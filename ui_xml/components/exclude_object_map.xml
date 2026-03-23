@@ -29,15 +29,15 @@
                  clickable="false"
                  event_bubble="true"/>
 
-      <!-- Empty state message (hidden by default, shown when no geometry available) -->
+      <!-- Empty state message: hidden imperatively in C++ after build_object_rects().
+           Starts hidden; C++ calls lv_obj_remove_flag(HIDDEN) when no rects exist. -->
       <text_body name="empty_message"
                  text="Object positions unavailable"
                  style_text_color="#text_muted"
                  align="center"
+                 hidden="true"
                  clickable="false"
-                 event_bubble="true">
-        <bind_flag_if_eq subject="map_has_objects" flag="hidden" ref_value="1"/>
-      </text_body>
+                 event_bubble="true"/>
     </lv_obj>
 
     <!-- Key bar area -->

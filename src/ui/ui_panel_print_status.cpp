@@ -856,19 +856,7 @@ void PrintStatusPanel::show_exclude_map_view() {
     }
 
     map_view_ = std::make_unique<helix::ui::ExcludeObjectMapView>();
-    map_view_->set_close_callback([this]() {
-        if (map_view_) {
-            map_view_->destroy();
-            map_view_.reset();
-            // Restore thumbnail and gradient
-            if (print_thumbnail_) {
-                lv_obj_remove_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
-            }
-            if (gradient_background_) {
-                lv_obj_remove_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
-            }
-        }
-    });
+    map_view_->set_close_callback([this]() { hide_exclude_map_view(); });
 
     map_view_->create(thumbnail_section,
                       printer_state_.get_excluded_objects_state(),
@@ -877,6 +865,19 @@ void PrintStatusPanel::show_exclude_map_view() {
                       nullptr /* parsed_file */);
 
     spdlog::debug("[{}] Showed exclude object map view (bed: {}x{}mm)", get_name(), bed_w, bed_h);
+}
+
+void PrintStatusPanel::hide_exclude_map_view() {
+    if (map_view_) {
+        map_view_->destroy();
+        map_view_.reset();
+    }
+    if (print_thumbnail_) {
+        lv_obj_remove_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (gradient_background_) {
+        lv_obj_remove_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void PrintStatusPanel::load_gcode_file(const char* file_path) {
@@ -1304,15 +1305,7 @@ void PrintStatusPanel::on_objects_clicked(lv_event_t* e) {
     if (mode == 0) {
         // Thumbnail-only mode: toggle the overhead map view
         if (panel.map_view_ && panel.map_view_->is_active()) {
-            panel.map_view_->destroy();
-            panel.map_view_.reset();
-            // Restore thumbnail and gradient visibility
-            if (panel.print_thumbnail_) {
-                lv_obj_remove_flag(panel.print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
-            }
-            if (panel.gradient_background_) {
-                lv_obj_remove_flag(panel.gradient_background_, LV_OBJ_FLAG_HIDDEN);
-            }
+            panel.hide_exclude_map_view();
         } else {
             panel.show_exclude_map_view();
         }

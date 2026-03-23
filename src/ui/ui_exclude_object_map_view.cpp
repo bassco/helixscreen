@@ -132,12 +132,8 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
         spdlog::error("[ExcludeObjectMapView] Could not find key_bar");
     }
 
-    // Initialize subject for hiding the empty message
-    lv_subject_init_int(&map_has_objects_subject_, 0);
-    lv_xml_register_subject(lv_xml_component_get_scope("exclude_object_map"),
-                            "map_has_objects", &map_has_objects_subject_);
-
-    // Create transparent overlay container for object rects
+    // Create transparent overlay container for object rects.
+    // EVENT_BUBBLE ensures clicks on object rects reach the close button.
     if (plate_area_) {
         object_container_ = lv_obj_create(plate_area_);
         lv_obj_set_size(object_container_, lv_pct(100), lv_pct(100));
@@ -146,6 +142,7 @@ void ExcludeObjectMapView::create(lv_obj_t* parent,
         lv_obj_set_style_pad_all(object_container_, 0, 0);
         lv_obj_remove_flag(object_container_, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_remove_flag(object_container_, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(object_container_, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_set_pos(object_container_, 0, 0);
     }
 
@@ -221,6 +218,12 @@ void ExcludeObjectMapView::destroy() {
     excluded_version_obs_.reset();
     defined_version_obs_.reset();
 
+    // Null the global pointer BEFORE deleting widgets, so any queued close
+    // events that fire during the delete cascade cannot reach a stale pointer.
+    if (g_active_map_view == this) {
+        g_active_map_view = nullptr;
+    }
+
     // Freeze queue, drain pending callbacks, then delete widgets
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
@@ -229,17 +232,11 @@ void ExcludeObjectMapView::destroy() {
         object_rects_.clear();
         mapper_.reset();
 
-        lv_subject_deinit(&map_has_objects_subject_);
-
         lv_obj_delete(root_);
         root_ = nullptr;
         plate_area_ = nullptr;
         key_bar_ = nullptr;
         object_container_ = nullptr;
-    }
-
-    if (g_active_map_view == this) {
-        g_active_map_view = nullptr;
     }
 
     state_ = nullptr;
@@ -309,9 +306,17 @@ void ExcludeObjectMapView::build_object_rects() {
     spdlog::debug("[ExcludeObjectMapView] Built {} rects from {} defined objects",
                   rects_created, defined.size());
 
-    // Update the subject so the empty_message binding can react
-    bool has_objects = rects_created > 0;
-    lv_subject_set_int(&map_has_objects_subject_, has_objects ? 1 : 0);
+    // Show or hide the empty message imperatively. The XML component scope
+    // persists across create/destroy cycles, so we cannot use lv_xml_register_subject
+    // here — the scope would hold a dangling pointer after destroy() deinits it.
+    lv_obj_t* empty_msg = lv_obj_find_by_name(root_, "empty_message");
+    if (empty_msg) {
+        if (rects_created > 0) {
+            lv_obj_add_flag(empty_msg, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_remove_flag(empty_msg, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
 
     update_visual_states();
 }
@@ -453,10 +458,13 @@ void ExcludeObjectMapView::build_key_bar() {
     }
 
     // FullNames or Abbreviated: colored dot + number + name per object
+    const auto& excluded = state_->get_excluded_objects();
+
     for (int i = 0; i < count && i < static_cast<int>(object_rects_.size()); ++i) {
         const auto& entry = object_rects_[i];
+        bool is_excluded = excluded.count(entry.name) > 0;
 
-        // Key entry container
+        // Key entry container — dim excluded objects to signal they are skipped
         lv_obj_t* entry_row = lv_obj_create(key_bar_);
         lv_obj_set_size(entry_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_style_bg_opa(entry_row, LV_OPA_TRANSP, 0);
@@ -468,6 +476,9 @@ void ExcludeObjectMapView::build_key_bar() {
         lv_obj_remove_flag(entry_row, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_remove_flag(entry_row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(entry_row, LV_OBJ_FLAG_EVENT_BUBBLE);
+        if (is_excluded) {
+            lv_obj_set_style_opa(entry_row, LV_OPA_40, 0);
+        }
 
         // Colored dot
         lv_color_t color = get_object_color(i);
@@ -480,13 +491,16 @@ void ExcludeObjectMapView::build_key_bar() {
         lv_obj_remove_flag(dot, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(dot, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-        // Number + name label
+        // Number + name label; strikethrough on excluded entries
         lv_obj_t* name_label = lv_label_create(entry_row);
         lv_obj_set_style_text_font(name_label, theme_manager_get_font("font_small"), 0);
         lv_obj_set_style_text_color(name_label, theme_manager_get_color("text_muted"), 0);
         lv_obj_set_style_pad_left(name_label, 3, 0);
         lv_obj_remove_flag(name_label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(name_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+        if (is_excluded) {
+            lv_obj_set_style_text_decor(name_label, LV_TEXT_DECOR_STRIKETHROUGH, 0);
+        }
 
         if (mode == KeyBarMode::Abbreviated) {
             char buf[16];

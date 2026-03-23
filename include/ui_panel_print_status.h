@@ -431,6 +431,7 @@ class PrintStatusPanel : public OverlayBase {
     void animate_print_error();     ///< Error animation when print fails
     void cleanup_temp_gcode();      ///< Remove temp G-code file downloaded for viewing
     void show_exclude_map_view();    ///< Show overhead map view of print objects
+    void hide_exclude_map_view();    ///< Destroy map view and restore thumbnail/gradient
     void apply_filament_color_override(
         uint32_t color_rgb);            ///< Apply AMS/Spoolman filament color to gcode viewer
     bool build_and_apply_tool_colors(); ///< Build per-tool AMS color map and apply to viewer
