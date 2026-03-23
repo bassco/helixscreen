@@ -73,6 +73,12 @@ void MaterialSettingsManager::load_from_config() {
             if (values.contains("bed_temp") && values["bed_temp"].is_number_integer()) {
                 ovr.bed_temp = values["bed_temp"].get<int>();
             }
+            if (values.contains("preheat_macro") && values["preheat_macro"].is_string()) {
+                ovr.preheat_macro = values["preheat_macro"].get<std::string>();
+            }
+            if (values.contains("macro_handles_heating") && values["macro_handles_heating"].is_boolean()) {
+                ovr.macro_handles_heating = values["macro_handles_heating"].get<bool>();
+            }
             overrides_[name] = ovr;
         }
     } catch (const std::exception& e) {
@@ -93,6 +99,8 @@ void MaterialSettingsManager::save_to_config() {
         if (ovr.nozzle_min) entry["nozzle_min"] = *ovr.nozzle_min;
         if (ovr.nozzle_max) entry["nozzle_max"] = *ovr.nozzle_max;
         if (ovr.bed_temp) entry["bed_temp"] = *ovr.bed_temp;
+        if (ovr.preheat_macro) entry["preheat_macro"] = *ovr.preheat_macro;
+        if (ovr.macro_handles_heating) entry["macro_handles_heating"] = *ovr.macro_handles_heating;
         overrides_json[name] = entry;
     }
 

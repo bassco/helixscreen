@@ -227,6 +227,67 @@ TEST_CASE_METHOD(LVGLTestFixture, "Multiple material overrides coexist",
     MaterialSettingsManager::instance().clear_override("ABS");
 }
 
+TEST_CASE_METHOD(LVGLTestFixture, "MaterialSettingsManager preheat_macro round trip",
+                 "[material_settings]") {
+    Config::get_instance();
+    MaterialSettingsManager::instance().init();
+
+    MaterialOverride ovr;
+    ovr.preheat_macro = "PREHEAT_ABS";
+    ovr.macro_handles_heating = true;
+    MaterialSettingsManager::instance().set_override("ABS", ovr);
+
+    const auto* result = MaterialSettingsManager::instance().get_override("ABS");
+    REQUIRE(result != nullptr);
+    REQUIRE(result->preheat_macro.has_value());
+    CHECK(*result->preheat_macro == "PREHEAT_ABS");
+    REQUIRE(result->macro_handles_heating.has_value());
+    CHECK(*result->macro_handles_heating == true);
+
+    CHECK_FALSE(result->nozzle_min.has_value());
+    CHECK_FALSE(result->nozzle_max.has_value());
+    CHECK_FALSE(result->bed_temp.has_value());
+
+    MaterialSettingsManager::instance().clear_override("ABS");
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "MaterialSettingsManager macro with temp overrides",
+                 "[material_settings]") {
+    Config::get_instance();
+    MaterialSettingsManager::instance().init();
+
+    MaterialOverride ovr;
+    ovr.bed_temp = 110;
+    ovr.preheat_macro = "HEAT_SOAK_ABS";
+    ovr.macro_handles_heating = false;
+    MaterialSettingsManager::instance().set_override("ABS", ovr);
+
+    const auto* result = MaterialSettingsManager::instance().get_override("ABS");
+    REQUIRE(result != nullptr);
+    CHECK(*result->bed_temp == 110);
+    CHECK(*result->preheat_macro == "HEAT_SOAK_ABS");
+    CHECK(*result->macro_handles_heating == false);
+
+    MaterialSettingsManager::instance().clear_override("ABS");
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "MaterialSettingsManager absent macro_handles_heating defaults true",
+                 "[material_settings]") {
+    Config::get_instance();
+    MaterialSettingsManager::instance().init();
+
+    MaterialOverride ovr;
+    ovr.preheat_macro = "MY_MACRO";
+    MaterialSettingsManager::instance().set_override("TPU", ovr);
+
+    const auto* result = MaterialSettingsManager::instance().get_override("TPU");
+    REQUIRE(result != nullptr);
+    REQUIRE(result->preheat_macro.has_value());
+    CHECK_FALSE(result->macro_handles_heating.has_value());
+
+    MaterialSettingsManager::instance().clear_override("TPU");
+}
+
 TEST_CASE_METHOD(LVGLTestFixture, "get_all_overrides returns all set overrides",
                  "[material_settings]") {
     Config::get_instance();
