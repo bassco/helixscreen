@@ -23,6 +23,7 @@
 #include "panel_widgets/printer_image_widget.h"
 #include "printer_image_manager.h"
 #include "printer_state.h"
+#include "runtime_config.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
 
@@ -248,31 +249,37 @@ void HomePanel::build_carousel() {
         }
     }
 
-    // Create arrow buttons (absolutely positioned over the carousel)
-    auto create_arrow = [this](const char* icon_name, lv_align_t align,
-                               int x_offset) -> lv_obj_t* {
-        lv_obj_t* arrow = lv_obj_create(carousel_host_);
-        lv_obj_set_size(arrow, 40, 40);
-        lv_obj_set_style_radius(arrow, 20, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(arrow, theme_manager_get_color("card_bg"), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(arrow, LV_OPA_80, LV_PART_MAIN);
-        lv_obj_set_style_border_width(arrow, 0, LV_PART_MAIN);
-        lv_obj_align(arrow, align, x_offset, 0);
-        lv_obj_add_flag(arrow, LV_OBJ_FLAG_FLOATING);
-        lv_obj_add_flag(arrow, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_remove_flag(arrow, LV_OBJ_FLAG_SCROLLABLE);
+    // Create arrow buttons for page navigation
+    // Only shown on SDL (test mode) or resistive touchscreens where swipe is unreliable
+    // TODO: Add proper resistive touch detection; for now use test_mode as proxy for SDL
+    bool show_arrows = get_runtime_config()->test_mode;
+    if (show_arrows) {
+        auto arrow_size = theme_manager_get_spacing("button_height");
+        auto create_arrow = [&](const char* icon_name, lv_align_t align) -> lv_obj_t* {
+            lv_obj_t* arrow = lv_obj_create(carousel_host_);
+            lv_obj_set_size(arrow, arrow_size, arrow_size);
+            lv_obj_set_style_radius(arrow, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(arrow, theme_manager_get_color("card_bg"), LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(arrow, LV_OPA_40, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(arrow, LV_OPA_80, LV_PART_MAIN | LV_STATE_PRESSED);
+            lv_obj_set_style_border_width(arrow, 0, LV_PART_MAIN);
+            lv_obj_align(arrow, align, 0, 0);
+            lv_obj_add_flag(arrow, LV_OBJ_FLAG_FLOATING);
+            lv_obj_add_flag(arrow, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_remove_flag(arrow, LV_OBJ_FLAG_SCROLLABLE);
 
-        lv_obj_t* label = lv_label_create(arrow);
-        lv_label_set_text(label, ui_icon::lookup_codepoint(icon_name));
-        lv_obj_set_style_text_font(label, &mdi_icons_24, LV_PART_MAIN);
-        lv_obj_set_style_text_color(label, theme_manager_get_color("icon_secondary"),
-                                    LV_PART_MAIN);
-        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-        return arrow;
-    };
+            lv_obj_t* label = lv_label_create(arrow);
+            lv_label_set_text(label, ui_icon::lookup_codepoint(icon_name));
+            lv_obj_set_style_text_font(label, &mdi_icons_24, LV_PART_MAIN);
+            lv_obj_set_style_text_color(label, theme_manager_get_color("text"),
+                                        LV_PART_MAIN);
+            lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+            return arrow;
+        };
 
-    arrow_left_ = create_arrow("chevron_left", LV_ALIGN_LEFT_MID, 4);
-    arrow_right_ = create_arrow("chevron_right", LV_ALIGN_RIGHT_MID, -4);
+        arrow_left_ = create_arrow("chevron_left", LV_ALIGN_LEFT_MID);
+        arrow_right_ = create_arrow("chevron_right", LV_ALIGN_RIGHT_MID);
+    }
 
     // Arrow click handlers (acceptable exception for programmatic creation)
     lv_obj_add_event_cb(

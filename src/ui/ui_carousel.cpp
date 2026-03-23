@@ -3,6 +3,7 @@
 #include "ui_carousel.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
+#include "theme_manager.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
 #include "helix-xml/src/xml/lv_xml_utils.h"
 #include "helix-xml/src/xml/lv_xml_widget.h"
@@ -273,7 +274,7 @@ static lv_obj_t* carousel_create_core(lv_obj_t* parent) {
     lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(container, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(container, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(container, 0, LV_PART_MAIN);
     lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -293,14 +294,18 @@ static lv_obj_t* carousel_create_core(lv_obj_t* parent) {
     lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
 
-    // Indicator row: centered dots at bottom
+    // Indicator row: floating, overlaps content at bottom center (takes zero layout space)
     lv_obj_t* indicator_row = lv_obj_create(container);
     lv_obj_set_size(indicator_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_add_flag(indicator_row, LV_OBJ_FLAG_FLOATING);
+    lv_obj_align(indicator_row, LV_ALIGN_BOTTOM_MID, 0,
+                 -theme_manager_get_spacing("space_xxs"));
     lv_obj_set_flex_flow(indicator_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(indicator_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_all(indicator_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(indicator_row, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(indicator_row, theme_manager_get_spacing("space_sm"),
+                                LV_PART_MAIN);
     lv_obj_remove_flag(indicator_row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_border_width(indicator_row, 0, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(indicator_row, LV_OPA_TRANSP, LV_PART_MAIN);
