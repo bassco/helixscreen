@@ -288,7 +288,9 @@ bool DisplayManager::init(const Config& config) {
                 // Fallback failed (EGL/DSI display without fbdev).
                 // Continue without rotation rather than aborting — a
                 // working unrotated display is better than no display.
-                spdlog::warn("[DisplayManager] Continuing without rotation");
+                spdlog::warn("[DisplayManager] Continuing without rotation. "
+                             "For DSI/EGL displays, use panel_orientation in "
+                             "/boot/firmware/cmdline.txt instead.");
                 rotation_degrees = 0;
             } else {
                 lv_display_set_rotation(m_display, lv_rot);
