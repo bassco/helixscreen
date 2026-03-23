@@ -601,11 +601,11 @@ void MaterialTempsOverlay::handle_macro_selected(const std::string& macro_name) 
     selected_macro_ = macro_name;
     populate_macro_picker_btn();
 
-    // Close the picker modal
+    // Defer deletion — we're inside LV_EVENT_CLICKED on a child of picker
     lv_obj_t* picker = lv_obj_find_by_name(
         lv_obj_get_parent(overlay_root_), "macro_picker_modal");
     if (picker) {
-        lv_obj_delete(picker);
+        lv_obj_delete_async(picker);
     }
 
     spdlog::debug("[{}] Macro selected: '{}'", get_name(),
