@@ -32,12 +32,12 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2025-12-14 | **Last**: 2025-12-31 | **Category**: pattern | **Type**: informational
 > Use centidegrees (int) for temperature subjects to preserve 0.1C resolution. Float subjects lose precision in LVGL binding
 
-### [L025] [**---|**---] Button content centering
-- **Uses**: 9 | **Velocity**: 0.5 | **Learned**: 2025-12-21 | **Last**: 2026-03-13 | **Category**: pattern | **Type**: constraint
+### [L025] [***--|***--] Button content centering
+- **Uses**: 10 | **Velocity**: 1.5 | **Learned**: 2025-12-21 | **Last**: 2026-03-23 | **Category**: pattern | **Type**: constraint
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 51.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-14 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 53.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-23 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|***--] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 57 | **Velocity**: 28.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-14 | **Category**: correction | **Type**: constraint
+- **Uses**: 58 | **Velocity**: 29.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-23 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash

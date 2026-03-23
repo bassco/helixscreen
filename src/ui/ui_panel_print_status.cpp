@@ -858,11 +858,22 @@ void PrintStatusPanel::show_exclude_map_view() {
     map_view_ = std::make_unique<helix::ui::ExcludeObjectMapView>();
     map_view_->set_close_callback([this]() { hide_exclude_map_view(); });
 
+    // Try to get parsed GCode data from the viewer (may be nullptr in thumbnail-only mode)
+    std::shared_ptr<helix::gcode::ParsedGCodeFile> parsed;
+    if (gcode_viewer_) {
+        const auto* raw = ui_gcode_viewer_get_parsed_file(gcode_viewer_);
+        if (raw) {
+            // Wrap in a no-op shared_ptr (we don't own it, viewer manages lifetime)
+            parsed = std::shared_ptr<helix::gcode::ParsedGCodeFile>(
+                const_cast<helix::gcode::ParsedGCodeFile*>(raw), [](helix::gcode::ParsedGCodeFile*) {});
+        }
+    }
+
     map_view_->create(thumbnail_section,
                       printer_state_.get_excluded_objects_state(),
                       bed_w, bed_h,
                       exclude_manager_.get(),
-                      nullptr /* parsed_file */);
+                      parsed);
 
     spdlog::debug("[{}] Showed exclude object map view (bed: {}x{}mm)", get_name(), bed_w, bed_h);
 }

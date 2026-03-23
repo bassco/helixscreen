@@ -359,6 +359,40 @@ void ExcludeObjectMapView::build_object_rects() {
 // draw_first_layer_outlines
 // ============================================================================
 
+// Convex hull using Andrew's monotone chain algorithm.
+// Returns hull points in counter-clockwise order.
+static std::vector<glm::vec2> convex_hull(std::vector<glm::vec2>& pts) {
+    size_t n = pts.size();
+    if (n < 3) return pts;
+
+    std::sort(pts.begin(), pts.end(), [](const glm::vec2& a, const glm::vec2& b) {
+        return a.x < b.x || (a.x == b.x && a.y < b.y);
+    });
+
+    // Cross product of OA and OB vectors
+    auto cross = [](const glm::vec2& o, const glm::vec2& a, const glm::vec2& b) -> float {
+        return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    };
+
+    std::vector<glm::vec2> hull(2 * n);
+    int k = 0;
+
+    // Lower hull
+    for (size_t i = 0; i < n; ++i) {
+        while (k >= 2 && cross(hull[k - 2], hull[k - 1], pts[i]) <= 0) k--;
+        hull[k++] = pts[i];
+    }
+
+    // Upper hull
+    for (int i = static_cast<int>(n) - 2, t = k + 1; i >= 0; i--) {
+        while (k >= t && cross(hull[k - 2], hull[k - 1], pts[i]) <= 0) k--;
+        hull[k++] = pts[i];
+    }
+
+    hull.resize(k - 1);  // last point == first point, remove duplicate
+    return hull;
+}
+
 void ExcludeObjectMapView::draw_first_layer_outlines() {
     if (!canvas_ || !parsed_file_ || !mapper_) return;
 
@@ -369,52 +403,63 @@ void ExcludeObjectMapView::draw_first_layer_outlines() {
     const auto* first_layer = parsed_file_->get_layer(0);
     if (!first_layer || first_layer->segments.empty()) return;
 
-    // Build object name -> index mapping for color lookup
+    // Collect extrusion points per object (in mm coordinates)
+    std::unordered_map<std::string, std::vector<glm::vec2>> object_points;
+    for (const auto& seg : first_layer->segments) {
+        if (!seg.is_extrusion) continue;
+        const auto& obj_name = parsed_file_->get_object_name(seg.object_name_index);
+        if (obj_name.empty()) continue;
+        auto& pts = object_points[obj_name];
+        pts.push_back({seg.start.x, seg.start.y});
+        pts.push_back({seg.end.x, seg.end.y});
+    }
+
+    // Build object name -> color index mapping
     std::unordered_map<std::string, int> name_to_index;
     const auto& defined = state_ ? state_->get_defined_objects() : std::vector<std::string>{};
     for (int i = 0; i < static_cast<int>(defined.size()); ++i) {
         name_to_index[defined[i]] = i;
     }
 
-    // Draw all extrusion segments on the canvas
+    // Draw convex hull outline for each object
     lv_layer_t layer;
     lv_canvas_init_layer(canvas_, &layer);
 
-    for (const auto& seg : first_layer->segments) {
-        if (!seg.is_extrusion) continue;
-
-        // Resolve object name from interned index
-        const auto& obj_name = parsed_file_->get_object_name(seg.object_name_index);
-        if (obj_name.empty()) continue;
-
-        // Find color index from defined objects ordering
+    for (auto& [obj_name, pts] : object_points) {
         auto it = name_to_index.find(obj_name);
         if (it == name_to_index.end()) continue;
 
-        // Transform coordinates to canvas pixels
-        auto [px1, py1] = mapper_->mm_to_px(seg.start.x, seg.start.y);
-        auto [px2, py2] = mapper_->mm_to_px(seg.end.x, seg.end.y);
+        auto hull = convex_hull(pts);
+        if (hull.size() < 3) continue;
 
-        // Draw line segment
-        lv_draw_line_dsc_t dsc;
-        lv_draw_line_dsc_init(&dsc);
-        dsc.color = get_object_color(it->second);
-        dsc.width = 2;
-        dsc.p1.x = static_cast<lv_value_precise_t>(px1);
-        dsc.p1.y = static_cast<lv_value_precise_t>(py1);
-        dsc.p2.x = static_cast<lv_value_precise_t>(px2);
-        dsc.p2.y = static_cast<lv_value_precise_t>(py2);
-        dsc.opa = LV_OPA_COVER;
-        dsc.round_start = 1;
-        dsc.round_end = 1;
+        lv_color_t color = get_object_color(it->second);
 
-        lv_draw_line(&layer, &dsc);
+        // Draw hull edges as closed polygon
+        for (size_t i = 0; i < hull.size(); ++i) {
+            size_t j = (i + 1) % hull.size();
+            auto [px1, py1] = mapper_->mm_to_px(hull[i].x, hull[i].y);
+            auto [px2, py2] = mapper_->mm_to_px(hull[j].x, hull[j].y);
+
+            lv_draw_line_dsc_t dsc;
+            lv_draw_line_dsc_init(&dsc);
+            dsc.color = color;
+            dsc.width = 2;
+            dsc.p1.x = static_cast<lv_value_precise_t>(px1);
+            dsc.p1.y = static_cast<lv_value_precise_t>(py1);
+            dsc.p2.x = static_cast<lv_value_precise_t>(px2);
+            dsc.p2.y = static_cast<lv_value_precise_t>(py2);
+            dsc.opa = LV_OPA_COVER;
+            dsc.round_start = 1;
+            dsc.round_end = 1;
+
+            lv_draw_line(&layer, &dsc);
+        }
     }
 
     lv_canvas_finish_layer(canvas_, &layer);
 
-    spdlog::debug("[ExcludeObjectMapView] Drew first-layer outlines ({} segments)",
-                  first_layer->segments.size());
+    spdlog::debug("[ExcludeObjectMapView] Drew convex hull outlines for {} objects",
+                  object_points.size());
 }
 
 // ============================================================================
