@@ -589,7 +589,9 @@ bool DisplayBackendDRM::supports_hardware_rotation(lv_display_rotation_t rot) co
     }
 
 #ifdef HELIX_ENABLE_OPENGLES
-    return false;
+    // LVGL's OpenGL ES renderer handles rotation natively via vertex
+    // transforms in the shader — no DRM plane rotation needed.
+    return true;
 #else
     uint64_t supported_mask =
         lv_linux_drm_get_plane_rotation_mask(const_cast<lv_display_t*>(display_));
