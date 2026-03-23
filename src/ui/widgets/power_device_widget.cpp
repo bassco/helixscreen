@@ -42,8 +42,20 @@ int resolve_space_token(const char* name, int fallback) {
 
 // Power-related icons for the picker grid
 static const char* const kPowerIcons[] = {
-    "power_cycle", "power",          "power_plug",         "power_standby",      "power_on",
-    "power_off",   "power_plug_off", "power_plug_outline", "power_plug_battery", "power_socket",
+    // clang-format off
+    // Power symbols
+    "power_cycle",       "power",              "power_on",            "power_off",
+    "power_standby",
+    // Plugs
+    "power_plug",        "power_plug_off",     "power_plug_outline",  "power_plug_battery",
+    // Sockets
+    "power_socket",      "power_socket_au",    "power_socket_ch",     "power_socket_de",
+    "power_socket_eu",   "power_socket_fr",    "power_socket_it",     "power_socket_jp",
+    "power_socket_uk",   "power_socket_us",
+    // Device types (already in font)
+    "lightbulb_outline", "lightbulb_on",       "led_strip",           "fan",
+    "radiator",          "flash",              "electric_switch",
+    // clang-format on
 };
 static constexpr size_t kPowerIconCount = std::size(kPowerIcons);
 static constexpr int kIconCellSize = 36;

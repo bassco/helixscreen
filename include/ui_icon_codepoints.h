@@ -204,6 +204,15 @@ static const IconMapping ICON_MAP[] = {
     {"power_plug_off",     "\xF3\xB0\x9A\xA6"},  // F06A6 power-plug-off
     {"power_plug_outline", "\xF3\xB1\x90\xA5"},  // F1425 power-plug-outline
     {"power_socket",       "\xF3\xB0\x90\xA7"},  // F0427 power-socket
+    {"power_socket_au",    "\xF3\xB0\xA4\x85"},  // F0905 power-socket-au
+    {"power_socket_ch",    "\xF3\xB0\xBE\xB3"},  // F0FB3 power-socket-ch
+    {"power_socket_de",    "\xF3\xB1\x84\x87"},  // F1107 power-socket-de
+    {"power_socket_eu",    "\xF3\xB0\x9F\xA7"},  // F07E7 power-socket-eu
+    {"power_socket_fr",    "\xF3\xB1\x84\x88"},  // F1108 power-socket-fr
+    {"power_socket_it",    "\xF3\xB1\x93\xBF"},  // F14FF power-socket-it
+    {"power_socket_jp",    "\xF3\xB1\x84\x89"},  // F1109 power-socket-jp
+    {"power_socket_uk",    "\xF3\xB0\x9F\xA8"},  // F07E8 power-socket-uk
+    {"power_socket_us",    "\xF3\xB0\x9F\xA9"},  // F07E9 power-socket-us
     {"power_standby",      "\xF3\xB0\xA4\x86"},  // F0906 power-standby
     {"print",              "\xF3\xB0\x90\xAA"},  // F042A printer
     {"printer",            "\xF3\xB0\x90\xAA"},  // F042A printer (alias)
