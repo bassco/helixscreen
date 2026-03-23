@@ -10,6 +10,8 @@
 
 #include "app_globals.h"
 #include "filament_database.h"
+#include "macro_executor.h"
+#include "material_settings_manager.h"
 #include "moonraker_api.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
@@ -155,22 +157,7 @@ void PreheatWidget::handle_selection_changed() {
     }
 }
 
-void PreheatWidget::handle_apply() {
-    auto mat = filament::find_material(PRESET_NAMES[selected_material_]);
-    if (!mat) {
-        spdlog::error("[PreheatWidget] Material '{}' not found", PRESET_NAMES[selected_material_]);
-        return;
-    }
-
-    int nozzle = mat->nozzle_recommended();
-    int bed = mat->bed_temp;
-
-    auto* api = get_moonraker_api();
-    if (!api) {
-        spdlog::warn("[PreheatWidget] No MoonrakerAPI available");
-        return;
-    }
-
+void PreheatWidget::set_temperatures(MoonrakerAPI* api, int nozzle, int bed) {
     api->set_temperature(
         printer_state_.active_extruder_name(), static_cast<double>(nozzle),
         [nozzle]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", nozzle); },
@@ -183,9 +170,48 @@ void PreheatWidget::handle_apply() {
         [](const MoonrakerError& error) {
             NOTIFY_ERROR("Failed to set bed temp: {}", error.user_message());
         });
+}
 
-    spdlog::info("[PreheatWidget] Preheat {} applied (nozzle={}°C, bed={}°C)",
-                 PRESET_NAMES[selected_material_], nozzle, bed);
+void PreheatWidget::handle_apply() {
+    const char* material_name = PRESET_NAMES[selected_material_];
+    auto mat = filament::find_material(material_name);
+    if (!mat) {
+        spdlog::error("[PreheatWidget] Material '{}' not found", material_name);
+        return;
+    }
+
+    auto* api = get_moonraker_api();
+    if (!api) {
+        spdlog::warn("[PreheatWidget] No MoonrakerAPI available");
+        return;
+    }
+
+    // Check for custom preheat macro
+    const auto* ovr = MaterialSettingsManager::instance().get_override(material_name);
+    if (ovr && ovr->preheat_macro && !ovr->preheat_macro->empty()) {
+        bool handles_heating = ovr->macro_handles_heating.value_or(true);
+
+        if (!handles_heating) {
+            // Macro is additive — set temps first
+            set_temperatures(api, mat->nozzle_recommended(), mat->bed_temp);
+        }
+
+        // Execute the macro
+        MacroParamResult no_params;
+        execute_macro_gcode(api, *ovr->preheat_macro, no_params, "[PreheatWidget]");
+
+        spdlog::info("[PreheatWidget] Preheat {} via macro '{}' (handles_heating={})",
+                     material_name, *ovr->preheat_macro, handles_heating);
+        return;
+    }
+
+    // Default path: set temperatures only
+    int nozzle = mat->nozzle_recommended();
+    int bed = mat->bed_temp;
+    set_temperatures(api, nozzle, bed);
+
+    spdlog::info("[PreheatWidget] Preheat {} applied (nozzle={}°C, bed={}°C)", material_name,
+                 nozzle, bed);
 }
 
 void PreheatWidget::handle_nozzle_tap() {

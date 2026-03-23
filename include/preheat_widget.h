@@ -8,6 +8,8 @@
 #include <memory>
 #include <string>
 
+class MoonrakerAPI;
+
 namespace helix {
 class PrinterState;
 
@@ -34,6 +36,7 @@ class PreheatWidget : public PanelWidget {
     void handle_apply();
     void handle_selection_changed();
     void update_button_label();
+    void set_temperatures(MoonrakerAPI* api, int nozzle, int bed);
 
     void handle_nozzle_tap();
     void handle_bed_tap();

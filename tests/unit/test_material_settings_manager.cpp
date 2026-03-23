@@ -288,6 +288,46 @@ TEST_CASE_METHOD(LVGLTestFixture, "MaterialSettingsManager absent macro_handles_
     MaterialSettingsManager::instance().clear_override("TPU");
 }
 
+TEST_CASE_METHOD(LVGLTestFixture, "Preheat macro override: macro_handles_heating true skips temps",
+                 "[material_settings][preheat]") {
+    Config::get_instance();
+    MaterialSettingsManager::instance().init();
+
+    MaterialOverride ovr;
+    ovr.preheat_macro = "PREHEAT_ABS";
+    ovr.macro_handles_heating = true;
+    MaterialSettingsManager::instance().set_override("ABS", ovr);
+
+    const auto* result = MaterialSettingsManager::instance().get_override("ABS");
+    REQUIRE(result != nullptr);
+    REQUIRE(result->preheat_macro.has_value());
+
+    bool handles_heating = result->macro_handles_heating.value_or(true);
+    CHECK(handles_heating == true);
+    CHECK(*result->preheat_macro == "PREHEAT_ABS");
+
+    MaterialSettingsManager::instance().clear_override("ABS");
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "Preheat macro override: macro_handles_heating false runs both",
+                 "[material_settings][preheat]") {
+    Config::get_instance();
+    MaterialSettingsManager::instance().init();
+
+    MaterialOverride ovr;
+    ovr.preheat_macro = "ENABLE_BED_FANS";
+    ovr.macro_handles_heating = false;
+    MaterialSettingsManager::instance().set_override("ABS", ovr);
+
+    const auto* result = MaterialSettingsManager::instance().get_override("ABS");
+    REQUIRE(result != nullptr);
+
+    bool handles_heating = result->macro_handles_heating.value_or(true);
+    CHECK(handles_heating == false);
+
+    MaterialSettingsManager::instance().clear_override("ABS");
+}
+
 TEST_CASE_METHOD(LVGLTestFixture, "get_all_overrides returns all set overrides",
                  "[material_settings]") {
     Config::get_instance();
