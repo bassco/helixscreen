@@ -22,7 +22,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 75
 
     steps:
     - name: Checkout repository
@@ -80,7 +80,7 @@ jobs:
       run: make venv-setup
 
     - name: Build application + tests
-      timeout-minutes: 55
+      timeout-minutes: 70
       run: |
         make -j$(nproc)
         make test

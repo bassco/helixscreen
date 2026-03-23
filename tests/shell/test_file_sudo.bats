@@ -197,7 +197,7 @@ SEDWRAP
 # file_sudo() used in platform.sh symlink operations
 # =============================================================================
 
-@test "setup_config_symlink: creates symlink without sudo in user-writable dir" {
+@test "setup_config_symlink: creates config directory without sudo in user-writable dir" {
     . "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
 
     KLIPPER_HOME="$BATS_TEST_TMPDIR/home/pi"
@@ -209,23 +209,27 @@ SEDWRAP
 
     run setup_config_symlink
     [ "$status" -eq 0 ]
-    [ -L "$KLIPPER_HOME/printer_data/config/helixscreen" ]
+    # New layout creates a real directory, not a symlink
+    [ -d "$KLIPPER_HOME/printer_data/config/helixscreen" ]
 }
 
-@test "setup_config_symlink: updates wrong symlink without sudo" {
+@test "setup_config_symlink: migrates old symlink to directory layout without sudo" {
     . "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
 
     KLIPPER_HOME="$BATS_TEST_TMPDIR/home/pi"
     INSTALL_DIR="$BATS_TEST_TMPDIR/helixscreen"
     mkdir -p "$KLIPPER_HOME/printer_data/config"
     mkdir -p "$INSTALL_DIR/config"
+    # Old layout used a directory symlink
     ln -s "/old/wrong/path" "$KLIPPER_HOME/printer_data/config/helixscreen"
 
     mock_command_fail "sudo"
 
     run setup_config_symlink
     [ "$status" -eq 0 ]
-    [ "$(readlink "$KLIPPER_HOME/printer_data/config/helixscreen")" = "$INSTALL_DIR/config" ]
+    # Old symlink should be replaced with a real directory
+    [ -d "$KLIPPER_HOME/printer_data/config/helixscreen" ]
+    [ ! -L "$KLIPPER_HOME/printer_data/config/helixscreen" ]
 }
 
 # =============================================================================

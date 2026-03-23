@@ -18,6 +18,9 @@
 # Supports: Linux (nproc), macOS (sysctl), fallback to 4 cores
 NPROCS := $(shell echo $$(( $$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) * 3 )))
 
+# Detect timeout command: GNU timeout on Linux, gtimeout (from coreutils) on macOS
+TIMEOUT_CMD := $(shell command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || echo "")
+
 # Per-shard timeout in seconds — safety net for infinite hangs only.
 # Must be generous: some shards with threading tests take 60-90s under load.
 SHARD_TIMEOUT := 300
@@ -32,7 +35,7 @@ define run_tests_parallel
 	set -o pipefail; \
 	pids=""; \
 	for i in $$(seq 0 $$(($(NPROCS)-1))); do \
-		(timeout $(SHARD_TIMEOUT) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1 | sed "s/^/[shard $$i] /") & \
+		($(if $(TIMEOUT_CMD),$(TIMEOUT_CMD) $(SHARD_TIMEOUT)) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1 | sed "s/^/[shard $$i] /") & \
 		pids="$$pids $$!"; \
 	done; \
 	failed=0; \
@@ -616,7 +619,7 @@ $(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp
 $(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST-C]$(RESET) $<"
-	$(Q)$(CC) $(CFLAGS) $(LIBHV_INC) -c $< -o $@
+	$(Q)$(CC) $(CFLAGS) -I$(LIBHV_DIR)/base $(LIBHV_INC) -c $< -o $@
 
 # Compile mock sources
 # Uses DEPFLAGS to track header dependencies
