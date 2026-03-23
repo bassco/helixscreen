@@ -93,3 +93,45 @@ TEST_CASE_METHOD(XMLTestFixture, "all 8 object color tokens are registered",
         REQUIRE(is_non_black);
     }
 }
+
+// ============================================================================
+// Coordinate mapping tests
+// ============================================================================
+
+#include "ui_exclude_object_map_view.h"
+
+using helix::ui::ExcludeObjectMapView;
+
+TEST_CASE("Coordinate mapping: mm to pixels", "[exclude_map][coords]") {
+    SECTION("square bed in square viewport") {
+        auto mapper = ExcludeObjectMapView::CoordMapper(235.0f, 235.0f, 400, 400);
+        auto [px, py] = mapper.mm_to_px(0.0f, 0.0f);
+        REQUIRE_THAT(px, Catch::Matchers::WithinAbs(0.0f, 0.5f));
+        REQUIRE_THAT(py, Catch::Matchers::WithinAbs(400.0f, 0.5f));
+
+        auto [cx, cy] = mapper.mm_to_px(117.5f, 117.5f);
+        REQUIRE_THAT(cx, Catch::Matchers::WithinAbs(200.0f, 0.5f));
+        REQUIRE_THAT(cy, Catch::Matchers::WithinAbs(200.0f, 0.5f));
+    }
+
+    SECTION("rectangular bed — width-limited") {
+        auto mapper = ExcludeObjectMapView::CoordMapper(350.0f, 200.0f, 400, 400);
+        auto [cx, cy] = mapper.mm_to_px(175.0f, 100.0f);
+        REQUIRE_THAT(cx, Catch::Matchers::WithinAbs(200.0f, 0.5f));
+        REQUIRE_THAT(cy, Catch::Matchers::WithinAbs(200.0f, 0.5f));
+    }
+
+    SECTION("bbox_to_rect") {
+        auto mapper = ExcludeObjectMapView::CoordMapper(235.0f, 235.0f, 470, 470);
+        auto rect = mapper.bbox_to_rect({10.0f, 10.0f}, {60.0f, 40.0f});
+        REQUIRE_THAT(rect.w, Catch::Matchers::WithinAbs(100.0f, 0.5f));
+        REQUIRE_THAT(rect.h, Catch::Matchers::WithinAbs(60.0f, 0.5f));
+    }
+
+    SECTION("minimum rect size enforced") {
+        auto mapper = ExcludeObjectMapView::CoordMapper(350.0f, 350.0f, 400, 400);
+        auto rect = mapper.bbox_to_rect({100.0f, 100.0f}, {101.0f, 101.0f});
+        REQUIRE(rect.w >= 28.0f);
+        REQUIRE(rect.h >= 28.0f);
+    }
+}
