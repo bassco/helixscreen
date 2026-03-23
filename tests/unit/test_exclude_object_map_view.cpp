@@ -128,6 +128,20 @@ TEST_CASE("key_bar_mode returns Summary for >= 8 objects", "[exclude_map][key_ba
 }
 
 // ============================================================================
+// Adaptive key bar mode selection (consolidated)
+// ============================================================================
+
+TEST_CASE("Adaptive key bar mode selection", "[exclude_map][key_bar]") {
+    using KBM = ExcludeObjectMapView::KeyBarMode;
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(2) == KBM::FullNames);
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(4) == KBM::FullNames);
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(5) == KBM::Abbreviated);
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(7) == KBM::Abbreviated);
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(8) == KBM::Summary);
+    REQUIRE(ExcludeObjectMapView::key_bar_mode(20) == KBM::Summary);
+}
+
+// ============================================================================
 // Coordinate mapping tests
 // ============================================================================
 
@@ -162,5 +176,47 @@ TEST_CASE("Coordinate mapping: mm to pixels", "[exclude_map][coords]") {
         auto rect = mapper.bbox_to_rect({100.0f, 100.0f}, {101.0f, 101.0f});
         REQUIRE(rect.w >= 28.0f);
         REQUIRE(rect.h >= 28.0f);
+    }
+}
+
+// ============================================================================
+// Bed size fallback: derive bed extents from object bounding boxes
+// ============================================================================
+
+TEST_CASE("Bed size fallback from object extents", "[exclude_map][bed_size]") {
+    // When bed dimensions are unknown (0x0), the caller derives them from the
+    // union of all object bounding boxes plus a 10% padding margin.
+    // Objects span 20-170mm x 30-140mm → effective extents: 170*1.1 x 140*1.1
+    auto mapper = ExcludeObjectMapView::CoordMapper(
+        170.0f * 1.1f, 140.0f * 1.1f, 400, 400);
+    // Center of objects area (85, 70) should map near viewport center
+    auto [cx, cy] = mapper.mm_to_px(85.0f, 70.0f);
+    REQUIRE(cx > 150.0f);
+    REQUIRE(cx < 250.0f);
+    REQUIRE(cy > 150.0f);
+    REQUIRE(cy < 250.0f);
+}
+
+// ============================================================================
+// CoordMapper edge cases
+// ============================================================================
+
+TEST_CASE("CoordMapper edge cases", "[exclude_map][coords]") {
+    SECTION("very narrow bed (portrait)") {
+        // Height-limited: scale = 400/300 = 1.333
+        auto mapper = ExcludeObjectMapView::CoordMapper(100.0f, 300.0f, 400, 400);
+        auto [cx, cy] = mapper.mm_to_px(50.0f, 150.0f);
+        REQUIRE_THAT(cx, Catch::Matchers::WithinAbs(200.0f, 1.0f));
+        REQUIRE_THAT(cy, Catch::Matchers::WithinAbs(200.0f, 1.0f));
+    }
+
+    SECTION("overlapping minimum-size rects") {
+        // Two tiny adjacent objects (1mm each) on a 235mm square bed.
+        // Both must be expanded to at least MIN_TOUCH_TARGET_PX.
+        auto mapper = ExcludeObjectMapView::CoordMapper(235.0f, 235.0f, 400, 400);
+        auto r1 = mapper.bbox_to_rect({100.0f, 100.0f}, {101.0f, 101.0f});
+        auto r2 = mapper.bbox_to_rect({102.0f, 100.0f}, {103.0f, 101.0f});
+        REQUIRE(r1.w >= ExcludeObjectMapView::MIN_TOUCH_TARGET_PX);
+        REQUIRE(r2.w >= ExcludeObjectMapView::MIN_TOUCH_TARGET_PX);
     }
 }
