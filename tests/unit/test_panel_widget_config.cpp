@@ -1433,7 +1433,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
         REQUIRE(wc2.page_id(1) == "p2");
     }
 
-    SECTION("removing the main page resets main_page_index to 0") {
+    SECTION("removing the main page is a no-op") {
         json w0 = json::array({{{"id", "power"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
         json w1 = json::array({{{"id", "network"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
         setup_with_pages({{"p0", w0}, {"p1", w1}}, 1, 2);
@@ -1441,9 +1441,11 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
         PanelWidgetConfig wc2("home", config);
         wc2.load();
         REQUIRE(wc2.main_page_index() == 1);
+        REQUIRE(wc2.page_count() == 2);
 
-        wc2.remove_page(1);
-        REQUIRE(wc2.main_page_index() == 0);
+        REQUIRE_FALSE(wc2.remove_page(1));
+        REQUIRE(wc2.page_count() == 2);
+        REQUIRE(wc2.main_page_index() == 1);
     }
 }
 

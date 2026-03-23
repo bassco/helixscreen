@@ -372,13 +372,15 @@ bool PanelWidgetConfig::remove_page(size_t page_index) {
     if (page_index >= pages_.size()) {
         return false;
     }
+    if (page_index == main_page_index_) {
+        spdlog::warn("[PanelWidgetConfig] Cannot remove main page (index {})", page_index);
+        return false;
+    }
 
     pages_.erase(pages_.begin() + static_cast<ptrdiff_t>(page_index));
 
     // Adjust main_page_index
-    if (main_page_index_ == page_index) {
-        main_page_index_ = 0;
-    } else if (main_page_index_ > page_index) {
+    if (main_page_index_ > page_index) {
         --main_page_index_;
     }
 
