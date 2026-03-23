@@ -129,3 +129,106 @@ TEST_CASE_METHOD(helix::MultiInstanceMigrationFixture,
     REQUIRE(e3->enabled == false);
     REQUIRE(e3->config.value("macro_name", "") == "HOME_ALL");
 }
+
+TEST_CASE_METHOD(helix::MultiInstanceMigrationFixture,
+                 "mint_instance_id generates monotonically increasing IDs",
+                 "[panel_widget][multi_instance]") {
+    SECTION("Empty config mints :1") {
+        json widgets = json::array();
+        // Add a non-multi-instance widget so config isn't totally empty
+        widgets.push_back({{"id", "power"},
+                           {"enabled", true},
+                           {"col", 0},
+                           {"row", 0},
+                           {"colspan", 1},
+                           {"rowspan", 1}});
+        setup_with_widgets(widgets);
+        PanelWidgetConfig pwc("home", config);
+        pwc.load();
+
+        REQUIRE(pwc.mint_instance_id("favorite_macro") == "favorite_macro:1");
+    }
+
+    SECTION("With :1 existing, mints :2") {
+        json widgets = json::array();
+        widgets.push_back({{"id", "favorite_macro:1"},
+                           {"enabled", true},
+                           {"col", 0},
+                           {"row", 0},
+                           {"colspan", 1},
+                           {"rowspan", 1}});
+        setup_with_widgets(widgets);
+        PanelWidgetConfig pwc("home", config);
+        pwc.load();
+
+        REQUIRE(pwc.mint_instance_id("favorite_macro") == "favorite_macro:2");
+    }
+
+    SECTION("With gap (:1 and :5), mints :6 (monotonic)") {
+        json widgets = json::array();
+        widgets.push_back({{"id", "favorite_macro:1"},
+                           {"enabled", true},
+                           {"col", 0},
+                           {"row", 0},
+                           {"colspan", 1},
+                           {"rowspan", 1}});
+        widgets.push_back({{"id", "favorite_macro:5"},
+                           {"enabled", true},
+                           {"col", 1},
+                           {"row", 0},
+                           {"colspan", 1},
+                           {"rowspan", 1}});
+        setup_with_widgets(widgets);
+        PanelWidgetConfig pwc("home", config);
+        pwc.load();
+
+        REQUIRE(pwc.mint_instance_id("favorite_macro") == "favorite_macro:6");
+    }
+}
+
+TEST_CASE_METHOD(helix::MultiInstanceMigrationFixture, "delete_entry removes entry entirely",
+                 "[panel_widget][multi_instance]") {
+    json widgets = json::array();
+    widgets.push_back({{"id", "favorite_macro:1"},
+                       {"enabled", true},
+                       {"col", 0},
+                       {"row", 0},
+                       {"colspan", 1},
+                       {"rowspan", 1}});
+    widgets.push_back({{"id", "favorite_macro:2"},
+                       {"enabled", true},
+                       {"col", 1},
+                       {"row", 0},
+                       {"colspan", 1},
+                       {"rowspan", 1}});
+    widgets.push_back({{"id", "power"},
+                       {"enabled", true},
+                       {"col", 2},
+                       {"row", 0},
+                       {"colspan", 1},
+                       {"rowspan", 1}});
+    setup_with_widgets(widgets);
+    PanelWidgetConfig pwc("home", config);
+    pwc.load();
+
+    auto find_entry = [&](const std::string& id) -> const PanelWidgetEntry* {
+        for (const auto& e : pwc.entries()) {
+            if (e.id == id)
+                return &e;
+        }
+        return nullptr;
+    };
+
+    // Precondition: all three exist
+    REQUIRE(find_entry("favorite_macro:1") != nullptr);
+    REQUIRE(find_entry("favorite_macro:2") != nullptr);
+    REQUIRE(find_entry("power") != nullptr);
+
+    pwc.delete_entry("favorite_macro:1");
+
+    // :1 is gone entirely
+    REQUIRE(find_entry("favorite_macro:1") == nullptr);
+    // Others still present
+    REQUIRE(find_entry("favorite_macro:2") != nullptr);
+    REQUIRE(find_entry("power") != nullptr);
+}

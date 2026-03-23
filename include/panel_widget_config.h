@@ -60,6 +60,13 @@ class PanelWidgetConfig {
 
     void reset_to_defaults();
 
+    /// Generate the next unique instance ID for a multi-instance base ID.
+    /// Scans existing entries for base_id:N patterns and returns base_id:(max_N+1).
+    std::string mint_instance_id(const std::string& base_id);
+
+    /// Remove an entry entirely (used for multi-instance widget deletion).
+    void delete_entry(const std::string& id);
+
     /// Generate default grid layout, placing enabled widgets sequentially in 1x1 cells.
     static std::vector<PanelWidgetEntry> build_default_grid();
 

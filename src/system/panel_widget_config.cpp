@@ -192,6 +192,29 @@ void PanelWidgetConfig::reset_to_defaults() {
     entries_ = build_defaults();
 }
 
+std::string PanelWidgetConfig::mint_instance_id(const std::string& base_id) {
+    int max_n = 0;
+    std::string prefix = base_id + ":";
+    for (const auto& entry : entries_) {
+        if (entry.id.size() > prefix.size() && entry.id.substr(0, prefix.size()) == prefix) {
+            auto suffix = entry.id.substr(prefix.size());
+            try {
+                int n = std::stoi(suffix);
+                if (n > max_n)
+                    max_n = n;
+            } catch (...) {
+            }
+        }
+    }
+    return base_id + ":" + std::to_string(max_n + 1);
+}
+
+void PanelWidgetConfig::delete_entry(const std::string& id) {
+    entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
+                                  [&id](const PanelWidgetEntry& e) { return e.id == id; }),
+                   entries_.end());
+}
+
 bool PanelWidgetConfig::is_enabled(const std::string& id) const {
     auto it = std::find_if(entries_.begin(), entries_.end(),
                            [&id](const PanelWidgetEntry& e) { return e.id == id; });

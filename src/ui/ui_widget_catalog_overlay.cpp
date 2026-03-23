@@ -8,6 +8,7 @@
 
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "panel_widget_config.h"
+#include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 #include "theme_manager.h"
 
@@ -180,75 +181,57 @@ void WidgetCatalogOverlay::populate_rows(lv_obj_t* scroll, const PanelWidgetConf
                                          WidgetSelectedCallback /*on_select*/) {
     const auto& defs = get_all_widget_defs();
 
-    // Pre-pass: count placed/total per catalog_group
-    std::unordered_map<std::string, int> group_placed_count;
-    std::unordered_map<std::string, int> group_total_count;
-    // Collect the first non-enabled member ID per group for click handler
-    std::unordered_map<std::string, const char*> group_next_id;
-
-    for (const auto& def : defs) {
-        if (!def.catalog_group)
-            continue;
-        std::string group(def.catalog_group);
-        group_total_count[group]++;
-        if (config.is_enabled(def.id)) {
-            group_placed_count[group]++;
-        } else if (group_next_id.find(group) == group_next_id.end()) {
-            group_next_id[group] = def.id;
+    // Pre-pass: count placed instances per multi_instance base ID
+    std::unordered_map<std::string, int> multi_placed_count;
+    for (const auto& entry : config.entries()) {
+        auto colon_pos = entry.id.find(':');
+        if (colon_pos != std::string::npos && entry.enabled) {
+            std::string base = entry.id.substr(0, colon_pos);
+            multi_placed_count[base]++;
         }
     }
 
-    std::unordered_set<std::string> group_seen;
-
     for (const auto& def : defs) {
-        if (def.catalog_group) {
-            // Grouped widget — show one catalog row per group
-            std::string group(def.catalog_group);
-            if (!group_seen.insert(group).second)
-                continue; // already emitted this group's row
-
-            int placed = group_placed_count[group];
-            int total = group_total_count[group];
-            bool all_placed = (placed >= total);
+        if (def.multi_instance) {
+            // Multi-instance widget — show one row with placed count.
+            // Clicking always mints a new instance.
+            int placed = multi_placed_count[def.id];
 
             const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;
 
-            // Build status suffix showing placement count
             std::string name_str(display_name);
             if (placed > 0) {
                 char buf[32];
-                snprintf(buf, sizeof(buf), " (%d/%d %s)", placed, total, lv_tr("Placed"));
+                snprintf(buf, sizeof(buf), " (%d %s)", placed, lv_tr("Placed"));
                 name_str += buf;
             }
 
             const char* desc = def.description ? lv_tr(def.description) : nullptr;
+            // Multi-instance widgets are always clickable (never "all placed")
             lv_obj_t* row = create_row(scroll, name_str.c_str(), def.icon, desc, def.colspan,
-                                       def.rowspan, all_placed,
+                                       def.rowspan, /*already_placed=*/false,
                                        /*hardware_gated=*/false);
 
-            if (!all_placed) {
-                // Find the first non-enabled member to assign on click
-                const char* next_id = group_next_id[group];
-                if (next_id) {
-                    lv_obj_add_event_cb(
-                        row,
-                        [](lv_event_t* ev) {
-                            auto* widget_id = static_cast<const char*>(lv_event_get_user_data(ev));
-                            if (!widget_id)
-                                return;
-                            spdlog::info("[WidgetCatalog] Selected grouped widget: {}", widget_id);
-                            auto cb = g_catalog_state.on_select;
-                            std::string id_copy(widget_id);
-                            close_catalog();
-                            if (cb) {
-                                cb(id_copy);
-                            }
-                        },
-                        LV_EVENT_CLICKED, const_cast<char*>(next_id));
-                }
-            }
+            // The base ID pointer comes from the static def table (stable lifetime)
+            lv_obj_add_event_cb(
+                row,
+                [](lv_event_t* ev) {
+                    auto* base_id = static_cast<const char*>(lv_event_get_user_data(ev));
+                    if (!base_id)
+                        return;
+                    // Mint a new instance ID
+                    auto& mgr_config = PanelWidgetManager::instance().get_widget_config("home");
+                    std::string new_id = mgr_config.mint_instance_id(base_id);
+                    spdlog::info("[WidgetCatalog] Minted multi-instance widget: {}", new_id);
+                    auto cb = g_catalog_state.on_select;
+                    close_catalog();
+                    if (cb) {
+                        cb(new_id);
+                    }
+                },
+                LV_EVENT_CLICKED, const_cast<char*>(def.id));
         } else {
-            // Non-grouped widget — existing single-widget logic
+            // Single-instance widget
             bool already_placed = config.is_enabled(def.id);
 
             const char* display_name = def.display_name ? lv_tr(def.display_name) : def.id;

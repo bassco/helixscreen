@@ -645,8 +645,13 @@ void GridEditMode::remove_selected_widget() {
     spdlog::info("[GridEditMode] Removing widget '{}' (config index {})",
                  entries[static_cast<size_t>(config_index)].id, config_index);
 
-    // Disable the widget in config
-    config_->set_enabled(static_cast<size_t>(config_index), false);
+    // Multi-instance widgets are deleted entirely; single-instance are disabled
+    const auto& widget_id = entries[static_cast<size_t>(config_index)].id;
+    if (widget_id.find(':') != std::string::npos) {
+        config_->delete_entry(widget_id);
+    } else {
+        config_->set_enabled(static_cast<size_t>(config_index), false);
+    }
 
     // Deselect before rebuild. Null out overlay pointers since
     // lv_obj_clean in the rebuild will delete them.
