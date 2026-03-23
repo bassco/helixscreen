@@ -51,7 +51,7 @@ Touch coordinate rotation is already handled by `set_display_rotation()` which r
 
 ### Testing
 
-- **Unit test:** Verify `supports_hardware_rotation()` returns `true` on EGL for 90°/180°/270°
+- **Unit test:** The EGL path is a compile-time `#ifdef`, so the existing test pattern (testing via `choose_drm_rotation_strategy()`) applies to the dumb-buffer path only. For EGL, add a compile-time static assert or a test that checks the `#ifdef` logic directly. The real verification is the hardware test.
 - **Hardware test (Pi 5, 192.168.1.113):** Set `"rotate": 270` in helixconfig.json, verify display rotates and touch maps correctly
 
 ---
@@ -76,7 +76,7 @@ On the second start, ownership is already correct, so `chown` is a no-op (no cti
 
 ### Fix
 
-Stop the update path watcher before `ExecStartPre` steps run, re-arm it after the service starts. This prevents ANY `ExecStartPre` side-effect from triggering a spurious restart.
+Stop the update path watcher before `ExecStartPre` steps run, re-arm it after the service starts or stops. This prevents ANY `ExecStartPre` side-effect from triggering a spurious restart.
 
 Add to `config/helixscreen.service`:
 
@@ -90,9 +90,21 @@ ExecStartPre=+/bin/systemctl stop helixscreen-update.path 2>/dev/null || true
 
 # Re-arm update watcher after main process starts
 ExecStartPost=+/bin/systemctl start helixscreen-update.path 2>/dev/null || true
+
+# Re-arm on stop/crash too, so the watcher isn't left disabled if the service
+# fails before ExecStartPost runs (e.g., startup crash hitting StartLimitBurst).
+ExecStopPost=+/bin/systemctl start helixscreen-update.path 2>/dev/null || true
 ```
 
 The `|| true` ensures the service starts even if the path unit isn't installed (e.g., SysV init systems, development environments).
+
+### Design Tradeoffs
+
+**Why stop/start instead of conditional chown?** A conditional chown (`stat -c %U` check) would avoid the ctime change on subsequent boots, but only protects against this specific trigger. The stop/start approach is more defensive — it guards against ANY ExecStartPre step (current or future) that might modify watched files.
+
+**Race window with real updates:** If Moonraker extracts an update during the few seconds between ExecStartPre (path stopped) and ExecStartPost (path re-armed), that update event is missed. This is the same narrow window that already exists in `helixscreen-update.service` line 40 (`ExecStartPost=/bin/systemctl restart helixscreen-update.path`). In practice, Moonraker updates are user-initiated and unlikely to land in this window. If they do, the next service restart picks up the update normally.
+
+**Upgrade path:** Existing deployments have an already-deployed `/etc/systemd/system/helixscreen.service`. The update service (`helixscreen-update.service` lines 25-37) copies and re-templates the service file on each update, so the fix will be picked up automatically on the next Moonraker-managed update.
 
 ### Files Modified
 
@@ -102,7 +114,7 @@ The `|| true` ensures the service starts even if the path unit isn't installed (
 
 ### Testing
 
-- **Shell test (BATS):** Validate that `chown` on a file triggers systemd `PathChanged` via ctime modification (confirms theory)
+- **Shell test (BATS):** Verify that `chown` modifies ctime even when ownership is unchanged (confirms the trigger mechanism). This is a pure filesystem test, not a systemd integration test — testing the actual PathChanged behavior requires a running systemd with temp units, which is better done as a manual hardware test.
 - **Hardware test (Pi 5, 192.168.1.113):**
   1. Before fix: `sudo systemctl restart helixscreen`, check `journalctl -u helixscreen-update.service` for activation
   2. After fix: same test, verify no spurious activation
