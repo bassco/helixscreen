@@ -179,15 +179,15 @@ void PowerDeviceWidget::update_display(int status) {
     if (status_label_) {
         switch (status) {
         case 1:
-            lv_label_set_text(status_label_, "ON");
+            lv_label_set_text(status_label_, lv_tr("ON"));
             lv_obj_set_style_text_color(status_label_, theme_manager_get_color("danger"), 0);
             break;
         case 0:
-            lv_label_set_text(status_label_, "OFF");
+            lv_label_set_text(status_label_, lv_tr("OFF"));
             lv_obj_set_style_text_color(status_label_, theme_manager_get_color("text_muted"), 0);
             break;
         case 2:
-            lv_label_set_text(status_label_, "LOCKED");
+            lv_label_set_text(status_label_, lv_tr("LOCKED"));
             lv_obj_set_style_text_color(status_label_, theme_manager_get_color("text_muted"), 0);
             break;
         default:
