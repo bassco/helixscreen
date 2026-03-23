@@ -114,7 +114,11 @@ TEST_CASE_METHOD(helix::ThermistorConfigFixture,
 TEST_CASE_METHOD(helix::ThermistorConfigFixture,
                  "ThermistorWidget: set_widget_config saves and persists",
                  "[thermistor][panel_widget]") {
-    setup_empty_config();
+    // Multi-instance widgets need a pre-existing entry (not auto-created by defaults)
+    json widgets = json::array({
+        {{"id", "thermistor"}, {"enabled", true}, {"col", 0}, {"row", 0}},
+    });
+    setup_with_widgets(widgets);
     PanelWidgetConfig wc("home", config);
     wc.load();
 

@@ -5,7 +5,9 @@
 
 #include "ui_carousel.h"
 #include "ui_event_safety.h"
+#include "ui_fonts.h"
 #include "ui_icon.h"
+#include "ui_icon_codepoints.h"
 #include "ui_temperature_utils.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
@@ -27,9 +29,9 @@
 
 namespace helix {
 void register_thermistor_widget() {
-    register_widget_factory("thermistor", [](const std::string&) {
+    register_widget_factory("thermistor", [](const std::string& id) {
         auto& ps = get_printer_state();
-        return std::make_unique<ThermistorWidget>(ps);
+        return std::make_unique<ThermistorWidget>(id, ps);
     });
 
     // Register XML event callbacks at startup (before any XML is parsed)
@@ -56,6 +58,52 @@ static void strip_temperature_suffix(std::string& name) {
 }
 
 namespace {
+
+// Thermistor-related icons for the picker grid
+static const char* const kThermistorIcons[] = {
+    // clang-format off
+    "thermometer", "thermometer_lines", "thermometer_plus", "thermometer_minus",
+    "thermometer_probe", "thermometer_off",
+    "coolant_temperature", "home_thermometer",
+    "heat_wave", "heater", "radiator", "cooldown",
+    // clang-format on
+};
+static constexpr size_t kThermistorIconCount = std::size(kThermistorIcons);
+static constexpr int kIconCellSize = 36;
+static constexpr const char* kDefaultIcon = "thermometer";
+
+// Icons with distinct on/off glyphs. Config stores the ON variant;
+// resolve_icon_for_state() derives the OFF variant from this table.
+struct IconPair {
+    const char* on_icon;
+    const char* off_icon;
+};
+static const IconPair kIconPairs[] = {
+    {"thermometer", "thermometer_off"},
+};
+
+/// Map an off-variant icon name to its on-variant (e.g., "thermometer_off" -> "thermometer").
+/// Returns the input unchanged if it's not an off-variant.
+static const char* to_on_variant(const char* icon) {
+    for (const auto& pair : kIconPairs) {
+        if (std::strcmp(icon, pair.off_icon) == 0)
+            return pair.on_icon;
+    }
+    return icon;
+}
+
+/// Apply highlight styling to an icon grid cell.
+void apply_icon_cell_highlight(lv_obj_t* cell, bool selected) {
+    if (selected) {
+        lv_obj_set_style_border_width(cell, 2, 0);
+        lv_obj_set_style_border_color(cell, theme_manager_get_color("primary"), 0);
+        lv_obj_set_style_bg_opa(cell, 20, 0);
+        lv_obj_set_style_bg_color(cell, theme_manager_get_color("primary"), 0);
+    } else {
+        lv_obj_set_style_border_width(cell, 0, 0);
+        lv_obj_set_style_bg_opa(cell, 0, 0);
+    }
+}
 
 /// Resolve a responsive spacing token to pixels, with a fallback.
 int resolve_space_token(const char* name, int fallback) {
@@ -171,7 +219,8 @@ void position_picker_card(lv_obj_t* backdrop, lv_obj_t* widget_obj, lv_obj_t* pa
 
 } // anonymous namespace
 
-ThermistorWidget::ThermistorWidget(PrinterState& /*printer_state*/) {
+ThermistorWidget::ThermistorWidget(const std::string& instance_id, PrinterState& /*printer_state*/)
+    : instance_id_(instance_id) {
     std::strcpy(temp_buffer_, "--\xC2\xB0"
                               "C"); // "--°C"
 }
@@ -200,6 +249,13 @@ void ThermistorWidget::attach_single() {
     // Cache label pointers
     temp_label_ = lv_obj_find_by_name(widget_obj_, "thermistor_temp");
     name_label_ = lv_obj_find_by_name(widget_obj_, "thermistor_name");
+
+    // Apply custom icon
+    lv_obj_t* icon_obj = lv_obj_find_by_name(widget_obj_, "thermistor_icon");
+    if (icon_obj) {
+        const char* icon = icon_name_.empty() ? kDefaultIcon : icon_name_.c_str();
+        ui_icon_set_source(icon_obj, icon);
+    }
 
     // If no sensor saved (set_config provided none), auto-select first available
     if (selected_sensor_.empty()) {
@@ -332,9 +388,9 @@ void ThermistorWidget::bind_carousel_sensors() {
         lv_obj_set_style_bg_opa(page, LV_OPA_TRANSP, 0);
         lv_obj_remove_flag(page, LV_OBJ_FLAG_SCROLLABLE);
 
-        // Thermometer icon
-        const char* icon_attrs[] = {"src",     "thermometer", "size", "sm",
-                                    "variant", "secondary",   nullptr};
+        // Thermometer icon (use custom icon if configured)
+        const char* icon_src = icon_name_.empty() ? kDefaultIcon : icon_name_.c_str();
+        const char* icon_attrs[] = {"src", icon_src, "size", "sm", "variant", "secondary", nullptr};
         lv_xml_create(page, "icon", icon_attrs);
 
         // Temperature label
@@ -495,6 +551,42 @@ void ThermistorWidget::select_sensor(const std::string& klipper_name) {
     spdlog::info("[ThermistorWidget] Selected sensor: {} ({})", display_name_, klipper_name);
 }
 
+void ThermistorWidget::select_icon(const std::string& name) {
+    // Store the ON variant so display can derive the OFF icon from the pair table
+    std::string canonical(to_on_variant(name.c_str()));
+    icon_name_ = (canonical == kDefaultIcon) ? "" : canonical;
+    save_config();
+
+    // Update the widget icon immediately (single mode)
+    lv_obj_t* icon_obj =
+        widget_obj_ ? lv_obj_find_by_name(widget_obj_, "thermistor_icon") : nullptr;
+    if (icon_obj) {
+        const char* effective = icon_name_.empty() ? kDefaultIcon : icon_name_.c_str();
+        ui_icon_set_source(icon_obj, effective);
+    }
+
+    // Update icon grid highlights if picker is still open
+    if (picker_backdrop_) {
+        lv_obj_t* icon_grid = lv_obj_find_by_name(picker_backdrop_, "thermistor_icon_grid");
+        if (icon_grid) {
+            std::string effective_icon =
+                icon_name_.empty() ? std::string(kDefaultIcon) : icon_name_;
+            uint32_t grid_count = lv_obj_get_child_count(icon_grid);
+            for (uint32_t i = 0; i < grid_count; ++i) {
+                lv_obj_t* cell = lv_obj_get_child(icon_grid, i);
+                auto idx =
+                    static_cast<size_t>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(cell)));
+                if (idx < kThermistorIconCount) {
+                    apply_icon_cell_highlight(cell, kThermistorIcons[idx] == effective_icon);
+                }
+            }
+        }
+    }
+
+    spdlog::info("[ThermistorWidget] {} selected icon: {}", instance_id_,
+                 icon_name_.empty() ? "thermometer (default)" : icon_name_);
+}
+
 void ThermistorWidget::on_temp_changed(int centidegrees) {
     float deg = centi_to_degrees_f(centidegrees);
     format_temperature_f(deg, temp_buffer_, sizeof(temp_buffer_));
@@ -539,7 +631,12 @@ void ThermistorWidget::update_display() {
 void ThermistorWidget::set_config(const nlohmann::json& config) {
     config_ = config;
 
-    // Migrate old format: {"sensor": "x"} → sensors_ vector
+    // Read icon
+    if (config.contains("icon") && config["icon"].is_string()) {
+        icon_name_ = config["icon"].get<std::string>();
+    }
+
+    // Migrate old format: {"sensor": "x"} -> sensors_ vector
     if (config.contains("sensor") && config["sensor"].is_string()) {
         selected_sensor_ = config["sensor"].get<std::string>();
         sensors_ = {selected_sensor_};
@@ -558,8 +655,9 @@ void ThermistorWidget::set_config(const nlohmann::json& config) {
             selected_sensor_ = sensors_.front();
             resolve_display_name();
         }
-        spdlog::debug("[ThermistorWidget] Config: {} sensors, mode={}", sensors_.size(),
-                      is_carousel_mode() ? "carousel" : "single");
+        spdlog::debug("[ThermistorWidget] Config: {} sensors, mode={} icon={}", sensors_.size(),
+                      is_carousel_mode() ? "carousel" : "single",
+                      icon_name_.empty() ? kDefaultIcon : icon_name_);
     }
 }
 
@@ -591,10 +689,16 @@ void ThermistorWidget::save_config() {
     if (is_carousel_mode()) {
         config["display_mode"] = "carousel";
     }
+    if (!icon_name_.empty()) {
+        config["icon"] = icon_name_;
+    } else {
+        config.erase("icon");
+    }
     config_ = config;
     save_widget_config(config);
-    spdlog::debug("[ThermistorWidget] Saved config: {} sensors, mode={}", sensors_.size(),
-                  is_carousel_mode() ? "carousel" : "single");
+    spdlog::debug("[ThermistorWidget] Saved config: {} sensors, mode={} icon={}", sensors_.size(),
+                  is_carousel_mode() ? "carousel" : "single",
+                  icon_name_.empty() ? kDefaultIcon : icon_name_);
 }
 
 void ThermistorWidget::show_sensor_picker() {
@@ -769,6 +873,90 @@ void ThermistorWidget::show_configure_picker() {
             LV_EVENT_CLICKED, nullptr);
     }
 
+    // Icon picker section
+    lv_obj_t* context_menu = lv_obj_find_by_name(picker_backdrop_, "context_menu");
+    if (context_menu) {
+        // Icon section divider
+        lv_obj_t* icon_divider = lv_obj_create(context_menu);
+        lv_obj_set_width(icon_divider, LV_PCT(100));
+        lv_obj_set_height(icon_divider, 1);
+        lv_obj_set_style_bg_color(icon_divider, theme_manager_get_color("text_muted"), 0);
+        lv_obj_set_style_bg_opa(icon_divider, 38, 0);
+        lv_obj_set_style_pad_all(icon_divider, 0, 0);
+        lv_obj_set_style_border_width(icon_divider, 0, 0);
+        lv_obj_remove_flag(icon_divider, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(icon_divider, LV_OBJ_FLAG_CLICKABLE);
+
+        // Icon section title
+        lv_obj_t* icon_title = lv_label_create(context_menu);
+        lv_label_set_text(icon_title, lv_tr("Icon"));
+        lv_obj_set_style_text_font(icon_title, lv_font_get_default(), 0);
+        lv_obj_set_style_text_color(icon_title, theme_manager_get_color("text"), 0);
+        lv_obj_set_width(icon_title, LV_PCT(100));
+
+        // Icon grid (wrap flow)
+        lv_obj_t* icon_grid = lv_obj_create(context_menu);
+        lv_obj_set_name(icon_grid, "thermistor_icon_grid");
+        lv_obj_set_width(icon_grid, LV_PCT(100));
+        lv_obj_set_height(icon_grid, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(icon_grid, LV_FLEX_FLOW_ROW_WRAP);
+        lv_obj_set_flex_align(icon_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                              LV_FLEX_ALIGN_START);
+        lv_obj_set_style_pad_all(icon_grid, 0, 0);
+        lv_obj_set_style_pad_gap(icon_grid, 4, 0);
+        lv_obj_set_style_bg_opa(icon_grid, 0, 0);
+        lv_obj_set_style_border_width(icon_grid, 0, 0);
+        lv_obj_remove_flag(icon_grid, LV_OBJ_FLAG_SCROLLABLE);
+
+        std::string effective_icon = icon_name_.empty() ? std::string(kDefaultIcon) : icon_name_;
+
+        for (size_t i = 0; i < kThermistorIconCount; ++i) {
+            lv_obj_t* cell = lv_obj_create(icon_grid);
+            lv_obj_set_size(cell, kIconCellSize, kIconCellSize);
+            lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_add_flag(cell, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_style_bg_opa(cell, 0, 0);
+            lv_obj_set_style_radius(cell, 4, 0);
+            lv_obj_set_style_pad_all(cell, 0, 0);
+
+            // Pressed feedback
+            lv_obj_set_style_bg_color(cell, theme_manager_get_color("text_muted"),
+                                      LV_PART_MAIN | LV_STATE_PRESSED);
+            lv_obj_set_style_bg_opa(cell, LV_OPA_20, LV_PART_MAIN | LV_STATE_PRESSED);
+
+            apply_icon_cell_highlight(cell, kThermistorIcons[i] == effective_icon);
+
+            // Icon glyph
+            const char* cp = ui_icon::lookup_codepoint(kThermistorIcons[i]);
+            if (cp) {
+                lv_obj_t* icon = lv_label_create(cell);
+                lv_label_set_text(icon, cp);
+                lv_obj_set_style_text_font(icon, &mdi_icons_24, 0);
+                lv_obj_set_style_text_color(icon, theme_manager_get_color("text"), 0);
+                lv_obj_center(icon);
+                lv_obj_remove_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+                lv_obj_add_flag(icon, LV_OBJ_FLAG_EVENT_BUBBLE);
+            }
+
+            // Store index as user_data
+            lv_obj_set_user_data(cell, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+
+            lv_obj_add_event_cb(
+                cell,
+                [](lv_event_t* e) {
+                    LVGL_SAFE_EVENT_CB_BEGIN("[ThermistorWidget] icon_cell_cb");
+                    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                    auto idx = static_cast<size_t>(
+                        reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
+                    if (idx < kThermistorIconCount && ThermistorWidget::s_active_picker_) {
+                        ThermistorWidget::s_active_picker_->select_icon(kThermistorIcons[idx]);
+                    }
+                    LVGL_SAFE_EVENT_CB_END();
+                },
+                LV_EVENT_CLICKED, nullptr);
+        }
+    }
+
     s_active_picker_ = this;
 
     // Self-clearing delete callback with heap string cleanup
@@ -787,9 +975,9 @@ void ThermistorWidget::show_configure_picker() {
         },
         LV_EVENT_DELETE, this);
 
-    // Position card — wider for the header
+    // Position card — wider for the header + icon grid
     int screen_w = lv_obj_get_width(parent_screen_);
-    int card_w = std::clamp(screen_w * 35 / 100, 180, 280);
+    int card_w = std::clamp(screen_w * 40 / 100, 200, 320);
     position_picker_card(picker_backdrop_, widget_obj_, parent_screen_, card_w);
 
     spdlog::debug("[ThermistorWidget] Configure picker shown with {} sensors", sensors.size());
