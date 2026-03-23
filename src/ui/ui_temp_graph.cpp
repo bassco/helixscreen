@@ -300,10 +300,11 @@ static void draw_x_axis_labels_cb(lv_event_t* e) {
     lv_layer_t* layer = lv_event_get_layer(e);
     ui_temp_graph_t* graph = static_cast<ui_temp_graph_t*>(lv_event_get_user_data(e));
 
-    if (!layer || !graph || graph->visible_point_count == 0) {
-        spdlog::trace("[TempGraph] X-axis skip: layer={}, graph={}, points={}", layer != nullptr,
-                      graph != nullptr, graph ? graph->visible_point_count : -1);
-        return; // No data to label yet
+    if (!layer || !graph || !graph->show_x_axis || graph->visible_point_count == 0) {
+        spdlog::trace("[TempGraph] X-axis skip: layer={}, graph={}, show={}, points={}",
+                      layer != nullptr, graph != nullptr, graph ? graph->show_x_axis : false,
+                      graph ? graph->visible_point_count : -1);
+        return; // No data to label yet or X-axis disabled
     }
 
     spdlog::trace("[TempGraph] Drawing X-axis labels: {} points, first={}ms, latest={}ms",
@@ -629,8 +630,10 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     graph->max_temp = UI_TEMP_GRAPH_DEFAULT_MAX_TEMP;
     graph->series_count = 0;
     graph->next_series_id = 0;
+    graph->features = TEMP_GRAPH_ALL_FEATURES & ~TEMP_GRAPH_FEATURE_Y_AXIS;  // Y-axis off until caller configures
     graph->y_axis_increment = 0; // Disabled by default (caller must enable)
     graph->show_y_axis = false;
+    graph->show_x_axis = true;
     graph->max_visible_temp = graph->min_temp + 1.0f; // Initialize to avoid zero gradient span
     graph->axis_font = theme_manager_get_font("font_small"); // Default axis label font
     graph->y_axis_width = 40;                                // Default Y-axis label width
@@ -1171,4 +1174,77 @@ void ui_temp_graph_set_axis_size(ui_temp_graph_t* graph, const char* size) {
 
     spdlog::debug("[TempGraph] Axis size: {} -> {} (y_width={}, label_h={})", size ? size : "null",
                   font_token, y_axis_width, label_height);
+}
+
+// Set which chart features are visible
+void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
+    if (!graph || !graph->chart) {
+        spdlog::error("[TempGraph] NULL graph in set_features");
+        return;
+    }
+
+    // LINES is always forced on — the chart must show data lines
+    features |= TEMP_GRAPH_FEATURE_LINES;
+    graph->features = features;
+
+    // Toggle Y-axis via existing API
+    bool want_y = (features & TEMP_GRAPH_FEATURE_Y_AXIS) != 0;
+    graph->show_y_axis = want_y;
+
+    // Toggle X-axis
+    graph->show_x_axis = (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0;
+
+    // Toggle gradient opacity: zero out when disabled, restore defaults when enabled
+    bool want_gradients = (features & TEMP_GRAPH_FEATURE_GRADIENTS) != 0;
+    for (int i = 0; i < graph->series_count; i++) {
+        ui_temp_series_meta_t* meta = &graph->series_meta[i];
+        if (!meta->chart_series)
+            continue;
+
+        if (want_gradients) {
+            // Restore default gradient opacities
+            meta->gradient_top_opa = UI_TEMP_GRAPH_GRADIENT_TOP_OPA;
+            meta->gradient_bottom_opa = UI_TEMP_GRAPH_GRADIENT_BOTTOM_OPA;
+        } else {
+            meta->gradient_top_opa = LV_OPA_TRANSP;
+            meta->gradient_bottom_opa = LV_OPA_TRANSP;
+        }
+    }
+
+    // Toggle target cursors: move off-screen when disabled
+    bool want_targets = (features & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0;
+    for (int i = 0; i < graph->series_count; i++) {
+        ui_temp_series_meta_t* meta = &graph->series_meta[i];
+        if (!meta->chart_series || !meta->target_cursor)
+            continue;
+
+        if (!want_targets) {
+            // Move cursor far off-screen to hide it
+            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, -10000);
+        } else if (meta->show_target) {
+            // Restore cursor to correct position
+            int32_t pixel_y = temp_to_pixel_y(graph, meta->target_temp);
+            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, pixel_y);
+        }
+    }
+
+    lv_obj_invalidate(graph->chart);
+
+    spdlog::debug("[TempGraph] Features set: 0x{:02x} (lines={} targets={} legend={} "
+                  "y_axis={} x_axis={} gradients={} readouts={})",
+                  features, (features & TEMP_GRAPH_FEATURE_LINES) != 0,
+                  (features & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0,
+                  (features & TEMP_GRAPH_FEATURE_LEGEND) != 0,
+                  (features & TEMP_GRAPH_FEATURE_Y_AXIS) != 0,
+                  (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0,
+                  (features & TEMP_GRAPH_FEATURE_GRADIENTS) != 0,
+                  (features & TEMP_GRAPH_FEATURE_READOUTS) != 0);
+}
+
+// Get the current feature flags
+uint32_t ui_temp_graph_get_features(ui_temp_graph_t* graph) {
+    if (!graph) {
+        return 0;
+    }
+    return graph->features;
 }

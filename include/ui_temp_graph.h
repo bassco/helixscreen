@@ -50,6 +50,26 @@
 #define UI_TEMP_GRAPH_GRADIENT_BOTTOM_OPA LV_OPA_0 // At chart bottom (fully transparent)
 
 /**
+ * Feature flags for controlling which chart elements are visible.
+ * Used by ui_temp_graph_set_features() / ui_temp_graph_get_features().
+ */
+enum ui_temp_graph_feature {
+    TEMP_GRAPH_FEATURE_LINES        = (1 << 0), // Temperature data lines (always forced on)
+    TEMP_GRAPH_FEATURE_TARGET_LINES = (1 << 1), // Target temperature dashed lines
+    TEMP_GRAPH_FEATURE_LEGEND       = (1 << 2), // Legend labels (reserved for future use)
+    TEMP_GRAPH_FEATURE_Y_AXIS       = (1 << 3), // Y-axis temperature labels
+    TEMP_GRAPH_FEATURE_X_AXIS       = (1 << 4), // X-axis time labels
+    TEMP_GRAPH_FEATURE_GRADIENTS    = (1 << 5), // Gradient fills under lines
+    TEMP_GRAPH_FEATURE_READOUTS     = (1 << 6), // Reserved — managed by widget, not by this module
+};
+
+#define TEMP_GRAPH_ALL_FEATURES \
+    (TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES | \
+     TEMP_GRAPH_FEATURE_LEGEND | TEMP_GRAPH_FEATURE_Y_AXIS | \
+     TEMP_GRAPH_FEATURE_X_AXIS | TEMP_GRAPH_FEATURE_GRADIENTS | \
+     TEMP_GRAPH_FEATURE_READOUTS)
+
+/**
  * Temperature series metadata
  * Stores information about each temperature series (heater/sensor)
  */
@@ -85,10 +105,14 @@ struct ui_temp_graph_t {
     int64_t latest_point_time_ms; // Timestamp of most recent point (right edge)
     int visible_point_count;      // How many points have actual data
 
+    // Feature flags (controls which chart elements are visible)
+    uint32_t features; // Bitmask of ui_temp_graph_feature flags
+
     // Y-axis label configuration
     float y_axis_increment; // Temperature increment between Y-axis labels (e.g., 80 for
                             // 0°,80°,160°...)
     bool show_y_axis;       // Whether to draw Y-axis labels
+    bool show_x_axis;       // Whether to draw X-axis time labels
 
     // Gradient rendering state (updated when data changes)
     float max_visible_temp; // Maximum temperature currently visible in any series
@@ -294,3 +318,24 @@ void ui_temp_graph_set_y_axis(ui_temp_graph_t* graph, float increment, bool show
  * (font_heading)
  */
 void ui_temp_graph_set_axis_size(ui_temp_graph_t* graph, const char* size);
+
+/**
+ * Feature Flags API
+ */
+
+/**
+ * Set which chart features are visible
+ * LINES flag is always forced on even if not included in the bitmask.
+ *
+ * @param graph Graph instance
+ * @param features Bitmask of ui_temp_graph_feature flags
+ */
+void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features);
+
+/**
+ * Get the current feature flags
+ *
+ * @param graph Graph instance
+ * @return Bitmask of ui_temp_graph_feature flags (0 if graph is NULL)
+ */
+uint32_t ui_temp_graph_get_features(ui_temp_graph_t* graph);
