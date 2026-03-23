@@ -37,6 +37,7 @@ void register_gcode_console_widget();
 void register_bed_temperature_widget();
 void register_preheat_widget();
 void register_power_device_widget();
+void register_fan_widget();
 #if HELIX_HAS_CAMERA
 void register_camera_widget();
 #endif
@@ -59,6 +60,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"led",              "LED Light",         "lightbulb_outline","Quick toggle, long press for full control",    "LED Light",        "printer_has_led",    "No LED strips detected",              true,  1, 1, 1, 1, 2, 1},
     {"led_controls",     "LED Controls",      "led_strip",        "Open LED color and brightness controls",       "LED Controls",     "printer_has_led",    "No LED strips detected",              false, 1, 1, 1, 1, 1, 1},
     {"fan_stack",        "Fan Speeds",        "fan",              "Part, hotend, and auxiliary fan speeds",        "Fan Speeds",       nullptr,              nullptr,                               true,  1, 1, 1, 1, 3, 2, true},
+    {"fan",              "Fan",               "fan",              "Monitor a single fan speed",                   "Fan",              nullptr,              nullptr,                               false, 1, 1, 1, 1, 2, 1, true},
     {"temperature",      "Nozzle Temperature","thermometer",      "Monitor and set nozzle temperature",           "Nozzle Temperature", nullptr,            nullptr,                               true,  1, 1, 1, 1, 2, 2},
     {"bed_temperature",  "Bed Temperature",   "radiator",         "Monitor and set bed temperature",              "Bed Temperature",    nullptr,            nullptr,                               false, 1, 1, 1, 1, 2, 2},
     {"preheat",          "Preheat",           "heat_wave",        "Quick preheat with material selection",        "Preheat",            nullptr,            nullptr,                               false, 3, 1, 2, 1, 4, 1},
@@ -148,6 +150,7 @@ void init_widget_registrations() {
     register_led_widget();
     register_led_controls_widget();
     register_fan_stack_widget();
+    register_fan_widget();
     register_thermistor_widget();
     register_favorite_macro_widgets();
     register_clock_widget();

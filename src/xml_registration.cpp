@@ -345,6 +345,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_filament.xml");
     register_xml("components/panel_widget_thermistor.xml");
     register_xml("components/panel_widget_thermistor_carousel.xml");
+    register_xml("components/panel_widget_fan.xml");
     register_xml("components/panel_widget_fan_stack.xml");
     register_xml("components/panel_widget_fan_carousel.xml");
     register_xml("components/panel_widget_favorite_macro.xml");
@@ -360,8 +361,10 @@ void register_xml_components() {
     register_xml("components/panel_widget_print_stats.xml");
     register_xml("components/panel_widget_gcode_console.xml");
     register_xml("components/clog_detection_config_modal.xml");
+    register_xml("components/camera_config_modal.xml");
     register_xml("components/buffer_status_modal.xml");
     register_xml("job_queue_modal.xml");
+    register_xml("fan_picker.xml");
     register_xml("thermistor_sensor_picker.xml");
     register_xml("thermistor_configure_picker.xml");
     register_xml("print_status_configure_picker.xml");

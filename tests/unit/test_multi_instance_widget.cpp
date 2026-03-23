@@ -62,6 +62,56 @@ TEST_CASE("WidgetFactory receives instance ID", "[panel_widget][multi_instance]"
     REQUIRE(std::string(widget->id()) == "favorite_macro:7");
 }
 
+TEST_CASE("Thermistor widget is multi-instance", "[panel_widget][multi_instance]") {
+    SECTION("Base ID resolves with multi_instance flag") {
+        const auto* def = find_widget_def("thermistor");
+        REQUIRE(def != nullptr);
+        REQUIRE(def->multi_instance == true);
+    }
+
+    SECTION("Colon-suffixed ID resolves to base def") {
+        const auto* def = find_widget_def("thermistor:1");
+        REQUIRE(def != nullptr);
+        REQUIRE(std::string(def->id) == "thermistor");
+        REQUIRE(def->multi_instance == true);
+    }
+
+    SECTION("Factory creates widget with correct instance ID") {
+        init_widget_registrations();
+        const auto* def = find_widget_def("thermistor");
+        REQUIRE(def->factory != nullptr);
+
+        auto widget = def->factory("thermistor:3");
+        REQUIRE(widget != nullptr);
+        REQUIRE(std::string(widget->id()) == "thermistor:3");
+    }
+}
+
+TEST_CASE("Fan widget is multi-instance", "[panel_widget][multi_instance]") {
+    SECTION("Base ID resolves with multi_instance flag") {
+        const auto* def = find_widget_def("fan");
+        REQUIRE(def != nullptr);
+        REQUIRE(def->multi_instance == true);
+    }
+
+    SECTION("Colon-suffixed ID resolves to base def") {
+        const auto* def = find_widget_def("fan:1");
+        REQUIRE(def != nullptr);
+        REQUIRE(std::string(def->id) == "fan");
+        REQUIRE(def->multi_instance == true);
+    }
+
+    SECTION("Factory creates widget with correct instance ID") {
+        init_widget_registrations();
+        const auto* def = find_widget_def("fan");
+        REQUIRE(def->factory != nullptr);
+
+        auto widget = def->factory("fan:5");
+        REQUIRE(widget != nullptr);
+        REQUIRE(std::string(widget->id()) == "fan:5");
+    }
+}
+
 // ============================================================================
 // Config migration fixture
 // ============================================================================

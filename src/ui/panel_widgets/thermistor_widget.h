@@ -13,14 +13,12 @@
 
 namespace helix {
 
-class PrinterState;
-
 /// Home widget displaying a user-selected temperature sensor reading.
 /// Click opens a context menu to choose which sensor to monitor.
 /// Selection persists via PanelWidgetConfig per-widget config.
 class ThermistorWidget : public PanelWidget {
   public:
-    explicit ThermistorWidget(const std::string& instance_id, PrinterState& printer_state);
+    explicit ThermistorWidget(const std::string& instance_id);
     ~ThermistorWidget() override;
 
     void set_config(const nlohmann::json& config) override;

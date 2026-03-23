@@ -116,24 +116,24 @@ TEST_CASE_METHOD(helix::ThermistorConfigFixture,
                  "[thermistor][panel_widget]") {
     // Multi-instance widgets need a pre-existing entry (not auto-created by defaults)
     json widgets = json::array({
-        {{"id", "thermistor"}, {"enabled", true}, {"col", 0}, {"row", 0}},
+        {{"id", "thermistor:1"}, {"enabled", true}, {"col", 0}, {"row", 0}},
     });
     setup_with_widgets(widgets);
     PanelWidgetConfig wc("home", config);
     wc.load();
 
     json sensor_config = {{"sensor", "temperature_sensor chamber"}};
-    wc.set_widget_config("thermistor", sensor_config);
+    wc.set_widget_config("thermistor:1", sensor_config);
 
     // Verify immediate read
-    auto cfg = wc.get_widget_config("thermistor");
+    auto cfg = wc.get_widget_config("thermistor:1");
     REQUIRE(cfg["sensor"].get<std::string>() == "temperature_sensor chamber");
 
     // Verify persisted in underlying JSON
     auto& saved = get_data()["printers"]["default"]["panel_widgets"]["home"];
     bool found = false;
     for (const auto& item : saved) {
-        if (item["id"] == "thermistor" && item.contains("config")) {
+        if (item["id"] == "thermistor:1" && item.contains("config")) {
             found = true;
             REQUIRE(item["config"]["sensor"] == "temperature_sensor chamber");
         }
