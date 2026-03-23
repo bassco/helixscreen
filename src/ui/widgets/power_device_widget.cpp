@@ -3,7 +3,9 @@
 #include "power_device_widget.h"
 
 #include "ui_event_safety.h"
+#include "ui_fonts.h"
 #include "ui_icon.h"
+#include "ui_icon_codepoints.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
 
@@ -38,6 +40,27 @@ int resolve_space_token(const char* name, int fallback) {
     return s ? std::atoi(s) : fallback;
 }
 
+// Power-related icons for the picker grid
+static const char* const kPowerIcons[] = {
+    "power_cycle", "power",          "power_plug",         "power_standby",      "power_on",
+    "power_off",   "power_plug_off", "power_plug_outline", "power_plug_battery", "power_socket",
+};
+static constexpr size_t kPowerIconCount = std::size(kPowerIcons);
+static constexpr int kIconCellSize = 36;
+
+/// Apply highlight styling to an icon grid cell.
+void apply_icon_cell_highlight(lv_obj_t* cell, bool selected) {
+    if (selected) {
+        lv_obj_set_style_border_width(cell, 2, 0);
+        lv_obj_set_style_border_color(cell, theme_manager_get_color("primary"), 0);
+        lv_obj_set_style_bg_opa(cell, 20, 0);
+        lv_obj_set_style_bg_color(cell, theme_manager_get_color("primary"), 0);
+    } else {
+        lv_obj_set_style_border_width(cell, 0, 0);
+        lv_obj_set_style_bg_opa(cell, 0, 0);
+    }
+}
+
 } // namespace
 
 using namespace helix;
@@ -54,8 +77,12 @@ void PowerDeviceWidget::set_config(const nlohmann::json& config) {
     if (config.contains("device") && config["device"].is_string()) {
         device_name_ = config["device"].get<std::string>();
     }
-    spdlog::debug("[PowerDeviceWidget] Config: {}={}", instance_id_,
-                  device_name_.empty() ? "(unconfigured)" : device_name_);
+    if (config.contains("icon") && config["icon"].is_string()) {
+        icon_name_ = config["icon"].get<std::string>();
+    }
+    spdlog::debug("[PowerDeviceWidget] Config: {}={} icon={}", instance_id_,
+                  device_name_.empty() ? "(unconfigured)" : device_name_,
+                  icon_name_.empty() ? "power_cycle" : icon_name_);
 }
 
 void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
@@ -156,6 +183,10 @@ void PowerDeviceWidget::update_display(int status) {
     }
 
     if (icon_obj_) {
+        // Apply custom icon (or default "power_cycle")
+        const char* effective_icon = icon_name_.empty() ? "power_cycle" : icon_name_.c_str();
+        ui_icon_set_source(icon_obj_, effective_icon);
+
         switch (status) {
         case 1:
             ui_icon_set_variant(icon_obj_, "danger");
@@ -331,6 +362,17 @@ void PowerDeviceWidget::show_device_picker() {
     lv_obj_set_style_text_color(title, theme_manager_get_color("text"), 0);
     lv_obj_set_width(title, LV_PCT(100));
 
+    // Divider below title
+    lv_obj_t* divider = lv_obj_create(card);
+    lv_obj_set_width(divider, LV_PCT(100));
+    lv_obj_set_height(divider, 1);
+    lv_obj_set_style_bg_color(divider, theme_manager_get_color("text_muted"), 0);
+    lv_obj_set_style_bg_opa(divider, 38, 0);
+    lv_obj_set_style_pad_all(divider, 0, 0);
+    lv_obj_set_style_border_width(divider, 0, 0);
+    lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(divider, LV_OBJ_FLAG_CLICKABLE);
+
     // Scrollable list
     lv_obj_t* list = lv_obj_create(card);
     lv_obj_set_width(list, LV_PCT(100));
@@ -402,6 +444,84 @@ void PowerDeviceWidget::show_device_picker() {
                 if (PowerDeviceWidget::s_active_picker_) {
                     std::string selected = *name_ptr;
                     PowerDeviceWidget::s_active_picker_->select_device(selected);
+                }
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_CLICKED, nullptr);
+    }
+
+    // Icon section divider
+    lv_obj_t* icon_divider = lv_obj_create(card);
+    lv_obj_set_width(icon_divider, LV_PCT(100));
+    lv_obj_set_height(icon_divider, 1);
+    lv_obj_set_style_bg_color(icon_divider, theme_manager_get_color("text_muted"), 0);
+    lv_obj_set_style_bg_opa(icon_divider, 38, 0);
+    lv_obj_set_style_pad_all(icon_divider, 0, 0);
+    lv_obj_set_style_border_width(icon_divider, 0, 0);
+    lv_obj_remove_flag(icon_divider, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(icon_divider, LV_OBJ_FLAG_CLICKABLE);
+
+    // Icon section title
+    lv_obj_t* icon_title = lv_label_create(card);
+    lv_label_set_text(icon_title, lv_tr("Icon"));
+    lv_obj_set_style_text_font(icon_title, lv_font_get_default(), 0);
+    lv_obj_set_style_text_color(icon_title, theme_manager_get_color("text"), 0);
+    lv_obj_set_width(icon_title, LV_PCT(100));
+
+    // Icon grid (wrap flow)
+    lv_obj_t* icon_grid = lv_obj_create(card);
+    lv_obj_set_width(icon_grid, LV_PCT(100));
+    lv_obj_set_height(icon_grid, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(icon_grid, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(icon_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_all(icon_grid, 0, 0);
+    lv_obj_set_style_pad_gap(icon_grid, 4, 0);
+    lv_obj_set_style_bg_opa(icon_grid, 0, 0);
+    lv_obj_set_style_border_width(icon_grid, 0, 0);
+    lv_obj_remove_flag(icon_grid, LV_OBJ_FLAG_SCROLLABLE);
+
+    std::string effective_icon = icon_name_.empty() ? "power_cycle" : icon_name_;
+
+    for (size_t i = 0; i < kPowerIconCount; ++i) {
+        lv_obj_t* cell = lv_obj_create(icon_grid);
+        lv_obj_set_size(cell, kIconCellSize, kIconCellSize);
+        lv_obj_remove_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(cell, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(cell, 0, 0);
+        lv_obj_set_style_radius(cell, 4, 0);
+        lv_obj_set_style_pad_all(cell, 0, 0);
+
+        // Pressed feedback
+        lv_obj_set_style_bg_color(cell, theme_manager_get_color("text_muted"),
+                                  LV_PART_MAIN | LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_20, LV_PART_MAIN | LV_STATE_PRESSED);
+
+        apply_icon_cell_highlight(cell, kPowerIcons[i] == effective_icon);
+
+        // Icon glyph
+        const char* cp = ui_icon::lookup_codepoint(kPowerIcons[i]);
+        if (cp) {
+            lv_obj_t* icon = lv_label_create(cell);
+            lv_label_set_text(icon, cp);
+            lv_obj_set_style_text_font(icon, &mdi_icons_24, 0);
+            lv_obj_set_style_text_color(icon, theme_manager_get_color("text"), 0);
+            lv_obj_center(icon);
+            lv_obj_remove_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_flag(icon, LV_OBJ_FLAG_EVENT_BUBBLE);
+        }
+
+        // Store index as user_data
+        lv_obj_set_user_data(cell, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+
+        lv_obj_add_event_cb(
+            cell,
+            [](lv_event_t* e) {
+                LVGL_SAFE_EVENT_CB_BEGIN("[PowerDeviceWidget] icon_cell_cb");
+                auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                auto idx =
+                    static_cast<size_t>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
+                if (idx < kPowerIconCount && PowerDeviceWidget::s_active_picker_) {
+                    PowerDeviceWidget::s_active_picker_->select_icon(kPowerIcons[idx]);
                 }
                 LVGL_SAFE_EVENT_CB_END();
             },
@@ -504,9 +624,51 @@ void PowerDeviceWidget::select_device(const std::string& name) {
     spdlog::info("[PowerDeviceWidget] {} selected device: {}", instance_id_, name);
 }
 
+void PowerDeviceWidget::select_icon(const std::string& name) {
+    // Store empty for the default icon to avoid persisting the default name
+    icon_name_ = (name == "power_cycle") ? "" : name;
+    save_config();
+
+    // Update the widget icon immediately
+    if (icon_obj_) {
+        const char* effective = icon_name_.empty() ? "power_cycle" : icon_name_.c_str();
+        ui_icon_set_source(icon_obj_, effective);
+    }
+
+    // Update icon grid highlights if picker is still open
+    if (picker_backdrop_) {
+        // The icon grid is inside: backdrop -> card -> icon_grid
+        // Walk card children to find grid and update highlights
+        lv_obj_t* card = lv_obj_get_child(picker_backdrop_, 0);
+        if (card) {
+            // Icon grid is the last child of the card
+            uint32_t child_count = lv_obj_get_child_count(card);
+            if (child_count > 0) {
+                lv_obj_t* icon_grid = lv_obj_get_child(card, child_count - 1);
+                std::string effective_icon = icon_name_.empty() ? "power_cycle" : icon_name_;
+                uint32_t grid_count = lv_obj_get_child_count(icon_grid);
+                for (uint32_t i = 0; i < grid_count; ++i) {
+                    lv_obj_t* cell = lv_obj_get_child(icon_grid, i);
+                    auto idx =
+                        static_cast<size_t>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(cell)));
+                    if (idx < kPowerIconCount) {
+                        apply_icon_cell_highlight(cell, kPowerIcons[idx] == effective_icon);
+                    }
+                }
+            }
+        }
+    }
+
+    spdlog::info("[PowerDeviceWidget] {} selected icon: {}", instance_id_,
+                 icon_name_.empty() ? "power_cycle (default)" : icon_name_);
+}
+
 void PowerDeviceWidget::save_config() {
     nlohmann::json config;
     config["device"] = device_name_;
+    if (!icon_name_.empty())
+        config["icon"] = icon_name_;
     save_widget_config(config);
-    spdlog::debug("[PowerDeviceWidget] Saved config: {}={}", instance_id_, device_name_);
+    spdlog::debug("[PowerDeviceWidget] Saved config: {}={} icon={}", instance_id_, device_name_,
+                  icon_name_.empty() ? "power_cycle" : icon_name_);
 }

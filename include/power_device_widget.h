@@ -44,6 +44,7 @@ class PowerDeviceWidget : public PanelWidget {
   private:
     std::string instance_id_;
     std::string device_name_;
+    std::string icon_name_; // Custom icon, empty = "power_cycle" default
 
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
@@ -65,6 +66,7 @@ class PowerDeviceWidget : public PanelWidget {
     void show_device_picker();
     void dismiss_device_picker();
     void select_device(const std::string& name);
+    void select_icon(const std::string& name);
     void save_config();
 };
 
