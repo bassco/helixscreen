@@ -33,6 +33,7 @@ struct CarouselState {
     lv_timer_t* auto_timer = nullptr;
     int current_page = 0;
     int auto_scroll_ms = 0;
+    int real_page_count = -1; ///< When >= 0, limits indicator dots and page clamping
     bool wrap = true;
     bool show_indicators = true;
     bool user_touching = false;
@@ -103,3 +104,51 @@ void ui_carousel_start_auto_advance(lv_obj_t* carousel);
  * @param carousel The carousel container object
  */
 void ui_carousel_stop_auto_advance(lv_obj_t* carousel);
+
+/**
+ * @brief Create a carousel programmatically (not via XML)
+ *
+ * Creates the same structure as the XML factory: outer container with
+ * scroll container and indicator row. Use this from C++ code when
+ * creating carousels without XML.
+ *
+ * @param parent Parent LVGL object
+ * @return The carousel container object
+ */
+lv_obj_t* ui_carousel_create_obj(lv_obj_t* parent);
+
+/**
+ * @brief Set the real page count for indicator display
+ *
+ * When set to >= 0, indicator dots and page clamping use this count
+ * instead of real_tiles.size(). Useful when the carousel manages
+ * virtual pages that don't map 1:1 to tiles.
+ *
+ * @param carousel The carousel container object
+ * @param count Number of real pages, or -1 to use tile count
+ */
+void ui_carousel_set_real_page_count(lv_obj_t* carousel, int count);
+
+/**
+ * @brief Remove an item (tile) from the carousel by index
+ *
+ * Deletes the tile's LVGL object and removes it from real_tiles.
+ * Adjusts current_page if it was pointing at or past the removed item.
+ * Rebuilds indicators after removal.
+ *
+ * @param carousel The carousel container object
+ * @param index Zero-based index of the tile to remove
+ */
+void ui_carousel_remove_item(lv_obj_t* carousel, int index);
+
+/**
+ * @brief Enable or disable scroll input on the carousel
+ *
+ * When disabled, the scroll container loses LV_OBJ_FLAG_SCROLLABLE
+ * and scroll direction is set to LV_DIR_NONE. When enabled, scrollable
+ * flag and horizontal direction are restored.
+ *
+ * @param carousel The carousel container object
+ * @param enabled Whether scrolling should be enabled
+ */
+void ui_carousel_set_scroll_enabled(lv_obj_t* carousel, bool enabled);

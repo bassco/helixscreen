@@ -449,3 +449,241 @@ TEST_CASE_METHOD(LVGLTestFixture, "Carousel edge cases", "[carousel][edge]") {
     delete cs;
     lv_obj_set_user_data(container, nullptr);
 }
+
+// ============================================================================
+// ui_carousel_create_obj tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture, "ui_carousel_create_obj creates valid carousel",
+                 "[carousel][create_obj]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    REQUIRE(carousel != nullptr);
+
+    CarouselState* state = ui_carousel_get_state(carousel);
+    REQUIRE(state != nullptr);
+    REQUIRE(state->magic == CarouselState::MAGIC);
+    REQUIRE(state->scroll_container != nullptr);
+    REQUIRE(state->indicator_row != nullptr);
+    REQUIRE(state->real_tiles.empty());
+    REQUIRE(state->current_page == 0);
+    REQUIRE(state->real_page_count == -1);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "ui_carousel_create_obj returns nullptr for null parent",
+                 "[carousel][create_obj]") {
+    REQUIRE(ui_carousel_create_obj(nullptr) == nullptr);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "ui_carousel_create_obj carousel supports add_item and goto_page",
+                 "[carousel][create_obj]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    REQUIRE(carousel != nullptr);
+
+    // Add items and navigate
+    for (int i = 0; i < 3; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+    REQUIRE(ui_carousel_get_page_count(carousel) == 3);
+
+    CarouselState* state = ui_carousel_get_state(carousel);
+    state->wrap = false;
+    ui_carousel_goto_page(carousel, 2, false);
+    REQUIRE(ui_carousel_get_current_page(carousel) == 2);
+}
+
+// ============================================================================
+// set_real_page_count tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_real_page_count limits indicator dots",
+                 "[carousel][real_page_count]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    // Add 5 tiles
+    for (int i = 0; i < 5; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 5);
+
+    // Limit indicator dots to 3
+    ui_carousel_set_real_page_count(carousel, 3);
+    REQUIRE(state->real_page_count == 3);
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 3);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_real_page_count clamps goto_page",
+                 "[carousel][real_page_count]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+    state->wrap = false;
+
+    for (int i = 0; i < 5; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+
+    ui_carousel_set_real_page_count(carousel, 3);
+
+    // Should clamp to page 2 (0-based, count=3)
+    ui_carousel_goto_page(carousel, 4, false);
+    REQUIRE(ui_carousel_get_current_page(carousel) == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_real_page_count -1 reverts to tile count",
+                 "[carousel][real_page_count]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    for (int i = 0; i < 4; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+
+    ui_carousel_set_real_page_count(carousel, 2);
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 2);
+
+    ui_carousel_set_real_page_count(carousel, -1);
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 4);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_real_page_count on non-carousel is safe",
+                 "[carousel][real_page_count]") {
+    lv_obj_t* plain = lv_obj_create(test_screen());
+    ui_carousel_set_real_page_count(plain, 3); // Should not crash
+}
+
+// ============================================================================
+// remove_item tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item removes tile and adjusts state",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    for (int i = 0; i < 3; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+    REQUIRE(ui_carousel_get_page_count(carousel) == 3);
+
+    // Remove middle item
+    ui_carousel_remove_item(carousel, 1);
+    REQUIRE(ui_carousel_get_page_count(carousel) == 2);
+    REQUIRE(state->real_tiles.size() == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item adjusts current_page when removing last page",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+    state->wrap = false;
+
+    for (int i = 0; i < 3; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+
+    // Navigate to last page
+    ui_carousel_goto_page(carousel, 2, false);
+    REQUIRE(state->current_page == 2);
+
+    // Remove last page — current_page should adjust to new last
+    ui_carousel_remove_item(carousel, 2);
+    REQUIRE(state->current_page == 1);
+    REQUIRE(ui_carousel_get_page_count(carousel) == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item updates page_subject",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+    state->wrap = false;
+
+    lv_subject_t subject;
+    lv_subject_init_int(&subject, 0);
+    state->page_subject = &subject;
+
+    for (int i = 0; i < 3; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+
+    ui_carousel_goto_page(carousel, 2, false);
+    REQUIRE(lv_subject_get_int(&subject) == 2);
+
+    // Remove last page — subject should update
+    ui_carousel_remove_item(carousel, 2);
+    REQUIRE(lv_subject_get_int(&subject) == 1);
+
+    lv_subject_deinit(&subject);
+    state->page_subject = nullptr;
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item rebuilds indicators",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    for (int i = 0; i < 3; i++) {
+        ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    }
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 3);
+
+    ui_carousel_remove_item(carousel, 0);
+    REQUIRE(lv_obj_get_child_count(state->indicator_row) == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item with out-of-range index is safe",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+
+    ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+
+    // Should not crash
+    ui_carousel_remove_item(carousel, -1);
+    ui_carousel_remove_item(carousel, 5);
+    REQUIRE(ui_carousel_get_page_count(carousel) == 1);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item on non-carousel is safe",
+                 "[carousel][remove_item]") {
+    lv_obj_t* plain = lv_obj_create(test_screen());
+    ui_carousel_remove_item(plain, 0); // Should not crash
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "remove_item removing all items leaves empty carousel",
+                 "[carousel][remove_item]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    ui_carousel_add_item(carousel, lv_obj_create(test_screen()));
+    ui_carousel_remove_item(carousel, 0);
+    REQUIRE(ui_carousel_get_page_count(carousel) == 0);
+    REQUIRE(state->current_page == 0);
+}
+
+// ============================================================================
+// set_scroll_enabled tests
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_scroll_enabled toggles scrollability",
+                 "[carousel][scroll_enabled]") {
+    lv_obj_t* carousel = ui_carousel_create_obj(test_screen());
+    CarouselState* state = ui_carousel_get_state(carousel);
+
+    // Initially scrollable
+    REQUIRE(lv_obj_has_flag(state->scroll_container, LV_OBJ_FLAG_SCROLLABLE));
+
+    // Disable
+    ui_carousel_set_scroll_enabled(carousel, false);
+    REQUIRE_FALSE(lv_obj_has_flag(state->scroll_container, LV_OBJ_FLAG_SCROLLABLE));
+    REQUIRE(lv_obj_get_scroll_dir(state->scroll_container) == LV_DIR_NONE);
+
+    // Re-enable
+    ui_carousel_set_scroll_enabled(carousel, true);
+    REQUIRE(lv_obj_has_flag(state->scroll_container, LV_OBJ_FLAG_SCROLLABLE));
+    REQUIRE(lv_obj_get_scroll_dir(state->scroll_container) == LV_DIR_HOR);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture, "set_scroll_enabled on non-carousel is safe",
+                 "[carousel][scroll_enabled]") {
+    lv_obj_t* plain = lv_obj_create(test_screen());
+    ui_carousel_set_scroll_enabled(plain, false); // Should not crash
+}

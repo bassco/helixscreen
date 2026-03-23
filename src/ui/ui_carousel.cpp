@@ -190,79 +190,6 @@ void carousel_delete_cb(lv_event_t* e) {
 }
 
 /**
- * @brief XML create callback for <ui_carousel> widget
- *
- * Creates a vertical container with:
- * - Horizontal scroll container with snap-to-start behavior (for pages)
- * - Indicator row at the bottom (for page dots)
- *
- * @param state XML parser state
- * @param attrs XML attributes
- * @return Created carousel container object
- */
-void* ui_carousel_create(lv_xml_parser_state_t* state, const char** /*attrs*/) {
-    lv_obj_t* parent = static_cast<lv_obj_t*>(lv_xml_state_get_parent(state));
-
-    // Outer container: column layout holding scroll area + indicators
-    lv_obj_t* container = lv_obj_create(parent);
-    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(container, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(container, 4, LV_PART_MAIN);
-    lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, LV_PART_MAIN);
-
-    // Scroll container: horizontal, full width, grows to fill available space
-    lv_obj_t* scroll = lv_obj_create(container);
-    lv_obj_set_width(scroll, LV_PCT(100));
-    lv_obj_set_flex_grow(scroll, 1);
-    lv_obj_set_flex_flow(scroll, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(scroll, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(scroll, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(scroll, 0, LV_PART_MAIN);
-    lv_obj_set_scroll_snap_x(scroll, LV_SCROLL_SNAP_START);
-    lv_obj_add_flag(scroll, LV_OBJ_FLAG_SCROLL_ONE);
-    lv_obj_set_scroll_dir(scroll, LV_DIR_HOR);
-    lv_obj_set_style_border_width(scroll, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
-
-    // Indicator row: centered dots at bottom
-    lv_obj_t* indicator_row = lv_obj_create(container);
-    lv_obj_set_size(indicator_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(indicator_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(indicator_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                          LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(indicator_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(indicator_row, 6, LV_PART_MAIN);
-    lv_obj_remove_flag(indicator_row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_border_width(indicator_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(indicator_row, LV_OPA_TRANSP, LV_PART_MAIN);
-
-    // Allocate and store carousel state
-    CarouselState* cstate = new CarouselState();
-    cstate->scroll_container = scroll;
-    cstate->indicator_row = indicator_row;
-    lv_obj_set_user_data(container, cstate);
-
-    // Register delete handler for cleanup
-    lv_obj_add_event_cb(container, carousel_delete_cb, LV_EVENT_DELETE, nullptr);
-
-    // Register scroll-end handler for page tracking from swipe gestures
-    lv_obj_add_event_cb(scroll, carousel_scroll_end_cb, LV_EVENT_SCROLL_END, nullptr);
-
-    // Register touch handlers for auto-advance pause/resume
-    lv_obj_add_event_cb(scroll, carousel_press_cb, LV_EVENT_PRESSED, nullptr);
-    lv_obj_add_event_cb(scroll, carousel_release_cb, LV_EVENT_RELEASED, nullptr);
-
-    spdlog::trace("[ui_carousel] Created carousel widget");
-    return container;
-}
-
-/**
  * @brief XML apply callback for <ui_carousel> widget
  *
  * Parses custom attributes: wrap, auto_scroll_ms, show_indicators, current_page_subject
@@ -328,6 +255,81 @@ void ui_carousel_apply(lv_xml_parser_state_t* state, const char** attrs) {
 
 } // namespace
 
+/**
+ * @brief Core carousel creation logic shared by XML factory and C++ API
+ *
+ * Creates a vertical container with:
+ * - Horizontal scroll container with snap-to-start behavior (for pages)
+ * - Indicator row at the bottom (for page dots)
+ *
+ * @param parent Parent LVGL object
+ * @return Created carousel container object
+ */
+static lv_obj_t* carousel_create_core(lv_obj_t* parent) {
+    // Outer container: column layout holding scroll area + indicators
+    lv_obj_t* container = lv_obj_create(parent);
+    lv_obj_set_size(container, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(container, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(container, 4, LV_PART_MAIN);
+    lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, LV_PART_MAIN);
+
+    // Scroll container: horizontal, full width, grows to fill available space
+    lv_obj_t* scroll = lv_obj_create(container);
+    lv_obj_set_width(scroll, LV_PCT(100));
+    lv_obj_set_flex_grow(scroll, 1);
+    lv_obj_set_flex_flow(scroll, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(scroll, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(scroll, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(scroll, 0, LV_PART_MAIN);
+    lv_obj_set_scroll_snap_x(scroll, LV_SCROLL_SNAP_START);
+    lv_obj_add_flag(scroll, LV_OBJ_FLAG_SCROLL_ONE);
+    lv_obj_set_scroll_dir(scroll, LV_DIR_HOR);
+    lv_obj_set_style_border_width(scroll, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(scroll, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
+
+    // Indicator row: centered dots at bottom
+    lv_obj_t* indicator_row = lv_obj_create(container);
+    lv_obj_set_size(indicator_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(indicator_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(indicator_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(indicator_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(indicator_row, 6, LV_PART_MAIN);
+    lv_obj_remove_flag(indicator_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_border_width(indicator_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(indicator_row, LV_OPA_TRANSP, LV_PART_MAIN);
+
+    // Allocate and store carousel state
+    CarouselState* cstate = new CarouselState();
+    cstate->scroll_container = scroll;
+    cstate->indicator_row = indicator_row;
+    lv_obj_set_user_data(container, cstate);
+
+    // Register delete handler for cleanup
+    lv_obj_add_event_cb(container, carousel_delete_cb, LV_EVENT_DELETE, nullptr);
+
+    // Register scroll-end handler for page tracking from swipe gestures
+    lv_obj_add_event_cb(scroll, carousel_scroll_end_cb, LV_EVENT_SCROLL_END, nullptr);
+
+    // Register touch handlers for auto-advance pause/resume
+    lv_obj_add_event_cb(scroll, carousel_press_cb, LV_EVENT_PRESSED, nullptr);
+    lv_obj_add_event_cb(scroll, carousel_release_cb, LV_EVENT_RELEASED, nullptr);
+
+    spdlog::trace("[ui_carousel] Created carousel widget");
+    return container;
+}
+
+static void* ui_carousel_create(lv_xml_parser_state_t* state, const char** /*attrs*/) {
+    lv_obj_t* parent = static_cast<lv_obj_t*>(lv_xml_state_get_parent(state));
+    return carousel_create_core(parent);
+}
+
 void ui_carousel_init() {
     lv_xml_register_widget("ui_carousel", ui_carousel_create, ui_carousel_apply);
     spdlog::trace("[ui_carousel] Registered carousel widget");
@@ -351,19 +353,21 @@ void ui_carousel_goto_page(lv_obj_t* carousel, int page, bool animate) {
     }
 
     int count = static_cast<int>(state->real_tiles.size());
-    if (count == 0) {
+    // Use real_page_count for clamping when set
+    int effective_count = (state->real_page_count >= 0) ? state->real_page_count : count;
+    if (effective_count == 0) {
         return;
     }
 
     // Handle out-of-range pages: wrap or clamp
     if (state->wrap) {
-        page = ((page % count) + count) % count;
+        page = ((page % effective_count) + effective_count) % effective_count;
     } else {
         if (page < 0) {
             page = 0;
         }
-        if (page >= count) {
-            page = count - 1;
+        if (page >= effective_count) {
+            page = effective_count - 1;
         }
     }
 
@@ -437,7 +441,9 @@ void ui_carousel_rebuild_indicators(lv_obj_t* carousel) {
     // Clear existing dots
     lv_obj_clean(state->indicator_row);
 
-    int count = static_cast<int>(state->real_tiles.size());
+    // Use real_page_count for indicator dots when set
+    int count = (state->real_page_count >= 0) ? state->real_page_count
+                                              : static_cast<int>(state->real_tiles.size());
 
     // Single page: hide indicators, disable swiping, allow click passthrough
     if (count <= 1) {
@@ -518,4 +524,77 @@ void ui_carousel_stop_auto_advance(lv_obj_t* carousel) {
         state->auto_timer = nullptr;
         spdlog::trace("[ui_carousel] Stopped auto-advance timer");
     }
+}
+
+lv_obj_t* ui_carousel_create_obj(lv_obj_t* parent) {
+    if (!parent) {
+        return nullptr;
+    }
+    return carousel_create_core(parent);
+}
+
+void ui_carousel_set_real_page_count(lv_obj_t* carousel, int count) {
+    CarouselState* state = ui_carousel_get_state(carousel);
+    if (!state) {
+        return;
+    }
+
+    state->real_page_count = count;
+    ui_carousel_rebuild_indicators(carousel);
+    spdlog::trace("[ui_carousel] Set real_page_count to {}", count);
+}
+
+void ui_carousel_remove_item(lv_obj_t* carousel, int index) {
+    CarouselState* state = ui_carousel_get_state(carousel);
+    if (!state) {
+        return;
+    }
+
+    if (index < 0 || index >= static_cast<int>(state->real_tiles.size())) {
+        spdlog::warn("[ui_carousel] remove_item: index {} out of range (size={})", index,
+                     state->real_tiles.size());
+        return;
+    }
+
+    // Delete the tile LVGL object (and its children)
+    lv_obj_t* tile = state->real_tiles[static_cast<size_t>(index)];
+    lv_obj_delete(tile);
+
+    // Remove from tracking vector
+    state->real_tiles.erase(state->real_tiles.begin() + index);
+
+    // Adjust current_page if it was pointing at or past the removed item
+    int new_count = static_cast<int>(state->real_tiles.size());
+    if (new_count == 0) {
+        state->current_page = 0;
+    } else if (state->current_page >= new_count) {
+        state->current_page = new_count - 1;
+    }
+
+    // Update page subject if changed
+    if (state->page_subject) {
+        lv_subject_set_int(state->page_subject, state->current_page);
+    }
+
+    // Rebuild indicators
+    ui_carousel_rebuild_indicators(carousel);
+
+    spdlog::trace("[ui_carousel] Removed item at index {}, page count now {}", index, new_count);
+}
+
+void ui_carousel_set_scroll_enabled(lv_obj_t* carousel, bool enabled) {
+    CarouselState* state = ui_carousel_get_state(carousel);
+    if (!state || !state->scroll_container) {
+        return;
+    }
+
+    if (enabled) {
+        lv_obj_add_flag(state->scroll_container, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scroll_dir(state->scroll_container, LV_DIR_HOR);
+    } else {
+        lv_obj_remove_flag(state->scroll_container, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_scroll_dir(state->scroll_container, LV_DIR_NONE);
+    }
+
+    spdlog::trace("[ui_carousel] Scroll {}", enabled ? "enabled" : "disabled");
 }
