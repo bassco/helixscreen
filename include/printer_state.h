@@ -969,6 +969,18 @@ class PrinterState {
     }
 
     /**
+     * @brief Get the excluded objects state component
+     *
+     * Provides direct access for components that need the full state
+     * (e.g., ExcludeObjectMapView needs version subjects + geometry).
+     *
+     * @return Pointer to the excluded objects state
+     */
+    PrinterExcludedObjectsState* get_excluded_objects_state() {
+        return &excluded_objects_state_;
+    }
+
+    /**
      * @brief Update excluded objects from Moonraker status update
      *
      * Called by status update handler when exclude_object.excluded_objects changes.

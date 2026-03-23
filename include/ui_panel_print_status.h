@@ -7,6 +7,7 @@
 #include "ui_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_print_cancel_modal.h"
+#include "ui_exclude_object_map_view.h"
 #include "ui_print_exclude_object_manager.h"
 #include "ui_print_light_timelapse.h"
 #include "ui_print_tune_overlay.h"
@@ -429,6 +430,7 @@ class PrintStatusPanel : public OverlayBase {
     void animate_print_cancelled(); ///< Warning animation when print is cancelled
     void animate_print_error();     ///< Error animation when print fails
     void cleanup_temp_gcode();      ///< Remove temp G-code file downloaded for viewing
+    void show_exclude_map_view();    ///< Show overhead map view of print objects
     void apply_filament_color_override(
         uint32_t color_rgb);            ///< Apply AMS/Spoolman filament color to gcode viewer
     bool build_and_apply_tool_colors(); ///< Build per-tool AMS color map and apply to viewer
@@ -514,6 +516,9 @@ class PrintStatusPanel : public OverlayBase {
 
     /// Manages exclude object feature (extracted from PrintStatusPanel)
     std::unique_ptr<helix::ui::PrintExcludeObjectManager> exclude_manager_;
+
+    /// Overhead map view for exclude objects (shown in thumbnail-only mode)
+    std::unique_ptr<helix::ui::ExcludeObjectMapView> map_view_;
 
     /// Print cancel confirmation modal (RAII - auto-hides when destroyed)
     PrintCancelModal cancel_modal_;

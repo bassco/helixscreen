@@ -8,6 +8,7 @@
 #include "ui_component_header_bar.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+#include "ui_exclude_object_map_view.h"
 #include "ui_exclude_objects_list_overlay.h"
 #include "ui_filename_utils.h"
 #include "ui_gcode_viewer.h"
@@ -685,6 +686,12 @@ void PrintStatusPanel::on_ui_destroyed() {
     // Note: LVGL animations are already cancelled by lv_obj_delete() in the base
     // class destroy_overlay_ui() call, so no need to cancel them here.
 
+    // Clean up map view before the widget tree is gone
+    if (map_view_) {
+        map_view_->destroy();
+        map_view_.reset();
+    }
+
     // Deinit exclude manager (holds gcode_viewer_ reference)
     if (exclude_manager_) {
         exclude_manager_->deinit();
@@ -816,6 +823,60 @@ void PrintStatusPanel::show_gcode_viewer(bool show) {
         bool grad_hidden = lv_obj_has_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
         spdlog::trace("[{}]   -> gradient: hidden={}", get_name(), grad_hidden);
     }
+}
+
+void PrintStatusPanel::show_exclude_map_view() {
+    if (!exclude_manager_) return;
+
+    // Get bed dimensions from MoonrakerAPI hardware info
+    float bed_w = 235.0f, bed_h = 235.0f; // sensible defaults
+    if (api_) {
+        const auto& vol = api_->hardware().build_volume();
+        float w = vol.x_max - vol.x_min;
+        float h = vol.y_max - vol.y_min;
+        if (w > 0.0f && h > 0.0f) {
+            bed_w = w;
+            bed_h = h;
+        }
+    }
+
+    // Find thumbnail section container
+    lv_obj_t* thumbnail_section = lv_obj_find_by_name(overlay_root_, "thumbnail_section");
+    if (!thumbnail_section) {
+        spdlog::warn("[{}] Cannot show map view: thumbnail_section not found", get_name());
+        return;
+    }
+
+    // Hide thumbnail and gradient to make room for the map view
+    if (print_thumbnail_) {
+        lv_obj_add_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (gradient_background_) {
+        lv_obj_add_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    map_view_ = std::make_unique<helix::ui::ExcludeObjectMapView>();
+    map_view_->set_close_callback([this]() {
+        if (map_view_) {
+            map_view_->destroy();
+            map_view_.reset();
+            // Restore thumbnail and gradient
+            if (print_thumbnail_) {
+                lv_obj_remove_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (gradient_background_) {
+                lv_obj_remove_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+    });
+
+    map_view_->create(thumbnail_section,
+                      printer_state_.get_excluded_objects_state(),
+                      bed_w, bed_h,
+                      exclude_manager_.get(),
+                      nullptr /* parsed_file */);
+
+    spdlog::debug("[{}] Showed exclude object map view (bed: {}x{}mm)", get_name(), bed_w, bed_h);
 }
 
 void PrintStatusPanel::load_gcode_file(const char* file_path) {
@@ -1237,10 +1298,31 @@ void PrintStatusPanel::on_objects_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusPanel] on_objects_clicked");
     (void)e;
     auto& panel = get_global_print_status_panel();
-    if (panel.exclude_manager_ && panel.parent_screen_) {
-        helix::ui::get_exclude_objects_list_overlay().show(
-            panel.parent_screen_, panel.api_, panel.printer_state_, panel.exclude_manager_.get(),
-            panel.gcode_viewer_);
+
+    int mode = lv_subject_get_int(&panel.gcode_viewer_mode_subject_);
+
+    if (mode == 0) {
+        // Thumbnail-only mode: toggle the overhead map view
+        if (panel.map_view_ && panel.map_view_->is_active()) {
+            panel.map_view_->destroy();
+            panel.map_view_.reset();
+            // Restore thumbnail and gradient visibility
+            if (panel.print_thumbnail_) {
+                lv_obj_remove_flag(panel.print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
+            }
+            if (panel.gradient_background_) {
+                lv_obj_remove_flag(panel.gradient_background_, LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            panel.show_exclude_map_view();
+        }
+    } else {
+        // 3D/2D viewer mode: show the list overlay
+        if (panel.exclude_manager_ && panel.parent_screen_) {
+            helix::ui::get_exclude_objects_list_overlay().show(
+                panel.parent_screen_, panel.api_, panel.printer_state_,
+                panel.exclude_manager_.get(), panel.gcode_viewer_);
+        }
     }
     LVGL_SAFE_EVENT_CB_END();
 }
