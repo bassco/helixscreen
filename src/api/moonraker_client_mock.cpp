@@ -28,6 +28,25 @@
 
 using namespace helix;
 
+// Generate mock geometry for exclude_object status updates.
+// Spreads objects in a grid across a 235x235 bed.
+static json mock_object_entry(const std::string& name, int index, int total) {
+    int cols = static_cast<int>(std::ceil(std::sqrt(static_cast<double>(total))));
+    int row = index / cols, col = index % cols;
+    float cell_w = 200.0f / static_cast<float>(cols);
+    float cell_h = 200.0f / static_cast<float>(std::max(1, (total + cols - 1) / cols));
+    float cx = 17.5f + (static_cast<float>(col) + 0.5f) * cell_w;
+    float cy = 17.5f + (static_cast<float>(row) + 0.5f) * cell_h;
+    float hw = cell_w * 0.35f, hh = cell_h * 0.35f;
+    return {{"name", name},
+            {"center", {cx, cy}},
+            {"polygon",
+             {{cx - hw, cy - hh},
+              {cx + hw, cy - hh},
+              {cx + hw, cy + hh},
+              {cx - hw, cy + hh}}}};
+}
+
 // Delegating constructor - uses default speedup of 1.0
 MoonrakerClientMock::MoonrakerClientMock(PrinterType type) : MoonrakerClientMock(type, 1.0) {}
 
@@ -2393,8 +2412,9 @@ bool MoonrakerClientMock::start_print_internal(const std::string& filename) {
 
             // Dispatch exclude_object status update so PrinterState knows about them
             json objects_array = json::array();
-            for (const auto& obj_name : defined_objects) {
-                objects_array.push_back({{"name", obj_name}});
+            for (int i = 0; i < static_cast<int>(defined_objects.size()); i++) {
+                objects_array.push_back(mock_object_entry(
+                    defined_objects[i], i, static_cast<int>(defined_objects.size())));
             }
             json eo_status = {{"exclude_object",
                                {{"objects", objects_array},
@@ -2661,8 +2681,9 @@ void MoonrakerClientMock::dispatch_enhanced_print_status() {
             // Use shared state (thread-safe copies via internal mutex)
             auto names = mock_state_->get_object_names();
             auto excl = mock_state_->get_excluded_objects();
-            for (const auto& name : names) {
-                objects_array.push_back({{"name", name}});
+            for (int i = 0; i < static_cast<int>(names.size()); i++) {
+                objects_array.push_back(
+                    mock_object_entry(names[i], i, static_cast<int>(names.size())));
             }
             for (const auto& obj : excl) {
                 excluded_array.push_back(obj);
@@ -2679,8 +2700,9 @@ void MoonrakerClientMock::dispatch_enhanced_print_status() {
         } else {
             // Fallback to local state for backward compatibility
             std::lock_guard<std::mutex> lock(excluded_objects_mutex_);
-            for (const auto& name : object_names_) {
-                objects_array.push_back({{"name", name}});
+            for (int i = 0; i < static_cast<int>(object_names_.size()); i++) {
+                objects_array.push_back(
+                    mock_object_entry(object_names_[i], i, static_cast<int>(object_names_.size())));
             }
             for (const auto& obj : excluded_objects_) {
                 excluded_array.push_back(obj);
@@ -3545,8 +3567,9 @@ void MoonrakerClientMock::temperature_simulation_loop() {
             if (mock_state_) {
                 auto names = mock_state_->get_object_names();
                 auto excl = mock_state_->get_excluded_objects();
-                for (const auto& name : names) {
-                    objects_array.push_back({{"name", name}});
+                for (int i = 0; i < static_cast<int>(names.size()); i++) {
+                    objects_array.push_back(
+                        mock_object_entry(names[i], i, static_cast<int>(names.size())));
                 }
                 for (const auto& obj : excl) {
                     excluded_array.push_back(obj);
@@ -3562,8 +3585,9 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 }
             } else {
                 std::lock_guard<std::mutex> lock(excluded_objects_mutex_);
-                for (const auto& name : object_names_) {
-                    objects_array.push_back({{"name", name}});
+                for (int i = 0; i < static_cast<int>(object_names_.size()); i++) {
+                    objects_array.push_back(
+                        mock_object_entry(object_names_[i], i, static_cast<int>(object_names_.size())));
                 }
                 for (const auto& obj : excluded_objects_) {
                     excluded_array.push_back(obj);

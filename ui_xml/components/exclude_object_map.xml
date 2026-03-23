@@ -5,7 +5,9 @@
         style_bg_color="#screen_bg"
         style_bg_opa="255"
         style_pad_all="#space_sm"
-        flex_flow="column">
+        flex_flow="column"
+        scrollbar_mode="off"
+        scrollable="false">
 
     <!-- Build plate area — object rects added as children in C++ -->
     <lv_obj name="plate_area"
@@ -38,13 +40,31 @@
                  hidden="true"
                  clickable="false"
                  event_bubble="true"/>
+
+      <!-- Close button — top right of plate area (must be inside non-flex parent for align to work) -->
+      <lv_obj name="close_btn"
+              align="top_right"
+              style_x="-4"
+              style_y="4"
+              style_width="36"
+              style_height="36"
+              style_bg_color="#card_bg"
+              style_bg_opa="180"
+              style_radius="18"
+              style_border_width="0"
+              style_pad_all="0">
+        <event_cb trigger="clicked" callback="on_exclude_map_close"/>
+        <icon src="close" size="sm" style_text_color="#text_muted"
+              align="center"
+              clickable="false" event_bubble="true"/>
+      </lv_obj>
     </lv_obj>
 
     <!-- Key bar area -->
     <lv_obj name="key_bar"
             style_width="100%"
             style_height="content"
-            style_min_height="28"
+            style_max_height="48"
             style_bg_opa="0"
             style_pad_all="#space_xs"
             style_pad_top="#space_sm"
@@ -55,26 +75,10 @@
             style_pad_row="2"
             style_pad_column="#space_sm"
             style_border_width="0"
+            scrollbar_mode="off"
+            scrollable="false"
+            style_overflow="hidden"
             clickable="false"/>
 
-    <!-- Close button — top right of entire view -->
-    <lv_obj name="close_btn"
-            align="top_right"
-            style_width="36"
-            style_height="36"
-            style_margin_top="#space_xs"
-            style_margin_right="#space_xs"
-            style_bg_color="#card_bg"
-            style_bg_opa="180"
-            style_radius="18"
-            style_border_width="0"
-            style_pad_all="0"
-            flex_flow="row"
-            style_flex_main_place="center"
-            style_flex_cross_place="center">
-      <event_cb trigger="clicked" callback="on_exclude_map_close"/>
-      <icon src="close" size="sm" style_text_color="#text_muted"
-            clickable="false" event_bubble="true"/>
-    </lv_obj>
   </view>
 </component>

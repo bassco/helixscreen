@@ -502,14 +502,21 @@ void ExcludeObjectMapView::build_key_bar() {
             lv_obj_set_style_text_decor(name_label, LV_TEXT_DECOR_STRIKETHROUGH, 0);
         }
 
-        if (mode == KeyBarMode::Abbreviated) {
-            char buf[16];
-            snprintf(buf, sizeof(buf), "%d", i + 1);
-            lv_label_set_text(name_label, buf);
-        } else {
-            // FullNames
+        if (mode == KeyBarMode::FullNames) {
+            // Show number + name, auto-truncate with LVGL dot mode
             char buf[64];
             snprintf(buf, sizeof(buf), "%d %s", i + 1, entry.name.c_str());
+            lv_label_set_text(name_label, buf);
+            lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
+            // Limit width to share space among entries
+            int max_label_w = lv_obj_get_width(key_bar_) / std::max(count, 1) - 20;
+            if (max_label_w > 30) {
+                lv_obj_set_width(name_label, max_label_w);
+            }
+        } else {
+            // Abbreviated: just the number
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d", i + 1);
             lv_label_set_text(name_label, buf);
         }
     }
