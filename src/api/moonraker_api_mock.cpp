@@ -3,11 +3,13 @@
 
 #include "moonraker_api_mock.h"
 
+#include "ui_update_queue.h"
+
 #include "../tests/mocks/mock_printer_state.h"
 #include "gcode_parser.h"
+#include "power_device_state.h"
 #include "runtime_config.h"
 #include "timelapse_state.h"
-#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -94,7 +96,8 @@ MoonrakerSpoolmanAPIMock::MoonrakerSpoolmanAPIMock(MoonrakerClient& client)
 // Connection/Subscription/Database Proxy Overrides (mock no-ops)
 // ============================================================================
 
-SubscriptionId MoonrakerAPIMock::subscribe_notifications(std::function<void(const json&)> /*callback*/) {
+SubscriptionId
+MoonrakerAPIMock::subscribe_notifications(std::function<void(const json&)> /*callback*/) {
     return mock_next_subscription_id_++;
 }
 
@@ -219,7 +222,8 @@ void MoonrakerFileTransferAPIMock::download_file(const std::string& root, const 
             std::string timelapse_path = prefix + "assets/test_timelapse/" + filename;
             if (std::filesystem::exists(timelapse_path)) {
                 local_path = timelapse_path;
-                spdlog::debug("[MoonrakerAPIMock] Found timelapse test file at: {}", timelapse_path);
+                spdlog::debug("[MoonrakerAPIMock] Found timelapse test file at: {}",
+                              timelapse_path);
                 break;
             }
         }
@@ -350,7 +354,8 @@ void MoonrakerFileTransferAPIMock::download_file_to_path(
             std::string timelapse_path = prefix + "assets/test_timelapse/" + filename;
             if (std::filesystem::exists(timelapse_path)) {
                 local_path = timelapse_path;
-                spdlog::debug("[MoonrakerAPIMock] Found timelapse test file at: {}", timelapse_path);
+                spdlog::debug("[MoonrakerAPIMock] Found timelapse test file at: {}",
+                              timelapse_path);
                 break;
             }
         }
@@ -627,6 +632,9 @@ void MoonrakerAPIMock::set_device_power(const std::string& device, const std::st
     if (on_success) {
         on_success();
     }
+
+    // Simulate notify_power_changed so PowerDeviceState updates subjects
+    helix::PowerDeviceState::instance().update_device_status(device, new_state ? "on" : "off");
 }
 
 // ============================================================================
@@ -2044,8 +2052,7 @@ void MoonrakerTimelapseAPIMock::get_last_frame_info(
     // Set frame count and capture info subjects directly (we're on the UI thread)
     auto& tl = helix::TimelapseState::instance();
     lv_subject_set_int(tl.get_frame_count_subject(), 42);
-    lv_subject_copy_string(tl.get_capture_info_subject(),
-                           "3DBenchy.gcode \xC2\xB7 Mar 10, 14:32");
+    lv_subject_copy_string(tl.get_capture_info_subject(), "3DBenchy.gcode \xC2\xB7 Mar 10, 14:32");
 
     if (on_success) {
         LastFrameInfo info;

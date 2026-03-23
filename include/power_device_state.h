@@ -50,6 +50,10 @@ class PowerDeviceState {
     /// Get list of all tracked device names
     std::vector<std::string> device_names() const;
 
+    /// Update a device's status directly (for mock/testing).
+    /// Marshals to UI thread via queue_update.
+    void update_device_status(const std::string& device, const std::string& status);
+
     /// Clean up all LVGL subjects (called by StaticSubjectRegistry)
     void deinit_subjects();
 

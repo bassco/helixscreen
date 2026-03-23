@@ -129,6 +129,31 @@ void PowerDeviceState::unsubscribe(MoonrakerAPI& api) {
     spdlog::debug("[PowerDeviceState] Unsubscribed and cleaned up");
 }
 
+void PowerDeviceState::update_device_status(const std::string& device, const std::string& status) {
+    int new_raw = status_string_to_int(status);
+    spdlog::debug("[PowerDeviceState] update_device_status: device='{}' status='{}'", device,
+                  status);
+    ui::queue_update([this, device, new_raw]() {
+        auto it = devices_.find(device);
+        if (it == devices_.end())
+            return;
+        it->second.raw_status = new_raw;
+        int effective = new_raw;
+        if (it->second.locked_while_printing && new_raw == 1) {
+            auto* print_subj = get_printer_state().get_print_state_enum_subject();
+            if (print_subj) {
+                auto state = static_cast<PrintJobState>(lv_subject_get_int(print_subj));
+                if (state == PrintJobState::PRINTING || state == PrintJobState::PAUSED) {
+                    effective = 2;
+                }
+            }
+        }
+        if (lv_subject_get_int(it->second.status_subject.get()) != effective) {
+            lv_subject_set_int(it->second.status_subject.get(), effective);
+        }
+    });
+}
+
 void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
     // Moonraker sends: {"method": "notify_power_changed", "params": [{"device": "...", "status":
     // "on|off", ...}]}
