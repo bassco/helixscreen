@@ -13,6 +13,7 @@
 #include "clog_detection_config_modal.h"
 #include "helix-xml/src/xml/lv_xml.h"
 #include "panel_widget_registry.h"
+#include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -78,6 +79,7 @@ void ClogDetectionWidget::build_carousel_pages() {
             buffer_page_ = lv_obj_create(lv_scr_act());
             lv_obj_set_size(buffer_page_, LV_PCT(100), LV_PCT(100));
             lv_obj_set_style_pad_all(buffer_page_, 0, 0);
+            lv_obj_set_style_pad_bottom(buffer_page_, theme_manager_get_spacing("space_lg"), 0);
             lv_obj_set_style_border_width(buffer_page_, 0, 0);
             lv_obj_set_style_bg_opa(buffer_page_, LV_OPA_TRANSP, 0);
             lv_obj_clear_flag(buffer_page_, LV_OBJ_FLAG_SCROLLABLE);

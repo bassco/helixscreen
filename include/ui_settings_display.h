@@ -274,6 +274,7 @@ class DisplaySettingsOverlay : public OverlayBase {
 
     static void on_brightness_changed(lv_event_t* e);
     static void on_sleep_while_printing_changed(lv_event_t* e);
+    static void on_widget_labels_changed(lv_event_t* e);
 #ifdef HELIX_ENABLE_SCREENSAVER
     static void on_screensaver_changed(lv_event_t* e);
 #endif

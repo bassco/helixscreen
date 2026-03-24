@@ -34,5 +34,11 @@
         <bind_flag_if_not_eq subject="home_network_icon_state" flag="hidden" ref_value="5"/>
       </icon>
     </ui_button>
+    <text_tiny text="Network" translation_tag="Network"
+               style_text_color="#text_muted" style_text_align="center"
+               align="bottom_mid" y="-#space_md"
+               clickable="false" event_bubble="true">
+      <bind_flag_if_eq subject="show_widget_labels" flag="hidden" ref_value="0"/>
+    </text_tiny>
   </view>
 </component>

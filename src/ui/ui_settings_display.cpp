@@ -17,6 +17,7 @@
 #include "ui_utils.h"
 
 #include "display_settings_manager.h"
+#include "settings_manager.h"
 #include "format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
@@ -89,6 +90,8 @@ void DisplaySettingsOverlay::register_callbacks() {
         {"on_brightness_changed", on_brightness_changed},
         // Sleep while printing toggle
         {"on_sleep_while_printing_changed", on_sleep_while_printing_changed},
+        // Widget labels toggle
+        {"on_widget_labels_changed", on_widget_labels_changed},
 #ifdef HELIX_ENABLE_SCREENSAVER
         // Screensaver toggle
         {"on_screensaver_changed", on_screensaver_changed},
@@ -601,6 +604,14 @@ void DisplaySettingsOverlay::on_sleep_while_printing_changed(lv_event_t* e) {
     auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
     get_display_settings_overlay().handle_sleep_while_printing_changed(enabled);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void DisplaySettingsOverlay::on_widget_labels_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySettingsOverlay] on_widget_labels_changed");
+    auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
+    SettingsManager::instance().set_show_widget_labels(enabled);
     LVGL_SAFE_EVENT_CB_END();
 }
 

@@ -10,5 +10,11 @@
       <icon name="led_controls_icon" src="led_strip" size="#icon_size" align="center" variant="muted"/>
       <event_cb trigger="clicked" callback="on_led_controls_clicked"/>
     </ui_button>
+    <text_tiny text="LEDs" translation_tag="LEDs"
+               style_text_color="#text_muted" style_text_align="center"
+               align="bottom_mid" y="-#space_md"
+               clickable="false" event_bubble="true">
+      <bind_flag_if_eq subject="show_widget_labels" flag="hidden" ref_value="0"/>
+    </text_tiny>
   </view>
 </component>

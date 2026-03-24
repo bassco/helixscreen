@@ -16,5 +16,11 @@
       </icon>
       <event_cb trigger="clicked" callback="lock_screen_clicked_cb"/>
     </ui_button>
+    <text_tiny text="Lock" translation_tag="Lock"
+               style_text_color="#text_muted" style_text_align="center"
+               align="bottom_mid" y="-#space_md"
+               clickable="false" event_bubble="true">
+      <bind_flag_if_eq subject="show_widget_labels" flag="hidden" ref_value="0"/>
+    </text_tiny>
   </view>
 </component>

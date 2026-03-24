@@ -464,6 +464,7 @@ void FanStackWidget::bind_carousel_fans() {
         lv_obj_t* page = lv_obj_create(lv_scr_act());
         lv_obj_set_size(page, LV_PCT(100), LV_PCT(100));
         lv_obj_set_style_pad_all(page, 0, 0);
+        lv_obj_set_style_pad_bottom(page, theme_manager_get_spacing("space_lg"), 0);
         lv_obj_set_style_pad_gap(page, 0, 0);
         lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_flex_cross_place(page, LV_FLEX_ALIGN_CENTER, 0);

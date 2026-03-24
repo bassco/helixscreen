@@ -60,6 +60,15 @@
         </lv_obj>
       </lv_obj>
       <!-- ================================================================== -->
+      <!-- WIDGET LABELS -->
+      <!-- ================================================================== -->
+      <setting_toggle_row name="row_widget_labels"
+                          label="Widget Labels" label_tag="Widget Labels" icon="view_grid"
+                          description="Show text labels on icon-only home screen widgets"
+                          description_tag="Show text labels on icon-only home screen widgets"
+                          subject="show_widget_labels"
+                          callback="on_widget_labels_changed"/>
+      <!-- ================================================================== -->
       <!-- BED MESH RENDER MODE -->
       <!-- ================================================================== -->
       <setting_dropdown_row name="row_bed_mesh_mode"

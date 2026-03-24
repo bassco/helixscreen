@@ -197,6 +197,21 @@ class SettingsManager {
         return &show_printer_switcher_subject_;
     }
 
+    // =========================================================================
+    // WIDGET LABELS (owned by SettingsManager — appearance)
+    // =========================================================================
+
+    /** @brief Get whether icon-only widget labels are shown on the home screen */
+    bool get_show_widget_labels() const;
+
+    /** @brief Set whether icon-only widget labels are shown on the home screen */
+    void set_show_widget_labels(bool show);
+
+    /** @brief Widget label visibility subject (integer: 0=hidden, 1=shown) */
+    lv_subject_t* subject_show_widget_labels() {
+        return &show_widget_labels_subject_;
+    }
+
   private:
     SettingsManager();
     ~SettingsManager() = default;
@@ -210,6 +225,7 @@ class SettingsManager {
     lv_subject_t extrude_speed_subject_;
     lv_subject_t toolhead_style_subject_;
     lv_subject_t show_printer_switcher_subject_;
+    lv_subject_t show_widget_labels_subject_;
 
     // External references
     MoonrakerClient* moonraker_client_ = nullptr;

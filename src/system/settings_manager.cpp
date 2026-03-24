@@ -87,6 +87,11 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(show_printer_switcher_subject_, show_printer_switcher ? 1 : 0,
                            "show_printer_switcher", subjects_);
 
+    // Widget labels on icon-only home screen widgets (default: off)
+    bool show_widget_labels = config->get<bool>("/appearance/show_widget_labels", false);
+    UI_MANAGED_SUBJECT_INT(show_widget_labels_subject_, show_widget_labels ? 1 : 0,
+                           "show_widget_labels", subjects_);
+
     subjects_initialized_ = true;
 
     // Self-register cleanup — ensures deinit runs before lv_deinit()
@@ -239,6 +244,22 @@ void SettingsManager::set_show_printer_switcher(bool show) {
     lv_subject_set_int(&show_printer_switcher_subject_, show ? 1 : 0);
     Config* config = Config::get_instance();
     config->set<bool>("/printers/show_printer_switcher", show);
+    config->save();
+}
+
+// ============================================================================
+// Widget Labels
+// ============================================================================
+
+bool SettingsManager::get_show_widget_labels() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&show_widget_labels_subject_)) != 0;
+}
+
+void SettingsManager::set_show_widget_labels(bool show) {
+    spdlog::info("[SettingsManager] set_show_widget_labels({})", show);
+    lv_subject_set_int(&show_widget_labels_subject_, show ? 1 : 0);
+    Config* config = Config::get_instance();
+    config->set<bool>("/appearance/show_widget_labels", show);
     config->save();
 }
 
