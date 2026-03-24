@@ -249,6 +249,11 @@ TEST_CASE("Plugin status characterization: async update behavior",
     }
 
     SECTION("set_phase_tracking_enabled requires queue drain to take effect") {
+        // Must deinit first because the outer scope already called
+        // init_subjects(false), setting subjects_initialized_=true.
+        // Without deinit, init_subjects(true) is a no-op and XML subjects
+        // are never registered, causing get_subject_by_name to return nullptr.
+        state.deinit_subjects();
         state.init_subjects(true);
         lv_subject_t* subject = get_subject_by_name("phase_tracking_enabled");
 

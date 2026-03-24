@@ -328,7 +328,15 @@ TEST_CASE("LedAutoState apply_action 'brightness' sets light_is_on based on valu
 
     ctrl2.light_set(true);
     state2.init(get_printer_state());
-    state2.set_mapping("idle", {"brightness", 0xFFFFFF, 0, "", 0, ""});
+    // Map ALL possible states to brightness=0 since shared PrinterState singleton
+    // may retain subject values from earlier tests in the same shard.
+    LedStateAction zero_brightness{"brightness", 0xFFFFFF, 0, "", 0, ""};
+    state2.set_mapping("idle", zero_brightness);
+    state2.set_mapping("printing", zero_brightness);
+    state2.set_mapping("paused", zero_brightness);
+    state2.set_mapping("heating", zero_brightness);
+    state2.set_mapping("error", zero_brightness);
+    state2.set_mapping("complete", zero_brightness);
     state2.set_enabled(true);
 
     state2.evaluate();

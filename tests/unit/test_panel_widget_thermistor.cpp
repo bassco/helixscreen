@@ -42,7 +42,7 @@ class ThermistorConfigFixture {
 TEST_CASE("ThermistorWidget: registered in widget registry", "[thermistor][panel_widget]") {
     const auto* def = find_widget_def("thermistor");
     REQUIRE(def != nullptr);
-    REQUIRE(std::string(def->display_name) == "Thermistors");
+    REQUIRE(std::string(def->display_name) == "Temperature Sensors");
     REQUIRE(std::string(def->icon) == "thermometer");
     REQUIRE(def->hardware_gate_subject != nullptr);
     REQUIRE(std::string(def->hardware_gate_subject) == "temp_sensor_count");
