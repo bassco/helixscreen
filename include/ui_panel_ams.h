@@ -15,6 +15,7 @@
 #include "ams_state.h"
 #include "ams_types.h" // For SlotInfo
 
+#include <chrono>
 #include <memory>
 
 /**
@@ -129,6 +130,9 @@ class AmsPanel : public PanelBase {
     std::unique_ptr<helix::ui::AmsEditModal> edit_modal_;          ///< Edit filament modal
     std::unique_ptr<helix::ui::AmsLoadingErrorModal> error_modal_; ///< Loading error modal
     std::unique_ptr<helix::ui::AmsOperationSidebar> sidebar_;      ///< Shared sidebar component
+
+    /// Cooldown after user dismissal to prevent immediate re-trigger from stale AFC state
+    std::chrono::steady_clock::time_point error_modal_dismiss_time_{};
 
     // === Observers (RAII cleanup via ObserverGuard) ===
 

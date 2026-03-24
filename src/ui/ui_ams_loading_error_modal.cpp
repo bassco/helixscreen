@@ -74,6 +74,15 @@ void AmsLoadingErrorModal::on_show() {
 }
 
 void AmsLoadingErrorModal::on_hide() {
+    // Fire dismiss callback for all close paths EXCEPT Retry.
+    // This catches: Close button, X button, Cancel, backdrop click, ESC key.
+    // The dismiss callback clears AFC error state (RESET_FAILURE + AFC_CLEAR_MESSAGE)
+    // so the error dialog doesn't reappear immediately.
+    if (!retry_in_progress_ && dismiss_callback_) {
+        spdlog::debug("[AmsLoadingErrorModal] Firing dismiss callback");
+        dismiss_callback_();
+    }
+    retry_in_progress_ = false;
     spdlog::debug("[AmsLoadingErrorModal] on_hide()");
 }
 
@@ -93,6 +102,9 @@ void AmsLoadingErrorModal::handle_cancel() {
 
 void AmsLoadingErrorModal::handle_retry() {
     spdlog::info("[AmsLoadingErrorModal] Retry requested");
+
+    // Mark retry so on_hide() doesn't fire the dismiss callback
+    retry_in_progress_ = true;
 
     // Invoke retry callback
     if (retry_callback_) {

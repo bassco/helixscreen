@@ -181,8 +181,17 @@ void AmsPanel::init_subjects() {
             // Error modal (panel-specific)
             if (action == AmsAction::ERROR) {
                 if (!self->error_modal_ || !self->error_modal_->is_visible()) {
-                    self->show_loading_error_modal();
+                    // Cooldown: don't re-show within 3s of user dismissal
+                    auto now = std::chrono::steady_clock::now();
+                    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                        now - self->error_modal_dismiss_time_);
+                    if (elapsed.count() >= 3) {
+                        self->show_loading_error_modal();
+                    }
                 }
+            } else {
+                // Error cleared — reset cooldown so next error shows immediately
+                self->error_modal_dismiss_time_ = {};
             }
         });
 
@@ -1495,6 +1504,34 @@ void AmsPanel::show_loading_error_modal() {
 
     // Store slot for retry
     int retry_slot = info.current_slot;
+
+    // Clear backend error state when user dismisses (Close/X/Cancel/backdrop).
+    // AFC maintains a persistent message_queue and error_state that won't clear
+    // until RESET_FAILURE + AFC_CLEAR_MESSAGE are sent. Without this, the error
+    // dialog reappears immediately because AFC keeps reporting ERROR. (#497)
+    error_modal_->set_dismiss_callback([this]() {
+        error_modal_dismiss_time_ = std::chrono::steady_clock::now();
+        AmsBackend* backend = AmsState::instance().get_backend();
+        if (!backend) {
+            return;
+        }
+
+        spdlog::info("[AmsPanel] Clearing error state on dismiss (type={})",
+                     ams_type_to_string(backend->get_type()));
+        backend->cancel();
+
+        // AFC-specific: clear the message from AFC's persistent queue
+        if (backend->get_type() == AmsType::AFC && api_) {
+            api_->execute_gcode(
+                "AFC_CLEAR_MESSAGE",
+                []() { spdlog::debug("[AmsPanel] AFC message queue cleared"); },
+                [](const MoonrakerError& err) {
+                    spdlog::debug("[AmsPanel] AFC_CLEAR_MESSAGE failed (may not be "
+                                  "supported): {}",
+                                 err.message);
+                });
+        }
+    });
 
     // Show the error modal with retry callback
     error_modal_->show(parent_screen_, error_message, [this, retry_slot]() {
