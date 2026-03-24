@@ -281,39 +281,43 @@ void HomePanel::build_carousel() {
         arrow_right_ = create_arrow("chevron_right", LV_ALIGN_RIGHT_MID);
     }
 
-    // Arrow click handlers (acceptable exception for programmatic creation)
-    lv_obj_add_event_cb(
-        arrow_left_,
-        [](lv_event_t* /*e*/) {
-            LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] arrow_left_clicked");
-            auto& panel = get_global_home_panel();
-            if (panel.carousel_) {
-                int cur = ui_carousel_get_current_page(panel.carousel_);
-                if (cur > 0) {
-                    ui_carousel_goto_page(panel.carousel_, cur - 1, true);
+    // Arrow click handlers (only when arrows were created)
+    if (arrow_left_) {
+        lv_obj_add_event_cb(
+            arrow_left_,
+            [](lv_event_t* /*e*/) {
+                LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] arrow_left_clicked");
+                auto& panel = get_global_home_panel();
+                if (panel.carousel_) {
+                    int cur = ui_carousel_get_current_page(panel.carousel_);
+                    if (cur > 0) {
+                        ui_carousel_goto_page(panel.carousel_, cur - 1, true);
+                    }
                 }
-            }
-            LVGL_SAFE_EVENT_CB_END();
-        },
-        LV_EVENT_CLICKED, nullptr);
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_CLICKED, nullptr);
+    }
 
-    lv_obj_add_event_cb(
-        arrow_right_,
-        [](lv_event_t* /*e*/) {
-            LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] arrow_right_clicked");
-            auto& panel = get_global_home_panel();
-            if (panel.carousel_) {
-                auto& config =
-                    helix::PanelWidgetManager::instance().get_widget_config("home");
-                int cur = ui_carousel_get_current_page(panel.carousel_);
-                int max_page = static_cast<int>(config.page_count()) - 1;
-                if (cur < max_page) {
-                    ui_carousel_goto_page(panel.carousel_, cur + 1, true);
+    if (arrow_right_) {
+        lv_obj_add_event_cb(
+            arrow_right_,
+            [](lv_event_t* /*e*/) {
+                LVGL_SAFE_EVENT_CB_BEGIN("[HomePanel] arrow_right_clicked");
+                auto& panel = get_global_home_panel();
+                if (panel.carousel_) {
+                    auto& config =
+                        helix::PanelWidgetManager::instance().get_widget_config("home");
+                    int cur = ui_carousel_get_current_page(panel.carousel_);
+                    int max_page = static_cast<int>(config.page_count()) - 1;
+                    if (cur < max_page) {
+                        ui_carousel_goto_page(panel.carousel_, cur + 1, true);
+                    }
                 }
-            }
-            LVGL_SAFE_EVENT_CB_END();
-        },
-        LV_EVENT_CLICKED, nullptr);
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_CLICKED, nullptr);
+    }
 
     // Observe page subject for page change callbacks
     page_observer_ = helix::ui::observe_int_sync<HomePanel>(
