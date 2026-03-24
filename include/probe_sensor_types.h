@@ -23,6 +23,7 @@ enum class ProbeSensorType {
     BEACON = 6,         ///< Beacon eddy current probe
     TAP = 7,            ///< Voron Tap nozzle-contact probe
     KLICKY = 8,         ///< Klicky magnetic probe (macro-based)
+    PRTOUCH_V2 = 9,     ///< Creality prtouch_v2 pressure-based probe (K1/K1C/K1 Max)
 };
 
 /// @brief Configuration for a probe sensor
@@ -107,6 +108,8 @@ struct ProbeSensorState {
         return "tap";
     case ProbeSensorType::KLICKY:
         return "klicky";
+    case ProbeSensorType::PRTOUCH_V2:
+        return "prtouch_v2";
     default:
         return "standard";
     }
@@ -133,6 +136,8 @@ struct ProbeSensorState {
         return "Voron Tap";
     case ProbeSensorType::KLICKY:
         return "Klicky";
+    case ProbeSensorType::PRTOUCH_V2:
+        return "Creality ProTouch";
     default:
         return "Unknown Probe";
     }
@@ -156,6 +161,8 @@ struct ProbeSensorState {
         return ProbeSensorType::TAP;
     if (str == "klicky")
         return ProbeSensorType::KLICKY;
+    if (str == "prtouch_v2")
+        return ProbeSensorType::PRTOUCH_V2;
     return ProbeSensorType::STANDARD;
 }
 

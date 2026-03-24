@@ -224,6 +224,12 @@ class ProbeSensorManager : public ISensorManager {
      */
     void set_sync_mode(bool enabled);
 
+    /// Override the probe type for the primary probe sensor.
+    /// Called by PrinterState after printer detection identifies a specific probe type
+    /// that can't be inferred from Klipper object names alone (e.g., prtouch_v2 registers
+    /// as generic "probe").
+    void set_probe_type_override(ProbeSensorType type);
+
     /**
      * @brief Update subjects on main LVGL thread (called by async callback)
      */

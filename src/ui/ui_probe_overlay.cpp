@@ -436,6 +436,9 @@ void ProbeOverlay::update_display_subjects() {
     case ProbeSensorType::SMART_EFFECTOR:
         type_label = "Piezo Contact Probe";
         break;
+    case ProbeSensorType::PRTOUCH_V2:
+        type_label = "Creality Pressure Probe";
+        break;
     case ProbeSensorType::STANDARD:
     default:
         break;
@@ -503,6 +506,9 @@ void ProbeOverlay::load_type_panel() {
         break;
     case ProbeSensorType::EDDY_CURRENT:
         component = "probe_eddy_panel";
+        break;
+    case ProbeSensorType::PRTOUCH_V2:
+        component = "probe_generic_panel";
         break;
     default:
         component = "probe_generic_panel";
@@ -693,6 +699,8 @@ std::string ProbeOverlay::get_probe_config_section() const {
         return "bltouch";
     case ProbeSensorType::SMART_EFFECTOR:
         return "smart_effector";
+    case ProbeSensorType::PRTOUCH_V2:
+        return "prtouch_v2";
     default:
         return "probe";
     }

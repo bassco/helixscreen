@@ -280,6 +280,10 @@ class PrinterDetector {
      */
     static std::string get_z_offset_calibration_strategy(const std::string& printer_name);
 
+    /// Look up probe type override from the printer database.
+    /// @return Probe type string (e.g., "prtouch_v2"), or empty if not specified
+    static std::string get_probe_type(const std::string& printer_name);
+
     /**
      * @brief Get print start profile name for a printer
      *

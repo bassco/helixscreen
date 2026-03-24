@@ -1247,6 +1247,42 @@ std::string PrinterDetector::get_z_offset_calibration_strategy(const std::string
 }
 
 // ============================================================================
+// Probe Type Lookup
+// ============================================================================
+
+std::string PrinterDetector::get_probe_type(const std::string& printer_name) {
+    if (!g_database.load()) {
+        return "";
+    }
+
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return "";
+    }
+
+    std::string name_lower = printer_name;
+    std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    for (const auto& printer : g_database.data["printers"]) {
+        std::string db_name = printer.value("name", "");
+        std::string db_name_lower = db_name;
+        std::transform(db_name_lower.begin(), db_name_lower.end(), db_name_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (db_name_lower == name_lower) {
+            std::string probe_type = printer.value("probe_type", "");
+            if (!probe_type.empty()) {
+                spdlog::debug("[PrinterDetector] Found probe_type '{}' for printer '{}'",
+                              probe_type, printer_name);
+            }
+            return probe_type;
+        }
+    }
+
+    return "";
+}
+
+// ============================================================================
 // Print Start Profile Lookup
 // ============================================================================
 

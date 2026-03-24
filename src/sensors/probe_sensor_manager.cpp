@@ -596,6 +596,23 @@ bool ProbeSensorManager::parse_klipper_name(const std::string& klipper_name,
     return false;
 }
 
+void ProbeSensorManager::set_probe_type_override(ProbeSensorType type) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    for (auto& sensor : sensors_) {
+        if (sensor.type == ProbeSensorType::STANDARD) {
+            spdlog::info("[ProbeSensorManager] Overriding probe type from STANDARD to {} "
+                         "(printer database)",
+                         probe_type_to_string(type));
+            sensor.type = type;
+            update_subjects();
+            return;
+        }
+    }
+
+    spdlog::debug("[ProbeSensorManager] No STANDARD probe to override (may already be typed)");
+}
+
 ProbeSensorConfig* ProbeSensorManager::find_config(const std::string& klipper_name) {
     for (auto& sensor : sensors_) {
         if (sensor.klipper_name == klipper_name) {

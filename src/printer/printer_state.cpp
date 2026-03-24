@@ -780,6 +780,15 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
     print_start_capabilities_ = new_caps;
     z_offset_calibration_strategy_ = new_strategy;
 
+    // Apply probe type override from database (e.g., prtouch_v2 for K1 series)
+    std::string probe_type_str = PrinterDetector::get_probe_type(type);
+    if (!probe_type_str.empty()) {
+        auto probe_type = helix::sensors::probe_type_from_string(probe_type_str);
+        if (probe_type != helix::sensors::ProbeSensorType::STANDARD) {
+            helix::sensors::ProbeSensorManager::instance().set_probe_type_override(probe_type);
+        }
+    }
+
     // Update printer_has_purge_line_ based on capabilities database
     // "priming" is the capability key for purge/prime line in the database
     bool has_priming = print_start_capabilities_.get_capability("priming") != nullptr;
