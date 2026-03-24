@@ -1976,6 +1976,58 @@ void AmsState::refresh_spoolman_weights() {
         }
     }
 
+    // Also refresh external spool if it has a Spoolman link
+    auto ext_spool = get_external_spool_info();
+    if (ext_spool.has_value() && ext_spool->spoolman_id > 0) {
+        ++linked_count;
+        int ext_spoolman_id = ext_spool->spoolman_id;
+
+        api_->spoolman().get_spoolman_spool(
+            ext_spoolman_id,
+            [ext_spoolman_id](const std::optional<SpoolInfo>& spool_opt) {
+                if (!spool_opt.has_value()) {
+                    spdlog::warn("[AmsState] External spool Spoolman #{} not found",
+                                 ext_spoolman_id);
+                    return;
+                }
+
+                const SpoolInfo& spool = spool_opt.value();
+                float new_remaining = static_cast<float>(spool.remaining_weight_g);
+                float new_total = static_cast<float>(spool.initial_weight_g);
+
+                helix::ui::queue_update([ext_spoolman_id, new_remaining, new_total]() {
+                    if (s_shutdown_flag.load(std::memory_order_acquire)) {
+                        return;
+                    }
+
+                    AmsState& state = AmsState::instance();
+                    auto ext = state.get_external_spool_info();
+                    if (!ext.has_value() || ext->spoolman_id != ext_spoolman_id) {
+                        spdlog::debug("[AmsState] External spool changed, skipping stale update");
+                        return;
+                    }
+
+                    // Skip if weights unchanged
+                    if (ext->remaining_weight_g == new_remaining &&
+                        ext->total_weight_g == new_total) {
+                        return;
+                    }
+
+                    ext->remaining_weight_g = new_remaining;
+                    ext->total_weight_g = new_total;
+                    state.set_external_spool_info(*ext);
+
+                    spdlog::debug(
+                        "[AmsState] Updated external spool weights: {:.0f}g / {:.0f}g",
+                        new_remaining, new_total);
+                });
+            },
+            [ext_spoolman_id](const MoonrakerError& err) {
+                spdlog::warn("[AmsState] Failed to fetch external spool Spoolman #{}: {}",
+                             ext_spoolman_id, err.message);
+            });
+    }
+
     if (linked_count > 0) {
         spdlog::trace("[AmsState] Refreshing Spoolman weights for {} linked slots", linked_count);
     }
