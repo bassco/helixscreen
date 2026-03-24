@@ -1,0 +1,9 @@
+<component name="tool_picker_button">
+    <api>
+        <prop name="tool_text" type="string" default="T0"/>
+    </api>
+    <ui_button name="tool_btn" variant="ghost" width="100%" height="content"
+               style_min_height="#button_height_sm">
+        <text_small name="tool_btn_label" text="$tool_text" align="center"/>
+    </ui_button>
+</component>

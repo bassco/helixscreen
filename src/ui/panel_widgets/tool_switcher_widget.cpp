@@ -143,13 +143,19 @@ void ToolSwitcherWidget::rebuild_pills() {
     }
     lv_obj_set_style_pad_gap(container, space_xs, 0);
 
-    lv_color_t accent_color = theme_manager_get_color("accent");
-    lv_color_t card_bg = theme_manager_get_color("card_bg");
-    lv_color_t text_color = theme_manager_get_color("text");
-    lv_color_t text_inv = theme_manager_get_color("text_inverse");
-
     for (size_t i = 0; i < tools.size(); ++i) {
-        lv_obj_t* btn = lv_button_create(container);
+        bool is_active = (static_cast<int>(i) == active);
+
+        // Create pill button from XML ui_button widget — variant handles base styling
+        const char* variant = is_active ? "primary" : "ghost";
+        const char* attrs[] = {"variant", variant, "text", tools[i].name.c_str(), nullptr};
+        lv_obj_t* btn = static_cast<lv_obj_t*>(lv_xml_create(container, "ui_button", attrs));
+        if (!btn) {
+            spdlog::error("[ToolSwitcher] lv_xml_create('ui_button') returned NULL for pill '{}'",
+                          tools[i].name);
+            continue;
+        }
+
         lv_obj_set_flex_grow(btn, 1);
         lv_obj_set_height(btn, LV_SIZE_CONTENT);
         int btn_min_h = resolve_space_token("space_xl", 24);
@@ -157,29 +163,6 @@ void ToolSwitcherWidget::rebuild_pills() {
         lv_obj_set_style_radius(btn, btn_min_h / 2, 0);
         lv_obj_set_style_pad_ver(btn, resolve_space_token("space_xxs", 4), 0);
         lv_obj_set_style_pad_hor(btn, resolve_space_token("space_sm", 8), 0);
-
-        bool is_active = (static_cast<int>(i) == active);
-
-        if (is_active) {
-            lv_obj_set_style_bg_color(btn, accent_color, 0);
-            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        } else {
-            lv_obj_set_style_bg_color(btn, card_bg, 0);
-            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        }
-
-        // Pressed state feedback
-        lv_obj_set_style_bg_opa(btn, LV_OPA_80, LV_PART_MAIN | LV_STATE_PRESSED);
-
-        lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, tools[i].name.c_str());
-        lv_obj_set_style_text_color(label, is_active ? text_inv : text_color, 0);
-        const lv_font_t* pill_font = theme_manager_get_font("font_small");
-        if (pill_font)
-            lv_obj_set_style_text_font(label, pill_font, 0);
-        lv_obj_center(label);
-        lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
         // Store tool index in user_data for click handler
         lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
@@ -203,34 +186,17 @@ void ToolSwitcherWidget::rebuild_pills() {
 }
 
 void ToolSwitcherWidget::on_active_tool_changed(int tool_index) {
-    if (pill_buttons_.empty()) {
-        // In compact mode, update the label
-        if (widget_obj_ && current_colspan_ == 1 && current_rowspan_ == 1) {
+    if (current_colspan_ == 1 && current_rowspan_ == 1) {
+        // Compact mode — rebuild to update the label
+        if (widget_obj_) {
             rebuild_compact();
         }
         return;
     }
 
-    lv_color_t accent_color = theme_manager_get_color("accent");
-    lv_color_t card_bg = theme_manager_get_color("card_bg");
-    lv_color_t text_color = theme_manager_get_color("text");
-    lv_color_t text_inv = theme_manager_get_color("text_inverse");
-
-    for (size_t i = 0; i < pill_buttons_.size(); ++i) {
-        lv_obj_t* btn = pill_buttons_[i];
-        if (!btn) continue;
-
-        bool is_active = (static_cast<int>(i) == tool_index);
-
-        lv_obj_set_style_bg_color(btn, is_active ? accent_color : card_bg, 0);
-
-        // Update label color
-        if (lv_obj_get_child_count(btn) > 0) {
-            lv_obj_t* label = lv_obj_get_child(btn, 0);
-            if (label) {
-                lv_obj_set_style_text_color(label, is_active ? text_inv : text_color, 0);
-            }
-        }
+    // Pill mode — rebuild to apply correct variant styling per button
+    if (widget_obj_) {
+        rebuild_pills();
     }
 
     spdlog::debug("[ToolSwitcher] Active tool changed to T{}", tool_index);
@@ -394,58 +360,51 @@ void ToolSwitcherWidget::show_tool_picker() {
     int available_w = card_w - 2 * space_md;
     int btn_w = (available_w - (cols - 1) * space_xs) / cols;
 
-    lv_color_t accent_color = theme_manager_get_color("accent");
-    lv_color_t surface_color = theme_manager_get_color("card_bg");
-    lv_color_t text_color = theme_manager_get_color("text");
-    lv_color_t text_inv = theme_manager_get_color("text_inverse");
-
     for (size_t i = 0; i < tools.size(); ++i) {
-        lv_obj_t* btn = lv_button_create(grid);
-        lv_obj_set_width(btn, btn_w);
-        lv_obj_set_height(btn, LV_SIZE_CONTENT);
-        lv_obj_set_style_min_height(btn, resolve_space_token("space_xl", 24) + space_sm, 0);
-        lv_obj_set_style_radius(btn, resolve_space_token("space_sm", 8), 0);
-        lv_obj_set_style_pad_ver(btn, space_sm, 0);
-        lv_obj_set_style_pad_hor(btn, space_xs, 0);
-
         bool is_active = (static_cast<int>(i) == active);
 
-        if (is_active) {
-            lv_obj_set_style_bg_color(btn, accent_color, 0);
-            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-        } else {
-            lv_obj_set_style_bg_color(btn, surface_color, 0);
-            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+        // Create picker button from XML template — styling is declarative
+        const char* btn_attrs[] = {"tool_text", tools[i].name.c_str(), nullptr};
+        lv_obj_t* picker_btn =
+            static_cast<lv_obj_t*>(lv_xml_create(grid, "tool_picker_button", btn_attrs));
+        if (!picker_btn) {
+            spdlog::error("[ToolSwitcher] lv_xml_create('tool_picker_button') returned NULL");
+            continue;
         }
 
-        lv_obj_set_style_bg_opa(btn, LV_OPA_80, LV_PART_MAIN | LV_STATE_PRESSED);
+        // Find the actual ui_button inside the component and set width + variant override
+        lv_obj_t* btn = lv_obj_find_by_name(picker_btn, "tool_btn");
+        if (btn) {
+            lv_obj_set_width(picker_btn, btn_w);
+            lv_obj_set_width(btn, LV_PCT(100));
 
-        lv_obj_t* label = lv_label_create(btn);
-        lv_label_set_text(label, tools[i].name.c_str());
-        lv_obj_set_style_text_color(label, is_active ? text_inv : text_color, 0);
-        const lv_font_t* picker_font = theme_manager_get_font("font_small");
-        if (picker_font)
-            lv_obj_set_style_text_font(label, picker_font, 0);
-        lv_obj_center(label);
-        lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
+            // Active tool gets solid accent styling
+            if (is_active) {
+                lv_obj_set_style_bg_color(btn, theme_manager_get_color("accent"), 0);
+                lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+                lv_obj_t* label = lv_obj_find_by_name(picker_btn, "tool_btn_label");
+                if (label) {
+                    lv_obj_set_style_text_color(label, theme_manager_get_color("text_inverse"), 0);
+                }
+            }
 
-        // Store tool index in user_data
-        lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+            // Store tool index in user_data for click handler
+            lv_obj_set_user_data(btn, reinterpret_cast<void*>(static_cast<intptr_t>(i)));
 
-        lv_obj_add_event_cb(
-            btn,
-            [](lv_event_t* e) {
-                LVGL_SAFE_EVENT_CB_BEGIN("[ToolSwitcher] picker_tool_click");
-                if (!s_active_instance) return;
-                auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-                int idx =
-                    static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-                s_active_instance->handle_tool_selected(idx);
-                s_active_instance->dismiss_tool_picker();
-                LVGL_SAFE_EVENT_CB_END();
-            },
-            LV_EVENT_CLICKED, nullptr);
+            lv_obj_add_event_cb(
+                btn,
+                [](lv_event_t* e) {
+                    LVGL_SAFE_EVENT_CB_BEGIN("[ToolSwitcher] picker_tool_click");
+                    if (!s_active_instance) return;
+                    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                    int idx =
+                        static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
+                    s_active_instance->handle_tool_selected(idx);
+                    s_active_instance->dismiss_tool_picker();
+                    LVGL_SAFE_EVENT_CB_END();
+                },
+                LV_EVENT_CLICKED, nullptr);
+        }
     }
 
     // Position card above the widget instead of centered on screen.
