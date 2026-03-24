@@ -31,6 +31,7 @@
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_detector.h"
+#include "printer_state.h"
 #include "standard_macros.h"
 #include "static_panel_registry.h"
 
@@ -914,6 +915,58 @@ void BedMeshPanel::start_calibration() {
         return;
     }
 
+    // Check homing state — auto-home if needed before probing
+    const char* homed = lv_subject_get_string(get_printer_state().get_homed_axes_subject());
+    bool all_homed = homed && std::string(homed).find("xyz") != std::string::npos;
+
+    if (all_homed) {
+        start_calibration_probing();
+    } else {
+        spdlog::info("[BedMeshPanel] Not fully homed (axes={}), sending G28 first",
+                     homed ? homed : "none");
+        lv_subject_copy_string(&bed_mesh_probe_text_, lv_tr("Homing..."));
+
+        auto alive = alive_;
+        api->execute_gcode(
+            "G28",
+            [this, alive]() {
+                if (!alive->load())
+                    return;
+                helix::ui::async_call(
+                    [](void* data) {
+                        spdlog::info("[BedMeshPanel] G28 complete, starting calibration");
+                        static_cast<BedMeshPanel*>(data)->start_calibration_probing();
+                    },
+                    this);
+            },
+            [this, alive](const MoonrakerError& err) {
+                if (!alive->load())
+                    return;
+                struct ErrorCtx {
+                    BedMeshPanel* panel;
+                    std::string message;
+                };
+                std::string msg = (err.type == MoonrakerErrorType::TIMEOUT)
+                                      ? "Homing timed out — printer may still be homing"
+                                      : "Homing failed: " + err.message;
+                auto ctx = std::make_unique<ErrorCtx>(ErrorCtx{this, std::move(msg)});
+                helix::ui::queue_update<ErrorCtx>(std::move(ctx), [](ErrorCtx* c) {
+                    c->panel->on_calibration_error(c->message);
+                });
+            },
+            MoonrakerAPI::HOMING_TIMEOUT_MS);
+    }
+}
+
+void BedMeshPanel::start_calibration_probing() {
+    MoonrakerAPI* api = get_moonraker_api();
+    if (!api) {
+        on_calibration_error("API not available");
+        return;
+    }
+
+    lv_subject_copy_string(&bed_mesh_probe_text_, lv_tr("Preparing..."));
+
     // Capture alive flag for callback safety
     auto alive = alive_;
 
@@ -1243,9 +1296,47 @@ void BedMeshPanel::on_calibration_complete() {
                        static_cast<int>(BedMeshCalibrationState::NAMING));
 }
 
+/// Strip Klipper error prefixes and make messages user-friendly
+static std::string sanitize_error_message(const std::string& raw) {
+    std::string msg = raw;
+
+    // Strip Klipper emergency/error prefixes
+    if (msg.rfind("!! ", 0) == 0)
+        msg = msg.substr(3);
+    if (msg.rfind("Error:", 0) == 0)
+        msg = msg.substr(6);
+    if (msg.rfind("error:", 0) == 0)
+        msg = msg.substr(6);
+
+    // Trim leading whitespace
+    auto start = msg.find_first_not_of(" \t");
+    if (start != std::string::npos && start > 0)
+        msg = msg.substr(start);
+
+    // Strip JSON-looking content (e.g. {"message": "Must home axis..."} → extract message)
+    if (!msg.empty() && msg.front() == '{') {
+        auto mpos = msg.find("\"message\"");
+        if (mpos != std::string::npos) {
+            // Find the value after "message":
+            auto colon = msg.find(':', mpos + 9);
+            if (colon != std::string::npos) {
+                auto qstart = msg.find('"', colon + 1);
+                auto qend = (qstart != std::string::npos) ? msg.find('"', qstart + 1)
+                                                          : std::string::npos;
+                if (qstart != std::string::npos && qend != std::string::npos) {
+                    msg = msg.substr(qstart + 1, qend - qstart - 1);
+                }
+            }
+        }
+    }
+
+    return msg;
+}
+
 void BedMeshPanel::on_calibration_error(const std::string& message) {
     spdlog::error("[BedMeshPanel] Calibration error: {}", message);
-    std::strncpy(error_message_buf_, message.c_str(), sizeof(error_message_buf_) - 1);
+    std::string clean = sanitize_error_message(message);
+    std::strncpy(error_message_buf_, clean.c_str(), sizeof(error_message_buf_) - 1);
     error_message_buf_[sizeof(error_message_buf_) - 1] = '\0';
     lv_subject_copy_string(&bed_mesh_error_message_, error_message_buf_);
     lv_subject_set_int(&bed_mesh_calibrate_state_,

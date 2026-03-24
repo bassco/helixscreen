@@ -96,6 +96,7 @@ class BedMeshPanel : public OverlayBase {
     void on_calibration_error(const std::string& message);
     void handle_emergency_stop();
     void save_profile_with_name(const std::string& name);
+    void start_calibration_probing();
 
   private:
     // ========== Subject Manager (RAII cleanup) ==========
