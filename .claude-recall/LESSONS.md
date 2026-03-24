@@ -9,11 +9,11 @@
 ## Active Lessons
 
 ### [L008] [***--|****-] Design tokens and semantic widgets
-- **Uses**: 11 | **Velocity**: 2 | **Learned**: 2025-12-14 | **Last**: 2026-03-13 | **Category**: pattern | **Type**: informational
+- **Uses**: 12 | **Velocity**: 3 | **Learned**: 2025-12-14 | **Last**: 2026-03-24 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 22 | **Velocity**: 5.5 | **Learned**: 2025-12-14 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 23 | **Velocity**: 6.5 | **Learned**: 2025-12-14 | **Last**: 2026-03-24 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|**---] No mutex in destructors
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 52.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-23 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 55.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-24 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|***--] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 58 | **Velocity**: 29.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-23 | **Category**: correction | **Type**: constraint
+- **Uses**: 59 | **Velocity**: 30.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-24 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -125,7 +125,7 @@
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [***--|*****] Commit generated translation artifacts
-- **Uses**: 14 | **Velocity**: 7 | **Learned**: 2026-02-10 | **Last**: 2026-03-13 | **Category**: i18n
+- **Uses**: 15 | **Velocity**: 8 | **Learned**: 2026-02-10 | **Last**: 2026-03-24 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
 ### [L065] [-----|-----] No test-only methods on production classes
@@ -149,11 +149,11 @@
 > LVGL's lv_obj_set_user_data() is a single shared slot per object. Custom XML widgets, component handlers, and LVGL internals may set user_data during object creation (e.g., ui_button stores button_data_t*, severity_card stores a severity string). NEVER call delete/free on lv_obj_get_user_data() unless you are 100% certain you set it yourself on that specific object. NEVER use user_data as general-purpose storage on objects you didn't fully create — XML components and custom widgets may have claimed it already. **CRITICAL: NEVER walk parent chain checking any non-null user_data to find an instance pointer** — ui_button and other widgets set their own user_data, so the traversal will find the WRONG data and miscast it (caused SEGFAULT in AmsOperationSidebar/AmsDryerCard). Instead, walk parents checking `lv_obj_get_name()` for a specific known name, THEN read user_data from that named object. For per-item data, prefer: (1) event callback user_data (separate per-callback), (2) a C++ side container (map/vector indexed by object pointer), or (3) lv_obj_find_by_name to stash data in a hidden child label.
 
 ### [L071] [***--|*****] XML child click passthrough
-- **Uses**: 12 | **Velocity**: 5.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-12 | **Category**: ui | **Type**: constraint
+- **Uses**: 13 | **Velocity**: 6.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-24 | **Category**: ui | **Type**: constraint
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
-### [L070] [**---|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 9 | **Velocity**: 4.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-13 | **Category**: i18n
+### [L070] [***--|*****] Don't lv_tr() non-translatable strings
+- **Uses**: 11 | **Velocity**: 6.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-24 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
