@@ -319,6 +319,31 @@ void AmsState::init_subjects(bool register_xml) {
             snprintf(name_buf, sizeof(name_buf), "ams_slot_%d_status", i);
             lv_xml_register_subject(nullptr, name_buf, &slot_statuses_[i]);
         }
+
+        lv_subject_init_string(&slot_remaining_[i], slot_remaining_buf_[i], nullptr,
+                               sizeof(slot_remaining_buf_[i]), "");
+        subjects_.register_subject(&slot_remaining_[i]);
+        if (register_xml) {
+            snprintf(name_buf, sizeof(name_buf), "ams_slot_%d_remaining", i);
+            lv_xml_register_subject(nullptr, name_buf, &slot_remaining_[i]);
+        }
+    }
+
+    // Per-unit environment subjects (CFS temperature/humidity)
+    for (int i = 0; i < MAX_UNITS; ++i) {
+        lv_subject_init_int(&unit_temp_[i], 0);
+        subjects_.register_subject(&unit_temp_[i]);
+        if (register_xml) {
+            snprintf(name_buf, sizeof(name_buf), "ams_unit_%d_temp", i);
+            lv_xml_register_subject(nullptr, name_buf, &unit_temp_[i]);
+        }
+
+        lv_subject_init_int(&unit_humidity_[i], 0);
+        subjects_.register_subject(&unit_humidity_[i]);
+        if (register_xml) {
+            snprintf(name_buf, sizeof(name_buf), "ams_unit_%d_humidity", i);
+            lv_xml_register_subject(nullptr, name_buf, &unit_humidity_[i]);
+        }
     }
 
     // Ask the factory for a backend. In mock mode, it returns a mock backend.
@@ -592,6 +617,27 @@ lv_subject_t* AmsState::get_slot_status_subject(int slot_index) {
     return &slot_statuses_[slot_index];
 }
 
+lv_subject_t* AmsState::get_slot_remaining_subject(int slot_index) {
+    if (slot_index < 0 || slot_index >= MAX_SLOTS) {
+        return nullptr;
+    }
+    return &slot_remaining_[slot_index];
+}
+
+lv_subject_t* AmsState::get_unit_temp_subject(int unit_index) {
+    if (unit_index < 0 || unit_index >= MAX_UNITS) {
+        return nullptr;
+    }
+    return &unit_temp_[unit_index];
+}
+
+lv_subject_t* AmsState::get_unit_humidity_subject(int unit_index) {
+    if (unit_index < 0 || unit_index >= MAX_UNITS) {
+        return nullptr;
+    }
+    return &unit_humidity_[unit_index];
+}
+
 lv_subject_t* AmsState::get_slot_color_subject(int backend_index, int slot_index) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (backend_index == 0) {
@@ -855,6 +901,17 @@ void AmsState::sync_from_backend() {
                 lv_subject_set_int(&slot_statuses_[i], new_status);
                 any_slot_changed = true;
             }
+
+            // Update remaining filament string
+            std::string remaining;
+            if (slot->remaining_length_m > 0) {
+                remaining = std::to_string(static_cast<int>(slot->remaining_length_m)) + "m";
+            } else if (slot->remaining_weight_g > 0) {
+                remaining = std::to_string(static_cast<int>(slot->remaining_weight_g)) + "g";
+            }
+            if (strcmp(lv_subject_get_string(&slot_remaining_[i]), remaining.c_str()) != 0) {
+                lv_subject_copy_string(&slot_remaining_[i], remaining.c_str());
+            }
         }
     }
 
@@ -873,6 +930,40 @@ void AmsState::sync_from_backend() {
         ToolState::instance().save_spool_assignments_if_dirty(get_moonraker_api());
     }
 
+    // Update per-unit environment subjects (CFS temperature/humidity)
+    for (const auto& unit : info.units) {
+        int idx = unit.unit_index;
+        if (idx >= 0 && idx < MAX_UNITS) {
+            if (unit.environment.has_value()) {
+                int temp_tenths = static_cast<int>(unit.environment->temperature_c * 10.0f);
+                int humidity = static_cast<int>(unit.environment->humidity_pct);
+                if (lv_subject_get_int(&unit_temp_[idx]) != temp_tenths) {
+                    lv_subject_set_int(&unit_temp_[idx], temp_tenths);
+                }
+                if (lv_subject_get_int(&unit_humidity_[idx]) != humidity) {
+                    lv_subject_set_int(&unit_humidity_[idx], humidity);
+                }
+            } else {
+                if (lv_subject_get_int(&unit_temp_[idx]) != 0) {
+                    lv_subject_set_int(&unit_temp_[idx], 0);
+                }
+                if (lv_subject_get_int(&unit_humidity_[idx]) != 0) {
+                    lv_subject_set_int(&unit_humidity_[idx], 0);
+                }
+            }
+        }
+    }
+
+    // Clear environment subjects for units beyond what backend reports
+    for (int i = static_cast<int>(info.units.size()); i < MAX_UNITS; ++i) {
+        if (lv_subject_get_int(&unit_temp_[i]) != 0) {
+            lv_subject_set_int(&unit_temp_[i], 0);
+        }
+        if (lv_subject_get_int(&unit_humidity_[i]) != 0) {
+            lv_subject_set_int(&unit_humidity_[i], 0);
+        }
+    }
+
     // Clear remaining slot subjects, only firing when values actually change
     for (int i = info.total_slots; i < MAX_SLOTS; ++i) {
         int default_color = static_cast<int>(AMS_DEFAULT_SLOT_COLOR);
@@ -884,6 +975,10 @@ void AmsState::sync_from_backend() {
         if (lv_subject_get_int(&slot_statuses_[i]) != default_status) {
             lv_subject_set_int(&slot_statuses_[i], default_status);
             any_slot_changed = true;
+        }
+        // Clear remaining filament for unused slots
+        if (strcmp(lv_subject_get_string(&slot_remaining_[i]), "") != 0) {
+            lv_subject_copy_string(&slot_remaining_[i], "");
         }
     }
 
@@ -928,6 +1023,18 @@ void AmsState::update_slot(int slot_index) {
             lv_subject_set_int(&slot_statuses_[slot_index], new_status);
             changed = true;
         }
+
+        // Update remaining filament string
+        std::string remaining;
+        if (slot.remaining_length_m > 0) {
+            remaining = std::to_string(static_cast<int>(slot.remaining_length_m)) + "m";
+        } else if (slot.remaining_weight_g > 0) {
+            remaining = std::to_string(static_cast<int>(slot.remaining_weight_g)) + "g";
+        }
+        if (strcmp(lv_subject_get_string(&slot_remaining_[slot_index]), remaining.c_str()) != 0) {
+            lv_subject_copy_string(&slot_remaining_[slot_index], remaining.c_str());
+        }
+
         if (changed) {
             bump_slots_version();
         }

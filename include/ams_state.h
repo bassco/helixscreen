@@ -50,6 +50,14 @@ class AmsState {
      */
     static constexpr int MAX_SLOTS = 16;
 
+    /**
+     * @brief Maximum number of AMS units supported for per-unit subjects
+     *
+     * Per-unit subjects (temperature, humidity) are allocated statically.
+     * Systems with more units will only have subjects for the first MAX_UNITS.
+     */
+    static constexpr int MAX_UNITS = 4;
+
     /// @name Dryer Constants
     /// @{
     static constexpr int DEFAULT_DRYER_TEMP_C = 55;        ///< Default dryer temp (PETG)
@@ -716,6 +724,40 @@ class AmsState {
      */
     [[nodiscard]] lv_subject_t* get_slot_status_subject(int backend_index, int slot_index);
 
+    /**
+     * @brief Get remaining filament subject for a specific slot
+     *
+     * Holds formatted remaining amount string ("52m", "432g", or "").
+     *
+     * @param slot_index Slot index (0 to MAX_SLOTS-1)
+     * @return Subject pointer or nullptr if out of range
+     */
+    [[nodiscard]] lv_subject_t* get_slot_remaining_subject(int slot_index);
+
+    // ========================================================================
+    // Per-Unit Subject Accessors (CFS environment sensors)
+    // ========================================================================
+
+    /**
+     * @brief Get temperature subject for a unit (tenths of degrees C)
+     *
+     * Value is in tenths of degrees C (e.g., 270 = 27.0C). 0 = no data.
+     *
+     * @param unit_index Unit index (0 to MAX_UNITS-1)
+     * @return Subject pointer or nullptr if out of range
+     */
+    [[nodiscard]] lv_subject_t* get_unit_temp_subject(int unit_index);
+
+    /**
+     * @brief Get humidity subject for a unit (percentage)
+     *
+     * Value is integer percentage (0-100). 0 = no data.
+     *
+     * @param unit_index Unit index (0 to MAX_UNITS-1)
+     * @return Subject pointer or nullptr if out of range
+     */
+    [[nodiscard]] lv_subject_t* get_unit_humidity_subject(int unit_index);
+
     // ========================================================================
     // Direct State Update (called by backend event handler)
     // ========================================================================
@@ -1071,9 +1113,15 @@ class AmsState {
     lv_subject_t current_has_weight_;
     lv_subject_t current_color_;
 
-    // Per-slot subjects (color and status)
+    // Per-slot subjects (color, status, remaining filament)
     lv_subject_t slot_colors_[MAX_SLOTS];
     lv_subject_t slot_statuses_[MAX_SLOTS];
+    lv_subject_t slot_remaining_[MAX_SLOTS];     // string: "52m" or "432g" or ""
+    char slot_remaining_buf_[MAX_SLOTS][16];      // buffers for remaining strings
+
+    // Per-unit environment subjects (CFS temp/humidity)
+    lv_subject_t unit_temp_[MAX_UNITS];           // int: tenths of C (270 = 27.0C), 0 = no data
+    lv_subject_t unit_humidity_[MAX_UNITS];       // int: percentage, 0 = no data
 
     // Observer for print state changes to auto-refresh Spoolman weights
     ObserverGuard print_state_observer_;
