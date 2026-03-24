@@ -10,6 +10,7 @@
 #include "printer_state.h"
 #include "theme_manager.h"
 #include "tool_state.h"
+#include "ui_overlay_temp_graph.h"
 
 #include <spdlog/spdlog.h>
 
@@ -43,13 +44,17 @@ void NozzleTempsWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     rebuild_rows();
 
-    // Observe extruder version changes to rebuild rows when tools are discovered
+    // Observe extruder version changes to rebuild rows when tools are discovered.
+    // Capture current version to skip the initial immediate callback — rows already built.
     std::weak_ptr<bool> weak_alive = alive_;
+    int initial_version = lv_subject_get_int(printer_state_.get_extruder_version_subject());
     version_observer_ = helix::ui::observe_int_sync<NozzleTempsWidget>(
         printer_state_.get_extruder_version_subject(), this,
-        [weak_alive](NozzleTempsWidget* self, int) {
+        [weak_alive, initial_version](NozzleTempsWidget* self, int version) {
             if (weak_alive.expired())
                 return;
+            if (version == initial_version)
+                return; // Skip initial callback — rows already built in attach()
             self->rebuild_rows();
         });
 
@@ -58,8 +63,8 @@ void NozzleTempsWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
 void NozzleTempsWidget::detach() {
     *alive_ = false;
+    version_observer_.reset();
     clear_rows();
-    // version_observer_ already reset in clear_rows() under freeze
     widget_obj_ = nullptr;
     parent_screen_ = nullptr;
 }
@@ -68,7 +73,7 @@ void NozzleTempsWidget::clear_rows() {
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
 
-    version_observer_.reset();
+    ++rebuild_gen_; // Bump generation to invalidate stale deferred callbacks
     extruder_rows_.clear();
     bed_temp_observer_.reset();
     bed_target_observer_.reset();
@@ -200,15 +205,6 @@ void NozzleTempsWidget::rebuild_rows() {
     update_row_display(bed_temp_label_, bed_target_label_, bed_progress_bar_, cached_bed_temp_,
                        cached_bed_target_, true);
 
-    // Re-attach version observer (cleared in clear_rows)
-    version_observer_ = helix::ui::observe_int_sync<NozzleTempsWidget>(
-        printer_state_.get_extruder_version_subject(), this,
-        [weak_alive](NozzleTempsWidget* self, int) {
-            if (weak_alive.expired())
-                return;
-            self->rebuild_rows();
-        });
-
     spdlog::debug("[NozzleTempsWidget] Rebuilt with {} extruder rows + bed", extruder_rows_.size());
 }
 
@@ -231,6 +227,19 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
     row.temp_label = lv_obj_find_by_name(row_obj, "temp_label");
     row.target_label = lv_obj_find_by_name(row_obj, "target_label");
     row.progress_bar = lv_obj_find_by_name(row_obj, "progress_bar");
+
+    // Tap row → open nozzle temp graph overlay
+    lv_obj_add_flag(row_obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* screen = parent_screen_;
+    lv_obj_add_event_cb(
+        row_obj,
+        [](lv_event_t* e) {
+            auto* scr = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+            if (scr) {
+                get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Nozzle, scr);
+            }
+        },
+        LV_EVENT_CLICKED, screen);
 }
 
 void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
@@ -246,6 +255,19 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
     bed_temp_label_ = lv_obj_find_by_name(row_obj, "bed_temp_label");
     bed_target_label_ = lv_obj_find_by_name(row_obj, "bed_target_label");
     bed_progress_bar_ = lv_obj_find_by_name(row_obj, "bed_progress_bar");
+
+    // Tap bed row → open bed temp graph overlay
+    lv_obj_add_flag(row_obj, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* screen = parent_screen_;
+    lv_obj_add_event_cb(
+        row_obj,
+        [](lv_event_t* e) {
+            auto* scr = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+            if (scr) {
+                get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Bed, scr);
+            }
+        },
+        LV_EVENT_CLICKED, screen);
 }
 
 void NozzleTempsWidget::update_row_display(lv_obj_t* temp_label, lv_obj_t* target_label,
@@ -277,10 +299,12 @@ void NozzleTempsWidget::update_row_display(lv_obj_t* temp_label, lv_obj_t* targe
             bar_color = theme_manager_get_color("warning");
         }
         lv_obj_set_style_bg_color(progress_bar, bar_color, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(progress_bar, LV_OPA_COVER, LV_PART_INDICATOR);
     } else {
         lv_label_set_text(target_label, "off");
         lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
         lv_obj_set_style_bg_color(progress_bar, theme_manager_get_color("text_muted"),
                                   LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(progress_bar, LV_OPA_30, LV_PART_INDICATOR);
     }
 }
