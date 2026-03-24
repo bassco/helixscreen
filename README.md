@@ -22,11 +22,11 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 
 ---
 
-> **Release Candidate — v0.98**
+> **Release Candidate — v0.99**
 >
-> Approaching 1.0 with a customizable grid dashboard, full widget system, and comprehensive printer support. Looking for testers across different printer setups.
+> On the doorstep of 1.0 (targeting early April 2026). Multi-page home screen, exclude object map, temperature graph, Creality K2/CFS support, tool changer widgets, and preheat macros — plus dozens of crash fixes.
 >
-> **Tested on:** Voron 2.4 (Raspberry Pi 5), Voron 0.2, Doron Velta, RatRig V-Core, Flashforge AD5M Pro ([Forge-X](https://github.com/DrA1ex/ff5m) firmware), QIDI Q1 Pro, Sovol SV06, Sovol SV08
+> **Tested on:** Voron 2.4 (Raspberry Pi 5), Voron 0.2, Doron Velta, RatRig V-Core, Flashforge AD5M Pro ([Forge-X](https://github.com/DrA1ex/ff5m) firmware), QIDI Q1 Pro, Sovol SV06, Sovol SV08, Creality K1C, Creality K2 Max
 >
 > **Raspberry Pi:** Both 64-bit and 32-bit Raspberry Pi OS are supported (Pi 4, Pi 5, CM4, Zero 2 W).
 >
@@ -34,7 +34,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 >
 > **Flashforge:** AD5M/Pro (Forge-X firmware), AD5X (ZMOD firmware).
 >
-> **Creality:** Sonic Pad, K1/K1C/K1 Max binaries are included. K2 Plus build target exists (ARM, static musl) but is **untested** — if you have one, we'd love your help!
+> **Creality:** Sonic Pad, K1/K1C/K1 Max, and K2 Max binaries are included. CFS (Creality Filament System) support is in progress.
 >
 > **Snapmaker U1:** Cross-compile target with 480x320 display support.
 >
@@ -48,11 +48,12 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 
 ## Why HelixScreen?
 
-- **Customizable dashboard** — Drag, resize, and arrange widgets on a grid that persists across restarts
-- **Every feature at your fingertips** — 30+ panels, 18 overlays, 13 modals, 233 XML layouts
+- **Customizable dashboard** — Multi-page grid with drag-to-reposition, edge resize, and 25+ widgets including temperature graphs, fan arcs, and power toggles
+- **Every feature at your fingertips** — 30+ panels, 18 overlays, 13 modals, 250+ XML layouts
 - **Runs on anything** — ~10MB RAM, from a Creality K1 to a Raspberry Pi 5
 - **68 printers in the database** — Auto-detects your hardware and configures itself
-- **Multi-material ready** — AFC, Happy Hare, ValgACE, ViViD, tool changers, Spoolman
+- **Multi-material ready** — AFC, Happy Hare, ValgACE, ViViD, CFS, tool changers, Spoolman
+- **Exclude objects** — Tap-to-exclude overhead map view with object outlines during prints
 - **Looks great** — Light/dark themes with 14 presets, responsive layouts, GPU-accelerated blur
 - **First-run wizard** — 13-step guided setup discovers your printer's capabilities
 
@@ -65,7 +66,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 | Declarative UI | Full XML with reactive bindings | C only | Python only |
 | RAM Usage | ~10MB | ~15-20MB | ~50MB |
 | Disk Size | ~70-80MB | ~60-80MB | ~50MB |
-| Multi-Material | 5 backends | Limited | Basic |
+| Multi-Material | 6 backends | Limited | Basic |
 | Printer Database | 68 models | — | Manual config |
 | Display Layouts | Auto-detecting (tiny to ultrawide) | Fixed | Configurable |
 | Status | Release Candidate (active) | Inactive | Mature (maintenance) |
@@ -118,7 +119,7 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 
 **Printer Control** — Print management with G-code preview, motion controls, temperature presets with per-material overrides, multi-fan control, Z-offset, speed/flow tuning, live filament consumption tracking, power device management
 
-**Multi-Material** — 5 filament system backends: AFC (Box Turtle), Happy Hare (ERCF, 3MS, Tradrack), ValgACE, ViViD, and tool changers. Multi-unit and multi-backend support. Full Spoolman integration with spool creation wizard.
+**Multi-Material** — 6 filament system backends: AFC (Box Turtle), Happy Hare (ERCF, 3MS, Tradrack), ValgACE, ViViD, Creality CFS, and tool changers. Multi-unit and multi-backend support. Full Spoolman integration with spool creation wizard.
 
 **Visualization** — 3D G-code layer preview with memory-aware geometry budgets, 3D bed mesh with async rendering, print thumbnails, frequency response charts, unified temperature graph
 
@@ -141,8 +142,8 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 | Flashforge AD5X | MIPS32 | Supported |
 | QIDI (Q1 Pro, Plus 4, etc.) | aarch64 | Supported |
 | Creality Sonic Pad | armhf | Tested |
-| Creality K1/K1C/K1 Max | MIPS32 | Builds available |
-| Creality K2 Plus | ARM (musl) | Untested |
+| Creality K1/K1C/K1 Max | MIPS32 | Tested |
+| Creality K2 Max/Plus | ARM (musl) | Tested |
 | Sovol SV06/SV08 | Pi build | Active testing |
 | Elegoo Centauri Carbon | Dedicated build | Active testing |
 | Snapmaker U1 | armv7-a | Cross-compile target |
@@ -212,7 +213,7 @@ Any Klipper + Moonraker printer. 68 models in the auto-detection database spanni
 800x480, 1024x600, and 1920x480 (ultrawide) are fully supported with auto-detecting layouts. Display rotation (0/90/180/270) is supported with auto-detection. Smaller displays like 480x320 (Snapmaker U1) are a work-in-progress.
 
 **What multi-material systems work?**
-AFC (Box Turtle), Happy Hare (ERCF, 3MS, Tradrack, Night Owl), ValgACE, ViViD, and tool changers (viesturz/klipper-toolchanger). Full Spoolman integration for spool management.
+AFC (Box Turtle), Happy Hare (ERCF, 3MS, Tradrack, Night Owl), ValgACE, ViViD, Creality CFS, and tool changers (viesturz/klipper-toolchanger). Full Spoolman integration for spool management.
 
 See [docs/user/FAQ.md](docs/user/FAQ.md) for the full FAQ.
 

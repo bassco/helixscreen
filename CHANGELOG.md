@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.0] - 2026-03-24
+
+A major release bringing multi-page home screen, exclude object map, temperature graph widget, Creality K2/CFS support, preheat macros, tool changer improvements, and a settings.json rename — across 100+ commits.
+
+### Added
+- Multi-page home screen with carousel navigation, per-page widget layout, and page deletion (#484)
+- Exclude object overhead map view on print status panel with convex hull outlines and touch-to-exclude (#511)
+- Temperature graph dashboard widget with sensor config modal, color picker, and adaptive sizing
+- Creality K2 Max support: printer definition, preset, platform hooks, and deploy targets
+- Creality Filament System (CFS) backend with RFID material database, slot addressing, and status parsing
+- Tool changer improvements: tool switcher widget, nozzle temps widget, preheat all tools (#493)
+- Preheat custom macro support with per-material macro picker, toggle, and cool down button (#486)
+- Fine/Coarse jog toggle on motion panel (#505)
+- Optional text labels on icon-only home screen widgets (#501)
+- First-class prtouch_v2 z-offset calibration for K1/K1C/K1 Max
+- Probe accuracy test results displayed in formatted modal
+- x86_64 Debian release target for x86 SBCs
+- Creality K1, K1 Max, and K1C linked to k1 preset
+- 74 new translated strings across all 8 languages to 100% coverage
+
+### Fixed
+- Print status thumbnail not visible on first navigation in thumbnail-only mode
+- Crash from camera stream callback race and LRU cache splice (#491)
+- Crash from macros panel param modal at startup with null screen (#491)
+- Crash from null pointer in home panel arrow event callbacks on non-SDL displays
+- Crash from wifi wizard use-after-free on network item click
+- Crash from null guards in LVGL object deletion path (#511)
+- AFC error state not clearing on modal dismiss (#497)
+- Bed mesh auto-home before calibration with sanitized error messages
+- K1C probe using wrong calibration method (now uses standard probe_calibrate)
+- Power disconnect dialog suppressed for all power-off events (#469)
+- Service double-restart from pending update watcher on self-update (#509)
+- Dangling symlink install error (#496)
+- K2 display rotation set to 270° in preset
+
+### Changed
+- Config file renamed from `helixconfig.json` to `settings.json` with automatic migration
+- Controls panel reorganized: QGL/Z-Tilt moved to Calibration card, enlarged quick action buttons with slots 3 & 4
+- Spoolman layout compacted with side-by-side sync toggle and interval
+- Dropdown styling improved with responsive item spacing and clipped corners
+- Thermistor widget renamed to Temperature Sensors
+- Persistently disable stock Creality UI on K1 devices (#495)
+
+## [0.98.12] - 2026-03-23
+
+### Fixed
+- Systemctl shell syntax in service restart wrapper (#495)
+
 ## [0.98.11] - 2026-03-23
 
 ### Added
@@ -2057,6 +2105,8 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.0]: https://github.com/prestonbrown/helixscreen/compare/v0.98.12...v0.99.0
+[0.98.12]: https://github.com/prestonbrown/helixscreen/compare/v0.98.11...v0.98.12
 [0.98.11]: https://github.com/prestonbrown/helixscreen/compare/v0.98.10...v0.98.11
 [0.98.10]: https://github.com/prestonbrown/helixscreen/compare/v0.98.9...v0.98.10
 [0.98.9]: https://github.com/prestonbrown/helixscreen/compare/v0.98.8...v0.98.9
