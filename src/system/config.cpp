@@ -31,6 +31,8 @@ using AppConstants::Update::config_backup_fallback;
 using AppConstants::Update::CONFIG_BACKUP_PRIMARY;
 using AppConstants::Update::env_backup_fallback;
 using AppConstants::Update::ENV_BACKUP_PRIMARY;
+using AppConstants::Update::legacy_config_backup_fallback;
+using AppConstants::Update::LEGACY_CONFIG_BACKUP_PRIMARY;
 
 Config* Config::instance{NULL};
 
@@ -574,7 +576,9 @@ void Config::init(const std::string& config_path) {
         // Backups are maintained by Config::save() and survive Moonraker's
         // shutil.rmtree() wipe of the install directory.
         restored_from_backup_ = restore_from_backup(
-            config_path, "Config", {CONFIG_BACKUP_PRIMARY, config_backup_fallback()});
+            config_path, "Config",
+            {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
+             LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
     }
 
     // Restore helixscreen.env independently — it can be lost even if config survived
