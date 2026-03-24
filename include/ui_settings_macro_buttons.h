@@ -156,6 +156,18 @@ class MacroButtonsOverlay : public OverlayBase {
     void handle_quick_button_2_changed(int index);
 
     /**
+     * @brief Handle quick button 3 dropdown change
+     * @param index Selected dropdown index
+     */
+    void handle_quick_button_3_changed(int index);
+
+    /**
+     * @brief Handle quick button 4 dropdown change
+     * @param index Selected dropdown index
+     */
+    void handle_quick_button_4_changed(int index);
+
+    /**
      * @brief Handle standard macro slot dropdown change
      * @param slot The slot being changed
      * @param dropdown The dropdown widget (to read selected value)
@@ -209,6 +221,8 @@ class MacroButtonsOverlay : public OverlayBase {
 
     static void on_quick_button_1_changed(lv_event_t* e);
     static void on_quick_button_2_changed(lv_event_t* e);
+    static void on_quick_button_3_changed(lv_event_t* e);
+    static void on_quick_button_4_changed(lv_event_t* e);
     static void on_load_filament_changed(lv_event_t* e);
     static void on_unload_filament_changed(lv_event_t* e);
     static void on_purge_changed(lv_event_t* e);

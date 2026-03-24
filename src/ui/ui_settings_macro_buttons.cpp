@@ -67,6 +67,8 @@ void MacroButtonsOverlay::register_callbacks() {
         // Quick button dropdown callbacks
         {"on_quick_button_1_changed", on_quick_button_1_changed},
         {"on_quick_button_2_changed", on_quick_button_2_changed},
+        {"on_quick_button_3_changed", on_quick_button_3_changed},
+        {"on_quick_button_4_changed", on_quick_button_4_changed},
         // Standard macro slot callbacks
         {"on_load_filament_changed", on_load_filament_changed},
         {"on_unload_filament_changed", on_unload_filament_changed},
@@ -178,6 +180,10 @@ void MacroButtonsOverlay::populate_dropdowns() {
     std::string qb2_slot =
         config ? config->get<std::string>("/standard_macros/quick_button_2", "bed_level")
                : "bed_level";
+    std::string qb3_slot =
+        config ? config->get<std::string>("/standard_macros/quick_button_3", "") : "";
+    std::string qb4_slot =
+        config ? config->get<std::string>("/standard_macros/quick_button_4", "") : "";
 
     // Helper to find index for a slot name
     auto find_slot_index = [](const std::string& slot_name) -> int {
@@ -206,6 +212,22 @@ void MacroButtonsOverlay::populate_dropdowns() {
     if (qb2_dropdown) {
         lv_dropdown_set_options(qb2_dropdown, quick_button_options.c_str());
         lv_dropdown_set_selected(qb2_dropdown, find_slot_index(qb2_slot));
+    }
+
+    // Quick Button 3
+    lv_obj_t* qb3_row = lv_obj_find_by_name(overlay_root_, "row_quick_button_3");
+    lv_obj_t* qb3_dropdown = qb3_row ? lv_obj_find_by_name(qb3_row, "dropdown") : nullptr;
+    if (qb3_dropdown) {
+        lv_dropdown_set_options(qb3_dropdown, quick_button_options.c_str());
+        lv_dropdown_set_selected(qb3_dropdown, find_slot_index(qb3_slot));
+    }
+
+    // Quick Button 4
+    lv_obj_t* qb4_row = lv_obj_find_by_name(overlay_root_, "row_quick_button_4");
+    lv_obj_t* qb4_dropdown = qb4_row ? lv_obj_find_by_name(qb4_row, "dropdown") : nullptr;
+    if (qb4_dropdown) {
+        lv_dropdown_set_options(qb4_dropdown, quick_button_options.c_str());
+        lv_dropdown_set_selected(qb4_dropdown, find_slot_index(qb4_slot));
     }
 
     // === Populate Standard Macro Dropdowns ===
@@ -339,6 +361,32 @@ void MacroButtonsOverlay::handle_quick_button_2_changed(int index) {
                  slot_name.empty() ? "(empty)" : slot_name);
 }
 
+void MacroButtonsOverlay::handle_quick_button_3_changed(int index) {
+    std::string slot_name = quick_button_index_to_slot_name(index);
+
+    Config* config = Config::get_instance();
+    if (config) {
+        config->set<std::string>("/standard_macros/quick_button_3", slot_name);
+        config->save();
+    }
+
+    spdlog::info("[{}] Quick button 3 set to: {}", get_name(),
+                 slot_name.empty() ? "(empty)" : slot_name);
+}
+
+void MacroButtonsOverlay::handle_quick_button_4_changed(int index) {
+    std::string slot_name = quick_button_index_to_slot_name(index);
+
+    Config* config = Config::get_instance();
+    if (config) {
+        config->set<std::string>("/standard_macros/quick_button_4", slot_name);
+        config->save();
+    }
+
+    spdlog::info("[{}] Quick button 4 set to: {}", get_name(),
+                 slot_name.empty() ? "(empty)" : slot_name);
+}
+
 void MacroButtonsOverlay::handle_standard_macro_changed(StandardMacroSlot slot,
                                                         lv_obj_t* dropdown) {
     std::string macro = get_selected_macro_from_dropdown(dropdown);
@@ -367,6 +415,22 @@ void MacroButtonsOverlay::on_quick_button_2_changed(lv_event_t* e) {
     auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
     get_macro_buttons_overlay().handle_quick_button_2_changed(index);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void MacroButtonsOverlay::on_quick_button_3_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[MacroButtonsOverlay] on_quick_button_3_changed");
+    auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    get_macro_buttons_overlay().handle_quick_button_3_changed(index);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void MacroButtonsOverlay::on_quick_button_4_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[MacroButtonsOverlay] on_quick_button_4_changed");
+    auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    get_macro_buttons_overlay().handle_quick_button_4_changed(index);
     LVGL_SAFE_EVENT_CB_END();
 }
 

@@ -29,6 +29,14 @@
       <setting_dropdown_row name="row_quick_button_2"
                             label="Quick Button 2" label_tag="Quick Button 2" icon="play_circle" description="Select macro for second button" description_tag="Select macro for second button"
                             callback="on_quick_button_2_changed"/>
+      <!-- Quick Button 3 - assign a macro slot -->
+      <setting_dropdown_row name="row_quick_button_3"
+                            label="Quick Button 3" label_tag="Quick Button 3" icon="play_circle" description="Select macro for third button" description_tag="Select macro for third button"
+                            callback="on_quick_button_3_changed"/>
+      <!-- Quick Button 4 - assign a macro slot -->
+      <setting_dropdown_row name="row_quick_button_4"
+                            label="Quick Button 4" label_tag="Quick Button 4" icon="play_circle" description="Select macro for fourth button" description_tag="Select macro for fourth button"
+                            callback="on_quick_button_4_changed"/>
       <!-- ================================================================== -->
       <!-- STANDARD MACROS SECTION -->
       <!-- ================================================================== -->
