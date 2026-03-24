@@ -505,7 +505,7 @@ setup_config_symlink() {
             if [ ! -f "$pd_file" ]; then
                 # Move the file to printer_data — check for success before removing original.
                 # A silent cp failure followed by rm would permanently destroy the user's config.
-                if $(file_sudo "$pd_helix") cp "$install_file" "$pd_file"; then
+                if $(file_sudo "$pd_helix") cp "$install_file" "$pd_file" 2>/dev/null; then
                     log_info "Migrated $file to printer_data"
                 else
                     log_warn "Could not migrate $file to printer_data — keeping in install dir"
