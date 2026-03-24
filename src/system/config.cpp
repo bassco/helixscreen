@@ -499,6 +499,42 @@ void Config::init(const std::string& config_path) {
     path = config_path;
     struct stat buffer;
 
+    // Migration: rename helixconfig.json -> settings.json if old name exists
+    fs::path old_config = fs::path(config_path).parent_path() / "helixconfig.json";
+    if (stat(config_path.c_str(), &buffer) != 0 && fs::exists(old_config)) {
+        spdlog::info("[Config] Migrating {} -> {}", old_config.string(), config_path);
+        std::error_code ec;
+        fs::rename(old_config, config_path, ec);
+        if (ec) {
+            spdlog::warn("[Config] Migration rename failed: {} — trying copy",
+                         ec.message());
+            try {
+                fs::copy_file(old_config, config_path);
+                fs::remove(old_config);
+                spdlog::info("[Config] Migration complete (copy+remove)");
+            } catch (const fs::filesystem_error& e) {
+                spdlog::error("[Config] Migration failed: {}", e.what());
+            }
+        } else {
+            spdlog::info("[Config] Migration complete");
+        }
+    } else if (stat(config_path.c_str(), &buffer) == 0 && fs::exists(old_config)) {
+        spdlog::warn("[Config] Both settings.json and helixconfig.json exist; "
+                     "using settings.json (old file left in place)");
+    }
+
+    // Migrate test config unconditionally (has its own existence guard)
+    fs::path old_test = fs::path(config_path).parent_path() / "helixconfig-test.json";
+    fs::path new_test = fs::path(config_path).parent_path() / "settings-test.json";
+    if (fs::exists(old_test) && !fs::exists(new_test)) {
+        std::error_code ec;
+        fs::rename(old_test, new_test, ec);
+        if (!ec) {
+            spdlog::info("[Config] Migrated test config: {} -> {}", old_test.string(),
+                         new_test.string());
+        }
+    }
+
     // Migration: Check for legacy config at old location (helixconfig.json in app root)
     // If new location doesn't exist but old location does, migrate it
     if (stat(config_path.c_str(), &buffer) != 0) {
