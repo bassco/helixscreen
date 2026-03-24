@@ -4,6 +4,7 @@
 #pragma once
 
 #include "panel_widget.h"
+#include "ui_observer_guard.h"
 
 #include <memory>
 #include <string>
@@ -32,10 +33,19 @@ class PreheatWidget : public PanelWidget {
     lv_obj_t* split_btn_ = nullptr;
 
     int selected_material_ = 0; // 0=PLA, 1=PETG, 2=ABS, 3=TPU
+    bool heaters_active_ = false;
+
+    // Observers for heater target temperatures
+    ObserverGuard extruder_target_obs_;
+    ObserverGuard bed_target_obs_;
+    int cached_extruder_target_ = 0;
+    int cached_bed_target_ = 0;
 
     void handle_apply();
+    void handle_cooldown();
     void handle_selection_changed();
     void update_button_label();
+    void update_heater_state();
     void set_temperatures(MoonrakerAPI* api, int nozzle, int bed);
 
     void handle_nozzle_tap();

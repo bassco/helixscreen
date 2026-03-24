@@ -23,6 +23,7 @@
 #include "ams_state.h"
 #include "app_constants.h"
 #include "app_globals.h"
+#include "config.h"
 #include "filament_database.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -1422,8 +1423,16 @@ void FilamentPanel::handle_cooldown() {
     spdlog::info("[{}] Cooldown requested - turning off heaters", get_name());
 
     if (api_) {
+        // Use configured cooldown macro (user-overridable in helixconfig.json)
+        auto* cfg = helix::Config::get_instance();
+        helix::MacroConfig default_cooldown{
+            "Cool Down",
+            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
+            "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
+        auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
+
         api_->execute_gcode(
-            "TURN_OFF_HEATERS", []() { NOTIFY_SUCCESS("Heaters off"); },
+            cooldown.gcode, []() { NOTIFY_SUCCESS("Heaters off"); },
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR("Failed to turn off heaters: {}", error.user_message());
             });

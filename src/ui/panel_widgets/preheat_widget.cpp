@@ -9,10 +9,12 @@
 #include "ui_split_button.h"
 
 #include "app_globals.h"
+#include "config.h"
 #include "filament_database.h"
 #include "macro_executor.h"
 #include "material_settings_manager.h"
 #include "moonraker_api.h"
+#include "observer_factory.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
 
@@ -88,6 +90,21 @@ void PreheatWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     if (bed_row)
         lv_obj_set_user_data(bed_row, this);
 
+    // Observe heater targets to toggle preheat/cooldown mode
+    using helix::ui::observe_int_sync;
+    extruder_target_obs_ = observe_int_sync<PreheatWidget>(
+        printer_state_.get_active_extruder_target_subject(), this,
+        [](PreheatWidget* self, int target) {
+            self->cached_extruder_target_ = target;
+            self->update_heater_state();
+        });
+    bed_target_obs_ = observe_int_sync<PreheatWidget>(
+        printer_state_.get_bed_target_subject(), this,
+        [](PreheatWidget* self, int target) {
+            self->cached_bed_target_ = target;
+            self->update_heater_state();
+        });
+
     spdlog::debug("[PreheatWidget] Attached (material={})", PRESET_NAMES[selected_material_]);
 }
 
@@ -95,6 +112,10 @@ void PreheatWidget::detach() {
     if (s_active_instance == this) {
         s_active_instance = nullptr;
     }
+
+    // Applying [L073]: subjects are alive during detach, use reset()
+    extruder_target_obs_.reset();
+    bed_target_obs_.reset();
 
     if (split_btn_) {
         lv_obj_set_user_data(split_btn_, nullptr);
@@ -119,6 +140,11 @@ void PreheatWidget::update_button_label() {
     if (!split_btn_)
         return;
 
+    if (heaters_active_) {
+        ui_split_button_set_text(split_btn_, "Cool Down");
+        return;
+    }
+
     auto mat = filament::find_material(PRESET_NAMES[selected_material_]);
     int nozzle = mat ? mat->nozzle_recommended() : 0;
     int bed = mat ? mat->bed_temp : 0;
@@ -136,6 +162,16 @@ void PreheatWidget::update_button_label() {
         std::snprintf(label, sizeof(label), "Preheat %s", PRESET_NAMES[selected_material_]);
     }
     ui_split_button_set_text(split_btn_, label);
+}
+
+void PreheatWidget::update_heater_state() {
+    bool active = (cached_extruder_target_ > 0 || cached_bed_target_ > 0);
+    if (active != heaters_active_) {
+        heaters_active_ = active;
+        update_button_label();
+        spdlog::debug("[PreheatWidget] Heaters {} (extruder_target={}, bed_target={})",
+                      active ? "active" : "inactive", cached_extruder_target_, cached_bed_target_);
+    }
 }
 
 void PreheatWidget::handle_selection_changed() {
@@ -173,6 +209,11 @@ void PreheatWidget::set_temperatures(MoonrakerAPI* api, int nozzle, int bed) {
 }
 
 void PreheatWidget::handle_apply() {
+    if (heaters_active_) {
+        handle_cooldown();
+        return;
+    }
+
     const char* material_name = PRESET_NAMES[selected_material_];
     auto mat = filament::find_material(material_name);
     if (!mat) {
@@ -212,6 +253,29 @@ void PreheatWidget::handle_apply() {
 
     spdlog::info("[PreheatWidget] Preheat {} applied (nozzle={}°C, bed={}°C)", material_name,
                  nozzle, bed);
+}
+
+void PreheatWidget::handle_cooldown() {
+    auto* api = get_moonraker_api();
+    if (!api) {
+        spdlog::warn("[PreheatWidget] No MoonrakerAPI available for cooldown");
+        return;
+    }
+
+    // Use configured cooldown macro (user-overridable in helixconfig.json)
+    auto* cfg = Config::get_instance();
+    MacroConfig default_cooldown{"Cool Down",
+                                 "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
+                                 "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
+    auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
+
+    spdlog::info("[PreheatWidget] Cooldown requested - executing: {}", cooldown.gcode);
+    api->execute_gcode(
+        cooldown.gcode,
+        []() { NOTIFY_SUCCESS("Heaters off"); },
+        [](const MoonrakerError& error) {
+            NOTIFY_ERROR("Failed to cool down: {}", error.user_message());
+        });
 }
 
 void PreheatWidget::handle_nozzle_tap() {
