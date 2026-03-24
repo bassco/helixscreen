@@ -610,6 +610,11 @@ void PrintStatusPanel::on_activate() {
         }
     }
 
+    // Re-apply cached thumbnail now that the panel is visible.
+    if (print_thumbnail_ && !cached_thumbnail_path_.empty()) {
+        lv_image_set_src(print_thumbnail_, cached_thumbnail_path_.c_str());
+    }
+
     // Restore G-code viewer state based on current print conditions
     // This ensures the viewer is properly restored when returning from overlays like Tune panel
     show_gcode_viewer(lifecycle_.want_viewer() && gcode_loaded_);
@@ -1752,12 +1757,11 @@ void PrintStatusPanel::on_print_start_phase_changed(int phase) {
     lv_subject_set_int(&preparing_visible_subject_, preparing ? 1 : 0);
 
     if (preparing) {
-        // Clear stale state from previous print immediately so users don't see
-        // the old thumbnail/progress flash before the new print's data loads
-        if (print_thumbnail_) {
-            lv_image_set_src(print_thumbnail_, nullptr);
-        }
-        cached_thumbnail_path_.clear();
+        // Preserve the thumbnail — it was loaded for the current print by the
+        // filename observer or ActivePrintMediaManager. The preparing phase
+        // fires concurrently with thumbnail loading, so clearing here would
+        // race and discard a valid thumbnail. Stale thumbnails from a previous
+        // print are cleared by the print_ended path in on_print_state_changed.
         loaded_thumbnail_filename_.clear();
         requested_gcode_filename_.clear();
         if (progress_bar_) {
