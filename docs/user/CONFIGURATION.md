@@ -660,7 +660,9 @@ Configured via **Settings > LED Settings > Macro Devices**.
 
 ### `default_macros`
 **Type:** object
-**Description:** Custom macros for quick actions:
+**Description:** G-code macros for quick-action buttons throughout the UI. Each macro can be a plain G-code string or an object with `label` and `gcode` fields.
+
+**Default values:**
 
 ```json
 {
@@ -674,9 +676,27 @@ Configured via **Settings > LED Settings > Macro Devices**.
 }
 ```
 
-- `cooldown` - G-code string for the cooldown button
-- `load_filament` / `unload_filament` - Object with `label` and `gcode` for filament operations
-- `macro_1` / `macro_2` - Custom macro buttons with `label` and `gcode`
+| Key | Format | Where it's used |
+|-----|--------|-----------------|
+| `cooldown` | G-code string | Preheat widget (auto-shows "Cool Down" when heaters are on), Filament panel cooldown button |
+| `load_filament` | `{ "label", "gcode" }` | Filament panel Load button |
+| `unload_filament` | `{ "label", "gcode" }` | Filament panel Unload button |
+| `macro_1` | `{ "label", "gcode" }` | Controls panel custom button 1 |
+| `macro_2` | `{ "label", "gcode" }` | Controls panel custom button 2 |
+
+**Customizing cooldown for enclosed printers:**
+
+If your printer has a chamber heater, bed fans, or recirculation fans that should turn off during cooldown, override the `cooldown` macro:
+
+```json
+{
+  "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0\nSET_HEATER_TEMPERATURE HEATER=chamber_heater TARGET=0\nSET_FAN_SPEED FAN=bed_fan SPEED=0"
+}
+```
+
+Multi-line G-code is separated by `\n`. You can also reference a Klipper macro by name (e.g., `"cooldown": "MY_COOLDOWN_MACRO"`).
+
+Configured via **Settings > Printer > Macro Buttons**, or by editing `helixconfig.json` directly.
 
 ---
 
