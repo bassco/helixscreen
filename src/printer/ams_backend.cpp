@@ -252,8 +252,8 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerA
             spdlog::error("[AMS Backend] CFS requires MoonrakerAPI and MoonrakerClient");
             return nullptr;
         }
-        spdlog::debug("[AMS Backend] CFS backend not yet implemented");
-        return nullptr;
+        spdlog::debug("[AMS Backend] Creating CFS backend");
+        return std::make_unique<printer::AmsBackendCfs>(api, client);
 
     case AmsType::NONE:
     default:
