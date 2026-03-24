@@ -12,8 +12,6 @@
 #include "ui_modal.h"
 #include "ui_utils.h"
 
-#include "ui_fonts.h"
-
 #include <spdlog/spdlog.h>
 
 namespace helix {
@@ -154,10 +152,11 @@ void ToolSwitcherWidget::rebuild_pills() {
         lv_obj_t* btn = lv_button_create(container);
         lv_obj_set_flex_grow(btn, 1);
         lv_obj_set_height(btn, LV_SIZE_CONTENT);
-        lv_obj_set_style_min_height(btn, 32, 0);
-        lv_obj_set_style_radius(btn, 16, 0);
-        lv_obj_set_style_pad_ver(btn, 4, 0);
-        lv_obj_set_style_pad_hor(btn, 8, 0);
+        int btn_min_h = resolve_space_token("space_xl", 24);
+        lv_obj_set_style_min_height(btn, btn_min_h, 0);
+        lv_obj_set_style_radius(btn, btn_min_h / 2, 0);
+        lv_obj_set_style_pad_ver(btn, resolve_space_token("space_xxs", 4), 0);
+        lv_obj_set_style_pad_hor(btn, resolve_space_token("space_sm", 8), 0);
 
         bool is_active = (static_cast<int>(i) == active);
 
@@ -175,7 +174,9 @@ void ToolSwitcherWidget::rebuild_pills() {
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, tools[i].name.c_str());
         lv_obj_set_style_text_color(label, is_active ? text_inv : text_color, 0);
-        lv_obj_set_style_text_font(label, lv_font_get_default(), 0);
+        const lv_font_t* pill_font = theme_manager_get_font("font_small");
+        if (pill_font)
+            lv_obj_set_style_text_font(label, pill_font, 0);
         lv_obj_center(label);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -217,7 +218,7 @@ void ToolSwitcherWidget::on_active_tool_changed(int tool_index) {
 
     for (size_t i = 0; i < pill_buttons_.size(); ++i) {
         lv_obj_t* btn = pill_buttons_[i];
-        if (!lv_obj_is_valid(btn)) continue;
+        if (!btn) continue;
 
         bool is_active = (static_cast<int>(i) == tool_index);
 
@@ -260,7 +261,7 @@ void ToolSwitcherWidget::rebuild_compact() {
     lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_gap(container, 2, 0);
+    lv_obj_set_style_pad_gap(container, resolve_space_token("space_xxs", 2), 0);
 
     // Swap icon above tool label
     const char* icon_attrs[] = {"src", "arrow_left_right", "size", "sm", "variant",
@@ -278,7 +279,9 @@ void ToolSwitcherWidget::rebuild_compact() {
                                 : "T?";
     lv_label_set_text(label, tool_name.c_str());
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
-    lv_obj_set_style_text_font(label, &noto_sans_bold_16, 0);
+    const lv_font_t* body_font = theme_manager_get_font("font_body");
+    if (body_font)
+        lv_obj_set_style_text_font(label, body_font, 0);
     lv_obj_set_width(label, LV_PCT(100));
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
@@ -325,7 +328,7 @@ void ToolSwitcherWidget::show_tool_picker() {
     picker_backdrop_ = lv_obj_create(parent_screen_);
     lv_obj_set_size(picker_backdrop_, screen_w, screen_h);
     lv_obj_set_pos(picker_backdrop_, 0, 0);
-    lv_obj_set_style_bg_color(picker_backdrop_, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(picker_backdrop_, theme_manager_get_color("screen_bg"), 0);
     lv_obj_set_style_bg_opa(picker_backdrop_, LV_OPA_50, 0);
     lv_obj_set_style_border_width(picker_backdrop_, 0, 0);
     lv_obj_set_style_radius(picker_backdrop_, 0, 0);
@@ -352,7 +355,7 @@ void ToolSwitcherWidget::show_tool_picker() {
     lv_obj_set_style_max_height(card, screen_h * 70 / 100, 0);
     lv_obj_set_style_bg_color(card, theme_manager_get_color("card_bg"), 0);
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(card, 12, 0);
+    lv_obj_set_style_radius(card, resolve_space_token("space_lg", 12), 0);
     lv_obj_set_style_border_width(card, 1, 0);
     lv_obj_set_style_border_color(card, theme_manager_get_color("border"), 0);
     lv_obj_set_style_pad_all(card, space_md, 0);
@@ -364,7 +367,9 @@ void ToolSwitcherWidget::show_tool_picker() {
     // Title
     lv_obj_t* title = lv_label_create(card);
     lv_label_set_text(title, "Select Tool");
-    lv_obj_set_style_text_font(title, lv_font_get_default(), 0);
+    const lv_font_t* title_font = theme_manager_get_font("font_body");
+    if (title_font)
+        lv_obj_set_style_text_font(title, title_font, 0);
     lv_obj_set_style_text_color(title, theme_manager_get_color("text"), 0);
     lv_obj_set_width(title, LV_PCT(100));
 
@@ -398,8 +403,8 @@ void ToolSwitcherWidget::show_tool_picker() {
         lv_obj_t* btn = lv_button_create(grid);
         lv_obj_set_width(btn, btn_w);
         lv_obj_set_height(btn, LV_SIZE_CONTENT);
-        lv_obj_set_style_min_height(btn, 36, 0);
-        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_set_style_min_height(btn, resolve_space_token("space_xl", 24) + space_sm, 0);
+        lv_obj_set_style_radius(btn, resolve_space_token("space_sm", 8), 0);
         lv_obj_set_style_pad_ver(btn, space_sm, 0);
         lv_obj_set_style_pad_hor(btn, space_xs, 0);
 
@@ -418,7 +423,9 @@ void ToolSwitcherWidget::show_tool_picker() {
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, tools[i].name.c_str());
         lv_obj_set_style_text_color(label, is_active ? text_inv : text_color, 0);
-        lv_obj_set_style_text_font(label, lv_font_get_default(), 0);
+        const lv_font_t* picker_font = theme_manager_get_font("font_small");
+        if (picker_font)
+            lv_obj_set_style_text_font(label, picker_font, 0);
         lv_obj_center(label);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -434,8 +441,8 @@ void ToolSwitcherWidget::show_tool_picker() {
                 auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
                 int idx =
                     static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-                s_active_instance->dismiss_tool_picker();
                 s_active_instance->handle_tool_selected(idx);
+                s_active_instance->dismiss_tool_picker();
                 LVGL_SAFE_EVENT_CB_END();
             },
             LV_EVENT_CLICKED, nullptr);
@@ -478,12 +485,9 @@ void ToolSwitcherWidget::show_tool_picker() {
 void ToolSwitcherWidget::dismiss_tool_picker() {
     if (!picker_backdrop_) return;
 
-    lv_obj_t* backdrop = picker_backdrop_;
-    picker_backdrop_ = nullptr;
-
-    if (lv_obj_is_valid(backdrop)) {
-        helix::ui::safe_delete(backdrop);
-    }
+    // Use deferred deletion to avoid destroying the event source during
+    // event processing (picker button click calls dismiss then handle_tool_selected)
+    helix::ui::safe_delete_deferred(picker_backdrop_);
 
     spdlog::debug("[ToolSwitcher] Picker dismissed");
 }

@@ -218,7 +218,7 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
     lv_obj_set_size(col, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(col, 0, 0);
-    lv_obj_set_style_pad_gap(col, 2, 0);
+    lv_obj_set_style_pad_gap(col, theme_manager_get_spacing("space_xxs"), 0);
     lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(col, 0, 0);
     lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
@@ -248,8 +248,9 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
     const lv_font_t* small_font = theme_manager_get_font("font_small");
     if (small_font)
         lv_obj_set_style_text_font(tool_label, small_font, 0);
-    lv_obj_set_width(tool_label, 28);
-    lv_obj_set_style_min_width(tool_label, 28, 0);
+    int label_w = theme_manager_get_spacing("space_xl") + theme_manager_get_spacing("space_xxs");
+    lv_obj_set_width(tool_label, label_w);
+    lv_obj_set_style_min_width(tool_label, label_w, 0);
     lv_obj_set_style_text_align(tool_label, LV_TEXT_ALIGN_LEFT, 0);
 
     // Current temperature
@@ -259,13 +260,15 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
         lv_obj_set_style_text_font(row.temp_label, small_font, 0);
     lv_obj_set_style_text_color(row.temp_label, theme_manager_get_color("text"), 0);
 
-    // Target label
+    // Target label (right-justified)
     row.target_label = lv_label_create(text_row);
     lv_label_set_text(row.target_label, "off");
+    lv_obj_set_flex_grow(row.target_label, 1);
+    lv_obj_set_style_text_align(row.target_label, LV_TEXT_ALIGN_RIGHT, 0);
     const lv_font_t* xs_font = theme_manager_get_font("font_xs");
     if (xs_font)
         lv_obj_set_style_text_font(row.target_label, xs_font, 0);
-    lv_obj_set_style_text_color(row.target_label, theme_manager_get_color("muted"), 0);
+    lv_obj_set_style_text_color(row.target_label, theme_manager_get_color("text_muted"), 0);
 
     // Progress bar
     row.progress_bar = lv_bar_create(col);
@@ -274,7 +277,7 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
     lv_bar_set_value(row.progress_bar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(row.progress_bar, theme_manager_get_color("surface"), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(row.progress_bar, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(row.progress_bar, theme_manager_get_color("muted"),
+    lv_obj_set_style_bg_color(row.progress_bar, theme_manager_get_color("text_muted"),
                               LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(row.progress_bar, LV_OPA_COVER, LV_PART_INDICATOR);
     lv_obj_set_style_radius(row.progress_bar, 1, LV_PART_MAIN);
@@ -295,7 +298,7 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
     lv_obj_set_size(col, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(col, 0, 0);
-    lv_obj_set_style_pad_gap(col, 2, 0);
+    lv_obj_set_style_pad_gap(col, theme_manager_get_spacing("space_xxs"), 0);
     lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(col, 0, 0);
     lv_obj_remove_flag(col, LV_OBJ_FLAG_SCROLLABLE);
@@ -321,8 +324,9 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
     const lv_font_t* small_font = theme_manager_get_font("font_small");
     if (small_font)
         lv_obj_set_style_text_font(bed_label, small_font, 0);
-    lv_obj_set_width(bed_label, 28);
-    lv_obj_set_style_min_width(bed_label, 28, 0);
+    int bed_label_w = theme_manager_get_spacing("space_xl") + theme_manager_get_spacing("space_xxs");
+    lv_obj_set_width(bed_label, bed_label_w);
+    lv_obj_set_style_min_width(bed_label, bed_label_w, 0);
     lv_obj_set_style_text_align(bed_label, LV_TEXT_ALIGN_LEFT, 0);
 
     // Current temperature
@@ -332,13 +336,15 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
         lv_obj_set_style_text_font(bed_temp_label_, small_font, 0);
     lv_obj_set_style_text_color(bed_temp_label_, theme_manager_get_color("text"), 0);
 
-    // Target label
+    // Target label (right-justified)
     bed_target_label_ = lv_label_create(text_row);
     lv_label_set_text(bed_target_label_, "off");
+    lv_obj_set_flex_grow(bed_target_label_, 1);
+    lv_obj_set_style_text_align(bed_target_label_, LV_TEXT_ALIGN_RIGHT, 0);
     const lv_font_t* xs_font = theme_manager_get_font("font_xs");
     if (xs_font)
         lv_obj_set_style_text_font(bed_target_label_, xs_font, 0);
-    lv_obj_set_style_text_color(bed_target_label_, theme_manager_get_color("muted"), 0);
+    lv_obj_set_style_text_color(bed_target_label_, theme_manager_get_color("text_muted"), 0);
 
     // Progress bar (bed uses danger color accent)
     bed_progress_bar_ = lv_bar_create(col);
@@ -347,7 +353,7 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
     lv_bar_set_value(bed_progress_bar_, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(bed_progress_bar_, theme_manager_get_color("surface"), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(bed_progress_bar_, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(bed_progress_bar_, theme_manager_get_color("muted"),
+    lv_obj_set_style_bg_color(bed_progress_bar_, theme_manager_get_color("text_muted"),
                               LV_PART_INDICATOR);
     lv_obj_set_style_bg_opa(bed_progress_bar_, LV_OPA_COVER, LV_PART_INDICATOR);
     lv_obj_set_style_radius(bed_progress_bar_, 1, LV_PART_MAIN);
@@ -386,7 +392,7 @@ void NozzleTempsWidget::update_row_display(lv_obj_t* temp_label, lv_obj_t* targe
     } else {
         lv_label_set_text(target_label, "off");
         lv_bar_set_value(progress_bar, 0, LV_ANIM_OFF);
-        lv_obj_set_style_bg_color(progress_bar, theme_manager_get_color("muted"),
+        lv_obj_set_style_bg_color(progress_bar, theme_manager_get_color("text_muted"),
                                   LV_PART_INDICATOR);
     }
 }
