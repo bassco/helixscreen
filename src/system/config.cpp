@@ -503,7 +503,8 @@ void Config::init(const std::string& config_path) {
 
     // Migration: rename helixconfig.json -> settings.json if old name exists
     fs::path old_config = fs::path(config_path).parent_path() / "helixconfig.json";
-    if (stat(config_path.c_str(), &buffer) != 0 && fs::exists(old_config)) {
+    if (stat(config_path.c_str(), &buffer) != 0 && fs::exists(old_config) &&
+        !fs::is_symlink(old_config)) {
         spdlog::info("[Config] Migrating {} -> {}", old_config.string(), config_path);
         std::error_code ec;
         fs::rename(old_config, config_path, ec);
@@ -519,6 +520,13 @@ void Config::init(const std::string& config_path) {
             }
         } else {
             spdlog::info("[Config] Migration complete");
+        }
+    } else if (stat(config_path.c_str(), &buffer) != 0 && fs::is_symlink(old_config)) {
+        spdlog::info("[Config] {} is a symlink — deferring migration to installer",
+                     old_config.string());
+        // Read through the symlink for now
+        if (stat(old_config.c_str(), &buffer) == 0) {
+            path = old_config.string();
         }
     } else if (stat(config_path.c_str(), &buffer) == 0 && fs::exists(old_config)) {
         spdlog::warn("[Config] Both settings.json and helixconfig.json exist; "
