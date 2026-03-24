@@ -1904,12 +1904,12 @@ k1-dynamic-test: k1-dynamic-docker deploy-k1-dynamic-fg
 # Example: make deploy-k2 K2_HOST=192.168.30.197
 # Note: K2 uses BusyBox/OpenWrt - tar/ssh transfer, no rsync
 # Note: K2 hostname does NOT resolve via mDNS - always use IP address
-K2_HOST ?= $(error K2_HOST is required — K2 does not resolve via mDNS. Use: make deploy-k2 K2_HOST=192.168.x.x)
+K2_HOST ?=
 K2_USER ?= root
 K2_DEPLOY_DIR ?= /opt/helixscreen
 
 # Build SSH target for K2
-K2_SSH_TARGET := $(K2_USER)@$(K2_HOST)
+K2_SSH_TARGET = $(if $(K2_HOST),$(K2_USER)@$(K2_HOST),$(error K2_HOST is required. Use: make deploy-k2 K2_HOST=192.168.x.x))
 
 # =============================================================================
 # K2 Deployment Targets
