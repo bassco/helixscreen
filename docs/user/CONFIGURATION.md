@@ -893,7 +893,7 @@ Located under the `panel_widgets` key, grouped by panel ID:
 | `probe` | Z probe status and offset | Enabled | Yes (requires probe) |
 | `filament` | Filament runout detection | Enabled | Yes (requires sensor) |
 | `fan_stack` | Part, hotend, and auxiliary fan speeds (supports carousel mode with arc dials) | Enabled | No |
-| `thermistor` | Custom temperature sensor (chamber, etc.) | Disabled | Yes (requires sensor) |
+| `thermistor` | Temperature sensors (chamber, enclosure, etc.) | Disabled | Yes (requires sensor) |
 | `notifications` | Pending alerts with severity badge | Enabled | No |
 
 **Notes:**

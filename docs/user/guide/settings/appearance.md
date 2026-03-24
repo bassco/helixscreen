@@ -85,7 +85,7 @@ Tap **Home Widgets** to configure which widgets appear on your Home Panel dashbo
 | **Probe** | Z probe status and offset. Only appears if a probe is configured. |
 | **Filament Sensor** | Filament runout detection status. Only appears if a filament sensor is detected. |
 | **Fan Speeds** | Part, hotend, and auxiliary fan speeds. Fan icons spin when running. Labels switch to compact abbreviations (P/H/C) when many widgets are active. Tap to open the Fan Control overlay. |
-| **Thermistor** | Monitor a custom temperature sensor (e.g., chamber, enclosure). Only appears if extra sensors are detected. Disabled by default. |
+| **Temperature Sensors** | Monitor additional temperature sensors (e.g., chamber, enclosure). Only appears if extra sensors are detected. Disabled by default. |
 | **Macro Button 1–4** | Run a configured macro with one tap. Auto-detects and prompts for parameters. Disabled by default. |
 | **Notifications** | Pending alerts with severity badge. Tap to open notification history. |
 

@@ -112,7 +112,9 @@ Some widgets have settings you can change directly from Edit Mode. When you sele
 |--------|--------------------------|
 | **Temperatures** | Toggles between Stack and Carousel display mode |
 | **Fan Speeds** | Toggles between Stack and Carousel display mode |
-| **Thermistors** | Toggles between single-sensor and Carousel display mode |
+| **Temperature Sensors** | Toggles between single-sensor and Carousel display mode |
+| **Fan** | Opens the fan picker — choose which fan to monitor |
+| **Temperature Graph** | Opens a configuration modal — toggle sensors on/off and customize series colors |
 | **Macro Button 1–5** | Opens the macro picker — choose which macro to assign |
 | **Clog Detection** | Opens the Clog Detection config modal — set detection source, mode, and thresholds |
 
@@ -146,43 +148,74 @@ The default layout places:
 
 ## Available Widgets
 
-### Complete Widget Reference
+> **Sizes** are listed as columns x rows. For example, "2x1" means 2 columns wide and 1 row tall.
 
-Every widget available for your dashboard, with sizing constraints:
+### Printer Info & Status
 
 | Widget | Description | Default | Min | Max | Resizable | Hardware Required |
 |--------|-------------|---------|-----|-----|-----------|-------------------|
 | **Printer Image** | Your printer's photo. Tap to open the Printer Manager overlay where you can change the name, image, and see hardware info. | 2x2 | 1x1 | 4x3 | Yes | — |
 | **Print Status** | Current print progress with filename, percentage, ETA, and elapsed time. Tap to open the full Print Status overlay when printing, or navigate to the file browser when idle. | 2x2 | 2x1 | 4x3 | Yes | — |
+| **Print Stats** | Print history statistics — total prints, success rate, and total print time. Tap to open the full print history overlay. | 2x2 | 2x1 | 3x2 | Yes | — |
+| **Job Queue** | Shows the number of queued print jobs. Tap to open the Job Queue Manager modal (see [Job Queue Manager](#job-queue-manager) below). | 2x2 | 2x1 | 4x3 | Yes | — |
 | **Digital Clock** | Current time and date. Respects your 12/24-hour preference from display settings. Content adapts to size: time only at 1x1, time + date at 2x1, time + date + system uptime at 2x2+. | 2x1 | 1x1 | 3x3 | Yes | — |
-| **Tips** | Rotating helpful tips about 3D printing and HelixScreen features. Tap any tip to see the full article. Tips rotate automatically. | 4x2 | 2x1 | 6x2 | Horizontal only | — |
 | **Notifications** | Shows pending notification count with a severity badge (info/warning/error). Tap to open the notification history overlay. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
+| **Tips** | Rotating helpful tips about 3D printing and HelixScreen features. Tap any tip to see the full article. Tips rotate automatically. | 4x2 | 2x1 | 6x2 | Horizontal only | — |
+| **Network** | Current network connection status — WiFi signal strength (with bar indicator) or Ethernet. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
+| **Camera** | Live webcam feed from your MJPEG stream. Tap to go fullscreen. Automatically detects webcams configured in Moonraker. See [Camera Widget](#camera-widget) below for setup tips. | 2x2 | 1x1 | 4x3 | Yes | Webcam configured |
+
+### Temperature & Climate
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
 | **Nozzle Temperature** | Live nozzle temperature with an animated heating icon that pulses when the heater is active. Tap to open the temperature graph overlay. | 1x1 | 1x1 | 2x2 | Yes | — |
 | **Bed Temperature** | Live bed temperature with current and target readings. Tap to open the temperature graph overlay. | 1x1 | 1x1 | 2x2 | Yes | — |
-| **Preheat** | Quick preheat buttons with material selection. Tap a material to instantly set nozzle and bed temperatures to that material's profile. | 3x1 | 2x1 | 4x1 | Horizontal only | — |
 | **Temperatures** | Stacked view showing nozzle, bed, and chamber temperatures in one widget. Each row shows current temp and target. Also available in Carousel mode (see [Display Modes](#display-modes-stack-vs-carousel) below). Tap any reading to open the temperature graph. | 1x1 | 1x1 | 3x2 | Yes | — |
-| **Fan Speeds** | Part cooling, hotend, and auxiliary fan speeds at a glance. Fan icons spin when running. Also available in Carousel mode with arc slider controls. Tap to open the Fan Control overlay. | 1x1 | 1x1 | 3x2 | Yes | — |
+| **Temperature Sensors** | Monitor additional temperature sensors (chamber, enclosure heater, etc.) in a single-sensor or carousel view. You can add multiple instances, each configured to a different sensor. Also available in Carousel mode. | 1x1 | 1x1 | 2x1 | Horizontal only | Extra temp sensors |
+| **Temperature Graph** | Live temperature chart with configurable sensor series. Shows colored lines for each sensor with optional target setpoint lines. Content adapts to size — larger sizes show legends, axis labels, gradients, and temperature readouts. Tap to open the full-screen graph overlay. Configure which sensors to display via the gear icon in Edit Mode. You can add multiple instances. | 2x2 | 1x1 | 6x4 | Yes | — |
+| **Preheat** | Quick preheat buttons with material selection. Tap a material to instantly set nozzle and bed temperatures to that material's profile. | 3x1 | 2x1 | 4x1 | Horizontal only | — |
+| **Humidity** | Enclosure humidity reading from a connected sensor. | 1x1 | 1x1 | 2x2 | Yes | Humidity sensor |
+
+### Fans
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
+| **Fan Speeds** | Part cooling, hotend, and auxiliary fan speeds at a glance. Fan icons spin when running. Also available in Carousel mode with arc slider controls. Tap to open the Fan Control overlay. You can add multiple instances. | 1x1 | 1x1 | 3x2 | Yes | — |
+| **Fan** | Monitor a single fan's speed. Tap to open a fan picker to choose which fan to display. You can add multiple instances, each showing a different fan. Configure via the gear icon in Edit Mode. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
+
+### Filament & Material
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
+| **AMS Status** | Mini view of your multi-material spool slots showing filament colors and status. Tap for the full AMS panel. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
+| **Filament Sensor** | Filament runout detection status. Shows whether filament is loaded. | 1x1 | 1x1 | 2x1 | Horizontal only | Filament sensor |
+| **Width Sensor** | Live filament width reading from a diameter sensor. | 1x1 | 1x1 | 2x2 | Yes | Width sensor |
+| **Clog Detection** | Filament clog and flow health monitor. Shows a clog/flow arc meter, and a buffer sync meter on Happy Hare printers. Tap to open the Buffer Status detail modal. Configurable via the gear icon in Edit Mode. See [Clog Detection Widget](#clog-detection-widget) below. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
+
+### Lighting
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
 | **LED Light** | Quick on/off toggle for your printer's LEDs. Tap to open the full LED Control Overlay with color picker, brightness, effects, and WLED controls. | 1x1 | 1x1 | 2x1 | Horizontal only | LEDs configured |
 | **LED Controls** | One-tap shortcut to open the LED color and brightness controls overlay directly. | 1x1 | 1x1 | 1x1 | No | LEDs configured |
-| **AMS Status** | Mini view of your multi-material spool slots showing filament colors and status. Tap for the full AMS panel. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
-| **Power** | Toggle Moonraker power devices (PSU, lights, etc.) with one tap. | 1x1 | 1x1 | 1x1 | No | Power devices |
-| **Shutdown/Reboot** | Shutdown or reboot your printer's host system. Shows a confirmation dialog before acting. | 1x1 | 1x1 | 1x1 | No | — |
-| **Firmware Restart** | Restart the Klipper firmware. Useful when Klipper enters SHUTDOWN state. This widget automatically appears during firmware errors even if disabled. | 1x1 | 1x1 | 1x1 | No | — |
-| **Network** | Current network connection status — WiFi signal strength (with bar indicator) or Ethernet. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
-| **Filament Sensor** | Filament runout detection status. Shows whether filament is loaded. | 1x1 | 1x1 | 2x1 | Horizontal only | Filament sensor |
-| **Humidity** | Enclosure humidity reading from a connected sensor. | 1x1 | 1x1 | 2x2 | Yes | Humidity sensor |
-| **Width Sensor** | Live filament width reading from a diameter sensor. | 1x1 | 1x1 | 2x2 | Yes | Width sensor |
-| **Thermistor** | Monitor a custom temperature sensor (chamber, enclosure heater, etc.). | 1x1 | 1x1 | 2x1 | Horizontal only | Extra temp sensors |
+
+### Controls & Automation
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
 | **Macro Button 1–5** | One-tap buttons to run configured macros. Up to 5 independently configurable slots. Assign a macro to each via the gear icon in Edit Mode. | 1x1 | 1x1 | 2x1 | Horizontal only | — |
-| **Clog Detection** | Filament clog and flow health monitor. Shows a clog/flow arc meter, and a buffer sync meter on Happy Hare printers. Tap to open the Buffer Status detail modal. Configurable via the gear icon in Edit Mode. See [Clog Detection Widget](#clog-detection-widget) below. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
 | **Macros** | One-tap shortcut to open the [Macros](advanced.md#macro-execution) panel for browsing and executing Klipper macros. | 1x1 | 1x1 | 1x1 | No | — |
 | **G-code Console** | One-tap shortcut to open the [G-code Console](advanced.md#g-code-console) overlay for sending commands and viewing Klipper responses. See [G-code Console Widget](#g-code-console-widget) below. | 1x1 | 1x1 | 1x1 | No | — |
-| **Camera** | Live webcam feed from your MJPEG stream. Tap to go fullscreen. Automatically detects webcams configured in Moonraker. See [Camera Widget](#camera-widget) below for setup tips. | 2x2 | 1x1 | 4x3 | Yes | Webcam configured |
-| **Job Queue** | Shows the number of queued print jobs. Tap to open the Job Queue Manager modal (see [Job Queue Manager](#job-queue-manager) below). | 2x2 | 2x1 | 4x3 | Yes | — |
-| **Print Stats** | Print history statistics — total prints, success rate, and total print time. Tap to open the full print history overlay. | 2x2 | 2x1 | 3x2 | Yes | — |
-| **Lock Screen** | Locks the screen immediately with PIN protection. Only appears in the Widget Catalog after setting a PIN in Settings > Security. | 1x1 | 1x1 | 1x1 | No | PIN set in Settings |
+| **Power** | Toggle all selected Moonraker power devices (PSU, lights, etc.) with one tap. | 1x1 | 1x1 | 1x1 | No | Power devices |
+| **Power Device** | Toggle an individual Moonraker power device. You can add multiple instances, each bound to a different device. Shows the device name, state, and a customizable icon. | 1x1 | 1x1 | 1x1 | No | Power devices |
 
-> **Sizes** are listed as columns x rows. For example, "2x1" means 2 columns wide and 1 row tall.
+### System
+
+| Widget | Description | Default | Min | Max | Resizable | Hardware Required |
+|--------|-------------|---------|-----|-----|-----------|-------------------|
+| **Shutdown/Reboot** | Shutdown or reboot your printer's host system. Shows a confirmation dialog before acting. | 1x1 | 1x1 | 1x1 | No | — |
+| **Firmware Restart** | Restart the Klipper firmware. Useful when Klipper enters SHUTDOWN state. This widget automatically appears during firmware errors even if disabled. | 1x1 | 1x1 | 1x1 | No | — |
+| **Lock Screen** | Locks the screen immediately with PIN protection. Only appears in the Widget Catalog after setting a PIN in Settings > Security. | 1x1 | 1x1 | 1x1 | No | PIN set in Settings |
 
 
 ### Hardware-Gated Widgets
@@ -199,17 +232,17 @@ Some widgets depend on specific hardware being detected by Klipper. If the hardw
 | AMS Status | AMS, AFC (Box Turtle), Happy Hare, ValgACE, or compatible MMU system |
 | Clog Detection | AMS, AFC, Happy Hare, or compatible MMU with clog/flow detection |
 | LED Light / LED Controls | Any LED strip configured in Klipper (neopixel, dotstar, output_pin) |
-| Power | Moonraker power devices (PSU control, smart plugs) |
+| Power / Power Device | Moonraker power devices (PSU control, smart plugs) |
 | Filament Sensor | `[filament_switch_sensor]` or `[filament_motion_sensor]` in Klipper |
 | Humidity | `[temperature_sensor]` with humidity capability |
 | Width Sensor | `[hall_filament_width_sensor]` in Klipper |
-| Thermistor | Extra `[temperature_sensor]` entries beyond nozzle and bed |
+| Temperature Sensors | Extra `[temperature_sensor]` entries beyond nozzle and bed |
 
 ---
 
 ## Display Modes: Stack vs. Carousel
 
-The **Temperatures**, **Fan Speeds**, and **Thermistors** widgets each support two visual modes:
+The **Temperatures**, **Fan Speeds**, and **Temperature Sensors** widgets each support two visual modes:
 
 ### Stack Mode (Default)
 
@@ -228,7 +261,7 @@ Full-size swipeable pages with one item per page. Indicator dots at the bottom s
 
 ### Switching Modes
 
-Long-press the grid to enter Edit Mode, select the Temperatures, Fan Speeds, or Thermistors widget, and tap the **gear icon** in the upper-left corner. Each tap toggles the mode. Your preference is saved per widget and persists across restarts.
+Long-press the grid to enter Edit Mode, select the Temperatures, Fan Speeds, or Temperature Sensors widget, and tap the **gear icon** in the upper-left corner. Each tap toggles the mode. Your preference is saved per widget and persists across restarts.
 
 ---
 
@@ -240,34 +273,37 @@ While **not** in Edit Mode, widgets respond to taps and other gestures:
 |--------|------------|
 | Printer Image | Opens Printer Manager overlay |
 | Print Status | Opens Print Status overlay (printing) or File Browser (idle) |
-| Digital Clock | — (display only) |
-| Nozzle Temperature | Opens temperature graph overlay |
-| Bed Temperature | Opens temperature graph overlay |
-| Preheat | Sets nozzle and bed temperature to the tapped material profile |
-| Temperatures | Opens temperature graph for the tapped sensor |
-| Fan Speeds (stack) | Opens Fan Control overlay |
-| Fan Speeds (carousel) | Drag the arc slider to adjust speed directly |
-| LED Light | Opens LED Control Overlay |
-| LED Controls | Opens LED Control Overlay |
-| AMS Status | Opens AMS panel overlay |
-| Power | Toggles the power device |
-| Shutdown/Reboot | Shows confirmation, then shuts down/reboots |
-| Firmware Restart | Restarts Klipper firmware |
-| Network | — (display only) |
-| Notifications | Opens notification history |
-| Tips | Opens the full tip article |
-| Clog Detection | Opens the Buffer Status detail modal |
-| G-code Console | Opens the G-code Console overlay |
-| Macros | Opens the Macros panel overlay |
-| Macro Button | Runs the configured macro immediately |
 | Print Stats | Opens print history overlay |
 | Job Queue | Opens Job Queue Manager modal |
+| Digital Clock | — (display only) |
+| Notifications | Opens notification history |
+| Tips | Opens the full tip article |
+| Network | — (display only) |
 | Camera | Opens fullscreen camera view |
-| Lock Screen | Locks the screen immediately; requires PIN to unlock |
+| Nozzle Temperature | Opens temperature graph overlay |
+| Bed Temperature | Opens temperature graph overlay |
+| Temperatures | Opens temperature graph for the tapped sensor |
+| Temperature Sensors | — (display only) |
+| Temperature Graph | Opens full-screen temperature graph overlay |
+| Preheat | Sets nozzle and bed temperature to the tapped material profile |
 | Humidity | — (display only) |
-| Width Sensor | — (display only) |
-| Thermistor | — (display only) |
+| Fan Speeds (stack) | Opens Fan Control overlay |
+| Fan Speeds (carousel) | Drag the arc slider to adjust speed directly |
+| Fan | Opens fan picker to select which fan to display |
+| AMS Status | Opens AMS panel overlay |
 | Filament Sensor | — (display only) |
+| Width Sensor | — (display only) |
+| Clog Detection | Opens the Buffer Status detail modal |
+| LED Light | Opens LED Control Overlay |
+| LED Controls | Opens LED Control Overlay |
+| Macro Button | Runs the configured macro immediately |
+| Macros | Opens the Macros panel overlay |
+| G-code Console | Opens the G-code Console overlay |
+| Power | Toggles all selected power devices |
+| Power Device | Toggles the individual power device |
+| Shutdown/Reboot | Shows confirmation, then shuts down/reboots |
+| Firmware Restart | Restarts Klipper firmware |
+| Lock Screen | Locks the screen immediately; requires PIN to unlock |
 
 ---
 

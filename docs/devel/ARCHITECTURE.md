@@ -426,7 +426,7 @@ PanelWidgets live in `src/ui/panel_widgets/` (implementations) and headers along
 | `fan_stack` | `FanStackWidget` | Part / hotend / aux fan speeds with spinning icon animations |
 | `temp_stack` | `TempStackWidget` | Nozzle and bed temperatures |
 | `temperature` | `TemperatureWidget` | Single temperature display |
-| `thermistor` | `ThermistorWidget` | Thermistor sensor readings |
+| `thermistor` | `ThermistorWidget` | Temperature sensor readings |
 | `led` | `LedWidget` | LED on/off toggle with brightness-reactive icon |
 | `power` | `PowerWidget` | Power device toggle |
 | `network` | `NetworkWidget` | Network connection status |
