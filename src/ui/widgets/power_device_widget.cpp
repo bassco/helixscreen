@@ -2,6 +2,7 @@
 
 #include "power_device_widget.h"
 
+#include "ui_emergency_stop.h"
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
 #include "ui_icon.h"
@@ -307,6 +308,19 @@ void PowerDeviceWidget::handle_clicked() {
     if (!api) {
         spdlog::warn("[PowerDeviceWidget] No API available");
         return;
+    }
+
+    // Suppress "Printer Firmware Disconnected" dialog when turning off a power device.
+    // The device may have bound_services: klipper, causing an expected Klipper disconnect.
+    // Check current state: if on (1), toggle means turning off.
+    {
+        SubjectLifetime lt;
+        lv_subject_t* status_subj =
+            PowerDeviceState::instance().get_status_subject(device_name_, lt);
+        if (status_subj && lv_subject_get_int(status_subj) == 1) {
+            EmergencyStopOverlay::instance().suppress_recovery_dialog(
+                RecoverySuppression::NORMAL);
+        }
     }
 
     spdlog::info("[PowerDeviceWidget] {} toggling device '{}'", instance_id_, device_name_);

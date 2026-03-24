@@ -10,6 +10,7 @@
 
 #include "power_device_state.h"
 
+#include "ui_emergency_stop.h"
 #include "ui_update_queue.h"
 
 #include "app_globals.h"
@@ -172,6 +173,15 @@ void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
 
         spdlog::debug("[PowerDeviceState] notify_power_changed: device='{}' status='{}'",
                       device_name, new_status);
+
+        // Suppress "Printer Firmware Disconnected" dialog when ANY power device turns off.
+        // The device may have bound_services: klipper, causing an expected Klipper disconnect.
+        // Must set BEFORE queue_update() — notify_klippy_disconnected arrives on the same
+        // WebSocket thread and checks suppression synchronously.
+        if (new_raw == 0) {
+            EmergencyStopOverlay::instance().suppress_recovery_dialog(
+                RecoverySuppression::NORMAL);
+        }
 
         // Marshal to UI thread for subject updates
         ui::queue_update([this, device_name, new_raw]() {
