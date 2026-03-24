@@ -627,6 +627,7 @@
       "manufacturer": "Creality",
       "image": "creality-k1.png",
       "probe_type": "prtouch_v2",
+      "preset": "k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
@@ -708,6 +709,7 @@
       "manufacturer": "Creality",
       "image": "creality-k1-max.png",
       "probe_type": "prtouch_v2",
+      "preset": "k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
@@ -962,6 +964,7 @@
       "manufacturer": "Creality",
       "image": "creality-k1c.png",
       "probe_type": "prtouch_v2",
+      "preset": "k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
