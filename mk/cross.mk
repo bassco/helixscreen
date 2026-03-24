@@ -1898,12 +1898,13 @@ k1-dynamic-test: k1-dynamic-docker deploy-k1-dynamic-fg
 #   - 32 GB storage (plenty of room)
 #   - SSH: root / creality_2024
 #
-# UNTESTED: Based on research, not hardware validation.
-# See docs/printer-research/CREALITY_K2_PLUS_RESEARCH.md
+# Hardware-validated on K2 Max (2026-03-23).
+# See docs/devel/printers/CREALITY_K2_SUPPORT.md
 #
-# Example: make deploy-k2 K2_HOST=192.168.1.100
-# Note: K2 uses BusyBox/OpenWrt - tar/ssh transfer, no rsync expected
-K2_HOST ?= k2.local
+# Example: make deploy-k2 K2_HOST=192.168.30.197
+# Note: K2 uses BusyBox/OpenWrt - tar/ssh transfer, no rsync
+# Note: K2 hostname does NOT resolve via mDNS - always use IP address
+K2_HOST ?= $(error K2_HOST is required — K2 does not resolve via mDNS. Use: make deploy-k2 K2_HOST=192.168.x.x)
 K2_USER ?= root
 K2_DEPLOY_DIR ?= /opt/helixscreen
 
@@ -1911,7 +1912,7 @@ K2_DEPLOY_DIR ?= /opt/helixscreen
 K2_SSH_TARGET := $(K2_USER)@$(K2_HOST)
 
 # =============================================================================
-# K2 Deployment Targets (UNTESTED)
+# K2 Deployment Targets
 # =============================================================================
 
 .PHONY: deploy-k2 deploy-k2-fg deploy-k2-bin k2-ssh k2-test
@@ -1921,7 +1922,6 @@ deploy-k2:
 	@test -f build/k2/bin/helix-screen || { echo "$(RED)Error: build/k2/bin/helix-screen not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
 	@test -f build/k2/bin/helix-splash || { echo "$(RED)Error: build/k2/bin/helix-splash not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
 	@echo "$(CYAN)Deploying HelixScreen to $(K2_SSH_TARGET):$(K2_DEPLOY_DIR)...$(RESET)"
-	@echo "$(YELLOW)NOTE: K2 deployment is UNTESTED - please report issues$(RESET)"
 	@# Generate pre-rendered images if missing
 	@if [ ! -f build/assets/images/prerendered/splash-logo-small.bin ]; then \
 		echo "$(DIM)Generating pre-rendered splash images...$(RESET)"; \
@@ -1932,7 +1932,11 @@ deploy-k2:
 		$(MAKE) gen-printer-images; \
 	fi
 	@# Stop running processes and prepare directory
-	ssh $(K2_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash display-server 2>/dev/null || true; mkdir -p $(K2_DEPLOY_DIR)/bin"
+	ssh $(K2_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null || true; mkdir -p $(K2_DEPLOY_DIR)/bin $(K2_DEPLOY_DIR)/platform"
+	@# Deploy platform hooks (stops stock display-server cleanly via procd)
+	@if [ -f config/platform/hooks-k2.sh ]; then \
+		cat config/platform/hooks-k2.sh | ssh $(K2_SSH_TARGET) "cat > $(K2_DEPLOY_DIR)/platform/hooks.sh && chmod +x $(K2_DEPLOY_DIR)/platform/hooks.sh"; \
+	fi
 	@# Transfer binaries via cat/ssh
 	@echo "$(DIM)Transferring binaries...$(RESET)"
 	cat build/k2/bin/helix-screen | ssh $(K2_SSH_TARGET) "cat > $(K2_DEPLOY_DIR)/bin/helix-screen && chmod +x $(K2_DEPLOY_DIR)/bin/helix-screen"
@@ -1963,7 +1967,6 @@ deploy-k2:
 deploy-k2-fg:
 	@test -f build/k2/bin/helix-screen || { echo "$(RED)Error: build/k2/bin/helix-screen not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
 	@test -f build/k2/bin/helix-splash || { echo "$(RED)Error: build/k2/bin/helix-splash not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
-	@echo "$(YELLOW)NOTE: K2 deployment is UNTESTED - please report issues$(RESET)"
 	$(call deploy-common,$(K2_SSH_TARGET),$(K2_DEPLOY_DIR),build/k2/bin)
 	@echo "$(CYAN)Starting helix-screen on $(K2_HOST) (foreground, verbose)...$(RESET)"
 	ssh -t $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR) && ./bin/helix-launcher.sh --debug"

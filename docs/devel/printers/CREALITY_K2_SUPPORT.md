@@ -93,41 +93,77 @@ make package-k2
 ### Prerequisites
 
 - A Creality K2, K2 Pro, K2 Plus, or K2 Max printer
-- Root access enabled (Settings > "Root account information" > acknowledge disclaimer > wait 30 seconds > press "Ok")
-- SSH access: `root@<printer-ip>` (password: `creality_2024`)
+- **Stock firmware with root access** — no custom firmware (Guilouz, etc.) required
+- Root access enabled: Settings > "Root account information" > acknowledge disclaimer > wait 30 seconds > press "Ok"
+- SSH access: `ssh root@<printer-ip>` (password: `creality_2024`)
+- Find your printer's IP: Settings > Network on the printer touchscreen
 
-### Deploy
+**Important:** K2 hostname does NOT resolve via mDNS — always use the IP address.
+
+### Quick Install
 
 ```bash
-# Full deploy (binary + assets + config)
-make deploy-k2 K2_HOST=192.168.1.xxx
+# 1. Build the K2 binary (Docker — works on any host OS)
+make k2-docker
 
-# Deploy and run in foreground with debug logging
-make deploy-k2-fg K2_HOST=192.168.1.xxx
+# 2. Deploy and run in foreground (first time — watch the output)
+make deploy-k2-fg K2_HOST=192.168.x.x
 
-# Deploy binary only (fast iteration)
-make deploy-k2-bin K2_HOST=192.168.1.xxx
-
-# SSH into the printer
-make k2-ssh K2_HOST=192.168.1.xxx
-
-# Full build + deploy + run cycle
-make k2-test K2_HOST=192.168.1.xxx
+# 3. For production: deploy in background
+make deploy-k2 K2_HOST=192.168.x.x
 ```
 
-Default deploy directory is `/opt/helixscreen` (override with `K2_DEPLOY_DIR`). Default SSH credentials are `root`/`creality_2024` (override with `K2_USER`/`K2_PASS`).
+### All Deploy Targets
+
+```bash
+# Full deploy (binary + assets + config + platform hooks)
+make deploy-k2 K2_HOST=192.168.x.x
+
+# Deploy and run in foreground with debug logging
+make deploy-k2-fg K2_HOST=192.168.x.x
+
+# Deploy binary only (fast iteration during development)
+make deploy-k2-bin K2_HOST=192.168.x.x
+
+# SSH into the printer
+make k2-ssh K2_HOST=192.168.x.x
+
+# Full build + deploy + run cycle
+make k2-test K2_HOST=192.168.x.x
+```
+
+Deploy directory: `/opt/helixscreen` (override with `K2_DEPLOY_DIR`). SSH credentials: `root`/`creality_2024` (override with `K2_USER`/`K2_PASS`).
 
 **Note**: The K2 uses BusyBox (OpenWrt), so deployment uses tar/ssh transfer instead of rsync.
 
+### What Happens on Deploy
+
+1. Stops any running HelixScreen processes
+2. Deploys platform hooks (`config/platform/hooks-k2.sh` → `/opt/helixscreen/platform/hooks.sh`)
+3. Transfers binaries, assets, XML layouts, and config
+4. Platform hooks stop the stock Creality UI (`display-server`, `Monitor`, etc.) via procd
+5. Starts HelixScreen on the framebuffer
+
+### Reverting to Stock UI
+
+To restore the stock Creality touchscreen:
+
+```bash
+ssh root@<printer-ip>
+killall helix-screen helix-splash helix-watchdog 2>/dev/null
+/etc/init.d/app enable   # Re-enable stock UI on boot
+/etc/init.d/app start    # Start stock UI now
+```
+
 ### Display Backend
 
-HelixScreen renders directly to `/dev/fb0`. The stock display UI (`display-server`) must be stopped to release the framebuffer. The deploy targets handle this automatically.
+HelixScreen renders directly to `/dev/fb0`. The platform hooks stop the stock `display-server` to release the framebuffer. This is handled automatically by the deploy targets.
 
 The K2 Max framebuffer is **480x1600 portrait** — HelixScreen will need software rotation to landscape mode, plus touch coordinate transform.
 
 ### Touch Input
 
-HelixScreen uses evdev and should auto-detect the capacitive touch controller. Running as root (default) avoids permission issues on `/dev/input/event*`.
+HelixScreen uses evdev and auto-detects the capacitive touch controller. Running as root (default) avoids permission issues on `/dev/input/event*`.
 
 ## CFS (Creality Filament System) — Full Protocol Reference
 

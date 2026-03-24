@@ -1,0 +1,69 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Platform hooks: Creality K2 / K2 Pro / K2 Plus / K2 Max
+#
+# K2 series runs OpenWrt 21.02 with procd init system.
+# Stock UI is managed by /etc/init.d/app (procd service).
+# Processes: display-server, web-server, Monitor, master-server, etc.
+
+platform_stop_competing_uis() {
+    # Stop the stock Creality UI via procd (clean shutdown)
+    if [ -f /etc/init.d/app ]; then
+        /etc/init.d/app stop 2>/dev/null || true
+    fi
+
+    # Kill any lingering stock UI processes
+    for proc in display-server Monitor master-server audio-server \
+                wifi-server app-server upgrade-server; do
+        killall "$proc" 2>/dev/null || true
+    done
+
+    # Note: web-server is intentionally NOT killed — it serves the
+    # Creality Cloud integration and camera stream (webrtc_local).
+    # Stopping it would break remote monitoring via Creality app.
+
+    # Persistently disable the stock UI service (reversible)
+    if [ -x /etc/init.d/app ]; then
+        /etc/init.d/app disable 2>/dev/null || true
+    fi
+}
+
+platform_enable_backlight() {
+    :
+}
+
+platform_wait_for_services() {
+    # Wait for Moonraker to be ready (K2 Moonraker is on port 7125)
+    local timeout=30
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if python3 -c "
+import urllib.request
+try:
+    urllib.request.urlopen('http://127.0.0.1:7125/server/info', timeout=2)
+    exit(0)
+except:
+    exit(1)
+" 2>/dev/null; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    echo "[hooks-k2] Warning: Moonraker not ready after ${timeout}s"
+}
+
+platform_pre_start() {
+    export HELIX_CACHE_DIR="/mnt/UDISK/helixscreen/cache"
+
+    # K2 has no curl — ensure HelixScreen knows to skip HTTPS features
+    # SSL is disabled in the K2 build, but set this for safety
+    export HELIX_DISABLE_SSL=1
+}
+
+platform_post_stop() {
+    # Re-enable stock UI if HelixScreen is being uninstalled
+    # (installer calls this; normal stop does NOT re-enable)
+    :
+}
