@@ -18,6 +18,9 @@
 #   make PLATFORM_TARGET=ad5x  # Cross-compile for FlashForge AD5X (mips)
 #   make PLATFORM_TARGET=k2    # Cross-compile for Creality K2 series (ARM)
 #   make PLATFORM_TARGET=snapmaker-u1 # Cross-compile for Snapmaker U1 (aarch64)
+#   make PLATFORM_TARGET=x86   # Build for x86_64 Debian SBCs (DRM+GLES)
+#   make PLATFORM_TARGET=x86-fbdev  # Build for x86_64 Debian SBCs (fbdev fallback)
+#   make PLATFORM_TARGET=x86-both   # x86_64: compile once, link DRM + fbdev
 #   make pi-docker             # Docker-based Pi build (64-bit, DRM+GLES)
 #   make pi-fbdev-docker       # Docker-based Pi build (64-bit, fbdev fallback)
 #   make pi-all-docker         # Docker-based Pi build (both variants)
@@ -30,6 +33,9 @@
 #   make ad5x-docker           # Docker-based AD5X/MIPS build
 #   make k2-docker             # Docker-based K2 build
 #   make snapmaker-u1-docker   # Docker-based Snapmaker U1 build
+#   make x86-docker            # Docker-based x86_64 build (DRM+GLES)
+#   make x86-fbdev-docker      # Docker-based x86_64 build (fbdev fallback)
+#   make x86-all-docker        # Docker-based x86_64 build (both variants)
 
 # =============================================================================
 # Target Platform Definitions
@@ -447,6 +453,74 @@ else ifeq ($(PLATFORM_TARGET),snapmaker-u1)
     BUILD_SUBDIR := snapmaker-u1
     STRIP_BINARY := yes
 
+else ifeq ($(PLATFORM_TARGET),x86)
+    # -------------------------------------------------------------------------
+    # x86_64 Debian SBCs - DRM/KMS display
+    # -------------------------------------------------------------------------
+    # Native x86_64 build inside a Bullseye Docker container for glibc 2.31
+    # compatibility. Same dynamic-linking strategy as Pi: system glibc,
+    # static OpenSSL. Runs on both Debian Bullseye and Bookworm x86_64.
+    CROSS_COMPILE :=
+    TARGET_ARCH := x86_64
+    TARGET_TRIPLE := x86_64-linux-gnu
+    # -funwind-tables: Emit unwind info so backtrace() can walk the full
+    # call stack in crash reports. Negligible code size cost, zero runtime cost.
+    TARGET_CFLAGS := -march=x86-64 -funwind-tables -I/usr/include/libdrm -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"drm\"
+    DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := x86
+    STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),x86-fbdev)
+    # -------------------------------------------------------------------------
+    # x86_64 Debian SBCs - fbdev only, no GL dependencies
+    # Fallback for systems without EGL/GLES2/GBM libraries.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE :=
+    TARGET_ARCH := x86_64
+    TARGET_TRIPLE := x86_64-linux-gnu
+    TARGET_CFLAGS := -march=x86-64 -funwind-tables \
+        -Wno-error=conversion -Wno-error=sign-conversion \
+        -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"fbdev\"
+    DISPLAY_BACKEND := fbdev
+    ENABLE_OPENGLES := no
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := x86-fbdev
+    STRIP_BINARY := yes
+
+else ifeq ($(PLATFORM_TARGET),x86-both)
+    # -------------------------------------------------------------------------
+    # x86_64 Debian SBCs - Dual-link mode: compile once, link DRM + fbdev
+    # Produces both build/x86/bin/helix-screen (DRM) and build/x86-fbdev/bin/helix-screen (fbdev)
+    # in a single compilation pass. Used by CI to cut build time in half.
+    # -------------------------------------------------------------------------
+    CROSS_COMPILE :=
+    TARGET_ARCH := x86_64
+    TARGET_TRIPLE := x86_64-linux-gnu
+    TARGET_CFLAGS := -march=x86-64 -funwind-tables -I/usr/include/libdrm -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_BINARY_VARIANT=\"drm\"
+    DISPLAY_BACKEND := drm
+    ENABLE_OPENGLES := yes
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := yes
+    ENABLE_SCREENSAVER := yes
+    ENABLE_EVDEV := yes
+    ENABLE_SSL := yes
+    HELIX_HAS_SYSTEMD := yes
+    BUILD_SUBDIR := x86
+    STRIP_BINARY := yes
+    PI_DUAL_LINK := yes
+
 else ifeq ($(PLATFORM_TARGET),native)
     # -------------------------------------------------------------------------
     # Native desktop build (macOS / Linux)
@@ -462,7 +536,7 @@ else ifeq ($(PLATFORM_TARGET),native)
     BUILD_SUBDIR :=
 
 else
-    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1)
+    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, x86, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1)
 endif
 
 # =============================================================================
@@ -599,7 +673,7 @@ endif
 # Cross-Compilation Build Targets
 # =============================================================================
 
-.PHONY: pi pi-both pi32 pi32-both ad5m cc1 mips k1 ad5x k1-dynamic k2 snapmaker-u1 pi-docker pi32-docker ad5m-docker cc1-docker mips-docker k1-docker ad5x-docker k1-dynamic-docker k2-docker snapmaker-u1-docker docker-toolchains docker-toolchain-snapmaker-u1 cross-info ensure-docker ensure-buildx maybe-stop-colima
+.PHONY: pi pi-both pi32 pi32-both ad5m cc1 mips k1 ad5x k1-dynamic k2 snapmaker-u1 x86 x86-both pi-docker pi32-docker ad5m-docker cc1-docker mips-docker k1-docker ad5x-docker k1-dynamic-docker k2-docker snapmaker-u1-docker x86-docker x86-fbdev-docker x86-all-docker docker-toolchains docker-toolchain-snapmaker-u1 docker-toolchain-x86 cross-info ensure-docker ensure-buildx maybe-stop-colima
 
 # Persistent ccache for Docker builds — bind-mounts a host directory so the
 # cache survives across container runs (the container is --rm).  Per-platform
@@ -897,6 +971,39 @@ snapmaker-u1-docker: ensure-docker
 		|| echo "$(YELLOW)⚠ Could not extract CA certificates (HTTPS may rely on device certs)$(RESET)"
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
+x86-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Building for x86_64 Debian via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-x86 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-x86; \
+	fi
+	$(call ensure-ccache-dir,x86)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
+		make PLATFORM_TARGET=x86 SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+x86-fbdev-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Building x86_64 fbdev fallback via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-x86 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-x86; \
+	fi
+	$(call ensure-ccache-dir,x86-fbdev)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86-fbdev) helixscreen/toolchain-x86 \
+		make PLATFORM_TARGET=x86-fbdev SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+x86-all-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Building x86_64 (DRM + fbdev) via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-x86 >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-x86; \
+	fi
+	$(call ensure-ccache-dir,x86)
+	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
+		make PLATFORM_TARGET=x86-both SKIP_OPTIONAL_DEPS=1 -j$$(nproc)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
 # Stop Colima after build to free up RAM (macOS only)
 # Only stops if Colima is running and we're on macOS
 .PHONY: maybe-stop-colima
@@ -909,7 +1016,7 @@ maybe-stop-colima:
 	fi
 
 # Build Docker toolchain images
-docker-toolchains: docker-toolchain-pi docker-toolchain-pi32 docker-toolchain-ad5m docker-toolchain-ad5x docker-toolchain-cc1 docker-toolchain-k1 docker-toolchain-k1-dynamic docker-toolchain-k2 docker-toolchain-snapmaker-u1
+docker-toolchains: docker-toolchain-pi docker-toolchain-pi32 docker-toolchain-ad5m docker-toolchain-ad5x docker-toolchain-cc1 docker-toolchain-k1 docker-toolchain-k1-dynamic docker-toolchain-k2 docker-toolchain-snapmaker-u1 docker-toolchain-x86
 	@echo "$(GREEN)$(BOLD)All Docker toolchains built successfully$(RESET)"
 
 docker-toolchain-pi: ensure-buildx
@@ -948,6 +1055,10 @@ docker-toolchain-snapmaker-u1: ensure-buildx
 	@echo "$(CYAN)Building Snapmaker U1 toolchain Docker image...$(RESET)"
 	$(Q)docker buildx build --platform linux/amd64 -t helixscreen/toolchain-snapmaker-u1 -f docker/Dockerfile.snapmaker-u1 docker/
 
+docker-toolchain-x86: ensure-buildx
+	@echo "$(CYAN)Building x86_64 Debian toolchain Docker image...$(RESET)"
+	$(Q)docker buildx build --platform linux/amd64 -t helixscreen/toolchain-x86 -f docker/Dockerfile.x86 docker/
+
 # Display cross-compilation info (alias for help-cross)
 cross-info: help-cross
 
@@ -970,6 +1081,7 @@ help-cross:
 	echo "  $${G}k1-dynamic-docker$${X}    - Build for Creality K1 series (MIPS32, dynamic) via Docker"; \
 	echo "  $${G}k2-docker$${X}            - Build for Creality K2 series (ARM, static) via Docker"; \
 	echo "  $${G}snapmaker-u1-docker$${X}  - Build for Snapmaker U1 (aarch64, static) via Docker"; \
+	echo "  $${G}x86-docker$${X}           - Build for x86_64 Debian SBCs (DRM+GLES) via Docker"; \
 	echo "  $${G}docker-toolchains$${X}    - Build all Docker toolchain images"; \
 	echo "  $${G}docker-toolchain-pi$${X}  - Build Pi toolchain image only"; \
 	echo "  $${G}docker-toolchain-pi32$${X} - Build Pi 32-bit toolchain image only"; \
@@ -979,6 +1091,7 @@ help-cross:
 	echo "  $${G}docker-toolchain-k1-dynamic$${X} - Build K1 dynamic toolchain image only"; \
 	echo "  $${G}docker-toolchain-k2$${X}  - Build K2 toolchain image only"; \
 	echo "  $${G}docker-toolchain-snapmaker-u1$${X} - Build Snapmaker U1 toolchain image only"; \
+	echo "  $${G}docker-toolchain-x86$${X}  - Build x86_64 Debian toolchain image only"; \
 	echo ""; \
 	echo "$${C}Direct Cross-Compilation (requires local toolchain):$${X}"; \
 	echo "  $${G}pi$${X}                   - Cross-compile for Raspberry Pi (64-bit)"; \
@@ -1901,7 +2014,7 @@ define release-clean-assets
 	@find $(1)/assets -name 'mdi-icon-metadata.json.gz' -delete 2>/dev/null || true
 endef
 
-.PHONY: release-pi release-pi32 release-ad5m release-k1 release-ad5x release-k1-dynamic release-k2 release-snapmaker-u1 release-all release-clean pi-fbdev-docker pi32-fbdev-docker pi-all-docker pi32-all-docker
+.PHONY: release-pi release-pi32 release-ad5m release-k1 release-ad5x release-k1-dynamic release-k2 release-snapmaker-u1 release-x86 release-all release-clean pi-fbdev-docker pi32-fbdev-docker pi-all-docker pi32-all-docker x86-fbdev-docker x86-all-docker
 
 # Package Pi release
 release-pi: | build/pi/bin/helix-screen build/pi/bin/helix-splash build/pi-fbdev/bin/helix-screen
@@ -2260,8 +2373,47 @@ release-snapmaker-u1: | build/snapmaker-u1/bin/helix-screen
 	@echo "$(GREEN)✓ Created $(RELEASE_DIR)/helixscreen-snapmaker-u1-$(RELEASE_VERSION).tar.gz + helixscreen-snapmaker-u1.zip$(RESET)"
 	@ls -lh $(RELEASE_DIR)/helixscreen-snapmaker-u1-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-snapmaker-u1.zip
 
+# Package x86_64 Debian release (same structure as Pi)
+release-x86: | build/x86/bin/helix-screen build/x86/bin/helix-splash build/x86-fbdev/bin/helix-screen
+	@echo "$(CYAN)$(BOLD)Packaging x86 release v$(VERSION)...$(RESET)"
+	@mkdir -p $(RELEASE_DIR)/helixscreen/bin
+	@cp build/x86/bin/helix-screen build/x86/bin/helix-splash $(RELEASE_DIR)/helixscreen/bin/
+	@if [ -f build/x86/bin/helix-watchdog ]; then cp build/x86/bin/helix-watchdog $(RELEASE_DIR)/helixscreen/bin/; fi
+	@if [ -f build/x86/lib/libhelix-bluetooth.so ]; then cp build/x86/lib/libhelix-bluetooth.so $(RELEASE_DIR)/helixscreen/bin/; fi
+	@if [ -f build/x86-fbdev/bin/helix-screen ]; then cp build/x86-fbdev/bin/helix-screen $(RELEASE_DIR)/helixscreen/bin/helix-screen-fbdev; fi
+	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
+	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
+	@# Remove any personal config — release ships template only (installer copies it on first run)
+	@rm -f $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
+	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
+	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
+	@mkdir -p $(RELEASE_DIR)/helixscreen/scripts
+	@cp scripts/uninstall.sh $(RELEASE_DIR)/helixscreen/scripts/
+	@mkdir -p $(RELEASE_DIR)/helixscreen/assets
+	@for asset in $(RELEASE_ASSETS); do \
+		if [ -d "$$asset" ]; then cp -r "$$asset" $(RELEASE_DIR)/helixscreen/assets/; fi; \
+	done
+	@# Copy pre-rendered images from build directory (splash + printer images)
+	@if [ -d "build/assets/images/prerendered" ]; then \
+		mkdir -p $(RELEASE_DIR)/helixscreen/assets/images/prerendered; \
+		cp -r build/assets/images/prerendered/* $(RELEASE_DIR)/helixscreen/assets/images/prerendered/; \
+	fi
+	@if [ -d "build/assets/images/printers/prerendered" ]; then \
+		mkdir -p $(RELEASE_DIR)/helixscreen/assets/images/printers/prerendered; \
+		cp -r build/assets/images/printers/prerendered/* $(RELEASE_DIR)/helixscreen/assets/images/printers/prerendered/; \
+	fi
+	@find $(RELEASE_DIR)/helixscreen -name '.DS_Store' -delete 2>/dev/null || true
+	$(call release-clean-assets,$(RELEASE_DIR)/helixscreen)
+	@xattr -cr $(RELEASE_DIR)/helixscreen 2>/dev/null || true
+	@echo '{"project_name":"helixscreen","project_owner":"prestonbrown","version":"$(RELEASE_VERSION)","asset_name":"helixscreen-x86.zip"}' > $(RELEASE_DIR)/helixscreen/release_info.json
+	@cd $(RELEASE_DIR)/helixscreen && zip -qr ../helixscreen-x86.zip .
+	@cd $(RELEASE_DIR) && COPYFILE_DISABLE=1 tar -czvf helixscreen-x86-$(RELEASE_VERSION).tar.gz helixscreen
+	@rm -rf $(RELEASE_DIR)/helixscreen
+	@echo "$(GREEN)✓ Created $(RELEASE_DIR)/helixscreen-x86-$(RELEASE_VERSION).tar.gz + helixscreen-x86.zip$(RESET)"
+	@ls -lh $(RELEASE_DIR)/helixscreen-x86-$(RELEASE_VERSION).tar.gz $(RELEASE_DIR)/helixscreen-x86.zip
+
 # Package all releases
-release-all: release-pi release-pi32 release-ad5m release-cc1 release-k1 release-ad5x release-k1-dynamic release-k2
+release-all: release-pi release-pi32 release-ad5m release-cc1 release-k1 release-ad5x release-k1-dynamic release-k2 release-x86
 	@echo "$(GREEN)$(BOLD)✓ All releases packaged in $(RELEASE_DIR)/$(RESET)"
 	@ls -lh $(RELEASE_DIR)/*.tar.gz $(RELEASE_DIR)/*.zip
 
@@ -2272,7 +2424,7 @@ release-clean:
 
 # Aliases for package-* (matches scripts/package.sh naming)
 # These trigger the full build + package workflow
-.PHONY: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2 package-snapmaker-u1 package-all package-clean
+.PHONY: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2 package-snapmaker-u1 package-x86 package-all package-clean
 package-ad5m: ad5m-docker gen-images-ad5m gen-splash-3d-ad5m gen-printer-images release-ad5m
 package-cc1: cc1-docker gen-images gen-printer-images release-cc1
 package-pi: pi-all-docker gen-images gen-splash-3d gen-printer-images release-pi
@@ -2282,7 +2434,8 @@ package-ad5x: mips-docker gen-images gen-splash-3d-k1 gen-printer-images release
 package-k1-dynamic: k1-dynamic-docker gen-images gen-splash-3d-k1 gen-printer-images release-k1-dynamic
 package-k2: k2-docker gen-images gen-printer-images release-k2
 package-snapmaker-u1: snapmaker-u1-docker gen-images gen-printer-images release-snapmaker-u1
-package-all: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2
+package-x86: x86-all-docker gen-images gen-splash-3d gen-printer-images release-x86
+package-all: package-ad5m package-cc1 package-pi package-pi32 package-k1 package-ad5x package-k1-dynamic package-k2 package-x86
 package-clean: release-clean
 
 # Convenience aliases (verb-target → target-verb)

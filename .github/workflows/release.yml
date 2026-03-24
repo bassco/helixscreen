@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [pi, pi32, ad5m, cc1, k1, ad5x, k2]
+        platform: [pi, pi32, ad5m, cc1, k1, ad5x, k2, x86]
         include:
           - platform: pi
             display_name: "Raspberry Pi"
@@ -77,6 +77,9 @@ jobs:
             build_dir: ad5x
           - platform: k2
             display_name: "Creality K2 Series"
+          - platform: x86
+            display_name: "x86_64 Debian"
+            build_target: x86-both
 
     steps:
     - name: Checkout repository
@@ -383,6 +386,17 @@ jobs:
         # Download and extract
         wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/helixscreen-k2-${{ steps.version.outputs.version }}.tar.gz
         tar -xzf helixscreen-k2-${{ steps.version.outputs.version }}.tar.gz
+        cd helixscreen
+
+        # Run
+        ./helix-screen
+        ```
+
+        ### x86_64 Debian SBCs
+        ```bash
+        # Download and extract
+        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/helixscreen-x86-${{ steps.version.outputs.version }}.tar.gz
+        tar -xzf helixscreen-x86-${{ steps.version.outputs.version }}.tar.gz
         cd helixscreen
 
         # Run

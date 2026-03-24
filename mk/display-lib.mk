@@ -29,7 +29,7 @@ else
     DISPLAY_API_SRCS += src/api/display_backend_drm.cpp
     DISPLAY_API_SRCS += src/api/drm_rotation_strategy.cpp
     DISPLAY_API_SRCS += src/api/input_device_scanner.cpp
-    ifndef CROSS_COMPILE
+    ifeq ($(ENABLE_SDL),yes)
         # Native Linux desktop also gets SDL
         DISPLAY_API_SRCS += src/api/display_backend_sdl.cpp
     endif

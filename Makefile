@@ -523,11 +523,16 @@ LDFLAGS_COMMON := $(SDL2_LIBS) $(LIBHV_LIBS) $(FMT_LIBS) -lz -lm -lpthread
 
 # Platform-specific configuration
 # Cross-compilation targets (pi, ad5m, k1) are Linux-based embedded systems
-ifneq ($(CROSS_COMPILE),)
-    # Cross-compilation for embedded Linux targets
+ifneq ($(CROSS_COMPILE)$(filter x86 x86-fbdev x86-both,$(PLATFORM_TARGET)),)
+    # Platform builds (cross-compilation or x86 Docker native)
     NPROC := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-    # libnl libraries (built from submodule for cross-compilation)
-    LIBNL_LIBS := $(BUILD_DIR)/lib/libnl-genl-3.a $(BUILD_DIR)/lib/libnl-3.a
+    # libnl libraries: cross-compiled targets use static archives from submodule,
+    # x86 native uses system libnl via pkg-config
+    ifneq (,$(filter x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
+        LIBNL_LIBS := -lnl-genl-3 -lnl-3
+    else
+        LIBNL_LIBS := $(BUILD_DIR)/lib/libnl-genl-3.a $(BUILD_DIR)/lib/libnl-3.a
+    endif
     # Embedded targets link against libhv and wpa_supplicant
     # No SDL2 - display handled by framebuffer/DRM
     # SSL is optional - only needed if connecting to remote Moonraker over HTTPS
@@ -550,15 +555,15 @@ ifneq ($(CROSS_COMPILE),)
         LDFLAGS := $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) -ldl -lz -lm -lpthread
     else
         LDFLAGS := -L/usr/lib/$(TARGET_TRIPLE) $(LIBHV_LIBS) $(FMT_LIBS) $(WPA_CLIENT_LIB) $(LIBNL_LIBS) $(SYSTEMD_LIBS) -ldl -lz -lm -lpthread
-        # libusb only available on Pi targets (ad5m/cc1 use standalone ARM toolchains without it)
-        ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both,$(PLATFORM_TARGET)))
+        # libusb only available on Pi/x86 targets (ad5m/cc1 use standalone ARM toolchains without it)
+        ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
             LDFLAGS += -lusb-1.0
             CXXFLAGS += -isystem /usr/include/libusb-1.0 -DHELIX_HAS_LIBUSB=1
         endif
     endif
     ifeq ($(ENABLE_SSL),yes)
-        ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both,$(PLATFORM_TARGET)))
-            # Pi: static-link OpenSSL to avoid libssl soname mismatch across Debian versions
+        ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
+            # Pi/x86: static-link OpenSSL to avoid libssl soname mismatch across Debian versions
             # (Bullseye has libssl.so.1.1, Bookworm has libssl.so.3)
             LDFLAGS += -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic
         else

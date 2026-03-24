@@ -24,6 +24,8 @@ ifeq ($(BUILD_SUBDIR),pi)
     FBDEV_BUILD_DIR := build/pi-fbdev
 else ifeq ($(BUILD_SUBDIR),pi32)
     FBDEV_BUILD_DIR := build/pi32-fbdev
+else ifeq ($(BUILD_SUBDIR),x86)
+    FBDEV_BUILD_DIR := build/x86-fbdev
 endif
 
 FBDEV_TARGET := $(FBDEV_BUILD_DIR)/bin/helix-screen
