@@ -17,6 +17,7 @@
 #include "observer_factory.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
+#include "tool_state.h"
 
 #include <spdlog/spdlog.h>
 
@@ -246,13 +247,18 @@ void PreheatWidget::handle_apply() {
         return;
     }
 
-    // Default path: set temperatures only
+    // Default path: set temperatures
     int nozzle = mat->nozzle_recommended();
     int bed = mat->bed_temp;
-    set_temperatures(api, nozzle, bed);
 
-    spdlog::info("[PreheatWidget] Preheat {} applied (nozzle={}°C, bed={}°C)", material_name,
-                 nozzle, bed);
+    if (ToolState::instance().is_multi_tool()) {
+        set_temperatures_multi(api, nozzle, bed);
+    } else {
+        set_temperatures(api, nozzle, bed);
+    }
+
+    spdlog::info("[PreheatWidget] Preheat {} applied (nozzle={}°C, bed={}°C, tool_target={})",
+                 material_name, nozzle, bed, tool_target_);
 }
 
 void PreheatWidget::handle_cooldown() {
@@ -286,6 +292,91 @@ void PreheatWidget::handle_nozzle_tap() {
 void PreheatWidget::handle_bed_tap() {
     spdlog::info("[PreheatWidget] Bed tapped - opening temp graph overlay");
     get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Bed, parent_screen_);
+}
+
+// ============================================================================
+// Multi-tool preheat logic
+// ============================================================================
+
+std::vector<std::string> PreheatWidget::collect_preheat_heaters(const std::vector<ToolInfo>& tools,
+                                                                 int tool_target) {
+    std::vector<std::string> heaters;
+
+    if (tool_target == -1) {
+        // Heat all tools
+        for (const auto& tool : tools) {
+            if (!tool.extruder_name && !tool.heater_name) {
+                continue; // Skip tools with no valid heater
+            }
+            heaters.push_back(tool.effective_heater());
+        }
+    } else if (tool_target >= 0 && tool_target < static_cast<int>(tools.size())) {
+        const auto& tool = tools[tool_target];
+        if (tool.extruder_name || tool.heater_name) {
+            heaters.push_back(tool.effective_heater());
+        }
+    }
+
+    return heaters;
+}
+
+void PreheatWidget::set_temperatures_multi(MoonrakerAPI* api, int nozzle, int bed) {
+    const auto& tools = ToolState::instance().tools();
+    auto heaters = collect_preheat_heaters(tools, tool_target_);
+
+    for (const auto& heater : heaters) {
+        spdlog::debug("[PreheatWidget] Setting {} to {}°C", heater, nozzle);
+        api->set_temperature(
+            heater, static_cast<double>(nozzle),
+            [heater, nozzle]() {
+                spdlog::info("[PreheatWidget] {} target set to {}°C", heater, nozzle);
+            },
+            [heater](const MoonrakerError& error) {
+                NOTIFY_ERROR("Failed to set {} temp: {}", heater, error.user_message());
+            });
+    }
+
+    // Always set bed temperature once
+    api->set_temperature(
+        "heater_bed", static_cast<double>(bed),
+        [bed]() { NOTIFY_SUCCESS("Bed target set to {}°C", bed); },
+        [](const MoonrakerError& error) {
+            NOTIFY_ERROR("Failed to set bed temp: {}", error.user_message());
+        });
+
+    int tool_count = static_cast<int>(heaters.size());
+    if (tool_target_ == -1) {
+        NOTIFY_SUCCESS("Preheat: all {} tools + bed set", tool_count);
+    } else {
+        NOTIFY_SUCCESS("Preheat: T{} + bed set", tool_target_);
+    }
+}
+
+void PreheatWidget::cycle_tool_target() {
+    int tool_count = ToolState::instance().tool_count();
+    if (tool_count <= 1) {
+        tool_target_ = -1; // Single tool, always "all"
+        return;
+    }
+
+    if (tool_target_ == -1) {
+        tool_target_ = 0;
+    } else if (tool_target_ + 1 >= tool_count) {
+        tool_target_ = -1;
+    } else {
+        tool_target_++;
+    }
+
+    spdlog::info("[PreheatWidget] Tool target cycled to {}", tool_target_);
+}
+
+void PreheatWidget::tool_target_cb(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PreheatWidget] tool_target_cb");
+    (void)e;
+    if (s_active_instance) {
+        s_active_instance->cycle_tool_target();
+    }
+    LVGL_SAFE_EVENT_CB_END();
 }
 
 // Static callbacks

@@ -8,10 +8,13 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class MoonrakerAPI;
 
 namespace helix {
+
+struct ToolInfo;
 class PrinterState;
 
 class PreheatWidget : public PanelWidget {
@@ -41,19 +44,31 @@ class PreheatWidget : public PanelWidget {
     int cached_extruder_target_ = 0;
     int cached_bed_target_ = 0;
 
+    int tool_target_ = -1;     // -1 = all tools, 0..N = specific tool index
+
     void handle_apply();
     void handle_cooldown();
     void handle_selection_changed();
     void update_button_label();
     void update_heater_state();
     void set_temperatures(MoonrakerAPI* api, int nozzle, int bed);
+    void set_temperatures_multi(MoonrakerAPI* api, int nozzle, int bed);
+    void cycle_tool_target();
 
     void handle_nozzle_tap();
     void handle_bed_tap();
 
   public:
+    /// Collect the heater names that should be heated for a given tool target.
+    /// @param tools Vector of ToolInfo from ToolState::tools()
+    /// @param tool_target -1 for all tools, 0..N for a specific tool index
+    /// @return Vector of heater names (via effective_heater()), skipping tools with no heater
+    static std::vector<std::string> collect_preheat_heaters(const std::vector<ToolInfo>& tools,
+                                                            int tool_target);
+
     static void preheat_apply_cb(lv_event_t* e);
     static void preheat_changed_cb(lv_event_t* e);
+    static void tool_target_cb(lv_event_t* e);
     static void nozzle_tap_cb(lv_event_t* e);
     static void bed_tap_cb(lv_event_t* e);
 };
