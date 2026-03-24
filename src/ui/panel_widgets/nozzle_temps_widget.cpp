@@ -243,11 +243,13 @@ void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& ro
 
     lv_obj_t* tool_label = lv_label_create(text_row);
     lv_label_set_text(tool_label, tool_name.c_str());
+    lv_label_set_long_mode(tool_label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_color(tool_label, theme_manager_get_color("primary"), 0);
     const lv_font_t* small_font = theme_manager_get_font("font_small");
     if (small_font)
         lv_obj_set_style_text_font(tool_label, small_font, 0);
     lv_obj_set_width(tool_label, 28);
+    lv_obj_set_style_min_width(tool_label, 28, 0);
     lv_obj_set_style_text_align(tool_label, LV_TEXT_ALIGN_LEFT, 0);
 
     // Current temperature
@@ -311,14 +313,16 @@ void NozzleTempsWidget::create_bed_row(lv_obj_t* container) {
     lv_obj_set_style_border_width(text_row, 0, 0);
     lv_obj_remove_flag(text_row, LV_OBJ_FLAG_SCROLLABLE);
 
-    // "Bed" label
+    // "Bed" label — clipped to prevent wrapping in tight layouts
     lv_obj_t* bed_label = lv_label_create(text_row);
     lv_label_set_text(bed_label, "Bed");
+    lv_label_set_long_mode(bed_label, LV_LABEL_LONG_CLIP);
     lv_obj_set_style_text_color(bed_label, theme_manager_get_color("danger"), 0);
     const lv_font_t* small_font = theme_manager_get_font("font_small");
     if (small_font)
         lv_obj_set_style_text_font(bed_label, small_font, 0);
     lv_obj_set_width(bed_label, 28);
+    lv_obj_set_style_min_width(bed_label, 28, 0);
     lv_obj_set_style_text_align(bed_label, LV_TEXT_ALIGN_LEFT, 0);
 
     // Current temperature

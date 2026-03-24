@@ -12,6 +12,8 @@
 #include "ui_modal.h"
 #include "ui_utils.h"
 
+#include "ui_fonts.h"
+
 #include <spdlog/spdlog.h>
 
 namespace helix {
@@ -75,12 +77,9 @@ void ToolSwitcherWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
             }
         });
 
-    // Initial build based on current size
-    if (current_colspan_ == 1 && current_rowspan_ == 1) {
-        rebuild_compact();
-    } else {
-        rebuild_pills();
-    }
+    // Initial build deferred to on_size_changed() which fires after
+    // the widget is fully attached to the screen tree.
+    // Building here can crash (disp==NULL) if XML tree isn't mounted yet.
 }
 
 void ToolSwitcherWidget::detach() {
@@ -259,15 +258,29 @@ void ToolSwitcherWidget::rebuild_compact() {
     // Set container clickable for compact mode
     lv_obj_add_flag(container, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_gap(container, 2, 0);
 
-    // Current tool label centered
+    // Swap icon above tool label
+    const char* icon_attrs[] = {"src", "arrow_left_right", "size", "sm", "variant",
+                                "secondary", nullptr};
+    auto* icon = static_cast<lv_obj_t*>(lv_xml_create(container, "icon", icon_attrs));
+    if (icon) {
+        lv_obj_remove_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(icon, LV_OBJ_FLAG_EVENT_BUBBLE);
+    }
+
+    // Current tool label centered with larger font
     lv_obj_t* label = lv_label_create(container);
     std::string tool_name = (active >= 0 && active < static_cast<int>(tools.size()))
                                 ? tools[active].name
                                 : "T?";
     lv_label_set_text(label, tool_name.c_str());
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
-    lv_obj_set_style_text_font(label, lv_font_get_default(), 0);
+    lv_obj_set_style_text_font(label, &noto_sans_bold_16, 0);
+    lv_obj_set_width(label, LV_PCT(100));
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -331,7 +344,7 @@ void ToolSwitcherWidget::show_tool_picker() {
         },
         LV_EVENT_CLICKED, nullptr);
 
-    // Card container
+    // Card container — position above the widget if possible
     lv_obj_t* card = lv_obj_create(picker_backdrop_);
     int card_w = std::clamp(screen_w * 50 / 100, 180, 320);
     lv_obj_set_width(card, card_w);
@@ -426,6 +439,37 @@ void ToolSwitcherWidget::show_tool_picker() {
                 LVGL_SAFE_EVENT_CB_END();
             },
             LV_EVENT_CLICKED, nullptr);
+    }
+
+    // Position card above the widget instead of centered on screen.
+    // Force layout so LV_SIZE_CONTENT resolves to actual height.
+    lv_obj_update_layout(card);
+    int card_h = lv_obj_get_height(card);
+
+    if (widget_obj_) {
+        lv_area_t widget_coords;
+        lv_obj_get_coords(widget_obj_, &widget_coords);
+
+        // Center card horizontally over the widget
+        int widget_cx = (widget_coords.x1 + widget_coords.x2) / 2;
+        int card_x = widget_cx - card_w / 2;
+        // Place card bottom edge at widget top edge with a small gap
+        int card_y = widget_coords.y1 - card_h - space_sm;
+
+        // Clamp to screen bounds
+        card_x = std::clamp(card_x, space_sm, screen_w - card_w - space_sm);
+        if (card_y < space_sm) {
+            // Not enough room above — place below the widget instead
+            card_y = widget_coords.y2 + space_sm;
+        }
+        if (card_y + card_h > screen_h - space_sm) {
+            // Still doesn't fit — fall back to centered
+            lv_obj_center(card);
+        } else {
+            lv_obj_set_pos(card, card_x, card_y);
+        }
+    } else {
+        lv_obj_center(card);
     }
 
     spdlog::debug("[ToolSwitcher] Picker shown with {} tools", tools.size());
