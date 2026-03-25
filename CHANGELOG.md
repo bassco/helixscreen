@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.1] - 2026-03-25
+
+### Added
+- Creality K1 and K2 toolhead rendering with auto-detection and settings dropdown
+- CFS device actions: refresh, auto-refill toggle, and nozzle clean
+- Turbo jog mode with 10mm and 50mm step sizes on motion panel
+- Easier carousel swiping and smart home button on home panel
+- Telemetry tracking for home panel widget placement and interactions
+
+### Fixed
+- Crash from fan widget use-after-free during carousel rebuild (#517, #518, #519, #520)
+- Crash from fan picker backdrop deletion corrupting LVGL event list
+- Screensaver UI bleed-through from panel lifecycle not being suspended
+- Home carousel page tracking using wrong observer type
+- Dashboard Y-axis labels cut off; missing CFS/IFS AMS type entries
+- Toolhead heat glow drawn behind toolhead body; AntHead glow position corrected
+- K2 renderer heat block visible through U-cutout
+- Tool changer spool assignments not loaded on startup
+- Telemetry hardware profile recorded before build volume was available
+- Toolhead settings dropdown not respecting test mode for debug options
+
+### Changed
+- Toolhead dropdown separated into native vs aftermarket styles
+- Dashboard utilities extracted into shared module
+
 ## [0.99.0] - 2026-03-24
 
 A major release bringing multi-page home screen, exclude object map, temperature graph widget, Creality K2/CFS support, preheat macros, tool changer improvements, and a settings.json rename — across 100+ commits.
@@ -2109,6 +2134,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.1]: https://github.com/prestonbrown/helixscreen/compare/v0.99.0...v0.99.1
 [0.99.0]: https://github.com/prestonbrown/helixscreen/compare/v0.98.12...v0.99.0
 [0.98.12]: https://github.com/prestonbrown/helixscreen/compare/v0.98.11...v0.98.12
 [0.98.11]: https://github.com/prestonbrown/helixscreen/compare/v0.98.10...v0.98.11
