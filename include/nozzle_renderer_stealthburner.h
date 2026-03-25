@@ -1,6 +1,6 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
-/// @file nozzle_renderer_faceted.h
+/// @file nozzle_renderer_stealthburner.h
 /// @brief Voron Stealthburner toolhead renderer
 ///
 /// Vector-drawn Stealthburner print head using LVGL polygon primitives.
@@ -27,5 +27,6 @@
 /// @param cy Center Y position (center of entire print head)
 /// @param filament_color Color of loaded filament (or gray/black for default)
 /// @param scale_unit Base scaling unit (typically from theme space_md)
-void draw_nozzle_faceted(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_t filament_color,
-                         int32_t scale_unit, lv_opa_t opa = LV_OPA_COVER);
+void draw_nozzle_stealthburner(lv_layer_t* layer, int32_t cx, int32_t cy,
+                               lv_color_t filament_color, int32_t scale_unit,
+                               lv_opa_t opa = LV_OPA_COVER);

@@ -17,7 +17,16 @@ class MoonrakerClient;
 enum class ZMovementStyle { AUTO = 0, BED_MOVES = 1, NOZZLE_MOVES = 2 };
 
 /** @brief Toolhead rendering style (Auto=detect from printer type, or force) */
-enum class ToolheadStyle { AUTO = 0, DEFAULT = 1, A4T = 2, ANTHEAD = 3, JABBERWOCKY = 4, STEALTHBURNER = 5 };
+enum class ToolheadStyle {
+    AUTO = 0,
+    DEFAULT = 1,
+    A4T = 2,
+    ANTHEAD = 3,
+    JABBERWOCKY = 4,
+    STEALTHBURNER = 5,
+    CREALITY_K1 = 6,
+    CREALITY_K2 = 7
+};
 
 /**
  * @brief Application settings manager with reactive UI binding
@@ -132,7 +141,14 @@ class SettingsManager {
     /** @brief Get dropdown options string */
     static const char* get_toolhead_style_options();
 
-    /** @brief Toolhead style subject (integer: 0=Auto, 1=Default, 2=Stealthburner, 3=A4T) */
+    /** @brief Convert toolhead style to dropdown index (native styles map to 0/Auto) */
+    static int toolhead_style_to_dropdown_index(ToolheadStyle style);
+
+    /** @brief Convert dropdown index to toolhead style enum value */
+    static ToolheadStyle dropdown_index_to_toolhead_style(int index);
+
+    /** @brief Toolhead style subject (integer: 0=Auto, 1=Stealthburner, 2=A4T, 3=AntHead,
+     * 4=JabberWocky) */
     lv_subject_t* subject_toolhead_style() {
         return &toolhead_style_subject_;
     }

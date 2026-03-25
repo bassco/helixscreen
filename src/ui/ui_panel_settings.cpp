@@ -170,8 +170,9 @@ static void on_z_movement_style_changed(lv_event_t* e) {
 static void on_toolhead_style_changed(lv_event_t* e) {
     lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
-    auto style = static_cast<ToolheadStyle>(index);
-    spdlog::info("[SettingsPanel] Toolhead style changed: {}", index);
+    auto style = SettingsManager::dropdown_index_to_toolhead_style(index);
+    spdlog::info("[SettingsPanel] Toolhead style changed: {} (dropdown index {})",
+                 static_cast<int>(style), index);
     SettingsManager::instance().set_toolhead_style(style);
 }
 
@@ -504,14 +505,20 @@ void SettingsPanel::setup_toggle_handlers() {
     }
 
     // === Toolhead Style Dropdown ===
+    // Options set from C++ (varies between production and test mode)
     lv_obj_t* toolhead_style_row = lv_obj_find_by_name(panel_, "row_toolhead_style");
     if (toolhead_style_row) {
         lv_obj_t* toolhead_dropdown = lv_obj_find_by_name(toolhead_style_row, "dropdown");
         if (toolhead_dropdown) {
+            lv_dropdown_set_options(toolhead_dropdown,
+                                    SettingsManager::get_toolhead_style_options());
             auto style = SettingsManager::instance().get_toolhead_style();
-            lv_dropdown_set_selected(toolhead_dropdown, static_cast<uint32_t>(style));
-            spdlog::trace("[{}]   ✓ Toolhead style dropdown (style={})", get_name(),
-                          static_cast<int>(style));
+            lv_dropdown_set_selected(
+                toolhead_dropdown,
+                static_cast<uint32_t>(SettingsManager::toolhead_style_to_dropdown_index(style)));
+            spdlog::trace("[{}]   ✓ Toolhead style dropdown (style={}, dropdown_index={})",
+                          get_name(), static_cast<int>(style),
+                          SettingsManager::toolhead_style_to_dropdown_index(style));
         }
     }
 
@@ -1002,9 +1009,8 @@ void SettingsPanel::handle_factory_reset_clicked() {
             // UpdateQueue::process_pending(), and synchronous deletion
             // during a batch corrupts LVGL's event linked list (#356, #491).
             NavigationManager::instance().register_overlay_close_callback(
-                factory_reset_dialog_, [this]() {
-                    helix::ui::safe_delete_deferred(factory_reset_dialog_);
-                });
+                factory_reset_dialog_,
+                [this]() { helix::ui::safe_delete_deferred(factory_reset_dialog_); });
 
             spdlog::info("[{}] Factory reset dialog created", get_name());
         } else {

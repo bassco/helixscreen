@@ -1,12 +1,12 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
-/// @file nozzle_renderer_faceted.cpp
+/// @file nozzle_renderer_stealthburner.cpp
 /// @brief Voron Stealthburner toolhead renderer implementation
 ///
 /// Ported from toolhead_icon_scaled.c - a traced SVG of the Stealthburner
 /// using LVGL polygon primitives for vector rendering.
 
-#include "nozzle_renderer_faceted.h"
+#include "nozzle_renderer_stealthburner.h"
 
 #include "nozzle_renderer_common.h"
 
@@ -47,7 +47,7 @@ static const lv_point_t pts_top_circle[] = {
 };
 static constexpr int pts_top_circle_cnt = sizeof(pts_top_circle) / sizeof(pts_top_circle[0]);
 
-// Bottom fan is now drawn as a simple circle (see draw_circle in draw_nozzle_faceted)
+// Bottom fan is now drawn as a simple circle (see draw_circle in draw_nozzle_stealthburner)
 // The original complex polygon with fan blade details caused triangulation artifacts
 
 static const lv_point_t pts_logo_1[] = {
@@ -393,8 +393,8 @@ static void draw_polygon(lv_layer_t* layer, const lv_point_t* pts, int cnt, lv_c
 // Main Drawing Function
 // ============================================================================
 
-void draw_nozzle_faceted(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_t filament_color,
-                         int32_t scale_unit, lv_opa_t opa) {
+void draw_nozzle_stealthburner(lv_layer_t* layer, int32_t cx, int32_t cy,
+                               lv_color_t filament_color, int32_t scale_unit, lv_opa_t opa) {
     // The design space is 1000x1000, but the actual toolhead spans about
     // 440 units wide (280-720) and 850 units tall (78-928)
     // Stealthburner is larger than Bambu toolhead, so render at 2x

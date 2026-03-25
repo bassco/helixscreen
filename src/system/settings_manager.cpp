@@ -18,6 +18,7 @@
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 #include "system_settings_manager.h"
+#include "wizard_config_paths.h"
 
 #include <algorithm>
 #include <cmath>
@@ -26,7 +27,52 @@ using namespace helix;
 
 // Z movement style options (Auto=0, Bed Moves=1, Nozzle Moves=2)
 static const char* Z_MOVEMENT_STYLE_OPTIONS_TEXT = "Auto\nBed Moves\nNozzle Moves";
-static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nDefault\nA4T\nAntHead\nJabberWocky\nStealthburner";
+
+// Aftermarket toolhead styles shown in dropdown (Auto + user overrides only)
+// Native styles (DEFAULT, CREALITY_K1, CREALITY_K2) are auto-detected and not shown.
+static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nStealthburner\nA4T\nAntHead\nJabberWocky";
+
+// In test mode, show all styles for debugging
+static const char* TOOLHEAD_STYLE_OPTIONS_TEXT_DEBUG =
+    "Auto\nDefault\nA4T\nAntHead\nJabberWocky\nStealthburner\nCreality K1\nCreality K2";
+
+// Map dropdown index → ToolheadStyle enum value (production dropdown)
+static constexpr helix::ToolheadStyle DROPDOWN_TO_STYLE[] = {
+    helix::ToolheadStyle::AUTO,          // 0: Auto
+    helix::ToolheadStyle::STEALTHBURNER, // 1: Stealthburner
+    helix::ToolheadStyle::A4T,           // 2: A4T
+    helix::ToolheadStyle::ANTHEAD,       // 3: AntHead
+    helix::ToolheadStyle::JABBERWOCKY,   // 4: JabberWocky
+};
+static constexpr int DROPDOWN_COUNT =
+    static_cast<int>(sizeof(DROPDOWN_TO_STYLE) / sizeof(DROPDOWN_TO_STYLE[0]));
+
+// Debug dropdown: indices map directly to enum values (0=Auto, 1=Default, ...)
+static constexpr helix::ToolheadStyle DROPDOWN_TO_STYLE_DEBUG[] = {
+    helix::ToolheadStyle::AUTO,          // 0
+    helix::ToolheadStyle::DEFAULT,       // 1
+    helix::ToolheadStyle::A4T,           // 2
+    helix::ToolheadStyle::ANTHEAD,       // 3
+    helix::ToolheadStyle::JABBERWOCKY,   // 4
+    helix::ToolheadStyle::STEALTHBURNER, // 5
+    helix::ToolheadStyle::CREALITY_K1,   // 6
+    helix::ToolheadStyle::CREALITY_K2,   // 7
+};
+static constexpr int DROPDOWN_DEBUG_COUNT =
+    static_cast<int>(sizeof(DROPDOWN_TO_STYLE_DEBUG) / sizeof(DROPDOWN_TO_STYLE_DEBUG[0]));
+
+// Convert ToolheadStyle enum to dropdown index
+static int style_to_dropdown_index(helix::ToolheadStyle style) {
+    auto* rc = get_runtime_config();
+    bool debug = rc && rc->test_mode;
+    int count = debug ? DROPDOWN_DEBUG_COUNT : DROPDOWN_COUNT;
+    const auto* table = debug ? DROPDOWN_TO_STYLE_DEBUG : DROPDOWN_TO_STYLE;
+    for (int i = 0; i < count; i++) {
+        if (table[i] == style)
+            return i;
+    }
+    return 0; // Unknown styles map to Auto
+}
 
 SettingsManager& SettingsManager::instance() {
     static SettingsManager instance;
@@ -78,7 +124,7 @@ void SettingsManager::init_subjects() {
 
     // Toolhead style (default: 0 = Auto)
     int toolhead_style = config->get<int>("/appearance/toolhead_style", 0);
-    toolhead_style = std::clamp(toolhead_style, 0, 5);
+    toolhead_style = std::clamp(toolhead_style, 0, 7);
     UI_MANAGED_SUBJECT_INT(toolhead_style_subject_, toolhead_style, "settings_toolhead_style",
                            subjects_);
 
@@ -179,7 +225,7 @@ const char* SettingsManager::get_z_movement_style_options() {
 
 ToolheadStyle SettingsManager::get_toolhead_style() const {
     int val = lv_subject_get_int(const_cast<lv_subject_t*>(&toolhead_style_subject_));
-    return static_cast<ToolheadStyle>(std::clamp(val, 0, 5));
+    return static_cast<ToolheadStyle>(std::clamp(val, 0, 7));
 }
 
 ToolheadStyle SettingsManager::get_effective_toolhead_style() const {
@@ -187,18 +233,40 @@ ToolheadStyle SettingsManager::get_effective_toolhead_style() const {
     if (style != ToolheadStyle::AUTO) {
         return style;
     }
+
+    // Check printer database for native toolhead style first
+    Config* config = Config::get_instance();
+    if (config) {
+        std::string printer_type =
+            config->get<std::string>(config->df() + helix::wizard::PRINTER_TYPE, "");
+        if (!printer_type.empty()) {
+            std::string db_style = PrinterDetector::get_toolhead_style(printer_type);
+            if (db_style == "creality_k1")
+                return ToolheadStyle::CREALITY_K1;
+            if (db_style == "creality_k2")
+                return ToolheadStyle::CREALITY_K2;
+        }
+    }
+
+    // Fall back to heuristic detection
     if (PrinterDetector::is_pfa_printer()) {
         return ToolheadStyle::ANTHEAD;
     }
     if (PrinterDetector::is_voron_printer()) {
         return ToolheadStyle::STEALTHBURNER;
     }
+    if (PrinterDetector::is_creality_k1()) {
+        return ToolheadStyle::CREALITY_K1;
+    }
+    if (PrinterDetector::is_creality_k2()) {
+        return ToolheadStyle::CREALITY_K2;
+    }
     return ToolheadStyle::DEFAULT;
 }
 
 void SettingsManager::set_toolhead_style(ToolheadStyle style) {
     int val = static_cast<int>(style);
-    val = std::clamp(val, 0, 5);
+    val = std::clamp(val, 0, 7);
     spdlog::info("[SettingsManager] set_toolhead_style({})", val);
     lv_subject_set_int(&toolhead_style_subject_, val);
     Config* config = Config::get_instance();
@@ -207,7 +275,25 @@ void SettingsManager::set_toolhead_style(ToolheadStyle style) {
 }
 
 const char* SettingsManager::get_toolhead_style_options() {
+    auto* rc = get_runtime_config();
+    if (rc && rc->test_mode) {
+        return TOOLHEAD_STYLE_OPTIONS_TEXT_DEBUG;
+    }
     return TOOLHEAD_STYLE_OPTIONS_TEXT;
+}
+
+int SettingsManager::toolhead_style_to_dropdown_index(ToolheadStyle style) {
+    return style_to_dropdown_index(style);
+}
+
+ToolheadStyle SettingsManager::dropdown_index_to_toolhead_style(int index) {
+    auto* rc = get_runtime_config();
+    bool debug = rc && rc->test_mode;
+    int count = debug ? DROPDOWN_DEBUG_COUNT : DROPDOWN_COUNT;
+    const auto* table = debug ? DROPDOWN_TO_STYLE_DEBUG : DROPDOWN_TO_STYLE;
+    if (index < 0 || index >= count)
+        return ToolheadStyle::AUTO;
+    return table[index];
 }
 
 // ============================================================================

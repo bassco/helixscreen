@@ -8,8 +8,10 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_anthead.h"
 #include "nozzle_renderer_bambu.h"
-#include "nozzle_renderer_faceted.h"
+#include "nozzle_renderer_creality_k1.h"
+#include "nozzle_renderer_creality_k2.h"
 #include "nozzle_renderer_jabberwocky.h"
+#include "nozzle_renderer_stealthburner.h"
 #include "settings_manager.h"
 
 /// @brief Draw the nozzle matching the user's effective toolhead style setting
@@ -17,20 +19,26 @@ inline void draw_nozzle_for_style(lv_layer_t* layer, int32_t cx, int32_t cy,
                                   lv_color_t filament_color, int32_t scale_unit,
                                   lv_opa_t opa = LV_OPA_COVER) {
     switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-        case helix::ToolheadStyle::A4T:
-            draw_nozzle_a4t(layer, cx, cy, filament_color, scale_unit, opa);
-            break;
-        case helix::ToolheadStyle::ANTHEAD:
-            draw_nozzle_anthead(layer, cx, cy, filament_color, scale_unit, opa);
-            break;
-        case helix::ToolheadStyle::JABBERWOCKY:
-            draw_nozzle_jabberwocky(layer, cx, cy, filament_color, scale_unit, opa);
-            break;
-        case helix::ToolheadStyle::STEALTHBURNER:
-            draw_nozzle_faceted(layer, cx, cy, filament_color, scale_unit, opa);
-            break;
-        default:
-            draw_nozzle_bambu(layer, cx, cy, filament_color, scale_unit, opa);
-            break;
+    case helix::ToolheadStyle::A4T:
+        draw_nozzle_a4t(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    case helix::ToolheadStyle::ANTHEAD:
+        draw_nozzle_anthead(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    case helix::ToolheadStyle::JABBERWOCKY:
+        draw_nozzle_jabberwocky(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    case helix::ToolheadStyle::STEALTHBURNER:
+        draw_nozzle_stealthburner(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    case helix::ToolheadStyle::CREALITY_K1:
+        draw_nozzle_creality_k1(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    case helix::ToolheadStyle::CREALITY_K2:
+        draw_nozzle_creality_k2(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
+    default:
+        draw_nozzle_bambu(layer, cx, cy, filament_color, scale_unit, opa);
+        break;
     }
 }
