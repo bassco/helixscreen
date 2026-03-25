@@ -43,7 +43,7 @@ TEST_CASE("Brother QL protocol - raster mode command", "[label][brother]") {
     REQUIRE(data[205] == 0x01);
 }
 
-TEST_CASE("Brother QL protocol - media info", "[label][brother]") {
+TEST_CASE("Brother QL protocol - media info continuous", "[label][brother]") {
     LabelBitmap bitmap(696, 200);
     LabelSize size{"62mm", 696, 0, 300, 0x0A, 62, 0};
 
@@ -53,10 +53,24 @@ TEST_CASE("Brother QL protocol - media info", "[label][brother]") {
     REQUIRE(data[206] == 0x1B);
     REQUIRE(data[207] == 0x69);
     REQUIRE(data[208] == 0x7A);
-    REQUIRE(data[209] == 0x86);  // validity flags
-    REQUIRE(data[210] == 0x0A);  // media type
+    // Continuous: PI + width + media_type = 0x80 | 0x04 | 0x02 = 0x86
+    REQUIRE(data[209] == 0x86);
+    REQUIRE(data[210] == 0x0A);  // media type (continuous)
     REQUIRE(data[211] == 62);    // width mm
-    REQUIRE(data[212] == 0);     // length mm (continuous)
+    REQUIRE(data[212] == 0);     // length mm (continuous = 0)
+}
+
+TEST_CASE("Brother QL protocol - media info die-cut", "[label][brother]") {
+    LabelBitmap bitmap(306, 991);
+    LabelSize size{"29x90mm", 306, 991, 300, 0x0B, 29, 90};
+
+    auto data = brother_ql_build_raster(bitmap, size);
+
+    // ESC i z at offset 206
+    REQUIRE(data[209] == 0x8E);  // Die-cut: PI + width + media_type + length
+    REQUIRE(data[210] == 0x0B);  // media type (die-cut)
+    REQUIRE(data[211] == 29);    // width mm
+    REQUIRE(data[212] == 90);    // length mm
 }
 
 TEST_CASE("Brother QL protocol - print command at end", "[label][brother]") {
@@ -69,7 +83,7 @@ TEST_CASE("Brother QL protocol - print command at end", "[label][brother]") {
     REQUIRE(data.back() == 0x1A);
 }
 
-TEST_CASE("Brother QL protocol - horizontal flip verification", "[label][brother]") {
+TEST_CASE("Brother QL protocol - pixel data preserved (no flip)", "[label][brother]") {
     LabelBitmap bitmap(696, 1);
     LabelSize size{"62mm", 696, 0, 300, 0x0A, 62, 0};
 
@@ -78,8 +92,7 @@ TEST_CASE("Brother QL protocol - horizontal flip verification", "[label][brother
 
     auto data = brother_ql_build_raster(bitmap, size);
 
-    // Find the raster data row (0x67 0x00 0x5A marker)
-    // Since we have one non-blank row, look for 0x67
+    // Find the raster data row (0x67 0x00 marker)
     bool found_raster = false;
     size_t raster_start = 0;
     for (size_t i = 0; i + 2 < data.size(); i++) {
@@ -92,24 +105,54 @@ TEST_CASE("Brother QL protocol - horizontal flip verification", "[label][brother
     }
     REQUIRE(found_raster);
 
-    // After horizontal flip, pixel at x=0 should appear at x=695 (width-1)
-    // x=695 is in byte 695/8 = 86, bit 7-(695%8) = 7-7 = 0
-    // But with left padding: label is 87 bytes, left pad = 90-87 = 3
     int label_byte_width = (696 + 7) / 8; // 87
     int left_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width; // 3
 
-    // The flipped pixel at dst_x=695 is in the flipped row at byte 695/8=86, bit 0
-    // In the output buffer: offset = raster_start + left_pad + 86
-    size_t pixel_byte_offset = raster_start + left_pad + 86;
+    // Pixel at x=0 should be preserved at x=0 in the output (no flip)
+    // x=0 is in byte 0 of label data, bit 7 (MSB)
+    size_t pixel_byte_offset = raster_start + left_pad + 0;
     REQUIRE(pixel_byte_offset < data.size());
-    // Bit 0 (7 - (695%8) = 7-7 = 0) should be set
-    REQUIRE((data[pixel_byte_offset] & 0x01) != 0);
+    // Bit 7 should be set (pixel at x=0)
+    REQUIRE((data[pixel_byte_offset] & 0x80) != 0);
 
-    // Original position x=0 should NOT be set in the flipped output
-    // x=0 in output is at byte 0 of flipped row, bit 7
-    size_t orig_byte_offset = raster_start + left_pad + 0;
-    // bit 7 should NOT be set (the pixel was flipped away)
-    REQUIRE((data[orig_byte_offset] & 0x80) == 0);
+    // x=695 should NOT be set (no pixel there, and no flip moved it)
+    size_t far_byte_offset = raster_start + left_pad + 86;
+    REQUIRE(far_byte_offset < data.size());
+    REQUIRE((data[far_byte_offset] & 0x01) == 0);
+}
+
+TEST_CASE("Brother QL protocol - 38mm narrow label right-justified", "[label][brother]") {
+    LabelBitmap bitmap(413, 1);
+    LabelSize size{"38mm", 413, 0, 300, 0x0A, 38, 0};
+
+    // Set pixel at x=0 (leftmost pixel of 38mm label)
+    bitmap.set_pixel(0, 0, true);
+
+    auto data = brother_ql_build_raster(bitmap, size);
+
+    // Find raster row
+    bool found_raster = false;
+    size_t raster_start = 0;
+    for (size_t i = 0; i + 2 < data.size(); i++) {
+        if (data[i] == 0x67 && data[i + 1] == 0x00 &&
+            data[i + 2] == static_cast<uint8_t>(BROTHER_QL_RASTER_ROW_BYTES)) {
+            found_raster = true;
+            raster_start = i + 3;
+            break;
+        }
+    }
+    REQUIRE(found_raster);
+
+    int label_byte_width = (413 + 7) / 8; // 52
+    int left_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width; // 38
+
+    // Padding bytes should be zero
+    for (int i = 0; i < left_pad; i++) {
+        REQUIRE(data[raster_start + i] == 0x00);
+    }
+
+    // Pixel at x=0 of label should be at raster_start + left_pad, bit 7
+    REQUIRE((data[raster_start + left_pad] & 0x80) != 0);
 }
 
 TEST_CASE("Brother QL protocol - empty bitmap", "[label][brother]") {

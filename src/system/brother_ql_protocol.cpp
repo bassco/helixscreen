@@ -2,6 +2,8 @@
 
 #include "brother_ql_protocol.h"
 
+#include <algorithm>
+
 namespace helix::label {
 
 std::vector<uint8_t> brother_ql_build_raster(const LabelBitmap& bitmap,
@@ -28,7 +30,12 @@ std::vector<uint8_t> brother_ql_build_raster(const LabelBitmap& bitmap,
     cmd.push_back(0x1B);
     cmd.push_back(0x69);
     cmd.push_back(0x7A);
-    cmd.push_back(0x86);             // Validity flags: media type + width + length valid
+    // Validity flags: bit 7=PI, bit 2=width, bit 1=media_type, bit 3=length (die-cut only)
+    uint8_t valid_flags = 0x80 | 0x04 | 0x02;  // PI + width + media type
+    if (size.media_type == 0x0B) {
+        valid_flags |= 0x08;  // Die-cut: mark length field as valid
+    }
+    cmd.push_back(valid_flags);
     cmd.push_back(size.media_type);  // Media type
     cmd.push_back(size.width_mm);    // Width in mm
     cmd.push_back(size.length_mm);   // Length in mm
@@ -70,35 +77,25 @@ std::vector<uint8_t> brother_ql_build_raster(const LabelBitmap& bitmap,
     cmd.push_back(0x00);
 
     // 9. Raster data rows
-    // Brother QL printers require horizontally flipped image data
+    // Bitmap data is right-justified in the 90-byte row (left-padded with zeros)
+    // matching the Brother QL printhead layout where narrow labels are on the right edge.
+    // No horizontal flip — the bitmap is already in the correct pixel order (MSB first,
+    // left-to-right), matching the Brother QL raster format.
     int label_byte_width = (size.width_px + 7) / 8;
     int left_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width;
     if (left_pad < 0) left_pad = 0;
 
-    // Build a horizontally-flipped copy of each row
-    std::vector<uint8_t> flipped_row(label_byte_width, 0x00);
+    // Number of bytes to copy from the bitmap per row (may differ if bitmap is
+    // narrower or wider than label_byte_width)
+    int copy_bytes = std::min(label_byte_width, bitmap.row_byte_width());
 
     for (int y = 0; y < bitmap.height(); y++) {
         const uint8_t* row = bitmap.row_data(y);
-        int row_bytes = bitmap.row_byte_width();
 
-        // Horizontal flip: reverse pixel order within the row
-        std::fill(flipped_row.begin(), flipped_row.end(), 0x00);
-        for (int x = 0; x < size.width_px && x < bitmap.width(); x++) {
-            int src_byte = x / 8;
-            int src_bit = 7 - (x % 8);
-            if (src_byte < row_bytes && (row[src_byte] & (1 << src_bit))) {
-                int dst_x = size.width_px - 1 - x;
-                int dst_byte = dst_x / 8;
-                int dst_bit = 7 - (dst_x % 8);
-                flipped_row[dst_byte] |= (1 << dst_bit);
-            }
-        }
-
-        // Check if flipped row is all white
+        // Check if row is all white
         bool all_white = true;
-        for (int b = 0; b < label_byte_width; b++) {
-            if (flipped_row[b] != 0x00) {
+        for (int b = 0; b < copy_bytes; b++) {
+            if (row[b] != 0x00) {
                 all_white = false;
                 break;
             }
@@ -116,8 +113,14 @@ std::vector<uint8_t> brother_ql_build_raster(const LabelBitmap& bitmap,
             // Left padding (for narrow labels right-justified in 90-byte row)
             cmd.insert(cmd.end(), left_pad, 0x00);
 
-            // Copy flipped pixel data
-            cmd.insert(cmd.end(), flipped_row.begin(), flipped_row.end());
+            // Copy bitmap pixel data directly
+            cmd.insert(cmd.end(), row, row + copy_bytes);
+
+            // Right padding if bitmap is narrower than label
+            int right_pad = label_byte_width - copy_bytes;
+            if (right_pad > 0) {
+                cmd.insert(cmd.end(), right_pad, 0x00);
+            }
         }
     }
 
