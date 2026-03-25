@@ -189,6 +189,13 @@ void AboutSettingsOverlay::on_activate() {
     // Refresh info rows with current data
     populate_info_rows();
     fetch_print_hours();
+
+    // Re-trigger marquee scroll animation now that the overlay is visible and laid out.
+    // The label may have been created while the overlay was hidden, so LVGL couldn't
+    // determine the correct text bounds to start the scroll animation.
+    if (marquee_content_) {
+        lv_label_set_long_mode(marquee_content_, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    }
 }
 
 void AboutSettingsOverlay::on_deactivate() {
