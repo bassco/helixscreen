@@ -495,6 +495,11 @@ validate_binary_architecture() {
             expected_machine_lo="b7"
             expected_desc="AARCH64 64-bit"
             ;;
+        x86)
+            expected_class="02"
+            expected_machine_lo="3e"
+            expected_desc="x86_64 64-bit"
+            ;;
         *)
             log_warn "Unknown platform '$platform', skipping architecture validation"
             return 0
@@ -508,6 +513,8 @@ validate_binary_architecture() {
         actual_desc="MIPS 32-bit (mipsel)"
     elif [ "$elf_class" = "02" ] && [ "$machine_lo" = "b7" ]; then
         actual_desc="AARCH64 64-bit"
+    elif [ "$elf_class" = "02" ] && [ "$machine_lo" = "3e" ]; then
+        actual_desc="x86_64 64-bit"
     else
         actual_desc="unknown (class=$elf_class, machine=$machine_lo)"
     fi

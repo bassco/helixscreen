@@ -268,7 +268,7 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", or "unsupported"
+# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", "x86", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
@@ -376,6 +376,12 @@ detect_platform() {
             fi
             return
         fi
+    fi
+
+    # Check for x86_64 Linux (generic Debian/Ubuntu desktop or server)
+    if [ "$arch" = "x86_64" ] || [ "$arch" = "i686" ] || [ "$arch" = "amd64" ]; then
+        echo "x86"
+        return
     fi
 
     # Unknown ARM device - don't assume it's a Pi
@@ -2452,6 +2458,11 @@ validate_binary_architecture() {
             expected_machine_lo="b7"
             expected_desc="AARCH64 64-bit"
             ;;
+        x86)
+            expected_class="02"
+            expected_machine_lo="3e"
+            expected_desc="x86_64 64-bit"
+            ;;
         *)
             log_warn "Unknown platform '$platform', skipping architecture validation"
             return 0
@@ -2465,6 +2476,8 @@ validate_binary_architecture() {
         actual_desc="MIPS 32-bit (mipsel)"
     elif [ "$elf_class" = "02" ] && [ "$machine_lo" = "b7" ]; then
         actual_desc="AARCH64 64-bit"
+    elif [ "$elf_class" = "02" ] && [ "$machine_lo" = "3e" ]; then
+        actual_desc="x86_64 64-bit"
     else
         actual_desc="unknown (class=$elf_class, machine=$machine_lo)"
     fi
@@ -3957,6 +3970,7 @@ main() {
         log_error "  - Raspberry Pi (aarch64/armv7l)"
         log_error "  - FlashForge Adventurer 5M (armv7l)"
         log_error "  - Creality K1 series with Simple AF"
+        log_error "  - x86_64 Debian/Ubuntu (x86_64)"
         exit 1
     fi
 

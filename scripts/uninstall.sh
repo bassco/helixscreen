@@ -261,7 +261,7 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", or "unsupported"
+# Returns: "ad5m", "ad5x", "k1", "pi", "pi32", "x86", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
@@ -369,6 +369,12 @@ detect_platform() {
             fi
             return
         fi
+    fi
+
+    # Check for x86_64 Linux (generic Debian/Ubuntu desktop or server)
+    if [ "$arch" = "x86_64" ] || [ "$arch" = "i686" ] || [ "$arch" = "amd64" ]; then
+        echo "x86"
+        return
     fi
 
     # Unknown ARM device - don't assume it's a Pi
