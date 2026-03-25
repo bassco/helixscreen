@@ -560,22 +560,28 @@ ifneq ($(CROSS_COMPILE),)
         RANLIB := $(CROSS_COMPILE)ranlib
     endif
 
-    # Override build directories for cross-compilation
-    ifneq ($(BUILD_SUBDIR),)
-        BUILD_DIR := build/$(BUILD_SUBDIR)
-        BIN_DIR := $(BUILD_DIR)/bin
-        OBJ_DIR := $(BUILD_DIR)/obj
-    endif
+endif
 
-    # Print cross-compilation info
+# Override build directories when BUILD_SUBDIR is set (cross-compilation or
+# native platform targets like x86-both where CROSS_COMPILE is empty).
+ifneq ($(BUILD_SUBDIR),)
+    BUILD_DIR := build/$(BUILD_SUBDIR)
+    BIN_DIR := $(BUILD_DIR)/bin
+    OBJ_DIR := $(BUILD_DIR)/obj
+endif
+
+# Print platform info when cross-compiling or targeting a specific platform
+ifneq ($(PLATFORM_TARGET),native)
+ifneq ($(PLATFORM_TARGET),)
     $(info )
     $(info ========================================)
-    $(info Cross-compiling for: $(PLATFORM_TARGET))
+    $(info Building for: $(PLATFORM_TARGET))
     $(info Architecture: $(TARGET_ARCH))
     $(info Compiler: $(CC))
     $(info Output: $(BUILD_DIR))
     $(info ========================================)
     $(info )
+endif
 endif
 
 # =============================================================================
