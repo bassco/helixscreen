@@ -31,10 +31,15 @@
           <LineChart :data="sessionDurationChartData" />
         </div>
 
+        <div class="chart-section">
+          <h3>Theme Distribution</h3>
+          <BarChart :data="themeChartData" :options="horizontalOpts" />
+        </div>
+
         <div class="grid-2col">
           <div class="chart-section">
-            <h3>Theme Distribution</h3>
-            <PieChart :data="themeChartData" />
+            <h3>Dark vs Light Mode</h3>
+            <PieChart :data="darkLightChartData" />
           </div>
           <div class="chart-section">
             <h3>Locale Breakdown</h3>
@@ -113,8 +118,21 @@ const sessionDurationChartData = computed(() => ({
 const themeChartData = computed(() => ({
   labels: data.value?.themes.map(t => t.name) ?? [],
   datasets: [{
+    label: 'Users',
     data: data.value?.themes.map(t => t.count) ?? [],
-    backgroundColor: COLORS
+    backgroundColor: '#8b5cf6'
+  }]
+}))
+
+const DARK_LIGHT_COLORS: Record<string, string> = { dark: '#1e293b', light: '#f8fafc' }
+
+const darkLightChartData = computed(() => ({
+  labels: data.value?.dark_vs_light.map(d => d.name.charAt(0).toUpperCase() + d.name.slice(1)) ?? [],
+  datasets: [{
+    data: data.value?.dark_vs_light.map(d => d.count) ?? [],
+    backgroundColor: data.value?.dark_vs_light.map(d => DARK_LIGHT_COLORS[d.name] ?? '#64748b') ?? [],
+    borderColor: '#334155',
+    borderWidth: 1
   }]
 }))
 

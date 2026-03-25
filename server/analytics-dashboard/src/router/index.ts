@@ -4,7 +4,6 @@ import LoginView from '@/views/LoginView.vue'
 import OverviewView from '@/views/OverviewView.vue'
 import AdoptionView from '@/views/AdoptionView.vue'
 import PrintsView from '@/views/PrintsView.vue'
-import CrashesView from '@/views/CrashesView.vue'
 import ReleasesView from '@/views/ReleasesView.vue'
 
 export const router = createRouter({
@@ -30,10 +29,14 @@ export const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
-      path: '/crashes',
-      name: 'crashes',
-      component: CrashesView,
+      path: '/stability',
+      name: 'stability',
+      component: () => import('@/views/StabilityView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/crashes',
+      redirect: '/stability'
     },
     {
       path: '/releases',
@@ -61,9 +64,7 @@ export const router = createRouter({
     },
     {
       path: '/reliability',
-      name: 'reliability',
-      component: () => import('@/views/ReliabilityView.vue'),
-      meta: { requiresAuth: true }
+      redirect: '/stability'
     }
   ]
 })

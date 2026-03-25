@@ -325,16 +325,21 @@ export function hardwareQueries(days: number, filters?: FilterParams): string[] 
     `SELECT blob5 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile' AND blob5 != ''${f} GROUP BY name ORDER BY count DESC`,
     // MCU chips (by blob6)
     `SELECT blob6 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile' AND blob6 != ''${f} GROUP BY name ORDER BY count DESC LIMIT 20`,
-    // Capabilities bitmask (bitwise check on double8 for 8 bits)
+    // Capabilities bitmask (bitwise check on double8 for 13 bits)
     `SELECT
-      sumIf(1, bitAnd(toUInt8(double8), 1) > 0) as cap_0,
-      sumIf(1, bitAnd(toUInt8(double8), 2) > 0) as cap_1,
-      sumIf(1, bitAnd(toUInt8(double8), 4) > 0) as cap_2,
-      sumIf(1, bitAnd(toUInt8(double8), 8) > 0) as cap_3,
-      sumIf(1, bitAnd(toUInt8(double8), 16) > 0) as cap_4,
-      sumIf(1, bitAnd(toUInt8(double8), 32) > 0) as cap_5,
-      sumIf(1, bitAnd(toUInt8(double8), 64) > 0) as cap_6,
-      sumIf(1, bitAnd(toUInt8(double8), 128) > 0) as cap_7,
+      sumIf(1, bitAnd(toUInt16(double8), 1) > 0) as cap_0,
+      sumIf(1, bitAnd(toUInt16(double8), 2) > 0) as cap_1,
+      sumIf(1, bitAnd(toUInt16(double8), 4) > 0) as cap_2,
+      sumIf(1, bitAnd(toUInt16(double8), 8) > 0) as cap_3,
+      sumIf(1, bitAnd(toUInt16(double8), 16) > 0) as cap_4,
+      sumIf(1, bitAnd(toUInt16(double8), 32) > 0) as cap_5,
+      sumIf(1, bitAnd(toUInt16(double8), 64) > 0) as cap_6,
+      sumIf(1, bitAnd(toUInt16(double8), 128) > 0) as cap_7,
+      sumIf(1, bitAnd(toUInt16(double8), 256) > 0) as cap_8,
+      sumIf(1, bitAnd(toUInt16(double8), 512) > 0) as cap_9,
+      sumIf(1, bitAnd(toUInt16(double8), 1024) > 0) as cap_10,
+      sumIf(1, bitAnd(toUInt16(double8), 2048) > 0) as cap_11,
+      sumIf(1, bitAnd(toUInt16(double8), 4096) > 0) as cap_12,
       count() as total
     FROM ${dataset}
     WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile'${f}`,
@@ -345,13 +350,23 @@ export function hardwareQueries(days: number, filters?: FilterParams): string[] 
       avg(double7) as avg_vol_z
     FROM ${dataset}
     WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile' AND double5 > 0${f}`,
-    // Fan/sensor/macro count averages
+    // Fan/sensor/macro count averages (filter out rows where all three are zero — old mis-mapped data)
     `SELECT
       avg(double2) as avg_fan_count,
       avg(double3) as avg_sensor_count,
       avg(double4) as avg_macro_count
     FROM ${dataset}
-    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile'${f}`,
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile' AND (double2 > 0 OR double3 > 0 OR double4 > 0)${f}`,
+    // Host RAM distribution (from session events, double1 = ram_total_mb)
+    `SELECT
+      double1 as ram_mb,
+      count() as count
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session' AND double1 > 0${f}
+    GROUP BY ram_mb
+    ORDER BY ram_mb`,
+    // AMS backend distribution (blob8 from hardware_profile)
+    `SELECT blob8 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'hardware_profile' AND blob8 != ''${f} GROUP BY name ORDER BY count DESC`,
   ];
 }
 
@@ -359,10 +374,10 @@ export function engagementQueries(days: number, filters?: FilterParams): string[
   const dataset = "helixscreen_telemetry";
   const f = buildFilterClause(filters);
   return [
-    // Panel time (sum double2 by blob4 from panel_usage)
-    `SELECT blob4 as panel, sum(double2) as total_time_sec FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'panel_usage' AND blob4 != ''${f} GROUP BY panel ORDER BY total_time_sec DESC`,
-    // Panel visits (sum double3 by blob4)
-    `SELECT blob4 as panel, sum(double3) as total_visits FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'panel_usage' AND blob4 != ''${f} GROUP BY panel ORDER BY total_visits DESC`,
+    // Panel time (sum double2 by blob4 from panel_usage, exclude "home")
+    `SELECT blob4 as panel, sum(double2) as total_time_sec FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'panel_usage' AND blob4 != '' AND blob4 != 'home'${f} GROUP BY panel ORDER BY total_time_sec DESC`,
+    // Panel visits (sum double3 by blob4, exclude "home")
+    `SELECT blob4 as panel, sum(double3) as total_visits FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'panel_usage' AND blob4 != '' AND blob4 != 'home'${f} GROUP BY panel ORDER BY total_visits DESC`,
     // Session duration trend (avg double1 by date)
     `SELECT
       toDate(timestamp) as date,
@@ -382,6 +397,8 @@ export function engagementQueries(days: number, filters?: FilterParams): string[
       quantileExactWeighted(0.75)(double1, _sample_interval) as p75
     FROM ${dataset}
     WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'settings_snapshot'${f}`,
+    // Dark vs Light mode distribution (count by blob8 from settings_snapshot)
+    `SELECT blob8 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'settings_snapshot' AND blob8 != ''${f} GROUP BY name ORDER BY count DESC`,
   ];
 }
 
@@ -410,6 +427,35 @@ export function reliabilityQueries(days: number, filters?: FilterParams): string
     // Top error categories (count by blob4 from error_encountered)
     `SELECT blob4 as category, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'error_encountered' AND blob4 != ''${f} GROUP BY category ORDER BY count DESC LIMIT 20`,
     // Error codes (count by blob4, blob5 from error_encountered)
+    `SELECT blob4 as category, blob5 as code, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'error_encountered' AND blob4 != ''${f} GROUP BY category, code ORDER BY count DESC LIMIT 50`,
+  ];
+}
+
+export function stabilityQueries(days: number, filters?: FilterParams): string[] {
+  const dataset = "helixscreen_telemetry";
+  // crash event: blob2=version, blob4=platform — custom blob map
+  const crashFilter = buildFilterClause(filters, { platform: "blob4" });
+  const f = buildFilterClause(filters);
+  return [
+    // 0: Crash count over time
+    `SELECT toDate(timestamp) as date, count() as crash_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash'${crashFilter} GROUP BY date ORDER BY date`,
+    // 1: Session count over time (for rate denominator)
+    `SELECT toDate(timestamp) as date, count() as session_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session'${f} GROUP BY date ORDER BY date`,
+    // 2: Crash count by version
+    `SELECT blob2 as ver, count() as crash_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash' AND blob2 != ''${crashFilter} GROUP BY ver ORDER BY crash_count DESC`,
+    // 3: Session count by version
+    `SELECT blob2 as ver, count() as session_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session' AND blob2 != ''${f} GROUP BY ver`,
+    // 4: Crashes by signal
+    `SELECT blob3 as signal, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash' AND blob3 != ''${crashFilter} GROUP BY signal ORDER BY count DESC`,
+    // 5: Average uptime before crash
+    `SELECT avg(double1) as avg_uptime_sec FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash'${crashFilter}`,
+    // 6: Klippy errors and shutdowns over time
+    `SELECT toDate(timestamp) as date, sum(double7) as errors, sum(double8) as shutdowns FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'connection_stability'${f} GROUP BY date ORDER BY date`,
+    // 7: Memory warning count over time
+    `SELECT toDate(timestamp) as date, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_warning'${f} GROUP BY date ORDER BY date`,
+    // 8: Error hotspots (categories)
+    `SELECT blob4 as category, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'error_encountered' AND blob4 != ''${f} GROUP BY category ORDER BY count DESC LIMIT 20`,
+    // 9: Error codes detail
     `SELECT blob4 as category, blob5 as code, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'error_encountered' AND blob4 != ''${f} GROUP BY category, code ORDER BY count DESC LIMIT 50`,
   ];
 }

@@ -198,14 +198,23 @@ function mapEventToDataPointInternal(
     const extruders = (event.extruders ?? {}) as Record<string, unknown>;
 
     // Extract fan/sensor/macro counts from nested objects
+    // C++ sends fans.total (not fans.count), sensors has sub-fields, macros.total_count
     const fans = (event.fans ?? {}) as Record<string, unknown>;
     const sensors = (event.sensors ?? {}) as Record<string, unknown>;
     const macros = (event.macros ?? {}) as Record<string, unknown>;
+    const sensorCount =
+      Number(sensors.filament ?? 0) +
+      Number(sensors.temperature_extra ?? 0) +
+      Number(sensors.color ?? 0) +
+      Number(sensors.accel ?? 0);
 
-    // Build capabilities bitmask from nested boolean object
+    // Build capabilities bitmask from nested boolean object + derived flags
     // Bit order: 0=chamber, 1=accelerometer, 2=firmware_retraction,
-    //            3=exclude_object, 4=timelapse, 5=klippain_shaketune, 6=speaker
+    //   3=exclude_object, 4=timelapse, 5=klippain_shaketune, 6=speaker,
+    //   7=probe, 8=led, 9=filament_sensor, 10=multi_extruder, 11=ams, 12=heater_bed
     const caps = (event.capabilities ?? {}) as Record<string, unknown>;
+    const leds = (event.leds ?? {}) as Record<string, unknown>;
+    const tools = (event.tools ?? {}) as Record<string, unknown>;
     let capsBitmask = Number(event.capabilities_bitmask ?? 0);
     if (typeof caps === "object" && caps !== null && Object.keys(caps).length > 0) {
       const capBits = [
@@ -221,7 +230,18 @@ function mapEventToDataPointInternal(
       for (let i = 0; i < capBits.length; i++) {
         if (caps[capBits[i]]) capsBitmask |= 1 << i;
       }
+      // Derived flags from other event sections
+      if (probe.has_probe) capsBitmask |= 1 << 7;
+      if (Number(leds.count ?? 0) > 0) capsBitmask |= 1 << 8;
+      if (Number(sensors.filament ?? 0) > 0) capsBitmask |= 1 << 9;
+      if (tools.is_multi_tool || Number(extruders.count ?? 0) > 1) capsBitmask |= 1 << 10;
+      if (event.ams) capsBitmask |= 1 << 11;
+      if (extruders.has_heater_bed) capsBitmask |= 1 << 12;
     }
+
+    // Extract AMS backend type from nested ams object
+    const ams = (event.ams ?? {}) as Record<string, unknown>;
+    const amsType = String(ams.type ?? "");
 
     return {
       indexes: ["hardware_profile"],
@@ -233,7 +253,7 @@ function mapEventToDataPointInternal(
         String(printer.kinematics ?? event.kinematics ?? ""),
         mcuChip,
         probeType,
-        "",
+        amsType,
         "",
         "",
         "",
@@ -241,9 +261,9 @@ function mapEventToDataPointInternal(
       ],
       doubles: [
         Number(extruders.count ?? printer.extruder_count ?? event.extruder_count ?? 0),
-        Number(fans.count ?? event.fan_count ?? 0),
-        Number(sensors.count ?? event.sensor_count ?? 0),
-        Number(macros.count ?? event.macro_count ?? 0),
+        Number(fans.total ?? fans.count ?? event.fan_count ?? 0),
+        sensorCount || Number(sensors.count ?? event.sensor_count ?? 0),
+        Number(macros.total_count ?? macros.count ?? event.macro_count ?? 0),
         Number(buildVol.x_mm ?? event.build_vol_x ?? 0),
         Number(buildVol.y_mm ?? event.build_vol_y ?? 0),
         Number(buildVol.z_mm ?? event.build_vol_z ?? 0),
@@ -253,8 +273,10 @@ function mapEventToDataPointInternal(
   }
 
   if (eventType === "settings_snapshot") {
-    // Theme: prefer theme_name (full name like "Nord") over dark/light mode string
+    // Theme: prefer theme_name (full name like "Nord (Dark)") over dark/light mode string
     const themeName = String(event.theme_name ?? app.theme ?? event.theme ?? "");
+    // Dark/light mode: "dark" or "light" for the dark vs light chart
+    const darkLight = String(event.theme ?? (themeName.includes("(Dark)") ? "dark" : themeName.includes("(Light)") ? "light" : ""));
     return {
       indexes: ["settings_snapshot"],
       blobs: [
@@ -265,7 +287,7 @@ function mapEventToDataPointInternal(
         String(app.locale ?? event.locale ?? ""),
         String(event.update_channel ?? ""),
         String(event.time_format ?? ""),
-        "",
+        darkLight,
         "",
         "",
         "",

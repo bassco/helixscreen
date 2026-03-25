@@ -91,6 +91,8 @@ export interface HardwareData {
   capabilities: { total: number; bits: number[] }
   avg_build_volume: { x: number; y: number; z: number }
   avg_counts: { fans: number; sensors: number; macros: number }
+  ram_distribution: { name: string; count: number }[]
+  ams_backends: { name: string; count: number }[]
 }
 
 export interface EngagementData {
@@ -98,6 +100,7 @@ export interface EngagementData {
   panel_visits: { panel: string; total_visits: number }[]
   session_duration_trend: { date: string; avg_session_sec: number }[]
   themes: { name: string; count: number }[]
+  dark_vs_light: { name: string; count: number }[]
   locales: { name: string; count: number }[]
   brightness: { p25: number; p50: number; p75: number }
 }
@@ -108,6 +111,18 @@ export interface ReliabilityData {
   max_disconnect_sec: number
   error_categories: { category: string; count: number }[]
   error_codes: { category: string; code: string; count: number }[]
+}
+
+export interface StabilityData {
+  crash_rate_trend: { date: string; crashes: number; sessions: number; rate: number }[]
+  by_version: { version: string; crash_count: number; session_count: number; rate: number }[]
+  by_signal: { signal: string; count: number }[]
+  avg_uptime_sec: number
+  klippy_trend: { date: string; errors: number; shutdowns: number }[]
+  memory_warnings_trend: { date: string; count: number }[]
+  error_categories: { category: string; count: number }[]
+  error_codes: { category: string; code: string; count: number }[]
+  recent_crashes: { timestamp: string; device_id: string; version: string; signal: string; platform: string; uptime_sec: number }[]
 }
 
 export interface PrintStartData {
@@ -188,5 +203,9 @@ export const api = {
 
   getReliability(queryString: string): Promise<ReliabilityData> {
     return apiFetch(`/v1/dashboard/reliability?${queryString}`)
+  },
+
+  getStability(queryString: string): Promise<StabilityData> {
+    return apiFetch(`/v1/dashboard/stability?${queryString}`)
   }
 }

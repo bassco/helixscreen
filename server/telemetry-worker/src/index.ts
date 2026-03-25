@@ -16,6 +16,7 @@ import {
   hardwareQueries,
   engagementQueries,
   reliabilityQueries,
+  stabilityQueries,
   printStartQueries,
   type QueryConfig,
   type FilterParams,
@@ -543,7 +544,7 @@ export default {
         // GET /v1/dashboard/hardware
         if (url.pathname === "/v1/dashboard/hardware") {
           const queries = hardwareQueries(days, filters);
-          const [modelsRes, kinematicsRes, mcuRes, capsRes, volRes, countsRes] =
+          const [modelsRes, kinematicsRes, mcuRes, capsRes, volRes, countsRes, ramRes, amsRes] =
             await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
 
           const toList = (res: unknown) => {
@@ -557,6 +558,26 @@ export default {
           const volRow = volData.data?.[0] ?? { avg_vol_x: 0, avg_vol_y: 0, avg_vol_z: 0 };
           const countsData = countsRes as { data: Array<{ avg_fan_count: number; avg_sensor_count: number; avg_macro_count: number }> };
           const countsRow = countsData.data?.[0] ?? { avg_fan_count: 0, avg_sensor_count: 0, avg_macro_count: 0 };
+
+          // Bucket RAM values into human-readable ranges
+          const ramRaw = ramRes as { data: Array<{ ram_mb: number; count: number }> };
+          const ramBuckets = new Map<string, number>();
+          for (const r of ramRaw.data ?? []) {
+            const mb = Number(r.ram_mb);
+            let bucket: string;
+            if (mb <= 384) bucket = "256 MB";
+            else if (mb <= 768) bucket = "512 MB";
+            else if (mb <= 1536) bucket = "1 GB";
+            else if (mb <= 3072) bucket = "2 GB";
+            else if (mb <= 6144) bucket = "4 GB";
+            else if (mb <= 12288) bucket = "8 GB";
+            else bucket = "16+ GB";
+            ramBuckets.set(bucket, (ramBuckets.get(bucket) ?? 0) + Number(r.count));
+          }
+          const ramOrder = ["256 MB", "512 MB", "1 GB", "2 GB", "4 GB", "8 GB", "16+ GB"];
+          const ram_distribution = ramOrder
+            .filter((b) => ramBuckets.has(b))
+            .map((name) => ({ name, count: ramBuckets.get(name)! }));
 
           return json({
             printer_models: toList(modelsRes),
@@ -573,6 +594,11 @@ export default {
                 capsRow.cap_5 ?? 0,
                 capsRow.cap_6 ?? 0,
                 capsRow.cap_7 ?? 0,
+                capsRow.cap_8 ?? 0,
+                capsRow.cap_9 ?? 0,
+                capsRow.cap_10 ?? 0,
+                capsRow.cap_11 ?? 0,
+                capsRow.cap_12 ?? 0,
               ],
             },
             avg_build_volume: {
@@ -585,13 +611,25 @@ export default {
               sensors: countsRow.avg_sensor_count,
               macros: countsRow.avg_macro_count,
             },
+            ram_distribution,
+            ams_backends: toList(amsRes).map((r) => {
+              const AMS_NAMES: Record<string, string> = {
+                afc: "AFC",
+                happy_hare: "Happy Hare",
+                valgace: "ValgACE",
+                tool_changer: "Tool Changer",
+                cfs: "CFS",
+                ifs: "IFS",
+              };
+              return { name: AMS_NAMES[r.name] ?? r.name, count: r.count };
+            }),
           });
         }
 
         // GET /v1/dashboard/engagement
         if (url.pathname === "/v1/dashboard/engagement") {
           const queries = engagementQueries(days, filters);
-          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes] =
+          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes, darkLightRes] =
             await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
 
           const toList = (res: unknown) => {
@@ -604,6 +642,21 @@ export default {
           const sessionTrendData = sessionTrendRes as { data: Array<{ date: string; avg_session_sec: number }> };
           const brightnessData = brightnessRes as { data: Array<{ p25: number; p50: number; p75: number }> };
           const brightnessRow = brightnessData.data?.[0] ?? { p25: 0, p50: 0, p75: 0 };
+
+          // Aggregate themes by base name: strip " (Dark)"/" (Light)" suffix,
+          // rename "Copy" themes to "(Custom)"
+          const rawThemes = toList(themeRes);
+          const themeMap = new Map<string, number>();
+          for (const t of rawThemes) {
+            let base = t.name
+              .replace(/ \(Dark\)$/i, "")
+              .replace(/ \(Light\)$/i, "")
+              .replace(/ Copy$/i, " (Custom)");
+            themeMap.set(base, (themeMap.get(base) ?? 0) + t.count);
+          }
+          const themes = [...themeMap.entries()]
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
 
           return json({
             panel_time: (panelTimeData.data ?? []).map((r) => ({
@@ -618,7 +671,8 @@ export default {
               date: r.date,
               avg_session_sec: r.avg_session_sec,
             })),
-            themes: toList(themeRes),
+            themes,
+            dark_vs_light: toList(darkLightRes),
             locales: toList(localeRes),
             brightness: {
               p25: brightnessRow.p25,
@@ -658,6 +712,108 @@ export default {
               category: r.category,
               code: r.code,
               count: r.count,
+            })),
+          });
+        }
+
+        // GET /v1/dashboard/stability
+        if (url.pathname === "/v1/dashboard/stability") {
+          const queries = stabilityQueries(days, filters);
+          const limit = Math.max(1, Math.min(
+            parseInt(url.searchParams.get("limit") ?? "50", 10) || 50,
+            200,
+          ));
+          const crashListSql = crashListQuery(days, limit, filters);
+
+          const allResults = await Promise.all([
+            ...queries.map((q) => executeQuery(queryConfig, q)),
+            executeQuery(queryConfig, crashListSql),
+          ]);
+
+          const crashTimeRes = allResults[0] as { data: Array<{ date: string; crash_count: number }> };
+          const sessionTimeRes = allResults[1] as { data: Array<{ date: string; session_count: number }> };
+          const crashByVerRes = allResults[2] as { data: Array<{ ver: string; crash_count: number }> };
+          const sessionByVerRes = allResults[3] as { data: Array<{ ver: string; session_count: number }> };
+          const signalRes = allResults[4] as { data: Array<{ signal: string; count: number }> };
+          const uptimeRes = allResults[5] as { data: Array<{ avg_uptime_sec: number }> };
+          const klippyRes = allResults[6] as { data: Array<{ date: string; errors: number; shutdowns: number }> };
+          const memWarnRes = allResults[7] as { data: Array<{ date: string; count: number }> };
+          const errorCatsRes = allResults[8] as { data: Array<{ category: string; count: number }> };
+          const errorCodesRes = allResults[9] as { data: Array<{ category: string; code: string; count: number }> };
+          const crashListRes = allResults[10] as {
+            data: Array<{
+              timestamp: string;
+              device_id: string;
+              ver: string;
+              sig: string;
+              platform: string;
+              uptime_sec: number;
+            }>;
+          };
+
+          // Merge crash counts and session counts by date for crash rate trend
+          const sessionByDate = new Map<string, number>();
+          for (const row of sessionTimeRes.data ?? []) {
+            sessionByDate.set(row.date, row.session_count);
+          }
+          const allDates = new Set<string>();
+          for (const row of crashTimeRes.data ?? []) allDates.add(row.date);
+          for (const row of sessionTimeRes.data ?? []) allDates.add(row.date);
+          const crashByDate = new Map<string, number>();
+          for (const row of crashTimeRes.data ?? []) {
+            crashByDate.set(row.date, row.crash_count);
+          }
+          const crash_rate_trend = [...allDates].sort().map((date) => {
+            const crashes = crashByDate.get(date) ?? 0;
+            const sessions = sessionByDate.get(date) ?? 0;
+            return { date, crashes, sessions, rate: sessions > 0 ? crashes / sessions : 0 };
+          });
+
+          // Merge crash and session counts by version
+          const sessionVerMap = new Map<string, number>();
+          for (const row of sessionByVerRes.data ?? []) {
+            sessionVerMap.set(row.ver, row.session_count);
+          }
+          const by_version = (crashByVerRes.data ?? []).map((r) => {
+            const sessionCount = sessionVerMap.get(r.ver) ?? 0;
+            return {
+              version: r.ver,
+              crash_count: r.crash_count,
+              session_count: sessionCount,
+              rate: sessionCount > 0 ? r.crash_count / sessionCount : 0,
+            };
+          });
+
+          return json({
+            crash_rate_trend,
+            by_version,
+            by_signal: (signalRes.data ?? []).map((r) => ({ signal: r.signal, count: r.count })),
+            avg_uptime_sec: uptimeRes.data?.[0]?.avg_uptime_sec ?? 0,
+            klippy_trend: (klippyRes.data ?? []).map((r) => ({
+              date: r.date,
+              errors: r.errors,
+              shutdowns: r.shutdowns,
+            })),
+            memory_warnings_trend: (memWarnRes.data ?? []).map((r) => ({
+              date: r.date,
+              count: r.count,
+            })),
+            error_categories: (errorCatsRes.data ?? []).map((r) => ({
+              category: r.category,
+              count: r.count,
+            })),
+            error_codes: (errorCodesRes.data ?? []).map((r) => ({
+              category: r.category,
+              code: r.code,
+              count: r.count,
+            })),
+            recent_crashes: (crashListRes.data ?? []).map((r) => ({
+              timestamp: r.timestamp,
+              device_id: r.device_id,
+              version: r.ver,
+              signal: r.sig,
+              platform: r.platform,
+              uptime_sec: r.uptime_sec,
             })),
           });
         }

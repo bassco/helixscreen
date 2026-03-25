@@ -14,8 +14,8 @@
         <router-link to="/prints" class="nav-link" :class="{ active: route.path === '/prints' }">
           Prints
         </router-link>
-        <router-link to="/crashes" class="nav-link" :class="{ active: route.path === '/crashes' }">
-          Crashes
+        <router-link to="/stability" class="nav-link" :class="{ active: route.path === '/stability' }">
+          Stability
         </router-link>
         <router-link to="/releases" class="nav-link" :class="{ active: route.path === '/releases' }">
           Releases
@@ -29,9 +29,6 @@
         </router-link>
         <router-link to="/engagement" class="nav-link" :class="{ active: route.path === '/engagement' }">
           Engagement
-        </router-link>
-        <router-link to="/reliability" class="nav-link" :class="{ active: route.path === '/reliability' }">
-          Reliability
         </router-link>
       </nav>
       <div class="sidebar-footer">

@@ -50,6 +50,16 @@
           <h3>Capability Adoption</h3>
           <BarChart :data="capabilityChartData" :options="percentHorizontalOpts" />
         </div>
+
+        <div class="chart-section">
+          <h3>Host RAM Distribution</h3>
+          <BarChart :data="ramChartData" :options="horizontalOpts" />
+        </div>
+
+        <div class="chart-section" v-if="data.ams_backends.length > 0">
+          <h3>AMS Backend Distribution</h3>
+          <BarChart :data="amsChartData" :options="horizontalOpts" />
+        </div>
       </template>
     </div>
   </AppLayout>
@@ -127,7 +137,11 @@ const mcuChartData = computed(() => ({
   }]
 }))
 
-const CAP_NAMES = ['Has AMS', 'Has LED', 'Has Power Control', 'Has Chamber', 'Has Accelerometer', 'Has Filament Sensor', 'Has Probe', 'Has Multi Extruder']
+const CAP_NAMES = [
+  'Has Chamber', 'Has Accelerometer', 'Has Firmware Retraction', 'Has Exclude Object',
+  'Has Timelapse', 'Has Klippain ShakeTune', 'Has Speaker',
+  'Has Probe', 'Has LED', 'Has Filament Sensor', 'Has Multi Extruder', 'Has AMS', 'Has Heater Bed'
+]
 
 const capabilityChartData = computed(() => {
   const caps = data.value?.capabilities
@@ -142,6 +156,24 @@ const capabilityChartData = computed(() => {
     }]
   }
 })
+
+const ramChartData = computed(() => ({
+  labels: data.value?.ram_distribution.map(r => r.name) ?? [],
+  datasets: [{
+    label: 'Devices',
+    data: data.value?.ram_distribution.map(r => r.count) ?? [],
+    backgroundColor: '#06b6d4'
+  }]
+}))
+
+const amsChartData = computed(() => ({
+  labels: data.value?.ams_backends.map(a => a.name) ?? [],
+  datasets: [{
+    label: 'Devices',
+    data: data.value?.ams_backends.map(a => a.count) ?? [],
+    backgroundColor: '#f59e0b'
+  }]
+}))
 
 async function fetchData() {
   loading.value = true
