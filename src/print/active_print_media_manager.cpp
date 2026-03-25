@@ -158,15 +158,15 @@ void ActivePrintMediaManager::process_filename(const char* raw_filename) {
 }
 
 void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filename) {
-    // If we already have a directly-set thumbnail path, don't overwrite it.
-    // This happens when PrintStartController sets the path from a pre-extracted
-    // USB thumbnail before the filename observer fires.
+    // Check if thumbnail is already set (e.g., PrintStartController set it from USB).
+    // We still need metadata for layer_count and estimated_time, so don't early-return.
     const char* current_thumb =
         lv_subject_get_string(printer_state_.get_print_thumbnail_path_subject());
-    if (current_thumb && current_thumb[0] != '\0') {
-        spdlog::debug("[ActivePrintMediaManager] Thumbnail already set ({}), skipping API lookup",
-                      current_thumb);
-        return;
+    bool skip_thumbnail = (current_thumb && current_thumb[0] != '\0');
+    if (skip_thumbnail) {
+        spdlog::debug(
+            "[ActivePrintMediaManager] Thumbnail already set ({}), will fetch metadata only",
+            current_thumb);
     }
 
     // Skip if no API available
@@ -184,12 +184,12 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
     // (Moonraker only has metadata for original files, not modified copies)
     std::string metadata_filename = resolve_gcode_filename(filename);
 
-    spdlog::debug("[ActivePrintMediaManager] Loading thumbnail for: {}", metadata_filename);
+    spdlog::debug("[ActivePrintMediaManager] Loading metadata for: {}", metadata_filename);
 
-    // Get file metadata to find thumbnail path
+    // Get file metadata for layer count, estimated time, and optionally thumbnail
     api_->files().get_file_metadata(
         metadata_filename,
-        [this, current_gen](const FileMetadata& metadata) {
+        [this, current_gen, skip_thumbnail](const FileMetadata& metadata) {
             // Check if this callback is still relevant
             if (current_gen != thumbnail_load_generation_) {
                 spdlog::trace(
@@ -198,7 +198,7 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
                 return;
             }
 
-            // Also set total layer count from metadata while we have it
+            // Set total layer count from metadata
             if (metadata.layer_count > 0) {
                 int layer_count = static_cast<int>(metadata.layer_count);
                 PrinterState* state = &printer_state_;
@@ -218,6 +218,12 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
                     [state](int* seconds) { state->set_estimated_print_time(*seconds); });
                 spdlog::debug("[ActivePrintMediaManager] Set estimated print time from metadata: {}s",
                               metadata.estimated_time);
+            }
+
+            // Skip thumbnail fetch if one is already set
+            if (skip_thumbnail) {
+                spdlog::debug("[ActivePrintMediaManager] Skipping thumbnail fetch (already set)");
+                return;
             }
 
             // Get the largest thumbnail available

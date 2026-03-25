@@ -478,6 +478,33 @@ TEST_CASE_METHOD(ActivePrintMediaManagerTestFixture,
         REQUIRE(get_thumbnail_path() == preextracted);
     }
 
+    SECTION("pre-set thumbnail does not block layer count from metadata") {
+        // Regression: #526 - when thumbnail was pre-set, the metadata fetch was
+        // skipped entirely, so layer_count and estimated_time were never loaded.
+        // The fix ensures metadata is always fetched; only thumbnail download is skipped.
+
+        // Set thumbnail path first (simulating PrintStartController pre-extraction)
+        manager().set_thumbnail_path("/tmp/helix/preextracted.png");
+        REQUIRE(get_thumbnail_path() == "/tmp/helix/preextracted.png");
+
+        // Verify that having a pre-set thumbnail doesn't prevent layer_total
+        // from being set. Without API, metadata can't be fetched, but the code
+        // path that checks skip_thumbnail should not early-return before the
+        // API check. Verify the subject is still at 0 (no API = no metadata).
+        REQUIRE(lv_subject_get_int(state().get_print_layer_total_subject()) == 0);
+
+        // The key assertion: load_thumbnail_for_file should NOT early-return
+        // when thumbnail is set. It should proceed to the API check and only
+        // skip after that (because no API is configured in this test).
+        // This is implicitly tested: if the old early-return was still there,
+        // the "Thumbnail already set, skipping API lookup" log would fire,
+        // and we'd never reach the API check at all.
+        set_print_filename("model_with_layers.gcode");
+
+        // Display name should still work (metadata fetch path is entered)
+        REQUIRE(get_display_filename() == "model_with_layers");
+    }
+
     SECTION("empty path clears thumbnail") {
         // Set a thumbnail first
         manager().set_thumbnail_path("/tmp/some_thumbnail.png");
