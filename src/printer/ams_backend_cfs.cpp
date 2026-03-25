@@ -627,4 +627,29 @@ std::vector<helix::printer::DeviceAction> AmsBackendCfs::get_device_actions() co
     };
 }
 
+AmsError AmsBackendCfs::execute_device_action(const std::string& action_id,
+                                               const std::any& value) {
+    if (action_id == "refresh_rfid") {
+        // Re-query box state from Moonraker (the box module polls CFS automatically)
+        on_started(); // Triggers printer.objects.query for box state
+        return AmsErrorHelper::success();
+    }
+
+    if (action_id == "toggle_auto_refill") {
+        return execute_gcode("BOX_ENABLE_AUTO_REFILL");
+    }
+
+    if (action_id == "nozzle_clean") {
+        return execute_gcode("BOX_NOZZLE_CLEAN");
+    }
+
+    if (action_id == "comm_test") {
+        // Query box state as a connectivity test
+        on_started();
+        return AmsErrorHelper::success();
+    }
+
+    return AmsErrorHelper::not_supported("Unknown action: " + action_id);
+}
+
 } // namespace helix::printer

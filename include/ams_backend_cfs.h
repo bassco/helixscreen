@@ -102,6 +102,8 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     [[nodiscard]] bool tracks_weight_locally() const override { return false; }
     [[nodiscard]] bool manages_active_spool() const override { return false; }
     [[nodiscard]] std::vector<helix::printer::DeviceAction> get_device_actions() const override;
+    AmsError execute_device_action(const std::string& action_id,
+                                   const std::any& value = {}) override;
 
     // Static parser (public for testing)
     static AmsSystemInfo parse_box_status(const nlohmann::json& box_json);
