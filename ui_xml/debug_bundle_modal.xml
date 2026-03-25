@@ -46,10 +46,10 @@
       <!-- STATE 1: Uploading -->
       <lv_obj name="uploading_container"
               width="100%" height="content" flex_flow="column" style_pad_all="0" style_pad_gap="#space_md"
-              style_flex_cross_place="center">
+              style_flex_cross_place="center" style_flex_main_place="center">
         <bind_flag_if_not_eq subject="debug_bundle_state" flag="hidden" ref_value="1"/>
-        <lv_spinner width="48" height="48"/>
-        <text_body bind_text="debug_bundle_status" style_text_align="center"/>
+        <spinner size="lg" align="center"/>
+        <text_body bind_text="debug_bundle_status" width="100%" style_text_align="center"/>
       </lv_obj>
 
       <!-- STATE 2: Success -->
