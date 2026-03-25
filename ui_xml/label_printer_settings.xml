@@ -81,6 +81,15 @@
         </lv_obj>
       </lv_obj>
 
+      <!-- Label count for IPP sheet printing — visible when IPP protocol detected -->
+      <setting_dropdown_row name="row_label_count"
+                            label="Labels Per Sheet" label_tag="Labels Per Sheet" icon="view_grid"
+                            description="How many labels to print"
+                            description_tag="How many labels to print"
+                            callback="on_lp_label_count_changed">
+        <bind_flag_if_eq subject="ipp_selected" flag="hidden" ref_value="0"/>
+      </setting_dropdown_row>
+
       <!-- Label Size (shared) -->
       <setting_dropdown_row name="row_label_size"
                             label="Label Size" label_tag="Label Size" icon="ruler"

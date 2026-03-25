@@ -62,4 +62,44 @@ inline int label_printer_score(const DiscoveredPrinter& printer) {
     return 10;
 }
 
+/// Score how likely a discovered printer is to be a standard page printer (for IPP sheet labels).
+/// Higher scores = more likely. 0 = definitely not a page printer.
+inline int ipp_printer_score(const DiscoveredPrinter& printer) {
+    auto lower = [](const std::string& s) {
+        std::string out = s;
+        std::transform(out.begin(), out.end(), out.begin(), ::tolower);
+        return out;
+    };
+    std::string name = lower(printer.name);
+
+    // Label printers — NOT standard page printers
+    if (name.find("ql-") != std::string::npos || name.find("ql ") != std::string::npos)
+        return 0;
+    if (name.find("labelwriter") != std::string::npos || name.find("dymo") != std::string::npos)
+        return 0;
+    if (name.find("zebra") != std::string::npos)
+        return 0;
+    if (name.find("niimbot") != std::string::npos || name.find("phomemo") != std::string::npos)
+        return 0;
+
+    // Strong positive signals for standard printers
+    if (name.find("laserjet") != std::string::npos || name.find("officejet") != std::string::npos)
+        return 100;
+    if (name.find("pixma") != std::string::npos || name.find("ecotank") != std::string::npos)
+        return 100;
+    if (name.find("epson") != std::string::npos)
+        return 90;
+    if (name.find("envy") != std::string::npos || name.find("inkjet") != std::string::npos)
+        return 90;
+    if (name.find("brother") != std::string::npos)
+        return 70; // Could be label or page printer
+    if (name.find("canon") != std::string::npos)
+        return 80;
+    if (name.find("hp") != std::string::npos)
+        return 60;
+
+    // Unknown — probably a standard printer if found via _ipp._tcp
+    return 50;
+}
+
 } // namespace helix

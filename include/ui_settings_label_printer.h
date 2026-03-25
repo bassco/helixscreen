@@ -45,8 +45,16 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void handle_bt_printer_selected(int index);
     void handle_bt_scan();
     void handle_bt_connect();
+    void handle_label_count_changed(int index);
 
   private:
+    /// A discovered network printer with auto-detected protocol
+    struct DiscoveredNetworkPrinter {
+        DiscoveredPrinter printer;
+        std::string protocol; ///< "raw" or "ipp"
+        int score;
+    };
+
     void init_address_input();
     void init_port_input();
     void init_label_size_dropdown();
@@ -55,21 +63,27 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void init_printer_type_dropdown();
     void init_usb_printer_dropdown();
     void init_bt_printer_dropdown();
+    void init_label_count_dropdown();
     void start_label_printer_discovery();
     void stop_label_printer_discovery();
     void start_usb_detection();
     void stop_usb_detection();
     void start_bt_discovery();
     void stop_bt_discovery();
-    void on_printers_discovered(const std::vector<DiscoveredPrinter>& printers);
+    void merge_and_update_discovery();
     void on_usb_printers_detected(const std::vector<helix::UsbPrinterInfo>& printers);
+    void update_ipp_selected_subject();
 
     bool inputs_initialized_ = false; ///< Guard against stacking duplicate event callbacks
 
-    // mDNS discovery for Brother QL printers
-    std::unique_ptr<IMdnsDiscovery> mdns_discovery_;
-    std::vector<DiscoveredPrinter> discovered_printers_;
+    // mDNS discovery (raw TCP + IPP, merged into single list)
+    std::unique_ptr<IMdnsDiscovery> mdns_discovery_;     ///< _pdl-datastream._tcp
+    std::unique_ptr<IMdnsDiscovery> ipp_mdns_discovery_; ///< _ipp._tcp
+    std::vector<DiscoveredPrinter> raw_printers_;        ///< temp buffer for raw TCP results
+    std::vector<DiscoveredPrinter> ipp_printers_;        ///< temp buffer for IPP results
+    std::vector<DiscoveredNetworkPrinter> discovered_network_printers_; ///< merged list
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
+    lv_subject_t ipp_selected_subject_{}; ///< 0=not IPP, 1=IPP protocol selected
 
     // USB printer detection
     std::unique_ptr<helix::UsbPrinterDetector> usb_detector_;
@@ -109,6 +123,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     static void on_bt_printer_selected(lv_event_t* e);
     static void on_bt_scan(lv_event_t* e);
     static void on_bt_connect(lv_event_t* e);
+    static void on_label_count_changed(lv_event_t* e);
 
     // Pairing modal callbacks
     static void on_pair_confirm(lv_event_t* e);

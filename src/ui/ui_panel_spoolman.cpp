@@ -15,6 +15,7 @@
 
 #include "ams_state.h"
 #include "app_globals.h"
+#include "ipp_print_modal.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
 #include "format_utils.h"
@@ -832,14 +833,17 @@ void SpoolmanPanel::print_label_for_spool(int spool_id) {
         return;
     }
 
-    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
-
-    helix::print_spool_label(*spool, [](bool success, const std::string& error) {
+    auto print_cb = [](bool success, const std::string& error) {
         if (success) {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
         } else {
             spdlog::error("[SpoolmanPanel] Print failed: {}", error);
             ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
         }
-    });
+    };
+
+    if (!helix::maybe_show_ipp_print_modal(*spool, print_cb)) {
+        ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
+        helix::print_spool_label(*spool, print_cb);
+    }
 }

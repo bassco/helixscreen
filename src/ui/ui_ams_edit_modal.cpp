@@ -13,8 +13,9 @@
 #include "color_utils.h"
 #include "filament_database.h"
 #include "format_utils.h"
+#include "ipp_print_modal.h"
 #include "label_printer_settings.h"
-#include "label_renderer.h"
+#include "label_printer_utils.h"
 #include "moonraker_api.h"
 #include "ui_overlay_qr_scanner.h"
 #include "spoolman_slot_saver.h"
@@ -736,20 +737,7 @@ void AmsEditModal::handle_print_label() {
         return;
     }
 
-    std::string host = settings.get_printer_address();
-    int port = settings.get_printer_port();
-    int size_idx = settings.get_label_size_index();
-    int preset_idx = settings.get_label_preset();
-
-    auto sizes = helix::BrotherQLPrinter::supported_sizes_static();
-    if (size_idx < 0 || size_idx >= static_cast<int>(sizes.size()))
-        size_idx = 0;
-    const auto& label_size = sizes[size_idx];
-
-    auto preset = static_cast<helix::LabelPreset>(
-        std::clamp(preset_idx, 0, static_cast<int>(helix::LabelPreset::MINIMAL)));
-
-    // Try to find richer spool data from cached Spoolman spools
+    // Build SpoolInfo from AMS slot data
     SpoolInfo spool_info;
     bool found = false;
     for (const auto& spool : cached_spools_) {
@@ -761,7 +749,6 @@ void AmsEditModal::handle_print_label() {
     }
 
     if (!found) {
-        // Fall back to building SpoolInfo from working_info_ fields
         spool_info.id = working_info_.spoolman_id;
         spool_info.vendor = working_info_.brand;
         spool_info.material = working_info_.material;
@@ -770,25 +757,22 @@ void AmsEditModal::handle_print_label() {
         spool_info.initial_weight_g = working_info_.total_weight_g;
     }
 
-    auto bitmap = helix::LabelRenderer::render(spool_info, preset, label_size);
-    if (bitmap.empty()) {
-        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to render label"), 3000);
-        return;
+    // Use the standard print flow (handles all printer types including IPP modal)
+    auto print_cb = [](bool success, const std::string& error) {
+        if (success) {
+            ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                          lv_tr("Label printed"), 2000);
+        } else {
+            spdlog::error("[AmsEditModal] Print failed: {}", error);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          lv_tr("Print failed"), 3000);
+        }
+    };
+
+    if (!helix::maybe_show_ipp_print_modal(spool_info, print_cb)) {
+        ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
+        helix::print_spool_label(spool_info, print_cb);
     }
-
-    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
-
-    printer_.print_label(host, port, bitmap, label_size,
-                         [](bool success, const std::string& error) {
-                             if (success) {
-                                 ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                                               lv_tr("Label printed"), 2000);
-                             } else {
-                                 spdlog::error("[AmsEditModal] Print failed: {}", error);
-                                 ToastManager::instance().show(ToastSeverity::ERROR,
-                                                               lv_tr("Print failed"), 3000);
-                             }
-                         });
 }
 
 void AmsEditModal::update_spoolman_button_state() {

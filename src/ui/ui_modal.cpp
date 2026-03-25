@@ -581,24 +581,13 @@ bool Modal::show(lv_obj_t* parent, const char** attrs) {
 
     spdlog::info("[{}] Showing modal", get_name());
 
-    // Register event callbacks for XML components
+    // Register generic XML callbacks for backwards compatibility with modals
+    // that use XML callback names without wire_*_button(). Per-modal aliases
+    // are no longer needed — wire_*_button() now adds event callbacks directly.
     register_xml_callbacks({
         {"on_modal_ok_clicked", ok_button_cb},
         {"on_modal_cancel_clicked", cancel_button_cb},
         {"on_modal_tertiary_clicked", tertiary_button_cb},
-        // Register unique callback aliases for specific modals (same handlers, unique names)
-        {"on_print_cancel_confirm", ok_button_cb},
-        {"on_print_cancel_dismiss", cancel_button_cb},
-        {"on_z_offset_save", ok_button_cb},
-        {"on_z_offset_cancel", cancel_button_cb},
-        {"on_exclude_object_confirm", ok_button_cb},
-        {"on_exclude_object_cancel", cancel_button_cb},
-        {"on_runout_load_filament", ok_button_cb},
-        {"on_runout_resume", cancel_button_cb},
-        {"on_runout_cancel_print", tertiary_button_cb},
-        {"on_runout_unload_filament", quaternary_button_cb},
-        {"on_runout_purge", quinary_button_cb},
-        {"on_runout_ok", senary_button_cb},
     });
 
     // Use internal create method
@@ -688,10 +677,12 @@ lv_obj_t* Modal::find_widget(const char* name) {
     return lv_obj_find_by_name(dialog_, name);
 }
 
-void Modal::wire_button(const char* name, const char* role_name) {
+void Modal::wire_button(const char* name, const char* role_name, lv_event_cb_t cb) {
     lv_obj_t* btn = find_widget(name);
     if (btn) {
         lv_obj_set_user_data(btn, this);
+        // Add direct event callback so button works even without XML callback attribute
+        lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
         spdlog::trace("[{}] Wired {} button '{}'", get_name(), role_name, name);
     } else {
         spdlog::warn("[{}] {} button '{}' not found", get_name(), role_name, name);
@@ -699,22 +690,22 @@ void Modal::wire_button(const char* name, const char* role_name) {
 }
 
 void Modal::wire_ok_button(const char* name) {
-    wire_button(name, "OK");
+    wire_button(name, "OK", ok_button_cb);
 }
 void Modal::wire_cancel_button(const char* name) {
-    wire_button(name, "Cancel");
+    wire_button(name, "Cancel", cancel_button_cb);
 }
 void Modal::wire_tertiary_button(const char* name) {
-    wire_button(name, "Tertiary");
+    wire_button(name, "Tertiary", tertiary_button_cb);
 }
 void Modal::wire_quaternary_button(const char* name) {
-    wire_button(name, "Quaternary");
+    wire_button(name, "Quaternary", quaternary_button_cb);
 }
 void Modal::wire_quinary_button(const char* name) {
-    wire_button(name, "Quinary");
+    wire_button(name, "Quinary", quinary_button_cb);
 }
 void Modal::wire_senary_button(const char* name) {
-    wire_button(name, "Senary");
+    wire_button(name, "Senary", senary_button_cb);
 }
 
 // ============================================================================

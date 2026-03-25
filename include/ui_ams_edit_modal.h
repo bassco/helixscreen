@@ -7,7 +7,6 @@
 #include "ui_modal.h"
 
 #include "ams_types.h"
-#include "brother_ql_printer.h"
 #include "spoolman_types.h"
 #include "subject_managed_panel.h"
 
@@ -107,9 +106,6 @@ class AmsEditModal : public Modal {
 
     // === Owned color picker ===
     std::unique_ptr<ColorPicker> color_picker_;
-
-    // === Label printer ===
-    helix::BrotherQLPrinter printer_;
 
     // === Subjects for XML binding ===
     SubjectManager subjects_;

@@ -253,7 +253,7 @@ class Modal {
     // Internal implementation
     bool create_and_show(lv_obj_t* parent, const char* comp_name, const char** attrs);
     void destroy();
-    void wire_button(const char* name, const char* role_name);
+    void wire_button(const char* name, const char* role_name, lv_event_cb_t cb);
 
     // Static event handlers
     static void backdrop_click_cb(lv_event_t* e);

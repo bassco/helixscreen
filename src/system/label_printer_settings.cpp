@@ -30,6 +30,14 @@ void LabelPrinterSettingsManager::init_subjects() {
 
     // Printer type: 0=network, 1=usb, 2=bluetooth
     std::string type_str = config->get<std::string>("/label_printer/type", "network");
+    // Migrate legacy "ipp" type to "network" with ipp protocol
+    if (type_str == "ipp") {
+        type_str = "network";
+        config->set<std::string>("/label_printer/type", "network");
+        config->set<std::string>("/label_printer/protocol", "ipp");
+        config->save();
+        spdlog::info("[LabelPrinterSettings] Migrated legacy ipp type to network+ipp protocol");
+    }
     int type_int = 0;
     if (type_str == "usb") type_int = 1;
     else if (type_str == "bluetooth") type_int = 2;
@@ -103,6 +111,18 @@ void LabelPrinterSettingsManager::set_printer_address(const std::string& addr) {
     if (subjects_initialized_) {
         lv_subject_set_int(&printer_configured_subject_, addr.empty() ? 0 : 1);
     }
+}
+
+std::string LabelPrinterSettingsManager::get_printer_protocol() const {
+    Config* config = Config::get_instance();
+    return config->get<std::string>("/label_printer/protocol", "raw");
+}
+
+void LabelPrinterSettingsManager::set_printer_protocol(const std::string& protocol) {
+    spdlog::info("[LabelPrinterSettings] set_printer_protocol('{}')", protocol);
+    Config* config = Config::get_instance();
+    config->set<std::string>("/label_printer/protocol", protocol);
+    config->save();
 }
 
 int LabelPrinterSettingsManager::get_printer_port() const {
@@ -234,6 +254,19 @@ void LabelPrinterSettingsManager::set_bt_transport(const std::string& transport)
     config->save();
 }
 
+int LabelPrinterSettingsManager::get_label_count() const {
+    Config* config = Config::get_instance();
+    return config->get<int>("/label_printer/label_count", 1);
+}
+
+void LabelPrinterSettingsManager::set_label_count(int count) {
+    spdlog::info("[LabelPrinterSettings] set_label_count({})", count);
+
+    Config* config = Config::get_instance();
+    config->set<int>("/label_printer/label_count", count);
+    config->save();
+}
+
 bool LabelPrinterSettingsManager::is_configured() const {
     const auto type = get_printer_type();
     if (type == "usb") {
@@ -242,5 +275,6 @@ bool LabelPrinterSettingsManager::is_configured() const {
     if (type == "bluetooth") {
         return !get_bt_address().empty();
     }
+    // "network" requires an address (covers both raw and ipp protocols)
     return !get_printer_address().empty();
 }

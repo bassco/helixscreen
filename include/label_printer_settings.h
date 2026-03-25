@@ -16,8 +16,9 @@ namespace helix {
  *
  * Owns label printer configuration and persistence:
  * - printer_type ("network", "usb", or "bluetooth")
- * - printer_address (IP/hostname of Brother QL printer)
- * - printer_port (raw socket port, default 9100)
+ * - printer_address (IP/hostname of Brother QL printer or IPP printer)
+ * - printer_port (raw socket port, default 9100; IPP uses 631)
+ * - printer_protocol ("raw" or "ipp") — auto-detected from mDNS discovery
  * - usb_vid, usb_pid, usb_serial (USB device identification)
  * - bt_address (Bluetooth MAC address)
  * - bt_transport ("spp" or "ble")
@@ -46,11 +47,17 @@ class LabelPrinterSettingsManager {
     // GETTERS / SETTERS
     // =========================================================================
 
-    /** @brief Get printer type ("network" or "usb") */
+    /** @brief Get printer type ("network", "usb", or "bluetooth") */
     std::string get_printer_type() const;
 
     /** @brief Set printer type (updates type + configured subjects, persists) */
     void set_printer_type(const std::string& type);
+
+    /** @brief Get network printer protocol ("raw" or "ipp") */
+    std::string get_printer_protocol() const;
+
+    /** @brief Set network printer protocol (persists to config) */
+    void set_printer_protocol(const std::string& protocol);
 
     /** @brief Get printer IP address or hostname */
     std::string get_printer_address() const;
@@ -114,6 +121,12 @@ class LabelPrinterSettingsManager {
     /** @brief Set Bluetooth transport type ("spp" or "ble", persists) */
     void set_bt_transport(const std::string& transport);
 
+    /** @brief Get label count per print job (IPP sheet labels, default 1) */
+    int get_label_count() const;
+
+    /** @brief Set label count per print job (persists to config) */
+    void set_label_count(int count);
+
     /** @brief True if printer is configured (network: address non-empty; USB: VID+PID set; BT: address non-empty) */
     bool is_configured() const;
 
@@ -126,7 +139,7 @@ class LabelPrinterSettingsManager {
         return &printer_configured_subject_;
     }
 
-    /** @brief Printer type subject (integer: 0=network, 1=usb) */
+    /** @brief Printer type subject (integer: 0=network, 1=usb, 2=bluetooth) */
     lv_subject_t* subject_printer_type() {
         return &printer_type_subject_;
     }
@@ -138,7 +151,7 @@ class LabelPrinterSettingsManager {
     SubjectManager subjects_;
 
     lv_subject_t printer_configured_subject_; // int: 0/1
-    lv_subject_t printer_type_subject_;       // int: 0=network, 1=usb
+    lv_subject_t printer_type_subject_;       // int: 0=network, 1=usb, 2=bluetooth
 
     bool subjects_initialized_ = false;
 };

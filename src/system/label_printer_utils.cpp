@@ -6,6 +6,7 @@
 #include "brother_ql_bt_printer.h"
 #include "brother_ql_printer.h"
 #include "bt_discovery_utils.h"
+#include "ipp_printer.h"
 #include "label_printer_settings.h"
 #include "label_renderer.h"
 #include "makeid_bt_printer.h"
@@ -14,6 +15,7 @@
 #include "niimbot_protocol.h"
 #include "phomemo_bt_printer.h"
 #include "phomemo_printer.h"
+#include "sheet_label_layout.h"
 #include "ui_update_queue.h"
 #include "usb_printer_detector.h"
 
@@ -26,11 +28,15 @@ namespace helix {
 void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
     auto& settings = LabelPrinterSettingsManager::instance();
     const std::string type = settings.get_printer_type();
+    const std::string protocol = settings.get_printer_protocol();
     const bool is_usb = (type == "usb");
     const bool is_bt = (type == "bluetooth");
+    const bool is_ipp = (type == "network" && protocol == "ipp");
 
     std::vector<LabelSize> sizes;
-    if (is_usb) {
+    if (is_ipp) {
+        sizes = IppPrinter::supported_sizes_static();
+    } else if (is_usb) {
         sizes = PhomemoPrinter::supported_sizes_static();
     } else if (is_bt) {
         const auto bt_name = settings.get_bt_name();
@@ -59,7 +65,15 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         return;
     }
 
-    if (is_usb) {
+    if (is_ipp) {
+        static IppPrinter ipp_printer;
+        ipp_printer.set_target(settings.get_printer_address(),
+                               settings.get_printer_port(),
+                               "ipp/print");
+        ipp_printer.set_sheet_template(size_idx);
+        ipp_printer.set_label_count(settings.get_label_count());
+        ipp_printer.print(bitmap, label_size, callback);
+    } else if (is_usb) {
         auto detected = UsbPrinterDetector().scan();
         uint16_t vid = settings.get_usb_vid();
         uint16_t pid = settings.get_usb_pid();

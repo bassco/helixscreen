@@ -12,6 +12,8 @@
 
 #include "bluetooth_loader.h"
 #include "brother_ql_printer.h"
+#include "ipp_printer.h"
+#include "sheet_label_layout.h"
 #include "bt_discovery_utils.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
@@ -70,6 +72,9 @@ static std::vector<helix::LabelSize> get_sizes_for_current_printer() {
     auto& settings = LabelPrinterSettingsManager::instance();
     const auto type = settings.get_printer_type();
 
+    if (type == "network" && settings.get_printer_protocol() == "ipp") {
+        return helix::IppPrinter::supported_sizes_static();
+    }
     if (type == "usb") {
         return helix::PhomemoPrinter::supported_sizes_static();
     }
@@ -121,6 +126,7 @@ LabelPrinterSettingsOverlay::~LabelPrinterSettingsOverlay() {
     // Deinit subjects
     if (subjects_initialized_) {
         lv_subject_deinit(&bt_scanning_subject_);
+        lv_subject_deinit(&ipp_selected_subject_);
     }
 
     // Deinit BT context only in destructor, not in stop_bt_discovery()
@@ -155,6 +161,12 @@ void LabelPrinterSettingsOverlay::init_subjects() {
     lv_subject_init_int(&bt_scanning_subject_, 0);
     lv_xml_register_subject(nullptr, "bt_scanning", &bt_scanning_subject_);
 
+    // IPP selected subject (0=not IPP, 1=IPP protocol selected within network type)
+    int ipp_initial = (LabelPrinterSettingsManager::instance().get_printer_type() == "network" &&
+                       LabelPrinterSettingsManager::instance().get_printer_protocol() == "ipp") ? 1 : 0;
+    lv_subject_init_int(&ipp_selected_subject_, ipp_initial);
+    lv_xml_register_subject(nullptr, "ipp_selected", &ipp_selected_subject_);
+
     subjects_initialized_ = true;
     spdlog::debug("[{}] Subjects initialized", get_name());
 }
@@ -170,6 +182,7 @@ void LabelPrinterSettingsOverlay::register_callbacks() {
         {"on_lp_bt_printer_selected", on_bt_printer_selected},
         {"on_lp_bt_scan", on_bt_scan},
         {"on_lp_bt_connect", on_bt_connect},
+        {"on_lp_label_count_changed", on_label_count_changed},
     });
 
     spdlog::debug("[{}] Callbacks registered", get_name());
@@ -238,6 +251,10 @@ void LabelPrinterSettingsOverlay::on_activate() {
     init_discovery_dropdown();
     init_usb_printer_dropdown();
     init_bt_printer_dropdown();
+    init_label_count_dropdown();
+
+    // Update IPP selected subject based on current config
+    update_ipp_selected_subject();
 
     // Start detection based on current printer type
     auto& settings = LabelPrinterSettingsManager::instance();
@@ -382,59 +399,74 @@ void LabelPrinterSettingsOverlay::init_discovery_dropdown() {
 }
 
 void LabelPrinterSettingsOverlay::start_label_printer_discovery() {
-    if (mdns_discovery_ && mdns_discovery_->is_discovering()) {
-        return;
+    // Start raw TCP discovery (_pdl-datastream._tcp)
+    if (!mdns_discovery_ || !mdns_discovery_->is_discovering()) {
+        mdns_discovery_ = std::make_unique<MdnsDiscovery>("_pdl-datastream._tcp.local");
+        auto alive = alive_;
+        mdns_discovery_->start_discovery(
+            [this, alive](const std::vector<DiscoveredPrinter>& printers) {
+                if (!alive->load()) return;
+                raw_printers_ = printers;
+                merge_and_update_discovery();
+            });
     }
 
-    mdns_discovery_ = std::make_unique<MdnsDiscovery>("_pdl-datastream._tcp.local");
+    // Start IPP discovery (_ipp._tcp)
+    if (!ipp_mdns_discovery_ || !ipp_mdns_discovery_->is_discovering()) {
+        ipp_mdns_discovery_ = std::make_unique<MdnsDiscovery>("_ipp._tcp.local");
+        auto alive = alive_;
+        ipp_mdns_discovery_->start_discovery(
+            [this, alive](const std::vector<DiscoveredPrinter>& printers) {
+                if (!alive->load()) return;
+                ipp_printers_ = printers;
+                merge_and_update_discovery();
+            });
+    }
 
-    auto alive = alive_;
-    mdns_discovery_->start_discovery([this, alive](const std::vector<DiscoveredPrinter>& printers) {
-        if (!alive->load()) {
-            return;
-        }
-        on_printers_discovered(printers);
-    });
-
-    spdlog::debug("[{}] Started label printer mDNS discovery", get_name());
+    spdlog::debug("[{}] Started network printer mDNS discovery (raw TCP + IPP)", get_name());
 }
 
 void LabelPrinterSettingsOverlay::stop_label_printer_discovery() {
     if (mdns_discovery_) {
         mdns_discovery_->stop_discovery();
         mdns_discovery_.reset();
-        spdlog::debug("[{}] Stopped label printer mDNS discovery", get_name());
     }
+    if (ipp_mdns_discovery_) {
+        ipp_mdns_discovery_->stop_discovery();
+        ipp_mdns_discovery_.reset();
+    }
+    spdlog::debug("[{}] Stopped network printer mDNS discovery", get_name());
 }
 
-void LabelPrinterSettingsOverlay::on_printers_discovered(
-    const std::vector<DiscoveredPrinter>& printers) {
-    // Score and sort: likely label printers first, non-label printers excluded
-    struct ScoredPrinter {
-        DiscoveredPrinter printer;
-        int score;
-    };
+void LabelPrinterSettingsOverlay::merge_and_update_discovery() {
+    // Score and merge results from both raw TCP and IPP discoveries
+    discovered_network_printers_.clear();
 
-    std::vector<ScoredPrinter> scored;
-    for (const auto& p : printers) {
+    for (const auto& p : raw_printers_) {
         int score = helix::label_printer_score(p);
         if (score > 0) {
-            scored.push_back({p, score});
+            discovered_network_printers_.push_back({p, "raw", score});
         } else {
             spdlog::debug("[{}] Filtered out non-label printer: {} ({})", get_name(), p.name,
                           p.ip_address);
         }
     }
 
-    // Sort by score descending (most likely label printers first)
-    std::sort(scored.begin(), scored.end(),
-              [](const ScoredPrinter& a, const ScoredPrinter& b) { return a.score > b.score; });
-
-    // Store only the filtered/sorted list for selection
-    discovered_printers_.clear();
-    for (const auto& sp : scored) {
-        discovered_printers_.push_back(sp.printer);
+    for (const auto& p : ipp_printers_) {
+        int score = helix::ipp_printer_score(p);
+        if (score > 0) {
+            discovered_network_printers_.push_back({p, "ipp", score});
+        } else {
+            spdlog::debug("[{}] Filtered out non-page printer: {} ({})", get_name(), p.name,
+                          p.ip_address);
+        }
     }
+
+    // Sort by score descending (most likely printers first)
+    std::sort(discovered_network_printers_.begin(), discovered_network_printers_.end(),
+              [](const DiscoveredNetworkPrinter& a, const DiscoveredNetworkPrinter& b) {
+                  return a.score > b.score;
+              });
 
     if (!overlay_root_)
         return;
@@ -447,63 +479,102 @@ void LabelPrinterSettingsOverlay::on_printers_discovered(
     if (!dropdown)
         return;
 
+    // Dedup by IP+protocol — keep highest-scored per unique combination
+    {
+        std::vector<DiscoveredNetworkPrinter> deduped;
+        for (const auto& np : discovered_network_printers_) {
+            bool duplicate = false;
+            for (const auto& existing : deduped) {
+                if (existing.printer.ip_address == np.printer.ip_address &&
+                    existing.protocol == np.protocol) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                deduped.push_back(np);
+            }
+        }
+        discovered_network_printers_ = std::move(deduped);
+    }
+
     std::string options;
-    if (discovered_printers_.empty()) {
-        options = lv_tr("No label printers found");
+    if (discovered_network_printers_.empty()) {
+        options = lv_tr("No printers found");
     } else {
-        for (const auto& p : discovered_printers_) {
+        for (const auto& np : discovered_network_printers_) {
             if (!options.empty()) {
                 options += "\n";
             }
-            options += p.name + " (" + p.ip_address + ")";
+            options += np.printer.name + " (" + np.printer.ip_address + ")";
+            if (np.protocol == "ipp") {
+                options += " [IPP]"; // i18n: do not translate — protocol name
+            }
         }
     }
 
     lv_dropdown_set_options(dropdown, options.c_str());
 
-    spdlog::debug("[{}] Discovery update: {} total, {} likely label printers", get_name(),
-                  printers.size(), discovered_printers_.size());
+    spdlog::debug("[{}] Discovery update: {} raw + {} ipp = {} merged printers", get_name(),
+                  raw_printers_.size(), ipp_printers_.size(), discovered_network_printers_.size());
 
     // Auto-select the first discovered printer if no address is configured yet
-    if (!discovered_printers_.empty()) {
+    if (!discovered_network_printers_.empty()) {
         auto& settings = LabelPrinterSettingsManager::instance();
         if (!settings.is_configured()) {
             handle_printer_selected(0);
             spdlog::info("[{}] Auto-selected first discovered printer: {}", get_name(),
-                         discovered_printers_[0].name);
+                         discovered_network_printers_[0].printer.name);
         }
     }
 }
 
 void LabelPrinterSettingsOverlay::handle_printer_selected(int index) {
-    if (index < 0 || index >= static_cast<int>(discovered_printers_.size())) {
+    if (index < 0 || index >= static_cast<int>(discovered_network_printers_.size())) {
         return;
     }
 
-    const auto& printer = discovered_printers_[index];
-    spdlog::info("[{}] Selected printer: {} ({}:{})", get_name(), printer.name, printer.ip_address,
-                 printer.port);
+    const auto& np = discovered_network_printers_[index];
+    const auto& printer = np.printer;
+    int port = (np.protocol == "ipp") ? (printer.port > 0 ? printer.port : 631) : printer.port;
+
+    spdlog::info("[{}] Selected printer: {} ({}:{}, protocol={})", get_name(), printer.name,
+                 printer.ip_address, port, np.protocol);
 
     auto& settings = LabelPrinterSettingsManager::instance();
     settings.set_printer_address(printer.ip_address);
-    settings.set_printer_port(printer.port);
+    settings.set_printer_port(port);
+    settings.set_printer_protocol(np.protocol);
+
+    // Update IPP selected subject and refresh dependent UI
+    update_ipp_selected_subject();
+    init_label_size_dropdown();
+    init_label_count_dropdown();
 
     // Update address and port input fields
     if (overlay_root_) {
-        lv_obj_t* row = lv_obj_find_by_name(overlay_root_, "row_address_port");
-        if (row) {
-            lv_obj_t* addr_input = lv_obj_find_by_name(row, "input_address");
+        lv_obj_t* addr_row = lv_obj_find_by_name(overlay_root_, "row_address_port");
+        if (addr_row) {
+            lv_obj_t* addr_input = lv_obj_find_by_name(addr_row, "input_address");
             if (addr_input) {
                 lv_textarea_set_text(addr_input, printer.ip_address.c_str());
             }
 
-            lv_obj_t* port_input = lv_obj_find_by_name(row, "input_port");
+            lv_obj_t* port_input = lv_obj_find_by_name(addr_row, "input_port");
             if (port_input) {
-                auto port_str = fmt::format("{}", printer.port);
+                auto port_str = fmt::format("{}", port);
                 lv_textarea_set_text(port_input, port_str.c_str());
             }
         }
     }
+}
+
+void LabelPrinterSettingsOverlay::update_ipp_selected_subject() {
+    if (!subjects_initialized_) return;
+    auto& settings = LabelPrinterSettingsManager::instance();
+    int ipp_val = (settings.get_printer_type() == "network" &&
+                   settings.get_printer_protocol() == "ipp") ? 1 : 0;
+    lv_subject_set_int(&ipp_selected_subject_, ipp_val);
 }
 
 // ============================================================================
@@ -523,7 +594,8 @@ void LabelPrinterSettingsOverlay::init_printer_type_dropdown() {
         const bool bt_available = helix::bluetooth::BluetoothLoader::instance().is_available();
         std::string options;
         if (bt_available) {
-            options = fmt::format("{}\n{}\n{}", lv_tr("Network"), lv_tr("USB"), lv_tr("Bluetooth"));
+            options = fmt::format("{}\n{}\n{}", lv_tr("Network"), lv_tr("USB"),
+                                 lv_tr("Bluetooth"));
         } else {
             options = fmt::format("{}\n{}", lv_tr("Network"), lv_tr("USB"));
         }
@@ -546,25 +618,46 @@ void LabelPrinterSettingsOverlay::init_printer_type_dropdown() {
 }
 
 void LabelPrinterSettingsOverlay::handle_type_changed(int index) {
+    const bool bt_available = helix::bluetooth::BluetoothLoader::instance().is_available();
     std::string type;
-    if (index == 0)
-        type = "network";
-    else if (index == 1)
-        type = "usb";
-    else if (index == 2)
-        type = "bluetooth";
-    else
-        type = "network";
+    if (bt_available) {
+        // 0=network, 1=usb, 2=bluetooth
+        if (index == 0)
+            type = "network";
+        else if (index == 1)
+            type = "usb";
+        else if (index == 2)
+            type = "bluetooth";
+        else
+            type = "network";
+    } else {
+        // 0=network, 1=usb (no bluetooth)
+        if (index == 0)
+            type = "network";
+        else if (index == 1)
+            type = "usb";
+        else
+            type = "network";
+    }
 
     spdlog::info("[{}] Printer type changed: {} (index={})", get_name(), type, index);
 
-    LabelPrinterSettingsManager::instance().set_printer_type(type);
+    auto& settings = LabelPrinterSettingsManager::instance();
+    settings.set_printer_type(type);
+
+    // Reset protocol to raw when switching away from network
+    if (type != "network") {
+        settings.set_printer_protocol("raw");
+    }
+
+    // Update IPP selected subject
+    update_ipp_selected_subject();
 
     // Refresh label size dropdown for new backend
     init_label_size_dropdown();
 
     // Reset label size to first option for new backend
-    LabelPrinterSettingsManager::instance().set_label_size_index(0);
+    settings.set_label_size_index(0);
 
     // Stop all discoveries, then start the appropriate one
     stop_label_printer_discovery();
@@ -580,10 +673,55 @@ void LabelPrinterSettingsOverlay::handle_type_changed(int index) {
         init_bt_printer_dropdown();
         // BT discovery is on-demand via scan button
     } else {
-        discovered_printers_.clear();
+        discovered_network_printers_.clear();
+        raw_printers_.clear();
+        ipp_printers_.clear();
         init_discovery_dropdown();
         start_label_printer_discovery();
     }
+}
+
+// ============================================================================
+// LABEL COUNT
+// ============================================================================
+
+void LabelPrinterSettingsOverlay::init_label_count_dropdown() {
+    if (!overlay_root_)
+        return;
+
+    lv_obj_t* row = lv_obj_find_by_name(overlay_root_, "row_label_count");
+    if (!row)
+        return;
+
+    lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
+    if (!dropdown)
+        return;
+
+    // Determine max labels from current sheet template
+    auto& settings = LabelPrinterSettingsManager::instance();
+    const auto& templates = helix::label::get_sheet_templates();
+    int tmpl_idx = std::clamp(settings.get_label_size_index(), 0,
+                              static_cast<int>(templates.size()) - 1);
+    int max_labels = templates[tmpl_idx].labels_per_sheet();
+
+    std::string options;
+    for (int i = 1; i <= max_labels; i++) {
+        if (i > 1)
+            options += "\n";
+        options += fmt::format("{}", i);
+    }
+    lv_dropdown_set_options(dropdown, options.c_str());
+
+    int saved_count = std::clamp(settings.get_label_count(), 1, max_labels);
+    lv_dropdown_set_selected(dropdown, static_cast<uint32_t>(saved_count - 1));
+
+    spdlog::trace("[{}] Label count dropdown initialized (max={})", get_name(), max_labels);
+}
+
+void LabelPrinterSettingsOverlay::handle_label_count_changed(int index) {
+    int count = index + 1; // dropdown index 0 = "1 label"
+    spdlog::info("[{}] Label count changed: {} (index {})", get_name(), count, index);
+    LabelPrinterSettingsManager::instance().set_label_count(count);
 }
 
 // ============================================================================
@@ -1180,6 +1318,14 @@ void LabelPrinterSettingsOverlay::on_bt_printer_selected(lv_event_t* e) {
 void LabelPrinterSettingsOverlay::on_bt_scan(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_bt_scan");
     get_label_printer_settings_overlay().handle_bt_scan();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void LabelPrinterSettingsOverlay::on_label_count_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_label_count_changed");
+    auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    get_label_printer_settings_overlay().handle_label_count_changed(index);
     LVGL_SAFE_EVENT_CB_END();
 }
 

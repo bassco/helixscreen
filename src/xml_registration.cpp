@@ -309,6 +309,7 @@ void register_xml_components() {
     register_xml("crash_report_modal.xml");
     register_xml("debug_bundle_modal.xml");
     register_xml("modal_dialog.xml");
+    register_xml("components/ipp_print_modal.xml");
     register_xml("numeric_keypad_panel.xml");
     register_xml("runout_guidance_modal.xml");
     register_xml("shutdown_modal.xml");

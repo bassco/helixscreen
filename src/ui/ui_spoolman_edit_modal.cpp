@@ -8,6 +8,7 @@
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
+#include "ipp_print_modal.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -564,16 +565,19 @@ void SpoolEditModal::handle_print_label() {
         return;
     }
 
-    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
-
-    helix::print_spool_label(working_spool_, [](bool success, const std::string& error) {
+    auto print_cb = [](bool success, const std::string& error) {
         if (success) {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
         } else {
             spdlog::error("[SpoolEditModal] Print failed: {}", error);
             ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
         }
-    });
+    };
+
+    if (!helix::maybe_show_ipp_print_modal(working_spool_, print_cb)) {
+        ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Printing label..."), 2000);
+        helix::print_spool_label(working_spool_, print_cb);
+    }
 }
 
 // ============================================================================
