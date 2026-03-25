@@ -14,6 +14,7 @@
 
 #include "moonraker_client.h"
 
+#include "system/telemetry_manager.h"
 #include "ui_error_reporting.h"
 #include "ui_update_queue.h"
 
@@ -144,6 +145,9 @@ void MoonrakerClient::set_connection_state(ConnectionState new_state) {
             if (max_reconnect_attempts_ > 0 && reconnect_attempts_ >= max_reconnect_attempts_) {
                 spdlog::error("[Moonraker Client] Max reconnect attempts ({}) exceeded",
                               max_reconnect_attempts_);
+                TelemetryManager::instance().record_error(
+                    "websocket", "reconnect_failed",
+                    fmt::format("max attempts ({}) exceeded", max_reconnect_attempts_));
 
                 // Emit event only once during reconnect sequence
                 if (!g_already_notified_max_attempts.load()) {
@@ -380,6 +384,9 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
                 j = json::parse(msg);
             } catch (const json::parse_error& e) {
                 LOG_ERROR_INTERNAL("[Moonraker Client] JSON parse error: {}", e.what());
+                TelemetryManager::instance().record_error(
+                    "websocket", "parse_error",
+                    fmt::format("JSON parse: {}", e.what()));
                 return;
             }
 
@@ -537,6 +544,8 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
 
             if (was_connected_) {
                 spdlog::warn("[Moonraker Client] WebSocket connection closed");
+                TelemetryManager::instance().record_error(
+                    "websocket", "disconnected", "connection closed unexpectedly");
                 was_connected_ = false;
                 discovery_.reset_identified(); // Reset so re-identification happens on reconnect
 

@@ -38,6 +38,7 @@
 #endif
 
 #include "lock_manager.h"
+#include "system/telemetry_manager.h"
 #include "ui_lock_screen.h"
 
 #include <spdlog/spdlog.h>
@@ -118,6 +119,8 @@ bool DisplayManager::init(const Config& config) {
     m_backend = DisplayBackend::create_auto();
     if (!m_backend) {
         spdlog::error("[DisplayManager] No display backend available");
+        TelemetryManager::instance().record_error(
+            "display", "init_failed", "no display backend available");
         lv_xml_deinit();
         lv_deinit();
         return false;
@@ -190,6 +193,8 @@ bool DisplayManager::init(const Config& config) {
 
     if (!m_display) {
         spdlog::error("[DisplayManager] Failed to create display (all backends exhausted)");
+        TelemetryManager::instance().record_error(
+            "display", "init_failed", "all display backends exhausted");
         m_backend.reset();
         lv_xml_deinit();
         lv_deinit();

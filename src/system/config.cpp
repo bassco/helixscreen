@@ -3,6 +3,7 @@
 
 #include "config.h"
 
+#include "system/telemetry_manager.h"
 #include "ui_error_reporting.h"
 
 #include "app_constants.h"
@@ -612,6 +613,9 @@ void Config::init(const std::string& config_path) {
             data = json::parse(std::fstream(path));
         } catch (const json::exception& e) {
             spdlog::error("[Config] Failed to parse {}: {}", path, e.what());
+            TelemetryManager::instance().record_error(
+                "file_io", "config_read_failed",
+                fmt::format("parse error: {}", e.what()));
             spdlog::warn("[Config] Config file is corrupt — resetting to defaults");
 
             // Backup the corrupt file for diagnosis
@@ -1017,6 +1021,8 @@ bool Config::save() {
             if (!o.is_open()) {
                 NOTIFY_ERROR("Could not save configuration file");
                 LOG_ERROR_INTERNAL("Failed to open temp file for writing: {}", tmp_path);
+                TelemetryManager::instance().record_error(
+                    "file_io", "config_write_failed", "cannot open temp file");
                 return false;
             }
 
@@ -1026,6 +1032,8 @@ bool Config::save() {
             if (!o.good()) {
                 NOTIFY_ERROR("Error writing configuration file");
                 LOG_ERROR_INTERNAL("Failed to write config to temp file: {}", tmp_path);
+                TelemetryManager::instance().record_error(
+                    "file_io", "config_write_failed", "write error on temp file");
                 std::remove(tmp_path.c_str());
                 return false;
             }
@@ -1035,6 +1043,9 @@ bool Config::save() {
             NOTIFY_ERROR("Failed to save configuration file");
             LOG_ERROR_INTERNAL("Failed to rename temp file '{}' to '{}': {}", tmp_path, target_path,
                                strerror(errno));
+            TelemetryManager::instance().record_error(
+                "file_io", "config_write_failed",
+                fmt::format("rename failed: {}", strerror(errno)));
             std::remove(tmp_path.c_str());
             return false;
         }
@@ -1049,6 +1060,9 @@ bool Config::save() {
     } catch (const std::exception& e) {
         NOTIFY_ERROR("Failed to save configuration: {}", e.what());
         LOG_ERROR_INTERNAL("Exception while saving config to {}: {}", path, e.what());
+        TelemetryManager::instance().record_error(
+            "file_io", "config_write_failed",
+            fmt::format("exception: {}", e.what()));
         return false;
     }
 }
