@@ -2,6 +2,8 @@
 
 #include "printer_discovery.h"
 
+#include "ui_update_queue.h"
+
 #include "ams_state.h"
 #include "app_globals.h"
 #include "filament_sensor_manager.h"
@@ -9,13 +11,12 @@
 #include "led/led_controller.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "probe_sensor_manager.h"
 #include "runtime_config.h"
-#include "ui_update_queue.h"
 #include "spdlog/spdlog.h"
 #include "standard_macros.h"
 #include "temperature_sensor_manager.h"
 #include "tool_state.h"
-#include "probe_sensor_manager.h"
 #include "width_sensor_manager.h"
 #include "width_sensor_types.h"
 
@@ -146,6 +147,9 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     // Initialize tool changer state from discovered hardware
     helix::ToolState::instance().init_tools(hardware);
 
+    // Restore persisted spool assignments (Moonraker DB primary, local JSON fallback)
+    helix::ToolState::instance().load_spool_assignments(api);
+
     // Initialize standard macros
     StandardMacros::instance().init(hardware);
 
@@ -170,22 +174,21 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
         std::string tracked = strips.front();
         nlohmann::json query_objects = nlohmann::json::object();
         query_objects[tracked] = nullptr;
-        client->send_jsonrpc(
-            "printer.objects.query", {{"objects", query_objects}},
-            [tracked](nlohmann::json response) {
-                if (!response.contains("result") ||
-                    !response["result"].contains("status")) {
-                    return;
-                }
-                const auto& status = response["result"]["status"];
-                if (!status.contains(tracked)) {
-                    return;
-                }
-                // Feed into PrinterState on the UI thread
-                helix::ui::queue_update([status]() {
-                    get_printer_state().update_from_status(status);
-                });
-            });
+        client->send_jsonrpc("printer.objects.query", {{"objects", query_objects}},
+                             [tracked](nlohmann::json response) {
+                                 if (!response.contains("result") ||
+                                     !response["result"].contains("status")) {
+                                     return;
+                                 }
+                                 const auto& status = response["result"]["status"];
+                                 if (!status.contains(tracked)) {
+                                     return;
+                                 }
+                                 // Feed into PrinterState on the UI thread
+                                 helix::ui::queue_update([status]() {
+                                     get_printer_state().update_from_status(status);
+                                 });
+                             });
     }
 
     spdlog::info("[PrinterDiscovery] Subsystem initialization complete");
