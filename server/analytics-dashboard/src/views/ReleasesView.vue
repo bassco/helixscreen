@@ -23,7 +23,7 @@
       <div v-if="loading" class="loading">Loading...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else-if="data" class="releases-grid">
-        <div v-for="ver in data.versions" :key="ver.version" class="release-card">
+        <div v-for="ver in sortedVersions" :key="ver.version" class="release-card">
           <h3 class="release-version">{{ ver.version }}</h3>
           <div class="release-stats">
             <div class="stat">
@@ -61,11 +61,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
+import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { ReleasesData } from '@/services/api'
 
+function compareVersions(a: string, b: string): number {
+  const pa = a.replace(/^v/, '').split('.').map(Number)
+  const pb = b.replace(/^v/, '').split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+const filters = useFiltersStore()
 const availableVersions = ref<string[]>([])
 const selectedVersions = ref<string[]>([])
 const data = ref<ReleasesData | null>(null)
@@ -83,12 +95,20 @@ function toggleVersion(v: string) {
 
 async function fetchVersionList() {
   try {
-    const adoption = await api.getAdoption('90d')
-    availableVersions.value = adoption.versions.map(v => v.name)
+    const adoption = await api.getAdoption(filters.queryString)
+    availableVersions.value = adoption.versions
+      .map(v => v.name)
+      .sort(compareVersions)
+    // Deselect versions no longer in the list
+    selectedVersions.value = selectedVersions.value.filter(v => availableVersions.value.includes(v))
   } catch {
     // Silently fail - versions will just be empty
   }
 }
+
+const sortedVersions = computed(() =>
+  [...(data.value?.versions ?? [])].sort((a, b) => compareVersions(a.version, b.version))
+)
 
 async function fetchReleases() {
   if (selectedVersions.value.length === 0) {
@@ -107,7 +127,7 @@ async function fetchReleases() {
 }
 
 watch(selectedVersions, fetchReleases, { deep: true })
-fetchVersionList()
+watch(() => filters.queryString, fetchVersionList, { immediate: true })
 </script>
 
 <style scoped>
