@@ -26,6 +26,7 @@ A major release bringing multi-page home screen, exclude object map, temperature
 - x86_64 Debian release target for x86 SBCs
 - Creality K1, K1 Max, and K1C linked to k1 preset
 - 74 new translated strings across all 8 languages to 100% coverage
+- IPP sheet label printing for standard inkjet/laser printers
 
 ### Fixed
 - Print status thumbnail not visible on first navigation in thumbnail-only mode
@@ -41,6 +42,8 @@ A major release bringing multi-page home screen, exclude object map, temperature
 - Service double-restart from pending update watcher on self-update (#509)
 - Dangling symlink install error (#496)
 - K2 display rotation set to 270° in preset
+- Crash from fan widget animation teardown race condition
+- CFS slot parsing, subscription, and load/unload operations now use M8200 protocol directly
 
 ### Changed
 - Config file renamed from `helixconfig.json` to `settings.json` with automatic migration
@@ -49,6 +52,7 @@ A major release bringing multi-page home screen, exclude object map, temperature
 - Dropdown styling improved with responsive item spacing and clipped corners
 - Thermistor widget renamed to Temperature Sensors
 - Persistently disable stock Creality UI on K1 devices (#495)
+- Print status buttons converted to outline style
 
 ## [0.98.12] - 2026-03-23
 
