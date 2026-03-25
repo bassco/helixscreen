@@ -122,7 +122,7 @@ class Modal {
 
     /**
      * @brief Show this modal instance
-     * @param parent Parent object (usually lv_screen_active())
+     * @param parent Ignored — always uses lv_screen_active() to avoid stale pointers
      * @param attrs Optional XML attributes
      * @return true if shown successfully
      *
@@ -306,7 +306,14 @@ class ModalStack {
     void clear() {
         for (auto& entry : stack_) {
             if (entry.backdrop) {
-                lv_obj_delete(entry.backdrop);  // dialog is a child of backdrop — deleted too
+                // Cancel animations before deletion — exit animation exec callbacks
+                // trigger lv_obj_set_style_*() which crashes on freed objects
+                lv_anim_delete(entry.backdrop, nullptr);
+                lv_obj_t* dialog = lv_obj_get_child(entry.backdrop, 0);
+                if (dialog) {
+                    lv_anim_delete(dialog, nullptr);
+                }
+                lv_obj_delete(entry.backdrop);
             }
         }
         stack_.clear();

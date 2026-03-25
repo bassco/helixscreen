@@ -573,13 +573,15 @@ bool Modal::any_visible() {
 // MODAL CLASS - INSTANCE API (for subclasses)
 // ============================================================================
 
-bool Modal::show(lv_obj_t* parent, const char** attrs) {
+bool Modal::show(lv_obj_t* /*parent*/, const char** attrs) {
     if (backdrop_) {
         spdlog::warn("[{}] show() called while already visible - hiding first", get_name());
         hide();
     }
 
-    parent_ = parent ? parent : lv_screen_active();
+    // Always use the active screen — callers may pass a stale parent_screen_
+    // pointer that becomes dangling after screen transitions (#522, #523, #524).
+    parent_ = lv_screen_active();
     if (!parent_) {
         spdlog::warn("[{}] No active screen - cannot show modal", get_name());
         return false;
@@ -588,15 +590,13 @@ bool Modal::show(lv_obj_t* parent, const char** attrs) {
     spdlog::info("[{}] Showing modal", get_name());
 
     // Register generic XML callbacks for backwards compatibility with modals
-    // that use XML callback names without wire_*_button(). Per-modal aliases
-    // are no longer needed — wire_*_button() now adds event callbacks directly.
+    // that use XML callback names without wire_*_button().
     register_xml_callbacks({
         {"on_modal_ok_clicked", ok_button_cb},
         {"on_modal_cancel_clicked", cancel_button_cb},
         {"on_modal_tertiary_clicked", tertiary_button_cb},
     });
 
-    // Use internal create method
     if (!create_and_show(parent_, component_name(), attrs)) {
         return false;
     }
