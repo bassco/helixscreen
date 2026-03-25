@@ -1,6 +1,6 @@
 # Label Printer System
 
-HelixScreen supports printing spool labels to thermal label printers via three transports (USB, Network, Bluetooth) and five printer protocol families (Brother QL, Phomemo, Niimbot, MakeID/Wewin).
+HelixScreen supports printing spool labels to thermal label printers via three transports (USB, Network, Bluetooth) and six printer protocol families (Brother QL, Phomemo, Niimbot, MakeID/Wewin, IPP). The IPP backend also supports printing on sheets of Avery-style labels using standard inkjet/laser printers.
 
 ## Architecture Overview
 
@@ -45,6 +45,12 @@ HelixScreen supports printing spool labels to thermal label printers via three t
 | `src/system/niimbot_protocol.cpp` | Niimbot packet framing, row encoding, print job builder |
 | `include/makeid_protocol.h` | MakeID/Wewin 0x66 protocol: framing, bitmap encode, LZO compress |
 | `src/system/makeid_protocol.cpp` | MakeID frame building, response parsing, print job builder |
+| `include/ipp_protocol.h` | IPP binary encoding/decoding (operations, attributes, responses) |
+| `src/system/ipp_protocol.cpp` | IPP 2.0 message format, request builder, response parser |
+| `include/pwg_raster.h` | PWG Raster format generation (PackBits compression) |
+| `src/system/pwg_raster.cpp` | PWG page header, 1bpp→8bpp conversion, scanline compression |
+| `include/sheet_label_layout.h` | Sheet label template database + tiling engine |
+| `src/system/sheet_label_layout.cpp` | 10 Avery templates (A4 + Letter), page layout math |
 
 ### Transport Backends
 
@@ -56,6 +62,7 @@ HelixScreen supports printing spool labels to thermal label printers via three t
 | `src/system/phomemo_bt_printer.cpp` | Phomemo over BT Classic (RFCOMM) or BLE GATT |
 | `src/system/niimbot_bt_printer.cpp` | Niimbot over BLE GATT |
 | `src/system/makeid_bt_printer.cpp` | MakeID over BT Classic (RFCOMM) |
+| `src/system/ipp_printer.cpp` | IPP over HTTP POST (libhv, PWG Raster, sheet labels) |
 | `include/bt_print_utils.h` | Shared RFCOMM send helper (Brother + Phomemo BT) |
 | `include/bt_discovery_utils.h` | Brand detection table, BLE UUID matching |
 

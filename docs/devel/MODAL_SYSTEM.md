@@ -195,6 +195,21 @@ void on_show() override {
 
 The button names must match `name="..."` attributes in your XML. These use `lv_obj_find_by_name()` internally.
 
+**`wire_*_button()` is self-sufficient.** Each call:
+1. Sets `user_data` on the button to `this` (the Modal instance)
+2. Adds a direct `LV_EVENT_CLICKED` handler that routes to the corresponding virtual method
+
+This means **no XML callback attribute is needed** on the button. `modal_button_row` can omit `primary_callback` / `secondary_callback` entirely when using a Modal subclass:
+
+```xml
+<!-- Preferred for Modal subclasses — no callback attributes needed -->
+<modal_button_row primary_text="Save" secondary_text="Cancel"/>
+```
+
+The generic XML callbacks (`on_modal_ok_clicked`, `on_modal_cancel_clicked`) are retained for the static `Modal::show("component")` API, which doesn't use `wire_*_button()`.
+
+If both an XML callback and `wire_*_button()` are present on the same button, the handler may fire twice — this is safe because `hide()` guards against double-execution.
+
 ### Protected Members
 
 | Member | Type | Purpose |
