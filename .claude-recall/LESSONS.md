@@ -8,12 +8,12 @@
 
 ## Active Lessons
 
-### [L008] [***--|****-] Design tokens and semantic widgets
-- **Uses**: 12 | **Velocity**: 3 | **Learned**: 2025-12-14 | **Last**: 2026-03-24 | **Category**: pattern | **Type**: informational
+### [L008] [***--|*****] Design tokens and semantic widgets
+- **Uses**: 13 | **Velocity**: 4 | **Learned**: 2025-12-14 | **Last**: 2026-03-25 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 23 | **Velocity**: 6.5 | **Learned**: 2025-12-14 | **Last**: 2026-03-24 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 25 | **Velocity**: 8.5 | **Learned**: 2025-12-14 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|**---] No mutex in destructors
@@ -21,7 +21,7 @@
 > Avoid mutex locks in destructors during static destruction phase. Other objects may already be destroyed, causing deadlock or crash on exit
 
 ### [L014] [***--|*****] Register all XML components
-- **Uses**: 36 | **Velocity**: 5 | **Learned**: 2025-12-14 | **Last**: 2026-03-14 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 37 | **Velocity**: 6 | **Learned**: 2025-12-14 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > When adding new XML components, must add lv_xml_component_register_from_file() call in main.cpp. Forgetting causes silent failures
 
 ### [L020] [***--|**---] ObserverGuard for cleanup
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 55.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-24 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 59.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|***--] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 59 | **Velocity**: 30.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-24 | **Category**: correction | **Type**: constraint
+- **Uses**: 64 | **Velocity**: 35.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-25 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -121,11 +121,11 @@
 > AD5M (192.168.1.67, root@) runs armv7l Linux 5.4.61 (BusyBox). Key gotchas: (1) No curl, only wget - and wget has NO HTTPS support (compiled without SSL). (2) No sftp-server - use 'scp -O' (legacy protocol) instead of default scp. (3) Logging: default level is WARN, app logs to BOTH /tmp/helixscreen.log AND syslog (/var/log/messages) - syslog has the CURRENT session, /tmp/helixscreen.log may be stale from previous session. (4) No CA certificate bundle shipped - /etc/ssl/certs/ is empty, breaks ALL outbound HTTPS (libhv, wget). Must ship ca-certificates.crt with install. (5) No openssl CLI command. (6) No inotify support. (7) No WiFi (wpa_supplicant present but no interfaces). (8) OpenSSL 1.1 libs exist at /usr/lib/libssl.so.1.1. (9) Binary at /opt/helixscreen/, config at /opt/helixscreen/config/helixconfig.json. (10) ldd may return empty for statically-linked ARM binaries.
 
 ### [L062] [**---|****-] AD5M build and deploy targets
-- **Uses**: 5 | **Velocity**: 2.5 | **Learned**: 2026-02-07 | **Last**: 2026-02-25 | **Category**: build
+- **Uses**: 6 | **Velocity**: 3.5 | **Learned**: 2026-02-07 | **Last**: 2026-03-25 | **Category**: build
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [***--|*****] Commit generated translation artifacts
-- **Uses**: 15 | **Velocity**: 8 | **Learned**: 2026-02-10 | **Last**: 2026-03-24 | **Category**: i18n
+- **Uses**: 17 | **Velocity**: 10 | **Learned**: 2026-02-10 | **Last**: 2026-03-25 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
 ### [L065] [-----|-----] No test-only methods on production classes
@@ -136,12 +136,12 @@
 - **Uses**: 5 | **Velocity**: 2.5 | **Learned**: 2026-02-11 | **Last**: 2026-02-28 | **Category**: lvgl
 > When using flex_grow on a container with flex_flow=row_wrap, LVGL calculates wrap points based on the container's natural (content) width, NOT the flex-allocated width. Fix: set width="1" + flex_grow="1" — forces LVGL to use the grown width for wrapping. Without this, children overflow instead of wrapping.
 
-### [L067] [**---|****-] Wrap C++ UI strings in lv_tr()
-- **Uses**: 5 | **Velocity**: 2.5 | **Learned**: 2026-02-14 | **Last**: 2026-03-13 | **Category**: ui
+### [L067] [**---|*****] Wrap C++ UI strings in lv_tr()
+- **Uses**: 7 | **Velocity**: 4.5 | **Learned**: 2026-02-14 | **Last**: 2026-03-25 | **Category**: ui
 > All user-visible English strings in C++ code must be wrapped in lv_tr() for i18n. Dropdown options are concatenated strings so they're harder to translate - but labels, help text, toasts, etc. must use lv_tr().
 
-### [L068] [*----|**---] Cancel LVGL animations before object deletion
-- **Uses**: 1 | **Velocity**: 0.5 | **Learned**: 2026-02-15 | **Last**: 2026-03-12 | **Category**: lvgl
+### [L068] [*----|****-] Cancel LVGL animations before object deletion
+- **Uses**: 3 | **Velocity**: 2.5 | **Learned**: 2026-02-15 | **Last**: 2026-03-25 | **Category**: lvgl
 > When deleting LVGL objects that have animations with completion callbacks, ALWAYS cancel animations FIRST (lv_anim_delete) before lv_obj_delete/lv_obj_safe_delete. The completion callback may fire synchronously during lv_anim_delete, causing use-after-free if the object is already freed. Pattern: (1) nullify member pointer, (2) clear state flags, (3) lv_anim_delete, (4) lv_obj_delete. For animations using 'this' as var: set guard flags to false BEFORE lv_anim_delete so callbacks become no-ops.
 
 ### [L069] [**---|*****] Never assume lv_obj user_data ownership — it may already be set
@@ -149,23 +149,23 @@
 > LVGL's lv_obj_set_user_data() is a single shared slot per object. Custom XML widgets, component handlers, and LVGL internals may set user_data during object creation (e.g., ui_button stores button_data_t*, severity_card stores a severity string). NEVER call delete/free on lv_obj_get_user_data() unless you are 100% certain you set it yourself on that specific object. NEVER use user_data as general-purpose storage on objects you didn't fully create — XML components and custom widgets may have claimed it already. **CRITICAL: NEVER walk parent chain checking any non-null user_data to find an instance pointer** — ui_button and other widgets set their own user_data, so the traversal will find the WRONG data and miscast it (caused SEGFAULT in AmsOperationSidebar/AmsDryerCard). Instead, walk parents checking `lv_obj_get_name()` for a specific known name, THEN read user_data from that named object. For per-item data, prefer: (1) event callback user_data (separate per-callback), (2) a C++ side container (map/vector indexed by object pointer), or (3) lv_obj_find_by_name to stash data in a hidden child label.
 
 ### [L071] [***--|*****] XML child click passthrough
-- **Uses**: 13 | **Velocity**: 6.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-24 | **Category**: ui | **Type**: constraint
+- **Uses**: 16 | **Velocity**: 9.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-25 | **Category**: ui | **Type**: constraint
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 11 | **Velocity**: 6.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-24 | **Category**: i18n
+- **Uses**: 13 | **Velocity**: 8.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-25 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
-- **Uses**: 8 | **Velocity**: 4 | **Learned**: 2026-02-22 | **Last**: 2026-03-12 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
 ### [L073] [*----|***--] ObserverGuard release vs reset
 - **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
 > Use obs.reset() when subjects are ALIVE (normal cleanup, repopulate) — properly unsubscribes. Use obs.release() ONLY when subjects may already be DESTROYED (shutdown, pre-deinit) — avoids double-free. Wrong choice = crash: reset() on dead subject = double-free, release() on live subject = dangling observer = use-after-free.
 
-### [L074] [*----|***--] Generation counter for deferred observer callbacks
-- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-02-23 | **Category**: pattern | **Type**: informational
+### [L074] [***--|*****] Generation counter for deferred observer callbacks
+- **Uses**: 10 | **Velocity**: 9 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: pattern | **Type**: informational
 > When repopulating dynamic widget lists with observers, bump a generation counter BEFORE cleanup. Capture the counter in observer callbacks and check `if (gen != self->gen_) return;` to skip stale deferred callbacks that fire after the old widgets are deleted. Prevents use-after-free from observe_int_sync's deferred dispatch.
 
 ### [L075] [*----|**---] Validate lv_obj before accessing children
@@ -173,7 +173,7 @@
 > Before calling lv_obj_find_by_name(), lv_obj_get_child(), or lv_obj_get_child_count() on a cached widget pointer, ensure the pointer is not stale. Use null checks and alive guards (weak_ptr pattern) — NOT lv_obj_is_valid() which is O(n) recursive and can stack overflow on Pi (see L076). Use safe_delete_obj() instead of raw lv_obj_delete() to null pointers after deletion. For async callbacks, use alive guards to detect if the owning panel was destroyed.
 
 ### [L076] [**---|*****] NEVER use lv_obj_is_valid() in hot paths or async guards
-- **Uses**: 8 | **Velocity**: 4 | **Learned**: 2026-02-22 | **Last**: 2026-03-13 | **Category**: gotcha
+- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: gotcha
 > lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, safe_delete_obj(), or async deletion guards. Use simple null pointer checks instead. For deferred deletion guards, use **application-level tracking** (e.g., ModalStack membership check) or `lv_obj_delete_async()` which self-cancels. `lv_obj_is_valid()` can return TRUE on recycled memory — if LVGL reuses the address, you delete a live object (crash #399). Only safe in one-shot user-initiated event handlers (button clicks) where tree is stable and call happens once.
 
 ### [L077] [-----|-----] Dynamic subject observers MUST use SubjectLifetime tokens
