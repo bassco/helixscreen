@@ -5,7 +5,7 @@
 ///
 /// Traced from A4T SVG — polygon-based rendering using LVGL triangle
 /// primitives with ear-clipping triangulation, matching the approach
-/// of nozzle_renderer_faceted.cpp (Stealthburner).
+/// of nozzle_renderer_stealthburner.cpp.
 
 #include "nozzle_renderer_a4t.h"
 
@@ -24,22 +24,22 @@ static constexpr int DESIGN_CENTER_Y = 630;
 
 // --- Silhouette (overall outline) ---
 static const lv_point_t pts_silhouette[] = {
-    {135, 673}, {125, 1169}, {172, 1174}, {255, 1284}, {370, 1289}, {386, 1263}, {386, 1211},
+    {135, 673},  {125, 1169}, {172, 1174}, {255, 1284}, {370, 1289}, {386, 1263}, {386, 1211},
     {433, 1169}, {563, 1169}, {616, 1216}, {610, 1253}, {621, 1258}, {626, 1289}, {684, 1279},
-    {720, 1289}, {757, 1274}, {819, 1180}, {887, 1169}, {877, 668}, {819, 657}, {819, 626},
-    {793, 600}, {798, 522}, {819, 501}, {866, 485}, {866, 349}, {819, 308}, {819, 292}, {845, 271},
-    {840, 250}, {746, 161}, {757, 104}, {704, 93}, {668, 114}, {668, 83}, {642, 78}, {642, 0},
-    {548, 0}, {553, 78}, {522, 83}, {516, 140}, {469, 135}, {454, 140}, {459, 156}, {396, 151},
-    {365, 167}, {328, 271}, {334, 323}, {323, 328}, {318, 360}, {328, 370}, {328, 469}, {214, 501},
-    {214, 610}, {198, 616}, {198, 652},
+    {720, 1289}, {757, 1274}, {819, 1180}, {887, 1169}, {877, 668},  {819, 657},  {819, 626},
+    {793, 600},  {798, 522},  {819, 501},  {866, 485},  {866, 349},  {819, 308},  {819, 292},
+    {845, 271},  {840, 250},  {746, 161},  {757, 104},  {704, 93},   {668, 114},  {668, 83},
+    {642, 78},   {642, 0},    {548, 0},    {553, 78},   {522, 83},   {516, 140},  {469, 135},
+    {454, 140},  {459, 156},  {396, 151},  {365, 167},  {328, 271},  {334, 323},  {323, 328},
+    {318, 360},  {328, 370},  {328, 469},  {214, 501},  {214, 610},  {198, 616},  {198, 652},
 };
 static constexpr int pts_silhouette_cnt = sizeof(pts_silhouette) / sizeof(pts_silhouette[0]);
 
 // Nozzle / copper area silhouette (separate piece below body)
 static const lv_point_t pts_silhouette_nozzle[] = {
-    {412, 1211}, {433, 1221}, {433, 1274}, {443, 1279}, {443, 1289}, {475, 1295}, {496, 1310},
-    {506, 1331}, {516, 1305}, {527, 1305}, {532, 1295}, {563, 1295}, {563, 1284}, {574, 1279},
-    {574, 1237}, {590, 1211}, {558, 1190}, {433, 1190},
+    {412, 1211}, {433, 1221}, {433, 1274}, {443, 1279}, {443, 1289}, {475, 1295},
+    {496, 1310}, {506, 1331}, {516, 1305}, {527, 1305}, {532, 1295}, {563, 1295},
+    {563, 1284}, {574, 1279}, {574, 1237}, {590, 1211}, {558, 1190}, {433, 1190},
 };
 static constexpr int pts_silhouette_nozzle_cnt =
     sizeof(pts_silhouette_nozzle) / sizeof(pts_silhouette_nozzle[0]);
@@ -48,11 +48,11 @@ static constexpr int pts_silhouette_nozzle_cnt =
 static const lv_point_t pts_body_0[] = {
     {168, 1006}, {171, 1140}, {211, 1138}, {315, 1282}, {351, 1285}, {387, 1211}, {421, 1176},
     {484, 1168}, {585, 1180}, {644, 1284}, {679, 1283}, {784, 1138}, {831, 1149}, {832, 1028},
-    {845, 1024}, {866, 1077}, {883, 1063}, {862, 882}, {846, 1007}, {813, 987}, {805, 846},
-    {808, 671}, {874, 668}, {820, 656}, {815, 620}, {793, 603}, {766, 613}, {803, 658}, {787, 677},
-    {745, 630}, {708, 616}, {648, 618}, {599, 659}, {395, 656}, {347, 617}, {291, 616}, {257, 626},
-    {209, 676}, {196, 659}, {210, 645}, {212, 638}, {192, 656}, {142, 665}, {138, 674}, {188, 668},
-    {193, 680}, {195, 995}, {185, 1032}, {186, 1006},
+    {845, 1024}, {866, 1077}, {883, 1063}, {862, 882},  {846, 1007}, {813, 987},  {805, 846},
+    {808, 671},  {874, 668},  {820, 656},  {815, 620},  {793, 603},  {766, 613},  {803, 658},
+    {787, 677},  {745, 630},  {708, 616},  {648, 618},  {599, 659},  {395, 656},  {347, 617},
+    {291, 616},  {257, 626},  {209, 676},  {196, 659},  {210, 645},  {212, 638},  {192, 656},
+    {142, 665},  {138, 674},  {188, 668},  {193, 680},  {195, 995},  {185, 1032}, {186, 1006},
 };
 static constexpr int pts_body_0_cnt = sizeof(pts_body_0) / sizeof(pts_body_0[0]);
 
@@ -104,11 +104,11 @@ static constexpr int pts_detail_2_cnt = sizeof(pts_detail_2) / sizeof(pts_detail
 
 // --- Dark features (fan opening, screw holes, background cutouts) ---
 static const lv_point_t pts_fan_opening[] = {
-    {370, 763}, {352, 797}, {348, 821}, {357, 825}, {362, 856}, {380, 907}, {388, 922}, {405, 942},
-    {442, 969}, {479, 980}, {537, 977}, {572, 959}, {603, 932}, {617, 912}, {631, 867}, {634, 863},
-    {642, 827}, {645, 797}, {628, 764}, {616, 746}, {583, 717}, {572, 714}, {572, 719}, {588, 742},
-    {587, 744}, {545, 721}, {502, 713}, {476, 715}, {449, 723}, {410, 747}, {421, 728}, {440, 708},
-    {439, 705}, {415, 717}, {398, 731},
+    {370, 763}, {352, 797}, {348, 821}, {357, 825}, {362, 856}, {380, 907}, {388, 922},
+    {405, 942}, {442, 969}, {479, 980}, {537, 977}, {572, 959}, {603, 932}, {617, 912},
+    {631, 867}, {634, 863}, {642, 827}, {645, 797}, {628, 764}, {616, 746}, {583, 717},
+    {572, 714}, {572, 719}, {588, 742}, {587, 744}, {545, 721}, {502, 713}, {476, 715},
+    {449, 723}, {410, 747}, {421, 728}, {440, 708}, {439, 705}, {415, 717}, {398, 731},
 };
 static constexpr int pts_fan_opening_cnt = sizeof(pts_fan_opening) / sizeof(pts_fan_opening[0]);
 
@@ -139,15 +139,15 @@ static constexpr int pts_screw_right_cnt = sizeof(pts_screw_right) / sizeof(pts_
 static const lv_point_t pts_highlight_top_left[] = {
     {517, 134}, {458, 139}, {455, 143}, {456, 157}, {407, 148}, {384, 157}, {421, 152}, {454, 162},
     {471, 157}, {463, 155}, {464, 151}, {483, 148}, {553, 148}, {553, 142}, {549, 139}, {520, 135},
-    {525, 110}, {548, 106}, {551, 78}, {550, 1}, {548, 76}, {521, 77}, {520, 88}, {513, 90},
+    {525, 110}, {548, 106}, {551, 78},  {550, 1},   {548, 76},  {521, 77},  {520, 88},  {513, 90},
 };
 static constexpr int pts_highlight_top_left_cnt =
     sizeof(pts_highlight_top_left) / sizeof(pts_highlight_top_left[0]);
 
 static const lv_point_t pts_highlight_top_right[] = {
-    {642, 76}, {640, 0}, {638, 78}, {643, 106}, {663, 109}, {669, 121}, {683, 107}, {712, 97},
-    {721, 98}, {756, 110}, {751, 104}, {715, 91}, {682, 105}, {676, 105}, {676, 93}, {669, 87},
-    {668, 77},
+    {642, 76},  {640, 0},   {638, 78}, {643, 106}, {663, 109}, {669, 121},
+    {683, 107}, {712, 97},  {721, 98}, {756, 110}, {751, 104}, {715, 91},
+    {682, 105}, {676, 105}, {676, 93}, {669, 87},  {668, 77},
 };
 static constexpr int pts_highlight_top_right_cnt =
     sizeof(pts_highlight_top_right) / sizeof(pts_highlight_top_right[0]);
@@ -173,8 +173,8 @@ static constexpr int pts_highlight_cube_top_cnt =
 
 // --- Green shadow (darkest green tone) ---
 static const lv_point_t pts_green_shadow_0[] = {
-    {627, 382}, {624, 426}, {649, 416}, {656, 409}, {651, 408}, {649, 400}, {677, 384}, {685, 371},
-    {705, 328}, {705, 309}, {699, 280}, {685, 309},
+    {627, 382}, {624, 426}, {649, 416}, {656, 409}, {651, 408}, {649, 400},
+    {677, 384}, {685, 371}, {705, 328}, {705, 309}, {699, 280}, {685, 309},
 };
 static constexpr int pts_green_shadow_0_cnt =
     sizeof(pts_green_shadow_0) / sizeof(pts_green_shadow_0[0]);
@@ -187,17 +187,17 @@ static constexpr int pts_green_shadow_1_cnt =
     sizeof(pts_green_shadow_1) / sizeof(pts_green_shadow_1[0]);
 
 static const lv_point_t pts_green_shadow_band[] = {
-    {789, 543}, {350, 539}, {337, 542}, {217, 544}, {216, 547}, {218, 550}, {226, 551}, {362, 546},
-    {631, 546}, {792, 551}, {795, 548},
+    {789, 543}, {350, 539}, {337, 542}, {217, 544}, {216, 547}, {218, 550},
+    {226, 551}, {362, 546}, {631, 546}, {792, 551}, {795, 548},
 };
 static constexpr int pts_green_shadow_band_cnt =
     sizeof(pts_green_shadow_band) / sizeof(pts_green_shadow_band[0]);
 
 // --- Green dark ---
 static const lv_point_t pts_green_dark_0[] = {
-    {607, 439}, {623, 444}, {628, 382}, {690, 305}, {754, 133}, {751, 130}, {708, 226}, {690, 273},
-    {690, 282}, {634, 354}, {621, 366}, {589, 411}, {581, 417}, {564, 421}, {585, 423}, {586, 428},
-    {581, 437},
+    {607, 439}, {623, 444}, {628, 382}, {690, 305}, {754, 133}, {751, 130},
+    {708, 226}, {690, 273}, {690, 282}, {634, 354}, {621, 366}, {589, 411},
+    {581, 417}, {564, 421}, {585, 423}, {586, 428}, {581, 437},
 };
 static constexpr int pts_green_dark_0_cnt = sizeof(pts_green_dark_0) / sizeof(pts_green_dark_0[0]);
 
@@ -208,44 +208,44 @@ static const lv_point_t pts_green_dark_1[] = {
 static constexpr int pts_green_dark_1_cnt = sizeof(pts_green_dark_1) / sizeof(pts_green_dark_1[0]);
 
 static const lv_point_t pts_green_dark_band[] = {
-    {403, 607}, {370, 605}, {370, 608}, {409, 647}, {424, 657}, {444, 659}, {547, 660}, {577, 656},
-    {587, 649}, {625, 611}, {614, 607}, {608, 613}, {594, 613}, {564, 647}, {551, 654}, {449, 654},
-    {435, 646},
+    {403, 607}, {370, 605}, {370, 608}, {409, 647}, {424, 657}, {444, 659},
+    {547, 660}, {577, 656}, {587, 649}, {625, 611}, {614, 607}, {608, 613},
+    {594, 613}, {564, 647}, {551, 654}, {449, 654}, {435, 646},
 };
 static constexpr int pts_green_dark_band_cnt =
     sizeof(pts_green_dark_band) / sizeof(pts_green_dark_band[0]);
 
 // --- Bright green (A4T signature color) ---
 static const lv_point_t pts_green_bright_band[] = {
-    {646, 545}, {219, 549}, {215, 556}, {213, 569}, {215, 606}, {286, 600}, {338, 601}, {383, 606},
-    {403, 609}, {434, 647}, {446, 655}, {543, 656}, {552, 656}, {566, 649}, {595, 614}, {609, 615},
-    {616, 609}, {624, 611}, {634, 603}, {649, 599}, {732, 599}, {754, 603}, {794, 604}, {794, 553},
-    {792, 550},
+    {646, 545}, {219, 549}, {215, 556}, {213, 569}, {215, 606}, {286, 600}, {338, 601},
+    {383, 606}, {403, 609}, {434, 647}, {446, 655}, {543, 656}, {552, 656}, {566, 649},
+    {595, 614}, {609, 615}, {616, 609}, {624, 611}, {634, 603}, {649, 599}, {732, 599},
+    {754, 603}, {794, 604}, {794, 553}, {792, 550},
 };
 static constexpr int pts_green_bright_band_cnt =
     sizeof(pts_green_bright_band) / sizeof(pts_green_bright_band[0]);
 
 static const lv_point_t pts_green_bright_top[] = {
-    {524, 326}, {524, 393}, {555, 424}, {572, 422}, {586, 416}, {692, 282}, {692, 273}, {709, 226},
-    {723, 200}, {750, 134}, {754, 133}, {756, 127}, {756, 110}, {715, 95}, {682, 106}, {674, 112},
-    {653, 159}, {614, 264}, {537, 308}, {528, 317},
+    {524, 326}, {524, 393}, {555, 424}, {572, 422}, {586, 416}, {692, 282}, {692, 273},
+    {709, 226}, {723, 200}, {750, 134}, {754, 133}, {756, 127}, {756, 110}, {715, 95},
+    {682, 106}, {674, 112}, {653, 159}, {614, 264}, {537, 308}, {528, 317},
 };
 static constexpr int pts_green_bright_top_cnt =
     sizeof(pts_green_bright_top) / sizeof(pts_green_bright_top[0]);
 
 static const lv_point_t pts_green_bright_ptfe[] = {
-    {549, 77}, {540, 133}, {574, 122}, {585, 108}, {597, 102}, {635, 111}, {646, 125}, {640, 78},
-    {639, 1}, {550, 0},
+    {549, 77},  {540, 133}, {574, 122}, {585, 108}, {597, 102},
+    {635, 111}, {646, 125}, {640, 78},  {639, 1},   {550, 0},
 };
 static constexpr int pts_green_bright_ptfe_cnt =
     sizeof(pts_green_bright_ptfe) / sizeof(pts_green_bright_ptfe[0]);
 
 // --- Copper nozzle ---
 static const lv_point_t pts_copper[] = {
-    {465, 1194}, {436, 1191}, {428, 1196}, {428, 1214}, {433, 1228}, {435, 1271}, {446, 1290},
-    {453, 1294}, {496, 1298}, {541, 1295}, {546, 1301}, {550, 1295}, {560, 1291}, {574, 1271},
-    {574, 1232}, {581, 1217}, {586, 1214}, {574, 1199}, {564, 1193}, {555, 1193}, {533, 1197},
-    {472, 1198},
+    {465, 1194}, {436, 1191}, {428, 1196}, {428, 1214}, {433, 1228}, {435, 1271},
+    {446, 1290}, {453, 1294}, {496, 1298}, {541, 1295}, {546, 1301}, {550, 1295},
+    {560, 1291}, {574, 1271}, {574, 1232}, {581, 1217}, {586, 1214}, {574, 1199},
+    {564, 1193}, {555, 1193}, {533, 1197}, {472, 1198},
 };
 static constexpr int pts_copper_cnt = sizeof(pts_copper) / sizeof(pts_copper[0]);
 
@@ -253,7 +253,7 @@ static constexpr int pts_copper_cnt = sizeof(pts_copper) / sizeof(pts_copper[0])
 static constexpr int MAX_POLYGON_POINTS = 80;
 
 // ============================================================================
-// Ear-Clipping Triangulation (same algorithm as faceted renderer)
+// Ear-Clipping Triangulation (same algorithm as stealthburner renderer)
 // ============================================================================
 
 static int64_t cross_product_sign(const lv_point_t& a, const lv_point_t& b, const lv_point_t& c) {
@@ -272,8 +272,7 @@ static bool is_convex_vertex(const int* indices, int idx_cnt, int i, const lv_po
                              bool ccw) {
     int prev_i = (i - 1 + idx_cnt) % idx_cnt;
     int next_i = (i + 1) % idx_cnt;
-    int64_t cross =
-        cross_product_sign(pts[indices[prev_i]], pts[indices[i]], pts[indices[next_i]]);
+    int64_t cross = cross_product_sign(pts[indices[prev_i]], pts[indices[i]], pts[indices[next_i]]);
     return ccw ? (cross > 0) : (cross < 0);
 }
 
@@ -423,15 +422,15 @@ void draw_nozzle_a4t(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_t filam
                         !lv_color_eq(filament_color, lv_color_black());
 
     // Pre-dim colors
-    lv_color_t col_silhouette    = dim(lv_color_hex(0x1A1A1A));
-    lv_color_t col_body          = dim(lv_color_hex(0x353435));
-    lv_color_t col_detail        = dim(lv_color_hex(0x5F5E5F));
-    lv_color_t col_dark          = dim(lv_color_hex(0x0A0A0A));
-    lv_color_t col_highlight     = dim(lv_color_hex(0xC7C8C5));
-    lv_color_t col_green_shadow  = dim(lv_color_hex(0x282615));
-    lv_color_t col_green_dark    = dim(lv_color_hex(0x615B12));
-    lv_color_t col_green_bright  = dim(lv_color_hex(0xBFBB4B));
-    lv_color_t col_copper        = dim(lv_color_hex(0xA6614C));
+    lv_color_t col_silhouette = dim(lv_color_hex(0x1A1A1A));
+    lv_color_t col_body = dim(lv_color_hex(0x353435));
+    lv_color_t col_detail = dim(lv_color_hex(0x5F5E5F));
+    lv_color_t col_dark = dim(lv_color_hex(0x0A0A0A));
+    lv_color_t col_highlight = dim(lv_color_hex(0xC7C8C5));
+    lv_color_t col_green_shadow = dim(lv_color_hex(0x282615));
+    lv_color_t col_green_dark = dim(lv_color_hex(0x615B12));
+    lv_color_t col_green_bright = dim(lv_color_hex(0xBFBB4B));
+    lv_color_t col_copper = dim(lv_color_hex(0xA6614C));
 
     lv_point_t tmp[MAX_POLYGON_POINTS];
 
@@ -530,8 +529,7 @@ void draw_nozzle_a4t(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_t filam
         lv_color_t tip_color = dim(filament_color);
         lv_color_t nozzle_metal = dim(lv_color_hex(NOZZLE_UNLOADED));
 
-        int32_t nozzle_top_y =
-            cy + (int32_t)((1300 - DESIGN_CENTER_Y) * scale);
+        int32_t nozzle_top_y = cy + (int32_t)((1300 - DESIGN_CENTER_Y) * scale);
         int32_t nozzle_height = LV_MAX((int32_t)(30 * scale), 2);
         int32_t nozzle_top_width = LV_MAX((int32_t)(80 * scale), 4);
         int32_t nozzle_bottom_width = LV_MAX((int32_t)(30 * scale), 2);

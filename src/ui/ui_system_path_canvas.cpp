@@ -14,8 +14,8 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_anthead.h"
 #include "nozzle_renderer_bambu.h"
-#include "nozzle_renderer_faceted.h"
 #include "nozzle_renderer_jabberwocky.h"
+#include "nozzle_renderer_stealthburner.h"
 #include "settings_manager.h"
 #include "theme_manager.h"
 
@@ -109,7 +109,6 @@ struct SystemPathData {
     int32_t border_radius = 6;
     int32_t extruder_scale = 10;
     const lv_font_t* label_font = nullptr;
-
 };
 
 // Registry of widget data
@@ -713,15 +712,13 @@ static void system_path_draw_cb(lv_event_t* e) {
                     // Use the same start_x math as the route above
                     int32_t hub_start_x = unit_x;
                     if (tool_count > 1) {
-                        hub_start_x =
-                            unit_x - spread / 2 + (spread * hub_t) / (tool_count - 1);
+                        hub_start_x = unit_x - spread / 2 + (spread * hub_t) / (tool_count - 1);
                     }
                     int32_t mhw = data->hub_width * 2 / 5;
                     int32_t mhh = hub_h * 2 / 3;
                     int32_t mhy = entry_y + mhh / 2 + 4;
                     bool hub_has_filament =
-                        is_active && data->filament_loaded &&
-                        (data->active_tool == hub_tool_idx);
+                        is_active && data->filament_loaded && (data->active_tool == hub_tool_idx);
                     lv_color_t mini_bg = hub_bg;
                     if (hub_has_filament) {
                         mini_bg = sp_blend(hub_bg, active_color_lv, 0.33f);
@@ -922,21 +919,21 @@ static void system_path_draw_cb(lv_event_t* e) {
 
             lv_color_t noz_color = is_active_tool ? active_color_lv : nozzle_color;
             switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-                case helix::ToolheadStyle::A4T:
-                    draw_nozzle_a4t(layer, tool_x, tools_y, noz_color, small_scale);
-                    break;
-                case helix::ToolheadStyle::ANTHEAD:
-                    draw_nozzle_anthead(layer, tool_x, tools_y, noz_color, small_scale);
-                    break;
-                case helix::ToolheadStyle::JABBERWOCKY:
-                    draw_nozzle_jabberwocky(layer, tool_x, tools_y, noz_color, small_scale);
-                    break;
-                case helix::ToolheadStyle::STEALTHBURNER:
-                    draw_nozzle_faceted(layer, tool_x, tools_y, noz_color, small_scale);
-                    break;
-                default:
-                    draw_nozzle_bambu(layer, tool_x, tools_y, noz_color, small_scale);
-                    break;
+            case helix::ToolheadStyle::A4T:
+                draw_nozzle_a4t(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
+            case helix::ToolheadStyle::ANTHEAD:
+                draw_nozzle_anthead(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
+            case helix::ToolheadStyle::JABBERWOCKY:
+                draw_nozzle_jabberwocky(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
+            case helix::ToolheadStyle::STEALTHBURNER:
+                draw_nozzle_stealthburner(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
+            default:
+                draw_nozzle_bambu(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
             }
 
             // Tool badge below nozzle — use pre-formatted label from data
@@ -1109,21 +1106,22 @@ static void system_path_draw_cb(lv_event_t* e) {
             }
 
             switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-                case helix::ToolheadStyle::A4T:
-                    draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                    break;
-                case helix::ToolheadStyle::ANTHEAD:
-                    draw_nozzle_anthead(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                    break;
-                case helix::ToolheadStyle::JABBERWOCKY:
-                    draw_nozzle_jabberwocky(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                    break;
-                case helix::ToolheadStyle::STEALTHBURNER:
-                    draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                    break;
-                default:
-                    draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                    break;
+            case helix::ToolheadStyle::A4T:
+                draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+                break;
+            case helix::ToolheadStyle::ANTHEAD:
+                draw_nozzle_anthead(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+                break;
+            case helix::ToolheadStyle::JABBERWOCKY:
+                draw_nozzle_jabberwocky(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+                break;
+            case helix::ToolheadStyle::STEALTHBURNER:
+                draw_nozzle_stealthburner(layer, center_x, nozzle_y, noz_color,
+                                          data->extruder_scale);
+                break;
+            default:
+                draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+                break;
             }
 
             // Virtual tool badge beneath nozzle — only when multiple slots feed one toolhead

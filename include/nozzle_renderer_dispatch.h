@@ -10,8 +10,8 @@
 #include "nozzle_renderer_bambu.h"
 #include "nozzle_renderer_creality_k1.h"
 #include "nozzle_renderer_creality_k2.h"
-#include "nozzle_renderer_faceted.h"
 #include "nozzle_renderer_jabberwocky.h"
+#include "nozzle_renderer_stealthburner.h"
 #include "settings_manager.h"
 
 /// @brief Draw the nozzle matching the user's effective toolhead style setting
@@ -29,7 +29,7 @@ inline void draw_nozzle_for_style(lv_layer_t* layer, int32_t cx, int32_t cy,
         draw_nozzle_jabberwocky(layer, cx, cy, filament_color, scale_unit, opa);
         break;
     case helix::ToolheadStyle::STEALTHBURNER:
-        draw_nozzle_faceted(layer, cx, cy, filament_color, scale_unit, opa);
+        draw_nozzle_stealthburner(layer, cx, cy, filament_color, scale_unit, opa);
         break;
     case helix::ToolheadStyle::CREALITY_K1:
         draw_nozzle_creality_k1(layer, cx, cy, filament_color, scale_unit, opa);

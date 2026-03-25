@@ -20,8 +20,8 @@
 #include "nozzle_renderer_bambu.h"
 #include "nozzle_renderer_creality_k1.h"
 #include "nozzle_renderer_creality_k2.h"
-#include "nozzle_renderer_faceted.h"
 #include "nozzle_renderer_jabberwocky.h"
+#include "nozzle_renderer_stealthburner.h"
 #include "settings_manager.h"
 #include "theme_manager.h"
 
@@ -1540,7 +1540,8 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
             draw_nozzle_jabberwocky(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
             break;
         case helix::ToolheadStyle::STEALTHBURNER:
-            draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            draw_nozzle_stealthburner(layer, slot_x, toolhead_y, noz_color, tool_scale,
+                                      toolhead_opa);
             break;
         default:
             draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
@@ -1818,8 +1819,8 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                                             hub_noz_opa);
                     break;
                 case helix::ToolheadStyle::STEALTHBURNER:
-                    draw_nozzle_faceted(layer, hub_cx, toolhead_y, noz_color, tool_scale,
-                                        hub_noz_opa);
+                    draw_nozzle_stealthburner(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                                              hub_noz_opa);
                     break;
                 default:
                     draw_nozzle_bambu(layer, hub_cx, toolhead_y, noz_color, tool_scale,
@@ -1896,7 +1897,8 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                                         toolhead_opa);
                 break;
             case helix::ToolheadStyle::STEALTHBURNER:
-                draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+                draw_nozzle_stealthburner(layer, slot_x, toolhead_y, noz_color, tool_scale,
+                                          toolhead_opa);
                 break;
             default:
                 draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
@@ -2674,7 +2676,7 @@ static void filament_path_draw_cb(lv_event_t* e) {
             draw_nozzle_jabberwocky(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
             break;
         case helix::ToolheadStyle::STEALTHBURNER:
-            draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            draw_nozzle_stealthburner(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
             break;
         case helix::ToolheadStyle::CREALITY_K1:
             draw_nozzle_creality_k1(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
