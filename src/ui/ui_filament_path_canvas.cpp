@@ -18,6 +18,8 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_anthead.h"
 #include "nozzle_renderer_bambu.h"
+#include "nozzle_renderer_creality_k1.h"
+#include "nozzle_renderer_creality_k2.h"
 #include "nozzle_renderer_faceted.h"
 #include "nozzle_renderer_jabberwocky.h"
 #include "settings_manager.h"
@@ -52,7 +54,7 @@ static constexpr float ENTRY_Y_RATIO =
 static constexpr float PREP_Y_RATIO = 0.10f;     // Prep sensor position
 static constexpr float MERGE_Y_RATIO = 0.20f;    // Where lanes merge
 static constexpr float HUB_Y_RATIO = 0.30f;      // Hub/selector center
-static constexpr float HUB_HEIGHT_RATIO = 0.10f;  // Hub box height
+static constexpr float HUB_HEIGHT_RATIO = 0.10f; // Hub box height
 // Note: output sensor Y is computed as hub_bottom (butted against hub, no separate ratio)
 static constexpr float TOOLHEAD_Y_RATIO = 0.68f; // Toolhead sensor
 static constexpr float NOZZLE_Y_RATIO =
@@ -113,17 +115,21 @@ struct ActiveFilamentPath {
     int count = 0;
 
     void add_line(int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
-        if (count >= MAX_PATH_SEGS) return;
+        if (count >= MAX_PATH_SEGS)
+            return;
         segs[count++] = {PathSeg::LINE, x1, y1, x2, y2, 0, 0, 0, 0};
     }
 
-    void add_curve(int32_t x1, int32_t y1, int32_t cx1, int32_t cy1,
-                   int32_t cx2, int32_t cy2, int32_t x2, int32_t y2) {
-        if (count >= MAX_PATH_SEGS) return;
+    void add_curve(int32_t x1, int32_t y1, int32_t cx1, int32_t cy1, int32_t cx2, int32_t cy2,
+                   int32_t x2, int32_t y2) {
+        if (count >= MAX_PATH_SEGS)
+            return;
         segs[count++] = {PathSeg::CURVE, x1, y1, x2, y2, cx1, cy1, cx2, cy2};
     }
 
-    void clear() { count = 0; }
+    void clear() {
+        count = 0;
+    }
 };
 
 // Per-slot filament state for visualizing all installed filaments
@@ -156,7 +162,7 @@ struct FilamentPathData {
     bool slot_has_prep_sensor[MAX_SLOTS] = {};
 
     // Per-slot tool mapping (actual AFC map values, not slot index)
-    int mapped_tool[MAX_SLOTS];      // -1 = use slot index as fallback
+    int mapped_tool[MAX_SLOTS];              // -1 = use slot index as fallback
     bool slot_is_hub_routed[MAX_SLOTS] = {}; // true = lane routes through hub (MIXED topology)
 
     FilamentPathData() {
@@ -177,7 +183,7 @@ struct FilamentPathData {
     bool show_bypass = true; // false = hide bypass path/spool entirely (e.g. tool changers)
 
     // Rendering mode
-    bool hub_only = false;             // true = stop rendering at hub (skip downstream)
+    bool hub_only = false; // true = stop rendering at hub (skip downstream)
 
     // Buffer fault state (0=healthy, 1=warning/approaching, 2=fault)
     int buffer_fault_state = 0;
@@ -813,8 +819,8 @@ static float path_seg_length(const PathSeg& seg) {
     float total = 0.0f;
     float px = (float)seg.x1, py = (float)seg.y1;
     for (int i = 1; i <= SAMPLES; i++) {
-        auto pt = bezier_eval(seg.x1, seg.y1, seg.cx1, seg.cy1,
-                              seg.cx2, seg.cy2, seg.x2, seg.y2, (float)i / SAMPLES);
+        auto pt = bezier_eval(seg.x1, seg.y1, seg.cx1, seg.cy1, seg.cx2, seg.cy2, seg.x2, seg.y2,
+                              (float)i / SAMPLES);
         float dx = (float)pt.x - px;
         float dy = (float)pt.y - py;
         total += sqrtf(dx * dx + dy * dy);
@@ -825,8 +831,8 @@ static float path_seg_length(const PathSeg& seg) {
 }
 
 // Get point at distance `d` along a path segment (d in [0, seg_length])
-static void path_seg_point_at(const PathSeg& seg, float d, float seg_len,
-                              int32_t& out_x, int32_t& out_y) {
+static void path_seg_point_at(const PathSeg& seg, float d, float seg_len, int32_t& out_x,
+                              int32_t& out_y) {
     if (seg_len < 0.001f) {
         out_x = seg.x1;
         out_y = seg.y1;
@@ -838,8 +844,8 @@ static void path_seg_point_at(const PathSeg& seg, float d, float seg_len,
         out_x = seg.x1 + (int32_t)((seg.x2 - seg.x1) * t);
         out_y = seg.y1 + (int32_t)((seg.y2 - seg.y1) * t);
     } else {
-        auto pt = bezier_eval(seg.x1, seg.y1, seg.cx1, seg.cy1,
-                              seg.cx2, seg.cy2, seg.x2, seg.y2, t);
+        auto pt =
+            bezier_eval(seg.x1, seg.y1, seg.cx1, seg.cy1, seg.cx2, seg.cy2, seg.x2, seg.y2, t);
         out_x = pt.x;
         out_y = pt.y;
     }
@@ -889,8 +895,8 @@ static void path_point_at_distance(const ActiveFilamentPath& path, const PathLen
 // with flow_offset providing animation. When reverse=true (unloading), dots
 // flow from nozzle toward entry.
 static void draw_flow_dots_path(lv_layer_t* layer, const ActiveFilamentPath& path,
-                                const PathLengths& pl, lv_color_t color,
-                                int32_t flow_offset, bool reverse) {
+                                const PathLengths& pl, lv_color_t color, int32_t flow_offset,
+                                bool reverse) {
     if (path.count == 0 || pl.total < 1.0f)
         return;
 
@@ -991,8 +997,8 @@ static void draw_flat_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2
 // Draw a 3D tube effect for any line segment (angled or straight)
 // Shadow (wider, darker) → Body (base color) → Highlight (narrower, lighter, offset)
 static void draw_tube_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, int32_t y2,
-                           lv_color_t color, int32_t width,
-                           bool cap_start = true, bool cap_end = true) {
+                           lv_color_t color, int32_t width, bool cap_start = true,
+                           bool cap_end = true) {
     // Shadow: wider, darker — provides depth beneath the tube
     int32_t shadow_extra = LV_MAX(2, width / 2);
     lv_color_t shadow_color = ph_darken(color, 35);
@@ -1085,13 +1091,13 @@ static void draw_hollow_tube_line(lv_layer_t* layer, int32_t x1, int32_t y1, int
 
 // Convenience: draw a solid vertical tube segment
 static void draw_vertical_line(lv_layer_t* layer, int32_t x, int32_t y1, int32_t y2,
-                               lv_color_t color, int32_t width,
-                               bool cap_start = true, bool cap_end = true,
-                               ActiveFilamentPath* path = nullptr) {
+                               lv_color_t color, int32_t width, bool cap_start = true,
+                               bool cap_end = true, ActiveFilamentPath* path = nullptr) {
     draw_tube_line(layer, x, y1, x, y2, color, width, cap_start, cap_end);
     // Only record segments with positive length (skip zero/backwards segments
     // that occur when layout regions overlap, e.g. buffer extends past merge point)
-    if (path && y2 > y1) path->add_line(x, y1, x, y2);
+    if (path && y2 > y1)
+        path->add_line(x, y1, x, y2);
 }
 
 // Convenience: draw a solid tube segment between two arbitrary points
@@ -1181,7 +1187,8 @@ static void draw_curved_tube(lv_layer_t* layer, int32_t x0, int32_t y0, int32_t 
         draw_flat_line(layer, pts[i].x + offset_x, pts[i].y + offset_y, pts[i + 1].x + offset_x,
                        pts[i + 1].y + offset_y, hl_color, hl_width, cs, ce);
     }
-    if (path) path->add_curve(x0, y0, cx1, cy1, cx2, cy2, x1, y1);
+    if (path)
+        path->add_curve(x0, y0, cx1, cy1, cx2, cy2, x1, y1);
 }
 
 // Draw a hollow tube along a cubic bezier curve (p0 → cp1 → cp2 → p1)
@@ -1296,15 +1303,17 @@ static void draw_hub_box(lv_layer_t* layer, int32_t cx, int32_t cy, int32_t widt
 // Draw buffer box element — simple labeled box like HUB/SELECTOR
 // Color reflects buffer state: green (OK), orange (warning), red (fault)
 static void draw_buffer_coil(lv_layer_t* layer, int32_t cx, int32_t cy, int32_t hub_w,
-                              int32_t hub_h, int buffer_state, int buffer_fault_state,
-                              float buffer_bias, lv_color_t bg_color, int32_t radius,
-                              bool has_filament, lv_color_t filament_color,
-                              lv_color_t text_color, const lv_font_t* font) {
+                             int32_t hub_h, int buffer_state, int buffer_fault_state,
+                             float buffer_bias, lv_color_t bg_color, int32_t radius,
+                             bool has_filament, lv_color_t filament_color, lv_color_t text_color,
+                             const lv_font_t* font) {
     // Slightly smaller than hub box — fits "BUF" with comfortable padding
     int32_t box_w = hub_w * 4 / 5;
     int32_t box_h = hub_h;
-    if (box_w < 36) box_w = 36;
-    if (box_h < 16) box_h = 16;
+    if (box_w < 36)
+        box_w = 36;
+    if (box_h < 16)
+        box_h = 16;
 
     // Border color based on fault state and proportional bias
     lv_color_t border_color;
@@ -1349,8 +1358,8 @@ static void draw_buffer_coil(lv_layer_t* layer, int32_t cx, int32_t cy, int32_t 
         }
     }
 
-    draw_hub_box(layer, cx, cy, box_w, box_h, buf_bg, border_color,
-                 text_color, font, radius, "BUF");
+    draw_hub_box(layer, cx, cy, box_w, box_h, buf_bg, border_color, text_color, font, radius,
+                 "BUF");
 }
 
 // ============================================================================
@@ -1521,22 +1530,21 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
         }
 
         switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-            case helix::ToolheadStyle::A4T:
-                draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale * 6 / 5,
-                                toolhead_opa);
-                break;
-            case helix::ToolheadStyle::ANTHEAD:
-                draw_nozzle_anthead(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
-                break;
-            case helix::ToolheadStyle::JABBERWOCKY:
-                draw_nozzle_jabberwocky(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
-                break;
-            case helix::ToolheadStyle::STEALTHBURNER:
-                draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
-                break;
-            default:
-                draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
-                break;
+        case helix::ToolheadStyle::A4T:
+            draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale * 6 / 5, toolhead_opa);
+            break;
+        case helix::ToolheadStyle::ANTHEAD:
+            draw_nozzle_anthead(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
+        case helix::ToolheadStyle::JABBERWOCKY:
+            draw_nozzle_jabberwocky(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
+        case helix::ToolheadStyle::STEALTHBURNER:
+            draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
+        default:
+            draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
         }
 
         // Tool badge (T0, T1, etc.) below nozzle — matches system_path_canvas style
@@ -1608,7 +1616,7 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
     constexpr float SENSOR_Y = 0.15f;   // Sensor dot position
     constexpr float HUB_Y = 0.32f;      // Hub box center Y
     constexpr float HUB_H = 0.08f;      // Hub box height ratio
-    constexpr float TOOLHEAD_Y = 0.62f;  // Nozzle/toolhead position
+    constexpr float TOOLHEAD_Y = 0.62f; // Nozzle/toolhead position
 
     int32_t entry_y = y_off + (int32_t)(height * ENTRY_Y);
     int32_t sensor_y = y_off + (int32_t)(height * SENSOR_Y);
@@ -1638,7 +1646,8 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
             int32_t sx = x_off + get_slot_x(data, i, x_off);
             hub_x_sum += sx;
             hub_count++;
-            if (first_hub_lane < 0) first_hub_lane = i;
+            if (first_hub_lane < 0)
+                first_hub_lane = i;
         }
     }
 
@@ -1732,14 +1741,14 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
             int32_t cp2_y = end_y - drop * 2 / 5;
 
             if (has_filament) {
-                draw_glow_curve(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
-                                hub_cx, end_y, tool_color, line_active);
-                draw_curved_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
-                                 hub_cx, end_y, tool_color, line_active,
+                draw_glow_curve(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y, hub_cx, end_y,
+                                tool_color, line_active);
+                draw_curved_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y, hub_cx, end_y,
+                                 tool_color, line_active,
                                  /*cap_start=*/false, /*cap_end=*/true);
             } else {
-                draw_curved_hollow_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y,
-                                        hub_cx, end_y, idle_color, bg_color, line_active,
+                draw_curved_hollow_tube(layer, slot_x, start_y, cp1_x, cp1_y, cp2_x, cp2_y, hub_cx,
+                                        end_y, idle_color, bg_color, line_active,
                                         /*cap_start=*/false);
             }
 
@@ -1755,7 +1764,8 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                                    : (first_hub_lane >= 0 ? first_hub_lane : 0);
 
                 for (int j = 0; j < data->slot_count; j++) {
-                    if (!data->slot_is_hub_routed[j]) continue;
+                    if (!data->slot_is_hub_routed[j])
+                        continue;
                     bool j_mounted = (j == data->active_slot);
                     PathSegment j_seg = PathSegment::NONE;
                     lv_color_t j_color = idle_color;
@@ -1795,26 +1805,26 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                 lv_opa_t hub_noz_opa = LV_OPA_COVER;
 
                 switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-                    case helix::ToolheadStyle::A4T:
-                        draw_nozzle_a4t(layer, hub_cx, toolhead_y, noz_color, tool_scale * 6 / 5,
+                case helix::ToolheadStyle::A4T:
+                    draw_nozzle_a4t(layer, hub_cx, toolhead_y, noz_color, tool_scale * 6 / 5,
+                                    hub_noz_opa);
+                    break;
+                case helix::ToolheadStyle::ANTHEAD:
+                    draw_nozzle_anthead(layer, hub_cx, toolhead_y, noz_color, tool_scale,
                                         hub_noz_opa);
-                        break;
-                    case helix::ToolheadStyle::ANTHEAD:
-                        draw_nozzle_anthead(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                    break;
+                case helix::ToolheadStyle::JABBERWOCKY:
+                    draw_nozzle_jabberwocky(layer, hub_cx, toolhead_y, noz_color, tool_scale,
                                             hub_noz_opa);
-                        break;
-                    case helix::ToolheadStyle::JABBERWOCKY:
-                        draw_nozzle_jabberwocky(layer, hub_cx, toolhead_y, noz_color, tool_scale,
-                                                hub_noz_opa);
-                        break;
-                    case helix::ToolheadStyle::STEALTHBURNER:
-                        draw_nozzle_faceted(layer, hub_cx, toolhead_y, noz_color, tool_scale,
-                                            hub_noz_opa);
-                        break;
-                    default:
-                        draw_nozzle_bambu(layer, hub_cx, toolhead_y, noz_color, tool_scale,
-                                          hub_noz_opa);
-                        break;
+                    break;
+                case helix::ToolheadStyle::STEALTHBURNER:
+                    draw_nozzle_faceted(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                                        hub_noz_opa);
+                    break;
+                default:
+                    draw_nozzle_bambu(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                                      hub_noz_opa);
+                    break;
                 }
 
                 // Tool label below shared hub nozzle
@@ -1874,26 +1884,23 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
             lv_opa_t toolhead_opa = is_mounted ? LV_OPA_COVER : LV_OPA_40;
 
             switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-                case helix::ToolheadStyle::A4T:
-                    draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale * 6 / 5,
-                                    toolhead_opa);
-                    break;
-                case helix::ToolheadStyle::ANTHEAD:
-                    draw_nozzle_anthead(layer, slot_x, toolhead_y, noz_color, tool_scale,
+            case helix::ToolheadStyle::A4T:
+                draw_nozzle_a4t(layer, slot_x, toolhead_y, noz_color, tool_scale * 6 / 5,
+                                toolhead_opa);
+                break;
+            case helix::ToolheadStyle::ANTHEAD:
+                draw_nozzle_anthead(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+                break;
+            case helix::ToolheadStyle::JABBERWOCKY:
+                draw_nozzle_jabberwocky(layer, slot_x, toolhead_y, noz_color, tool_scale,
                                         toolhead_opa);
-                    break;
-                case helix::ToolheadStyle::JABBERWOCKY:
-                    draw_nozzle_jabberwocky(layer, slot_x, toolhead_y, noz_color, tool_scale,
-                                            toolhead_opa);
-                    break;
-                case helix::ToolheadStyle::STEALTHBURNER:
-                    draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale,
-                                        toolhead_opa);
-                    break;
-                default:
-                    draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale,
-                                      toolhead_opa);
-                    break;
+                break;
+            case helix::ToolheadStyle::STEALTHBURNER:
+                draw_nozzle_faceted(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+                break;
+            default:
+                draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+                break;
             }
 
             // Tool label below direct nozzle
@@ -1982,7 +1989,8 @@ static void filament_path_draw_cb(lv_event_t* e) {
     // Buffer geometry — shared by drawing and flow dot paths
     int32_t buffer_y = y_off + (int32_t)(height * BUFFER_Y_RATIO);
     int32_t buf_box_h = hub_h;
-    if (buf_box_h < 16) buf_box_h = 16;
+    if (buf_box_h < 16)
+        buf_box_h = 16;
     int32_t buf_extend = buf_box_h / 2;
     int32_t buf_fil_top = buffer_y - buf_box_h / 2 - buf_extend;
     int32_t buf_fil_bot = buffer_y + buf_box_h / 2 + buf_extend;
@@ -2044,12 +2052,16 @@ static void filament_path_draw_cb(lv_event_t* e) {
     int32_t dbg_flow_offset = 0;
     if (dbg_seg_env) {
         // Force active slot 0 if none set (local override only for drawing)
-        if (data->active_slot < 0) data->active_slot = 0;
+        if (data->active_slot < 0)
+            data->active_slot = 0;
 
         // Map name to PathSegment value
-        static const struct { const char* name; int val; } seg_map[] = {
-            {"PREP", (int)PathSegment::PREP}, {"LANE", (int)PathSegment::LANE},
-            {"HUB", (int)PathSegment::HUB}, {"OUTPUT", (int)PathSegment::OUTPUT},
+        static const struct {
+            const char* name;
+            int val;
+        } seg_map[] = {
+            {"PREP", (int)PathSegment::PREP},         {"LANE", (int)PathSegment::LANE},
+            {"HUB", (int)PathSegment::HUB},           {"OUTPUT", (int)PathSegment::OUTPUT},
             {"TOOLHEAD", (int)PathSegment::TOOLHEAD}, {"NOZZLE", (int)PathSegment::NOZZLE},
         };
         for (auto& m : seg_map) {
@@ -2065,14 +2077,17 @@ static void filament_path_draw_cb(lv_event_t* e) {
         dbg_anim_dir = dbg_unload ? AnimDirection::UNLOADING : AnimDirection::LOADING;
         dbg_flow_active = true;
         uint32_t ms = lv_tick_get();
-        dbg_flow_offset = (int32_t)(ms % FLOW_ANIM_DURATION_MS) * FLOW_DOT_SPACING / FLOW_ANIM_DURATION_MS;
+        dbg_flow_offset =
+            (int32_t)(ms % FLOW_ANIM_DURATION_MS) * FLOW_DOT_SPACING / FLOW_ANIM_DURATION_MS;
         // Use a persistent lv_timer to keep triggering redraws
         static lv_timer_t* dbg_timer = nullptr;
         if (!dbg_timer) {
-            dbg_timer = lv_timer_create([](lv_timer_t* t) {
-                auto* o = static_cast<lv_obj_t*>(lv_timer_get_user_data(t));
-                lv_obj_invalidate(o);
-            }, 30, obj);
+            dbg_timer = lv_timer_create(
+                [](lv_timer_t* t) {
+                    auto* o = static_cast<lv_obj_t*>(lv_timer_get_user_data(t));
+                    lv_obj_invalidate(o);
+                },
+                30, obj);
         }
     }
 
@@ -2406,8 +2421,8 @@ static void filament_path_draw_cb(lv_event_t* e) {
                 }
                 draw_glow_line(layer, output_x, sel_top, output_x, sel_bot, tube_color,
                                line_active);
-                draw_vertical_line(layer, output_x, sel_top, sel_bot, tube_color, line_active,
-                                   true, true, &active_path);
+                draw_vertical_line(layer, output_x, sel_top, sel_bot, tube_color, line_active, true,
+                                   true, &active_path);
             } else {
                 draw_hollow_vertical_line(layer, output_x, sel_top, sel_bot, idle_color, bg_color,
                                           line_active);
@@ -2479,15 +2494,13 @@ static void filament_path_draw_cb(lv_event_t* e) {
                 if (has_error && error_seg == PathSegment::OUTPUT) {
                     seg_color = error_color;
                 }
-                draw_glow_line(layer, center_x, output_y + sensor_r, center_x,
-                               seg_end_y, seg_color, line_active);
-                draw_vertical_line(layer, center_x, output_y + sensor_r, seg_end_y,
-                                   seg_color, line_active, /*cap_start=*/true, out_cap_end,
-                                   &active_path);
+                draw_glow_line(layer, center_x, output_y + sensor_r, center_x, seg_end_y, seg_color,
+                               line_active);
+                draw_vertical_line(layer, center_x, output_y + sensor_r, seg_end_y, seg_color,
+                                   line_active, /*cap_start=*/true, out_cap_end, &active_path);
             } else {
-                draw_hollow_vertical_line(layer, center_x, output_y + sensor_r,
-                                          seg_end_y, idle_color, bg_color,
-                                          line_active);
+                draw_hollow_vertical_line(layer, center_x, output_y + sensor_r, seg_end_y,
+                                          idle_color, bg_color, line_active);
             }
         }
 
@@ -2496,19 +2509,20 @@ static void filament_path_draw_cb(lv_event_t* e) {
             bool buffer_has_filament =
                 (data->active_slot >= 0 && is_segment_active(PathSegment::OUTPUT, fil_seg)) ||
                 data->bypass_active;
-            lv_color_t buf_fil_color = data->bypass_active ? lv_color_hex(data->bypass_color)
-                                                           : active_color;
+            lv_color_t buf_fil_color =
+                data->bypass_active ? lv_color_hex(data->bypass_color) : active_color;
 
             // Straight filament through buffer — no caps
             if (buffer_has_filament) {
-                draw_glow_line(layer, center_x, buf_fil_top, center_x, buf_fil_bot,
-                               buf_fil_color, line_active);
-                draw_vertical_line(layer, center_x, buf_fil_top, buf_fil_bot,
-                                   buf_fil_color, line_active, false, false,
-                                   (!data->bypass_active && data->active_slot >= 0) ? &active_path : nullptr);
+                draw_glow_line(layer, center_x, buf_fil_top, center_x, buf_fil_bot, buf_fil_color,
+                               line_active);
+                draw_vertical_line(layer, center_x, buf_fil_top, buf_fil_bot, buf_fil_color,
+                                   line_active, false, false,
+                                   (!data->bypass_active && data->active_slot >= 0) ? &active_path
+                                                                                    : nullptr);
             } else {
-                draw_hollow_vertical_line(layer, center_x, buf_fil_top, buf_fil_bot,
-                                          idle_color, bg_color, line_active);
+                draw_hollow_vertical_line(layer, center_x, buf_fil_top, buf_fil_bot, idle_color,
+                                          bg_color, line_active);
             }
 
             // Buffer box on top
@@ -2519,15 +2533,15 @@ static void filament_path_draw_cb(lv_event_t* e) {
 
             // Continuation: buffer bottom → merge/toolhead — no top cap
             if (buffer_has_filament) {
-                draw_glow_line(layer, center_x, buf_fil_bot, center_x,
-                               output_end_y - sensor_r, buf_fil_color, line_active);
+                draw_glow_line(layer, center_x, buf_fil_bot, center_x, output_end_y - sensor_r,
+                               buf_fil_color, line_active);
                 draw_vertical_line(layer, center_x, buf_fil_bot, output_end_y - sensor_r,
                                    buf_fil_color, line_active, false, true,
-                                   (!data->bypass_active && data->active_slot >= 0) ? &active_path : nullptr);
+                                   (!data->bypass_active && data->active_slot >= 0) ? &active_path
+                                                                                    : nullptr);
             } else {
-                draw_hollow_vertical_line(layer, center_x, buf_fil_bot,
-                                          output_end_y - sensor_r, idle_color, bg_color,
-                                          line_active);
+                draw_hollow_vertical_line(layer, center_x, buf_fil_bot, output_end_y - sensor_r,
+                                          idle_color, bg_color, line_active);
             }
         }
     }
@@ -2606,9 +2620,9 @@ static void filament_path_draw_cb(lv_event_t* e) {
             draw_glow_line(layer, center_x, toolhead_y + sensor_r, center_x,
                            nozzle_y - extruder_half_height, noz_color, line_active);
             draw_vertical_line(layer, center_x, toolhead_y + sensor_r,
-                               nozzle_y - extruder_half_height, noz_color, line_active,
-                               true, true,
-                               (nozzle_has_filament && !data->bypass_active) ? &active_path : nullptr);
+                               nozzle_y - extruder_half_height, noz_color, line_active, true, true,
+                               (nozzle_has_filament && !data->bypass_active) ? &active_path
+                                                                             : nullptr);
         } else {
             draw_hollow_vertical_line(layer, center_x, toolhead_y + sensor_r,
                                       nozzle_y - extruder_half_height, idle_color, bg_color,
@@ -2624,45 +2638,53 @@ static void filament_path_draw_cb(lv_event_t* e) {
             draw_flow_dots_path(layer, active_path, path_lens, active_color, flow_off, reverse);
         }
 
-        // Extruder/print head icon (responsive size)
-        // Draw nozzle first so heat glow can render on top
-        switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-            case helix::ToolheadStyle::A4T:
-                draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color,
-                                data->extruder_scale * 6 / 5);
-                break;
-            case helix::ToolheadStyle::ANTHEAD:
-                draw_nozzle_anthead(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                break;
-            case helix::ToolheadStyle::JABBERWOCKY:
-                draw_nozzle_jabberwocky(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                break;
-            case helix::ToolheadStyle::STEALTHBURNER:
-                draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                break;
-            default:
-                draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
-                break;
-        }
-
-        // Draw heat glow around nozzle tip when heating (after nozzle so glow is visible)
+        // Draw heat glow BEHIND the toolhead so it doesn't obscure the icon
+        auto effective_style = helix::SettingsManager::instance().get_effective_toolhead_style();
         if (data->heat_active) {
             int32_t tip_y;
-            switch (helix::SettingsManager::instance().get_effective_toolhead_style()) {
-                case helix::ToolheadStyle::A4T:
-                    // A4T: 20% larger scale, tip proportionally further down
-                    tip_y = nozzle_y + (data->extruder_scale * 6 / 5 * 46) / 10 - 6;
-                    break;
-                case helix::ToolheadStyle::STEALTHBURNER:
-                    // Stealthburner: nozzle tip is further below center due to larger body
-                    tip_y = nozzle_y + (data->extruder_scale * 46) / 10 - 6;
-                    break;
-                default:
-                    // Bambu, JabberWocky, AntHead: tip at cy + scale*2.6
-                    tip_y = nozzle_y + (data->extruder_scale * 26) / 10;
-                    break;
+            switch (effective_style) {
+            case helix::ToolheadStyle::A4T:
+                tip_y = nozzle_y + (data->extruder_scale * 6 / 5 * 46) / 10 - 6;
+                break;
+            case helix::ToolheadStyle::STEALTHBURNER:
+                tip_y = nozzle_y + (data->extruder_scale * 46) / 10 - 6;
+                break;
+            case helix::ToolheadStyle::ANTHEAD:
+                // AntHead image: nozzle tip at ~50% below center (82/163 of image)
+                // render_height = scale_unit * 6.5, tip offset ≈ scale_unit * 3.27
+                tip_y = nozzle_y + (data->extruder_scale * 33) / 10;
+                break;
+            default:
+                // Bambu, JabberWocky, Creality K1/K2: tip at cy + scale*2.6
+                tip_y = nozzle_y + (data->extruder_scale * 26) / 10;
+                break;
             }
             draw_heat_glow(layer, center_x, tip_y, sensor_r, data->heat_pulse_opa);
+        }
+
+        // Extruder/print head icon (drawn after glow so icon is on top)
+        switch (effective_style) {
+        case helix::ToolheadStyle::A4T:
+            draw_nozzle_a4t(layer, center_x, nozzle_y, noz_color, data->extruder_scale * 6 / 5);
+            break;
+        case helix::ToolheadStyle::ANTHEAD:
+            draw_nozzle_anthead(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
+        case helix::ToolheadStyle::JABBERWOCKY:
+            draw_nozzle_jabberwocky(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
+        case helix::ToolheadStyle::STEALTHBURNER:
+            draw_nozzle_faceted(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
+        case helix::ToolheadStyle::CREALITY_K1:
+            draw_nozzle_creality_k1(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
+        case helix::ToolheadStyle::CREALITY_K2:
+            draw_nozzle_creality_k2(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
+        default:
+            draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
+            break;
         }
     }
 
@@ -2676,8 +2698,7 @@ static void filament_path_draw_cb(lv_event_t* e) {
         // Interpolate position along the path based on segment transition progress.
         // Each PathSegment (SPOOL=1 through NOZZLE=7) maps to an equal fraction of
         // total path length. The tip moves between prev_seg and fil_seg boundaries.
-        const float NUM_INTERVALS =
-            (float)((int)PathSegment::NOZZLE - (int)PathSegment::SPOOL);
+        const float NUM_INTERVALS = (float)((int)PathSegment::NOZZLE - (int)PathSegment::SPOOL);
         float base = (float)((int)prev_seg - 1);
         float target = (float)((int)fil_seg - 1);
         float tip_fraction = (base + (target - base) * progress_factor) / NUM_INTERVALS;
@@ -2748,11 +2769,12 @@ static void filament_path_click_cb(lv_event_t* e) {
         int32_t hub_h = (int32_t)(height * HUB_HEIGHT_RATIO);
         int32_t box_w = data->hub_width * 4 / 5;
         int32_t box_h = hub_h;
-        if (box_w < 36) box_w = 36;
-        if (box_h < 16) box_h = 16;
+        if (box_w < 36)
+            box_w = 36;
+        if (box_h < 16)
+            box_h = 16;
         int32_t center_x = x_off + width / 2;
-        if (abs(point.x - center_x) < box_w / 2 + 4 &&
-            abs(point.y - buffer_y) < box_h / 2 + 4) {
+        if (abs(point.x - center_x) < box_w / 2 + 4 && abs(point.y - buffer_y) < box_h / 2 + 4) {
             spdlog::debug("[FilamentPath] Buffer coil clicked");
             data->buffer_callback(data->buffer_user_data);
             return;
@@ -3056,8 +3078,7 @@ void ui_filament_path_canvas_set_filament_segment(lv_obj_t* obj, int segment) {
     // Start animation from old to new segment
     start_segment_animation(obj, data, old_segment, new_segment);
     data->filament_segment = new_segment;
-    spdlog::info("[FilamentPath] Segment changed: {} -> {} (animating)", old_segment,
-                 new_segment);
+    spdlog::info("[FilamentPath] Segment changed: {} -> {} (animating)", old_segment, new_segment);
 
     // Stop flow animation when filament reaches a terminal position via a
     // single-step transition (normal operation). Big jumps (e.g., 0->7 initial

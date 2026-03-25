@@ -32,7 +32,11 @@ static const char* Z_MOVEMENT_STYLE_OPTIONS_TEXT = "Auto\nBed Moves\nNozzle Move
 // Native styles (DEFAULT, CREALITY_K1, CREALITY_K2) are auto-detected and not shown.
 static const char* TOOLHEAD_STYLE_OPTIONS_TEXT = "Auto\nStealthburner\nA4T\nAntHead\nJabberWocky";
 
-// Map dropdown index → ToolheadStyle enum value
+// In test mode, show all styles for debugging
+static const char* TOOLHEAD_STYLE_OPTIONS_TEXT_DEBUG =
+    "Auto\nDefault\nA4T\nAntHead\nJabberWocky\nStealthburner\nCreality K1\nCreality K2";
+
+// Map dropdown index → ToolheadStyle enum value (production dropdown)
 static constexpr helix::ToolheadStyle DROPDOWN_TO_STYLE[] = {
     helix::ToolheadStyle::AUTO,          // 0: Auto
     helix::ToolheadStyle::STEALTHBURNER, // 1: Stealthburner
@@ -43,13 +47,31 @@ static constexpr helix::ToolheadStyle DROPDOWN_TO_STYLE[] = {
 static constexpr int DROPDOWN_COUNT =
     static_cast<int>(sizeof(DROPDOWN_TO_STYLE) / sizeof(DROPDOWN_TO_STYLE[0]));
 
-// Convert ToolheadStyle enum to dropdown index (native styles map to 0/Auto)
+// Debug dropdown: indices map directly to enum values (0=Auto, 1=Default, ...)
+static constexpr helix::ToolheadStyle DROPDOWN_TO_STYLE_DEBUG[] = {
+    helix::ToolheadStyle::AUTO,          // 0
+    helix::ToolheadStyle::DEFAULT,       // 1
+    helix::ToolheadStyle::A4T,           // 2
+    helix::ToolheadStyle::ANTHEAD,       // 3
+    helix::ToolheadStyle::JABBERWOCKY,   // 4
+    helix::ToolheadStyle::STEALTHBURNER, // 5
+    helix::ToolheadStyle::CREALITY_K1,   // 6
+    helix::ToolheadStyle::CREALITY_K2,   // 7
+};
+static constexpr int DROPDOWN_DEBUG_COUNT =
+    static_cast<int>(sizeof(DROPDOWN_TO_STYLE_DEBUG) / sizeof(DROPDOWN_TO_STYLE_DEBUG[0]));
+
+// Convert ToolheadStyle enum to dropdown index
 static int style_to_dropdown_index(helix::ToolheadStyle style) {
-    for (int i = 0; i < DROPDOWN_COUNT; i++) {
-        if (DROPDOWN_TO_STYLE[i] == style)
+    auto* rc = get_runtime_config();
+    bool debug = rc && rc->test_mode;
+    int count = debug ? DROPDOWN_DEBUG_COUNT : DROPDOWN_COUNT;
+    const auto* table = debug ? DROPDOWN_TO_STYLE_DEBUG : DROPDOWN_TO_STYLE;
+    for (int i = 0; i < count; i++) {
+        if (table[i] == style)
             return i;
     }
-    return 0; // Native styles (DEFAULT, CREALITY_K1, CREALITY_K2) map to Auto
+    return 0; // Unknown styles map to Auto
 }
 
 SettingsManager& SettingsManager::instance() {
@@ -253,6 +275,10 @@ void SettingsManager::set_toolhead_style(ToolheadStyle style) {
 }
 
 const char* SettingsManager::get_toolhead_style_options() {
+    auto* rc = get_runtime_config();
+    if (rc && rc->test_mode) {
+        return TOOLHEAD_STYLE_OPTIONS_TEXT_DEBUG;
+    }
     return TOOLHEAD_STYLE_OPTIONS_TEXT;
 }
 
@@ -261,9 +287,13 @@ int SettingsManager::toolhead_style_to_dropdown_index(ToolheadStyle style) {
 }
 
 ToolheadStyle SettingsManager::dropdown_index_to_toolhead_style(int index) {
-    if (index < 0 || index >= DROPDOWN_COUNT)
+    auto* rc = get_runtime_config();
+    bool debug = rc && rc->test_mode;
+    int count = debug ? DROPDOWN_DEBUG_COUNT : DROPDOWN_COUNT;
+    const auto* table = debug ? DROPDOWN_TO_STYLE_DEBUG : DROPDOWN_TO_STYLE;
+    if (index < 0 || index >= count)
         return ToolheadStyle::AUTO;
-    return DROPDOWN_TO_STYLE[index];
+    return table[index];
 }
 
 // ============================================================================
