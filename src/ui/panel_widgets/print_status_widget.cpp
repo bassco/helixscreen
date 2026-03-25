@@ -48,7 +48,14 @@ using namespace helix;
 
 PrintStatusWidget* PrintStatusWidget::s_active_picker_ = nullptr;
 
-PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {}
+PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {
+    // Register column_mode subject before XML parsing so bind_flag_if_eq can find it
+    if (!column_mode_subject_initialized_) {
+        lv_subject_init_int(&column_mode_subject_, 0);
+        lv_xml_register_subject(nullptr, "print_status_column_mode", &column_mode_subject_);
+        column_mode_subject_initialized_ = true;
+    }
+}
 
 PrintStatusWidget::~PrintStatusWidget() {
     detach();
@@ -79,11 +86,7 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     print_card_thumb_compact_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_compact");
     library_row_last_ = lv_obj_find_by_name(widget_obj_, "library_row_last");
     compact_row_last_ = lv_obj_find_by_name(widget_obj_, "compact_row_last");
-    icon_files_ = lv_obj_find_by_name(widget_obj_, "icon_files");
-    icon_last_ = lv_obj_find_by_name(widget_obj_, "icon_last");
-    icon_recent_ = lv_obj_find_by_name(widget_obj_, "icon_recent");
     library_row_queue_ = lv_obj_find_by_name(widget_obj_, "library_row_queue");
-    icon_queue_ = lv_obj_find_by_name(widget_obj_, "icon_queue");
 
     // Set up observers (after widget references are cached and widget_obj_ is set)
     print_state_observer_ =
@@ -219,11 +222,7 @@ void PrintStatusWidget::detach() {
     print_card_thumb_compact_ = nullptr;
     library_row_last_ = nullptr;
     compact_row_last_ = nullptr;
-    icon_files_ = nullptr;
-    icon_last_ = nullptr;
-    icon_recent_ = nullptr;
     library_row_queue_ = nullptr;
-    icon_queue_ = nullptr;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, nullptr);
@@ -255,6 +254,9 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
     // 1x2, 3x2: row layout (thumbnail left, info right)
     bool use_column = (colspan == 2 && rowspan >= 2);
 
+    // Update subject for declarative icon visibility in XML
+    lv_subject_set_int(&column_mode_subject_, use_column ? 1 : 0);
+
     if (use_column) {
         lv_obj_set_flex_flow(print_card_layout_, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_width(print_card_thumb_wrap_, LV_PCT(100));
@@ -270,17 +272,6 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
         lv_obj_set_height(print_card_info_, LV_PCT(100));
         lv_obj_set_width(print_card_info_, LV_SIZE_CONTENT);
         lv_obj_set_style_flex_grow(print_card_info_, 1, 0);
-    }
-
-    // Hide library row icons at 2x2 — too easy to fat-finger at that size
-    lv_obj_t* icons[] = {icon_files_, icon_last_, icon_recent_, icon_queue_};
-    for (auto* icon : icons) {
-        if (!icon)
-            continue;
-        if (use_column)
-            lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
-        else
-            lv_obj_remove_flag(icon, LV_OBJ_FLAG_HIDDEN);
     }
 
     spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {} (compact={})", colspan, rowspan,

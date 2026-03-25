@@ -68,11 +68,11 @@ class PrintStatusWidget : public PanelWidget {
     lv_obj_t* print_card_thumb_compact_ = nullptr; // Compact thumbnail
     lv_obj_t* library_row_last_ = nullptr;        // Print Last row (for graying out)
     lv_obj_t* compact_row_last_ = nullptr;        // Compact Print Last row (for graying out)
-    lv_obj_t* icon_files_ = nullptr;              // Library row icons (hidden at 2x2)
-    lv_obj_t* icon_last_ = nullptr;
-    lv_obj_t* icon_recent_ = nullptr;
     lv_obj_t* library_row_queue_ = nullptr;
-    lv_obj_t* icon_queue_ = nullptr;
+
+    // Size-dependent subject for XML bindings (1 = column/2x2 mode, 0 = row/wide)
+    static inline lv_subject_t column_mode_subject_;
+    static inline bool column_mode_subject_initialized_ = false;
 
     // Compact mode and state tracking
     bool is_compact_ = false;

@@ -29,49 +29,44 @@
                   clickable="false" event_bubble="true"/>
         <!-- Action list -->
         <lv_obj name="library_actions" flex_grow="1" height="100%"
-                flex_flow="column" style_pad_all="0" style_pad_gap="#space_lg"
+                flex_flow="column" style_pad_all="0" style_pad_top="#space_xxs" style_pad_bottom="#space_xxs"
+                style_pad_gap="#space_sm"
                 style_flex_main_place="center" scrollable="false"
                 clickable="false" event_bubble="true">
-          <!-- Print Files row -->
-          <lv_obj name="library_row_files" width="100%" height="content"
-                  flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-                  style_flex_cross_place="center" style_radius="4"
-                  scrollbar_mode="off" scrollable="false">
+          <ui_button name="library_row_files" width="100%" height="#button_height_sm"
+                     variant="outline" layout="row">
+            <icon src="folder" size="sm" clickable="false" event_bubble="true">
+              <bind_flag_if_eq subject="print_status_column_mode" flag="hidden" ref_value="1"/>
+            </icon>
+            <text_small text="Print Files" translation_tag="Print Files" clickable="false" event_bubble="true"/>
             <event_cb trigger="clicked" callback="library_files_cb"/>
-            <icon name="icon_files" src="folder" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-            <text_small text="Print Files" translation_tag="Print Files"
-                        style_text_color="#text" clickable="false" event_bubble="true"/>
-          </lv_obj>
-          <!-- Print Last row -->
-          <lv_obj name="library_row_last" width="100%" height="content"
-                  flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-                  style_flex_cross_place="center" style_radius="4"
-                  scrollbar_mode="off" scrollable="false">
-            <event_cb trigger="clicked" callback="library_last_cb"/>
-            <icon name="icon_last" src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
+          </ui_button>
+          <ui_button name="library_row_last" width="100%" height="#button_height_sm"
+                     variant="outline" layout="row">
+            <icon src="clock" size="sm" clickable="false" event_bubble="true">
+              <bind_flag_if_eq subject="print_status_column_mode" flag="hidden" ref_value="1"/>
+            </icon>
             <text_small name="library_last_label" text="Reprint Last" translation_tag="Reprint Last"
-                        style_text_color="#text" clickable="false" event_bubble="true"/>
-          </lv_obj>
-          <!-- Recent row -->
-          <lv_obj name="library_row_recent" width="100%" height="content"
-                  flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-                  style_flex_cross_place="center" style_radius="4"
-                  scrollbar_mode="off" scrollable="false">
+                        clickable="false" event_bubble="true"/>
+            <event_cb trigger="clicked" callback="library_last_cb"/>
+          </ui_button>
+          <ui_button name="library_row_recent" width="100%" height="#button_height_sm"
+                     variant="outline" layout="row">
+            <icon src="star" size="sm" clickable="false" event_bubble="true">
+              <bind_flag_if_eq subject="print_status_column_mode" flag="hidden" ref_value="1"/>
+            </icon>
+            <text_small text="Recent Prints" translation_tag="Recent Prints" clickable="false" event_bubble="true"/>
             <event_cb trigger="clicked" callback="library_recent_cb"/>
-            <icon name="icon_recent" src="star" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-            <text_small text="Recent Prints" translation_tag="Recent Prints"
-                        style_text_color="#text" clickable="false" event_bubble="true"/>
-          </lv_obj>
-          <!-- Job Queue row (shown only when jobs are queued) -->
-          <lv_obj name="library_row_queue" width="100%" height="content"
-                  flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-                  style_flex_cross_place="center" style_radius="4"
-                  scrollbar_mode="off" scrollable="false" hidden="true">
-            <event_cb trigger="clicked" callback="library_queue_cb"/>
-            <icon name="icon_queue" src="progress_clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
+          </ui_button>
+          <ui_button name="library_row_queue" width="100%" height="#button_height_sm"
+                     variant="outline" layout="row" hidden="true">
+            <icon src="progress_clock" size="sm" clickable="false" event_bubble="true">
+              <bind_flag_if_eq subject="print_status_column_mode" flag="hidden" ref_value="1"/>
+            </icon>
             <text_small name="library_queue_label" text="Job Queue" translation_tag="Job Queue"
-                        style_text_color="#text" clickable="false" event_bubble="true"/>
-          </lv_obj>
+                        clickable="false" event_bubble="true"/>
+            <event_cb trigger="clicked" callback="library_queue_cb"/>
+          </ui_button>
         </lv_obj>
       </lv_obj>
     </lv_obj>
@@ -85,26 +80,14 @@
       <lv_image name="print_card_thumb_compact"
                 width="100%" flex_grow="1" src="A:assets/images/benchy_thumbnail_white.png" inner_align="contain"
                 clickable="false" event_bubble="true"/>
-      <!-- Print Files row -->
-      <lv_obj name="compact_row_files" width="100%" height="content"
-              flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-              style_flex_cross_place="center" style_radius="4"
-              scrollbar_mode="off" scrollable="false">
+      <ui_button name="compact_row_files" width="100%" height="#button_height_sm"
+                 variant="outline" text="Print Files" translation_tag="Print Files">
         <event_cb trigger="clicked" callback="library_files_cb"/>
-        <icon src="folder" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-        <text_small text="Print Files" translation_tag="Print Files"
-                    style_text_color="#text" clickable="false" event_bubble="true"/>
-      </lv_obj>
-      <!-- Print Last row -->
-      <lv_obj name="compact_row_last" width="100%" height="content"
-              flex_flow="row" style_pad_all="#space_xxs" style_pad_gap="#space_xs"
-              style_flex_cross_place="center" style_radius="4"
-              scrollbar_mode="off" scrollable="false">
+      </ui_button>
+      <ui_button name="compact_row_last" width="100%" height="#button_height_sm"
+                 variant="outline" text="Reprint Last" translation_tag="Reprint Last">
         <event_cb trigger="clicked" callback="library_last_cb"/>
-        <icon src="clock" size="sm" variant="primary" clickable="false" event_bubble="true"/>
-        <text_small name="compact_last_label" text="Reprint Last" translation_tag="Reprint Last"
-                    style_text_color="#text" clickable="false" event_bubble="true"/>
-      </lv_obj>
+      </ui_button>
     </lv_obj>
     <!-- PREPARING STATE: Progress + message (hidden when print_start_phase == 0/IDLE) -->
     <lv_obj name="print_card_preparing"
