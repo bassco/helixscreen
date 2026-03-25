@@ -302,13 +302,13 @@ TEST_CASE("CFS disconnected unit handling", "[ams][cfs]") {
 }
 
 TEST_CASE("CFS GCode helpers", "[ams][cfs]") {
-    SECTION("load gcode uses TNN addressing") {
-        REQUIRE(AmsBackendCfs::load_gcode(0) == "BOX_LOAD_MATERIAL TNN=T1A");
-        REQUIRE(AmsBackendCfs::load_gcode(4) == "BOX_LOAD_MATERIAL TNN=T2A");
+    SECTION("load gcode uses M8200 protocol") {
+        REQUIRE(AmsBackendCfs::load_gcode(0) == "M8200 P\nM8200 L I=0\nM8200 F\nM8200 O");
+        REQUIRE(AmsBackendCfs::load_gcode(4) == "M8200 P\nM8200 L I=4\nM8200 F\nM8200 O");
     }
 
-    SECTION("unload gcode") {
-        REQUIRE(AmsBackendCfs::unload_gcode() == "BOX_QUIT_MATERIAL");
+    SECTION("unload gcode uses M8200 protocol") {
+        REQUIRE(AmsBackendCfs::unload_gcode() == "M8200 P\nM8200 C\nM8200 R\nM8200 O");
     }
 
     SECTION("reset gcode") {
