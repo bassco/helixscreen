@@ -279,6 +279,7 @@ void LedWidget::light_toggle_cb(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* self = static_cast<LedWidget*>(lv_obj_get_user_data(target));
     if (self) {
+        self->record_interaction();
         self->handle_light_toggle();
     } else {
         spdlog::warn("[LedWidget] light_toggle_cb: could not recover widget instance");

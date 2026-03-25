@@ -132,6 +132,7 @@ void TemperatureWidget::temp_clicked_cb(lv_event_t* e) {
     auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* self = static_cast<TemperatureWidget*>(lv_obj_get_user_data(target));
     if (self) {
+        self->record_interaction();
         self->handle_temp_clicked();
     } else {
         spdlog::warn("[TemperatureWidget] temp_clicked_cb: could not recover widget instance");

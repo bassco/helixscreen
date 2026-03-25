@@ -97,6 +97,10 @@ class PanelWidget {
     /// Widgets call this instead of reaching into PanelWidgetManager directly.
     void save_widget_config(const nlohmann::json& config);
 
+  protected:
+    /// Call from widget event callbacks to track user interactions for telemetry
+    void record_interaction();
+
   private:
     std::string panel_id_;
 };

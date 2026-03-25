@@ -189,6 +189,7 @@ void PowerWidget::power_toggle_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PowerWidget] power_toggle_cb");
     auto* self = find_power_widget_ancestor(static_cast<lv_obj_t*>(lv_event_get_current_target(e)));
     if (self) {
+        self->record_interaction();
         self->handle_power_toggle();
     } else {
         spdlog::warn("[PowerWidget] power_toggle_cb: could not recover widget instance");

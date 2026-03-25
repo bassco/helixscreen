@@ -103,6 +103,8 @@ export interface EngagementData {
   dark_vs_light: { name: string; count: number }[]
   locales: { name: string; count: number }[]
   brightness: { p25: number; p50: number; p75: number }
+  widget_placement: { widget: string; devices: number }[]
+  widget_interactions: { widget: string; interactions: number }[]
 }
 
 export interface ReliabilityData {

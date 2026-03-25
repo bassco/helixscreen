@@ -422,6 +422,7 @@ void PreheatWidget::preheat_apply_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PreheatWidget] preheat_apply_cb");
     (void)e;
     if (s_active_instance) {
+        s_active_instance->record_interaction();
         s_active_instance->handle_apply();
     }
     LVGL_SAFE_EVENT_CB_END();

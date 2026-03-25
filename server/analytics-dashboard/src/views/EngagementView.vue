@@ -36,6 +36,16 @@
           <BarChart :data="themeChartData" :options="horizontalOpts" />
         </div>
 
+        <div class="chart-section">
+          <h3>Widget Adoption (devices with widget enabled)</h3>
+          <BarChart :data="widgetPlacementChartData" :options="horizontalOpts" />
+        </div>
+
+        <div class="chart-section">
+          <h3>Widget Interactions</h3>
+          <BarChart :data="widgetInteractionChartData" :options="horizontalOpts" />
+        </div>
+
         <div class="grid-2col">
           <div class="chart-section">
             <h3>Dark vs Light Mode</h3>
@@ -120,6 +130,28 @@ const themeChartData = computed(() => ({
   datasets: [{
     label: 'Users',
     data: data.value?.themes.map(t => t.count) ?? [],
+    backgroundColor: '#8b5cf6'
+  }]
+}))
+
+function formatWidgetName(id: string): string {
+  return id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+const widgetPlacementChartData = computed(() => ({
+  labels: data.value?.widget_placement?.map(w => formatWidgetName(w.widget)) ?? [],
+  datasets: [{
+    label: 'Devices',
+    data: data.value?.widget_placement?.map(w => w.devices) ?? [],
+    backgroundColor: '#10b981'
+  }]
+}))
+
+const widgetInteractionChartData = computed(() => ({
+  labels: data.value?.widget_interactions?.map(w => formatWidgetName(w.widget)) ?? [],
+  datasets: [{
+    label: 'Interactions',
+    data: data.value?.widget_interactions?.map(w => w.interactions) ?? [],
     backgroundColor: '#8b5cf6'
   }]
 }))

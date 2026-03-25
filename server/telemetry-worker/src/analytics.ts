@@ -277,12 +277,14 @@ function mapEventToDataPointInternal(
     const themeName = String(event.theme_name ?? app.theme ?? event.theme ?? "");
     // Dark/light mode: "dark" or "light" for the dark vs light chart
     const darkLight = String(event.theme ?? (themeName.includes("(Dark)") ? "dark" : themeName.includes("(Light)") ? "light" : ""));
-    return {
+    const version = String(app.version ?? event.app_version ?? event.version ?? "");
+    const platform = String(app.platform ?? event.app_platform ?? event.platform ?? "");
+    const mainPoint: AnalyticsEngineDataPoint = {
       indexes: ["settings_snapshot"],
       blobs: [
         deviceId,
-        String(app.version ?? event.app_version ?? event.version ?? ""),
-        String(app.platform ?? event.app_platform ?? event.platform ?? ""),
+        version,
+        platform,
         themeName,
         String(app.locale ?? event.locale ?? ""),
         String(event.update_channel ?? ""),
@@ -304,6 +306,36 @@ function mapEventToDataPointInternal(
         0,
       ],
     };
+
+    // Expand home widget placement into separate data points
+    const homeWidgets = event.home_widgets;
+    if (Array.isArray(homeWidgets) && homeWidgets.length > 0) {
+      const points: AnalyticsEngineDataPoint[] = [mainPoint];
+
+      // Count occurrences of each widget type
+      const widgetCounts = new Map<string, number>();
+      for (const w of homeWidgets) {
+        const id = String(w);
+        widgetCounts.set(id, (widgetCounts.get(id) ?? 0) + 1);
+      }
+
+      for (const [widgetId, count] of widgetCounts) {
+        points.push({
+          indexes: ["widget_placement"],
+          blobs: [
+            deviceId, version, platform, widgetId,
+            "", "", "", "", "", "", "", "",
+          ],
+          doubles: [
+            count,
+            0, 0, 0, 0, 0, 0, 0,
+          ],
+        });
+      }
+      return points;
+    }
+
+    return mainPoint;
   }
 
   if (eventType === "panel_usage") {
@@ -336,6 +368,23 @@ function mapEventToDataPointInternal(
           ],
         });
       }
+      // Expand widget interactions into separate data points
+      const widgetMap = (event.widget_interactions ?? {}) as Record<string, unknown>;
+      for (const [widgetId, count] of Object.entries(widgetMap)) {
+        points.push({
+          indexes: ["widget_interaction"],
+          blobs: [
+            deviceId, version, platform, widgetId,
+            "", "", "", "", "", "", "", "",
+          ],
+          doubles: [
+            sessionDuration,
+            Number(count),
+            0, 0, 0, 0, 0, 0,
+          ],
+        });
+      }
+
       return points;
     }
 

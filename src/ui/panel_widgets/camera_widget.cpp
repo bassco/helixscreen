@@ -7,6 +7,7 @@
 #if HELIX_HAS_CAMERA
 
 #include "camera_config_modal.h"
+#include "system/telemetry_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 
@@ -57,6 +58,7 @@ static void on_camera_clicked(lv_event_t* e) {
     auto* self = helix::panel_widget_from_event<helix::CameraWidget>(e);
     if (!self)
         return;
+    TelemetryManager::instance().notify_widget_interaction(self->id());
     self->open_fullscreen();
 }
 

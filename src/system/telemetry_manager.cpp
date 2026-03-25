@@ -6,6 +6,8 @@
 #include "ui_update_queue.h"
 
 #include "accel_sensor_manager.h"
+#include "panel_widget_config.h"
+#include "panel_widget_manager.h"
 #include "ams_state.h"
 #include "ams_types.h"
 #include "app_globals.h"
@@ -549,6 +551,19 @@ void TelemetryManager::notify_panel_changed(const std::string& panel_name) {
 void TelemetryManager::notify_overlay_opened() {
     overlay_open_count_++;
     spdlog::trace("[TelemetryManager] Overlay opened (count={})", overlay_open_count_);
+}
+
+void TelemetryManager::notify_widget_interaction(const std::string& widget_id) {
+    if (!enabled_.load() || !initialized_.load()) return;
+    // Strip instance suffix for aggregation (e.g., "favorite_macro:2" -> "favorite_macro")
+    std::string base_id = widget_id;
+    auto colon = base_id.find(':');
+    if (colon != std::string::npos) {
+        base_id = base_id.substr(0, colon);
+    }
+    widget_interactions_[base_id]++;
+    spdlog::trace("[TelemetryManager] Widget interaction '{}' (count={})", base_id,
+                  widget_interactions_[base_id]);
 }
 
 void TelemetryManager::record_panel_usage() {
@@ -1847,6 +1862,29 @@ nlohmann::json TelemetryManager::build_settings_snapshot_event() const {
     event["time_format"] =
         DisplaySettingsManager::instance().get_time_format() == TimeFormat::HOUR_12 ? "12h" : "24h";
 
+    // Home widget placement snapshot
+    try {
+        json widgets = json::array();
+        auto& widget_config =
+            helix::PanelWidgetManager::instance().get_widget_config("home");
+        for (const auto& page : widget_config.pages()) {
+            for (const auto& entry : page.widgets) {
+                if (entry.enabled) {
+                    // Strip instance suffix for aggregation
+                    std::string base_id = entry.id;
+                    auto colon = base_id.find(':');
+                    if (colon != std::string::npos) {
+                        base_id = base_id.substr(0, colon);
+                    }
+                    widgets.push_back(base_id);
+                }
+            }
+        }
+        event["home_widgets"] = widgets;
+    } catch (const std::exception& e) {
+        spdlog::debug("[TelemetryManager] Failed to snapshot home widgets: {}", e.what());
+    }
+
     return event;
 }
 
@@ -1876,6 +1914,12 @@ nlohmann::json TelemetryManager::build_panel_usage_event() const {
         visit_map[name] = count;
     }
     event["panel_visits"] = visit_map;
+
+    json widget_map = json::object();
+    for (const auto& [name, count] : widget_interactions_) {
+        widget_map[name] = count;
+    }
+    event["widget_interactions"] = widget_map;
 
     event["overlay_open_count"] = overlay_open_count_;
 

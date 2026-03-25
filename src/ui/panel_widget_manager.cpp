@@ -12,6 +12,7 @@
 #include "panel_widget.h"
 #include "panel_widget_config.h"
 #include "panel_widget_registry.h"
+#include "system/telemetry_manager.h"
 #include "theme_manager.h"
 
 #include <spdlog/fmt/fmt.h>
@@ -713,6 +714,10 @@ PanelWidgetConfig& PanelWidgetManager::get_widget_config(const std::string& pane
 }
 
 // -- PanelWidget base class --
+
+void PanelWidget::record_interaction() {
+    TelemetryManager::instance().notify_widget_interaction(id());
+}
 
 void PanelWidget::save_widget_config(const nlohmann::json& config) {
     if (panel_id_.empty()) {

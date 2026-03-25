@@ -661,7 +661,7 @@ export default {
         // GET /v1/dashboard/engagement
         if (url.pathname === "/v1/dashboard/engagement") {
           const queries = engagementQueries(days, filters);
-          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes, darkLightRes] =
+          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes, darkLightRes, widgetPlacementRes, widgetInteractionRes] =
             await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
 
           const toList = (res: unknown) => {
@@ -690,6 +690,9 @@ export default {
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => b.count - a.count);
 
+          const widgetPlacementData = widgetPlacementRes as { data: Array<{ widget: string; devices: number }> };
+          const widgetInteractionData = widgetInteractionRes as { data: Array<{ widget: string; interactions: number }> };
+
           return json({
             panel_time: (panelTimeData.data ?? []).map((r) => ({
               panel: r.panel,
@@ -711,6 +714,14 @@ export default {
               p50: brightnessRow.p50,
               p75: brightnessRow.p75,
             },
+            widget_placement: (widgetPlacementData.data ?? []).map((r) => ({
+              widget: r.widget,
+              devices: r.devices,
+            })),
+            widget_interactions: (widgetInteractionData.data ?? []).map((r) => ({
+              widget: r.widget,
+              interactions: r.interactions,
+            })),
           });
         }
 

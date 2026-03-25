@@ -279,6 +279,20 @@ class TelemetryManager {
     void notify_overlay_opened();
 
     /**
+     * @brief Notify that a home widget was interacted with
+     *
+     * Tracks user-initiated interactions (clicks, toggles) per widget type.
+     * Instance suffixes (e.g., "favorite_macro:2") are stripped for aggregation.
+     * Always tracks regardless of enabled state (data is only recorded at
+     * shutdown if enabled).
+     *
+     * Must be called from the LVGL/main thread only (same as panel tracking).
+     *
+     * @param widget_id Widget identifier (e.g., "power", "led", "temperature")
+     */
+    void notify_widget_interaction(const std::string& widget_id);
+
+    /**
      * @brief Record print start context when a print begins
      *
      * Records metadata about the print job (source, thumbnail, file size,
@@ -856,6 +870,7 @@ class TelemetryManager {
     // Panel usage tracking
     std::unordered_map<std::string, int> panel_time_sec_;
     std::unordered_map<std::string, int> panel_visits_;
+    std::unordered_map<std::string, int> widget_interactions_;
     std::string current_panel_;
     std::chrono::steady_clock::time_point panel_start_time_;
     int overlay_open_count_{0};

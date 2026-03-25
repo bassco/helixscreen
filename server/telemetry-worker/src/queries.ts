@@ -416,6 +416,10 @@ export function engagementQueries(days: number, filters?: FilterParams): string[
     WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'settings_snapshot'${f}`,
     // Dark vs Light mode distribution (count by blob8 from settings_snapshot)
     `SELECT blob8 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'settings_snapshot' AND blob8 != ''${f} GROUP BY name ORDER BY count DESC`,
+    // Widget placement (count by blob4 from widget_placement, unique per device)
+    `SELECT blob4 as widget, count(DISTINCT blob1) as devices FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'widget_placement' AND blob4 != ''${f} GROUP BY widget ORDER BY devices DESC`,
+    // Widget interactions (sum double2 by blob4 from widget_interaction)
+    `SELECT blob4 as widget, sum(double2) as interactions FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'widget_interaction' AND blob4 != ''${f} GROUP BY widget ORDER BY interactions DESC`,
   ];
 }
 

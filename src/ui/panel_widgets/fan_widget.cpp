@@ -437,6 +437,7 @@ void FanWidget::fan_widget_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FanWidget] fan_widget_clicked_cb");
     auto* widget = panel_widget_from_event<FanWidget>(e);
     if (widget) {
+        widget->record_interaction();
         widget->handle_clicked();
     }
     LVGL_SAFE_EVENT_CB_END();
