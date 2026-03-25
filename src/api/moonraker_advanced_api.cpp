@@ -1987,7 +1987,8 @@ void MoonrakerAdvancedAPI::save_config(SuccessCallback on_success, ErrorCallback
 
 void MoonrakerAdvancedAPI::execute_macro(const std::string& name,
                                          const std::map<std::string, std::string>& params,
-                                         SuccessCallback on_success, ErrorCallback on_error) {
+                                         SuccessCallback on_success, ErrorCallback on_error,
+                                         uint32_t timeout_ms) {
     // Validate macro name - only allow alphanumeric, underscore (standard Klipper macro names)
     if (name.empty()) {
         spdlog::error("[Moonraker API] execute_macro() called with empty name");
@@ -2060,7 +2061,9 @@ void MoonrakerAdvancedAPI::execute_macro(const std::string& name,
     std::string gcode_str = gcode.str();
     spdlog::debug("[Moonraker API] Executing macro: {}", gcode_str);
 
-    api_.execute_gcode(gcode_str, std::move(on_success), std::move(on_error));
+    // Default to MACRO_TIMEOUT_MS (5 min) — user macros can do anything
+    uint32_t effective_timeout = timeout_ms > 0 ? timeout_ms : MoonrakerAPI::MACRO_TIMEOUT_MS;
+    api_.execute_gcode(gcode_str, std::move(on_success), std::move(on_error), effective_timeout);
 }
 
 std::vector<MacroInfo> MoonrakerAdvancedAPI::get_user_macros(bool /*include_system*/) const {

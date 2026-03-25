@@ -13,6 +13,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 namespace helix {
 
@@ -50,6 +51,9 @@ class PrintStatusWidget : public PanelWidget {
 
     /// Configure picker callback
     static void print_status_picker_backdrop_cb(lv_event_t* e);
+
+    /// Registry of live (attached) widget instances for use-after-free prevention
+    static std::unordered_set<PrintStatusWidget*>& live_instances();
 
   private:
     lv_obj_t* widget_obj_ = nullptr;

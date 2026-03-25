@@ -839,7 +839,8 @@ void FilamentPanel::handle_purge_button() {
             []() { NOTIFY_SUCCESS("Purge complete"); },
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR("Purge failed: {}", error.user_message());
-            });
+            },
+            MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
         return;
     }
 
@@ -1546,7 +1547,8 @@ void FilamentPanel::execute_load() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
             NOTIFY_ERROR("Filament load failed: {}", error.user_message());
-        });
+        },
+        MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
 }
 
 void FilamentPanel::execute_unload() {
@@ -1573,7 +1575,8 @@ void FilamentPanel::execute_unload() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
             NOTIFY_ERROR("Filament unload failed: {}", error.user_message());
-        });
+        },
+        MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
 }
 
 void FilamentPanel::show_load_warning() {

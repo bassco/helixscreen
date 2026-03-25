@@ -266,7 +266,7 @@ class StandardMacros {
      *         false if slot is empty (no callbacks called)
      */
     bool execute(StandardMacroSlot slot, MoonrakerAPI* api, SuccessCallback on_success,
-                 ErrorCallback on_error);
+                 ErrorCallback on_error, uint32_t timeout_ms = 0);
 
     /**
      * @brief Execute macro with parameters
@@ -280,7 +280,7 @@ class StandardMacros {
      */
     bool execute(StandardMacroSlot slot, MoonrakerAPI* api,
                  const std::map<std::string, std::string>& params, SuccessCallback on_success,
-                 ErrorCallback on_error);
+                 ErrorCallback on_error, uint32_t timeout_ms = 0);
 
   private:
     StandardMacros();

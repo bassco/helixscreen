@@ -423,7 +423,8 @@ class MoonrakerAdvancedAPI {
      */
     virtual void execute_macro(const std::string& name,
                                const std::map<std::string, std::string>& params,
-                               SuccessCallback on_success, ErrorCallback on_error);
+                               SuccessCallback on_success, ErrorCallback on_error,
+                               uint32_t timeout_ms = 0);
 
     /**
      * @brief Get list of user-visible macros

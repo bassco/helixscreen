@@ -85,6 +85,8 @@ class MoonrakerAPI {
     static constexpr uint32_t AMS_OPERATION_TIMEOUT_MS = 300000; // 5 min — MMU/AFC/tool change ops
     static constexpr uint32_t EXTRUSION_TIMEOUT_MS =
         120000; // 2 min — filament purge/load at slow feedrate
+    static constexpr uint32_t MACRO_TIMEOUT_MS =
+        300000; // 5 min — user macros can do anything (homing, leveling, filament ops)
 
     using SuccessCallback = std::function<void()>;
     using ErrorCallback = std::function<void(const MoonrakerError&)>;

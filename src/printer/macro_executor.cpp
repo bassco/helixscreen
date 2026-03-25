@@ -73,7 +73,8 @@ void execute_macro_gcode(MoonrakerAPI* api, const std::string& macro_name,
             helix::ui::queue_update([msg]() {
                 ToastManager::instance().show(ToastSeverity::ERROR, msg.c_str(), 4000);
             });
-        });
+        },
+        MoonrakerAPI::MACRO_TIMEOUT_MS);
 }
 
 bool is_dangerous_macro(const std::string& name) {

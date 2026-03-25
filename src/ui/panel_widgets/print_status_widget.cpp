@@ -26,6 +26,7 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdio>
+#include <unordered_set>
 
 namespace helix {
 void register_print_status_widget() {
@@ -48,6 +49,11 @@ using namespace helix;
 
 PrintStatusWidget* PrintStatusWidget::s_active_picker_ = nullptr;
 
+std::unordered_set<PrintStatusWidget*>& PrintStatusWidget::live_instances() {
+    static std::unordered_set<PrintStatusWidget*> instances;
+    return instances;
+}
+
 PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {
     // Register column_mode subject before XML parsing so bind_flag_if_eq can find it
     if (!column_mode_subject_initialized_) {
@@ -69,6 +75,7 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
     alive_->store(true);
+    live_instances().insert(this);
 
     // Store this pointer for event callback recovery
     lv_obj_set_user_data(widget_obj_, this);
@@ -197,6 +204,7 @@ void PrintStatusWidget::detach() {
 
     // Invalidate alive guard FIRST to abort in-flight async fetches
     alive_->store(false);
+    live_instances().erase(this);
 
     // Unregister history observer
     if (auto* hm = get_print_history_manager()) {
@@ -983,8 +991,15 @@ static PrintStatusWidget* recover_widget_from_event(lv_event_t* e) {
     auto* obj = target;
     while (obj) {
         auto* self = static_cast<PrintStatusWidget*>(lv_obj_get_user_data(obj));
-        if (self)
+        if (self) {
+            // Validate widget is still alive — prevents use-after-free if
+            // event fires on stale LVGL objects after widget destruction
+            if (PrintStatusWidget::live_instances().count(self) == 0) {
+                spdlog::warn("[PrintStatusWidget] recover_widget_from_event: stale widget pointer");
+                return nullptr;
+            }
             return self;
+        }
         obj = lv_obj_get_parent(obj);
     }
     return nullptr;
@@ -993,8 +1008,7 @@ static PrintStatusWidget* recover_widget_from_event(lv_event_t* e) {
 void PrintStatusWidget::print_card_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusWidget] print_card_clicked_cb");
 
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<PrintStatusWidget*>(lv_obj_get_user_data(target));
+    auto* self = recover_widget_from_event(e);
     if (self) {
         self->record_interaction();
         self->handle_print_card_clicked();
