@@ -184,21 +184,31 @@ void FanStackWidget::attach_carousel(lv_obj_t* widget_obj) {
 void FanStackWidget::detach() {
     *alive_ = false;
     dismiss_fan_picker();
-    part_observer_.reset();
-    hotend_observer_.reset();
-    aux_observer_.reset();
-    version_observer_.reset();
-    anim_settings_observer_.reset();
-    carousel_observers_.clear();
 
-    // Stop any running animations before clearing pointers
-    for (auto* icon : {part_icon_, hotend_icon_, aux_icon_})
-        if (icon)
-            helix::ui::fan_spin_stop(icon);
-    for (auto& page : carousel_pages_)
-        if (page.fan_icon)
-            helix::ui::fan_spin_stop(page.fan_icon);
-    carousel_pages_.clear();
+    // Freeze queue, drain pending deferred callbacks, THEN tear down observers
+    // and animations. Without the freeze, the WebSocket thread can enqueue new
+    // callbacks between drain() and pointer cleanup → use-after-free.
+    {
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        helix::ui::UpdateQueue::instance().drain();
+
+        part_observer_.reset();
+        hotend_observer_.reset();
+        aux_observer_.reset();
+        version_observer_.reset();
+        anim_settings_observer_.reset();
+        carousel_observers_.clear();
+
+        // Cancel running animations — just delete the anim, don't touch
+        // the object's style (it's about to be destroyed by lv_obj_clean).
+        for (auto* icon : {part_icon_, hotend_icon_, aux_icon_})
+            if (icon)
+                lv_anim_delete(icon, helix::ui::fan_spin_anim_cb);
+        for (auto& page : carousel_pages_)
+            if (page.fan_icon)
+                lv_anim_delete(page.fan_icon, helix::ui::fan_spin_anim_cb);
+        carousel_pages_.clear();
+    }
 
     if (widget_obj_)
         lv_obj_set_user_data(widget_obj_, nullptr);

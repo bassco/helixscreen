@@ -177,17 +177,24 @@ void FanControlOverlay::cleanup() {
     // then create a fresh guard for the next create() cycle
     *alive_guard_ = false;
     alive_guard_ = std::make_shared<bool>(true);
-    // Clear observers first (they reference this object)
-    fans_observer_.reset();
-    anim_settings_observer_.reset();
-    unsubscribe_from_fan_speeds();
-    // Stop spin animations before clearing cards
-    for (auto& card : auto_fan_cards_) {
-        helix::ui::fan_spin_stop(card.fan_icon);
+
+    // Freeze queue, drain pending deferred callbacks, THEN tear down observers
+    // and animations to prevent use-after-free from stale queued callbacks.
+    {
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        helix::ui::UpdateQueue::instance().drain();
+
+        fans_observer_.reset();
+        anim_settings_observer_.reset();
+        unsubscribe_from_fan_speeds();
+        // Stop spin animations before clearing cards
+        for (auto& card : auto_fan_cards_) {
+            helix::ui::fan_spin_stop(card.fan_icon);
+        }
+        // Clear widget tracking vectors (widgets will be destroyed by OverlayBase::cleanup)
+        animated_fan_dials_.clear();
+        auto_fan_cards_.clear();
     }
-    // Clear widget tracking vectors (widgets will be destroyed by OverlayBase::cleanup)
-    animated_fan_dials_.clear();
-    auto_fan_cards_.clear();
     OverlayBase::cleanup();
 }
 
