@@ -45,7 +45,7 @@ Based on analysis of:
 ## K2 Renderer — `nozzle_renderer_creality_k2`
 
 ### Visual Identity
-- **Color**: Dark charcoal gray (~#2A2A2A body)
+- **Color**: Dark charcoal gray (~#2A2A2A body) — hardcoded, not a design token, since this represents the physical hardware color
 - **Proportions**: Tall tower, roughly 2:1 H:W ratio
 - **Key features**: 13 vertical vent slits, U-shaped nozzle cutout, no central fan
 
@@ -93,9 +93,16 @@ if (PrinterDetector::is_creality_k2()) {
 return ToolheadStyle::DEFAULT;
 ```
 
-Add detection methods to `PrinterDetector`:
-- `is_creality_k1()` — matches printer names containing "K1" (K1, K1C, K1 Max, K1 SE)
-- `is_creality_k2()` — matches printer names containing "K2" (K2, K2 Plus, K2 Max, K2 Pro)
+Add detection methods to `PrinterDetector` — must match BOTH "creality" AND "k1"/"k2" to avoid false positives on non-Creality printers:
+```cpp
+static bool is_creality_k1() {
+    return printer_type_contains("creality") && printer_type_contains("k1");
+}
+static bool is_creality_k2() {
+    return printer_type_contains("creality") && printer_type_contains("k2");
+}
+```
+Insert after `is_voron_printer()` / `is_pfa_printer()` checks, before the `return DEFAULT`.
 
 ### Dispatch
 Add cases in `nozzle_renderer_dispatch.h`:
@@ -109,7 +116,12 @@ case helix::ToolheadStyle::CREALITY_K2:
 ```
 
 ### Settings Dropdown
-Update `get_toolhead_style_options()` to include "Creality K1\nCreality K2" options. Update the clamp range from 5 to 7.
+Update `get_toolhead_style_options()` — append "Creality K1\nCreality K2" at the end (dropdown index must match enum integer value).
+
+Update all three clamp sites in `settings_manager.cpp` from `(0, 5)` to `(0, 7)`:
+- `init_subjects()` — loading from config
+- `get_toolhead_style()` — reading from subject
+- `set_toolhead_style()` — writing to config
 
 ### Files
 | File | Action |
@@ -118,12 +130,12 @@ Update `get_toolhead_style_options()` to include "Creality K1\nCreality K2" opti
 | `include/nozzle_renderer_creality_k2.h` | New header |
 | `src/rendering/nozzle_renderer_creality_k1.cpp` | New implementation |
 | `src/rendering/nozzle_renderer_creality_k2.cpp` | New implementation |
-| `include/nozzle_renderer_dispatch.h` | Add cases |
+| `include/nozzle_renderer_dispatch.h` | Add `#include` directives + switch cases |
 | `include/settings_manager.h` | Add enum values |
 | `src/system/settings_manager.cpp` | Add auto-detection, update options/clamp |
 | `src/printer/printer_detector.cpp` | Add `is_creality_k1()`, `is_creality_k2()` |
 | `include/printer_detector.h` | Add method declarations |
-| `Makefile` | Add new .cpp files to build |
+| `Makefile` | No changes needed — wildcard globs auto-discover `src/rendering/*.cpp` |
 
 ## Rendering Approach
 
