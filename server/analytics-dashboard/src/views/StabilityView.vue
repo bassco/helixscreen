@@ -64,7 +64,7 @@
 
         <div class="chart-section">
           <h3>Error Hotspots</h3>
-          <BarChart :data="errorCategoryChartData" :options="horizontalOpts" />
+          <BarChart :data="errorCategoryChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
@@ -134,6 +134,8 @@ import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { StabilityData } from '@/services/api'
 import type { ChartOptions } from 'chart.js'
+import { horizontalBarOpts, compareVersions } from '@/utils/chart'
+import { formatDuration, formatTimestamp, shortDeviceId } from '@/utils/format'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -141,28 +143,6 @@ const filters = useFiltersStore()
 const data = ref<StabilityData | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-function formatDuration(seconds: number): string {
-  if (!seconds) return '0m'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
-
-function formatTimestamp(ts: string): string {
-  try {
-    const d = new Date(ts)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-  } catch {
-    return ts
-  }
-}
-
-function shortDeviceId(id: string): string {
-  if (!id) return '\u2014'
-  return id.slice(0, 8) + '...'
-}
 
 function signalClass(signal: string): string {
   if (signal === 'SIGSEGV') return 'signal-segv'
@@ -232,8 +212,6 @@ const barPercentOpts: ChartOptions<'bar'> = {
   },
 }
 
-const horizontalOpts: ChartOptions<'bar'> = { indexAxis: 'y', scales: { y: { ticks: { autoSkip: false } } } }
-
 const crashRateChartData = computed(() => ({
   labels: data.value?.crash_rate_trend.map(d => d.date) ?? [],
   datasets: [{
@@ -245,16 +223,6 @@ const crashRateChartData = computed(() => ({
     tension: 0.3
   }]
 }))
-
-function compareVersions(a: string, b: string): number {
-  const pa = a.replace(/^v/, '').split('.').map(Number)
-  const pb = b.replace(/^v/, '').split('.').map(Number)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
-    if (diff !== 0) return diff
-  }
-  return 0
-}
 
 const versionChartData = computed(() => {
   const sorted = [...(data.value?.by_version ?? [])].sort((a, b) => compareVersions(a.version, b.version))

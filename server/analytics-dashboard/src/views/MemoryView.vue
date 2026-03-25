@@ -38,7 +38,7 @@
 
           <div class="chart-section">
             <h3>Avg RSS by Platform</h3>
-            <BarChart :data="platformChartData" :options="horizontalOpts" />
+            <BarChart :data="platformChartData" :options="horizontalBarOpts" />
           </div>
         </template>
 
@@ -93,7 +93,7 @@
 
             <div class="chart-section">
               <h3>Warnings by Platform</h3>
-              <BarChart :data="warningsPlatformChartData" :options="horizontalOpts" />
+              <BarChart :data="warningsPlatformChartData" :options="horizontalBarOpts" />
             </div>
 
             <div class="chart-section">
@@ -164,7 +164,7 @@
                                 </div>
                                 <div class="detail-item">
                                   <span class="detail-label">Uptime</span>
-                                  <span class="detail-value mono">{{ formatUptime(w.uptime_sec) }}</span>
+                                  <span class="detail-value mono">{{ formatDuration(w.uptime_sec) }}</span>
                                 </div>
                                 <div class="detail-item">
                                   <span class="detail-label">Platform</span>
@@ -212,6 +212,8 @@ import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { MemoryData, MemoryWarningsData } from '@/services/api'
 import type { ChartOptions } from 'chart.js'
+import { horizontalBarOpts } from '@/utils/chart'
+import { formatDuration, formatTimestamp } from '@/utils/format'
 
 const filters = useFiltersStore()
 const data = ref<MemoryData | null>(null)
@@ -232,8 +234,6 @@ function filterByDevice(deviceId: string) {
   alert(`Device ID copied to clipboard:\n${deviceId}\n\nUse this to search telemetry logs for this device.`)
 }
 
-const horizontalOpts: ChartOptions<'bar'> = { indexAxis: 'y', scales: { y: { ticks: { autoSkip: false } } } }
-
 const stackedBarOpts: ChartOptions<'bar'> = {
   scales: {
     x: { stacked: true },
@@ -248,21 +248,6 @@ function formatMB(kb: number): string {
 function formatGrowth(kb: number): string {
   const sign = kb >= 0 ? '+' : ''
   return `${sign}${(kb / 1024).toFixed(1)} MB`
-}
-
-function formatTimestamp(ts: string): string {
-  const d = new Date(ts)
-  return d.toLocaleString(undefined, {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  })
-}
-
-function formatUptime(sec: number): string {
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
 }
 
 // Memory snapshot computeds

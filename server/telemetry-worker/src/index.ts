@@ -59,7 +59,6 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
@@ -488,17 +487,17 @@ export default {
           return json({
             rss_over_time: (rssTimeData.data ?? []).map((r) => ({
               date: r.date,
-              avg_rss_kb: Number(r.avg_rss_kb),
-              p95_rss_kb: Number(r.p95_rss_kb),
-              max_rss_kb: Number(r.max_rss_kb),
+              avg_rss_kb: r.avg_rss_kb,
+              p95_rss_kb: r.p95_rss_kb,
+              max_rss_kb: r.max_rss_kb,
             })),
             rss_by_platform: (rssPlatformData.data ?? []).map((r) => ({
               platform: r.platform,
-              avg_rss_kb: Number(r.avg_rss_kb),
+              avg_rss_kb: r.avg_rss_kb,
             })),
             vm_peak_trend: (vmPeakData.data ?? []).map((r) => ({
               date: r.date,
-              avg_vm_peak_kb: Number(r.avg_vm_peak_kb),
+              avg_vm_peak_kb: r.avg_vm_peak_kb,
             })),
           });
         }
@@ -531,30 +530,29 @@ export default {
             }>;
           };
 
-          // Total warning count — Analytics Engine returns strings, must Number()
-          const totalWarnings = (byLevelData.data ?? []).reduce((sum, r) => sum + Number(r.count), 0);
+          const totalWarnings = (byLevelData.data ?? []).reduce((sum, r) => sum + r.count, 0);
 
           return json({
             total_warnings: totalWarnings,
-            affected_devices: Number(affectedData.data?.[0]?.affected_devices ?? 0),
+            affected_devices: affectedData.data?.[0]?.affected_devices ?? 0,
             by_level: (byLevelData.data ?? []).map((r) => ({
               level: r.level,
-              count: Number(r.count),
+              count: r.count,
             })),
             over_time: (overTimeData.data ?? []).map((r) => ({
               date: r.date,
               level: r.level,
-              count: Number(r.count),
+              count: r.count,
             })),
             rss_at_warning: (rssAtWarningData.data ?? []).map((r) => ({
               date: r.date,
-              avg_rss_kb: Number(r.avg_rss_kb),
-              max_rss_kb: Number(r.max_rss_kb),
+              avg_rss_kb: r.avg_rss_kb,
+              max_rss_kb: r.max_rss_kb,
             })),
             by_platform: (byPlatformData.data ?? []).map((r) => ({
               platform: r.platform,
-              count: Number(r.count),
-              avg_rss_kb: Number(r.avg_rss_kb),
+              count: r.count,
+              avg_rss_kb: r.avg_rss_kb,
             })),
             recent_warnings: (recentData.data ?? []).map((r) => ({
               timestamp: r.timestamp,
@@ -563,12 +561,12 @@ export default {
               platform: r.platform,
               level: r.level,
               reason: r.reason,
-              uptime_sec: Number(r.uptime_sec),
-              rss_kb: Number(r.rss_kb),
-              system_available_mb: Number(r.system_available_mb),
-              growth_5min_kb: Number(r.growth_5min_kb),
-              private_dirty_kb: Number(r.private_dirty_kb),
-              pss_kb: Number(r.pss_kb),
+              uptime_sec: r.uptime_sec,
+              rss_kb: r.rss_kb,
+              system_available_mb: r.system_available_mb,
+              growth_5min_kb: r.growth_5min_kb,
+              private_dirty_kb: r.private_dirty_kb,
+              pss_kb: r.pss_kb,
             })),
           });
         }
@@ -595,7 +593,7 @@ export default {
           const ramRaw = ramRes as { data: Array<{ ram_mb: number; count: number }> };
           const ramBuckets = new Map<string, number>();
           for (const r of ramRaw.data ?? []) {
-            const mb = Number(r.ram_mb);
+            const mb = r.ram_mb;
             let bucket: string;
             if (mb <= 384) bucket = "256 MB";
             else if (mb <= 768) bucket = "512 MB";
@@ -604,7 +602,7 @@ export default {
             else if (mb <= 6144) bucket = "4 GB";
             else if (mb <= 12288) bucket = "8 GB";
             else bucket = "16+ GB";
-            ramBuckets.set(bucket, (ramBuckets.get(bucket) ?? 0) + Number(r.count));
+            ramBuckets.set(bucket, (ramBuckets.get(bucket) ?? 0) + r.count);
           }
           const ramOrder = ["256 MB", "512 MB", "1 GB", "2 GB", "4 GB", "8 GB", "16+ GB"];
           const ram_distribution = ramOrder
@@ -795,17 +793,16 @@ export default {
           };
 
           // Merge crash counts and session counts by date for crash rate trend
-          // Note: Analytics Engine returns all values as strings — must Number() everything
           const sessionByDate = new Map<string, number>();
           for (const row of sessionTimeRes.data ?? []) {
-            sessionByDate.set(row.date, Number(row.session_count));
+            sessionByDate.set(row.date, row.session_count);
           }
           const allDates = new Set<string>();
           for (const row of crashTimeRes.data ?? []) allDates.add(row.date);
           for (const row of sessionTimeRes.data ?? []) allDates.add(row.date);
           const crashByDate = new Map<string, number>();
           for (const row of crashTimeRes.data ?? []) {
-            crashByDate.set(row.date, Number(row.crash_count));
+            crashByDate.set(row.date, row.crash_count);
           }
           const crash_rate_trend = [...allDates].sort().map((date) => {
             const crashes = crashByDate.get(date) ?? 0;
@@ -816,10 +813,10 @@ export default {
           // Merge crash and session counts by version
           const sessionVerMap = new Map<string, number>();
           for (const row of sessionByVerRes.data ?? []) {
-            sessionVerMap.set(row.ver, Number(row.session_count));
+            sessionVerMap.set(row.ver, row.session_count);
           }
           const by_version = (crashByVerRes.data ?? []).map((r) => {
-            const crashes = Number(r.crash_count);
+            const crashes = r.crash_count;
             const sessionCount = sessionVerMap.get(r.ver) ?? 0;
             return {
               version: r.ver,
@@ -832,25 +829,25 @@ export default {
           return json({
             crash_rate_trend,
             by_version,
-            by_signal: (signalRes.data ?? []).map((r) => ({ signal: r.signal, count: Number(r.count) })),
-            avg_uptime_sec: Number(uptimeRes.data?.[0]?.avg_uptime_sec ?? 0),
+            by_signal: (signalRes.data ?? []).map((r) => ({ signal: r.signal, count: r.count })),
+            avg_uptime_sec: uptimeRes.data?.[0]?.avg_uptime_sec ?? 0,
             klippy_trend: (klippyRes.data ?? []).map((r) => ({
               date: r.date,
-              errors: Number(r.errors),
-              shutdowns: Number(r.shutdowns),
+              errors: r.errors,
+              shutdowns: r.shutdowns,
             })),
             memory_warnings_trend: (memWarnRes.data ?? []).map((r) => ({
               date: r.date,
-              count: Number(r.count),
+              count: r.count,
             })),
             error_categories: (errorCatsRes.data ?? []).map((r) => ({
               category: r.category,
-              count: Number(r.count),
+              count: r.count,
             })),
             error_codes: (errorCodesRes.data ?? []).map((r) => ({
               category: r.category,
               code: r.code,
-              count: Number(r.count),
+              count: r.count,
             })),
             recent_crashes: (crashListRes.data ?? []).map((r) => ({
               timestamp: r.timestamp,
@@ -858,7 +855,7 @@ export default {
               version: r.ver,
               signal: r.sig,
               platform: r.platform,
-              uptime_sec: Number(r.uptime_sec),
+              uptime_sec: r.uptime_sec,
             })),
           });
         }

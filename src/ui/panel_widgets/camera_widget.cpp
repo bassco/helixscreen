@@ -7,7 +7,6 @@
 #if HELIX_HAS_CAMERA
 
 #include "camera_config_modal.h"
-#include "system/telemetry_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 
@@ -54,14 +53,6 @@ static void camera_widget_init_subjects() {
 // Only one fullscreen camera overlay can be open at a time
 static helix::CameraWidget* s_fullscreen_owner = nullptr;
 
-static void on_camera_clicked(lv_event_t* e) {
-    auto* self = helix::panel_widget_from_event<helix::CameraWidget>(e);
-    if (!self)
-        return;
-    TelemetryManager::instance().notify_widget_interaction(self->id());
-    self->open_fullscreen();
-}
-
 static void on_camera_fullscreen_close(lv_event_t* /*e*/) {
     if (s_fullscreen_owner) {
         s_fullscreen_owner->close_fullscreen();
@@ -73,7 +64,7 @@ void register_camera_widget() {
     register_widget_factory("camera",
                             [](const std::string&) { return std::make_unique<CameraWidget>(); });
     register_widget_subjects("camera", camera_widget_init_subjects);
-    lv_xml_register_event_cb(nullptr, "on_camera_clicked", on_camera_clicked);
+    lv_xml_register_event_cb(nullptr, "on_camera_clicked", CameraWidget::on_camera_clicked);
     lv_xml_register_event_cb(nullptr, "on_camera_fullscreen_close", on_camera_fullscreen_close);
 
     // Camera config modal callbacks (registered once, not per-modal-instance)
@@ -83,6 +74,14 @@ void register_camera_widget() {
     lv_xml_register_event_cb(nullptr, "on_cam_rotate_270", CameraConfigModal::on_rotate_270);
     lv_xml_register_event_cb(nullptr, "on_cam_flip_h_toggled", CameraConfigModal::on_flip_h_toggled);
     lv_xml_register_event_cb(nullptr, "on_cam_flip_v_toggled", CameraConfigModal::on_flip_v_toggled);
+}
+
+void CameraWidget::on_camera_clicked(lv_event_t* e) {
+    auto* self = panel_widget_from_event<CameraWidget>(e);
+    if (!self)
+        return;
+    self->record_interaction();
+    self->open_fullscreen();
 }
 
 CameraWidget::CameraWidget() : alive_(std::make_shared<bool>(true)) {}

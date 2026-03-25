@@ -76,16 +76,12 @@ import type { PrintsData } from '@/services/api'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
+import { formatDuration } from '@/utils/format'
+
 const filters = useFiltersStore()
 const data = ref<PrintsData | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
 
 const successRateChartData = computed(() => ({
   labels: data.value?.success_rate_over_time.map(d => d.date) ?? [],

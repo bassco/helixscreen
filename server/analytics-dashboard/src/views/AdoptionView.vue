@@ -15,13 +15,13 @@
           </div>
           <div class="chart-section">
             <h3>Version Distribution</h3>
-            <BarChart :data="versionChartData" :options="horizontalOpts" />
+            <BarChart :data="versionChartData" :options="horizontalBarOpts" />
           </div>
         </div>
 
         <div class="chart-section">
           <h3>Top Printer Models</h3>
-          <BarChart :data="printerChartData" :options="horizontalOpts" />
+          <BarChart :data="printerChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
@@ -41,7 +41,7 @@ import BarChart from '@/components/BarChart.vue'
 import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { AdoptionData } from '@/services/api'
-import type { ChartOptions } from 'chart.js'
+import { horizontalBarOpts } from '@/utils/chart'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -49,8 +49,6 @@ const filters = useFiltersStore()
 const data = ref<AdoptionData | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-const horizontalOpts: ChartOptions<'bar'> = { indexAxis: 'y', scales: { y: { ticks: { autoSkip: false } } } }
 
 const platformChartData = computed(() => ({
   labels: data.value?.platforms.map(p => p.name) ?? [],

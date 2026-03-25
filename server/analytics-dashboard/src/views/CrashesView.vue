@@ -70,6 +70,7 @@ import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { CrashesData, CrashListData } from '@/services/api'
 import type { ChartOptions } from 'chart.js'
+import { formatDuration, formatTimestamp, shortDeviceId } from '@/utils/format'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -79,28 +80,6 @@ const crashList = ref<CrashListData['crashes']>([])
 const loading = ref(true)
 const crashListLoading = ref(true)
 const error = ref('')
-
-function formatDuration(seconds: number): string {
-  if (!seconds) return '0m'
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
-
-function formatTimestamp(ts: string): string {
-  try {
-    const d = new Date(ts)
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-      ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-  } catch {
-    return ts
-  }
-}
-
-function shortDeviceId(id: string): string {
-  if (!id) return '—'
-  return id.slice(0, 8) + '...'
-}
 
 function signalClass(signal: string): string {
   if (signal === 'SIGSEGV') return 'signal-segv'

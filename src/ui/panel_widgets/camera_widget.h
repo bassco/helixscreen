@@ -36,6 +36,9 @@ class CameraWidget : public PanelWidget {
     void open_fullscreen();
     void close_fullscreen();
 
+    /// Event callback for camera click (static to access protected record_interaction)
+    static void on_camera_clicked(lv_event_t* e);
+
   private:
     void start_stream();
     void stop_stream();

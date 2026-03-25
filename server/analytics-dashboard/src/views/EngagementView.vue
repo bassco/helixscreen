@@ -18,12 +18,12 @@
 
         <div class="chart-section">
           <h3>Time per Panel</h3>
-          <BarChart :data="panelTimeChartData" :options="horizontalOpts" />
+          <BarChart :data="panelTimeChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
           <h3>Visit Count per Panel</h3>
-          <BarChart :data="panelVisitsChartData" :options="horizontalOpts" />
+          <BarChart :data="panelVisitsChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
@@ -33,17 +33,17 @@
 
         <div class="chart-section">
           <h3>Theme Distribution</h3>
-          <BarChart :data="themeChartData" :options="horizontalOpts" />
+          <BarChart :data="themeChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
           <h3>Widget Adoption (devices with widget enabled)</h3>
-          <BarChart :data="widgetPlacementChartData" :options="horizontalOpts" />
+          <BarChart :data="widgetPlacementChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
           <h3>Widget Interactions</h3>
-          <BarChart :data="widgetInteractionChartData" :options="horizontalOpts" />
+          <BarChart :data="widgetInteractionChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="grid-2col">
@@ -71,7 +71,8 @@ import PieChart from '@/components/PieChart.vue'
 import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { EngagementData } from '@/services/api'
-import type { ChartOptions } from 'chart.js'
+import { horizontalBarOpts } from '@/utils/chart'
+import { formatDuration } from '@/utils/format'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
@@ -80,22 +81,10 @@ const data = ref<EngagementData | null>(null)
 const loading = ref(true)
 const error = ref('')
 
-const horizontalOpts: ChartOptions<'bar'> = { indexAxis: 'y', scales: { y: { ticks: { autoSkip: false } } } }
-
-function formatTime(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`
-  const h = Math.floor(m / 60)
-  const rm = m % 60
-  return rm > 0 ? `${h}h ${rm}m` : `${h}h`
-}
-
 const panelTimeChartData = computed(() => {
   const sorted = [...(data.value?.panel_time ?? [])].sort((a, b) => b.total_time_sec - a.total_time_sec)
   return {
-    labels: sorted.map(p => `${p.panel} (${formatTime(p.total_time_sec)})`),
+    labels: sorted.map(p => `${p.panel} (${formatDuration(p.total_time_sec)})`),
     datasets: [{
       label: 'Seconds',
       data: sorted.map(p => p.total_time_sec),

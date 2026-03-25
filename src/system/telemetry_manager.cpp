@@ -56,6 +56,14 @@ using json = nlohmann::json;
 namespace fs = std::filesystem;
 using namespace helix;
 
+namespace {
+/// Strip instance suffix for aggregation (e.g., "favorite_macro:2" -> "favorite_macro")
+std::string strip_instance_suffix(const std::string& id) {
+    auto colon = id.find(':');
+    return (colon != std::string::npos) ? id.substr(0, colon) : id;
+}
+} // namespace
+
 // =============================================================================
 // SHA-256 implementation
 // =============================================================================
@@ -555,12 +563,7 @@ void TelemetryManager::notify_overlay_opened() {
 
 void TelemetryManager::notify_widget_interaction(const std::string& widget_id) {
     if (!enabled_.load() || !initialized_.load()) return;
-    // Strip instance suffix for aggregation (e.g., "favorite_macro:2" -> "favorite_macro")
-    std::string base_id = widget_id;
-    auto colon = base_id.find(':');
-    if (colon != std::string::npos) {
-        base_id = base_id.substr(0, colon);
-    }
+    std::string base_id = strip_instance_suffix(widget_id);
     widget_interactions_[base_id]++;
     spdlog::trace("[TelemetryManager] Widget interaction '{}' (count={})", base_id,
                   widget_interactions_[base_id]);
@@ -1870,13 +1873,7 @@ nlohmann::json TelemetryManager::build_settings_snapshot_event() const {
         for (const auto& page : widget_config.pages()) {
             for (const auto& entry : page.widgets) {
                 if (entry.enabled) {
-                    // Strip instance suffix for aggregation
-                    std::string base_id = entry.id;
-                    auto colon = base_id.find(':');
-                    if (colon != std::string::npos) {
-                        base_id = base_id.substr(0, colon);
-                    }
-                    widgets.push_back(base_id);
+                    widgets.push_back(strip_instance_suffix(entry.id));
                 }
             }
         }

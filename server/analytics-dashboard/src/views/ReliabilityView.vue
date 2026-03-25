@@ -29,7 +29,7 @@
 
         <div class="chart-section">
           <h3>Top Error Categories</h3>
-          <BarChart :data="errorCategoryChartData" :options="horizontalOpts" />
+          <BarChart :data="errorCategoryChartData" :options="horizontalBarOpts" />
         </div>
 
         <div class="chart-section">
@@ -69,13 +69,13 @@ import { useFiltersStore } from '@/stores/filters'
 import { api } from '@/services/api'
 import type { ReliabilityData } from '@/services/api'
 import type { ChartOptions } from 'chart.js'
+import { horizontalBarOpts } from '@/utils/chart'
+import { formatDuration } from '@/utils/format'
 
 const filters = useFiltersStore()
 const data = ref<ReliabilityData | null>(null)
 const loading = ref(true)
 const error = ref('')
-
-const horizontalOpts: ChartOptions<'bar'> = { indexAxis: 'y', scales: { y: { ticks: { autoSkip: false } } } }
 
 const uptimeOpts: ChartOptions<'line'> = {
   scales: {
@@ -93,16 +93,6 @@ const uptimeOpts: ChartOptions<'line'> = {
       grid: { color: 'rgba(45, 51, 72, 0.5)' }
     }
   }
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds) return '0s'
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.round(seconds % 60)
-  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`
-  return s > 0 ? `${m}m ${s}s` : `${m}m`
 }
 
 const uptimeChartData = computed(() => ({
