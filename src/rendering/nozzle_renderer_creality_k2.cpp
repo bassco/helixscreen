@@ -47,10 +47,6 @@ void draw_nozzle_creality_k2(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color
     int32_t tip_bottom_width = (scale_unit * 2) / 10;
     int32_t tip_height = (scale_unit * 3) / 10;
 
-    // Heat block inside the U-cutout
-    int32_t heat_block_height = (scale_unit * 4) / 10;
-    int32_t heat_block_half_width = (scale_unit * 3) / 10;
-
     // Section heights
     int32_t slope_height = (body_height * 45) / 100;  // Sloped upper 45%
     int32_t vent_height = (body_height * 30) / 100;   // Vent section 30%
@@ -261,15 +257,8 @@ void draw_nozzle_creality_k2(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color
         lv_area_t cutout_area = {cutout_left, cutout_top, cutout_right, body_bottom};
         lv_draw_fill(layer, &fill, &cutout_area);
 
-        // Heat block inside the U-cutout (small metallic block)
-        lv_color_t heat_block_color = nr_lighten(body_base, 15);
-        int32_t hb_top = body_bottom - heat_block_height - tip_height;
-        int32_t hb_bottom = body_bottom - tip_height + 1;
-        fill.color = heat_block_color;
-        fill.radius = 1;
-        lv_area_t hb_area = {cx - heat_block_half_width, hb_top, cx + heat_block_half_width,
-                             hb_bottom};
-        lv_draw_fill(layer, &fill, &hb_area);
+        // Heat block hidden inside U-cutout — not visible on K2
+        // (recessed behind the dark cutout opening)
 
         // Bottom outline
         line_dsc.color = outline_color;
