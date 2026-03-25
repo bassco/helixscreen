@@ -21,6 +21,7 @@ Welcome to HelixScreen — a modern touchscreen interface for Klipper 3D printer
 HelixScreen uses a consistent layout:
 
 - **Left sidebar**: Five navigation buttons to switch between main panels
+- **Home button**: Tapping Home returns to the Home panel (to whichever page you were last viewing). Tapping Home again while already on the Home panel jumps to the main (first) page.
 - **Back arrow**: Returns from sub-panels to the parent panel
 - **Tap**: Select buttons, open panels, activate controls
 - **Swipe**: Scroll through lists and long content
@@ -38,6 +39,7 @@ HelixScreen supports these touch interactions:
 | **Tap** | Select buttons, open panels, toggle options |
 | **Swipe** | Scroll lists, move through content |
 | **Long press** | Access alternate characters on keyboard |
+| **Swipe left/right on Home panel** | Switch between widget pages |
 | **Pinch/spread** | Zoom 3D views (G-code preview, bed mesh) |
 
 Temperature displays are tappable shortcuts — tap the nozzle or bed temperature on the Home panel to jump directly to that temperature control panel.

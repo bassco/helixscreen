@@ -8,6 +8,7 @@
 #include "ui_fonts.h"
 #include "ui_keyboard_manager.h"
 #include "ui_panel_base.h"
+#include "ui_panel_home.h"
 #include "ui_update_queue.h"
 
 #include "app_globals.h"
@@ -692,10 +693,17 @@ void NavigationManager::nav_button_clicked_cb(lv_event_t* event) {
                   static_cast<int>(code), panel_id, static_cast<int>(mgr.active_panel_));
 
     if (code == LV_EVENT_CLICKED) {
-        // Skip if already on this panel AND no overlays are open
+        // Already on this panel with no overlays: special handling per panel
         if (panel_id == static_cast<int>(mgr.active_panel_) && !mgr.has_open_overlays()) {
-            spdlog::info("[NavigationManager] Skipping - already on panel {} with no overlays",
-                         panel_id);
+            if (panel_id == static_cast<int>(PanelId::Home)) {
+                // Tapping home while on home scrolls carousel to page 0
+                spdlog::debug("[NavigationManager] Already on Home - navigating to main page");
+                get_global_home_panel().go_to_main_page();
+            } else {
+                spdlog::debug(
+                    "[NavigationManager] Skipping - already on panel {} with no overlays",
+                    panel_id);
+            }
             return;
         }
 

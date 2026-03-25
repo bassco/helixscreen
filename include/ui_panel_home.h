@@ -55,6 +55,9 @@ class HomePanel : public PanelBase {
     /// Trigger a deferred runout check (delegates to PrintStatusWidget)
     void trigger_idle_runout_check();
 
+    /// Navigate the carousel to page 0 (main page) if not already there
+    void go_to_main_page();
+
     /// Exit grid edit mode (called by navbar done button)
     void exit_grid_edit_mode();
 

@@ -860,40 +860,58 @@ Located in the `ams` section:
 
 ## Panel Widget Settings
 
-Located under the `panel_widgets` key, grouped by panel ID:
+Located under the `panel_widgets` key, grouped by panel ID. The Home panel uses a multi-page format with explicit grid positions:
 
 ```json
 {
   "panel_widgets": {
-    "home": [
-      {"id": "power", "enabled": true},
-      {"id": "network", "enabled": false},
-      {"id": "firmware_restart", "enabled": false},
-      {"id": "ams", "enabled": true},
-      {"id": "temperature", "enabled": true},
-      {"id": "temp_stack", "enabled": false, "config": {"display_mode": "stack"}},
-      {"id": "led", "enabled": true},
-      {"id": "humidity", "enabled": true},
-      {"id": "width_sensor", "enabled": true},
-      {"id": "probe", "enabled": true},
-      {"id": "filament", "enabled": true},
-      {"id": "fan_stack", "enabled": true, "config": {"display_mode": "stack"}},
-      {"id": "thermistor", "enabled": false},
-      {"id": "notifications", "enabled": true}
-    ]
+    "home": {
+      "pages": [
+        {
+          "id": "main",
+          "widgets": [
+            {"id": "printer_image", "enabled": true, "col": 0, "row": 0, "colspan": 2, "rowspan": 2},
+            {"id": "print_status", "enabled": true, "col": 0, "row": 2, "colspan": 2, "rowspan": 2},
+            {"id": "tips", "enabled": true, "col": 2, "row": 0, "colspan": 4, "rowspan": 2},
+            {"id": "temperature", "enabled": true, "col": 6, "row": 0, "colspan": 1, "rowspan": 1},
+            {"id": "fan_stack", "enabled": true, "col": 7, "row": 0, "colspan": 1, "rowspan": 1}
+          ]
+        },
+        {
+          "id": "page_1",
+          "widgets": [
+            {"id": "temp_graph", "enabled": true, "col": 0, "row": 0, "colspan": 4, "rowspan": 3},
+            {"id": "camera", "enabled": true, "col": 4, "row": 0, "colspan": 4, "rowspan": 3}
+          ]
+        }
+      ],
+      "main_page_index": 0,
+      "next_page_id": 2
+    }
   }
 }
 ```
 
-> **Migration note:** If your config has the older `home_widgets` key, HelixScreen automatically migrates it to `panel_widgets.home` on first launch.
+> **Migration note:** If your config has the older flat-array format (a simple list of widgets without pages) or the legacy `home_widgets` key, HelixScreen automatically migrates it to the multi-page format on first launch. Your existing widgets are placed on a single page.
 
 ### `panel_widgets.home`
-**Type:** array of objects
-**Default:** See defaults in table below
-**Description:** Controls which widgets appear on the Home Panel and in what order. Each object has:
+**Type:** object
+**Description:** Controls the Home Panel's pages and widgets. Contains:
+
+- `pages` — Array of page objects. Each page has:
+  - `id` — Unique page identifier (e.g., `"main"`, `"page_1"`)
+  - `widgets` — Array of widget objects on this page (see below)
+- `main_page_index` — Which page is the "main" page (shown on first connect and when double-tapping Home). `0` = first page.
+- `next_page_id` — Internal counter for generating unique page IDs. Do not modify manually.
+
+Each widget object has:
 
 - `id` — Widget identifier (see table below)
 - `enabled` — Whether the widget is shown (`true`/`false`)
+- `col` — Grid column position (0-based, left to right)
+- `row` — Grid row position (0-based, top to bottom)
+- `colspan` — Number of columns the widget spans
+- `rowspan` — Number of rows the widget spans
 - `config` — (optional) Per-widget settings object. Currently used by `temp_stack` and `fan_stack` for display mode:
   - `display_mode` — `"stack"` (default) or `"carousel"`. Stack shows compact rows; carousel shows swipeable full-size pages. Toggle via long-press on the widget.
 
@@ -917,12 +935,13 @@ Located under the `panel_widgets` key, grouped by panel ID:
 | `notifications` | Pending alerts with severity badge | Enabled | No |
 
 **Notes:**
-- The array order determines display order on the Home Panel
+- Widget grid positions (`col`, `row`, `colspan`, `rowspan`) determine where each widget appears on its page
 - Hardware-gated widgets are hidden on the Home Panel if their hardware isn't detected, even when enabled
 - New widgets added in future versions are automatically appended with their default enabled state
 - Unknown widget IDs (from older versions) are silently ignored
+- Up to 8 pages are supported
 
-This is best configured via **Settings > Home Widgets** rather than editing the JSON directly.
+This is best configured via **Edit Mode** on the Home Panel (long-press the widget grid) rather than editing the JSON directly. See the [Home Panel guide](guide/home-panel.md) for details on adding pages and arranging widgets.
 
 ---
 

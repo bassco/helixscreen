@@ -2,7 +2,7 @@
 
 ![Home Panel](../../images/user/home.png)
 
-The Home Panel is your printer dashboard — a fully customizable grid of widgets showing everything you need at a glance. You choose what appears, where it goes, how big each widget is, and can rearrange everything with drag-and-drop.
+The Home Panel is your printer dashboard — a fully customizable grid of widgets spread across multiple pages, like home screens on a phone. You choose what appears, where it goes, how big each widget is, and can rearrange everything with drag-and-drop.
 
 <!-- Screenshot: default home panel layout, idle printer -->
 
@@ -21,9 +21,45 @@ When you first launch HelixScreen, a default layout is created with your printer
 
 ---
 
+## Multiple Pages
+
+Your dashboard can have **multiple pages** of widgets — just like home screens on a phone. Each page has its own independent grid layout.
+
+### Navigating Between Pages
+
+- **Swipe left or right** anywhere on the widget grid to move between pages
+- **Dot indicators** at the bottom of the screen show which page you're on and how many pages you have
+- If you only have one page, the dots and swiping are hidden — it works exactly like a single-page dashboard
+
+### The Main Page
+
+One page is designated as the **main page** (the first page by default). This is the page shown when you first connect to your printer or navigate to the Home panel.
+
+**Home button behavior:**
+
+- From any other panel, tapping the **Home** button takes you back to the Home panel — to whichever page you were last viewing
+- Tapping **Home** again while already on the Home panel jumps to the **main page**
+- So the main page is always at most **two taps** of the Home button away
+
+### Adding a Page
+
+1. Enter **Edit Mode** (long-press the widget grid)
+2. Swipe to the **last page** — a **"+" tile** appears
+3. Tap the **"+"** to create a new empty page
+4. You can have up to **8 pages** maximum
+5. Exit Edit Mode and start adding widgets to your new page
+
+### Page Limit
+
+The dashboard supports up to **8 pages**. Once you reach the limit, the "+" tile no longer appears.
+
+---
+
 ## Edit Mode
 
 Edit Mode is how you customize your dashboard layout. While in Edit Mode, all normal widget interactions (tapping to open overlays, etc.) are disabled so you can freely rearrange things.
+
+**Page swiping in Edit Mode:** Swiping between pages is disabled while in Edit Mode so you can drag widgets without accidentally changing pages. The one exception is swiping past the last page to reach the "+" add-page tile. When you exit Edit Mode, normal page swiping is re-enabled.
 
 ### Entering Edit Mode
 
@@ -131,7 +167,7 @@ Some widgets have settings you can change directly from Edit Mode. When you sele
 
 ### Resetting to Defaults
 
-Tap the **Reset** button in the Edit Mode toolbar to restore the default widget layout. This resets positions and sizes, and restores the default set of enabled widgets. Your per-widget settings (like display mode preferences) are preserved.
+Tap the **Reset** button in the Edit Mode toolbar to restore the default widget layout. This resets **all pages** back to a single page with the default layout — any extra pages you created are removed. Widget positions and sizes are reset, and the default set of enabled widgets is restored. Your per-widget settings (like display mode preferences) are preserved.
 
 The default layout places:
 - **Printer Image** in the top-left (2x2)

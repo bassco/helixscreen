@@ -106,9 +106,9 @@ bool init_lvgl(int width, int height, LvglContext& ctx) {
         Config* cfg = Config::get_instance();
 
         // Scroll tuning
-        // scroll_throw: momentum decay rate (1-99), higher = faster decay, default LVGL is 10
-        // scroll_limit: pixels before scrolling starts, default LVGL is 10
-        int scroll_throw = cfg->get<int>("/input/scroll_throw", 25);
+        // scroll_throw: momentum decay rate (1-99), higher = faster decay (LVGL default: 10)
+        // scroll_limit: pixels before scrolling starts (LVGL default: 10)
+        int scroll_throw = cfg->get<int>("/input/scroll_throw", 12);
         int scroll_limit = cfg->get<int>("/input/scroll_limit", 10);
         lv_indev_set_scroll_throw(ctx.pointer, static_cast<uint8_t>(scroll_throw));
         lv_indev_set_scroll_limit(ctx.pointer, static_cast<uint8_t>(scroll_limit));

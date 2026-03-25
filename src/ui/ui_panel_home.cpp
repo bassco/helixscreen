@@ -884,6 +884,15 @@ void HomePanel::on_home_grid_released(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void HomePanel::go_to_main_page() {
+    if (!carousel_ || grid_edit_mode_.is_active()) return;
+    int current = ui_carousel_get_current_page(carousel_);
+    if (current != 0) {
+        spdlog::debug("[HomePanel] Navigating carousel to main page (page 0)");
+        ui_carousel_goto_page(carousel_, 0, true);
+    }
+}
+
 void HomePanel::exit_grid_edit_mode() {
     if (grid_edit_mode_.is_active()) {
         grid_edit_mode_.exit();
