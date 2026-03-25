@@ -319,8 +319,12 @@ void HomePanel::build_carousel() {
             LV_EVENT_CLICKED, nullptr);
     }
 
-    // Observe page subject for page change callbacks
-    page_observer_ = helix::ui::observe_int_sync<HomePanel>(
+    // Observe page subject for page change callbacks.
+    // Use immediate (non-deferred) observer because the subject is set from
+    // carousel_scroll_end_cb on the UI thread, and the deferred path via
+    // observe_int_sync drops the callback (weak_alive expires before the
+    // queued lambda executes, causing active_page_index_ desync).
+    page_observer_ = helix::ui::observe_int_immediate<HomePanel>(
         &page_subject_, this, [](HomePanel* self, int page) { self->on_page_changed(page); });
 
     // Navigate to main page
