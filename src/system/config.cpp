@@ -3,7 +3,12 @@
 
 #include "config.h"
 
+#ifndef HELIX_SPLASH_ONLY
 #include "system/telemetry_manager.h"
+#define CONFIG_RECORD_ERROR(...) TelemetryManager::instance().record_error(__VA_ARGS__)
+#else
+#define CONFIG_RECORD_ERROR(...) ((void)0)
+#endif
 #include "ui_error_reporting.h"
 
 #include "app_constants.h"
@@ -510,8 +515,7 @@ void Config::init(const std::string& config_path) {
         std::error_code ec;
         fs::rename(old_config, config_path, ec);
         if (ec) {
-            spdlog::warn("[Config] Migration rename failed: {} — trying copy",
-                         ec.message());
+            spdlog::warn("[Config] Migration rename failed: {} — trying copy", ec.message());
             try {
                 fs::copy_file(old_config, config_path);
                 fs::remove(old_config);
@@ -529,7 +533,8 @@ void Config::init(const std::string& config_path) {
         if (stat(old_config.c_str(), &buffer) == 0) {
             path = old_config.string();
             spdlog::info("[Config] {} is a symlink — using it directly, "
-                         "installer will migrate on next update", old_config.string());
+                         "installer will migrate on next update",
+                         old_config.string());
         } else {
             spdlog::warn("[Config] {} is a dangling symlink", old_config.string());
         }
@@ -591,10 +596,10 @@ void Config::init(const std::string& config_path) {
         // Recovery: restore config from rolling backups if missing.
         // Backups are maintained by Config::save() and survive Moonraker's
         // shutil.rmtree() wipe of the install directory.
-        restored_from_backup_ = restore_from_backup(
-            path, "Config",
-            {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
-             LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+        restored_from_backup_ =
+            restore_from_backup(path, "Config",
+                                {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
+                                 LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
     }
 
     // Restore helixscreen.env independently — it can be lost even if config survived
@@ -613,9 +618,8 @@ void Config::init(const std::string& config_path) {
             data = json::parse(std::fstream(path));
         } catch (const json::exception& e) {
             spdlog::error("[Config] Failed to parse {}: {}", path, e.what());
-            TelemetryManager::instance().record_error(
-                "file_io", "config_read_failed",
-                fmt::format("parse error: {}", e.what()));
+            CONFIG_RECORD_ERROR("file_io", "config_read_failed",
+                                fmt::format("parse error: {}", e.what()));
             spdlog::warn("[Config] Config file is corrupt — resetting to defaults");
 
             // Backup the corrupt file for diagnosis
@@ -1021,8 +1025,7 @@ bool Config::save() {
             if (!o.is_open()) {
                 NOTIFY_ERROR("Could not save configuration file");
                 LOG_ERROR_INTERNAL("Failed to open temp file for writing: {}", tmp_path);
-                TelemetryManager::instance().record_error(
-                    "file_io", "config_write_failed", "cannot open temp file");
+                CONFIG_RECORD_ERROR("file_io", "config_write_failed", "cannot open temp file");
                 return false;
             }
 
@@ -1032,8 +1035,7 @@ bool Config::save() {
             if (!o.good()) {
                 NOTIFY_ERROR("Error writing configuration file");
                 LOG_ERROR_INTERNAL("Failed to write config to temp file: {}", tmp_path);
-                TelemetryManager::instance().record_error(
-                    "file_io", "config_write_failed", "write error on temp file");
+                CONFIG_RECORD_ERROR("file_io", "config_write_failed", "write error on temp file");
                 std::remove(tmp_path.c_str());
                 return false;
             }
@@ -1043,9 +1045,8 @@ bool Config::save() {
             NOTIFY_ERROR("Failed to save configuration file");
             LOG_ERROR_INTERNAL("Failed to rename temp file '{}' to '{}': {}", tmp_path, target_path,
                                strerror(errno));
-            TelemetryManager::instance().record_error(
-                "file_io", "config_write_failed",
-                fmt::format("rename failed: {}", strerror(errno)));
+            CONFIG_RECORD_ERROR("file_io", "config_write_failed",
+                                fmt::format("rename failed: {}", strerror(errno)));
             std::remove(tmp_path.c_str());
             return false;
         }
@@ -1060,9 +1061,8 @@ bool Config::save() {
     } catch (const std::exception& e) {
         NOTIFY_ERROR("Failed to save configuration: {}", e.what());
         LOG_ERROR_INTERNAL("Exception while saving config to {}: {}", path, e.what());
-        TelemetryManager::instance().record_error(
-            "file_io", "config_write_failed",
-            fmt::format("exception: {}", e.what()));
+        CONFIG_RECORD_ERROR("file_io", "config_write_failed",
+                            fmt::format("exception: {}", e.what()));
         return false;
     }
 }
