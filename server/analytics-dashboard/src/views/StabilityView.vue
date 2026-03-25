@@ -246,14 +246,27 @@ const crashRateChartData = computed(() => ({
   }]
 }))
 
-const versionChartData = computed(() => ({
-  labels: data.value?.by_version.map(v => v.version) ?? [],
-  datasets: [{
-    label: 'Crash Rate %',
-    data: data.value?.by_version.map(v => v.rate * 100) ?? [],
-    backgroundColor: '#ef4444'
-  }]
-}))
+function compareVersions(a: string, b: string): number {
+  const pa = a.replace(/^v/, '').split('.').map(Number)
+  const pb = b.replace(/^v/, '').split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+const versionChartData = computed(() => {
+  const sorted = [...(data.value?.by_version ?? [])].sort((a, b) => compareVersions(a.version, b.version))
+  return {
+    labels: sorted.map(v => v.version),
+    datasets: [{
+      label: 'Crash Rate %',
+      data: sorted.map(v => v.rate * 100),
+      backgroundColor: '#ef4444'
+    }]
+  }
+})
 
 const signalChartData = computed(() => ({
   labels: data.value?.by_signal.map(s => s.signal) ?? [],
