@@ -248,32 +248,11 @@ bool DisplayManager::init(const Config& config) {
             rotation_degrees = helix::Config::get_instance()->get<int>("/display/rotate", 0);
         }
 
-        // If no rotation from config/CLI/env, try kernel auto-detection.
-        // Must happen here (before pointer creation) so the DRM→fbdev fallback
-        // works cleanly — the pointer hasn't been bound to a display yet.
-        if (rotation_degrees == 0) {
-            int kernel_orientation = DisplayBackend::detect_panel_orientation();
-            if (kernel_orientation > 0) {
-                spdlog::info("[DisplayManager] Kernel panel orientation: {}°",
-                             kernel_orientation);
-                rotation_degrees = kernel_orientation;
+        // Kernel auto-detection and interactive probing are handled by
+        // Application::run_rotation_probe_and_layout(), which checks both
+        // rotation_probed and has_rotate_key before overwriting config.
 
-                // Save to config so subsequent boots use the config path directly
-                helix::Config::get_instance()->set("/display/rotate", kernel_orientation);
-                helix::Config::get_instance()->set("/display/rotation_probed", true);
-                helix::Config::get_instance()->save();
-            } else if (kernel_orientation == 0) {
-                spdlog::info("[DisplayManager] Kernel panel orientation: Normal (0°)");
-                helix::Config::get_instance()->set("/display/rotate", 0);
-                helix::Config::get_instance()->set("/display/rotation_probed", true);
-                helix::Config::get_instance()->save();
-            } else {
-                spdlog::debug("[DisplayManager] Kernel panel orientation not detected "
-                              "(deferred to interactive probe)");
-            }
-        }
-
-        // Apply rotation (from config, env, CLI, or kernel detection above)
+        // Apply rotation from config, env, or CLI
         if (rotation_degrees != 0) {
 #ifdef HELIX_DISPLAY_SDL
             // LVGL's SDL driver only supports software rotation in PARTIAL render mode,
