@@ -19,6 +19,56 @@ platform_stop_competing_uis() {
             killall "$proc" 2>/dev/null || true
         done
     fi
+
+    # S99start_app also manages dropbear (SSH) on stock K1 firmware.
+    # Disabling it kills SSH on next reboot (#535). Ensure SSH survives.
+    _ensure_ssh_running
+}
+
+# Ensure SSH (dropbear) is running. On stock K1, dropbear is started by
+# S99start_app which we disable. Start it independently if needed.
+_ensure_ssh_running() {
+    # Already running — nothing to do
+    if pidof dropbear >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Try existing init script
+    for script in /etc/init.d/S50dropbear /etc/init.d/S*dropbear*; do
+        [ -f "$script" ] || continue
+        chmod +x "$script" 2>/dev/null || true
+        "$script" start 2>/dev/null || true
+        if pidof dropbear >/dev/null 2>&1; then
+            return 0
+        fi
+    done
+
+    # Start directly as fallback and create init script for next boot
+    local dropbear_bin=""
+    for bin in /usr/sbin/dropbear /usr/bin/dropbear /sbin/dropbear; do
+        if [ -x "$bin" ]; then
+            dropbear_bin="$bin"
+            break
+        fi
+    done
+
+    if [ -n "$dropbear_bin" ]; then
+        "$dropbear_bin" -R 2>/dev/null || true
+        # Create init script so it starts on future boots without our help
+        if [ ! -f /etc/init.d/S50dropbear ]; then
+            cat > /etc/init.d/S50dropbear << INITEOF
+#!/bin/sh
+DROPBEAR="${dropbear_bin}"
+PIDFILE="/var/run/dropbear.pid"
+case "\$1" in
+    start) [ -x "\$DROPBEAR" ] && "\$DROPBEAR" -R -P "\$PIDFILE" ;;
+    stop) [ -f "\$PIDFILE" ] && kill "\$(cat "\$PIDFILE")" 2>/dev/null; killall dropbear 2>/dev/null; rm -f "\$PIDFILE" ;;
+    restart) \$0 stop; sleep 1; \$0 start ;;
+esac
+INITEOF
+            chmod +x /etc/init.d/S50dropbear
+        fi
+    fi
 }
 
 platform_enable_backlight() {

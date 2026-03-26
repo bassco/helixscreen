@@ -93,8 +93,8 @@ HEADER
         # Skip shebang, SPDX header, and source guard lines
         # Keep everything else
         awk '
-            # Skip shebang
-            /^#!/ { next }
+            # Skip shebang (only the first line — not heredoc content)
+            NR == 1 && /^#!/ { next }
             # Skip SPDX header
             /^# SPDX-License-Identifier:/ { next }
             # Skip module comment block at top (first few lines starting with #)
@@ -329,6 +329,12 @@ main() {
     fix_install_ownership
     install_service "$platform"
     install_platform_hooks
+
+    # K1: ensure SSH (dropbear) is running — recovers from #535 where disabling
+    # S99start_app also killed SSH. Runs on both fresh install and self-update.
+    if [ "$platform" = "k1" ]; then
+        ensure_k1_ssh
+    fi
 
     # Verify all shared library dependencies are satisfied before starting
     verify_binary_deps "$platform"

@@ -1685,6 +1685,7 @@ install_forgex_logged_wrapper() {
 
     # Create the wrapper script
     cat > "$logged_wrapper" << 'WRAPPER_EOF'
+#!/bin/sh
 # Wrapper for logged that strips --send-to-screen when HelixScreen is active
 # The logged binary writes directly to /dev/fb0, bypassing screen.sh patches
 
@@ -1879,6 +1880,99 @@ stop_k1_stock_competing_uis() {
             found_any=true
         fi
     done
+
+    # S99start_app also manages dropbear (SSH) on stock K1 firmware.
+    # Disabling it kills SSH on next reboot (#535). Ensure SSH survives.
+    ensure_k1_ssh
+}
+
+# Ensure SSH (dropbear) is running and will start on boot.
+# On stock K1 firmware, dropbear is managed by S99start_app which we disable.
+# This creates an independent dropbear init script so SSH survives reboots.
+ensure_k1_ssh() {
+    # Already running — nothing to do
+    if pidof dropbear >/dev/null 2>&1; then
+        # Make sure it has a boot-time init script
+        _ensure_dropbear_init_script
+        return 0
+    fi
+
+    # Try existing init script first
+    for script in /etc/init.d/S50dropbear /etc/init.d/S*dropbear*; do
+        [ -f "$script" ] || continue
+        chmod +x "$script" 2>/dev/null || true
+        "$script" start 2>/dev/null || true
+        if pidof dropbear >/dev/null 2>&1; then
+            log_info "SSH (dropbear) started via $script"
+            return 0
+        fi
+    done
+
+    # No init script or it failed — start dropbear directly
+    local dropbear_bin=""
+    for bin in /usr/sbin/dropbear /usr/bin/dropbear /sbin/dropbear; do
+        if [ -x "$bin" ]; then
+            dropbear_bin="$bin"
+            break
+        fi
+    done
+
+    if [ -n "$dropbear_bin" ]; then
+        log_info "Starting dropbear directly ($dropbear_bin)..."
+        "$dropbear_bin" -R 2>/dev/null || true
+        _ensure_dropbear_init_script "$dropbear_bin"
+        if pidof dropbear >/dev/null 2>&1; then
+            log_info "SSH (dropbear) started successfully"
+        else
+            log_warn "Failed to start dropbear — SSH may not be available"
+        fi
+    else
+        log_warn "dropbear not found — SSH may not be available"
+    fi
+}
+
+# Create a minimal dropbear init script if one doesn't exist.
+# Ensures SSH starts on boot independently of S99start_app.
+# Args: $1 = dropbear binary path (optional, defaults to /usr/sbin/dropbear)
+_ensure_dropbear_init_script() {
+    local dropbear_path="${1:-/usr/sbin/dropbear}"
+
+    # Check if any dropbear init script already exists
+    for script in /etc/init.d/S50dropbear /etc/init.d/S*dropbear*; do
+        if [ -f "$script" ] && [ -x "$script" ]; then
+            return 0
+        fi
+    done
+
+    # Create a minimal init script at S50 (before HelixScreen at S99)
+    log_info "Creating dropbear init script (S50dropbear)..."
+    cat > /etc/init.d/S50dropbear << INITEOF
+#!/bin/sh
+# Auto-created by HelixScreen to ensure SSH survives S99start_app being disabled
+DROPBEAR="${dropbear_path}"
+PIDFILE="/var/run/dropbear.pid"
+case "\$1" in
+    start)
+        [ -x "\$DROPBEAR" ] || exit 0
+        "\$DROPBEAR" -R -P "\$PIDFILE"
+        ;;
+    stop)
+        [ -f "\$PIDFILE" ] && kill "\$(cat "\$PIDFILE")" 2>/dev/null
+        killall dropbear 2>/dev/null || true
+        rm -f "\$PIDFILE"
+        ;;
+    restart)
+        \$0 stop
+        sleep 1
+        \$0 start
+        ;;
+    *)
+        echo "Usage: \$0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+INITEOF
+    chmod +x /etc/init.d/S50dropbear
 }
 
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
@@ -4074,6 +4168,12 @@ main() {
     fix_install_ownership
     install_service "$platform"
     install_platform_hooks
+
+    # K1: ensure SSH (dropbear) is running — recovers from #535 where disabling
+    # S99start_app also killed SSH. Runs on both fresh install and self-update.
+    if [ "$platform" = "k1" ]; then
+        ensure_k1_ssh
+    fi
 
     # Verify all shared library dependencies are satisfied before starting
     verify_binary_deps "$platform"
