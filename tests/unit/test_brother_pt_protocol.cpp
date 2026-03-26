@@ -57,3 +57,113 @@ TEST_CASE("Brother PT label size for 3.5mm tape", "[label][brother-pt]") {
     REQUIRE(size->dpi == 180);
     REQUIRE(size->width_mm == 4);
 }
+
+// --- Task 2: Status request/parse/error ---
+
+TEST_CASE("Brother PT status request command", "[label][brother-pt]") {
+    auto cmd = brother_pt_build_status_request();
+    REQUIRE(cmd.size() == 105);
+    for (int i = 0; i < 100; i++) {
+        REQUIRE(cmd[i] == 0x00);
+    }
+    REQUIRE(cmd[100] == 0x1B);
+    REQUIRE(cmd[101] == 0x40);
+    REQUIRE(cmd[102] == 0x1B);
+    REQUIRE(cmd[103] == 0x69);
+    REQUIRE(cmd[104] == 0x53);
+}
+
+TEST_CASE("Brother PT parse status - valid 12mm laminated", "[label][brother-pt]") {
+    uint8_t response[32] = {};
+    response[0] = 0x80;
+    response[10] = 12;
+    response[11] = 0x01;
+    response[18] = 0x00;
+
+    auto media = brother_pt_parse_status(response, 32);
+    REQUIRE(media.valid);
+    REQUIRE(media.width_mm == 12);
+    REQUIRE(media.media_type == 0x01);
+    REQUIRE(media.status_type == 0x00);
+    REQUIRE(media.error_info_1 == 0);
+    REQUIRE(media.error_info_2 == 0);
+}
+
+TEST_CASE("Brother PT parse status - no tape", "[label][brother-pt]") {
+    uint8_t response[32] = {};
+    response[0] = 0x80;
+    response[8] = 0x01;
+    response[10] = 0;
+    response[18] = 0x02;
+
+    auto media = brother_pt_parse_status(response, 32);
+    REQUIRE(media.valid);
+    REQUIRE(media.width_mm == 0);
+    REQUIRE(media.error_info_1 == 0x01);
+    REQUIRE(media.status_type == 0x02);
+}
+
+TEST_CASE("Brother PT parse status - truncated data", "[label][brother-pt]") {
+    uint8_t response[10] = {};
+    auto media = brother_pt_parse_status(response, 10);
+    REQUIRE_FALSE(media.valid);
+}
+
+TEST_CASE("Brother PT parse status - wrong header", "[label][brother-pt]") {
+    uint8_t response[32] = {};
+    response[0] = 0x00;
+    auto media = brother_pt_parse_status(response, 32);
+    REQUIRE_FALSE(media.valid);
+}
+
+TEST_CASE("Brother PT error string", "[label][brother-pt]") {
+    BrotherPTMedia media{};
+    media.valid = true;
+
+    REQUIRE(brother_pt_error_string(media).empty());
+
+    media.error_info_1 = 0x01;
+    REQUIRE(brother_pt_error_string(media).find("media") != std::string::npos);
+
+    media.error_info_1 = 0x04;
+    REQUIRE(brother_pt_error_string(media).find("utter") != std::string::npos);
+
+    media.error_info_1 = 0x08;
+    REQUIRE(brother_pt_error_string(media).find("battery") != std::string::npos);
+
+    media.error_info_1 = 0;
+    media.error_info_2 = 0x01;
+    REQUIRE(brother_pt_error_string(media).find("media") != std::string::npos);
+
+    media.error_info_2 = 0x10;
+    REQUIRE(brother_pt_error_string(media).find("over") != std::string::npos);
+
+    media.error_info_2 = 0x20;
+    REQUIRE(brother_pt_error_string(media).find("ver") != std::string::npos);
+}
+
+// --- Task 3: PackBits compression ---
+
+TEST_CASE("Brother PT PackBits - all zeros", "[label][brother-pt]") {
+    std::vector<uint8_t> row(16, 0x00);
+    auto compressed = brother_pt_packbits_compress(row.data(), row.size());
+    REQUIRE(compressed.size() == 2);
+    REQUIRE(compressed[0] == 0xF1);  // -(16-1) = -15 = 0xF1
+    REQUIRE(compressed[1] == 0x00);
+}
+
+TEST_CASE("Brother PT PackBits - all unique bytes", "[label][brother-pt]") {
+    std::vector<uint8_t> row;
+    for (int i = 0; i < 16; i++) row.push_back(static_cast<uint8_t>(i));
+    auto compressed = brother_pt_packbits_compress(row.data(), row.size());
+    REQUIRE(compressed.size() == 17);
+    REQUIRE(compressed[0] == 15);
+}
+
+TEST_CASE("Brother PT PackBits - mixed run", "[label][brother-pt]") {
+    std::vector<uint8_t> row = {0x01, 0x02, 0x03, 0x04};
+    row.insert(row.end(), 12, 0xFF);
+    auto compressed = brother_pt_packbits_compress(row.data(), row.size());
+    REQUIRE(compressed.size() > 2);
+    REQUIRE(compressed.size() < 16);
+}
