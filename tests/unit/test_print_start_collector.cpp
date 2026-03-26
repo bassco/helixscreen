@@ -913,7 +913,7 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
 
 TEST_CASE_METHOD(
     PrintStartCollectorHeaterFixture,
-    "Proactive detection: bed at >=50% of target does not trigger HEATING_BED directly",
+    "Proactive detection: bed heating stays HEATING_BED until bed reaches target",
     "[print][collector][proactive][heating]") {
     collector().start();
     drain_async_updates();
@@ -921,25 +921,38 @@ TEST_CASE_METHOD(
     reset_collector_to_idle();
     collector().enable_fallbacks();
 
-    SECTION("Bed at 50% of target - nozzle heating takes over if nozzle not at target") {
+    SECTION("Bed at 50% of target - bed still heating even with nozzle also heating") {
         // Bed target 60C, current 30C (300 decideg) = 50% of target
-        // Nozzle also heating
+        // Nozzle also heating - but bed_heating takes priority
         set_all_temps(300, 600, 500, 2100); // Nozzle 50C/210C
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        // Nozzle heating should be detected instead
-        REQUIRE(get_current_phase() == PrintStartPhase::HEATING_NOZZLE);
+        // Bed is still heating, so HEATING_BED takes priority
+        REQUIRE(get_current_phase() == PrintStartPhase::HEATING_BED);
     }
 
-    SECTION("Bed at 80% of target with nozzle heating") {
+    SECTION("Bed at 80% of target with nozzle heating - bed still takes priority") {
         // Bed target 60C, current 48C (480 decideg) = 80%
         set_all_temps(480, 600, 1000, 2100);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
+        // Bed is still below target-tolerance, so HEATING_BED
+        REQUIRE(get_current_phase() == PrintStartPhase::HEATING_BED);
+    }
+
+    SECTION("Bed at target - nozzle heating takes over") {
+        // Bed target 60C, current 59C (590 decideg) = within tolerance
+        // Nozzle still heating
+        set_all_temps(590, 600, 1000, 2100);
+
+        collector().check_fallback_completion();
+        drain_async_updates();
+
+        // Bed is within tolerance, so nozzle heating takes over
         REQUIRE(get_current_phase() == PrintStartPhase::HEATING_NOZZLE);
     }
 }
@@ -1024,15 +1037,14 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     SECTION("Temp 1 decidegree below tolerance is considered heating") {
         // Target 60C (600), temp 54.9C (549), diff = 51 decideg
         // 549 < 600 - 50 = 549 < 550 is TRUE, so bed_heating = true
-        // However, 549 >= 300 (50% of target), so we get INITIALIZING not HEATING_BED
-        // HEATING_BED only shows when bed is far from target (< 50%)
+        // Bed heating takes priority regardless of how close to target
         set_all_temps(549, 600, 0, 0);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        // Bed is heating but past 50% mark, so generic "Preparing" state
-        REQUIRE(get_current_phase() == PrintStartPhase::INITIALIZING);
+        // Bed is still heating (below tolerance), so HEATING_BED
+        REQUIRE(get_current_phase() == PrintStartPhase::HEATING_BED);
     }
 
     SECTION("Temp 1 decidegree above tolerance is NOT heating") {

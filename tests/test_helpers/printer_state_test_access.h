@@ -15,6 +15,8 @@ class PrinterPrintStateTestAccess {
         pps.has_real_layer_data_ = false;
         pps.slicer_progress_ = 0.0;
         pps.slicer_progress_active_ = false;
+        pps.smoothed_remaining_ = 0.0;
+        pps.has_smoothed_remaining_ = false;
     }
 };
 

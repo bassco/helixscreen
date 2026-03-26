@@ -45,7 +45,8 @@ static lv_obj_t* create_mock_temperature_widget(lv_obj_t* parent) {
     return container;
 }
 
-TEST_CASE_METHOD(TempWidgetFixture, "TemperatureWidget: user_data set on button, not container",
+TEST_CASE_METHOD(TempWidgetFixture,
+                 "TemperatureWidget: user_data on container, per-callback user_data on button",
                  "[temperature_widget][regression]") {
     // Simulate TempControlPanel shared resource
     auto tcp = std::make_shared<TempControlPanel>(state(), nullptr);
@@ -61,20 +62,20 @@ TEST_CASE_METHOD(TempWidgetFixture, "TemperatureWidget: user_data set on button,
     TemperatureWidget widget(state(), tcp.get());
     widget.attach(container, test_screen());
 
-    SECTION("user_data is on the button") {
-        auto* recovered = static_cast<TemperatureWidget*>(lv_obj_get_user_data(btn));
+    SECTION("user_data is on the container") {
+        auto* recovered = static_cast<TemperatureWidget*>(lv_obj_get_user_data(container));
         REQUIRE(recovered == &widget);
     }
 
-    SECTION("user_data is NOT on the outer container") {
-        auto* container_data = lv_obj_get_user_data(container);
-        // Container should not have widget pointer — the event fires on the button
-        REQUIRE(container_data == nullptr);
+    SECTION("user_data is NOT on the button (per-callback user_data used instead)") {
+        auto* btn_data = lv_obj_get_user_data(btn);
+        // Button uses per-callback user_data via lv_obj_add_event_cb, not obj user_data
+        REQUIRE(btn_data == nullptr);
     }
 
-    SECTION("detach clears button user_data") {
+    SECTION("detach clears container user_data") {
         widget.detach();
-        auto* recovered = lv_obj_get_user_data(btn);
+        auto* recovered = lv_obj_get_user_data(container);
         REQUIRE(recovered == nullptr);
     }
 
@@ -84,7 +85,7 @@ TEST_CASE_METHOD(TempWidgetFixture, "TemperatureWidget: user_data set on button,
 }
 
 TEST_CASE_METHOD(TempWidgetFixture,
-                 "TemperatureWidget: click callback recovers widget via button user_data",
+                 "TemperatureWidget: click callback recovers widget via per-callback user_data",
                  "[temperature_widget][regression]") {
     auto tcp = std::make_shared<TempControlPanel>(state(), nullptr);
     auto& mgr = PanelWidgetManager::instance();
@@ -97,9 +98,10 @@ TEST_CASE_METHOD(TempWidgetFixture,
     TemperatureWidget widget(state(), tcp.get());
     widget.attach(container, test_screen());
 
-    // Simulate what temp_clicked_cb does: get current_target (the button) and
-    // recover the widget from user_data
-    auto* recovered = static_cast<TemperatureWidget*>(lv_obj_get_user_data(btn));
+    // temp_clicked_cb now uses lv_event_get_user_data(e) (per-callback user_data)
+    // rather than lv_obj_get_user_data(btn). Verify the container holds the widget
+    // pointer (set during attach) so the widget is recoverable.
+    auto* recovered = static_cast<TemperatureWidget*>(lv_obj_get_user_data(container));
     REQUIRE(recovered != nullptr);
     REQUIRE(recovered == &widget);
 

@@ -1496,6 +1496,31 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: language supports all planned langu
 // Config Versioning & Migration Tests
 // ============================================================================
 
+// RAII guard to save and restore the global backup file that init() overwrites
+struct BackupGuard {
+    std::string backup_path;
+    std::string saved;
+    bool had_file = false;
+
+    BackupGuard() {
+        const char* home = std::getenv("HOME");
+        backup_path = std::string(home ? home : "/tmp") + "/.helixscreen/settings.json.backup";
+        if (std::filesystem::exists(backup_path)) {
+            std::ifstream f(backup_path);
+            saved = std::string(std::istreambuf_iterator<char>(f), {});
+            had_file = true;
+        }
+    }
+    ~BackupGuard() {
+        if (had_file) {
+            std::ofstream o(backup_path);
+            o << saved;
+        } else {
+            std::filesystem::remove(backup_path);
+        }
+    }
+};
+
 TEST_CASE_METHOD(ConfigTestFixture,
                  "Config: v0 config with sounds_enabled=true gets migrated to false",
                  "[core][config][migration][versioning]") {
@@ -1522,6 +1547,7 @@ TEST_CASE_METHOD(ConfigTestFixture,
     }
 
     // Run init which triggers migrations
+    BackupGuard guard;
     Config test_config;
     test_config.init(temp_path);
 
@@ -1551,6 +1577,7 @@ TEST_CASE_METHOD(ConfigTestFixture,
         o << v1_config.dump(2);
     }
 
+    BackupGuard guard;
     Config test_config;
     test_config.init(temp_path);
 
@@ -1574,6 +1601,7 @@ TEST_CASE_METHOD(ConfigTestFixture,
     std::filesystem::remove(temp_path);
     REQUIRE_FALSE(std::filesystem::exists(temp_path));
 
+    BackupGuard guard;
     Config test_config;
     test_config.init(temp_path);
 

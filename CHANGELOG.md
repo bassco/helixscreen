@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.4] - 2026-03-26
+
+### Added
+- ALSA sound backend with 4-voice polyphony and MOD/MED tracker music playback
+- Active Spool widget showing current filament via Spoolman integration (#545)
+- Open source licenses section on the About page
+- Auto-detect tape width for Brother PT label printers
+
+### Fixed
+- Crash from object deletion during LVGL event processing (#543)
+- Stale print outcome not clearing when starting a new print after complete/cancel (#546)
+- K1C: stabilized time estimates, fixed layer count, added arc support, improved pre-print status
+- K2 platform misidentified as AD5M during installation (#544)
+- ui_button user_data collisions causing crashes in temperature presets, macros, modal buttons, and print status controls
+- Stale modal stack entries when animations are disabled
+- Brother PT label printing: single RFCOMM connection, QR code clipping on narrow tape, rotation, auto-cut, dropdown corruption, and reconnect timing
+- Die-cut label layout too wide for 38mm tape
+- Print status buttons not anchored to bottom of controls column
+- Notification badge positioned incorrectly on content-sized containers
+
+### Changed
+- Display rotation probe moved from DisplayManager init to Application startup
+
 ## [0.99.3] - 2026-03-26
 
 ### Added
@@ -2168,6 +2191,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.4]: https://github.com/prestonbrown/helixscreen/compare/v0.99.3...v0.99.4
 [0.99.3]: https://github.com/prestonbrown/helixscreen/compare/v0.99.2...v0.99.3
 [0.99.2]: https://github.com/prestonbrown/helixscreen/compare/v0.99.1...v0.99.2
 [0.99.1]: https://github.com/prestonbrown/helixscreen/compare/v0.99.0...v0.99.1
