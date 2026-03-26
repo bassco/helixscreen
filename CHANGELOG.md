@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.2] - 2026-03-25
+
+### Added
+- Per-unit environment display and dryer controls for AMS
+- Hardware-gated widgets shown as disabled instead of hidden
+- x86_64 platform detection and binary validation in installer
+
+### Fixed
+- Crash on RGB565 embedded builds from blur tree walk (#528)
+- Crash from stale parent pointer in modal dialogs (#522, #523, #524)
+- Crash from use-after-free in action prompt modal (#514, #515, #521)
+- Crash from PrintStatusWidget use-after-free during macro timeout (#522)
+- Brother QL label printing: raster alignment, die-cut support, auto-detection, and async Bluetooth
+- Print metadata not fetched when thumbnail was already set (#526)
+- Debug bundle upload spinner and text alignment
+
 ## [0.99.1] - 2026-03-25
 
 ### Added
@@ -2134,6 +2150,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.2]: https://github.com/prestonbrown/helixscreen/compare/v0.99.1...v0.99.2
 [0.99.1]: https://github.com/prestonbrown/helixscreen/compare/v0.99.0...v0.99.1
 [0.99.0]: https://github.com/prestonbrown/helixscreen/compare/v0.98.12...v0.99.0
 [0.98.12]: https://github.com/prestonbrown/helixscreen/compare/v0.98.11...v0.98.12

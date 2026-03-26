@@ -81,8 +81,8 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands raster row format", "[label]"
     REQUIRE(found_raster);
 }
 
-TEST_CASE("BrotherQLPrinter::build_raster_commands row right-alignment", "[label]") {
-    // 29mm label (306px = 39 bytes) should be right-justified in 90-byte row
+TEST_CASE("BrotherQLPrinter::build_raster_commands row left-justified", "[label]") {
+    // 29mm label (306px = 39 bytes) is left-justified in 90-byte row with right padding
     auto bitmap = helix::LabelBitmap::create(306, 1, 300);
     // Set a pixel so we get a raster row, not a blank
     bitmap.set_pixel(0, 0, true);
@@ -93,9 +93,9 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands row right-alignment", "[label
     // Find the raster data row
     for (size_t i = 0; i + 2 < commands.size(); i++) {
         if (commands[i] == 0x67 && commands[i + 1] == 0x00) {
-            // Left padding: 90 - 39 = 51 bytes of 0x00
+            // Right padding: 90 - 39 = 51 bytes of 0x00 after the label data
             for (int p = 0; p < 51; p++) {
-                REQUIRE(commands[i + 3 + p] == 0x00);
+                REQUIRE(commands[i + 3 + 39 + p] == 0x00);
             }
             break;
         }
@@ -119,14 +119,14 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands 62mm full width", "[label]") 
 
     auto commands = helix::BrotherQLPrinter::build_raster_commands(bitmap, size_62);
 
-    // Left padding should be 90 - 87 = 3 bytes
+    // Data is left-justified, right padding should be 90 - 87 = 3 bytes
     for (size_t i = 0; i + 2 < commands.size(); i++) {
         if (commands[i] == 0x67 && commands[i + 1] == 0x00) {
             REQUIRE(commands[i + 2] == 90);
-            // First 3 bytes should be padding
-            REQUIRE(commands[i + 3] == 0x00);
-            REQUIRE(commands[i + 4] == 0x00);
-            REQUIRE(commands[i + 5] == 0x00);
+            // Last 3 bytes should be padding
+            REQUIRE(commands[i + 3 + 87] == 0x00);
+            REQUIRE(commands[i + 3 + 88] == 0x00);
+            REQUIRE(commands[i + 3 + 89] == 0x00);
             break;
         }
     }
@@ -235,18 +235,18 @@ TEST_CASE("BrotherQLPrinter::build_raster_commands horizontal flip", "[label]") 
     // Find the raster row
     for (size_t i = 0; i + 2 < commands.size(); i++) {
         if (commands[i] == 0x67 && commands[i + 1] == 0x00) {
-            // 29mm: 306px = 39 bytes, left_pad = 51
+            // 29mm: 306px = 39 bytes, data is left-justified (no left padding)
             // After flip, pixel at x=0 should appear at x=305
             // x=305 in flipped data: byte 305/8 = 38, bit 7-(305%8) = 7-1 = 6
             // So flipped_row[38] should have bit 6 set
-            // In the command buffer: offset i+3 + 51 (pad) + 38 = i + 92
-            uint8_t flipped_byte = commands[i + 3 + 51 + 38];
+            // In the command buffer: offset i+3 + 38
+            uint8_t flipped_byte = commands[i + 3 + 38];
             REQUIRE((flipped_byte & (1 << 6)) != 0);
 
             // Original position x=0 should be empty after flip
             // x=0 in flipped data: byte 0, bit 7
-            // In command buffer: offset i+3 + 51 + 0
-            uint8_t original_byte = commands[i + 3 + 51];
+            // In command buffer: offset i+3 + 0
+            uint8_t original_byte = commands[i + 3];
             REQUIRE((original_byte & (1 << 7)) == 0);
             break;
         }

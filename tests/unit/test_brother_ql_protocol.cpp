@@ -105,18 +105,16 @@ TEST_CASE("Brother QL protocol - horizontal flip verification", "[label][brother
     }
     REQUIRE(found_raster);
 
-    int label_byte_width = (696 + 7) / 8; // 87
-    int left_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width; // 3
-
+    // Data is left-justified (no left padding for continuous labels)
     // After horizontal flip, pixel at x=0 should appear at x=695 (width-1)
     // x=695 is in byte 695/8 = 86, bit 7-(695%8) = 7-7 = 0
-    size_t pixel_byte_offset = raster_start + left_pad + 86;
+    size_t pixel_byte_offset = raster_start + 86;
     REQUIRE(pixel_byte_offset < data.size());
     // Bit 0 should be set (flipped pixel)
     REQUIRE((data[pixel_byte_offset] & 0x01) != 0);
 
     // Original position x=0 should NOT be set (pixel was flipped away)
-    size_t orig_byte_offset = raster_start + left_pad + 0;
+    size_t orig_byte_offset = raster_start;
     // bit 7 should NOT be set
     REQUIRE((data[orig_byte_offset] & 0x80) == 0);
 }
@@ -144,19 +142,19 @@ TEST_CASE("Brother QL protocol - 38mm narrow label right-justified with flip", "
     REQUIRE(found_raster);
 
     int label_byte_width = (413 + 7) / 8; // 52
-    int left_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width; // 38
+    int right_pad = BROTHER_QL_RASTER_ROW_BYTES - label_byte_width; // 38
 
-    // Padding bytes should be zero
-    for (int i = 0; i < left_pad; i++) {
-        REQUIRE(data[raster_start + i] == 0x00);
+    // Data is left-justified, right padding bytes should be zero
+    for (int i = 0; i < right_pad; i++) {
+        REQUIRE(data[raster_start + label_byte_width + i] == 0x00);
     }
 
     // After flip, pixel at x=0 should appear at x=412 (width-1)
     // x=412 is in byte 412/8=51, bit 7-(412%8) = 7-4 = 3
-    REQUIRE((data[raster_start + left_pad + 51] & (1 << 3)) != 0);
+    REQUIRE((data[raster_start + 51] & (1 << 3)) != 0);
 
     // Original position x=0 (byte 0, bit 7) should NOT be set
-    REQUIRE((data[raster_start + left_pad] & 0x80) == 0);
+    REQUIRE((data[raster_start] & 0x80) == 0);
 }
 
 TEST_CASE("Brother QL protocol - empty bitmap", "[label][brother]") {
