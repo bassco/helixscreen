@@ -789,6 +789,16 @@ extract_release() {
     # so the .old directory on the real filesystem acts as a safety net.)
     $(file_sudo "${INSTALL_DIR}") mkdir -p "${INSTALL_DIR}/config" 2>/dev/null || true
 
+    # Remove tarball's default settings.json if we have a backup to restore.
+    # If Phase 6 restore fails, we want the file to be MISSING so that
+    # Config::init()'s restore_from_backup() safety net kicks in.
+    # Without this, a failed restore leaves the tarball defaults in place,
+    # which Config::init() loads without attempting backup recovery.
+    if [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
+        rm -f "${INSTALL_DIR}/config/settings.json" 2>/dev/null
+        rm -f "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null
+    fi
+
     # _restore_config_file SRC DEST LABEL — copy a single config file with
     # appropriate sudo, logging success or warning on failure.
     _restore_config_file() {

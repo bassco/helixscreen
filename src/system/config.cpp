@@ -620,14 +620,35 @@ void Config::init(const std::string& config_path) {
             spdlog::error("[Config] Failed to parse {}: {}", path, e.what());
             CONFIG_RECORD_ERROR("file_io", "config_read_failed",
                                 fmt::format("parse error: {}", e.what()));
-            spdlog::warn("[Config] Config file is corrupt — resetting to defaults");
 
-            // Backup the corrupt file for diagnosis
-            std::string backup_path = path + ".corrupt";
-            std::rename(path.c_str(), backup_path.c_str());
-            spdlog::info("[Config] Corrupt config backed up to {}", backup_path);
+            // Preserve the corrupt file for diagnosis
+            std::string corrupt_path = path + ".corrupt";
+            std::rename(path.c_str(), corrupt_path.c_str());
+            spdlog::info("[Config] Corrupt config saved to {}", corrupt_path);
 
-            data = get_default_config("127.0.0.1", false);
+            // Try restoring from backup before falling back to defaults
+            std::string backup_src = find_backup(
+                {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
+                 LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+
+            bool restored = false;
+            if (!backup_src.empty()) {
+                try {
+                    data = json::parse(std::fstream(backup_src));
+                    restored = true;
+                    restored_from_backup_ = true;
+                    spdlog::info("[Config] Restored from backup: {}", backup_src);
+                    NOTIFY_WARNING("Settings were corrupted — restored from backup");
+                } catch (const json::exception& e2) {
+                    spdlog::warn("[Config] Backup also corrupt: {}", e2.what());
+                }
+            }
+
+            if (!restored) {
+                spdlog::warn("[Config] No valid backup — resetting to defaults");
+                data = get_default_config("127.0.0.1", false);
+                NOTIFY_ERROR("Settings were corrupted and could not be recovered — reset to defaults");
+            }
             config_modified = true;
         }
 
@@ -870,6 +891,14 @@ void Config::init(const std::string& config_path) {
         o << std::setw(2) << data << std::endl;
         spdlog::debug("[Config] Saved updated config to {}", path);
     }
+
+    // Always maintain a rolling backup on startup — ensures backup freshness
+    // even if the user never explicitly saves settings. Without this, the only
+    // backup is from the last Config::save() call, which may be days/weeks old
+    // or nonexistent (user configured once, never changed settings again).
+    // Critical for upgrade recovery: if the installer's Phase 6 config restore
+    // fails, Config::init() falls back to these rolling backups.
+    write_rolling_backup(path, CONFIG_BACKUP_PRIMARY, config_backup_fallback());
 
     // Back up helixscreen.env outside install dir (env only changes at startup via launcher)
     {

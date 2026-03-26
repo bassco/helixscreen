@@ -2579,6 +2579,10 @@ extract_release() {
             BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
             cp "${INSTALL_DIR}/config/helixconfig.json" "$BACKUP_CONFIG"
             log_info "Backed up existing configuration (from config/helixconfig.json)"
+        elif [ -f "${INSTALL_DIR}/settings.json" ]; then
+            BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
+            cp "${INSTALL_DIR}/settings.json" "$BACKUP_CONFIG"
+            log_info "Backed up existing configuration (legacy root location)"
         elif [ -f "${INSTALL_DIR}/helixconfig.json" ]; then
             BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
             cp "${INSTALL_DIR}/helixconfig.json" "$BACKUP_CONFIG"
@@ -2748,6 +2752,16 @@ extract_release() {
     # so the .old directory on the real filesystem acts as a safety net.)
     $(file_sudo "${INSTALL_DIR}") mkdir -p "${INSTALL_DIR}/config" 2>/dev/null || true
 
+    # Remove tarball's default settings.json if we have a backup to restore.
+    # If Phase 6 restore fails, we want the file to be MISSING so that
+    # Config::init()'s restore_from_backup() safety net kicks in.
+    # Without this, a failed restore leaves the tarball defaults in place,
+    # which Config::init() loads without attempting backup recovery.
+    if [ "$ORIGINAL_INSTALL_EXISTS" = true ]; then
+        rm -f "${INSTALL_DIR}/config/settings.json" 2>/dev/null
+        rm -f "${INSTALL_DIR}/config/helixscreen.env" 2>/dev/null
+    fi
+
     # _restore_config_file SRC DEST LABEL — copy a single config file with
     # appropriate sudo, logging success or warning on failure.
     _restore_config_file() {
@@ -2768,6 +2782,8 @@ extract_release() {
             _restore_config_file "${INSTALL_BACKUP}/config/settings.json" "$_config_dest" "settings.json from .old backup"
         elif [ -f "${INSTALL_BACKUP}/config/helixconfig.json" ]; then
             _restore_config_file "${INSTALL_BACKUP}/config/helixconfig.json" "$_config_dest" "settings.json from .old backup (migrated from helixconfig.json)"
+        elif [ -f "${INSTALL_BACKUP}/settings.json" ]; then
+            _restore_config_file "${INSTALL_BACKUP}/settings.json" "$_config_dest" "settings.json from .old backup (legacy root location)"
         elif [ -f "${INSTALL_BACKUP}/helixconfig.json" ]; then
             _restore_config_file "${INSTALL_BACKUP}/helixconfig.json" "$_config_dest" "settings.json from .old backup (legacy root location)"
         fi
