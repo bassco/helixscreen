@@ -83,6 +83,7 @@ class PinEntryModal {
 
     void create();
     void destroy();
+    void destroy_async();
     void update_dots();
     void clear_digits();
     void show_error(const char* text = nullptr);

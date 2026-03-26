@@ -91,7 +91,10 @@ void LockScreenOverlay::destroy_overlay() {
         if (dots) {
             lv_anim_delete(dots, nullptr);
         }
-        lv_obj_delete(overlay_);
+        // Use lv_obj_delete_async — if called from an lv_async_call chain (e.g.,
+        // on_confirm → hide → destroy_overlay), synchronous deletion can corrupt
+        // LVGL's event linked list in lv_event_mark_deleted (#543).
+        lv_obj_delete_async(overlay_);
         overlay_ = nullptr;
         digit_buffer_.clear();
         spdlog::debug("[LockScreen] Overlay destroyed");

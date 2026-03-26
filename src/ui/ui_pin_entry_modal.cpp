@@ -34,8 +34,7 @@ void PinEntryModal::show_pin_entry(const std::string& heading, PinCallback on_co
     // Dismiss any active modal first
     if (g_active_modal) {
         spdlog::warn("[PinEntryModal] Replacing active modal without callback");
-        g_active_modal->destroy();
-        delete g_active_modal;
+        g_active_modal->destroy_async();
         g_active_modal = nullptr;
     }
 
@@ -53,14 +52,7 @@ void PinEntryModal::dismiss() {
     if (modal->on_complete_) {
         modal->on_complete_("");  // Return value ignored on dismiss
     }
-    // Defer destruction to avoid deleting objects in input event handler
-    lv_async_call(
-        [](void* user_data) {
-            auto* m = static_cast<PinEntryModal*>(user_data);
-            m->destroy();
-            delete m;
-        },
-        modal);
+    modal->destroy_async();
 }
 
 // ============================================================================
@@ -128,6 +120,20 @@ void PinEntryModal::destroy() {
     }
     digit_buffer_.clear();
     spdlog::debug("[PinEntryModal] Destroyed");
+}
+
+void PinEntryModal::destroy_async() {
+    // Use lv_obj_delete_async for LVGL objects — auto-cancelled if parent is
+    // deleted first, preventing use-after-free in lv_event_mark_deleted (#543).
+    if (backdrop_) {
+        lv_obj_delete_async(backdrop_);
+        backdrop_ = nullptr;
+        dialog_ = nullptr;
+    }
+    digit_buffer_.clear();
+    // Defer C++ cleanup (destructor is trivial — just logging)
+    lv_async_call([](void* ud) { delete static_cast<PinEntryModal*>(ud); }, this);
+    spdlog::debug("[PinEntryModal] Async destruction scheduled");
 }
 
 // ============================================================================
@@ -210,15 +216,8 @@ void PinEntryModal::on_confirm() {
     }
 
     // Accepted — defer destruction to avoid deleting objects in input event handler
-    auto* modal = this;
     g_active_modal = nullptr;
-    lv_async_call(
-        [](void* user_data) {
-            auto* m = static_cast<PinEntryModal*>(user_data);
-            m->destroy();
-            delete m;
-        },
-        modal);
+    destroy_async();
 }
 
 void PinEntryModal::on_cancel() {
@@ -226,22 +225,13 @@ void PinEntryModal::on_cancel() {
 
     auto callback = std::move(on_complete_);
     on_complete_ = nullptr;
-
-    auto* modal = this;
     g_active_modal = nullptr;
 
     if (callback) {
         callback("");  // Return value ignored on cancel
     }
 
-    // Defer destruction to avoid deleting objects in input event handler
-    lv_async_call(
-        [](void* user_data) {
-            auto* m = static_cast<PinEntryModal*>(user_data);
-            m->destroy();
-            delete m;
-        },
-        modal);
+    destroy_async();
 }
 
 // ============================================================================
