@@ -26,7 +26,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 >
 > On the doorstep of 1.0 (targeting early April 2026). Multi-page home screen, exclude object map, temperature graph, Creality K2/CFS support, tool changer widgets, and preheat macros — plus dozens of crash fixes.
 >
-> **Tested on:** Voron 2.4 (Raspberry Pi 5), Voron 0.2, Doron Velta, RatRig V-Core, Flashforge AD5M Pro ([Forge-X](https://github.com/DrA1ex/ff5m) firmware), Sovol SV06, Sovol SV08, Creality K1C, Creality K2 Max
+> **Tested on:** Voron 2.4 (Raspberry Pi 5), Voron 0.2, Doron Velta, RatRig V-Core, Flashforge AD5M Pro ([Forge-X](https://github.com/DrA1ex/ff5m) firmware), Sovol SV06, Sovol SV08, Creality K1C, Creality K2 Max, x86 Mini ITX PC (Debian Bookworm, 7" HDMI touchscreen)
 >
 > **Raspberry Pi:** Both 64-bit and 32-bit Raspberry Pi OS are supported (Pi 4, Pi 5, CM4, Zero 2 W).
 >
@@ -147,8 +147,8 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 | Sovol SV06/SV08 | Pi build | Active testing |
 | Elegoo Centauri Carbon | Dedicated build | Active testing |
 | Snapmaker U1 | armv7-a | Cross-compile target |
-| macOS | x86_64/ARM64 | Development |
-| Linux | x86_64 | Development / CI |
+| x86 Mini PC (Debian) | x86_64 | Tested |
+| macOS / Linux desktop | x86_64/ARM64 | Development / CI |
 
 ¹ Only QIDI models with Linux framebuffer displays (Q2, Max 4) are compatible. Older models (X-Max 3, X-Plus 3, Plus 4, Q1 Pro, X-Smart 3) use TJC/Nextion HMI serial displays and are **not supported** without a screen replacement.
 

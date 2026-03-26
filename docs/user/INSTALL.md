@@ -65,7 +65,7 @@ After installation, the setup wizard will guide you through initial configuratio
 
 ### MainsailOS (Raspberry Pi)
 
-This covers any Klipper printer with a Raspberry Pi running MainsailOS (or similar), including SOVOL SV06, SOVOL SV08, Voron, RatRig, and other printers where Klipper runs on a separate Pi.
+This covers any Klipper printer with a Raspberry Pi running MainsailOS (or similar), including SOVOL SV06, SOVOL SV08, Voron, RatRig, and other printers where Klipper runs on a separate Pi. Also works on x86 Linux PCs (e.g., mini ITX) running Debian/Ubuntu with Klipper and a touchscreen.
 
 - **Hardware:**
   - Raspberry Pi 3, 4, or 5 (Pi 3 is minimum, Pi 4/5 recommended)
