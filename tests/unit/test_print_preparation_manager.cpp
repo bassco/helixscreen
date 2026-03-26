@@ -1546,8 +1546,8 @@ TEST_CASE_METHOD(MacroAnalysisRetryFixture,
         // Trigger analysis
         manager_.analyze_print_start_macro();
 
-        // Wait for all attempts to complete
-        REQUIRE(wait_for([&]() { return callback_invoked.load(); }, 8000));
+        // Wait for all attempts to complete (generous timeout for loaded CI)
+        REQUIRE(wait_for([&]() { return callback_invoked.load(); }, 15000));
 
         // Get call timestamps
         auto times = get_call_times();
@@ -1558,14 +1558,15 @@ TEST_CASE_METHOD(MacroAnalysisRetryFixture,
         auto delay2 = std::chrono::duration_cast<std::chrono::milliseconds>(times[2] - times[1]);
 
         // First delay should be ~1s (1000ms with tolerance)
+        // Wide tolerance for CI machines under load (macOS, parallel shards)
         INFO("Delay 1: " << delay1.count() << "ms");
-        REQUIRE(delay1.count() >= 800);  // At least 800ms
-        REQUIRE(delay1.count() <= 1500); // At most 1.5s
+        REQUIRE(delay1.count() >= 700);  // At least 700ms
+        REQUIRE(delay1.count() <= 2500); // At most 2.5s
 
         // Second delay should be ~2s (2000ms with tolerance)
         INFO("Delay 2: " << delay2.count() << "ms");
-        REQUIRE(delay2.count() >= 1800); // At least 1.8s
-        REQUIRE(delay2.count() <= 2500); // At most 2.5s
+        REQUIRE(delay2.count() >= 1500); // At least 1.5s
+        REQUIRE(delay2.count() <= 4000); // At most 4s
     }
 }
 

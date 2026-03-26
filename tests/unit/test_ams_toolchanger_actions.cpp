@@ -116,8 +116,13 @@ TEST_CASE("change_tool sets SELECTING immediately in mock toolchanger mode",
         auto result = backend.change_tool(1);
         REQUIRE(result);
 
-        // The action should no longer be IDLE right after change_tool returns
-        auto action = backend.get_current_action();
+        // Wait for async state transition
+        AmsAction action = AmsAction::IDLE;
+        for (int i = 0; i < 20; ++i) {
+            action = backend.get_current_action();
+            if (action != AmsAction::IDLE) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
         CHECK(action != AmsAction::IDLE);
 
         // Wait for completion

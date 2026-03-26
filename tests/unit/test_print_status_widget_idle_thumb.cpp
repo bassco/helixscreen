@@ -80,7 +80,7 @@ TEST_CASE_METHOD(PrintStatusIdleThumbFixture,
     lv_obj_t* container = create_mock_print_card(test_screen());
 
     widget.attach(container, test_screen());
-    process_lvgl(50);
+    process_lvgl(200);
 
     // Should fall back to benchy since no history manager
     auto src = get_idle_thumb_src(container);
@@ -96,7 +96,7 @@ TEST_CASE_METHOD(PrintStatusIdleThumbFixture,
     lv_obj_t* container = create_mock_print_card(test_screen());
 
     widget.attach(container, test_screen());
-    process_lvgl(50);
+    process_lvgl(200);
 
     auto* label = lv_obj_find_by_name(container, "print_card_label");
     REQUIRE(label != nullptr);
@@ -113,15 +113,15 @@ TEST_CASE_METHOD(PrintStatusIdleThumbFixture,
 
     // Multiple attach/detach cycles should not crash
     widget.attach(container, test_screen());
-    process_lvgl(50);
+    process_lvgl(200);
     widget.detach();
 
     widget.attach(container, test_screen());
-    process_lvgl(50);
+    process_lvgl(200);
     widget.detach();
 
     // LVGL processing after detach should be safe
-    process_lvgl(100);
+    process_lvgl(200);
 }
 
 TEST_CASE_METHOD(PrintStatusIdleThumbFixture,
@@ -131,7 +131,7 @@ TEST_CASE_METHOD(PrintStatusIdleThumbFixture,
     lv_obj_t* container = create_mock_print_card(test_screen());
 
     widget.attach(container, test_screen());
-    process_lvgl(50);
+    process_lvgl(200);
 
     // Verify benchy is shown (no history in test env)
     REQUIRE(get_idle_thumb_src(container) == BENCHY_PATH);

@@ -119,12 +119,12 @@ setup() {
     echo "$config" | grep -q "path: /opt/helixscreen"
 }
 
-@test "generate_update_manager_config has persistent_files" {
+@test "generate_update_manager_config does NOT have persistent_files" {
     INSTALL_DIR="/opt/helixscreen"
     local config
     config=$(generate_update_manager_config)
-    echo "$config" | grep -q "persistent_files:"
-    echo "$config" | grep -q "config/settings.json"
+    ! echo "$config" | grep -q "persistent_files:"
+    ! echo "$config" | grep -q "config/settings.json"
 }
 
 @test "generate_update_manager_config does NOT have install_script" {

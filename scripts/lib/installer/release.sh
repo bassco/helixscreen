@@ -616,6 +616,10 @@ extract_release() {
             BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
             cp "${INSTALL_DIR}/config/helixconfig.json" "$BACKUP_CONFIG"
             log_info "Backed up existing configuration (from config/helixconfig.json)"
+        elif [ -f "${INSTALL_DIR}/settings.json" ]; then
+            BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
+            cp "${INSTALL_DIR}/settings.json" "$BACKUP_CONFIG"
+            log_info "Backed up existing configuration (legacy root location)"
         elif [ -f "${INSTALL_DIR}/helixconfig.json" ]; then
             BACKUP_CONFIG="${TMP_DIR}/settings.json.backup"
             cp "${INSTALL_DIR}/helixconfig.json" "$BACKUP_CONFIG"
@@ -805,6 +809,8 @@ extract_release() {
             _restore_config_file "${INSTALL_BACKUP}/config/settings.json" "$_config_dest" "settings.json from .old backup"
         elif [ -f "${INSTALL_BACKUP}/config/helixconfig.json" ]; then
             _restore_config_file "${INSTALL_BACKUP}/config/helixconfig.json" "$_config_dest" "settings.json from .old backup (migrated from helixconfig.json)"
+        elif [ -f "${INSTALL_BACKUP}/settings.json" ]; then
+            _restore_config_file "${INSTALL_BACKUP}/settings.json" "$_config_dest" "settings.json from .old backup (legacy root location)"
         elif [ -f "${INSTALL_BACKUP}/helixconfig.json" ]; then
             _restore_config_file "${INSTALL_BACKUP}/helixconfig.json" "$_config_dest" "settings.json from .old backup (legacy root location)"
         fi

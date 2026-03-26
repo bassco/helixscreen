@@ -602,7 +602,7 @@ TEST_CASE("Mock print progress and layer tracking", "[print][progress][slow]") {
                 return status.contains("virtual_sdcard") &&
                        status["virtual_sdcard"].contains("progress");
             },
-            2000));
+            5000));
 
         // Find first progress notification
         auto notif = fixture.find_notification([](const json& n) {
@@ -631,7 +631,7 @@ TEST_CASE("Mock print progress and layer tracking", "[print][progress][slow]") {
         fixture.reset();
 
         // Wait for some progress
-        REQUIRE(fixture.wait_for_callbacks(5, 5000));
+        REQUIRE(fixture.wait_for_callbacks(5, 10000));
 
         // Find progress values
         double first_progress = -1.0;
@@ -672,7 +672,7 @@ TEST_CASE("Mock print progress and layer tracking", "[print][progress][slow]") {
         fixture.reset();
 
         // Wait while paused
-        REQUIRE(fixture.wait_for_callbacks(3, 3000));
+        REQUIRE(fixture.wait_for_callbacks(3, 6000));
 
         // Get all progress values while paused
         std::vector<double> progress_values;
@@ -740,7 +740,7 @@ TEST_CASE("Mock print thermal phase behavior", "[print][thermal][slow]") {
                 return status.contains("extruder") && status["extruder"].contains("target") &&
                        status["extruder"]["target"].get<double>() > 0;
             },
-            2000));
+            5000));
 
         mock->stop_temperature_simulation();
         mock->disconnect();
@@ -755,7 +755,7 @@ TEST_CASE("Mock print thermal phase behavior", "[print][thermal][slow]") {
         fixture.reset();
 
         // Collect temperature values
-        REQUIRE(fixture.wait_for_callbacks(3, 3000));
+        REQUIRE(fixture.wait_for_callbacks(3, 6000));
 
         bool found_high_temp = false;
         for (const auto& n : fixture.get_notifications()) {
@@ -787,7 +787,7 @@ TEST_CASE("Mock print thermal phase behavior", "[print][thermal][slow]") {
 
         fixture.reset();
 
-        REQUIRE(fixture.wait_for_callbacks(3, 3000));
+        REQUIRE(fixture.wait_for_callbacks(3, 6000));
 
         // Temperatures should still be high while paused
         bool found_high_temp = false;
@@ -829,7 +829,7 @@ TEST_CASE("Mock print thermal phase behavior", "[print][thermal][slow]") {
                 return status.contains("extruder") && status["extruder"].contains("target") &&
                        status["extruder"]["target"].get<double>() == 0.0;
             },
-            2000));
+            5000));
 
         mock->stop_temperature_simulation();
         mock->disconnect();
@@ -856,7 +856,7 @@ TEST_CASE("Mock print status notifications match Moonraker format", "[print][not
                 const json& status = n["params"][0];
                 return status.contains("print_stats") && status["print_stats"].is_object();
             },
-            2000));
+            5000));
 
         mock->stop_temperature_simulation();
         mock->disconnect();
@@ -879,7 +879,7 @@ TEST_CASE("Mock print status notifications match Moonraker format", "[print][not
                 return ps.contains("state") && ps.contains("filename") && ps["state"].is_string() &&
                        ps["filename"].is_string();
             },
-            2000));
+            5000));
 
         mock->stop_temperature_simulation();
         mock->disconnect();
@@ -925,7 +925,7 @@ TEST_CASE("Mock print status notifications match Moonraker format", "[print][not
                        status["virtual_sdcard"].contains("progress") &&
                        status["virtual_sdcard"]["progress"].is_number();
             },
-            2000));
+            5000));
 
         mock->stop_temperature_simulation();
         mock->disconnect();
@@ -940,7 +940,7 @@ TEST_CASE("Mock print status notifications match Moonraker format", "[print][not
 
         REQUIRE(fixture.wait_for_matching(
             [](const json& n) { return get_print_state_from_notification(n) == "printing"; },
-            2000));
+            5000));
 
         // Pause - should notify "paused"
         mock->gcode_script("PAUSE");

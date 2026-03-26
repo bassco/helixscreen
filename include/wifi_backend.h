@@ -186,12 +186,12 @@ class WifiBackend {
      * @brief Connection status information
      */
     struct ConnectionStatus {
-        bool connected;          ///< True if connected to a network
+        bool connected{false};   ///< True if connected to a network
         std::string ssid;        ///< Connected network name
         std::string bssid;       ///< Access point MAC address
         std::string ip_address;  ///< Current IP address
         std::string mac_address; ///< Device WiFi adapter MAC address
-        int signal_strength;     ///< Signal strength (0-100%)
+        int signal_strength{0};  ///< Signal strength (0-100%)
         int frequency_mhz{0};    ///< Connected frequency in MHz (0 = unknown)
     };
 

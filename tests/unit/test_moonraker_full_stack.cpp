@@ -666,6 +666,9 @@ TEST_CASE("Full stack: API error callbacks work correctly",
     client.connect("ws://mock/websocket", []() {}, []() {});
     client.discover_printer([]() {});
 
+    // Allow async discovery to populate hardware data
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
     MoonrakerAPIMock api(client, state);
 
     SECTION("Async API methods accept callbacks") {

@@ -264,6 +264,9 @@ jobs:
     - name: Setup Python venv
       run: make venv-setup
 
+    - name: Apply submodule patches
+      run: make apply-patches
+
     - name: Build and run with ASAN
       timeout-minutes: 45
       run: |
@@ -341,6 +344,9 @@ jobs:
 
     - name: Setup Python venv
       run: make venv-setup
+
+    - name: Apply submodule patches
+      run: make apply-patches
 
     - name: Build and run with TSAN
       timeout-minutes: 45

@@ -664,6 +664,9 @@ TEST_CASE_METHOD(EventTestFixture, "MoonrakerClient suppresses RPC_ERROR during 
         // Verify AbortManager reports it's handling shutdown
         REQUIRE(helix::AbortManager::instance().is_handling_shutdown() == true);
 
+        // Allow state machine to fully propagate before simulating RPC error
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
         // Now trigger an RPC error through the full error handling path
         // This should NOT emit an event because AbortManager is handling shutdown
         client_->simulate_rpc_error("printer.gcode.script", "Klippy not ready");

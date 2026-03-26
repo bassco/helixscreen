@@ -92,7 +92,7 @@ class WifiBackendNetworkManager : public WifiBackend {
     std::condition_variable status_cv_;
     std::atomic<bool> status_running_{false};
     std::atomic<bool> status_refresh_requested_{false};
-    ConnectionStatus cached_status_; // Protected by status_mutex_
+    ConnectionStatus cached_status_{}; // Protected by status_mutex_
 
     // 5GHz support — computed once at start(), never changes
     std::atomic<bool> supports_5ghz_cached_{false};

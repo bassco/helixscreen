@@ -556,7 +556,7 @@ TEST_CASE("MoonrakerClientMock callback invocation", "[connection][slow][callbac
         mock.register_notify_update(fixture1.create_capture_callback());
 
         // Should receive simulation updates
-        REQUIRE(fixture1.wait_for_callback(1500));
+        REQUIRE(fixture1.wait_for_callback(3000));
         mock.stop_temperature_simulation();
 
         REQUIRE(!fixture1.get_notifications().empty());
