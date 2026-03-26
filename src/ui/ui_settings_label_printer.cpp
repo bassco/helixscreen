@@ -11,6 +11,7 @@
 #include "ui_update_queue.h"
 
 #include "bluetooth_loader.h"
+#include "brother_pt_bt_printer.h"
 #include "brother_ql_printer.h"
 #include "ipp_printer.h"
 #include "sheet_label_layout.h"
@@ -73,6 +74,16 @@ static bool check_bt_connected(helix_bt_context* ctx, const std::string& mac) {
 }
 
 /// Return the correct label sizes for the current printer configuration.
+/// Returns true if the current printer auto-detects label/tape size (no manual selection).
+static bool current_printer_auto_detects_size() {
+    auto& settings = LabelPrinterSettingsManager::instance();
+    if (settings.get_printer_type() == "bluetooth") {
+        const auto bt_name = settings.get_bt_name();
+        return helix::bluetooth::is_brother_pt_printer(bt_name.c_str());
+    }
+    return false;
+}
+
 /// Mirrors the logic in label_printer_utils.cpp print_spool_label().
 static std::vector<helix::LabelSize> get_sizes_for_current_printer() {
     auto& settings = LabelPrinterSettingsManager::instance();
@@ -86,6 +97,9 @@ static std::vector<helix::LabelSize> get_sizes_for_current_printer() {
     }
     if (type == "bluetooth") {
         const auto bt_name = settings.get_bt_name();
+        if (helix::bluetooth::is_brother_pt_printer(bt_name.c_str())) {
+            return helix::label::BrotherPTBluetoothPrinter::supported_sizes_static();
+        }
         if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
             return BrotherQLPrinter::supported_sizes_static();
         }
@@ -336,6 +350,16 @@ void LabelPrinterSettingsOverlay::init_label_size_dropdown() {
 
     lv_obj_t* dropdown = lv_obj_find_by_name(size_row, "dropdown");
     if (dropdown) {
+        // PT printers auto-detect tape — disable size selection
+        if (current_printer_auto_detects_size()) {
+            lv_dropdown_set_options(dropdown, lv_tr("Auto-detect"));
+            lv_dropdown_set_selected(dropdown, 0);
+            lv_obj_add_state(dropdown, LV_STATE_DISABLED);
+            spdlog::trace("[{}] Label size dropdown disabled (auto-detect)", get_name());
+            return;
+        }
+
+        lv_obj_remove_state(dropdown, LV_STATE_DISABLED);
         auto& settings = LabelPrinterSettingsManager::instance();
         auto sizes = get_sizes_for_current_printer();
 
