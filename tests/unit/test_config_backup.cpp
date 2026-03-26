@@ -298,6 +298,70 @@ TEST_CASE("full backup-restore cycle survives simulated Moonraker wipe", "[confi
     REQUIRE(read_file(env_path) == "MOONRAKER_HOST=192.168.1.100");
 }
 
+// ─── upgrade safety: backup freshness ─────────────────────────────────────────
+
+TEST_CASE("rolling backup written on startup ensures fresh recovery data", "[config_backup]") {
+    // Simulates the Config::init() fix: rolling backup is written every startup,
+    // not just on explicit save. Verifies that even without a save() call,
+    // a fresh backup exists for upgrade recovery.
+    TmpDir dir("startup_backup");
+
+    std::string config = dir.file("settings.json");
+    std::string primary = dir.file("primary.backup");
+    std::string fallback = dir.file("fallback.backup");
+
+    write_file(config, R"({"moonraker_host":"192.168.1.50","wizard_completed":true})");
+
+    // Simulate what Config::init() now does: write rolling backup on load
+    write_rolling_backup(config, primary, fallback);
+
+    REQUIRE(fs::exists(primary));
+    REQUIRE(read_file(primary) == R"({"moonraker_host":"192.168.1.50","wizard_completed":true})");
+
+    // Simulate upgrade wiping the config (tarball default removed, Phase 6 failed)
+    fs::remove(config);
+    REQUIRE_FALSE(fs::exists(config));
+
+    // restore_from_backup should recover from the fresh rolling backup
+    REQUIRE(restore_from_backup(config, "Config", {primary, fallback}));
+    REQUIRE(read_file(config) == R"({"moonraker_host":"192.168.1.50","wizard_completed":true})");
+}
+
+TEST_CASE("default config blocks backup recovery without tarball removal fix", "[config_backup]") {
+    // Demonstrates the bug: if a default settings.json exists (from tarball),
+    // restore_from_backup skips recovery because "target exists".
+    TmpDir dir("default_blocks");
+
+    std::string target = dir.file("settings.json");
+    std::string backup = dir.file("settings.json.backup");
+
+    // User's real config in backup
+    write_file(backup, R"({"moonraker_host":"192.168.1.50"})");
+    // Tarball default in target
+    write_file(target, R"({"moonraker_host":"127.0.0.1"})");
+
+    // restore_from_backup refuses because target exists — this is the bug scenario
+    REQUIRE_FALSE(restore_from_backup(target, "Config", {backup}));
+    // User's config is NOT recovered; default remains
+    REQUIRE(read_file(target) == R"({"moonraker_host":"127.0.0.1"})");
+}
+
+TEST_CASE("missing config triggers backup recovery after tarball removal fix", "[config_backup]") {
+    // With the fix: tarball default is removed before Phase 6, so if restore
+    // fails, the file is missing and restore_from_backup kicks in.
+    TmpDir dir("fix_recovery");
+
+    std::string target = dir.file("settings.json");
+    std::string backup = dir.file("settings.json.backup");
+
+    write_file(backup, R"({"moonraker_host":"192.168.1.50"})");
+    // No target file (tarball default was removed by the fix)
+    REQUIRE_FALSE(fs::exists(target));
+
+    REQUIRE(restore_from_backup(target, "Config", {backup}));
+    REQUIRE(read_file(target) == R"({"moonraker_host":"192.168.1.50"})");
+}
+
 TEST_CASE("restore_from_backup falls back to legacy backup names", "[config_backup]") {
     TmpDir dir("legacy_backup");
 

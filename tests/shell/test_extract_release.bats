@@ -363,6 +363,76 @@ echo "tmpfs       51200     48640  2560       95% /tmp"
     [ ! -d "$INSTALL_DIR/config/custom_images" ]
 }
 
+# --- Tarball default removal (config loss prevention) ---
+
+@test "extract_release: tarball default settings.json removed before restore on upgrade" {
+    setup_existing_install
+    # Create a tarball that ships a default settings.json
+    local staging="$BATS_TEST_TMPDIR/staging"
+    mkdir -p "$staging/helixscreen/bin" "$staging/helixscreen/config"
+    create_fake_arm32_elf "$staging/helixscreen/bin/helix-screen"
+    chmod +x "$staging/helixscreen/bin/helix-screen"
+    echo '{"default_preset": true}' > "$staging/helixscreen/config/settings.json"
+    tar -czf "$TMP_DIR/helixscreen.tar.gz" -C "$staging" helixscreen
+    rm -rf "$staging"
+
+    extract_release "ad5m"
+
+    # User's config should win, not the tarball default
+    grep -q '"old"' "$INSTALL_DIR/config/settings.json"
+    ! grep -q '"default_preset"' "$INSTALL_DIR/config/settings.json"
+}
+
+@test "extract_release: config missing after failed restore triggers recovery" {
+    setup_existing_install
+    # Create a tarball with a default settings.json
+    local staging="$BATS_TEST_TMPDIR/staging"
+    mkdir -p "$staging/helixscreen/bin" "$staging/helixscreen/config"
+    create_fake_arm32_elf "$staging/helixscreen/bin/helix-screen"
+    chmod +x "$staging/helixscreen/bin/helix-screen"
+    echo '{"default_preset": true}' > "$staging/helixscreen/config/settings.json"
+    tar -czf "$TMP_DIR/helixscreen.tar.gz" -C "$staging" helixscreen
+    rm -rf "$staging"
+
+    # Sabotage Phase 4 backup so Phase 6 restore has nothing to restore from
+    # (simulates TMP_DIR backup failure)
+    BACKUP_CONFIG=""
+
+    extract_release "ad5m"
+
+    # With the fix: tarball default is removed + restore fails = file is MISSING
+    # This allows Config::init()'s restore_from_backup() to kick in.
+    # The .old backup restore should still succeed from INSTALL_BACKUP though.
+    # If .old is also gone (e.g. cleanup_old_install ran), file would be missing.
+    # Test that the tarball default is NOT what's left behind:
+    if [ -f "$INSTALL_DIR/config/settings.json" ]; then
+        # If file exists, it must be from .old backup, not the tarball default
+        ! grep -q '"default_preset"' "$INSTALL_DIR/config/settings.json"
+    fi
+}
+
+@test "extract_release: fresh install keeps tarball default settings.json" {
+    # On fresh install (no existing install), tarball defaults should be kept
+    [ ! -d "$INSTALL_DIR" ]
+
+    local staging="$BATS_TEST_TMPDIR/staging"
+    mkdir -p "$staging/helixscreen/bin" "$staging/helixscreen/config"
+    create_fake_arm32_elf "$staging/helixscreen/bin/helix-screen"
+    chmod +x "$staging/helixscreen/bin/helix-screen"
+    echo '{"default_preset": true}' > "$staging/helixscreen/config/settings.json"
+    tar -czf "$TMP_DIR/helixscreen.tar.gz" -C "$staging" helixscreen
+    rm -rf "$staging"
+
+    run extract_release "ad5m"
+    [ "$status" -eq 0 ]
+
+    # Fresh install should keep the tarball defaults
+    [ -f "$INSTALL_DIR/config/settings.json" ]
+    grep -q '"default_preset"' "$INSTALL_DIR/config/settings.json"
+}
+
+# --- Legacy config migration ---
+
 @test "extract_release: preserves legacy config location" {
     mkdir -p "$INSTALL_DIR/bin"
     echo "old" > "$INSTALL_DIR/bin/helix-screen"
