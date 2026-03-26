@@ -16,7 +16,7 @@ Toggle UI motion effects (transitions, panel slides, confetti). Disable for bett
 
 ---
 
-## 3D Preview
+## G-code Preview
 
 Enable interactive 3D G-code visualization during prints. When off, only the 2D layer view is available. Disable if your hardware struggles with 3D rendering.
 

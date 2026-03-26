@@ -14,7 +14,7 @@ HelixScreen is a touchscreen interface for Klipper 3D printers. It connects to y
 - 30 panels and 48 overlays covering all printer operations
 - 3D G-code preview, bed mesh visualization, frequency response charts
 - First-run wizard with telemetry opt-in
-- Theme editor with 14 presets (dark and light)
+- Theme editor with 17 presets (dark and light)
 - Sound system, timelapse integration, filament tracking
 - Auto-detecting layout system for multiple display sizes
 - Designed for embedded displays (low memory, no desktop required)
@@ -95,7 +95,7 @@ If you test on hardware not listed above, please let us know your results!
 
 ### Is HelixScreen production-ready?
 
-HelixScreen is currently in **beta** (closer to alpha). This means:
+HelixScreen is currently in **beta**. This means:
 
 - ✅ Core features are complete and tested
 - ✅ Daily use on real printers works well
@@ -251,11 +251,11 @@ Up to 10 widgets can be shown. Some widgets (like AMS, humidity sensor, or probe
 
 ### Can I customize the colors or layout?
 
-**Yes!** HelixScreen includes a built-in theme editor with 14 preset themes:
+**Yes!** HelixScreen includes a built-in theme editor with 17 preset themes:
 
 1. Go to **Settings** → **Display Settings**
 2. Tap **Theme** to open the theme editor
-3. Choose from presets: Nord (default), Catppuccin, Dracula, Gruvbox, Tokyo Night, One Dark, Solarized, Material Design, Rose Pine, Everforest, Kanagawa, Ayu, Yami, or ChatGPT
+3. Choose from presets: Ayu, Catppuccin, ChatGPT, Cupertino, Dracula, Everforest, Gruvbox, HelixScreen, Kanagawa, Material Design, Midnight, Nord (default), One Dark, Rose Pine, Solarized, Tokyo Night, or Yami
 4. Toggle dark/light mode
 5. Customize individual colors if desired - changes are saved to `config/themes/`
 
@@ -428,7 +428,7 @@ Yes! HelixScreen is licensed under **GPL v3**. Source code is on GitHub.
 
 ### How can I contribute?
 
-See the [Contributing Guide](../DEVELOPMENT.md#contributing) for:
+See the [Contributing Guide](../devel/DEVELOPMENT.md#contributing) for:
 - Code standards
 - Development setup
 - Pull request process
@@ -441,7 +441,7 @@ We welcome:
 
 ### How do I build from source?
 
-See the [Development Guide](../DEVELOPMENT.md) for build instructions, dependencies, and development setup.
+See the [Development Guide](../devel/DEVELOPMENT.md) for build instructions, dependencies, and development setup.
 
 ### What programming language is HelixScreen?
 

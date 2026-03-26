@@ -46,7 +46,7 @@ Recorded once per application launch.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | integer | Event schema version (currently `1`) |
+| `schema_version` | integer | Event schema version (currently `2`) |
 | `event` | string | Always `"session"` |
 | `device_id` | string | Double-hashed anonymous device identifier (64-char hex) |
 | `timestamp` | string | ISO 8601 UTC timestamp (e.g., `"2026-02-08T14:30:00Z"`) |
@@ -60,7 +60,7 @@ Recorded when a print job reaches a terminal state (completion, failure, or canc
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | integer | Event schema version (currently `1`) |
+| `schema_version` | integer | Event schema version (currently `2`) |
 | `event` | string | Always `"print_outcome"` |
 | `device_id` | string | Double-hashed anonymous device identifier |
 | `timestamp` | string | ISO 8601 UTC timestamp |
@@ -78,7 +78,7 @@ Written to local storage at crash time using async-signal-safe functions. Picked
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | integer | Event schema version (currently `1`) |
+| `schema_version` | integer | Event schema version (currently `2`) |
 | `event` | string | Always `"crash"` |
 | `device_id` | string | Double-hashed anonymous device identifier |
 | `timestamp` | string | ISO 8601 UTC timestamp |
@@ -251,4 +251,4 @@ Material changes that expand the scope of data collection or alter the anonymiza
 For questions, concerns, or requests regarding this privacy policy or HelixScreen's telemetry system:
 
 **Email**: privacy@helixscreen.org
-**Project**: https://github.com/356C/helixscreen
+**Project**: https://github.com/prestonbrown/helixscreen

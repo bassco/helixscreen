@@ -51,10 +51,10 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 - **Customizable dashboard** — Multi-page grid with drag-to-reposition, edge resize, and 25+ widgets including temperature graphs, fan arcs, and power toggles
 - **Every feature at your fingertips** — 30+ panels, 18 overlays, 13 modals, 250+ XML layouts
 - **Runs on anything** — ~10MB RAM, from a Creality K1 to a Raspberry Pi 5
-- **68 printers in the database** — Auto-detects your hardware and configures itself
+- **71 printers in the database** — Auto-detects your hardware and configures itself
 - **Multi-material ready** — AFC, Happy Hare, ValgACE, ViViD, CFS, tool changers, Spoolman
 - **Exclude objects** — Tap-to-exclude overhead map view with object outlines during prints
-- **Looks great** — Light/dark themes with 14 presets, responsive layouts, GPU-accelerated blur
+- **Looks great** — Light/dark themes with 17 presets, responsive layouts, GPU-accelerated blur
 - **First-run wizard** — 13-step guided setup discovers your printer's capabilities
 
 <details>
@@ -127,9 +127,9 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 
 **Integrations** — HelixPrint plugin, power devices with quick-toggle, print history with dashboard, timelapse (Moonraker plugin), exclude objects with per-object thumbnails, LED control (5 backends), sound alerts (SDL/PWM/M300)
 
-**Display** — Auto-detecting layout system (480x320, 800x480, 1024x600, 1920x480 ultrawide), display rotation (0/90/180/270) with auto-detection, light/dark themes with 14 presets and live theme editor, GPU-accelerated backdrop blur, screensavers
+**Display** — Auto-detecting layout system (480x320, 800x480, 1024x600, 1920x480 ultrawide), display rotation (0/90/180/270) with auto-detection, light/dark themes with 17 presets and live theme editor, GPU-accelerated backdrop blur, screensavers
 
-**System** — 13-step first-run wizard, 68 printer models with auto-detection, opt-in crash reporting with debug bundles, KIAUH installer, versioned config migration, i18n translation system
+**System** — 13-step first-run wizard, 71 printer models with auto-detection, opt-in crash reporting with debug bundles, KIAUH installer, versioned config migration, i18n translation system
 
 ## Supported Platforms
 
@@ -196,14 +196,14 @@ make test-run
 
 **Controls:** Click navigation icons, press 'S' for screenshot, use `-v` (INFO), `-vv` (DEBUG), or `-vvv` (TRACE) for logging.
 
-**Test suite:** 317 test files with comprehensive coverage of printer state, UI components, XML parsing, and more.
+**Test suite:** 390+ test files with comprehensive coverage of printer state, UI components, XML parsing, and more.
 
 See [docs/devel/DEVELOPMENT.md](docs/devel/DEVELOPMENT.md) for detailed setup, cross-compilation, and contributing guidelines.
 
 ## FAQ
 
 **Is HelixScreen production-ready?**
-Release candidate status, approaching 1.0. Core features are stable with 317 test files and opt-in crash reporting. Suitable for daily use on any Klipper printer.
+Release candidate status, approaching 1.0. Core features are stable with 390+ test files and opt-in crash reporting. Suitable for daily use on any Klipper printer.
 
 **How is this different from GuppyScreen/KlipperScreen?**
 More features, way less resource usage (~10MB RAM vs ~50MB for KlipperScreen), and actively developed. See the [comparison table](#why-helixscreen).

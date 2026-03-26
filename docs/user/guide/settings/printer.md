@@ -60,6 +60,27 @@ Tap to open the retraction overlay. Configure G10/G11 firmware retraction parame
 
 ---
 
+## Timelapse
+
+> Only shown when the [Moonraker-Timelapse](https://github.com/mainsail-crew/moonraker-timelapse) plugin is installed.
+
+Tap to open the Timelapse Settings overlay. Configure how HelixScreen records timelapse videos of your prints.
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **Enable Timelapse** | On/Off | Master toggle for timelapse recording |
+| **Recording Mode** | Layer / Hyperlapse | **Layer** captures one frame at each layer change — best for most prints. **Hyperlapse** captures frames at fixed time intervals — better for very long prints. |
+| **Framerate** | 15 / 24 / 30 / 60 fps | Playback speed of the rendered video. 30 fps is the default. |
+| **Auto-render video** | On/Off | When enabled, automatically renders a video file when the print completes |
+
+A quick **timelapse toggle** also appears on the print status panel, so you can enable or disable recording without leaving the print view.
+
+Changes are saved immediately and sent to Moonraker. If the timelapse plugin is not yet installed, HelixScreen shows an **Install Wizard** that walks you through the SSH commands to set it up — see [Advanced > Timelapse](../advanced.md#timelapse) for details.
+
+For browsing and playing recorded videos, see **Settings > Timelapse Videos** (also covered in [Advanced > Timelapse](../advanced.md#timelapse)).
+
+---
+
 ## Macro Buttons
 
 Tap to open the Macro Buttons overlay. Configure quick-action buttons and standard macro assignments.

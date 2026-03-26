@@ -168,7 +168,10 @@ When using the SDL2 desktop simulator:
 | Key | Action |
 |-----|--------|
 | **S** | Take screenshot (saves to /tmp/) |
+| **D** | Toggle dark/light mode |
+| **M** | Toggle memory stats overlay |
 | **Escape** | Exit application |
+| **Cmd+Q** / **Win+Q** | Exit application |
 
 ---
 

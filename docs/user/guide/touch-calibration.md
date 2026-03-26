@@ -262,4 +262,4 @@ sudo systemctl restart helixscreen
 
 ---
 
-**Next:** [Calibration & Tuning](calibration.md) | [Back to User Guide](../USER_GUIDE.md)
+**Prev:** [Calibration & Tuning](calibration.md) | [Back to User Guide](../USER_GUIDE.md)

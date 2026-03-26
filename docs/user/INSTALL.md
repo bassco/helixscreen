@@ -2,7 +2,7 @@
 
 This guide walks you through installing HelixScreen on your 3D printer's touchscreen display.
 
-**Target Audience:** Klipper users who want to use pre-built packages. If you're a developer building from source, see [DEVELOPMENT.md](../DEVELOPMENT.md).
+**Target Audience:** Klipper users who want to use pre-built packages. If you're a developer building from source, see [DEVELOPMENT.md](../devel/DEVELOPMENT.md).
 
 ---
 

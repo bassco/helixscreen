@@ -132,6 +132,9 @@ Each printer entry contains all printer-specific settings (connection details, h
 
 ---
 
+> **Looking for a walkthrough of each setting?** See the detailed guides:
+> [Appearance](guide/settings/appearance.md) · [Printer](guide/settings/printer.md) · [Notifications](guide/settings/notifications.md) · [Motion](guide/settings/motion.md) · [System](guide/settings/system.md) · [LED Settings](guide/settings/led-settings.md) · [Help & About](guide/settings/help-about.md)
+
 ## General Settings
 
 ### `dark_mode`
@@ -199,8 +202,29 @@ Located in the `theme` section:
 ### `preset`
 **Type:** integer
 **Default:** `0`
-**Values:** `0` (Nord)
 **Description:** Theme accent color preset. **Requires restart to take effect.**
+
+| Value | Theme |
+|-------|-------|
+| 0 | Ayu |
+| 1 | Catppuccin |
+| 2 | ChatGPT |
+| 3 | Cupertino |
+| 4 | Dracula |
+| 5 | Everforest |
+| 6 | Gruvbox |
+| 7 | HelixScreen |
+| 8 | Kanagawa |
+| 9 | Material Design |
+| 10 | Midnight |
+| 11 | Nord (default) |
+| 12 | One Dark |
+| 13 | Rose Pine |
+| 14 | Solarized |
+| 15 | Tokyo Night |
+| 16 | Yami |
+
+> **Tip:** You can also browse and apply themes visually in **Settings > Appearance > Display Settings > Theme Colors**.
 
 ---
 
@@ -1345,16 +1369,29 @@ helix-screen --screenshot 5
 
 These can be set in the systemd service file or before running the binary:
 
+**Display & Input:**
+
 | Variable | Description |
 |----------|-------------|
 | `HELIX_DRM_DEVICE` | Override DRM device path (e.g., `/dev/dri/card1`) |
+| `HELIX_DISPLAY_BACKEND` | Override display backend (`drm`, `fbdev`, `sdl`) |
+| `HELIX_DISPLAY_ROTATION` | Override display rotation in degrees (`0`, `90`, `180`, `270`) |
+| `HELIX_COLOR_SWAP_RB` | Swap red/blue channels (`1` to enable) — fixes inverted colors on some displays |
 | `HELIX_TOUCH_DEVICE` | Override touch input device (e.g., `/dev/input/event1`) |
+| `HELIX_TOUCH_SWAP_AXES` | Swap X/Y touch axes (`1` to enable) |
+| `HELIX_TOUCH_CALIBRATE` | Force touch calibration on next launch (`1` to enable) |
 | `HELIX_MOUSE_DEVICE` | Override USB mouse device (e.g., `/dev/input/event4`) |
 | `HELIX_KEYBOARD_DEVICE` | Override USB keyboard device (e.g., `/dev/input/event5`) |
-| `HELIX_DISPLAY_BACKEND` | Override display backend (`drm`, `fbdev`, `sdl`) |
+
+**Theme & Rendering:**
+
+| Variable | Description |
+|----------|-------------|
+| `HELIX_THEME` | Override theme (e.g., `dracula`, `nord`, `gruvbox`) |
 | `HELIX_GCODE_MODE` | Override G-code render mode (`3D` or `2D`) |
 | `HELIX_GCODE_STREAMING` | Override G-code streaming mode |
 | `HELIX_FORCE_STREAMING` | Force streaming for all file operations (`1` to enable) |
+| `HELIX_HOT_RELOAD` | Enable XML hot reload for development (`1` to enable) |
 
 **Example in service file:**
 ```ini

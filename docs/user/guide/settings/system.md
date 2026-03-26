@@ -1,6 +1,26 @@
 # Settings: System
 
-The System section covers network configuration, hardware management, privacy settings, and maintenance actions.
+The System section covers security, network configuration, hardware management, privacy settings, and maintenance actions.
+
+---
+
+## Security
+
+Set up a screen lock with a PIN code to prevent unauthorized access to your printer controls. Tap to open the Security overlay.
+
+**When no PIN is set:**
+
+- **Set PIN** — Create a 4–6 digit numeric PIN. You'll be asked to enter it twice to confirm.
+
+**When a PIN is set:**
+
+- **Change PIN** — Update your PIN. You must enter the current PIN first, then enter and confirm the new one.
+- **Remove PIN** — Disable the PIN entirely. Requires entering the current PIN for confirmation.
+- **Auto-lock** — Toggle automatic screen locking. When enabled, the screen locks after the display sleep timeout. You'll need to enter your PIN to unlock.
+
+When the screen is locked, a full-screen lock overlay appears with a numeric keypad. Enter your PIN and tap the checkmark to unlock. If you enter the wrong PIN, an error message appears briefly. An **Emergency Stop** button remains accessible in the top-right corner of the lock screen while a print is running, so you can always halt the printer in an emergency without unlocking.
+
+The PIN is stored securely as a one-way hash in your settings — the actual digits are never saved in plain text. A factory reset clears all security settings.
 
 ---
 
