@@ -241,42 +241,30 @@ export function memoryQueries(days: number, filters?: FilterParams): string[] {
   const dataset = "helixscreen_telemetry";
   const f = buildFilterClause(filters);
   return [
-    // RSS over time — per-device daily average, then aggregate across devices
+    // RSS over time (avg/p95/max by date — one sample per device per day via _sample_interval weighting)
     `SELECT
-      date,
-      avg(dev_avg_rss) as avg_rss_kb,
-      quantileExact(0.95)(dev_avg_rss) as p95_rss_kb,
-      max(dev_avg_rss) as max_rss_kb
-    FROM (
-      SELECT toDate(timestamp) as date, blob1, avg(double2) as dev_avg_rss
-      FROM ${dataset}
-      WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot'${f}
-      GROUP BY date, blob1
-    )
+      toDate(timestamp) as date,
+      avg(double2) as avg_rss_kb,
+      quantileExactWeighted(0.95)(double2, _sample_interval) as p95_rss_kb,
+      max(double2) as max_rss_kb
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot'${f}
     GROUP BY date
     ORDER BY date`,
-    // RSS by platform — per-device average, then aggregate across devices
+    // RSS by platform (avg by blob3)
     `SELECT
-      platform,
-      avg(dev_avg_rss) as avg_rss_kb
-    FROM (
-      SELECT blob3 as platform, blob1, avg(double2) as dev_avg_rss
-      FROM ${dataset}
-      WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot' AND blob3 != ''${f}
-      GROUP BY platform, blob1
-    )
+      blob3 as platform,
+      avg(double2) as avg_rss_kb
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot' AND blob3 != ''${f}
     GROUP BY platform
     ORDER BY avg_rss_kb DESC`,
-    // VM peak trend — per-device daily max, then average across devices
+    // VM peak trend (avg by date)
     `SELECT
-      date,
-      avg(dev_max_vm) as avg_vm_peak_kb
-    FROM (
-      SELECT toDate(timestamp) as date, blob1, max(double4) as dev_max_vm
-      FROM ${dataset}
-      WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot'${f}
-      GROUP BY date, blob1
-    )
+      toDate(timestamp) as date,
+      avg(double4) as avg_vm_peak_kb
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'memory_snapshot'${f}
     GROUP BY date
     ORDER BY date`,
   ];
