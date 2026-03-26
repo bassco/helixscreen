@@ -352,7 +352,7 @@ void LabelPrinterSettingsOverlay::init_label_size_dropdown() {
     if (dropdown) {
         // PT printers auto-detect tape — disable size selection
         if (current_printer_auto_detects_size()) {
-            lv_dropdown_set_options(dropdown, lv_tr("Auto-detect"));
+            lv_dropdown_set_options(dropdown, "Auto-detect");
             lv_dropdown_set_selected(dropdown, 0);
             lv_obj_add_state(dropdown, LV_STATE_DISABLED);
             spdlog::trace("[{}] Label size dropdown disabled (auto-detect)", get_name());
@@ -1227,6 +1227,7 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                             options += "\n";
                                         options += bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
                                     }
+                                    lv_dropdown_close(dropdown);
                                     lv_dropdown_set_options(dropdown, options.c_str());
                                 }
                             }
@@ -1252,6 +1253,7 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                 if (row) {
                     lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
                     if (dropdown) {
+                        lv_dropdown_close(dropdown);
                         if (overlay->bt_devices_.empty()) {
                             lv_dropdown_set_options(dropdown, lv_tr("No Bluetooth printers found"));
                         } else {
@@ -1639,6 +1641,7 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                     if (row) {
                         lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
                         if (dropdown) {
+                            lv_dropdown_close(dropdown);
                             std::string options;
                             for (const auto& d : ov.bt_devices_) {
                                 if (!options.empty())
