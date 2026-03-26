@@ -154,11 +154,26 @@ setup_existing_install() {
 
 # --- cleanup_old_install ---
 
-@test "cleanup_old_install: removes .old directory" {
+@test "cleanup_old_install: removes .old directory when config restored" {
+    mkdir -p "$INSTALL_DIR/config"
+    echo '{"user": true}' > "$INSTALL_DIR/config/settings.json"
     mkdir -p "${INSTALL_DIR}.old/bin"
     echo "old" > "${INSTALL_DIR}.old/bin/helix-screen"
+    ORIGINAL_INSTALL_EXISTS=true
     cleanup_old_install
     [ ! -d "${INSTALL_DIR}.old" ]
+}
+
+@test "cleanup_old_install: keeps .old when config missing after upgrade" {
+    mkdir -p "$INSTALL_DIR/config"
+    # No settings.json — config restore failed
+    mkdir -p "${INSTALL_DIR}.old/config"
+    echo '{"user": true}' > "${INSTALL_DIR}.old/config/settings.json"
+    ORIGINAL_INSTALL_EXISTS=true
+    cleanup_old_install
+    # .old must be preserved as last-resort recovery
+    [ -d "${INSTALL_DIR}.old" ]
+    [ -f "${INSTALL_DIR}.old/config/settings.json" ]
 }
 
 @test "cleanup_old_install: no-op when .old does not exist" {

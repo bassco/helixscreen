@@ -2843,6 +2843,13 @@ extract_release() {
 
 # Remove backup of previous installation (call after service starts successfully)
 cleanup_old_install() {
+    # Keep .old as a last-resort recovery path if config wasn't restored.
+    # Without this guard, a failed Phase 6 + cleanup = permanent config loss.
+    if [ "$ORIGINAL_INSTALL_EXISTS" = true ] && [ ! -f "${INSTALL_DIR}/config/settings.json" ]; then
+        log_warn "Config not restored — keeping .old backup for recovery"
+        return 0
+    fi
+
     # Clean both the standard .old and any timestamped fallback backups
     for _backup in "${INSTALL_DIR}.old" "${INSTALL_DIR}.old."*; do
         if [ -d "$_backup" ]; then
