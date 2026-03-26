@@ -116,7 +116,7 @@ void DisplaySettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(display_sleep_subject_, sleep_sec, "settings_display_sleep", subjects_);
 
     // Brightness: Read from config (DisplayManager handles hardware)
-    int brightness = config->get<int>("/brightness", 50);
+    int brightness = config->get<int>("/brightness", 80);
     brightness = std::clamp(brightness, 10, 100);
     UI_MANAGED_SUBJECT_INT(brightness_subject_, brightness, "settings_brightness", subjects_);
     spdlog::debug("[DisplaySettingsManager] Brightness initialized to {}%", brightness);

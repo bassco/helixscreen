@@ -35,8 +35,8 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after i
         REQUIRE(DisplaySettingsManager::instance().get_display_sleep_sec() == 1800);
     }
 
-    SECTION("brightness defaults to 50") {
-        REQUIRE(DisplaySettingsManager::instance().get_brightness() == 50);
+    SECTION("brightness defaults to 80") {
+        REQUIRE(DisplaySettingsManager::instance().get_brightness() == 80);
     }
 
     SECTION("sleep_while_printing defaults to true") {

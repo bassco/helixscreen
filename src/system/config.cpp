@@ -418,6 +418,17 @@ static void migrate_v7_to_v8(json& config) {
     }
 }
 
+/// Re-apply brightness 50->80 bump for users whose config was written with the
+/// old default of 50 after v7 migration already ran (the default in
+/// get_default_config() was still 50, so new installs after v7 got 50 again).
+static void migrate_v8_to_v9(json& config) {
+    if (config.contains("brightness") && config["brightness"].is_number() &&
+        config["brightness"].get<int>() == 50) {
+        config["brightness"] = 80;
+        spdlog::info("[Config] Migration v9: updated default brightness from 50% to 80%");
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config) {
     int version = 0;
@@ -441,6 +452,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v6_to_v7(config);
     if (version < 8)
         migrate_v7_to_v8(config);
+    if (version < 9)
+        migrate_v8_to_v9(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
@@ -476,7 +489,7 @@ json get_default_config(const std::string& moonraker_host, bool include_user_pre
                    {"printers", {{"show_printer_switcher", false}, {printer_id, printer_data}}}};
 
     if (include_user_prefs) {
-        config["brightness"] = 50;
+        config["brightness"] = 80;
         config["sounds_enabled"] = false;
         config["completion_alert"] = true;
         config["wizard_completed"] = false;
