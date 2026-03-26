@@ -335,7 +335,13 @@ void ModalStack::animate_exit(lv_obj_t* backdrop, lv_obj_t* dialog) {
     if (!DisplaySettingsManager::instance().get_animations_enabled()) {
         lv_obj_set_style_transform_scale(dialog, MODAL_SCALE_END, LV_PART_MAIN);
         lv_obj_set_style_opa(dialog, LV_OPA_COVER, LV_PART_MAIN);
-        spdlog::debug("[ModalStack] Animations disabled - deferring modal deletion");
+        spdlog::debug("[ModalStack] Animations disabled - removing from stack and deferring deletion");
+        // Remove from stack BEFORE async deletion — exit_animation_done() handles
+        // this for animated exits, but the no-animation path was missing it.
+        // Without removal, stale exiting entries accumulate and if LVGL reuses
+        // the address for a new backdrop, is_exiting() matches the stale entry,
+        // causing hide() to bail out and the modal to become stuck.
+        remove(backdrop);
         helix::ui::defocus_tree(backdrop);
         lv_obj_add_flag(backdrop, LV_OBJ_FLAG_HIDDEN);
         lv_obj_delete_async(backdrop);
