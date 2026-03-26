@@ -398,12 +398,14 @@ void MachineLimitsOverlay::apply_limits() {
         [this]() {
             // Defer to main thread for LVGL calls
             helix::ui::queue_update([this]() {
+                if (cleanup_called()) return;
                 spdlog::debug("[{}] Machine limits applied successfully", get_name());
             });
         },
         [this](const MoonrakerError& err) {
             // Capture error by value and defer to main thread for LVGL calls
             helix::ui::queue_update([this, err]() {
+                if (cleanup_called()) return;
                 spdlog::error("[{}] Failed to apply machine limits: {}", get_name(), err.message);
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to apply limits"),
                                               2000);

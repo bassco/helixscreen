@@ -855,6 +855,7 @@ void ProbeOverlay::handle_config_save() {
                 [this]() {
                     spdlog::info("[Probe] Config edit saved successfully");
                     helix::ui::queue_update([this]() {
+                        if (cleanup_called()) return;
                         // Reload config values to reflect the change
                         load_config_values();
                     });

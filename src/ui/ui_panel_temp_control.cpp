@@ -1186,7 +1186,10 @@ void TempControlPanel::select_extruder(const std::string& name) {
 }
 
 void TempControlPanel::rebuild_extruder_segments() {
-    helix::ui::queue_update([this]() { rebuild_extruder_segments_impl(); });
+    helix::ui::queue_update([this]() {
+        if (!subjects_initialized_) return;
+        rebuild_extruder_segments_impl();
+    });
 }
 
 void TempControlPanel::rebuild_extruder_segments_impl() {
