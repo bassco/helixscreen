@@ -4,6 +4,8 @@
 #include "label_printer_utils.h"
 
 #include "bluetooth_loader.h"
+#include "brother_pt_bt_printer.h"
+#include "brother_pt_protocol.h"
 #include "brother_ql_bt_printer.h"
 #include "brother_ql_printer.h"
 #include "brother_ql_protocol.h"
@@ -96,7 +98,9 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         sizes = PhomemoPrinter::supported_sizes_static();
     } else if (is_bt) {
         const auto bt_name = settings.get_bt_name();
-        if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
+        if (helix::bluetooth::is_brother_pt_printer(bt_name.c_str())) {
+            sizes = helix::label::BrotherPTBluetoothPrinter::supported_sizes_static();
+        } else if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
             sizes = BrotherQLPrinter::supported_sizes_static();
         } else if (helix::bluetooth::is_niimbot_printer(bt_name.c_str())) {
             sizes = helix::label::niimbot_sizes_for_model(bt_name);
@@ -176,7 +180,12 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
         const auto bt_address = settings.get_bt_address();
         const auto bt_name = settings.get_bt_name();
 
-        if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
+        if (helix::bluetooth::is_brother_pt_printer(bt_name.c_str())) {
+            // Brother PT: deferred render — tape width detected via status query
+            helix::label::BrotherPTBluetoothPrinter printer;
+            printer.set_device(bt_address);
+            printer.print_spool(spool, preset, callback);
+        } else if (helix::bluetooth::is_brother_printer(bt_name.c_str())) {
             // Brother QL BT: RFCOMM only supports one connection at a time,
             // so media detection requires a single-connection flow. For now,
             // use the selected label size from settings.
