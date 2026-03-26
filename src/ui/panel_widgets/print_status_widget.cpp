@@ -992,13 +992,12 @@ static PrintStatusWidget* recover_widget_from_event(lv_event_t* e) {
     while (obj) {
         auto* self = static_cast<PrintStatusWidget*>(lv_obj_get_user_data(obj));
         if (self) {
-            // Validate widget is still alive — prevents use-after-free if
-            // event fires on stale LVGL objects after widget destruction
-            if (PrintStatusWidget::live_instances().count(self) == 0) {
-                spdlog::warn("[PrintStatusWidget] recover_widget_from_event: stale widget pointer");
-                return nullptr;
+            // Validate widget is still alive — non-matching pointers may be
+            // other user_data types (e.g., UiButtonData on ui_button children),
+            // so keep walking up rather than treating as stale
+            if (PrintStatusWidget::live_instances().count(self) != 0) {
+                return self;
             }
-            return self;
         }
         obj = lv_obj_get_parent(obj);
     }
