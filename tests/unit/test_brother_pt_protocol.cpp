@@ -218,11 +218,13 @@ TEST_CASE("Brother PT raster - compression enabled", "[label][brother-pt]") {
 TEST_CASE("Brother PT raster - ends with print command", "[label][brother-pt]") {
     LabelBitmap bitmap(70, 100);
     auto data = brother_pt_build_raster(bitmap, 12);
-    REQUIRE(data.back() == 0x1A);
+    REQUIRE(data.back() == 0x0C);
 }
 
 TEST_CASE("Brother PT raster - blank rows use 5A", "[label][brother-pt]") {
-    LabelBitmap bitmap(70, 10);  // After 90° CW rotation: 10 wide, 70 tall → 70 raster rows
+    // No rotation — bitmap rows map directly to raster lines.
+    // 70 wide (tape printable width), 10 tall → 10 raster rows, all blank.
+    LabelBitmap bitmap(70, 10);
     auto data = brother_pt_build_raster(bitmap, 12);
 
     // Find compression command (4D 02) to skip past header
@@ -240,7 +242,7 @@ TEST_CASE("Brother PT raster - blank rows use 5A", "[label][brother-pt]") {
         if (data[i] == 0x5A)
             blank_count++;
     }
-    REQUIRE(blank_count == 70);
+    REQUIRE(blank_count == 10);
 }
 
 TEST_CASE("Brother PT raster - deterministic output", "[label][brother-pt]") {
