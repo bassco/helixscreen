@@ -105,7 +105,122 @@ std::vector<uint8_t> brother_pt_packbits_compress(const uint8_t* data, size_t le
     return out;
 }
 
-// Stub for function implemented in a later task
-std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap&, int) { return {}; }
+std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
+                                              int tape_width_mm) {
+    const auto* tape = brother_pt_get_tape_info(tape_width_mm);
+    if (!tape)
+        return {};
+
+    // Image preparation: rotate 90° CW
+    // After rotation: original width becomes height, original height becomes width
+    auto rotated = bitmap.rotate_90_cw();
+    int rot_w = rotated.width();
+    int rot_h = rotated.height();
+
+    std::vector<uint8_t> cmd;
+    cmd.reserve(256 + static_cast<size_t>(rot_h) * (3 + BROTHER_PT_RASTER_ROW_BYTES) + 1);
+
+    // 1. Invalidate — 100 bytes of 0x00
+    cmd.insert(cmd.end(), 100, 0x00);
+
+    // 2. Initialize — ESC @
+    cmd.push_back(0x1B);
+    cmd.push_back(0x40);
+
+    // 3. Enter raster mode — ESC i a 01
+    cmd.push_back(0x1B);
+    cmd.push_back(0x69);
+    cmd.push_back(0x61);
+    cmd.push_back(0x01);
+
+    // 4. Print info — ESC i z
+    cmd.push_back(0x1B);
+    cmd.push_back(0x69);
+    cmd.push_back(0x7A);
+    cmd.push_back(0x86);  // valid flags: media type + width + quality
+    cmd.push_back(0x01);  // media type: laminated TZe
+    cmd.push_back(static_cast<uint8_t>(tape_width_mm));
+    cmd.push_back(0x00);  // length (continuous)
+    // Raster line count (LE 32-bit)
+    cmd.push_back(static_cast<uint8_t>(rot_h & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((rot_h >> 8) & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((rot_h >> 16) & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((rot_h >> 24) & 0xFF));
+    cmd.push_back(0x00);  // page number
+    cmd.push_back(0x00);  // reserved
+
+    // 5. Auto-cut — ESC i M
+    cmd.push_back(0x1B);
+    cmd.push_back(0x69);
+    cmd.push_back(0x4D);
+    cmd.push_back(0x40);
+
+    // 6. Advanced mode — ESC i K (no chain printing)
+    cmd.push_back(0x1B);
+    cmd.push_back(0x69);
+    cmd.push_back(0x4B);
+    cmd.push_back(0x08);
+
+    // 7. Margin — ESC i d (14 dots = 2mm at 180dpi)
+    cmd.push_back(0x1B);
+    cmd.push_back(0x69);
+    cmd.push_back(0x64);
+    cmd.push_back(0x0E);
+    cmd.push_back(0x00);
+
+    // 8. Compression — M 02 (TIFF PackBits)
+    cmd.push_back(0x4D);
+    cmd.push_back(0x02);
+
+    // 9. Raster rows — pin-precise margin centering
+    std::vector<uint8_t> padded_row(BROTHER_PT_RASTER_ROW_BYTES, 0x00);
+    int margin_pins = tape->left_margin_pins;
+
+    for (int y = 0; y < rot_h; y++) {
+        const uint8_t* row = rotated.row_data(y);
+        int row_bytes = rotated.row_byte_width();
+
+        std::fill(padded_row.begin(), padded_row.end(), 0x00);
+
+        // Horizontal flip the printable portion with pin-precise margin offset
+        for (int x = 0; x < tape->printable_pins && x < rot_w; x++) {
+            int src_byte = x / 8;
+            int src_bit = 7 - (x % 8);
+            if (src_byte < row_bytes && (row[src_byte] & (1 << src_bit))) {
+                int dst_x = tape->printable_pins - 1 - x;
+                int dst_pin = margin_pins + dst_x;
+                int dst_byte = dst_pin / 8;
+                int dst_bit = 7 - (dst_pin % 8);
+                if (dst_byte < BROTHER_PT_RASTER_ROW_BYTES)
+                    padded_row[dst_byte] |= (1 << dst_bit);
+            }
+        }
+
+        // Check if all zeros
+        bool all_white = true;
+        for (int b = 0; b < BROTHER_PT_RASTER_ROW_BYTES; b++) {
+            if (padded_row[b] != 0x00) {
+                all_white = false;
+                break;
+            }
+        }
+
+        if (all_white) {
+            cmd.push_back(0x5A);
+        } else {
+            auto compressed = brother_pt_packbits_compress(padded_row.data(),
+                                                            BROTHER_PT_RASTER_ROW_BYTES);
+            cmd.push_back(0x47);
+            cmd.push_back(static_cast<uint8_t>(compressed.size() & 0xFF));
+            cmd.push_back(static_cast<uint8_t>((compressed.size() >> 8) & 0xFF));
+            cmd.insert(cmd.end(), compressed.begin(), compressed.end());
+        }
+    }
+
+    // 10. Print + feed
+    cmd.push_back(0x1A);
+
+    return cmd;
+}
 
 }  // namespace helix::label

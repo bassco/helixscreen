@@ -4,6 +4,7 @@
 #include "brother_pt_protocol.h"
 
 using namespace helix::label;
+using helix::LabelBitmap;
 
 TEST_CASE("Brother PT tape info - valid widths", "[label][brother-pt]") {
     auto* info = brother_pt_get_tape_info(4);
@@ -166,4 +167,92 @@ TEST_CASE("Brother PT PackBits - mixed run", "[label][brother-pt]") {
     auto compressed = brother_pt_packbits_compress(row.data(), row.size());
     REQUIRE(compressed.size() > 2);
     REQUIRE(compressed.size() < 16);
+}
+
+// --- Task 4: Raster builder ---
+
+TEST_CASE("Brother PT raster - invalidation header", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 12);
+    REQUIRE(data.size() > 100);
+    for (int i = 0; i < 100; i++) {
+        REQUIRE(data[i] == 0x00);
+    }
+}
+
+TEST_CASE("Brother PT raster - init and raster mode", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 12);
+    REQUIRE(data[100] == 0x1B);
+    REQUIRE(data[101] == 0x40);
+    REQUIRE(data[102] == 0x1B);
+    REQUIRE(data[103] == 0x69);
+    REQUIRE(data[104] == 0x61);
+    REQUIRE(data[105] == 0x01);
+}
+
+TEST_CASE("Brother PT raster - media info for 12mm", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 12);
+    REQUIRE(data[106] == 0x1B);
+    REQUIRE(data[107] == 0x69);
+    REQUIRE(data[108] == 0x7A);
+    REQUIRE(data[110] == 0x01);  // laminated TZe
+    REQUIRE(data[111] == 12);    // width mm
+    REQUIRE(data[112] == 0);     // continuous
+}
+
+TEST_CASE("Brother PT raster - compression enabled", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 12);
+    bool found = false;
+    for (size_t i = 0; i + 1 < data.size(); i++) {
+        if (data[i] == 0x4D && data[i + 1] == 0x02) {
+            found = true;
+            break;
+        }
+    }
+    REQUIRE(found);
+}
+
+TEST_CASE("Brother PT raster - ends with print command", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 12);
+    REQUIRE(data.back() == 0x1A);
+}
+
+TEST_CASE("Brother PT raster - blank rows use 5A", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 10);  // After 90° CW rotation: 10 wide, 70 tall → 70 raster rows
+    auto data = brother_pt_build_raster(bitmap, 12);
+
+    // Find compression command (4D 02) to skip past header
+    size_t raster_start = 0;
+    for (size_t i = 0; i + 1 < data.size(); i++) {
+        if (data[i] == 0x4D && data[i + 1] == 0x02) {
+            raster_start = i + 2;
+            break;
+        }
+    }
+    REQUIRE(raster_start > 0);
+
+    int blank_count = 0;
+    for (size_t i = raster_start; i < data.size() - 1; i++) {
+        if (data[i] == 0x5A)
+            blank_count++;
+    }
+    REQUIRE(blank_count == 70);
+}
+
+TEST_CASE("Brother PT raster - deterministic output", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    bitmap.set_pixel(10, 5, true);
+    auto data1 = brother_pt_build_raster(bitmap, 12);
+    auto data2 = brother_pt_build_raster(bitmap, 12);
+    REQUIRE(data1 == data2);
+}
+
+TEST_CASE("Brother PT raster - invalid tape width returns empty", "[label][brother-pt]") {
+    LabelBitmap bitmap(70, 100);
+    auto data = brother_pt_build_raster(bitmap, 15);
+    REQUIRE(data.empty());
 }
