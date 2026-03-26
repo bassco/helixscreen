@@ -166,12 +166,18 @@ void EmergencyStopOverlay::create() {
                     [](void*) {
                         auto& inst = EmergencyStopOverlay::instance();
                         // Guard against async callback firing after display destruction
-                        if (inst.recovery_dialog_ && lv_obj_is_valid(inst.recovery_dialog_)) {
-                            spdlog::info(
-                                "[KlipperRecovery] Klipper is READY, dismissing recovery dialog");
-                            inst.dismiss_recovery_dialog();
-                            ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                                          lv_tr("Printer ready"), 3000);
+                        if (inst.recovery_dialog_) {
+                            if (!ModalStack::instance().backdrop_for(inst.recovery_dialog_)) {
+                                // Dialog was dismissed externally — clear stale pointer
+                                inst.recovery_dialog_ = nullptr;
+                            } else {
+                                spdlog::info(
+                                    "[KlipperRecovery] Klipper is READY, dismissing recovery "
+                                    "dialog");
+                                inst.dismiss_recovery_dialog();
+                                ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                                              lv_tr("Printer ready"), 3000);
+                            }
                         }
                     },
                     nullptr);
@@ -338,8 +344,13 @@ void EmergencyStopOverlay::show_recovery_for(RecoveryReason reason) {
     // If dialog is already showing, update reason if it's worse (SHUTDOWN -> DISCONNECTED means
     // can't restart)
     if (recovery_dialog_) {
-        if (reason == RecoveryReason::DISCONNECTED &&
-            recovery_reason_ == RecoveryReason::SHUTDOWN) {
+        // Check if dialog was dismissed externally (backdrop click, etc.)
+        if (!ModalStack::instance().backdrop_for(recovery_dialog_)) {
+            recovery_dialog_ = nullptr;
+            recovery_reason_ = RecoveryReason::NONE;
+            // Fall through to show new dialog
+        } else if (reason == RecoveryReason::DISCONNECTED &&
+                   recovery_reason_ == RecoveryReason::SHUTDOWN) {
             spdlog::info("[KlipperRecovery] Connection dropped while SHUTDOWN dialog showing, "
                          "updating buttons");
             recovery_reason_ = RecoveryReason::DISCONNECTED;
@@ -361,10 +372,10 @@ void EmergencyStopOverlay::show_recovery_for(RecoveryReason reason) {
             auto& inst = EmergencyStopOverlay::instance();
             // Guard: dialog may have been shown by another async call in the meantime
             if (inst.recovery_dialog_) {
-                if (lv_obj_is_valid(inst.recovery_dialog_)) {
+                if (ModalStack::instance().backdrop_for(inst.recovery_dialog_)) {
                     return;
                 }
-                // Dialog was freed by modal exit animation — clear stale pointer
+                // Dialog was dismissed externally — clear stale pointer
                 inst.recovery_dialog_ = nullptr;
             }
             spdlog::info("[KlipperRecovery] Showing recovery dialog (reason: {})",

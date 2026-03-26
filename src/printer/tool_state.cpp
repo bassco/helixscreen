@@ -593,14 +593,19 @@ void ToolState::load_spool_assignments(MoonrakerAPI* api) {
                 std::move(data_copy), [this](nlohmann::json* d) {
                     apply_spool_assignments(*d);
                     save_spool_json();
+                    // Re-sync AmsState so slot UI subjects reflect loaded assignments
+                    AmsState::instance().sync_from_backend();
                     spdlog::info("[ToolState] Loaded spool assignments from Moonraker DB");
                 });
         },
         [this](const MoonrakerError& err) {
             spdlog::debug("[ToolState] Moonraker DB load failed ({}), trying local JSON",
                           err.user_message());
-            helix::ui::queue_update<int>(std::make_unique<int>(0),
-                                         [this](int*) { load_spool_json(); });
+            helix::ui::queue_update<int>(std::make_unique<int>(0), [this](int*) {
+                load_spool_json();
+                // Re-sync AmsState so slot UI subjects reflect loaded assignments
+                AmsState::instance().sync_from_backend();
+            });
         });
 }
 

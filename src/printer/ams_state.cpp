@@ -1018,9 +1018,30 @@ void AmsState::sync_from_backend() {
         }
     }
 
-    // For backends without firmware persistence, save after sync
+    // Reverse sync: populate backend slots from ToolState for backends that
+    // don't persist spool info in firmware (e.g., toolchanger). Without this,
+    // spool assignments loaded from Moonraker DB / local JSON on startup
+    // don't propagate back to slot UI subjects.
     if (!backend->has_firmware_spool_persistence()) {
-        ToolState::instance().save_spool_assignments_if_dirty(get_moonraker_api());
+        auto& tool_state = ToolState::instance();
+        const auto& tools = tool_state.tools();
+        for (int i = 0; i < std::min(info.total_slots, MAX_SLOTS); ++i) {
+            const SlotInfo* slot = info.get_slot_global(i);
+            if (slot && slot->mapped_tool >= 0 && slot->spoolman_id == 0) {
+                int ti = slot->mapped_tool;
+                if (ti >= 0 && ti < static_cast<int>(tools.size()) &&
+                    tools[ti].spoolman_id > 0) {
+                    SlotInfo updated = *slot;
+                    updated.spoolman_id = tools[ti].spoolman_id;
+                    updated.spool_name = tools[ti].spool_name;
+                    updated.remaining_weight_g = tools[ti].remaining_weight_g;
+                    updated.total_weight_g = tools[ti].total_weight_g;
+                    backend->set_slot_info(i, updated, false);
+                }
+            }
+        }
+
+        tool_state.save_spool_assignments_if_dirty(get_moonraker_api());
     }
 
     // Update per-unit environment subjects (CFS temperature/humidity)
