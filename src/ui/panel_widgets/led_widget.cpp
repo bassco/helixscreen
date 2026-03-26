@@ -51,13 +51,15 @@ void LedWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
         return;
     }
 
+    // Set user_data on the root lv_obj, NOT on the ui_button child.
+    // ui_button allocates its own UiButtonData in user_data — overwriting it
+    // leaks memory and breaks button style/contrast auto-updates.
     lv_obj_set_user_data(widget_obj_, this);
 
-    // Set user_data on the light_button (where event_cb is registered in XML)
-    // so the callback can recover this widget instance via lv_obj_get_user_data()
-    auto* light_button = lv_obj_find_by_name(widget_obj_, "light_button");
-    if (light_button) {
-        lv_obj_set_user_data(light_button, this);
+    // Register click handler via per-callback user_data
+    lv_obj_t* light_btn = lv_obj_find_by_name(widget_obj_, "light_button");
+    if (light_btn) {
+        lv_obj_add_event_cb(light_btn, light_toggle_cb, LV_EVENT_CLICKED, this);
     }
 
     // Find light icon for dynamic brightness/color updates
@@ -92,10 +94,6 @@ void LedWidget::detach() {
 
     // Nullify widget pointers BEFORE resetting observers
     if (widget_obj_) {
-        auto* light_button = lv_obj_find_by_name(widget_obj_, "light_button");
-        if (light_button) {
-            lv_obj_set_user_data(light_button, nullptr);
-        }
         lv_obj_set_user_data(widget_obj_, nullptr);
     }
     widget_obj_ = nullptr;
@@ -276,15 +274,10 @@ void LedWidget::on_led_state_changed(int state) {
 
 void LedWidget::light_toggle_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LedWidget] light_toggle_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    if (!lv_obj_is_valid(target))
-        return;
-    auto* self = static_cast<LedWidget*>(lv_obj_get_user_data(target));
+    auto* self = static_cast<LedWidget*>(lv_event_get_user_data(e));
     if (self) {
         self->record_interaction();
         self->handle_light_toggle();
-    } else {
-        spdlog::warn("[LedWidget] light_toggle_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

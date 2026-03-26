@@ -82,14 +82,15 @@ void NetworkWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
 
-    // Store this pointer for event callback recovery
+    // Set user_data on the root lv_obj, NOT on the ui_button child.
+    // ui_button allocates its own UiButtonData in user_data — overwriting it
+    // leaks memory and breaks button style/contrast auto-updates.
     lv_obj_set_user_data(widget_obj_, this);
 
-    // Set user_data on the network_btn child (where event_cb is registered in XML)
-    // so the callback can recover this widget instance via lv_obj_get_user_data()
-    auto* network_btn = lv_obj_find_by_name(widget_obj_, "network_btn");
-    if (network_btn) {
-        lv_obj_set_user_data(network_btn, this);
+    // Register click handler via per-callback user_data
+    lv_obj_t* btn = lv_obj_find_by_name(widget_obj_, "network_btn");
+    if (btn) {
+        lv_obj_add_event_cb(btn, network_clicked_cb, LV_EVENT_CLICKED, this);
     }
 
     // Use module-owned subjects (initialized via network_widget_init_subjects)
@@ -127,10 +128,6 @@ void NetworkWidget::detach() {
     network_label_subject_ = nullptr;
 
     if (widget_obj_) {
-        auto* network_btn = lv_obj_find_by_name(widget_obj_, "network_btn");
-        if (network_btn) {
-            lv_obj_set_user_data(network_btn, nullptr);
-        }
         lv_obj_set_user_data(widget_obj_, nullptr);
         widget_obj_ = nullptr;
     }
@@ -294,14 +291,10 @@ void NetworkWidget::signal_poll_timer_cb(lv_timer_t* timer) {
 
 void NetworkWidget::network_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[NetworkWidget] network_clicked_cb");
-
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<NetworkWidget*>(lv_obj_get_user_data(target));
+    auto* self = static_cast<NetworkWidget*>(lv_event_get_user_data(e));
     if (self) {
+        self->record_interaction();
         self->handle_network_clicked();
-    } else {
-        spdlog::warn("[NetworkWidget] network_clicked_cb: could not recover widget instance");
     }
-
     LVGL_SAFE_EVENT_CB_END();
 }

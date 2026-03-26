@@ -47,11 +47,14 @@ void TemperatureWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     parent_screen_ = parent_screen;
     *alive_ = true;
 
-    // Store this pointer on the button that has the event_cb in XML,
-    // not on the outer container — event current_target is the button.
+    // Set user_data on the root lv_obj, NOT on the ui_button child.
+    // ui_button allocates its own UiButtonData in user_data — overwriting it
+    // leaks memory and breaks button style/contrast auto-updates.
+    lv_obj_set_user_data(widget_obj_, this);
+
     temp_btn_ = lv_obj_find_by_name(widget_obj_, "temp_btn");
     if (temp_btn_) {
-        lv_obj_set_user_data(temp_btn_, this);
+        lv_obj_add_event_cb(temp_btn_, temp_clicked_cb, LV_EVENT_CLICKED, this);
     }
 
     // Set up temperature observers with alive guard
@@ -94,13 +97,11 @@ void TemperatureWidget::detach() {
     extruder_temp_observer_.reset();
     extruder_target_observer_.reset();
 
-    if (temp_btn_) {
-        lv_obj_set_user_data(temp_btn_, nullptr);
-        temp_btn_ = nullptr;
-    }
     if (widget_obj_) {
-        widget_obj_ = nullptr;
+        lv_obj_set_user_data(widget_obj_, nullptr);
     }
+    temp_btn_ = nullptr;
+    widget_obj_ = nullptr;
     parent_screen_ = nullptr;
 
     spdlog::debug("[TemperatureWidget] Detached");
@@ -129,13 +130,10 @@ void TemperatureWidget::handle_temp_clicked() {
 
 void TemperatureWidget::temp_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[TemperatureWidget] temp_clicked_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<TemperatureWidget*>(lv_obj_get_user_data(target));
+    auto* self = static_cast<TemperatureWidget*>(lv_event_get_user_data(e));
     if (self) {
         self->record_interaction();
         self->handle_temp_clicked();
-    } else {
-        spdlog::warn("[TemperatureWidget] temp_clicked_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

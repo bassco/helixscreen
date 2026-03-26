@@ -35,11 +35,14 @@ void ShutdownWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     parent_screen_ = parent_screen;
     *alive_ = true;
 
-    // Store this pointer on the button that has the event_cb in XML,
-    // not on the outer container — event current_target is the button.
+    // Set user_data on the root lv_obj, NOT on the ui_button child.
+    // ui_button allocates its own UiButtonData in user_data — overwriting it
+    // leaks memory and breaks button style/contrast auto-updates.
+    lv_obj_set_user_data(widget_obj_, this);
+
     shutdown_btn_ = lv_obj_find_by_name(widget_obj_, "shutdown_button");
     if (shutdown_btn_) {
-        lv_obj_set_user_data(shutdown_btn_, this);
+        lv_obj_add_event_cb(shutdown_btn_, shutdown_clicked_cb, LV_EVENT_CLICKED, this);
     }
 }
 
@@ -50,10 +53,10 @@ void ShutdownWidget::detach() {
         shutdown_modal_.hide();
     }
 
-    if (shutdown_btn_) {
-        lv_obj_set_user_data(shutdown_btn_, nullptr);
-        shutdown_btn_ = nullptr;
+    if (widget_obj_) {
+        lv_obj_set_user_data(widget_obj_, nullptr);
     }
+    shutdown_btn_ = nullptr;
     widget_obj_ = nullptr;
     parent_screen_ = nullptr;
 }
@@ -99,13 +102,10 @@ void ShutdownWidget::execute_reboot() {
 
 void ShutdownWidget::shutdown_clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[ShutdownWidget] shutdown_clicked_cb");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<ShutdownWidget*>(lv_obj_get_user_data(target));
+    auto* self = static_cast<ShutdownWidget*>(lv_event_get_user_data(e));
     if (self) {
         self->record_interaction();
         self->handle_click();
-    } else {
-        spdlog::warn("[ShutdownWidget] shutdown_clicked_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

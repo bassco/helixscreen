@@ -40,20 +40,20 @@ void LedControlsWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
 
+    // Set user_data on the root lv_obj, NOT on the ui_button child.
+    // ui_button allocates its own UiButtonData in user_data — overwriting it
+    // leaks memory and breaks button style/contrast auto-updates.
     lv_obj_set_user_data(widget_obj_, this);
 
-    auto* button = lv_obj_find_by_name(widget_obj_, "led_controls_button");
-    if (button) {
-        lv_obj_set_user_data(button, this);
+    // Register click handler via per-callback user_data
+    lv_obj_t* btn = lv_obj_find_by_name(widget_obj_, "led_controls_button");
+    if (btn) {
+        lv_obj_add_event_cb(btn, on_led_controls_clicked, LV_EVENT_CLICKED, this);
     }
 }
 
 void LedControlsWidget::detach() {
     if (widget_obj_) {
-        auto* button = lv_obj_find_by_name(widget_obj_, "led_controls_button");
-        if (button) {
-            lv_obj_set_user_data(button, nullptr);
-        }
         lv_obj_set_user_data(widget_obj_, nullptr);
     }
     widget_obj_ = nullptr;
@@ -63,12 +63,10 @@ void LedControlsWidget::detach() {
 
 void LedControlsWidget::on_led_controls_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LedControlsWidget] on_led_controls_clicked");
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<LedControlsWidget*>(lv_obj_get_user_data(target));
+    auto* self = static_cast<LedControlsWidget*>(lv_event_get_user_data(e));
     if (self) {
+        self->record_interaction();
         self->handle_clicked();
-    } else {
-        spdlog::warn("[LedControlsWidget] on_led_controls_clicked: no widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

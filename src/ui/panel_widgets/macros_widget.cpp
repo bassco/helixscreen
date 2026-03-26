@@ -36,6 +36,9 @@ void MacrosWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     lv_obj_set_user_data(widget_obj_, this);
 
     btn_ = lv_obj_find_by_name(widget_obj_, "macros_button");
+    if (btn_) {
+        lv_obj_add_event_cb(btn_, clicked_cb, LV_EVENT_CLICKED, this);
+    }
 }
 
 void MacrosWidget::detach() {
@@ -54,21 +57,10 @@ void MacrosWidget::handle_click() {
 
 void MacrosWidget::clicked_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[MacrosWidget] clicked_cb");
-    // Walk up from the event target to find the root widget_obj_ that holds
-    // our user_data. The event_cb is on a ui_button child, but user_data is
-    // on the parent lv_obj to avoid colliding with ui_button's UiButtonData.
-    auto* obj = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    MacrosWidget* self = nullptr;
-    while (obj) {
-        self = static_cast<MacrosWidget*>(lv_obj_get_user_data(obj));
-        if (self) break;
-        obj = lv_obj_get_parent(obj);
-    }
+    auto* self = static_cast<MacrosWidget*>(lv_event_get_user_data(e));
     if (self) {
         self->record_interaction();
         self->handle_click();
-    } else {
-        spdlog::warn("[MacrosWidget] clicked_cb: could not recover widget instance");
     }
     LVGL_SAFE_EVENT_CB_END();
 }
