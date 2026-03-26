@@ -313,7 +313,7 @@ fix(drm): add legacy drmModeSetCrtc fallback when atomic commit fails (prestonbr
 PI_HOST=192.168.1.113 make pi-test
 ```
 
-On the Pi, ensure `helixconfig.json` has `"display": { "rotate": 180 }`.
+On the Pi, ensure `settings.json` has `"display": { "rotate": 180 }`.
 
 **Step 2: Verify fbdev auto-fallback**
 

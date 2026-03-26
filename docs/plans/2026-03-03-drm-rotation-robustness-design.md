@@ -6,7 +6,7 @@
 
 ## Problem
 
-Users with physically inverted displays (e.g., BTT TFT43 mounted upside-down) experience screen flicker when using `"rotate": 180` in helixconfig.json on DRM/KMS backends. Two root causes:
+Users with physically inverted displays (e.g., BTT TFT43 mounted upside-down) experience screen flicker when using `"rotate": 180` in settings.json on DRM/KMS backends. Two root causes:
 
 1. **Software rotation race:** When the DRM plane lacks hardware rotation (mask `0x0`), HelixScreen does CPU-based pixel reversal in `drm_flush()`. While the current shadow-buffer approach is correct (rotates the render buffer, not the displayed buffer), it adds CPU overhead and complexity to a hot path.
 

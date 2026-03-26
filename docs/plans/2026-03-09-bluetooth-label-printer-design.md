@@ -206,7 +206,7 @@ Extracts from `PhomemoPrinter::print()`:
 - On confirm: pair, show result toast
 - On cancel: deselect device in dropdown
 
-### Config Persistence (`helixconfig.json`)
+### Config Persistence (`settings.json`)
 
 ```json
 "label_printer": {

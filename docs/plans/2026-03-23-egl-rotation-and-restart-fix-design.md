@@ -9,7 +9,7 @@
 
 ### Symptom
 
-Users with GPU-accelerated (EGL/OpenGL ES) DRM displays cannot use the `"rotate"` config option. Setting `"rotate": 270` in `helixconfig.json` causes display init to fail, the process exits, watchdog restarts without rotation, and the config key may be lost.
+Users with GPU-accelerated (EGL/OpenGL ES) DRM displays cannot use the `"rotate"` config option. Setting `"rotate": 270` in `settings.json` causes display init to fail, the process exits, watchdog restarts without rotation, and the config key may be lost.
 
 ### Root Cause
 
@@ -52,7 +52,7 @@ Touch coordinate rotation is already handled by `set_display_rotation()` which r
 ### Testing
 
 - **Unit test:** The EGL path is a compile-time `#ifdef`, so the existing test pattern (testing via `choose_drm_rotation_strategy()`) applies to the dumb-buffer path only. For EGL, add a compile-time static assert or a test that checks the `#ifdef` logic directly. The real verification is the hardware test.
-- **Hardware test (Pi 5, 192.168.1.113):** Set `"rotate": 270` in helixconfig.json, verify display rotates and touch maps correctly
+- **Hardware test (Pi 5, 192.168.1.113):** Set `"rotate": 270` in settings.json, verify display rotates and touch maps correctly
 
 ---
 

@@ -103,9 +103,9 @@ Users can set the part cooling fan to 0% at any time via the controls panel slid
 
 ### M2. Safety limits in config lack validation
 
-`helixconfig.json` has user-editable safety limits (max temp, max distance, max feedrate). Nothing prevents setting nonsensical values like `max_temperature_celsius: 99999` or `max_temp < min_temp`.
+`settings.json` has user-editable safety limits (max temp, max distance, max feedrate). Nothing prevents setting nonsensical values like `max_temperature_celsius: 99999` or `max_temp < min_temp`.
 
-- **Location:** `config/helixconfig.json.template:67-78`, `src/system/config.cpp:288`
+- **Location:** `config/settings.json.template:67-78`, `src/system/config.cpp:288`
 - **Fix:** Validate on load:
   - `max > min` for all limit pairs
   - Temperature: max ≤ 500°C (no consumer printer needs more)
@@ -155,7 +155,7 @@ If another client (Mainsail, Fluidd, OctoPrint) changes printer state while Heli
 
 ### L1. Config file permissions
 
-`helixconfig.json` is saved with default umask (typically 0644 = world-readable). Contains Moonraker IP address and potentially sensitive configuration.
+`settings.json` is saved with default umask (typically 0644 = world-readable). Contains Moonraker IP address and potentially sensitive configuration.
 
 - **Location:** `src/system/config.cpp:461-489`
 - **Fix:** After save, `chmod(path, 0600)` to restrict to owner only.
@@ -165,7 +165,7 @@ If another client (Mainsail, Fluidd, OctoPrint) changes printer state while Heli
 
 Config has a `moonraker_api_key` field but no code sends it. If someone enables Moonraker authentication, HelixScreen fails to connect with no helpful error.
 
-- **Location:** `config/helixconfig.json.template`
+- **Location:** `config/settings.json.template`
 - **Fix:** Either implement API key support or remove the field and document that Moonraker auth is not supported.
 - **Effort:** Small (to remove), Medium (to implement)
 

@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 59.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 61.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|***--] Unique XML callback names
@@ -68,8 +68,8 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-08 | **Last**: 2026-01-23 | **Category**: gotcha | **Type**: constraint
 > When using lv_timer_create with object pointer as user_data, wrap in struct that captures alive_guard. Check alive_guard BEFORE dereferencing object pointer to prevent use-after-free if object destroyed during timer delay.
 
-### [L052] [***--|***--] Tag thread/network tests as [slow] to prevent hangs
-- **Uses**: 10 | **Velocity**: 1 | **Learned**: 2026-01-09 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+### [L052] [***--|****-] Tag thread/network tests as [slow] to prevent hangs
+- **Uses**: 11 | **Velocity**: 2 | **Learned**: 2026-01-09 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > Tests using threads (std::thread, std::condition_variable, hv::EventLoop) MUST be tagged [slow] or they cause parallel test shards to HANG indefinitely. This is NOT about speed — it's about concurrency issues that deadlock under parallel execution. Known offenders: hv::EventLoop fixtures (MoonrakerRobustnessFixture, MoonrakerClientSecurityFixture, NewFeaturesTestFixture, EventTestFixture), BedMeshRenderThread tests. The [slow] tag excludes them from `make test-run` which uses filter `~[.] ~[slow]`. When the user reports tests hanging, check for untagged thread-based tests FIRST.
 
 ### [L053] [*----|-----] Reset static fixture state in destructor
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 64 | **Velocity**: 35.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-25 | **Category**: correction | **Type**: constraint
+- **Uses**: 70 | **Velocity**: 41.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-26 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -118,7 +118,7 @@
 
 ### [L061] [*----|***--] AD5M test printer environment
 - **Uses**: 3 | **Velocity**: 1.5 | **Learned**: 2026-02-07 | **Last**: 2026-02-28 | **Category**: system
-> AD5M (192.168.1.67, root@) runs armv7l Linux 5.4.61 (BusyBox). Key gotchas: (1) No curl, only wget - and wget has NO HTTPS support (compiled without SSL). (2) No sftp-server - use 'scp -O' (legacy protocol) instead of default scp. (3) Logging: default level is WARN, app logs to BOTH /tmp/helixscreen.log AND syslog (/var/log/messages) - syslog has the CURRENT session, /tmp/helixscreen.log may be stale from previous session. (4) No CA certificate bundle shipped - /etc/ssl/certs/ is empty, breaks ALL outbound HTTPS (libhv, wget). Must ship ca-certificates.crt with install. (5) No openssl CLI command. (6) No inotify support. (7) No WiFi (wpa_supplicant present but no interfaces). (8) OpenSSL 1.1 libs exist at /usr/lib/libssl.so.1.1. (9) Binary at /opt/helixscreen/, config at /opt/helixscreen/config/helixconfig.json. (10) ldd may return empty for statically-linked ARM binaries.
+> AD5M (192.168.1.67, root@) runs armv7l Linux 5.4.61 (BusyBox). Key gotchas: (1) No curl, only wget - and wget has NO HTTPS support (compiled without SSL). (2) No sftp-server - use 'scp -O' (legacy protocol) instead of default scp. (3) Logging: default level is WARN, app logs to BOTH /tmp/helixscreen.log AND syslog (/var/log/messages) - syslog has the CURRENT session, /tmp/helixscreen.log may be stale from previous session. (4) No CA certificate bundle shipped - /etc/ssl/certs/ is empty, breaks ALL outbound HTTPS (libhv, wget). Must ship ca-certificates.crt with install. (5) No openssl CLI command. (6) No inotify support. (7) No WiFi (wpa_supplicant present but no interfaces). (8) OpenSSL 1.1 libs exist at /usr/lib/libssl.so.1.1. (9) Binary at /opt/helixscreen/, config at /opt/helixscreen/config/settings.json. (10) ldd may return empty for statically-linked ARM binaries.
 
 ### [L062] [**---|****-] AD5M build and deploy targets
 - **Uses**: 6 | **Velocity**: 3.5 | **Learned**: 2026-02-07 | **Last**: 2026-03-25 | **Category**: build
@@ -137,7 +137,7 @@
 > When using flex_grow on a container with flex_flow=row_wrap, LVGL calculates wrap points based on the container's natural (content) width, NOT the flex-allocated width. Fix: set width="1" + flex_grow="1" — forces LVGL to use the grown width for wrapping. Without this, children overflow instead of wrapping.
 
 ### [L067] [**---|*****] Wrap C++ UI strings in lv_tr()
-- **Uses**: 7 | **Velocity**: 4.5 | **Learned**: 2026-02-14 | **Last**: 2026-03-25 | **Category**: ui
+- **Uses**: 8 | **Velocity**: 5.5 | **Learned**: 2026-02-14 | **Last**: 2026-03-26 | **Category**: ui
 > All user-visible English strings in C++ code must be wrapped in lv_tr() for i18n. Dropdown options are concatenated strings so they're harder to translate - but labels, help text, toasts, etc. must use lv_tr().
 
 ### [L068] [*----|****-] Cancel LVGL animations before object deletion
@@ -172,8 +172,8 @@
 - **Uses**: 1 | **Velocity**: 0.5 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
 > Before calling lv_obj_find_by_name(), lv_obj_get_child(), or lv_obj_get_child_count() on a cached widget pointer, ensure the pointer is not stale. Use null checks and alive guards (weak_ptr pattern) — NOT lv_obj_is_valid() which is O(n) recursive and can stack overflow on Pi (see L076). Use safe_delete_obj() instead of raw lv_obj_delete() to null pointers after deletion. For async callbacks, use alive guards to detect if the owning panel was destroyed.
 
-### [L076] [**---|*****] NEVER use lv_obj_is_valid() in hot paths or async guards
-- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: gotcha
+### [L076] [***--|*****] NEVER use lv_obj_is_valid() in hot paths or async guards
+- **Uses**: 13 | **Velocity**: 9 | **Learned**: 2026-02-22 | **Last**: 2026-03-26 | **Category**: gotcha
 > lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, safe_delete_obj(), or async deletion guards. Use simple null pointer checks instead. For deferred deletion guards, use **application-level tracking** (e.g., ModalStack membership check) or `lv_obj_delete_async()` which self-cancels. `lv_obj_is_valid()` can return TRUE on recycled memory — if LVGL reuses the address, you delete a live object (crash #399). Only safe in one-shot user-initiated event handlers (button clicks) where tree is stable and call happens once.
 
 ### [L077] [-----|-----] Dynamic subject observers MUST use SubjectLifetime tokens
