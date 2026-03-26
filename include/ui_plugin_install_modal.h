@@ -103,4 +103,7 @@ class PluginInstallModal : public Modal {
     // Register XML event callbacks (called once in constructor)
     static void register_callbacks();
     static bool callbacks_registered_;
+
+    // Active instance pointer for static XML callbacks (only one modal visible at a time)
+    static PluginInstallModal* s_active_instance_;
 };
