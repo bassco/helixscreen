@@ -148,7 +148,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
             return;
         }
 
-        spdlog::info("[Brother PT BT] Detected {}mm tape ({} printable pixels)",
+        spdlog::info("[Brother PT BT] Detected {} tape ({} printable pixels)",
                      label_size->name, label_size->width_px);
 
         // Step 3: Render label at detected tape dimensions
@@ -166,6 +166,10 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
         }
 
         // Step 4: Build raster and send
+        // Brief delay for RFCOMM socket teardown from status query — the BlueZ
+        // socket isn't fully released until the kernel cleans up the L2CAP channel.
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+
         auto commands = brother_pt_build_raster(bitmap, media.width_mm);
         if (commands.empty()) {
             helix::ui::queue_update([callback]() {
