@@ -1015,7 +1015,11 @@ void NetworkSettingsOverlay::handle_hidden_connect_clicked() {
     const char* ssid = lv_textarea_get_text(ssid_input);
     if (!ssid || strlen(ssid) == 0) {
         spdlog::warn("[NetworkSettingsOverlay] SSID is empty");
-        // TODO: Show error in modal
+        lv_obj_t* error_label = lv_obj_find_by_name(hidden_network_modal_, "error_label");
+        if (error_label) {
+            lv_label_set_text(error_label, lv_tr("Network name cannot be empty"));
+            lv_obj_remove_flag(error_label, LV_OBJ_FLAG_HIDDEN);
+        }
         return;
     }
 
@@ -1038,13 +1042,57 @@ void NetworkSettingsOverlay::handle_hidden_connect_clicked() {
         }
     }
 
+    if (!wifi_manager_) {
+        spdlog::error("[NetworkSettingsOverlay] WiFiManager not initialized");
+        return;
+    }
+
     spdlog::info("[NetworkSettingsOverlay] Connecting to hidden network: {} (security: {})", ssid,
                  security_idx);
 
-    // TODO: Set hidden_connecting subject to show spinner
-    // TODO: Actually connect via wifi_manager_
-    // For now, just close the modal
-    handle_hidden_cancel_clicked();
+    lv_subject_t* connecting_subject = lv_xml_get_subject(nullptr, "hidden_connecting");
+    if (connecting_subject) {
+        lv_subject_set_int(connecting_subject, 1);
+    }
+
+    std::string ssid_str(ssid);
+    NetworkSettingsOverlay* self = this;
+
+    wifi_manager_->connect(ssid_str, password, [self, ssid_str](bool success, const std::string& error) {
+        if (self->cleanup_called()) {
+            return;
+        }
+
+        lv_subject_t* subj = lv_xml_get_subject(nullptr, "hidden_connecting");
+        if (subj) {
+            lv_subject_set_int(subj, 0);
+        }
+
+        if (success) {
+            spdlog::info("[NetworkSettingsOverlay] Connected to hidden network: {}", ssid_str);
+            self->handle_hidden_cancel_clicked();
+            self->update_wifi_status();
+            self->update_any_network_connected();
+
+            if (self->wifi_manager_) {
+                self->wifi_manager_->start_scan([self](const std::vector<WiFiNetwork>& networks) {
+                    if (!self->cleanup_called()) {
+                        self->populate_network_list(networks);
+                    }
+                });
+            }
+        } else {
+            spdlog::error("[NetworkSettingsOverlay] Hidden network connection failed: {}", error);
+
+            if (self->hidden_network_modal_) {
+                lv_obj_t* error_label = lv_obj_find_by_name(self->hidden_network_modal_, "error_label");
+                if (error_label) {
+                    lv_label_set_text(error_label, lv_tr("Connection failed. Check credentials."));
+                    lv_obj_remove_flag(error_label, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        }
+    });
 }
 
 void NetworkSettingsOverlay::handle_security_changed(lv_event_t* e) {
