@@ -564,16 +564,19 @@ void TempControlPanel::setup_panel(HeaterType type, lv_obj_t* panel, lv_obj_t* p
         return;
     }
 
-    // Set user_data on action button (confirm)
+    // Wire action button (confirm) via C++ event handler — do NOT use
+    // lv_obj_set_user_data() on ui_button components (overwrites UiButtonData*)
     lv_obj_t* overlay_header = lv_obj_find_by_name(panel, "overlay_header");
     if (overlay_header) {
         lv_obj_t* action_button = lv_obj_find_by_name(overlay_header, "action_button");
         if (action_button) {
-            lv_obj_set_user_data(action_button, this);
+            lv_obj_add_event_cb(action_button, on_heater_confirm_clicked, LV_EVENT_CLICKED, this);
         }
     }
 
-    // Set up preset buttons with PresetButtonData user_data
+    // Wire preset buttons via C++ event handlers with per-button PresetButtonData.
+    // Each button gets its own lv_obj_add_event_cb so the callback can read
+    // the data via lv_event_get_user_data(e) without touching obj user_data.
     const char* preset_names[] = {"preset_off", "preset_pla", "preset_petg", "preset_abs"};
     int preset_values[] = {
         h.config.presets.off,
@@ -587,14 +590,15 @@ void TempControlPanel::setup_panel(HeaterType type, lv_obj_t* panel, lv_obj_t* p
         lv_obj_t* btn = lv_obj_find_by_name(overlay_content, preset_names[i]);
         if (btn) {
             preset_data_[base_idx + i] = {this, type, preset_values[i]};
-            lv_obj_set_user_data(btn, &preset_data_[base_idx + i]);
+            lv_obj_add_event_cb(btn, on_heater_preset_clicked, LV_EVENT_CLICKED,
+                                &preset_data_[base_idx + i]);
         }
     }
 
-    // Custom button user_data
+    // Wire custom button via C++ event handler
     lv_obj_t* btn_custom = lv_obj_find_by_name(overlay_content, "btn_custom");
     if (btn_custom) {
-        lv_obj_set_user_data(btn_custom, this);
+        lv_obj_add_event_cb(btn_custom, on_heater_custom_clicked, LV_EVENT_CLICKED, this);
     }
 
     // Dynamic spool preset (shown when active material doesn't match standard presets)
@@ -729,8 +733,7 @@ void TempControlPanel::set_heater_limits(HeaterType type, int min_temp, int max_
 // ============================================================================
 
 void TempControlPanel::on_heater_preset_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (!data || !data->panel)
         return;
 
@@ -812,12 +815,12 @@ void TempControlPanel::keypad_value_cb(float value, void* user_data) {
 static KeypadCallbackData s_keypad_data[helix::HEATER_TYPE_COUNT];
 
 void TempControlPanel::on_heater_custom_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
+    auto* self = static_cast<TempControlPanel*>(lv_event_get_user_data(e));
     if (!self)
         return;
 
     // Determine heater type from which panel owns this button
+    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     HeaterType type = HeaterType::Nozzle; // fallback
     for (int i = 0; i < helix::HEATER_TYPE_COUNT; ++i) {
         auto& h = self->heaters_[i];
@@ -912,110 +915,63 @@ void TempControlPanel::on_bed_confirm_clicked(lv_event_t* e) {
     NavigationManager::instance().go_back();
 }
 
-// Legacy preset callbacks: use old user_data pattern (this pointer on button)
+// Legacy preset callbacks: delegate to generic handler via lv_event_get_user_data(e).
+// XML event_cb passes NULL user_data, so these return early. The actual work is done
+// by the C++ lv_obj_add_event_cb handler registered in setup_panel().
 void TempControlPanel::on_nozzle_preset_off_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Nozzle, data->preset_value);
-        return;
     }
-    // Fallback for old user_data pattern
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Nozzle,
-                               self->heaters_[idx(HeaterType::Nozzle)].config.presets.off);
 }
 
 void TempControlPanel::on_nozzle_preset_pla_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Nozzle, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Nozzle,
-                               self->heaters_[idx(HeaterType::Nozzle)].config.presets.pla);
 }
 
 void TempControlPanel::on_nozzle_preset_petg_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Nozzle, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Nozzle,
-                               self->heaters_[idx(HeaterType::Nozzle)].config.presets.petg);
 }
 
 void TempControlPanel::on_nozzle_preset_abs_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Nozzle, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Nozzle,
-                               self->heaters_[idx(HeaterType::Nozzle)].config.presets.abs);
 }
 
 void TempControlPanel::on_bed_preset_off_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Bed, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Bed,
-                               self->heaters_[idx(HeaterType::Bed)].config.presets.off);
 }
 
 void TempControlPanel::on_bed_preset_pla_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Bed, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Bed,
-                               self->heaters_[idx(HeaterType::Bed)].config.presets.pla);
 }
 
 void TempControlPanel::on_bed_preset_petg_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Bed, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Bed,
-                               self->heaters_[idx(HeaterType::Bed)].config.presets.petg);
 }
 
 void TempControlPanel::on_bed_preset_abs_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* data = static_cast<PresetButtonData*>(lv_obj_get_user_data(btn));
+    auto* data = static_cast<PresetButtonData*>(lv_event_get_user_data(e));
     if (data && data->panel) {
         data->panel->send_temperature(HeaterType::Bed, data->preset_value);
-        return;
     }
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
-    if (self)
-        self->send_temperature(HeaterType::Bed,
-                               self->heaters_[idx(HeaterType::Bed)].config.presets.abs);
 }
 
 // ============================================================================
@@ -1062,10 +1018,11 @@ void TempControlPanel::setup_spool_preset(helix::HeaterType type, lv_obj_t* over
         return;
     }
 
-    // Set up PresetButtonData using the spool_preset_data_ slot
+    // Wire preset click handler via C++ event_cb with per-button data.
+    // Do NOT use lv_obj_set_user_data — that overwrites UiButtonData* allocated by ui_button.
     auto& data = spool_preset_data_[idx(type)];
     data = {this, type, temp};
-    lv_obj_set_user_data(btn, &data);
+    lv_obj_add_event_cb(btn, on_heater_preset_clicked, LV_EVENT_CLICKED, &data);
 
     // Format button label: "MaterialName (Temp°C)".
     // Using lv_label_set_text directly: text is dynamic (material name + computed temp).
@@ -1083,8 +1040,7 @@ void TempControlPanel::setup_spool_preset(helix::HeaterType type, lv_obj_t* over
 }
 
 void TempControlPanel::on_nozzle_custom_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
+    auto* self = static_cast<TempControlPanel*>(lv_event_get_user_data(e));
     if (!self)
         return;
 
@@ -1105,8 +1061,7 @@ void TempControlPanel::on_nozzle_custom_clicked(lv_event_t* e) {
 }
 
 void TempControlPanel::on_bed_custom_clicked(lv_event_t* e) {
-    lv_obj_t* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    auto* self = static_cast<TempControlPanel*>(lv_obj_get_user_data(btn));
+    auto* self = static_cast<TempControlPanel*>(lv_event_get_user_data(e));
     if (!self)
         return;
 
