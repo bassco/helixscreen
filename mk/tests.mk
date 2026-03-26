@@ -184,11 +184,15 @@ test-serial: test-build
 	DURATION=$$((END_TIME - START_TIME)); \
 	echo "$(GREEN)$(BOLD)✓ Tests passed in $${DURATION}s$(RESET)"
 
-# Run ALL tests including slow ones in PARALLEL (for thorough validation)
+# Run ALL tests including slow ones (for thorough validation)
+# Fast tests run in parallel shards; [slow] tests run sequentially to avoid
+# deadlocks from thread-based tests (hv::EventLoop, std::thread) under sharding.
 test-all: test-build
-	$(ECHO) "$(CYAN)$(BOLD)Running ALL tests in parallel (including slow)...$(RESET)"
+	$(ECHO) "$(CYAN)$(BOLD)Running fast tests in parallel...$(RESET)"
 	@START_TIME=$$(date +%s); \
-	$(call run_tests_parallel,"~[.]"); \
+	$(call run_tests_parallel,"~[.] ~[slow]"); \
+	echo "$(CYAN)$(BOLD)Running [slow] tests sequentially...$(RESET)"; \
+	$(TEST_BIN) "[slow]" --durations yes; \
 	END_TIME=$$(date +%s); \
 	DURATION=$$((END_TIME - START_TIME)); \
 	echo "$(GREEN)$(BOLD)✓ All tests passed in $${DURATION}s$(RESET)"
@@ -616,7 +620,7 @@ $(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp
 	$(call emit-compile-command,$(CXX),$(CXXFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) -I$(TEST_UNIT_DIR)/application $(INCLUDES) $(LV_CONF),$<,$@)
 
 # Compile libhv dns_resolv.c for test_dns_resolver
-$(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c
+$(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c $(PATCHES_STAMP)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST-C]$(RESET) $<"
 	$(Q)$(CC) $(CFLAGS) -I$(LIBHV_DIR)/base $(LIBHV_INC) -c $< -o $@

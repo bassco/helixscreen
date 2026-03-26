@@ -8,6 +8,15 @@ RELEASE_SH="scripts/lib/installer/release.sh"
 setup() {
     source tests/shell/helpers.bash
     export GITHUB_REPO="prestonbrown/helixscreen"
+
+    # Source common.sh for file_sudo() which release.sh calls
+    unset _HELIX_COMMON_SOURCED
+    source scripts/lib/installer/common.sh
+
+    # Stub _has_no_new_privs (defined in service.sh) — tests never run under
+    # systemd's NoNewPrivileges, so always return false
+    _has_no_new_privs() { return 1; }
+
     source "$RELEASE_SH"
 
     # Set up isolated test environment
