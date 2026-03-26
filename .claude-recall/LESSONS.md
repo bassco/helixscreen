@@ -21,11 +21,11 @@
 > Avoid mutex locks in destructors during static destruction phase. Other objects may already be destroyed, causing deadlock or crash on exit
 
 ### [L014] [***--|*****] Register all XML components
-- **Uses**: 37 | **Velocity**: 6 | **Learned**: 2025-12-14 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 38 | **Velocity**: 7 | **Learned**: 2025-12-14 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > When adding new XML components, must add lv_xml_component_register_from_file() call in main.cpp. Forgetting causes silent failures
 
-### [L020] [***--|**---] ObserverGuard for cleanup
-- **Uses**: 18 | **Velocity**: 0.5 | **Learned**: 2025-12-14 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
+### [L020] [***--|***--] ObserverGuard for cleanup
+- **Uses**: 19 | **Velocity**: 1.5 | **Learned**: 2025-12-14 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > Use ObserverGuard RAII wrapper for lv_subject observers. Manual observer cleanup is error-prone and causes use-after-free on panel destruction
 
 ### [L021] [*----|-----] Centidegrees for temps
@@ -37,11 +37,11 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 61.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 66.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
-### [L039] [*----|***--] Unique XML callback names
-- **Uses**: 4 | **Velocity**: 1 | **Learned**: 2025-12-30 | **Last**: 2026-03-07 | **Category**: pattern | **Type**: constraint
+### [L039] [**---|****-] Unique XML callback names
+- **Uses**: 5 | **Velocity**: 2 | **Learned**: 2025-12-30 | **Last**: 2026-03-26 | **Category**: pattern | **Type**: constraint
 > All XML event_cb callback names must be globally unique using on_<component>_<action> pattern. LVGL's XML callback registry is a flat global namespace with no scoping. Generic names like on_modal_ok_clicked cause collisions when multiple components register handlers.
 
 ### [L040] [**---|****-] Inline XML attrs override bind_style
@@ -81,7 +81,7 @@
 > Singleton queues (like UpdateQueue) MUST clear pending callbacks in shutdown(), not just null the timer. Without clearing, stale callbacks remain queued and execute on next init() with pointers to destroyed objects → use-after-free. Pattern: std::queue<T>().swap(pending_) to clear, then null timer.
 
 ### [L055] [**---|****-] LVGL pad_all excludes flex gaps
-- **Uses**: 5 | **Velocity**: 2 | **Learned**: 2026-01-10 | **Last**: 2026-03-13 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 6 | **Velocity**: 3 | **Learned**: 2026-01-10 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > `style_pad_all` only sets edge padding (top/bottom/left/right), NOT inter-item spacing. For zero-gap flex layouts, also need `style_pad_row="0"` (column) or `style_pad_column="0"` (row), or `style_pad_gap="0"` for both.
 
 ### [L056] [*----|-----] lv_subject_t no shallow copy
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 70 | **Velocity**: 41.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-26 | **Category**: correction | **Type**: constraint
+- **Uses**: 76 | **Velocity**: 47.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-26 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -145,19 +145,19 @@
 > When deleting LVGL objects that have animations with completion callbacks, ALWAYS cancel animations FIRST (lv_anim_delete) before lv_obj_delete/lv_obj_safe_delete. The completion callback may fire synchronously during lv_anim_delete, causing use-after-free if the object is already freed. Pattern: (1) nullify member pointer, (2) clear state flags, (3) lv_anim_delete, (4) lv_obj_delete. For animations using 'this' as var: set guard flags to false BEFORE lv_anim_delete so callbacks become no-ops.
 
 ### [L069] [**---|*****] Never assume lv_obj user_data ownership — it may already be set
-- **Uses**: 8 | **Velocity**: 4 | **Learned**: 2026-02-15 | **Last**: 2026-03-02 | **Category**: architecture
+- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-15 | **Last**: 2026-03-26 | **Category**: architecture
 > LVGL's lv_obj_set_user_data() is a single shared slot per object. Custom XML widgets, component handlers, and LVGL internals may set user_data during object creation (e.g., ui_button stores button_data_t*, severity_card stores a severity string). NEVER call delete/free on lv_obj_get_user_data() unless you are 100% certain you set it yourself on that specific object. NEVER use user_data as general-purpose storage on objects you didn't fully create — XML components and custom widgets may have claimed it already. **CRITICAL: NEVER walk parent chain checking any non-null user_data to find an instance pointer** — ui_button and other widgets set their own user_data, so the traversal will find the WRONG data and miscast it (caused SEGFAULT in AmsOperationSidebar/AmsDryerCard). Instead, walk parents checking `lv_obj_get_name()` for a specific known name, THEN read user_data from that named object. For per-item data, prefer: (1) event callback user_data (separate per-callback), (2) a C++ side container (map/vector indexed by object pointer), or (3) lv_obj_find_by_name to stash data in a hidden child label.
 
 ### [L071] [***--|*****] XML child click passthrough
-- **Uses**: 16 | **Velocity**: 9.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-25 | **Category**: ui | **Type**: constraint
+- **Uses**: 17 | **Velocity**: 10.5 | **Learned**: 2026-02-21 | **Last**: 2026-03-26 | **Category**: ui | **Type**: constraint
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
 - **Uses**: 13 | **Velocity**: 8.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-25 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
-### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
-- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
+### [L072] [***--|*****] Never capture bare this in async/WebSocket callbacks
+- **Uses**: 11 | **Velocity**: 7 | **Learned**: 2026-02-22 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
 ### [L073] [*----|***--] ObserverGuard release vs reset
@@ -183,4 +183,12 @@
 ### [L078] [-----|-----] lv_obj transform_scale invisible without background
 - **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-13 | **Last**: 2026-03-13 | **Category**: gotcha
 > LVGL transform_scale on lv_obj with transparent background only affects the object's own draw (border/bg), not children. Children are separate draw units. Use opacity (lv_style_set_opa) for press feedback on transparent containers like back buttons, since it applies to the entire object layer including children.
+
+### [L079] [*****|*****] ui_button user_data is reserved — use per-callback user_data
+- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-26 | **Last**: 2026-03-26 | **Category**: lvgl
+> `ui_button` XML component allocates a heap `UiButtonData*` and stores it in `lv_obj_set_user_data()`. NEVER overwrite it with `lv_obj_set_user_data(btn, this)`. For click handlers on ui_button objects, use `lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, this)` with per-callback user_data (4th param), and read via `lv_event_get_user_data(e)`. For XML-registered callbacks (which have NULL event user_data), use a static active instance pointer. The parent-walk pattern DOES NOT WORK because `lv_event_get_current_target(e)` returns the ui_button, whose non-null `UiButtonData*` is found immediately and miscast. Overwriting causes: memory leak, broken text/icon contrast auto-updates, broken DELETE cleanup. Fixed 13 sites across the codebase (2026-03-26).
+
+### [L080] [****-|*****] ModalStack must remove() on all exit paths
+- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-26 | **Last**: 2026-03-26 | **Category**: modal
+> When animations are disabled, `ModalStack::animate_exit()` defers backdrop deletion via `lv_obj_delete_async()` but must ALSO call `remove(backdrop)` to clean up the stack entry. Without removal, stale entries with `exiting=true` accumulate. When LVGL reuses the same memory address for a new backdrop (common on embedded with small heaps), `is_exiting()` matches the stale entry, causing `hide()` to bail out — making the modal completely unresponsive (buttons, backdrop click, everything). The animated exit path handled this via `exit_animation_done()` callback, but the no-animation fast path was missing it.
 
