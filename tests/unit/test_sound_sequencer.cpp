@@ -333,6 +333,8 @@ TEST_CASE("SoundSequencer: ADSR attack ramps amplitude up", "[sound][sequencer]"
 // ============================================================================
 
 TEST_CASE("SoundSequencer: ADSR decay drops amplitude toward sustain", "[sound][sequencer]") {
+    lv_init_safe();
+    SettingsManager::instance().init_subjects();
     AudioSettingsManager::instance().set_volume(100);
     auto backend = std::make_shared<MockBackend>();
     SoundSequencer seq(backend);
@@ -388,6 +390,8 @@ TEST_CASE("SoundSequencer: ADSR decay drops amplitude toward sustain", "[sound][
 // ============================================================================
 
 TEST_CASE("SoundSequencer: ADSR sustain holds amplitude", "[sound][sequencer]") {
+    lv_init_safe();
+    SettingsManager::instance().init_subjects();
     AudioSettingsManager::instance().set_volume(100);
     auto backend = std::make_shared<MockBackend>();
     SoundSequencer seq(backend);
@@ -441,6 +445,9 @@ TEST_CASE("SoundSequencer: ADSR sustain holds amplitude", "[sound][sequencer]") 
 // ============================================================================
 
 TEST_CASE("SoundSequencer: ADSR release fades amplitude to zero", "[sound][sequencer]") {
+    lv_init_safe();
+    SettingsManager::instance().init_subjects();
+    AudioSettingsManager::instance().set_volume(100);
     auto backend = std::make_shared<MockBackend>();
     SoundSequencer seq(backend);
     seq.start();
