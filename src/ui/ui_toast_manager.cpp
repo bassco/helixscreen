@@ -122,7 +122,9 @@ void ToastManager::animate_entrance(lv_obj_t* toast) {
     lv_anim_set_duration(&slide_anim, TOAST_ENTRANCE_DURATION_MS);
     lv_anim_set_path_cb(&slide_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&slide_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_translate_y(static_cast<lv_obj_t*>(obj), value, LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o)) return;
+        lv_obj_set_style_translate_y(o, value, LV_PART_MAIN);
     });
     lv_anim_start(&slide_anim);
 
@@ -134,8 +136,9 @@ void ToastManager::animate_entrance(lv_obj_t* toast) {
     lv_anim_set_duration(&fade_anim, TOAST_ENTRANCE_DURATION_MS);
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_out);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o)) return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_start(&fade_anim);
 
@@ -161,8 +164,9 @@ void ToastManager::animate_exit(lv_obj_t* toast) {
     lv_anim_set_duration(&fade_anim, TOAST_EXIT_DURATION_MS);
     lv_anim_set_path_cb(&fade_anim, lv_anim_path_ease_in);
     lv_anim_set_exec_cb(&fade_anim, [](void* obj, int32_t value) {
-        lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(value),
-                             LV_PART_MAIN);
+        auto* o = static_cast<lv_obj_t*>(obj);
+        if (!lv_obj_is_valid(o)) return;
+        lv_obj_set_style_opa(o, static_cast<lv_opa_t>(value), LV_PART_MAIN);
     });
     lv_anim_set_completed_cb(&fade_anim, exit_animation_complete_cb);
     lv_anim_start(&fade_anim);

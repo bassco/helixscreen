@@ -277,6 +277,8 @@ void LedWidget::on_led_state_changed(int state) {
 void LedWidget::light_toggle_cb(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LedWidget] light_toggle_cb");
     auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    if (!lv_obj_is_valid(target))
+        return;
     auto* self = static_cast<LedWidget*>(lv_obj_get_user_data(target));
     if (self) {
         self->record_interaction();

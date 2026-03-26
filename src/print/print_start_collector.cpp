@@ -760,24 +760,34 @@ void PrintStartCollector::save_prediction_entry() {
             return;
         }
 
-        json entries_json = json::array();
-        for (const auto& e : entries) {
-            json entry_json;
-            entry_json["total"] = e.total_seconds;
-            entry_json["timestamp"] = e.timestamp;
-
-            json phases_json = json::object();
-            for (const auto& [phase, duration] : e.phase_durations) {
-                phases_json[std::to_string(phase)] = duration;
-            }
-            entry_json["phases"] = phases_json;
-            entries_json.push_back(entry_json);
+        if (entries.size() > 1000) {
+            spdlog::warn("[PrintStartCollector] Suspiciously large entry count ({}), skipping save",
+                         entries.size());
+            return;
         }
 
-        cfg->set<json>(PREPRINT_HISTORY_PATH, entries_json);
-        cfg->save();
+        try {
+            json entries_json = json::array();
+            for (const auto& e : entries) {
+                json entry_json;
+                entry_json["total"] = e.total_seconds;
+                entry_json["timestamp"] = e.timestamp;
 
-        spdlog::debug("[PrintStartCollector] Saved prediction history ({} entries)",
-                      entries.size());
+                json phases_json = json::object();
+                for (const auto& [phase, duration] : e.phase_durations) {
+                    phases_json[std::to_string(phase)] = duration;
+                }
+                entry_json["phases"] = phases_json;
+                entries_json.push_back(entry_json);
+            }
+
+            cfg->set<json>(PREPRINT_HISTORY_PATH, entries_json);
+            cfg->save();
+
+            spdlog::debug("[PrintStartCollector] Saved prediction history ({} entries)",
+                          entries.size());
+        } catch (const std::exception& ex) {
+            spdlog::error("[PrintStartCollector] Failed to save prediction history: {}", ex.what());
+        }
     });
 }

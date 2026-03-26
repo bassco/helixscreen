@@ -183,9 +183,19 @@ bool ModalStack::is_exiting(lv_obj_t* backdrop) const {
 }
 
 void ModalStack::animate_entrance(lv_obj_t* dialog) {
+    if (!lv_obj_is_valid(dialog)) {
+        spdlog::warn("[ModalStack] animate_entrance called with invalid dialog object");
+        return;
+    }
+
     // Find backdrop for this dialog
     lv_obj_t* backdrop = backdrop_for(dialog);
     if (!backdrop) {
+        return;
+    }
+
+    if (!lv_obj_is_valid(backdrop)) {
+        spdlog::warn("[ModalStack] animate_entrance: backdrop is invalid");
         return;
     }
 
@@ -308,6 +318,16 @@ void ModalStack::exit_animation_done(lv_anim_t* anim) {
 
 void ModalStack::animate_exit(lv_obj_t* backdrop, lv_obj_t* dialog) {
     if (!backdrop || !dialog) {
+        return;
+    }
+
+    if (!lv_obj_is_valid(dialog)) {
+        spdlog::warn("[ModalStack] animate_exit called with invalid dialog object");
+        return;
+    }
+
+    if (!lv_obj_is_valid(backdrop)) {
+        spdlog::warn("[ModalStack] animate_exit called with invalid backdrop object");
         return;
     }
 
