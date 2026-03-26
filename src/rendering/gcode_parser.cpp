@@ -162,10 +162,23 @@ void GCodeParser::parse_line(const std::string& line) {
         return;
     }
 
+    // G92: Set position (resets extruder and/or axis positions)
+    if (trimmed.find("G92 ") == 0 || trimmed == "G92") {
+        parse_set_position_command(trimmed);
+        return;
+    }
+
     // Parse movement commands (G0, G1)
     if (trimmed[0] == 'G' && (trimmed.find("G0 ") == 0 || trimmed.find("G1 ") == 0 ||
                               trimmed == "G0" || trimmed == "G1")) {
         parse_movement_command(trimmed);
+        return;
+    }
+
+    // G2/G3: Arc moves — linearize into short segments
+    if (trimmed[0] == 'G' && (trimmed.find("G2 ") == 0 || trimmed.find("G3 ") == 0)) {
+        bool clockwise = (trimmed[1] == '2');
+        parse_arc_command(trimmed, clockwise);
     }
 }
 
@@ -234,6 +247,122 @@ bool GCodeParser::parse_movement_command(const std::string& line) {
     }
 
     return has_movement;
+}
+
+void GCodeParser::parse_set_position_command(const std::string& line) {
+    // G92 sets the current position without moving.
+    // Most commonly: G92 E0 (reset extruder position to 0)
+    float value;
+    if (extract_param(line, 'E', value)) {
+        current_e_ = value;
+    }
+    if (extract_param(line, 'X', value)) {
+        current_position_.x = value;
+    }
+    if (extract_param(line, 'Y', value)) {
+        current_position_.y = value;
+    }
+    if (extract_param(line, 'Z', value)) {
+        current_position_.z = value;
+    }
+}
+
+void GCodeParser::parse_arc_command(const std::string& line, bool clockwise) {
+    // G2/G3 arc moves: linearize into short line segments for the 2D renderer.
+    // Parameters: X Y Z (endpoint), I J (center offset from start), E (extrusion)
+    float value;
+    glm::vec3 end_pos = current_position_;
+    float new_e = current_e_;
+    bool has_extrusion = false;
+    float i_offset = 0.0f, j_offset = 0.0f;
+
+    if (extract_param(line, 'X', value))
+        end_pos.x = is_absolute_positioning_ ? value : current_position_.x + value;
+    if (extract_param(line, 'Y', value))
+        end_pos.y = is_absolute_positioning_ ? value : current_position_.y + value;
+    if (extract_param(line, 'Z', value))
+        end_pos.z = is_absolute_positioning_ ? value : current_position_.z + value;
+    if (extract_param(line, 'E', value)) {
+        new_e = is_absolute_extrusion_ ? value : current_e_ + value;
+        has_extrusion = true;
+    }
+    if (extract_param(line, 'I', value))
+        i_offset = value;
+    if (extract_param(line, 'J', value))
+        j_offset = value;
+
+    // Calculate arc center
+    float cx = current_position_.x + i_offset;
+    float cy = current_position_.y + j_offset;
+
+    // Calculate start and end angles
+    float start_angle = std::atan2(current_position_.y - cy, current_position_.x - cx);
+    float end_angle = std::atan2(end_pos.y - cy, end_pos.x - cx);
+    float radius = std::sqrt(i_offset * i_offset + j_offset * j_offset);
+
+    if (radius < 0.001f) {
+        // Degenerate arc — just update position
+        current_position_ = end_pos;
+        if (has_extrusion)
+            current_e_ = new_e;
+        return;
+    }
+
+    // Calculate sweep angle
+    float sweep = end_angle - start_angle;
+    if (clockwise) {
+        if (sweep >= 0)
+            sweep -= 2.0f * static_cast<float>(M_PI);
+    } else {
+        if (sweep <= 0)
+            sweep += 2.0f * static_cast<float>(M_PI);
+    }
+
+    // Check for full circle (P parameter or endpoint == startpoint)
+    int full_turns = 0;
+    if (extract_param(line, 'P', value))
+        full_turns = static_cast<int>(value);
+    if (full_turns > 0) {
+        float dir = clockwise ? -1.0f : 1.0f;
+        sweep = dir * full_turns * 2.0f * static_cast<float>(M_PI) +
+                (end_angle - start_angle);
+        if (clockwise && sweep > 0)
+            sweep -= 2.0f * static_cast<float>(M_PI);
+        else if (!clockwise && sweep < 0)
+            sweep += 2.0f * static_cast<float>(M_PI);
+    }
+
+    // Linearize: ~1mm segments or at least 8 segments
+    float arc_length = std::abs(sweep) * radius;
+    int num_segments = std::max(8, static_cast<int>(arc_length / 1.0f));
+    num_segments = std::min(num_segments, 128); // Cap to avoid excessive segments
+
+    float total_e_delta = has_extrusion ? (new_e - current_e_) : 0.0f;
+    bool is_extruding = has_extrusion && total_e_delta > 0.00001f;
+
+    for (int i = 1; i <= num_segments; i++) {
+        float t = static_cast<float>(i) / static_cast<float>(num_segments);
+        float angle = start_angle + sweep * t;
+
+        glm::vec3 seg_end;
+        seg_end.x = cx + radius * std::cos(angle);
+        seg_end.y = cy + radius * std::sin(angle);
+        seg_end.z = current_position_.z + (end_pos.z - current_position_.z) * t;
+
+        // Only add segment if there's XY movement
+        if (seg_end.x != current_position_.x || seg_end.y != current_position_.y) {
+            float seg_e_delta = is_extruding ? (total_e_delta / num_segments) : 0.0f;
+            add_segment(current_position_, seg_end, is_extruding, seg_e_delta);
+        }
+
+        current_position_ = seg_end;
+    }
+
+    // Snap to exact endpoint
+    current_position_ = end_pos;
+    if (has_extrusion) {
+        current_e_ = new_e;
+    }
 }
 
 bool GCodeParser::parse_exclude_object_command(const std::string& line) {
@@ -1608,6 +1737,30 @@ GCodeHeaderMetadata extract_header_metadata(const std::string& filepath) {
             continue;
         }
         parse_metadata_line(footer_line, metadata);
+    }
+
+    return metadata;
+}
+
+GCodeHeaderMetadata extract_header_metadata_from_content(const std::string& content) {
+    GCodeHeaderMetadata metadata;
+
+    std::istringstream stream(content);
+    std::string line;
+    int lines_read = 0;
+    constexpr int max_header_lines = 500;
+
+    while (std::getline(stream, line) && lines_read < max_header_lines) {
+        lines_read++;
+
+        if (line.empty() || line[0] != ';') {
+            if (!line.empty() && (line[0] == 'G' || line[0] == 'M' || line[0] == 'T')) {
+                break;
+            }
+            continue;
+        }
+
+        parse_metadata_line(line, metadata);
     }
 
     return metadata;

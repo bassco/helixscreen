@@ -328,6 +328,16 @@ class GCodeParser {
     bool parse_movement_command(const std::string& line);
 
     /**
+     * @brief Parse G92 (set position) command
+     */
+    void parse_set_position_command(const std::string& line);
+
+    /**
+     * @brief Parse G2/G3 arc command, linearizing into short line segments
+     */
+    void parse_arc_command(const std::string& line, bool clockwise);
+
+    /**
      * @brief Parse EXCLUDE_OBJECT_* command
      * @param line Trimmed G-code line
      * @return true if parsed successfully
@@ -583,6 +593,17 @@ struct GCodeHeaderMetadata {
  * @return GCodeHeaderMetadata with basic info populated
  */
 GCodeHeaderMetadata extract_header_metadata(const std::string& filepath);
+
+/**
+ * @brief Extract header metadata from in-memory content (e.g., partial HTTP download)
+ *
+ * Scans the provided string line-by-line for slicer metadata comments.
+ * Useful when the file content was fetched via HTTP range request.
+ *
+ * @param content G-code file content (typically first ~16KB)
+ * @return GCodeHeaderMetadata with whatever fields were found
+ */
+GCodeHeaderMetadata extract_header_metadata_from_content(const std::string& content);
 
 } // namespace gcode
 } // namespace helix

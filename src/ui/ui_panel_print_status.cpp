@@ -952,6 +952,15 @@ void PrintStatusPanel::load_gcode_file(const char* file_path) {
             int total_layers =
                 lv_subject_get_int(self->printer_state_.get_print_layer_total_subject());
 
+            // Fallback: if Moonraker metadata didn't provide layer count,
+            // use the count from the parsed/indexed gcode file
+            if (total_layers == 0 && viewer_max_layer > 0) {
+                int layer_count = viewer_max_layer + 1; // max_layer is 0-based
+                self->printer_state_.set_print_layer_total(layer_count);
+                spdlog::info("[{}] Set total layers from gcode viewer: {}",
+                             self->get_name(), layer_count);
+            }
+
             // Update lifecycle state while we're at it
             self->lifecycle_.on_layer_changed(current_layer, total_layers,
                                               self->printer_state_.has_real_layer_data());

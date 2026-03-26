@@ -3,6 +3,7 @@
 
 #include "active_print_media_manager.h"
 
+#include "gcode_parser.h"
 #include "ui_filename_utils.h"
 #include "ui_update_queue.h"
 
@@ -189,7 +190,7 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
     // Get file metadata for layer count, estimated time, and optionally thumbnail
     api_->files().get_file_metadata(
         metadata_filename,
-        [this, current_gen, skip_thumbnail](const FileMetadata& metadata) {
+        [this, current_gen, skip_thumbnail, metadata_filename](const FileMetadata& metadata) {
             // Check if this callback is still relevant
             if (current_gen != thumbnail_load_generation_) {
                 spdlog::trace(
@@ -207,6 +208,52 @@ void ActivePrintMediaManager::load_thumbnail_for_file(const std::string& filenam
                     [state](int* count) { state->set_print_layer_total(*count); });
                 spdlog::debug("[ActivePrintMediaManager] Set total layers from metadata: {}",
                               metadata.layer_count);
+            } else {
+                // Moonraker didn't provide layer count — scan gcode header directly.
+                // Download the first 16KB and parse slicer comments for layer info.
+                spdlog::info("[ActivePrintMediaManager] No layer count in metadata, "
+                             "scanning gcode header");
+                auto* api = this->api_;
+                auto gen = current_gen;
+                auto* self = this;
+                bool need_est_time = (metadata.estimated_time <= 0);
+                api->transfers().download_file_partial(
+                    "gcodes", metadata_filename, 16 * 1024,
+                    [self, gen, need_est_time](const std::string& content) {
+                        if (gen != self->thumbnail_load_generation_)
+                            return;
+                        auto header =
+                            helix::gcode::extract_header_metadata_from_content(content);
+                        if (header.layer_count > 0) {
+                            int lc = static_cast<int>(header.layer_count);
+                            PrinterState* state = &self->printer_state_;
+                            helix::ui::queue_update<int>(
+                                std::make_unique<int>(lc),
+                                [state](int* count) {
+                                    state->set_print_layer_total(*count);
+                                });
+                            spdlog::info("[ActivePrintMediaManager] Set total layers "
+                                         "from gcode header: {}",
+                                         lc);
+                        }
+                        if (need_est_time && header.estimated_time_seconds > 0) {
+                            int est = static_cast<int>(header.estimated_time_seconds);
+                            PrinterState* state = &self->printer_state_;
+                            helix::ui::queue_update<int>(
+                                std::make_unique<int>(est),
+                                [state](int* s) {
+                                    state->set_estimated_print_time(*s);
+                                });
+                            spdlog::info("[ActivePrintMediaManager] Set estimated time "
+                                         "from gcode header: {}s",
+                                         est);
+                        }
+                    },
+                    [](const MoonrakerError& err) {
+                        spdlog::debug("[ActivePrintMediaManager] Gcode header fetch "
+                                      "failed: {}",
+                                      err.message);
+                    });
             }
 
             // Store slicer's estimated print time for remaining time fallback

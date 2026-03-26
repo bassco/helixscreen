@@ -387,6 +387,11 @@ class PrinterPrintState {
     // Slicer estimated total print time (not a subject - no XML binding needed)
     int estimated_print_time_ = 0;
 
+    // Exponential moving average for time remaining estimate.
+    // Smooths out wild jumps at low progress where the extrapolation is noisy.
+    double smoothed_remaining_ = 0.0;
+    bool has_smoothed_remaining_ = false;
+
     // Layer tracking: true when real layer data received from print_stats.info or gcode fallback.
     // When false, current_layer is estimated from progress * total_layers.
     // Atomic: written from background thread (gcode fallback), read from main thread (UI).

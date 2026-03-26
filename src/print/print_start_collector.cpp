@@ -146,6 +146,21 @@ void PrintStartCollector::start() {
                 return;
             }
         }
+
+        // Pass through display_status.message (M117) during preparation.
+        // Many firmware/macros send M117 messages like "Homing...", "Probing...",
+        // "Heating bed..." during startup that provide useful status info.
+        if (status.contains("display_status")) {
+            const auto& ds = status["display_status"];
+            if (ds.contains("message") && ds["message"].is_string()) {
+                const auto& msg = ds["message"].get_ref<const std::string&>();
+                if (!msg.empty()) {
+                    spdlog::debug("[PrintStartCollector] display_status.message: {}", msg);
+                    // Update message without changing the current phase
+                    self->update_message_only(msg);
+                }
+            }
+        }
     });
 
     registered_.store(true);
@@ -271,29 +286,40 @@ void PrintStartCollector::check_fallback_completion() {
     bool temps_ready = !bed_heating && !nozzle_heating;
 
     // =========================================================================
-    // PROACTIVE DETECTION: Detect PREPARING phase when heaters are ramping
-    // This ensures "Preparing" shows even without HELIX:PHASE signals
+    // PROACTIVE DETECTION: Track preparation phases from temperature state
+    // Continuously updates as heaters change, not just on first detection.
+    // Only fires when no gcode_response patterns have been matched recently.
     // =========================================================================
-    if (current == PrintStartPhase::IDLE && !print_start_was_detected) {
-        // We're in IDLE but collector is active - this means print just started
-        // If heaters are ramping, we're definitely in PRINT_START preparation
-        if (bed_heating || nozzle_heating) {
-            // Determine which heating phase to show
-            if (bed_heating && bed_temp < bed_target / 2) {
-                // Bed is far from target - primary heating phase
-                spdlog::info("[PrintStartCollector] Proactive: bed heating ({}/{})", bed_temp / 10,
-                             bed_target / 10);
-                update_phase(PrintStartPhase::HEATING_BED, lv_tr("Heating Bed..."));
-            } else if (nozzle_heating) {
-                // Nozzle heating (bed may be close or done)
-                spdlog::info("[PrintStartCollector] Proactive: nozzle heating ({}/{})",
-                             ext_temp / 10, ext_target / 10);
-                update_phase(PrintStartPhase::HEATING_NOZZLE, lv_tr("Heating Nozzle..."));
-            } else {
-                // Generic initializing state
-                spdlog::info("[PrintStartCollector] Proactive: initializing (heaters ramping)");
-                update_phase(PrintStartPhase::INITIALIZING, lv_tr("Preparing Print..."));
-            }
+    bool is_temp_detected_phase =
+        (current == PrintStartPhase::IDLE || current == PrintStartPhase::INITIALIZING ||
+         current == PrintStartPhase::HEATING_BED || current == PrintStartPhase::HEATING_NOZZLE);
+    if (is_temp_detected_phase) {
+        if (bed_heating && (current != PrintStartPhase::HEATING_BED)) {
+            // Bed still heating — show bed phase
+            spdlog::info("[PrintStartCollector] Proactive: bed heating ({}/{})", bed_temp / 10,
+                         bed_target / 10);
+            update_phase(PrintStartPhase::HEATING_BED, lv_tr("Heating Bed..."));
+            return;
+        }
+        if (nozzle_heating && !bed_heating && current != PrintStartPhase::HEATING_NOZZLE) {
+            // Bed done (or no bed target), nozzle still heating
+            spdlog::info("[PrintStartCollector] Proactive: nozzle heating ({}/{})", ext_temp / 10,
+                         ext_target / 10);
+            update_phase(PrintStartPhase::HEATING_NOZZLE, lv_tr("Heating Nozzle..."));
+            return;
+        }
+        if (temps_ready && !bed_heating && !nozzle_heating &&
+            (current == PrintStartPhase::HEATING_BED ||
+             current == PrintStartPhase::HEATING_NOZZLE)) {
+            // Both heaters at target — preparation continues (homing, mesh, purge, etc.)
+            spdlog::info("[PrintStartCollector] Proactive: temps ready, waiting for print start");
+            update_phase(PrintStartPhase::INITIALIZING, lv_tr("Preparing Print..."));
+            return;
+        }
+        if ((bed_heating || nozzle_heating) && current == PrintStartPhase::IDLE) {
+            // First detection — heaters just started ramping
+            spdlog::info("[PrintStartCollector] Proactive: initializing (heaters ramping)");
+            update_phase(PrintStartPhase::INITIALIZING, lv_tr("Preparing Print..."));
             return;
         }
     }
@@ -574,6 +600,20 @@ void PrintStartCollector::update_phase(PrintStartPhase phase, const std::string&
     if (should_save) {
         save_prediction_entry();
     }
+}
+
+void PrintStartCollector::update_message_only(const std::string& message) {
+    PrintStartPhase phase;
+    int progress;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        phase = current_phase_;
+        if (phase == PrintStartPhase::IDLE || phase == PrintStartPhase::COMPLETE) {
+            return; // Don't update message when not preparing
+        }
+        progress = calculate_progress_locked();
+    }
+    state_.set_print_start_state(phase, message.c_str(), progress);
 }
 
 void PrintStartCollector::set_profile(std::shared_ptr<PrintStartProfile> profile) {
