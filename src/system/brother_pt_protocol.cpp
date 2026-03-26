@@ -111,14 +111,14 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
     if (!tape)
         return {};
 
-    // Image preparation: rotate 90° CW
-    // After rotation: original width becomes height, original height becomes width
-    auto rotated = bitmap.rotate_90_cw();
-    int rot_w = rotated.width();
-    int rot_h = rotated.height();
+    // No rotation needed — the renderer produces a bitmap with width = tape printable
+    // width and height = label length. Each row of the bitmap maps to one raster line
+    // across the tape, and the number of rows determines the label length.
+    int bmp_w = bitmap.width();
+    int bmp_h = bitmap.height();
 
     std::vector<uint8_t> cmd;
-    cmd.reserve(256 + static_cast<size_t>(rot_h) * (3 + BROTHER_PT_RASTER_ROW_BYTES) + 1);
+    cmd.reserve(256 + static_cast<size_t>(bmp_h) * (3 + BROTHER_PT_RASTER_ROW_BYTES) + 1);
 
     // 1. Invalidate — 100 bytes of 0x00
     cmd.insert(cmd.end(), 100, 0x00);
@@ -142,18 +142,18 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
     cmd.push_back(static_cast<uint8_t>(tape_width_mm));
     cmd.push_back(0x00);  // length (continuous)
     // Raster line count (LE 32-bit)
-    cmd.push_back(static_cast<uint8_t>(rot_h & 0xFF));
-    cmd.push_back(static_cast<uint8_t>((rot_h >> 8) & 0xFF));
-    cmd.push_back(static_cast<uint8_t>((rot_h >> 16) & 0xFF));
-    cmd.push_back(static_cast<uint8_t>((rot_h >> 24) & 0xFF));
+    cmd.push_back(static_cast<uint8_t>(bmp_h & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((bmp_h >> 8) & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((bmp_h >> 16) & 0xFF));
+    cmd.push_back(static_cast<uint8_t>((bmp_h >> 24) & 0xFF));
     cmd.push_back(0x00);  // page number
     cmd.push_back(0x00);  // reserved
 
-    // 5. Auto-cut — ESC i M
+    // 5. Auto-cut — ESC i M (0x00 = no auto-cut, PT-P300BT has manual cut only)
     cmd.push_back(0x1B);
     cmd.push_back(0x69);
     cmd.push_back(0x4D);
-    cmd.push_back(0x40);
+    cmd.push_back(0x00);
 
     // 6. Advanced mode — ESC i K (no chain printing)
     cmd.push_back(0x1B);
@@ -173,17 +173,18 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
     cmd.push_back(0x02);
 
     // 9. Raster rows — pin-precise margin centering
+    // Each bitmap row (70 pixels for 12mm) is centered in the 128-pin print head
     std::vector<uint8_t> padded_row(BROTHER_PT_RASTER_ROW_BYTES, 0x00);
     int margin_pins = tape->left_margin_pins;
 
-    for (int y = 0; y < rot_h; y++) {
-        const uint8_t* row = rotated.row_data(y);
-        int row_bytes = rotated.row_byte_width();
+    for (int y = 0; y < bmp_h; y++) {
+        const uint8_t* row = bitmap.row_data(y);
+        int row_bytes = bitmap.row_byte_width();
 
         std::fill(padded_row.begin(), padded_row.end(), 0x00);
 
         // Horizontal flip the printable portion with pin-precise margin offset
-        for (int x = 0; x < tape->printable_pins && x < rot_w; x++) {
+        for (int x = 0; x < tape->printable_pins && x < bmp_w; x++) {
             int src_byte = x / 8;
             int src_bit = 7 - (x % 8);
             if (src_byte < row_bytes && (row[src_byte] & (1 << src_bit))) {
