@@ -161,11 +161,13 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
     cmd.push_back(0x4B);
     cmd.push_back(0x08);
 
-    // 7. Margin — ESC i d (14 dots = 2mm at 180dpi)
+    // 7. Margin — ESC i d (50 dots ≈ 7mm at 180dpi)
+    // Trailing feed to ensure content clears the print head and reaches the
+    // manual cutter. Too little = content clipped, too much = tape waste.
     cmd.push_back(0x1B);
     cmd.push_back(0x69);
     cmd.push_back(0x64);
-    cmd.push_back(0x0E);
+    cmd.push_back(50);
     cmd.push_back(0x00);
 
     // 8. Compression — M 02 (TIFF PackBits)
@@ -218,8 +220,9 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
         }
     }
 
-    // 10. Print + feed
-    cmd.push_back(0x1A);
+    // 10. Print with minimal feed
+    // 0x1A = print + full feed (wastes tape), 0x0C = print page (minimal feed)
+    cmd.push_back(0x0C);
 
     return cmd;
 }

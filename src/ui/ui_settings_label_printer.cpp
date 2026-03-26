@@ -146,6 +146,7 @@ LabelPrinterSettingsOverlay::~LabelPrinterSettingsOverlay() {
     // Deinit subjects
     if (subjects_initialized_) {
         lv_subject_deinit(&bt_scanning_subject_);
+        lv_subject_deinit(&test_printing_subject_);
         lv_subject_deinit(&ipp_selected_subject_);
     }
 
@@ -180,6 +181,8 @@ void LabelPrinterSettingsOverlay::init_subjects() {
     // BT scanning state subject (0=idle, 1=scanning)
     lv_subject_init_int(&bt_scanning_subject_, 0);
     lv_xml_register_subject(nullptr, "bt_scanning", &bt_scanning_subject_);
+    lv_subject_init_int(&test_printing_subject_, 0);
+    lv_xml_register_subject(nullptr, "test_printing", &test_printing_subject_);
 
     // IPP selected subject (0=not IPP, 1=IPP protocol selected within network type)
     int ipp_initial = (LabelPrinterSettingsManager::instance().get_printer_type() == "network" &&
@@ -977,6 +980,9 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
 
     spdlog::info("[{}] Test print requested", get_name());
 
+    // Disable test print button via subject binding
+    lv_subject_set_int(&test_printing_subject_, 1);
+
     // Create a mock spool for the test label
     SpoolInfo mock_spool;
     mock_spool.id = 42;
@@ -1004,9 +1010,10 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
             ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
         }
 
-        // Note: Don't refresh BT connection state here — the overlay's bt_ctx_
-        // is separate from the print thread's persistent connection and may be
-        // invalid. The user can re-open the overlay or press Scan to refresh.
+        // Re-enable test print button via subject
+        if (alive->load()) {
+            get_label_printer_settings_overlay().test_printing_subject_set(0);
+        }
     });
 }
 

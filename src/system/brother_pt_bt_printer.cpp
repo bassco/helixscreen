@@ -10,7 +10,11 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cerrno>
+#include <cstring>
+#include <sys/socket.h>
 #include <thread>
+#include <unistd.h>
 
 namespace helix::label {
 
@@ -102,21 +106,59 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
     int channel = channel_;
 
     std::thread([mac, channel, spool, preset, callback]() {
-        // Step 1: Query status to detect loaded tape
-        auto status_cmd = brother_pt_build_status_request();
-        auto status_result = helix::bluetooth::rfcomm_send_receive(
-            mac, channel, status_cmd, 32, "Brother PT BT status");
-
-        if (!status_result.success) {
-            helix::ui::queue_update([callback, err = status_result.error]() {
-                if (callback) callback(false, "Status query failed: " + err);
+        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+        auto* ctx = loader.get_or_create_context();
+        if (!ctx) {
+            helix::ui::queue_update([callback]() {
+                if (callback) callback(false, "Failed to initialize Bluetooth");
             });
             return;
         }
 
-        auto media = brother_pt_parse_status(status_result.response.data(),
-                                              status_result.response.size());
+        // Single RFCOMM connection for both status query and raster send
+        spdlog::info("[Brother PT BT] Connecting to {} ch{}", mac, channel);
+        int fd = loader.connect_rfcomm(ctx, mac.c_str(), channel);
+        if (fd < 0) {
+            const char* err = loader.last_error ? loader.last_error(ctx) : "Unknown error";
+            helix::ui::queue_update([callback, e = std::string(err)]() {
+                if (callback) callback(false, "RFCOMM connect failed: " + e);
+            });
+            return;
+        }
+
+        auto cleanup = [&]() {
+            loader.disconnect(ctx, fd);
+        };
+
+        // Step 1: Query status to detect loaded tape
+        auto status_cmd = brother_pt_build_status_request();
+        ssize_t written = write(fd, status_cmd.data(), status_cmd.size());
+        if (written < 0) {
+            spdlog::error("[Brother PT BT] Status write failed: {}", strerror(errno));
+            cleanup();
+            helix::ui::queue_update([callback]() {
+                if (callback) callback(false, "Failed to send status request");
+            });
+            return;
+        }
+
+        // Read 32-byte status response with timeout
+        uint8_t status_buf[32] = {};
+        struct timeval tv = {5, 0}; // 5 second timeout
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        ssize_t nread = read(fd, status_buf, 32);
+        if (nread < 32) {
+            spdlog::error("[Brother PT BT] Status read: got {} bytes (expected 32)", nread);
+            cleanup();
+            helix::ui::queue_update([callback]() {
+                if (callback) callback(false, "Failed to read printer status");
+            });
+            return;
+        }
+
+        auto media = brother_pt_parse_status(status_buf, 32);
         if (!media.valid) {
+            cleanup();
             helix::ui::queue_update([callback]() {
                 if (callback) callback(false, "Invalid status response from printer");
             });
@@ -125,6 +167,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
 
         auto error = brother_pt_error_string(media);
         if (!error.empty()) {
+            cleanup();
             helix::ui::queue_update([callback, error]() {
                 if (callback) callback(false, error);
             });
@@ -132,6 +175,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
         }
 
         if (media.width_mm == 0) {
+            cleanup();
             helix::ui::queue_update([callback]() {
                 if (callback) callback(false, "No tape detected in printer");
             });
@@ -141,6 +185,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
         // Step 2: Build label size from detected tape
         auto label_size = brother_pt_label_size_for_tape(media.width_mm);
         if (!label_size) {
+            cleanup();
             helix::ui::queue_update([callback, w = media.width_mm]() {
                 if (callback)
                     callback(false, "Unsupported tape width: " + std::to_string(w) + "mm");
@@ -159,31 +204,67 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool,
 
         auto bitmap = helix::LabelRenderer::render(spool, actual_preset, *label_size);
         if (bitmap.empty()) {
+            cleanup();
             helix::ui::queue_update([callback]() {
                 if (callback) callback(false, "Failed to render label");
             });
             return;
         }
 
-        // Step 4: Build raster and send
-        // Brief delay for RFCOMM socket teardown from status query — the BlueZ
-        // socket isn't fully released until the kernel cleans up the L2CAP channel.
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-
+        // Step 4: Build raster and send on same connection
         auto commands = brother_pt_build_raster(bitmap, media.width_mm);
         if (commands.empty()) {
+            cleanup();
             helix::ui::queue_update([callback]() {
                 if (callback) callback(false, "Failed to build raster data");
             });
             return;
         }
 
-        spdlog::info("[Brother PT BT] Sending {} bytes to {} ch{}",
-                     commands.size(), mac, channel);
+        spdlog::info("[Brother PT BT] Sending {} bytes on fd {}", commands.size(), fd);
 
-        auto result = helix::bluetooth::rfcomm_send(mac, channel, commands, "Brother PT BT");
-        helix::ui::queue_update([callback, result]() {
-            if (callback) callback(result.success, result.error);
+        // Write raster data in chunks
+        size_t total = commands.size();
+        size_t sent = 0;
+        while (sent < total) {
+            size_t chunk = std::min(total - sent, size_t(4096));
+            ssize_t w = write(fd, commands.data() + sent, chunk);
+            if (w < 0) {
+                spdlog::error("[Brother PT BT] Raster write failed at byte {}: {}",
+                              sent, strerror(errno));
+                cleanup();
+                helix::ui::queue_update([callback]() {
+                    if (callback) callback(false, "Failed to send print data");
+                });
+                return;
+            }
+            sent += static_cast<size_t>(w);
+        }
+
+        spdlog::info("[Brother PT BT] Sent {} bytes, waiting for print completion", sent);
+
+        // Brief wait for print completion status (printer sends 32-byte response)
+        struct timeval tv2 = {3, 0};
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv2, sizeof(tv2));
+        uint8_t completion_buf[32] = {};
+        nread = read(fd, completion_buf, 32);
+        if (nread == 32) {
+            auto completion = brother_pt_parse_status(completion_buf, 32);
+            if (completion.valid && completion.status_type == 0x02) {
+                auto cerr = brother_pt_error_string(completion);
+                spdlog::error("[Brother PT BT] Print error: {}", cerr);
+                cleanup();
+                helix::ui::queue_update([callback, cerr]() {
+                    if (callback) callback(false, cerr.empty() ? "Print error" : cerr);
+                });
+                return;
+            }
+            spdlog::debug("[Brother PT BT] Completion status: type={}", completion.status_type);
+        }
+
+        cleanup();
+        helix::ui::queue_update([callback]() {
+            if (callback) callback(true, "");
         });
     }).detach();
 }

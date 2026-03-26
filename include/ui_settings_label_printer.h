@@ -110,6 +110,11 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     std::vector<BtDeviceInfo> bt_devices_;
     bool bt_discovering_ = false;
     lv_subject_t bt_scanning_subject_{}; ///< 0=idle, 1=scanning
+    lv_subject_t test_printing_subject_{}; ///< 0=idle, 1=printing
+
+  public:
+    void test_printing_subject_set(int val) { lv_subject_set_int(&test_printing_subject_, val); }
+  private:
 
     // Static callbacks
     static void on_address_done(lv_event_t* e);
