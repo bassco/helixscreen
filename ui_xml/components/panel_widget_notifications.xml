@@ -9,7 +9,7 @@
   </styles>
   <view name="panel_widget_notifications" extends="lv_obj"
         height="100%" flex_grow="1" style_pad_all="0" scrollable="false">
-    <lv_obj name="status_notification_container" width="100%" height="100%" style_pad_all="0">
+    <lv_obj name="status_notification_container" width="content" height="content" align="center" style_pad_all="0">
       <icon name="status_notification_icon"
             src="notifications" size="#icon_size" variant="secondary" align="center" clickable="true"
             click_focusable="false">
