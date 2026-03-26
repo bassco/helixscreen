@@ -7,6 +7,7 @@
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 
@@ -31,6 +32,12 @@ void SoundSequencer::play(const SoundDefinition& sound, SoundPriority priority) 
 
 void SoundSequencer::stop() {
     stop_requested_.store(true);
+    queue_cv_.notify_one();
+}
+
+void SoundSequencer::set_external_tick(std::function<void(float dt_ms)> fn) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    external_tick_ = std::move(fn);
     queue_cv_.notify_one();
 }
 
@@ -82,7 +89,7 @@ void SoundSequencer::sequencer_loop() {
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
 
-            if (!playing_.load() && request_queue_.empty()) {
+            if (!playing_.load() && request_queue_.empty() && !external_tick_) {
                 // Nothing playing, nothing queued — wait for a signal
                 was_playing = false;
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(10));
@@ -110,8 +117,24 @@ void SoundSequencer::sequencer_loop() {
             }
         }
 
-        // Tick if playing
-        if (playing_.load()) {
+        // External tick routing (for TrackerPlayer)
+        std::function<void(float)> ext_tick;
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            ext_tick = external_tick_;
+        }
+
+        if (ext_tick) {
+            if (!was_playing) {
+                last_tick = std::chrono::steady_clock::now();
+                was_playing = true;
+            }
+            auto now = std::chrono::steady_clock::now();
+            float dt_ms = std::chrono::duration<float, std::milli>(now - last_tick).count();
+            last_tick = now;
+            dt_ms = std::min(dt_ms, 5.0f);
+            ext_tick(dt_ms);
+        } else if (playing_.load()) {
             // Reset last_tick when transitioning to playing to avoid
             // counting queue processing time as elapsed playback time
             if (!was_playing) {
@@ -140,6 +163,41 @@ void SoundSequencer::sequencer_loop() {
     if (playing_.load()) {
         end_playback();
     }
+}
+
+void SoundSequencer::apply_step_voices(const SoundStep& step, float freq, float amplitude,
+                                       float duty) {
+    if (step.chord_count > 0) {
+        // Polyphonic: assign each chord note to a voice slot.
+        // When freq differs from step.freq_hz (sweep/LFO applied), scale chord
+        // intervals by the same ratio so they track the modulation together.
+        int voices = backend_->voice_count();
+        float ratio = 1.0f;
+        if (step.freq_hz > 0 && std::abs(freq - step.freq_hz) > 0.01f) {
+            ratio = freq / step.freq_hz;
+        }
+        for (int v = 0; v < voices; ++v) {
+            if (v < step.chord_count) {
+                backend_->set_voice(v, step.chord_freqs[v] * ratio, amplitude, duty);
+                if (backend_->supports_waveforms()) {
+                    backend_->set_voice_waveform(v, step.wave);
+                }
+            } else {
+                backend_->silence_voice(v);
+            }
+        }
+    } else {
+        // Monophonic: voice 0 only via existing set_tone path
+        if (backend_->supports_waveforms()) {
+            backend_->set_waveform(step.wave);
+        }
+        backend_->set_tone(freq, amplitude, duty);
+        // Silence other voices (no-op on mono backends via default impl)
+        for (int v = 1; v < backend_->voice_count(); ++v)
+            backend_->silence_voice(v);
+    }
+    // Release fence: make all voice writes visible to render thread
+    std::atomic_thread_fence(std::memory_order_release);
 }
 
 void SoundSequencer::tick(float dt_ms) {
@@ -209,11 +267,6 @@ void SoundSequencer::tick(float dt_ms) {
     amplitude = std::clamp(amplitude, 0.0f, 1.0f);
     duty = std::clamp(duty, 0.0f, 1.0f);
 
-    // Set waveform if backend supports it
-    if (backend_->supports_waveforms()) {
-        backend_->set_waveform(step.wave);
-    }
-
     // Set filter if backend supports it and step has a filter configured
     if (backend_->supports_filter() && !step.filter.type.empty()) {
         float cutoff = step.filter.cutoff;
@@ -223,7 +276,9 @@ void SoundSequencer::tick(float dt_ms) {
         backend_->set_filter(step.filter.type, cutoff);
     }
 
-    backend_->set_tone(freq, amplitude, duty);
+    // Apply voices (polyphonic or monophonic). Pass the modulated freq directly —
+    // apply_step_voices scales chord intervals by the freq/step.freq_hz ratio internally.
+    apply_step_voices(step, freq, amplitude, duty);
 }
 
 void SoundSequencer::advance_step() {

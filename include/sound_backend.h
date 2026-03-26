@@ -3,10 +3,18 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 
 /// Forward declaration — defined in sound_theme.h
 enum class Waveform;
+
+/// Sound priority levels (higher numeric value = more important)
+enum class SoundPriority {
+    UI = 0,    // button taps, nav sounds — can be interrupted by anything
+    EVENT = 1, // print complete, errors — only interrupted by ALARM
+    ALARM = 2  // critical alerts — never interrupted
+};
 
 /**
  * @brief Abstract interface for sound output backends
@@ -53,8 +61,39 @@ class SoundBackend {
     /// @param cutoff Filter cutoff frequency in Hz
     virtual void set_filter(const std::string& /* type */, float /* cutoff */) {}
 
+    /// Set a specific voice slot (0-based). Default: slot 0 maps to set_tone().
+    virtual void set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) {
+        if (slot == 0) set_tone(freq_hz, amplitude, duty_cycle);
+    }
+
+    /// Set waveform for a specific voice slot. Default: slot 0 maps to set_waveform().
+    virtual void set_voice_waveform(int slot, Waveform w) {
+        if (slot == 0) set_waveform(w);
+    }
+
+    /// Silence a specific voice slot. Default: slot 0 maps to silence().
+    virtual void silence_voice(int slot) {
+        if (slot == 0) silence();
+    }
+
+    /// Number of independent voice slots. Default: 1 (monophonic).
+    virtual int voice_count() const { return 1; }
+
     /// Minimum tick interval the backend can handle (ms)
     virtual float min_tick_ms() const {
         return 1.0f;
     }
+
+    /// Whether this backend supports direct audio rendering via set_render_source.
+    /// Backends with real audio output (SDL, ALSA) return true.
+    /// Frequency-only backends (PWM, M300) return false.
+    virtual bool supports_render_source() const { return false; }
+
+    /// Set an external audio render source. When set, the backend's render loop
+    /// calls this instead of per-voice waveform generation.
+    /// Callback signature: void(float* output_buffer, size_t frame_count, int sample_rate)
+    virtual void set_render_source(std::function<void(float*, size_t, int)> /* fn */) {}
+
+    /// Clear the external render source, reverting to per-voice synthesis.
+    virtual void clear_render_source() {}
 };

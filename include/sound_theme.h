@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -50,6 +51,9 @@ struct SoundStep {
     SweepParams sweep;
     FilterParams filter;
     bool is_pause = false;
+    // Polyphonic chord (empty = monophonic, use freq_hz on voice 0)
+    std::array<float, 4> chord_freqs{};
+    uint8_t chord_count = 0;  // 0 = monophonic
 };
 
 /// A named sound (sequence of steps)

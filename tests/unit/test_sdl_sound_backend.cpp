@@ -4,6 +4,7 @@
 #ifdef HELIX_DISPLAY_SDL
 
 #include "sdl_sound_backend.h"
+#include "sound_synthesis.h"
 
 #include <cmath>
 #include <vector>
@@ -70,7 +71,7 @@ TEST_CASE("Square wave generates bipolar signal", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     // Every sample should be either +1 or -1
@@ -84,7 +85,7 @@ TEST_CASE("Square wave duty cycle 0.5 produces roughly equal positive and negati
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     int pos = count_positive(buffer.data(), SAMPLES_10MS);
@@ -98,7 +99,7 @@ TEST_CASE("Square wave RMS at full amplitude is close to 1.0", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     // Square wave at amplitude 1.0 has RMS of exactly 1.0
@@ -114,7 +115,7 @@ TEST_CASE("Sine wave first samples match expected values", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     // Verify first few samples match sin(2*pi*440*n/44100)
@@ -130,7 +131,7 @@ TEST_CASE("Sine wave RMS is amplitude / sqrt(2)", "[sound][sdl]") {
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     float rms = compute_rms(buffer.data(), num_samples);
@@ -142,7 +143,7 @@ TEST_CASE("Sine wave stays within amplitude bounds", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 0.7f, 0.5f, phase);
 
     float max_abs = compute_max_abs(buffer.data(), SAMPLES_10MS);
@@ -160,7 +161,7 @@ TEST_CASE("Saw wave ramps from -amplitude to +amplitude", "[sound][sdl]") {
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SAW, freq,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SAW, freq,
                                       1.0f, 0.5f, phase);
 
     // Samples should span from near -1 to near +1
@@ -177,7 +178,7 @@ TEST_CASE("Saw wave is mostly monotonically increasing within a period", "[sound
     std::vector<float> buffer(period_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), period_samples, SAMPLE_RATE, Waveform::SAW,
+    helix::audio::generate_samples(buffer.data(), period_samples, SAMPLE_RATE, Waveform::SAW,
                                       freq, 1.0f, 0.5f, phase);
 
     // Count how many samples are increasing (allow a few for the reset at period boundary)
@@ -201,7 +202,7 @@ TEST_CASE("Triangle wave ramps up and down symmetrically", "[sound][sdl]") {
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::TRIANGLE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::TRIANGLE,
                                       freq, 1.0f, 0.5f, phase);
 
     // Should reach near +1 and near -1
@@ -217,9 +218,9 @@ TEST_CASE("Triangle wave has lower RMS than square wave", "[sound][sdl]") {
     std::vector<float> buffer_sq(num_samples);
     float phase_tri = 0, phase_sq = 0;
 
-    SDLSoundBackend::generate_samples(buffer_tri.data(), num_samples, SAMPLE_RATE,
+    helix::audio::generate_samples(buffer_tri.data(), num_samples, SAMPLE_RATE,
                                       Waveform::TRIANGLE, 440.0f, 1.0f, 0.5f, phase_tri);
-    SDLSoundBackend::generate_samples(buffer_sq.data(), num_samples, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer_sq.data(), num_samples, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.5f, phase_sq);
 
     float rms_tri = compute_rms(buffer_tri.data(), num_samples);
@@ -238,7 +239,7 @@ TEST_CASE("Amplitude scaling constrains output range", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 0.5f, 0.5f, phase);
 
     for (int i = 0; i < SAMPLES_10MS; i++) {
@@ -251,7 +252,7 @@ TEST_CASE("Amplitude 0.5 sine wave has correct RMS", "[sound][sdl]") {
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 0.5f, 0.5f, phase);
 
     float rms = compute_rms(buffer.data(), num_samples);
@@ -263,7 +264,7 @@ TEST_CASE("Zero amplitude produces silence", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 0.0f, 0.5f, phase);
 
     for (int i = 0; i < SAMPLES_10MS; i++) {
@@ -277,7 +278,7 @@ TEST_CASE("Zero amplitude works for all waveforms", "[sound][sdl]") {
 
     for (auto w : waves) {
         float phase = 0;
-        SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, w, 440.0f, 0.0f,
+        helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, w, 440.0f, 0.0f,
                                           0.5f, phase);
 
         float rms = compute_rms(buffer.data(), SAMPLES_10MS);
@@ -296,10 +297,10 @@ TEST_CASE("Phase continuity across generate_samples calls", "[sound][sdl]") {
     std::vector<float> buf2(half);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buf1.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
+    helix::audio::generate_samples(buf1.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
                                       0.5f, phase);
     // Phase carries over
-    SDLSoundBackend::generate_samples(buf2.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
+    helix::audio::generate_samples(buf2.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
                                       0.5f, phase);
 
     // The last sample of buf1 and first sample of buf2 should be continuous
@@ -320,13 +321,13 @@ TEST_CASE("Phase continuity produces identical output to single call", "[sound][
     std::vector<float> half2(half);
 
     float phase_full = 0;
-    SDLSoundBackend::generate_samples(full_buf.data(), total, SAMPLE_RATE, Waveform::SINE, 440.0f,
+    helix::audio::generate_samples(full_buf.data(), total, SAMPLE_RATE, Waveform::SINE, 440.0f,
                                       1.0f, 0.5f, phase_full);
 
     float phase_split = 0;
-    SDLSoundBackend::generate_samples(half1.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
+    helix::audio::generate_samples(half1.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
                                       0.5f, phase_split);
-    SDLSoundBackend::generate_samples(half2.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
+    helix::audio::generate_samples(half2.data(), half, SAMPLE_RATE, Waveform::SINE, 440.0f, 1.0f,
                                       0.5f, phase_split);
 
     for (int i = 0; i < half; i++) {
@@ -345,15 +346,15 @@ TEST_CASE("Lowpass filter attenuates high frequencies", "[sound][sdl]") {
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
                                       10000.0f, 1.0f, 0.5f, phase);
 
     float rms_before = compute_rms(buffer.data(), num_samples);
 
     // Apply lowpass at 1kHz
-    SDLSoundBackend::BiquadFilter filter{};
-    SDLSoundBackend::compute_biquad_coeffs(filter, "lowpass", 1000.0f, SAMPLE_RATE);
-    SDLSoundBackend::apply_filter(filter, buffer.data(), num_samples);
+    helix::audio::BiquadFilter filter{};
+    helix::audio::compute_biquad_coeffs(filter, helix::audio::FilterType::LOWPASS, 1000.0f, SAMPLE_RATE);
+    helix::audio::apply_filter(filter, buffer.data(), num_samples);
 
     float rms_after = compute_rms(buffer.data(), num_samples);
 
@@ -367,15 +368,15 @@ TEST_CASE("Highpass filter attenuates low frequencies", "[sound][sdl]") {
     float phase = 0;
 
     // Generate 100Hz sine
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
                                       100.0f, 1.0f, 0.5f, phase);
 
     float rms_before = compute_rms(buffer.data(), num_samples);
 
     // Apply highpass at 1kHz
-    SDLSoundBackend::BiquadFilter filter{};
-    SDLSoundBackend::compute_biquad_coeffs(filter, "highpass", 1000.0f, SAMPLE_RATE);
-    SDLSoundBackend::apply_filter(filter, buffer.data(), num_samples);
+    helix::audio::BiquadFilter filter{};
+    helix::audio::compute_biquad_coeffs(filter, helix::audio::FilterType::HIGHPASS, 1000.0f, SAMPLE_RATE);
+    helix::audio::apply_filter(filter, buffer.data(), num_samples);
 
     float rms_after = compute_rms(buffer.data(), num_samples);
 
@@ -390,15 +391,15 @@ TEST_CASE("Lowpass at extreme cutoff barely changes signal", "[sound][sdl]") {
     float phase = 0;
 
     // Generate 440Hz sine
-    SDLSoundBackend::generate_samples(original.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(original.data(), num_samples, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     std::copy(original.begin(), original.end(), filtered.begin());
 
     // Lowpass at 20kHz — 440Hz should pass through nearly unaffected
-    SDLSoundBackend::BiquadFilter filter{};
-    SDLSoundBackend::compute_biquad_coeffs(filter, "lowpass", 20000.0f, SAMPLE_RATE);
-    SDLSoundBackend::apply_filter(filter, filtered.data(), num_samples);
+    helix::audio::BiquadFilter filter{};
+    helix::audio::compute_biquad_coeffs(filter, helix::audio::FilterType::LOWPASS, 20000.0f, SAMPLE_RATE);
+    helix::audio::apply_filter(filter, filtered.data(), num_samples);
 
     float rms_orig = compute_rms(original.data(), num_samples);
     float rms_filt = compute_rms(filtered.data(), num_samples);
@@ -411,9 +412,9 @@ TEST_CASE("Filter preserves silence", "[sound][sdl]") {
     constexpr int num_samples = 441;
     std::vector<float> buffer(num_samples, 0.0f);
 
-    SDLSoundBackend::BiquadFilter filter{};
-    SDLSoundBackend::compute_biquad_coeffs(filter, "lowpass", 1000.0f, SAMPLE_RATE);
-    SDLSoundBackend::apply_filter(filter, buffer.data(), num_samples);
+    helix::audio::BiquadFilter filter{};
+    helix::audio::compute_biquad_coeffs(filter, helix::audio::FilterType::LOWPASS, 1000.0f, SAMPLE_RATE);
+    helix::audio::apply_filter(filter, buffer.data(), num_samples);
 
     for (int i = 0; i < num_samples; i++) {
         REQUIRE(buffer[i] == 0.0f);
@@ -434,7 +435,7 @@ TEST_CASE("set_tone stores frequency and amplitude for generation", "[sound][sdl
     // The backend should use whatever was last set via set_tone
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.5f, phase);
 
     float rms = compute_rms(buffer.data(), SAMPLES_10MS);
@@ -449,7 +450,7 @@ TEST_CASE("set_tone with zero amplitude produces silence", "[sound][sdl]") {
     // Verify via generate_samples that zero amplitude = silence
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 0.0f, 0.5f, phase);
 
     float rms = compute_rms(buffer.data(), SAMPLES_10MS);
@@ -467,7 +468,7 @@ TEST_CASE("silence() results in zero amplitude output", "[sound][sdl]") {
     // We verify via the static method with amplitude 0
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 0.0f, 0.5f, phase);
 
     float rms = compute_rms(buffer.data(), SAMPLES_10MS);
@@ -485,14 +486,14 @@ TEST_CASE("set_waveform switches active waveform type", "[sound][sdl]") {
     backend.set_waveform(Waveform::SINE);
     std::vector<float> sine_buf(SAMPLES_10MS);
     float phase1 = 0;
-    SDLSoundBackend::generate_samples(sine_buf.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(sine_buf.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       440.0f, 1.0f, 0.5f, phase1);
 
     // Generate saw
     backend.set_waveform(Waveform::SAW);
     std::vector<float> saw_buf(SAMPLES_10MS);
     float phase2 = 0;
-    SDLSoundBackend::generate_samples(saw_buf.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SAW,
+    helix::audio::generate_samples(saw_buf.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SAW,
                                       440.0f, 1.0f, 0.5f, phase2);
 
     // The waveforms should produce different sample values
@@ -512,7 +513,7 @@ TEST_CASE("All four waveforms produce distinct signals", "[sound][sdl]") {
 
     for (int w = 0; w < 4; w++) {
         float phase = 0;
-        SDLSoundBackend::generate_samples(buffers[w].data(), SAMPLES_10MS, SAMPLE_RATE, waves[w],
+        helix::audio::generate_samples(buffers[w].data(), SAMPLES_10MS, SAMPLE_RATE, waves[w],
                                           440.0f, 1.0f, 0.5f, phase);
     }
 
@@ -537,7 +538,7 @@ TEST_CASE("Very high frequency produces valid output", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       20000.0f, 1.0f, 0.5f, phase);
 
     // Should still produce valid samples (no NaN or inf)
@@ -551,7 +552,7 @@ TEST_CASE("Very low frequency produces valid output", "[sound][sdl]") {
     std::vector<float> buffer(SAMPLES_10MS);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+    helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                       20.0f, 1.0f, 0.5f, phase);
 
     for (int i = 0; i < SAMPLES_10MS; i++) {
@@ -566,7 +567,7 @@ TEST_CASE("Square wave duty cycle affects positive/negative ratio", "[sound][sdl
     std::vector<float> buffer(num_samples);
     float phase = 0;
 
-    SDLSoundBackend::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SQUARE,
+    helix::audio::generate_samples(buffer.data(), num_samples, SAMPLE_RATE, Waveform::SQUARE,
                                       440.0f, 1.0f, 0.75f, phase);
 
     int pos = count_positive(buffer.data(), num_samples);
@@ -582,7 +583,7 @@ TEST_CASE("Phase wraps correctly and stays in [0, 1)", "[sound][sdl]") {
 
     // Generate many buffers — phase should stay bounded
     for (int i = 0; i < 100; i++) {
-        SDLSoundBackend::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
+        helix::audio::generate_samples(buffer.data(), SAMPLES_10MS, SAMPLE_RATE, Waveform::SINE,
                                           440.0f, 1.0f, 0.5f, phase);
         REQUIRE(phase >= 0.0f);
         REQUIRE(phase < 1.0f);

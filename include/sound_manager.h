@@ -6,6 +6,10 @@
 #include "sound_sequencer.h"
 #include "sound_theme.h"
 
+#ifdef HELIX_HAS_TRACKER
+#include "tracker_player.h"
+#endif
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -80,6 +84,17 @@ class SoundManager {
     /// Check if sound playback is available (backend exists + sounds enabled)
     [[nodiscard]] bool is_available() const;
 
+#ifdef HELIX_HAS_TRACKER
+    /// Play a MOD/MED tracker file
+    void play_file(const std::string& path, SoundPriority priority = SoundPriority::EVENT);
+
+    /// Stop tracker playback
+    void stop_tracker();
+
+    /// Check if tracker is currently playing
+    bool is_tracker_playing() const;
+#endif
+
   private:
     SoundManager() = default;
     ~SoundManager() = default;
@@ -99,6 +114,11 @@ class SoundManager {
     SoundTheme current_theme_;
     std::string theme_name_ = "default";
     bool initialized_ = false;
+
+#ifdef HELIX_HAS_TRACKER
+    std::unique_ptr<helix::audio::TrackerPlayer> tracker_;
+    SoundPriority tracker_priority_ = SoundPriority::UI;
+#endif
 };
 
 } // namespace helix

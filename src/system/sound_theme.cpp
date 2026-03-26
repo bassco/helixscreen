@@ -143,6 +143,23 @@ static SoundStep parse_step(const json& j, float bpm, Waveform default_wave, flo
         step.freq_hz = clamp_freq(j["freq"].get<float>());
     }
 
+    // Polyphonic: "notes" array takes priority over single "note"/"freq"
+    if (j.contains("notes") && j["notes"].is_array()) {
+        auto& notes_arr = j["notes"];
+        step.chord_count = static_cast<uint8_t>(std::min(notes_arr.size(), size_t(4)));
+        for (uint8_t i = 0; i < step.chord_count; ++i) {
+            if (notes_arr[i].is_string()) {
+                step.chord_freqs[i] = SoundThemeParser::note_to_freq(notes_arr[i].get<std::string>());
+            } else if (notes_arr[i].is_number()) {
+                step.chord_freqs[i] = clamp_freq(notes_arr[i].get<float>());
+            }
+        }
+        // Also set freq_hz to root note for mono backends
+        if (step.chord_count > 0) {
+            step.freq_hz = step.chord_freqs[0];
+        }
+    }
+
     // Duration: either musical notation string or raw ms number
     if (j.contains("dur")) {
         if (j["dur"].is_string() && bpm > 0) {

@@ -643,6 +643,47 @@ CXXFLAGS += $(MOCK_DEFINES)
 # Add systemd defines to C++ compiler flags (for logging_init.cpp)
 CXXFLAGS += $(SYSTEMD_CXXFLAGS)
 
+# ALSA audio backend — real waveform synthesis on Linux targets with libasound2
+# Enabled for: Pi (all variants), x86 SBCs
+# Not available on: macOS (no ALSA), AD5M (no sound card), K1/K2/MIPS (musl, no ALSA)
+ALSA_LIBS :=
+ALSA_CXXFLAGS :=
+ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
+    ALSA_CXXFLAGS := -DHELIX_HAS_ALSA
+    ALSA_LIBS := -lasound
+else ifeq ($(PLATFORM_TARGET),native)
+    ifeq ($(UNAME_S),Linux)
+        ALSA_PKG := $(shell pkg-config --exists alsa 2>/dev/null && echo "yes")
+        ifeq ($(ALSA_PKG),yes)
+            ALSA_CXXFLAGS := -DHELIX_HAS_ALSA $(shell pkg-config --cflags alsa 2>/dev/null)
+            ALSA_LIBS := $(shell pkg-config --libs alsa 2>/dev/null)
+        endif
+    endif
+endif
+CXXFLAGS += $(ALSA_CXXFLAGS)
+LDFLAGS += $(ALSA_LIBS)
+
+# Sound system — synth, sequencer, backends (PWM/M300/SDL/ALSA), themes
+# Tracker player — MOD/MED file playback with PCM samples (requires HELIX_HAS_SOUND)
+#
+# HELIX_HAS_SOUND:   Pi, x86, AD5M, native — any platform with audio output
+# HELIX_HAS_TRACKER: Pi, x86, native — platforms with real audio (ALSA/SDL)
+# Disabled entirely: K1, K2, MIPS — no audio hardware at all
+SOUND_CXXFLAGS :=
+TRACKER_CXXFLAGS :=
+ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
+    SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
+    TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
+else ifneq (,$(filter ad5m ad5x,$(PLATFORM_TARGET)))
+    # AD5M: PWM beeper only, no tracker (no DAC for sample playback)
+    SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
+else ifeq ($(PLATFORM_TARGET),native)
+    SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
+    TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
+endif
+# K1, K2, MIPS — no sound at all
+CXXFLAGS += $(SOUND_CXXFLAGS) $(TRACKER_CXXFLAGS)
+
 # Parallel build control
 # Auto-parallelizes builds: plain 'make' automatically uses -j$(NPROC).
 #

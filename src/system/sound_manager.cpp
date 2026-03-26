@@ -16,6 +16,15 @@
 #include "sdl_sound_backend.h"
 #endif
 
+#ifdef HELIX_HAS_ALSA
+#include "alsa_sound_backend.h"
+#endif
+
+#ifdef HELIX_HAS_TRACKER
+#include "tracker_module.h"
+#include "tracker_player.h"
+#endif
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -67,6 +76,10 @@ void SoundManager::shutdown() {
     if (!initialized_)
         return;
 
+#ifdef HELIX_HAS_TRACKER
+    stop_tracker();
+#endif
+
     if (sequencer_) {
         sequencer_->shutdown();
         sequencer_.reset();
@@ -107,6 +120,18 @@ void SoundManager::play(const std::string& sound_name, SoundPriority priority) {
                       theme_name_);
         return;
     }
+
+#ifdef HELIX_HAS_TRACKER
+    if (tracker_ && tracker_->is_playing()) {
+        if (static_cast<int>(priority) >= static_cast<int>(tracker_priority_)) {
+            stop_tracker();
+        } else {
+            spdlog::debug("[SoundManager] play('{}') skipped - tracker at higher priority",
+                          sound_name);
+            return;
+        }
+    }
+#endif
 
     sequencer_->play(it->second, priority);
     spdlog::debug("[SoundManager] play('{}', priority={})", sound_name, static_cast<int>(priority));
@@ -166,9 +191,10 @@ bool SoundManager::is_available() const {
 std::shared_ptr<SoundBackend> SoundManager::create_backend() {
     // Auto-detection order:
     // 1. SDL audio available (desktop build) -> SDLBackend
-    // 2. /sys/class/pwm/pwmchip0 exists -> PWMBackend
-    // 3. Moonraker connected -> M300Backend
-    // 4. None -> sounds disabled
+    // 2. ALSA PCM available (Linux with audio) -> ALSABackend
+    // 3. /sys/class/pwm/pwmchip0 exists -> PWMBackend
+    // 4. Moonraker connected -> M300Backend
+    // 5. None -> sounds disabled
 
 #ifdef HELIX_DISPLAY_SDL
     auto sdl_backend = std::make_shared<SDLSoundBackend>();
@@ -177,6 +203,15 @@ std::shared_ptr<SoundBackend> SoundManager::create_backend() {
         return sdl_backend;
     }
     spdlog::warn("[SoundManager] SDL audio init failed, falling back");
+#endif
+
+#ifdef HELIX_HAS_ALSA
+    auto alsa_backend = std::make_shared<ALSASoundBackend>();
+    if (alsa_backend->initialize()) {
+        spdlog::info("[SoundManager] Using ALSA PCM backend");
+        return alsa_backend;
+    }
+    spdlog::debug("[SoundManager] ALSA not available, falling back");
 #endif
 
     // Try PWM sysfs backend (AD5M buzzer)
@@ -225,3 +260,72 @@ bool SoundManager::is_ui_sound(const std::string& name) {
     return name == "button_tap" || name == "toggle_on" || name == "toggle_off" ||
            name == "nav_forward" || name == "nav_back" || name == "dropdown_open";
 }
+
+// ============================================================================
+// Tracker playback (MOD/MED files)
+// ============================================================================
+
+#ifdef HELIX_HAS_TRACKER
+void SoundManager::play_file(const std::string& path, SoundPriority priority) {
+    if (!AudioSettingsManager::instance().get_sounds_enabled()) {
+        spdlog::trace("[SoundManager] play_file('{}') skipped - sounds disabled", path);
+        return;
+    }
+    if (!backend_ || !sequencer_) {
+        spdlog::debug("[SoundManager] play_file('{}') skipped - no backend/sequencer", path);
+        return;
+    }
+
+    auto module = helix::audio::TrackerModule::load(path);
+    if (!module) {
+        spdlog::warn("[SoundManager] play_file('{}') - failed to load", path);
+        return;
+    }
+
+    // IMPORTANT: Clear external tick FIRST to prevent use-after-free on old tracker
+    sequencer_->set_external_tick(nullptr);
+    if (tracker_) {
+        tracker_->stop();
+    }
+    sequencer_->stop();
+
+    // Create and start tracker
+    tracker_ = std::make_unique<helix::audio::TrackerPlayer>(backend_);
+    tracker_->load(std::move(*module));
+    tracker_priority_ = priority;
+    tracker_->play();
+
+    // Route ticks to tracker for sequencing
+    auto* tp = tracker_.get();
+    sequencer_->set_external_tick([tp](float dt_ms) { tp->tick(dt_ms); });
+
+    // Set render source for PCM sample playback on capable backends.
+    // Frequency-only backends (PWM, M300) get synth fallback via set_voice().
+    if (backend_->supports_render_source()) {
+        backend_->set_render_source([tp](float* buf, size_t frames, int sr) {
+            tp->render_audio(buf, frames, sr);
+        });
+    }
+
+    spdlog::info("[SoundManager] play_file('{}', priority={})", path, static_cast<int>(priority));
+}
+
+void SoundManager::stop_tracker() {
+    // IMPORTANT: Clear render source and external tick BEFORE destroying tracker
+    if (backend_) {
+        backend_->clear_render_source();
+    }
+    if (sequencer_) {
+        sequencer_->set_external_tick(nullptr);
+    }
+    if (tracker_) {
+        tracker_->stop();
+        tracker_.reset();
+    }
+    spdlog::debug("[SoundManager] stop_tracker");
+}
+
+bool SoundManager::is_tracker_playing() const {
+    return tracker_ && tracker_->is_playing();
+}
+#endif

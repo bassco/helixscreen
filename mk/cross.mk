@@ -1197,6 +1197,11 @@ DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.D
 # Tar-compatible excludes (same patterns, different syntax)
 DEPLOY_TAR_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
+# Exclude tracker files (MOD/MED) on platforms without HELIX_HAS_TRACKER
+# rsync syntax:
+DEPLOY_NO_TRACKER := --exclude='*.mod' --exclude='*.med'
+# tar syntax:
+DEPLOY_TAR_NO_TRACKER := --exclude='*.mod' --exclude='*.med'
 DEPLOY_ASSET_DIRS := ui_xml assets config moonraker-plugin
 
 # Common deploy recipe (called with: $(call deploy-common,SSH_TARGET,DEPLOY_DIR,BIN_DIR))
@@ -1421,7 +1426,7 @@ deploy-ad5m:
 	cat scripts/$(INSTALLER_FILENAME) | ssh $(AD5M_SSH_TARGET) "cat > $(AD5M_DEPLOY_DIR)/$(INSTALLER_FILENAME) && chmod +x $(AD5M_DEPLOY_DIR)/$(INSTALLER_FILENAME)"
 	@# Transfer assets via tar (uses shared DEPLOY_TAR_EXCLUDES and DEPLOY_ASSET_DIRS)
 	@echo "$(DIM)Transferring assets...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(AD5M_SSH_TARGET) "cd $(AD5M_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(AD5M_SSH_TARGET) "cd $(AD5M_DEPLOY_DIR) && tar -xf -"
 	@# Transfer pre-rendered images
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered images...$(RESET)"; \
@@ -1599,7 +1604,7 @@ deploy-cc1:
 	cat scripts/install.sh | ssh $(CC1_SSH_TARGET) "cat > $(CC1_DEPLOY_DIR)/install.sh && chmod +x $(CC1_DEPLOY_DIR)/install.sh"
 	@# Transfer assets via tar (uses shared DEPLOY_TAR_EXCLUDES and DEPLOY_ASSET_DIRS)
 	@echo "$(DIM)Transferring assets...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(CC1_SSH_TARGET) "cd $(CC1_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(CC1_SSH_TARGET) "cd $(CC1_DEPLOY_DIR) && tar -xf -"
 	@# Transfer pre-rendered images
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered images...$(RESET)"; \
@@ -1678,7 +1683,7 @@ deploy-snapmaker-u1:
 	@if [ -f build/snapmaker-u1/bin/helix-splash ]; then scp build/snapmaker-u1/bin/helix-splash $(SNAPMAKER_U1_SSH_TARGET):$(SNAPMAKER_U1_DEPLOY_DIR)/bin/; fi
 	ssh $(SNAPMAKER_U1_SSH_TARGET) "chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/bin/helix-*"
 	@# Transfer assets
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && tar -xf -"
 	@if [ -f "build/snapmaker-u1/certs/ca-certificates.crt" ]; then \
 		echo "  $(DIM)Deploying CA certificates...$(RESET)"; \
 		ssh $(SNAPMAKER_U1_SSH_TARGET) "mkdir -p $(SNAPMAKER_U1_DEPLOY_DIR)/certs"; \
@@ -1694,7 +1699,7 @@ deploy-snapmaker-u1-fg:
 	ssh $(SNAPMAKER_U1_SSH_TARGET) "sudo killall helix-screen helix-splash 2>/dev/null || true; sudo mkdir -p $(SNAPMAKER_U1_DEPLOY_DIR)/bin"
 	scp build/snapmaker-u1/bin/helix-screen $(SNAPMAKER_U1_SSH_TARGET):$(SNAPMAKER_U1_DEPLOY_DIR)/bin/
 	ssh $(SNAPMAKER_U1_SSH_TARGET) "chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/bin/helix-*"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && tar -xf -"
 	@echo "$(GREEN)✓ Deployed to $(SNAPMAKER_U1_HOST):$(SNAPMAKER_U1_DEPLOY_DIR)$(RESET)"
 	@echo "$(CYAN)Starting helix-screen on $(SNAPMAKER_U1_HOST) (foreground, verbose)...$(RESET)"
 	ssh -t $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && sudo ./bin/helix-screen -vv"
@@ -1767,7 +1772,7 @@ deploy-k1:
 	cat scripts/helix-launcher.sh | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-launcher.sh && chmod +x $(K1_DEPLOY_DIR)/bin/helix-launcher.sh"
 	@# Transfer assets via tar
 	@echo "$(DIM)Transferring assets...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && tar -xf -"
 	@# Transfer pre-rendered images
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered images...$(RESET)"; \
@@ -1851,7 +1856,7 @@ deploy-k1-dynamic:
 	cat scripts/helix-launcher.sh | ssh $(K1_SSH_TARGET) "cat > $(K1_DEPLOY_DIR)/bin/helix-launcher.sh && chmod +x $(K1_DEPLOY_DIR)/bin/helix-launcher.sh"
 	@# Transfer assets via tar
 	@echo "$(DIM)Transferring assets...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && tar -xf -"
 	@# Transfer pre-rendered images
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered images...$(RESET)"; \
@@ -1953,7 +1958,7 @@ deploy-k2:
 	cat scripts/helix-launcher.sh | ssh $(K2_SSH_TARGET) "cat > $(K2_DEPLOY_DIR)/bin/helix-launcher.sh && chmod +x $(K2_DEPLOY_DIR)/bin/helix-launcher.sh"
 	@# Transfer assets via tar
 	@echo "$(DIM)Transferring assets...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_ASSET_DIRS) | ssh $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR) && tar -xf -"
 	@# Transfer pre-rendered images
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered images...$(RESET)"; \

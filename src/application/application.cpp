@@ -476,6 +476,7 @@ int Application::run(int argc, char** argv) {
     // Initialize SoundManager (beta feature - audio feedback)
     if (Config::get_instance()->is_beta_features_enabled()) {
         SoundManager::instance().initialize();
+        SoundManager::instance().play("startup", SoundPriority::EVENT);
     }
 
     // Update DisplaySettingsManager with theme mode support (must be after both theme and settings
@@ -2189,11 +2190,10 @@ bool Application::connect_moonraker() {
         }
         http_base_url = "http://" + host_port;
     } else {
-        moonraker_url =
-            "ws://" + m_config->get<std::string>(m_config->df() + "moonraker_host") + ":" +
-            std::to_string(m_config->get<int>(m_config->df() + "moonraker_port")) + "/websocket";
-        http_base_url = "http://" + m_config->get<std::string>(m_config->df() + "moonraker_host") +
-                        ":" + std::to_string(m_config->get<int>(m_config->df() + "moonraker_port"));
+        auto host = m_config->get<std::string>(m_config->df() + "moonraker_host", "localhost");
+        auto port = m_config->get<int>(m_config->df() + "moonraker_port", 7125);
+        moonraker_url = "ws://" + host + ":" + std::to_string(port) + "/websocket";
+        http_base_url = "http://" + host + ":" + std::to_string(port);
     }
 
     // Discovery callbacks are already registered (setup_discovery_callbacks in init_moonraker)

@@ -37,6 +37,10 @@ inline constexpr int kContributorCount = 1;
 #include "ui/ui_lazy_panel_helper.h"
 #include "wizard_config_paths.h"
 
+#ifdef HELIX_HAS_TRACKER
+#include "sound_manager.h"
+#endif
+
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
@@ -196,10 +200,19 @@ void AboutSettingsOverlay::on_activate() {
     if (marquee_content_) {
         lv_label_set_long_mode(marquee_content_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     }
+
+#ifdef HELIX_HAS_TRACKER
+    helix::SoundManager::instance().play_file(
+        "assets/sounds/space_debris.mod", SoundPriority::EVENT);
+#endif
 }
 
 void AboutSettingsOverlay::on_deactivate() {
     OverlayBase::on_deactivate();
+
+#ifdef HELIX_HAS_TRACKER
+    helix::SoundManager::instance().stop_tracker();
+#endif
 }
 
 // ============================================================================

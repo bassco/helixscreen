@@ -8,12 +8,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 SDLSoundBackend::SDLSoundBackend() = default;
 
@@ -44,6 +39,8 @@ bool SDLSoundBackend::initialize() {
 
     sample_rate_ = obtained.freq;
     SDL_PauseAudioDevice(device_id_, 0); // Start playback
+    voice_buf_.resize(obtained.samples);
+    mix_buf_.resize(obtained.samples);
     initialized_ = true;
 
     spdlog::info("[SDLSound] Audio initialized: {} Hz, {} samples buffer", sample_rate_,
@@ -63,125 +60,61 @@ void SDLSoundBackend::shutdown() {
 }
 
 void SDLSoundBackend::set_tone(float freq_hz, float amplitude, float duty_cycle) {
-    current_freq_.store(freq_hz, std::memory_order_relaxed);
-    current_amplitude_.store(amplitude, std::memory_order_relaxed);
-    current_duty_.store(duty_cycle, std::memory_order_relaxed);
+    set_voice(0, freq_hz, amplitude, duty_cycle);
 }
 
 void SDLSoundBackend::silence() {
-    current_amplitude_.store(0, std::memory_order_relaxed);
+    for (int v = 0; v < MAX_VOICES; ++v)
+        voices_[v].amplitude.store(0, std::memory_order_relaxed);
 }
 
 void SDLSoundBackend::set_waveform(Waveform w) {
-    current_wave_.store(w, std::memory_order_relaxed);
+    set_voice_waveform(0, w);
+}
+
+void SDLSoundBackend::set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) {
+    if (slot < 0 || slot >= MAX_VOICES) return;
+    voices_[slot].freq.store(freq_hz, std::memory_order_relaxed);
+    voices_[slot].amplitude.store(amplitude, std::memory_order_relaxed);
+    voices_[slot].duty.store(duty_cycle, std::memory_order_relaxed);
+}
+
+void SDLSoundBackend::set_voice_waveform(int slot, Waveform w) {
+    if (slot < 0 || slot >= MAX_VOICES) return;
+    voices_[slot].wave.store(w, std::memory_order_relaxed);
+}
+
+void SDLSoundBackend::silence_voice(int slot) {
+    if (slot < 0 || slot >= MAX_VOICES) return;
+    voices_[slot].amplitude.store(0, std::memory_order_relaxed);
+}
+
+void SDLSoundBackend::set_render_source(std::function<void(float*, size_t, int)> fn) {
+    std::lock_guard<std::mutex> lock(render_source_mutex_);
+    render_source_ = std::move(fn);
+}
+
+void SDLSoundBackend::clear_render_source() {
+    std::lock_guard<std::mutex> lock(render_source_mutex_);
+    render_source_ = nullptr;
 }
 
 void SDLSoundBackend::set_filter(const std::string& type, float cutoff) {
+    // Note: compute_biquad_coeffs writes to filter_ (plain struct) from the sequencer
+    // thread while the render thread reads it. This is technically a data race, but
+    // a torn read at worst causes a single-frame audio glitch — acceptable for a
+    // synthesizer buzzer on a 3D printer touchscreen.
     if (type.empty()) {
-        filter_active_.store(false, std::memory_order_relaxed);
+        filter_type_.store(helix::audio::FilterType::NONE, std::memory_order_relaxed);
         return;
     }
 
-    filter_type_ = type;
+    auto ft = helix::audio::filter_type_from_string(type);
     filter_cutoff_.store(cutoff, std::memory_order_relaxed);
-
-    // Compute coefficients directly into filter state.
-    // The audio callback reads these -- rare torn reads cause a brief glitch,
-    // which is acceptable for a buzzer synth on a desktop simulator.
-    compute_biquad_coeffs(filter_, type, cutoff, static_cast<float>(sample_rate_));
+    helix::audio::compute_biquad_coeffs(filter_, ft, cutoff, static_cast<float>(sample_rate_));
     filter_.z1 = 0;
     filter_.z2 = 0;
-    filter_active_.store(true, std::memory_order_relaxed);
-}
-
-// --- Static helpers ---
-
-void SDLSoundBackend::generate_samples(float* buffer, int num_samples, int sample_rate,
-                                       Waveform wave, float freq, float amplitude, float duty_cycle,
-                                       float& phase) {
-    const float phase_inc = freq / static_cast<float>(sample_rate);
-
-    for (int i = 0; i < num_samples; ++i) {
-        float sample = 0.0f;
-
-        switch (wave) {
-        case Waveform::SQUARE:
-            sample = (phase < duty_cycle) ? amplitude : -amplitude;
-            break;
-
-        case Waveform::SAW:
-            sample = amplitude * (2.0f * phase - 1.0f);
-            break;
-
-        case Waveform::TRIANGLE:
-            sample = amplitude * (4.0f * std::abs(phase - 0.5f) - 1.0f);
-            break;
-
-        case Waveform::SINE:
-            sample = amplitude * std::sin(2.0f * static_cast<float>(M_PI) * phase);
-            break;
-        }
-
-        buffer[i] = sample;
-
-        phase += phase_inc;
-        phase -= std::floor(phase);
-    }
-}
-
-void SDLSoundBackend::compute_biquad_coeffs(BiquadFilter& f, const std::string& type, float cutoff,
-                                            float sample_rate) {
-    constexpr float Q = 0.707107f; // 1/sqrt(2), Butterworth
-
-    // Clamp cutoff to valid range (above 0, below Nyquist)
-    cutoff = std::clamp(cutoff, 20.0f, sample_rate * 0.499f);
-
-    const float omega = 2.0f * static_cast<float>(M_PI) * cutoff / sample_rate;
-    const float sin_omega = std::sin(omega);
-    const float cos_omega = std::cos(omega);
-    const float alpha = sin_omega / (2.0f * Q);
-
-    float a0 = 1.0f + alpha;
-
-    if (type == "lowpass") {
-        f.b0 = (1.0f - cos_omega) / 2.0f;
-        f.b1 = 1.0f - cos_omega;
-        f.b2 = (1.0f - cos_omega) / 2.0f;
-    } else if (type == "highpass") {
-        f.b0 = (1.0f + cos_omega) / 2.0f;
-        f.b1 = -(1.0f + cos_omega);
-        f.b2 = (1.0f + cos_omega) / 2.0f;
-    } else {
-        spdlog::warn("[SDLSound] Unknown filter type '{}', defaulting to lowpass", type);
-        f.b0 = (1.0f - cos_omega) / 2.0f;
-        f.b1 = 1.0f - cos_omega;
-        f.b2 = (1.0f - cos_omega) / 2.0f;
-    }
-
-    f.a1 = -2.0f * cos_omega;
-    f.a2 = 1.0f - alpha;
-
-    // Normalize by a0
-    f.b0 /= a0;
-    f.b1 /= a0;
-    f.b2 /= a0;
-    f.a1 /= a0;
-    f.a2 /= a0;
-
-    f.active = true;
-}
-
-void SDLSoundBackend::apply_filter(BiquadFilter& f, float* buffer, int num_samples) {
-    if (!f.active)
-        return;
-
-    for (int i = 0; i < num_samples; ++i) {
-        float x = buffer[i];
-        float y = f.b0 * x + f.z1;
-        f.z1 = f.b1 * x - f.a1 * y + f.z2;
-        f.z2 = f.b2 * x - f.a2 * y;
-        buffer[i] = y;
-    }
+    filter_type_.store(ft, std::memory_order_release);
 }
 
 void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
@@ -189,21 +122,74 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
     auto* out = reinterpret_cast<float*>(stream);
     int num_samples = len / static_cast<int>(sizeof(float));
 
-    float freq = self->current_freq_.load(std::memory_order_relaxed);
-    float amp = self->current_amplitude_.load(std::memory_order_relaxed);
-    float duty = self->current_duty_.load(std::memory_order_relaxed);
-    Waveform wave = self->current_wave_.load(std::memory_order_relaxed);
+    // Check for external render source (tracker PCM playback)
+    {
+        std::function<void(float*, size_t, int)> source;
+        {
+            std::lock_guard<std::mutex> lock(self->render_source_mutex_);
+            source = self->render_source_;
+        }
+        if (source) {
+            source(out, static_cast<size_t>(num_samples), self->sample_rate_);
+            // Apply filter if active
+            if (self->filter_type_.load(std::memory_order_acquire) !=
+                helix::audio::FilterType::NONE) {
+                helix::audio::apply_filter(self->filter_, out, num_samples);
+            }
+            return;
+        }
+    }
 
-    if (amp <= 0.001f || freq <= 0.0f) {
+    std::atomic_thread_fence(std::memory_order_acquire);
+
+    // Check if any voice is active
+    bool any_active = false;
+    for (int v = 0; v < MAX_VOICES; ++v) {
+        if (self->voices_[v].amplitude.load(std::memory_order_relaxed) > 0.001f) {
+            any_active = true;
+            break;
+        }
+    }
+    if (!any_active) {
         std::memset(stream, 0, static_cast<size_t>(len));
         return;
     }
 
-    generate_samples(out, num_samples, self->sample_rate_, wave, freq, amp, duty, self->phase_);
+    // Mix all active voices
+    auto* mix = self->mix_buf_.data();
+    auto* vbuf = self->voice_buf_.data();
+    std::memset(mix, 0, num_samples * sizeof(float));
 
-    if (self->filter_active_.load(std::memory_order_relaxed)) {
-        apply_filter(self->filter_, out, num_samples);
+    for (int v = 0; v < MAX_VOICES; ++v) {
+        float amp = self->voices_[v].amplitude.load(std::memory_order_relaxed);
+        if (amp <= 0.001f) {
+            self->voices_[v].phase = 0;
+            continue;
+        }
+        float freq = self->voices_[v].freq.load(std::memory_order_relaxed);
+        if (freq <= 0.0f) continue;
+
+        helix::audio::generate_samples(
+            vbuf, num_samples, self->sample_rate_,
+            self->voices_[v].wave.load(std::memory_order_relaxed),
+            freq, amp,
+            self->voices_[v].duty.load(std::memory_order_relaxed),
+            self->voices_[v].phase);
+
+        for (int i = 0; i < num_samples; ++i)
+            mix[i] += vbuf[i];
     }
+
+    // Clamp
+    for (int i = 0; i < num_samples; ++i)
+        mix[i] = std::clamp(mix[i], -1.0f, 1.0f);
+
+    // Apply shared filter
+    if (self->filter_type_.load(std::memory_order_acquire) != helix::audio::FilterType::NONE) {
+        helix::audio::apply_filter(self->filter_, mix, num_samples);
+    }
+
+    std::memcpy(out, mix, num_samples * sizeof(float));
 }
 
 #endif // HELIX_DISPLAY_SDL

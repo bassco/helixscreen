@@ -8,17 +8,11 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <thread>
-
-/// Sound priority levels (higher numeric value = more important)
-enum class SoundPriority {
-    UI = 0,    // button taps, nav sounds — can be interrupted by anything
-    EVENT = 1, // print complete, errors — only interrupted by ALARM
-    ALARM = 2  // critical alerts — never interrupted
-};
 
 /// Core playback engine for synthesized sounds.
 /// Runs a dedicated thread that ticks at ~1ms to drive the backend.
@@ -41,6 +35,10 @@ class SoundSequencer {
 
     /// Stop the sequencer thread (blocks until joined)
     void shutdown();
+
+    /// Set an external tick callback. When set, the sequencer loop calls this
+    /// instead of its own step logic. Used by SoundManager for TrackerPlayer.
+    void set_external_tick(std::function<void(float dt_ms)> fn);
 
   private:
     /// Request pushed from play() to the sequencer thread
@@ -84,6 +82,10 @@ class SoundSequencer {
     /// End the current playback and silence the backend
     void end_playback();
 
+    /// Apply a step's note(s) to backend voices with release fence.
+    /// @param freq  Modulated frequency to use (may differ from step.freq_hz due to sweep/LFO)
+    void apply_step_voices(const SoundStep& step, float freq, float amplitude, float duty);
+
     std::shared_ptr<SoundBackend> backend_;
     std::thread sequencer_thread_;
     std::atomic<bool> running_{false};
@@ -101,4 +103,6 @@ class SoundSequencer {
 
     // Signaled by stop() to halt current playback
     std::atomic<bool> stop_requested_{false};
+
+    std::function<void(float)> external_tick_;
 };
