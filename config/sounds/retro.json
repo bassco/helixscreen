@@ -172,6 +172,31 @@
         { "note": "C6", "dur": "8n", "vel": 1.0, "duty": 0.5,
           "env": { "a": 2, "d": 20, "s": 0.5, "r": 15 } }
       ]
+    },
+    "startup": {
+      "description": "8-bit power-on — NES-style boot sweep into victory arpeggio",
+      "bpm": 200,
+      "steps": [
+        { "freq": 100, "dur": 60, "wave": "square", "vel": 0.8, "duty": 0.5,
+          "sweep": { "target": "freq", "end": 1200 },
+          "env": { "a": 1, "d": 50, "s": 0.3, "r": 10 } },
+        { "pause": 20 },
+        { "note": "C5", "dur": "16n", "vel": 0.9, "duty": 0.25,
+          "env": { "a": 1, "d": 8, "s": 0.3, "r": 5 } },
+        { "note": "E5", "dur": "16n", "vel": 0.9, "duty": 0.25,
+          "env": { "a": 1, "d": 8, "s": 0.3, "r": 5 } },
+        { "note": "G5", "dur": "16n", "vel": 0.95, "duty": 0.25,
+          "env": { "a": 1, "d": 8, "s": 0.3, "r": 5 } },
+        { "note": "C6", "dur": "16n", "vel": 1.0, "duty": 0.5,
+          "env": { "a": 1, "d": 10, "s": 0.4, "r": 8 } },
+        { "pause": 30 },
+        { "note": "G5", "dur": "16n", "vel": 0.85, "duty": 0.5,
+          "env": { "a": 1, "d": 8, "s": 0.3, "r": 5 } },
+        { "note": "C6", "dur": "16n", "vel": 0.9, "duty": 0.5,
+          "env": { "a": 1, "d": 8, "s": 0.3, "r": 5 } },
+        { "note": "E6", "dur": "8n", "vel": 1.0, "duty": 0.5,
+          "env": { "a": 1, "d": 30, "s": 0.5, "r": 20 } }
+      ]
     }
   }
 }

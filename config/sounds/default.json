@@ -111,6 +111,30 @@
         { "freq": 1000, "dur": 100, "vel": 0.8,
           "env": { "a": 5, "d": 20, "s": 0.6, "r": 30 } }
       ]
+    },
+    "startup": {
+      "description": "Boot chime — ascending arpeggio with filter bloom",
+      "bpm": 140,
+      "steps": [
+        { "note": "C4", "dur": "16n", "wave": "saw", "vel": 0.5,
+          "filter": { "type": "lowpass", "cutoff": 600, "sweep_to": 3000 },
+          "env": { "a": 3, "d": 30, "s": 0.4, "r": 20 } },
+        { "note": "E4", "dur": "16n", "wave": "saw", "vel": 0.6,
+          "filter": { "type": "lowpass", "cutoff": 800, "sweep_to": 3500 },
+          "env": { "a": 3, "d": 30, "s": 0.4, "r": 20 } },
+        { "note": "G4", "dur": "16n", "wave": "saw", "vel": 0.7,
+          "filter": { "type": "lowpass", "cutoff": 1000, "sweep_to": 4000 },
+          "env": { "a": 3, "d": 30, "s": 0.4, "r": 20 } },
+        { "note": "C5", "dur": "8n", "wave": "saw", "vel": 0.8,
+          "filter": { "type": "lowpass", "cutoff": 1200, "sweep_to": 5000 },
+          "env": { "a": 3, "d": 40, "s": 0.5, "r": 40 } },
+        { "pause": 30 },
+        { "note": "E5", "dur": "8n", "wave": "saw", "vel": 0.85,
+          "filter": { "type": "lowpass", "cutoff": 1500, "sweep_to": 6000 },
+          "env": { "a": 3, "d": 50, "s": 0.6, "r": 60 } },
+        { "note": "G5", "dur": "4n", "vel": 0.9, "wave": "square",
+          "env": { "a": 5, "d": 80, "s": 0.7, "r": 150 } }
+      ]
     }
   }
 }
