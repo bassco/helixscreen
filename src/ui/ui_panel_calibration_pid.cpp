@@ -8,7 +8,6 @@
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_temp_control.h"
-#include "ui_update_queue.h"
 
 #include "app_globals.h"
 #include "filament_database.h"
@@ -601,13 +600,13 @@ void PIDCalibrationPanel::send_pid_calibrate() {
 
     spdlog::info("[PIDCal] Starting PID calibration: {} at {}°C", heater_name, target_temp_);
 
+    auto token = lifetime_.token();
     api_->advanced().start_pid_calibrate(
         heater_name, target_temp_,
-        [this](float kp, float ki, float kd) {
+        [this, token](float kp, float ki, float kd) {
+            if (token.expired()) return;
             // Callback from background thread - marshal to UI thread
-            helix::ui::queue_update([this, kp, ki, kd]() {
-                if (cleanup_called())
-                    return;
+            lifetime_.defer([this, kp, ki, kd]() {
                 // Ignore results if user already aborted
                 if (state_ != State::CALIBRATING) {
                     spdlog::info("[PIDCal] Ignoring PID result (state={}, user likely aborted)",
@@ -618,11 +617,10 @@ void PIDCalibrationPanel::send_pid_calibrate() {
                 on_calibration_result(true, kp, ki, kd);
             });
         },
-        [this](const MoonrakerError& err) {
+        [this, token](const MoonrakerError& err) {
+            if (token.expired()) return;
             std::string msg = err.message;
-            helix::ui::queue_update([this, msg]() {
-                if (cleanup_called())
-                    return;
+            lifetime_.defer([this, msg]() {
                 if (state_ != State::CALIBRATING) {
                     spdlog::info("[PIDCal] Ignoring PID error (state={}, user likely aborted)",
                                  static_cast<int>(state_));
@@ -632,10 +630,9 @@ void PIDCalibrationPanel::send_pid_calibrate() {
                 on_calibration_result(false, 0, 0, 0, msg);
             });
         },
-        [this](int sample, float tolerance) {
-            helix::ui::queue_update([this, sample, tolerance]() {
-                if (cleanup_called())
-                    return;
+        [this, token](int sample, float tolerance) {
+            if (token.expired()) return;
+            lifetime_.defer([this, sample, tolerance]() {
                 on_pid_progress(sample, tolerance);
             });
         });
@@ -649,21 +646,20 @@ void PIDCalibrationPanel::send_save_config() {
     EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::LONG);
 
     spdlog::info("[PIDCal] Sending SAVE_CONFIG");
+    auto token = lifetime_.token();
     api_->advanced().save_config(
-        [this]() {
-            helix::ui::queue_update([this]() {
-                if (cleanup_called())
-                    return;
+        [this, token]() {
+            if (token.expired()) return;
+            lifetime_.defer([this]() {
                 if (state_ == State::SAVING) {
                     set_state(State::COMPLETE);
                 }
             });
         },
-        [this](const MoonrakerError& err) {
+        [this, token](const MoonrakerError& err) {
+            if (token.expired()) return;
             std::string msg = err.message;
-            helix::ui::queue_update([this, msg]() {
-                if (cleanup_called())
-                    return;
+            lifetime_.defer([this, msg]() {
                 // Still show results even if save fails
                 spdlog::warn("[PIDCal] Save config failed: {}", msg);
                 if (state_ == State::SAVING) {
@@ -687,12 +683,12 @@ void PIDCalibrationPanel::fetch_old_pid_values() {
     const char* heater_name = (selected_heater_ == Heater::EXTRUDER) ? "extruder" : "heater_bed";
     spdlog::debug("[PIDCal] Fetching old PID values for '{}'", heater_name);
 
+    auto token = lifetime_.token();
     api_->advanced().get_heater_pid_values(
         heater_name,
-        [this](float kp, float ki, float kd) {
-            helix::ui::queue_update([this, kp, ki, kd]() {
-                if (cleanup_called())
-                    return;
+        [this, token](float kp, float ki, float kd) {
+            if (token.expired()) return;
+            lifetime_.defer([this, kp, ki, kd]() {
                 old_kp_ = kp;
                 old_ki_ = ki;
                 old_kd_ = kd;
@@ -1052,12 +1048,12 @@ void PIDCalibrationPanel::detect_heater_control_type() {
     const char* heater = (selected_heater_ == Heater::EXTRUDER) ? "extruder" : "heater_bed";
     spdlog::debug("[PIDCal] Querying heater control type for '{}'", heater);
 
+    auto token = lifetime_.token();
     api_->advanced().get_heater_control_type(
         heater,
-        [this](const std::string& type) {
-            helix::ui::queue_update([this, type]() {
-                if (cleanup_called())
-                    return;
+        [this, token](const std::string& type) {
+            if (token.expired()) return;
+            lifetime_.defer([this, type]() {
                 // Query succeeded, firmware supports control type query (Kalico)
                 is_kalico_ = true;
                 // Only expose MPC UI to beta users
@@ -1088,11 +1084,10 @@ void PIDCalibrationPanel::detect_heater_control_type() {
                 }
             });
         },
-        [this](const MoonrakerError&) {
+        [this, token](const MoonrakerError&) {
+            if (token.expired()) return;
             // Can't determine control type, not Kalico — default to PID
-            helix::ui::queue_update([this]() {
-                if (cleanup_called())
-                    return;
+            lifetime_.defer([this]() {
                 is_kalico_ = false;
                 lv_subject_set_int(&subj_is_kalico_, 0);
                 spdlog::debug("[PIDCal] Heater control type query failed, defaulting to PID");
@@ -1115,12 +1110,12 @@ void PIDCalibrationPanel::start_migration() {
 
     EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::EXTRA);
 
+    auto token = lifetime_.token();
     config_editor_.safe_multi_edit(
         *api_, section, edits,
-        [this]() {
-            helix::ui::queue_update([this]() {
-                if (cleanup_called())
-                    return;
+        [this, token]() {
+            if (token.expired()) return;
+            lifetime_.defer([this]() {
                 needs_migration_ = false;
                 lv_subject_set_int(&subj_needs_migration_, 0);
                 spdlog::info("[PIDCal] Migration complete, starting MPC calibration");
@@ -1128,10 +1123,9 @@ void PIDCalibrationPanel::start_migration() {
                 send_mpc_calibrate();
             });
         },
-        [this](const std::string& err) {
-            helix::ui::queue_update([this, err]() {
-                if (cleanup_called())
-                    return;
+        [this, token](const std::string& err) {
+            if (token.expired()) return;
+            lifetime_.defer([this, err]() {
                 spdlog::error("[PIDCal] Migration failed: {}", err);
                 lv_subject_copy_string(&subj_error_message_, err.c_str());
                 set_state(State::ERROR);
@@ -1157,22 +1151,21 @@ void PIDCalibrationPanel::send_mpc_calibrate() {
     spdlog::info("[PIDCal] Starting MPC calibration: {} at {}°C, fan_breakpoints={}", heater,
                  target_temp_, fan_breakpoints_);
 
+    auto token = lifetime_.token();
     api_->advanced().start_mpc_calibrate(
         heater, target_temp_, fan_breakpoints_,
-        [this](const MoonrakerAdvancedAPI::MPCResult& result) {
-            helix::ui::queue_update([this, result]() {
-                if (cleanup_called())
-                    return;
+        [this, token](const MoonrakerAdvancedAPI::MPCResult& result) {
+            if (token.expired()) return;
+            lifetime_.defer([this, result]() {
                 if (state_ != State::CALIBRATING)
                     return;
                 on_mpc_result(result);
             });
         },
-        [this](const MoonrakerError& err) {
+        [this, token](const MoonrakerError& err) {
+            if (token.expired()) return;
             std::string msg = err.message;
-            helix::ui::queue_update([this, msg]() {
-                if (cleanup_called())
-                    return;
+            lifetime_.defer([this, msg]() {
                 if (state_ != State::CALIBRATING)
                     return;
                 spdlog::error("[PIDCal] MPC calibration failed: {}", msg);
@@ -1180,10 +1173,9 @@ void PIDCalibrationPanel::send_mpc_calibrate() {
                 set_state(State::ERROR);
             });
         },
-        [this](int phase, int total, const std::string& desc) {
-            helix::ui::queue_update([this, phase, total, desc]() {
-                if (cleanup_called())
-                    return;
+        [this, token](int phase, int total, const std::string& desc) {
+            if (token.expired()) return;
+            lifetime_.defer([this, phase, total, desc]() {
                 on_mpc_progress(phase, total, desc);
             });
         });

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 
 #include "macro_param_cache.h"
@@ -10,7 +11,6 @@
 #include "panel_widget.h"
 
 #include <map>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -63,7 +63,7 @@ class FavoriteMacroWidget : public PanelWidget {
     std::string macro_name_;  ///< Assigned macro (e.g., "CLEAN_NOZZLE")
     std::string icon_name_;   ///< Custom icon name, empty = "play" default
     uint32_t icon_color_ = 0; ///< Custom icon color (RGB), 0 = theme secondary
-    std::shared_ptr<bool> alive_ = std::make_shared<bool>(false);
+    helix::AsyncLifetimeGuard lifetime_;
 
     // Picker context menu
     lv_obj_t* picker_backdrop_ = nullptr;

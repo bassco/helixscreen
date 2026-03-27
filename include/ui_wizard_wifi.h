@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "async_lifetime_guard.h"
 #include "lvgl/lvgl.h"
 #include "subject_managed_panel.h"
 
@@ -169,6 +170,9 @@ class WizardWifiStep {
     // State tracking
     bool subjects_initialized_ = false;
     bool cleanup_called_ = false; // Set true in cleanup() to invalidate pending callbacks
+
+    // Async callback safety — tokens expire when cleanup() invalidates lifetime
+    helix::AsyncLifetimeGuard lifetime_;
 
     // Subject manager for RAII cleanup
     SubjectManager subjects_;

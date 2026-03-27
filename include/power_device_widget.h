@@ -3,11 +3,11 @@
 
 #pragma once
 
+#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 
 #include "panel_widget.h"
 
-#include <memory>
 #include <string>
 
 class MoonrakerAPI;
@@ -55,7 +55,7 @@ class PowerDeviceWidget : public PanelWidget {
     lv_obj_t* lock_icon_ = nullptr;
 
     ObserverGuard status_observer_;
-    std::shared_ptr<bool> alive_ = std::make_shared<bool>(false);
+    helix::AsyncLifetimeGuard lifetime_;
 
     // Picker state
     lv_obj_t* picker_backdrop_ = nullptr;

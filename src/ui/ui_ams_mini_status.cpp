@@ -8,6 +8,7 @@
 #include "ui_observer_guard.h"
 #include "ui_panel_ams.h"
 #include "ui_panel_ams_overview.h"
+#include "ui_utils.h"
 
 #include "ams_backend.h"
 #include "ams_state.h"
@@ -208,6 +209,22 @@ static void rebuild_bars(AmsMiniStatusData* data) {
 
     bool is_multi_unit = (data->unit_count >= 2);
 
+    // Collect condemned row containers here; batch-delete at end via a single
+    // temporary parent to avoid cascading lv_obj_delete_async() calls that
+    // corrupt LVGL's event linked list during rapid rebuild cycles.
+    lv_obj_t* condemned_parent = nullptr;
+    auto condemn_row = [&](lv_obj_t* row) {
+        if (!row)
+            return;
+        if (!condemned_parent) {
+            condemned_parent = lv_obj_create(lv_screen_active());
+            lv_obj_add_flag(condemned_parent, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(condemned_parent, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_set_size(condemned_parent, 0, 0);
+        }
+        lv_obj_set_parent(row, condemned_parent);
+    };
+
     if (is_multi_unit) {
         // === Multi-unit stacked layout ===
         // bars_container becomes a column, each unit gets its own row
@@ -242,10 +259,10 @@ static void rebuild_bars(AmsMiniStatusData* data) {
         if (bar_height < 6)
             bar_height = 6;
 
-        // Delete any row containers beyond current unit_count
+        // Condemn any row containers beyond current unit_count
         for (int u = data->unit_count; u < 8; ++u) {
             if (data->unit_rows[u].row_container) {
-                lv_obj_delete_async(data->unit_rows[u].row_container);
+                condemn_row(data->unit_rows[u].row_container);
                 data->unit_rows[u].row_container = nullptr;
             }
         }
@@ -301,9 +318,9 @@ static void rebuild_bars(AmsMiniStatusData* data) {
                 }
             }
 
-            // Delete row if no visible bars (hidden rows still consume flex gap)
+            // Condemn row if no visible bars (hidden rows still consume flex gap)
             if (row_slots <= 0) {
-                lv_obj_delete_async(row);
+                condemn_row(row);
                 data->unit_rows[u].row_container = nullptr;
             }
         }
@@ -326,7 +343,7 @@ static void rebuild_bars(AmsMiniStatusData* data) {
                         lv_obj_set_parent(slot->col.container, data->bars_container);
                     }
                 }
-                lv_obj_delete_async(data->unit_rows[u].row_container);
+                condemn_row(data->unit_rows[u].row_container);
                 data->unit_rows[u].row_container = nullptr;
             }
         }
@@ -369,6 +386,11 @@ static void rebuild_bars(AmsMiniStatusData* data) {
                 }
             }
         }
+    }
+
+    // Batch-delete all condemned rows via a single deferred deletion
+    if (condemned_parent) {
+        helix::ui::safe_delete_deferred(condemned_parent);
     }
 
     // Update overflow label

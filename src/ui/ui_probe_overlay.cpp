@@ -850,12 +850,13 @@ void ProbeOverlay::handle_config_save() {
         *api_,
         [this, section, field,
          new_value](std::map<std::string, helix::system::SectionLocation> /*section_map*/) {
+            auto token = lifetime_.token();
             config_editor_.safe_edit_value(
                 *api_, section, field, new_value,
-                [this]() {
+                [this, token]() {
                     spdlog::info("[Probe] Config edit saved successfully");
-                    helix::ui::queue_update([this]() {
-                        if (cleanup_called()) return;
+                    if (token.expired()) return;
+                    lifetime_.defer([this]() {
                         // Reload config values to reflect the change
                         load_config_values();
                     });

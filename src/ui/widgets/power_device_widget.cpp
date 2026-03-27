@@ -137,7 +137,6 @@ void PowerDeviceWidget::set_config(const nlohmann::json& config) {
 void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
-    *alive_ = true;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, this);
@@ -161,11 +160,11 @@ void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
         lv_subject_t* subj =
             PowerDeviceState::instance().get_status_subject(device_name_, lifetime);
         if (subj) {
-            std::weak_ptr<bool> weak_alive = alive_;
+            auto token = lifetime_.token();
             status_observer_ = helix::ui::observe_int_sync<PowerDeviceWidget>(
                 subj, this,
-                [weak_alive](PowerDeviceWidget* self, int status) {
-                    if (weak_alive.expired())
+                [token](PowerDeviceWidget* self, int status) {
+                    if (token.expired())
                         return;
                     self->update_display(status);
                 },
@@ -191,7 +190,7 @@ void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 }
 
 void PowerDeviceWidget::detach() {
-    *alive_ = false;
+    lifetime_.invalidate();
     dismiss_device_picker();
 
     status_observer_.reset();
@@ -664,11 +663,11 @@ void PowerDeviceWidget::select_device(const std::string& name) {
         lv_subject_t* subj =
             PowerDeviceState::instance().get_status_subject(device_name_, lifetime);
         if (subj) {
-            std::weak_ptr<bool> weak_alive = alive_;
+            auto token = lifetime_.token();
             status_observer_ = helix::ui::observe_int_sync<PowerDeviceWidget>(
                 subj, this,
-                [weak_alive](PowerDeviceWidget* self, int status) {
-                    if (weak_alive.expired())
+                [token](PowerDeviceWidget* self, int status) {
+                    if (token.expired())
                         return;
                     self->update_display(status);
                 },

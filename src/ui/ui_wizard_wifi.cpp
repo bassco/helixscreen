@@ -490,36 +490,32 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
 
             // Capture weak reference for async safety
             std::weak_ptr<WiFiManager> weak_mgr = wifi_manager_;
-            WizardWifiStep* self = this;
+            auto token = lifetime_.token();
 
             spdlog::debug("[{}] Starting network scan", get_name());
-            wifi_manager_->start_scan([self, weak_mgr](const std::vector<WiFiNetwork>& networks) {
-                spdlog::info("[{}] Scan callback with {} networks", self->get_name(),
-                             networks.size());
+            wifi_manager_->start_scan([this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
+                if (token.expired()) {
+                    spdlog::debug("[{}] Lifetime expired, ignoring stale scan callback",
+                                  get_name());
+                    return;
+                }
 
                 // Check if manager still exists
                 if (weak_mgr.expired()) {
                     spdlog::trace("[{}] WiFiManager destroyed, ignoring callback",
-                                  self->get_name());
+                                  get_name());
                     return;
                 }
 
-                // Check if cleanup was called (step navigated away)
-                if (self->cleanup_called_) {
-                    spdlog::debug("[{}] Cleanup was called, ignoring stale scan callback",
-                                  self->get_name());
-                    return;
-                }
+                spdlog::info("[{}] Scan callback with {} networks", get_name(),
+                             networks.size());
 
-                self->cached_networks_ = networks;
-                // Marshal to UI thread — scan callback runs on background thread.
-                // queue_widget_update guards against screen_root_ being destroyed.
-                helix::ui::queue_widget_update(self->screen_root_, [self](lv_obj_t*) {
-                    if (self->cleanup_called_) {
-                        return;
-                    }
-                    lv_subject_set_int(&self->wifi_scanning_, 0);
-                    self->populate_network_list(self->cached_networks_);
+                cached_networks_ = networks;
+                // Marshal to UI thread via lifetime_.defer() — automatic lifetime
+                // guard + UI thread safety
+                lifetime_.defer([this]() {
+                    lv_subject_set_int(&wifi_scanning_, 0);
+                    populate_network_list(cached_networks_);
                 });
             });
         } else {
@@ -569,33 +565,34 @@ void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
     } else {
         // Connect to open network
         if (wifi_manager_) {
-            WizardWifiStep* self = this;
+            auto token = lifetime_.token();
             wifi_manager_->connect(
-                network.ssid, "", [self](bool success, const std::string& error) {
-                    // Check if cleanup was called (step navigated away)
-                    if (self->cleanup_called_) {
-                        spdlog::debug("[{}] Cleanup was called, ignoring connect callback",
-                                      self->get_name());
+                network.ssid, "", [this, token](bool success, const std::string& error) {
+                    if (token.expired()) {
+                        spdlog::debug("[{}] Lifetime expired, ignoring connect callback",
+                                      get_name());
                         return;
                     }
-                    if (success) {
-                        char msg[128];
-                        snprintf(msg, sizeof(msg), "%s%s", get_status_text("connected"),
-                                 self->current_ssid_);
-                        self->update_wifi_status(msg);
-                        // Update IP address display
-                        if (self->wifi_manager_) {
-                            std::string ip = self->wifi_manager_->get_ip_address();
-                            self->update_wifi_ip(ip.c_str());
+                    lifetime_.defer([this, success, error]() {
+                        if (success) {
+                            char msg[128];
+                            snprintf(msg, sizeof(msg), "%s%s", get_status_text("connected"),
+                                     current_ssid_);
+                            update_wifi_status(msg);
+                            // Update IP address display
+                            if (wifi_manager_) {
+                                std::string ip = wifi_manager_->get_ip_address();
+                                update_wifi_ip(ip.c_str());
+                            }
+                            spdlog::info("[{}] Connected to {}", get_name(), current_ssid_);
+                        } else {
+                            char msg[128];
+                            snprintf(msg, sizeof(msg), lv_tr("Failed to connect: %s"), error.c_str());
+                            update_wifi_status(msg);
+                            update_wifi_ip(""); // Clear IP on failure
+                            NOTIFY_ERROR("Failed to connect to '{}': {}", current_ssid_, error);
                         }
-                        spdlog::info("[{}] Connected to {}", self->get_name(), self->current_ssid_);
-                    } else {
-                        char msg[128];
-                        snprintf(msg, sizeof(msg), lv_tr("Failed to connect: %s"), error.c_str());
-                        self->update_wifi_status(msg);
-                        self->update_wifi_ip(""); // Clear IP on failure
-                        NOTIFY_ERROR("Failed to connect to '{}': {}", self->current_ssid_, error);
-                    }
+                    });
                 });
         } else {
             LOG_ERROR_INTERNAL("WiFi manager not initialized");
@@ -655,51 +652,52 @@ void WizardWifiStep::handle_modal_connect_clicked() {
     update_wifi_status(status_buf);
 
     if (wifi_manager_) {
-        WizardWifiStep* self = this;
+        auto token = lifetime_.token();
         wifi_manager_->connect(
-            current_ssid_, password, [self](bool success, const std::string& error) {
-                // Check if cleanup was called (step navigated away)
-                if (self->cleanup_called_) {
-                    spdlog::debug("[{}] Cleanup was called, ignoring connect callback",
-                                  self->get_name());
+            current_ssid_, password, [this, token](bool success, const std::string& error) {
+                if (token.expired()) {
+                    spdlog::debug("[{}] Lifetime expired, ignoring connect callback",
+                                  get_name());
                     return;
                 }
 
-                lv_subject_set_int(&self->wifi_connecting_, 0);
+                lifetime_.defer([this, success, error]() {
+                    lv_subject_set_int(&wifi_connecting_, 0);
 
-                lv_obj_t* connect_btn =
-                    lv_obj_find_by_name(self->password_modal_, "modal_connect_btn");
-                if (connect_btn) {
-                    lv_obj_remove_state(connect_btn, LV_STATE_DISABLED);
-                }
-
-                if (success) {
-                    self->hide_password_modal();
-
-                    char msg[128];
-                    snprintf(msg, sizeof(msg), "%s%s", get_status_text("connected"),
-                             self->current_ssid_);
-                    self->update_wifi_status(msg);
-                    // Update IP address display
-                    if (self->wifi_manager_) {
-                        std::string ip = self->wifi_manager_->get_ip_address();
-                        self->update_wifi_ip(ip.c_str());
-                    }
-                    spdlog::info("[{}] Connected to {}", self->get_name(), self->current_ssid_);
-                } else {
-                    lv_obj_t* modal_status =
-                        lv_obj_find_by_name(self->password_modal_, "modal_status");
-                    if (modal_status) {
-                        char error_msg[256];
-                        snprintf(error_msg, sizeof(error_msg), lv_tr("Connection failed: %s"),
-                                 error.c_str());
-                        lv_label_set_text(modal_status, error_msg);
-                        lv_obj_remove_flag(modal_status, LV_OBJ_FLAG_HIDDEN);
+                    lv_obj_t* connect_btn =
+                        lv_obj_find_by_name(password_modal_, "modal_connect_btn");
+                    if (connect_btn) {
+                        lv_obj_remove_state(connect_btn, LV_STATE_DISABLED);
                     }
 
-                    self->update_wifi_status(lv_tr("Connection failed"));
-                    NOTIFY_ERROR("Failed to connect to '{}': {}", self->current_ssid_, error);
-                }
+                    if (success) {
+                        hide_password_modal();
+
+                        char msg[128];
+                        snprintf(msg, sizeof(msg), "%s%s", get_status_text("connected"),
+                                 current_ssid_);
+                        update_wifi_status(msg);
+                        // Update IP address display
+                        if (wifi_manager_) {
+                            std::string ip = wifi_manager_->get_ip_address();
+                            update_wifi_ip(ip.c_str());
+                        }
+                        spdlog::info("[{}] Connected to {}", get_name(), current_ssid_);
+                    } else {
+                        lv_obj_t* modal_status =
+                            lv_obj_find_by_name(password_modal_, "modal_status");
+                        if (modal_status) {
+                            char error_msg[256];
+                            snprintf(error_msg, sizeof(error_msg), lv_tr("Connection failed: %s"),
+                                     error.c_str());
+                            lv_label_set_text(modal_status, error_msg);
+                            lv_obj_remove_flag(modal_status, LV_OBJ_FLAG_HIDDEN);
+                        }
+
+                        update_wifi_status(lv_tr("Connection failed"));
+                        NOTIFY_ERROR("Failed to connect to '{}': {}", current_ssid_, error);
+                    }
+                });
             });
     } else {
         LOG_ERROR_INTERNAL("WiFi manager not initialized");
@@ -848,23 +846,18 @@ void WizardWifiStep::init_wifi_manager() {
 
             // Start a scan to populate the network list
             lv_subject_set_int(&wifi_scanning_, 1);
-            wifi_manager_->start_scan([this](const std::vector<WiFiNetwork>& networks) {
-                // Check if cleanup was called (step navigated away)
-                if (cleanup_called_) {
-                    spdlog::debug("[{}] Cleanup was called, ignoring init scan callback",
+            auto token = lifetime_.token();
+            wifi_manager_->start_scan([this, token](const std::vector<WiFiNetwork>& networks) {
+                if (token.expired()) {
+                    spdlog::debug("[{}] Lifetime expired, ignoring init scan callback",
                                   get_name());
                     return;
                 }
 
                 cached_networks_ = networks;
-                // Marshal to UI thread — scan callback runs on background thread.
-                // queue_widget_update guards against screen_root_ being destroyed.
-                helix::ui::queue_widget_update(screen_root_, [this](lv_obj_t*) {
-                    if (cleanup_called_) {
-                        spdlog::debug("[{}] Cleanup called, skipping network list update",
-                                      get_name());
-                        return;
-                    }
+                // Marshal to UI thread via lifetime_.defer() — automatic lifetime
+                // guard + UI thread safety
+                lifetime_.defer([this]() {
                     lv_subject_set_int(&wifi_scanning_, 0);
                     if (!cached_networks_.empty()) {
                         populate_network_list(cached_networks_);
@@ -945,6 +938,7 @@ void WizardWifiStep::cleanup() {
 
     // Mark as cleaned up FIRST to invalidate any pending async callbacks
     cleanup_called_ = true;
+    lifetime_.invalidate(); // Expire all outstanding tokens
 
     if (wifi_manager_) {
         spdlog::debug("[{}] Stopping scan", get_name());

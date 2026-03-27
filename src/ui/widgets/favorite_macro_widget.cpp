@@ -142,7 +142,6 @@ void FavoriteMacroWidget::set_config(const nlohmann::json& config) {
 void FavoriteMacroWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     widget_obj_ = widget_obj;
     parent_screen_ = parent_screen;
-    *alive_ = true;
 
     if (widget_obj_) {
         lv_obj_set_user_data(widget_obj_, this);
@@ -162,7 +161,7 @@ void FavoriteMacroWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) 
 }
 
 void FavoriteMacroWidget::detach() {
-    *alive_ = false;
+    lifetime_.invalidate();
     dismiss_macro_picker();
 
     if (widget_obj_) {
@@ -275,11 +274,11 @@ void FavoriteMacroWidget::fetch_and_execute() {
         break;
     case MacroParamKnowledge::KNOWN_PARAMS:
         if (parent_screen_) {
-            std::weak_ptr<bool> weak_alive = alive_;
+            auto token = lifetime_.token();
             get_shared_param_modal().show_for_macro(
                 parent_screen_, macro_name_, cached.params,
-                [this, weak_alive](const MacroParamResult& result) {
-                    if (weak_alive.expired())
+                [this, token](const MacroParamResult& result) {
+                    if (token.expired())
                         return;
                     execute_with_params(result);
                 });
@@ -287,10 +286,10 @@ void FavoriteMacroWidget::fetch_and_execute() {
         break;
     case MacroParamKnowledge::UNKNOWN:
         if (parent_screen_) {
-            std::weak_ptr<bool> weak_alive = alive_;
+            auto token = lifetime_.token();
             get_shared_param_modal().show_for_unknown_params(
-                parent_screen_, macro_name_, [this, weak_alive](const MacroParamResult& result) {
-                    if (weak_alive.expired())
+                parent_screen_, macro_name_, [this, token](const MacroParamResult& result) {
+                    if (token.expired())
                         return;
                     execute_with_params(result);
                 });

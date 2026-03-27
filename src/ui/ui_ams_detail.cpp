@@ -5,6 +5,7 @@
 
 #include "ui/ams_drawing_utils.h"
 #include "ui_ams_slot.h"
+#include "ui_effects.h"
 #include "ui_filament_path_canvas.h"
 #include "ui_utils.h"
 
@@ -316,11 +317,31 @@ AmsDetailSlotResult ams_detail_create_slots(AmsDetailWidgets& w, lv_obj_t* slot_
 void ams_detail_destroy_slots(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int& slot_count) {
     (void)w; // Reserved for future use (e.g. labels_layer cleanup)
 
+    if (slot_count <= 0)
+        return;
+
+    // Reparent all slots into a hidden condemned container, then delete it
+    // in one deferred pass.  This avoids two problems with the old per-slot
+    // safe_delete() loop:
+    //   1. Repeated defocus_tree() calls that corrupt the LVGL group linked
+    //      list (crash b05adc0e).
+    //   2. Synchronous lv_obj_delete() inside UpdateQueue::process_pending(),
+    //      which can corrupt LVGL's event linked list.
+    lv_obj_t* condemned = lv_obj_create(lv_screen_active());
+    lv_obj_add_flag(condemned, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(condemned, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(condemned, 0, 0);
+
     for (int i = 0; i < slot_count; ++i) {
-        helix::ui::safe_delete(slot_widgets[i]);
+        if (slot_widgets[i] && lv_obj_is_valid(slot_widgets[i])) {
+            lv_obj_set_parent(slot_widgets[i], condemned);
+        }
         slot_widgets[i] = nullptr;
     }
     slot_count = 0;
+
+    helix::ui::defocus_tree(condemned);
+    helix::ui::safe_delete_deferred(condemned);
 }
 
 void ams_detail_update_tray(AmsDetailWidgets& w) {
