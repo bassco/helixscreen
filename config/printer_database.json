@@ -3511,45 +3511,31 @@
       ]
     },
     {
-      "id": "snapmaker_u1",
-      "name": "Snapmaker U1",
-      "manufacturer": "Snapmaker",
-      "image": "snapmaker-u1.png",
+      "id": "anet_et5_pro",
+      "name": "Anet ET5 Pro",
+      "manufacturer": "Anet",
+      "image": "anet-et5-pro.png",
       "heuristics": [
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "anet",
+          "confidence": 85,
+          "reason": "Hostname contains 'anet'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "et5",
+          "confidence": 95,
+          "reason": "Hostname contains 'et5' (Anet ET5 series)"
+        },
         {
           "type": "kinematics_match",
           "field": "kinematics",
-          "pattern": "corexy",
-          "confidence": 40,
-          "reason": "CoreXY kinematics"
-        },
-        {
-          "type": "object_exists",
-          "field": "printer_objects",
-          "pattern": "tool",
-          "confidence": 80,
-          "reason": "Multi-tool system (U1 toolchanger)"
-        },
-        {
-          "type": "object_exists",
-          "field": "printer_objects",
-          "pattern": "camera",
-          "confidence": 60,
-          "reason": "Built-in camera (U1 feature)"
-        },
-        {
-          "type": "hostname_match",
-          "field": "hostname",
-          "pattern": "snapmaker",
-          "confidence": 90,
-          "reason": "Hostname contains 'snapmaker'"
-        },
-        {
-          "type": "hostname_match",
-          "field": "hostname",
-          "pattern": "u1",
-          "confidence": 95,
-          "reason": "Hostname contains 'u1'"
+          "pattern": "cartesian",
+          "confidence": 20,
+          "reason": "Cartesian kinematics"
         }
       ]
     },
@@ -3932,6 +3918,20 @@
           "pattern": "FILAMENT_DT_QUERY",
           "confidence": 95,
           "reason": "RFID filament query macro (Snapmaker U1 extended firmware)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "tool",
+          "confidence": 80,
+          "reason": "Multi-tool system (U1 toolchanger)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "camera",
+          "confidence": 60,
+          "reason": "Built-in camera (U1 feature)"
         },
         {
           "type": "object_exists",
