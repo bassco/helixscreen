@@ -520,7 +520,7 @@ void HardwareValidator::validate_configured_hardware(Config* config,
 
                 // Check if this is AMS/MMU hardware (uses capability flags)
                 bool is_ams_hardware = (hw_name == "AFC" || hw_name == "mmu" ||
-                                        hw_name == "toolchanger" || hw_name == "valgace");
+                                        hw_name == "toolchanger" || hw_name == "ace");
 
                 if (is_ams_hardware) {
                     bool found = false;
@@ -532,13 +532,13 @@ void HardwareValidator::validate_configured_hardware(Config* config,
                     } else if (hw_name == "toolchanger" && hardware.has_tool_changer()) {
                         found = true;
                     }
-                    // valgace check remains as-is (REST-based detection)
+                    // ace check remains as-is (REST-based detection)
 
                     if (!found) {
-                        // ValgACE is detected via REST, not Klipper objects
-                        // For now, skip validation for valgace as it requires REST probe
-                        if (hw_name == "valgace") {
-                            spdlog::debug("[HardwareValidator] Skipping ValgACE validation "
+                        // ACE is detected via REST, not Klipper objects
+                        // For now, skip validation for ace as it requires REST probe
+                        if (hw_name == "ace") {
+                            spdlog::debug("[HardwareValidator] Skipping ACE validation "
                                           "(REST-based detection required)");
                             continue;
                         }

@@ -41,7 +41,7 @@ enum class AmsType {
     NONE = 0,        ///< No AMS detected
     HAPPY_HARE = 1,  ///< Happy Hare MMU (mmu object in Moonraker)
     AFC = 2,         ///< AFC-Klipper-Add-On (afc object, lane_data database)
-    VALGACE = 3,     ///< AnyCubic ACE Pro via ValgACE Klipper driver
+    ACE = 3,     ///< AnyCubic ACE Pro (ValgACE/BunnyACE/DuckACE Klipper drivers)
     TOOL_CHANGER = 4, ///< Physical tool changer (viesturz/klipper-toolchanger)
     AD5X_IFS = 5,     ///< FlashForge AD5X IFS (Intelligent Filament Switching)
     CFS = 6            ///< Creality Filament System (K2 series, RS-485)
@@ -58,8 +58,8 @@ inline const char* ams_type_to_string(AmsType type) {
         return "Happy Hare";
     case AmsType::AFC:
         return "AFC";
-    case AmsType::VALGACE:
-        return "ACE Pro";
+    case AmsType::ACE:
+        return "ACE";
     case AmsType::TOOL_CHANGER:
         return "Tool Changer";
     case AmsType::AD5X_IFS:
@@ -84,8 +84,9 @@ inline AmsType ams_type_from_string(std::string_view str) {
     if (str == "afc" || str == "AFC") {
         return AmsType::AFC;
     }
-    if (str == "valgace" || str == "ValgACE" || str == "ace" || str == "ACE Pro") {
-        return AmsType::VALGACE;
+    if (str == "valgace" || str == "ValgACE" || str == "bunnyace" || str == "BunnyACE" ||
+        str == "duckace" || str == "DuckACE" || str == "ace" || str == "ACE Pro") {
+        return AmsType::ACE;
     }
     if (str == "toolchanger" || str == "tool_changer" || str == "Tool Changer") {
         return AmsType::TOOL_CHANGER;
@@ -118,14 +119,14 @@ inline bool is_tool_changer(AmsType type) {
  * @brief Check if AMS type is a filament-switching system
  *
  * Filament systems route multiple filaments to a single toolhead:
- * - Happy Hare, AFC, ValgACE all fall into this category
+ * - Happy Hare, AFC, ACE all fall into this category
  * - Path topology is LINEAR or HUB (converging to single nozzle)
  *
  * @param type The AMS type to check
  * @return true if this is a filament-switching system
  */
 inline bool is_filament_system(AmsType type) {
-    return type == AmsType::HAPPY_HARE || type == AmsType::AFC || type == AmsType::VALGACE ||
+    return type == AmsType::HAPPY_HARE || type == AmsType::AFC || type == AmsType::ACE ||
            type == AmsType::AD5X_IFS || type == AmsType::CFS;
 }
 
@@ -1095,7 +1096,7 @@ struct DryingPreset {
 /**
  * @brief Dryer capability and state information
  *
- * Not all AMS systems have integrated dryers. Currently only ACE Pro (ValgACE)
+ * Not all AMS systems have integrated dryers. Currently only ACE Pro
  * has dryer support. This struct provides a generic interface that other
  * backends can implement when dryer hardware becomes available.
  */
@@ -1206,7 +1207,7 @@ struct EndlessSpoolConfig {
  * - AFC: Fully editable, per-lane tool assignment via SET_MAP
  * - Happy Hare: Fully editable, tool-to-gate mapping via MMU_TTG_MAP
  * - Mock: Configurable for testing both modes
- * - ValgACE: Not supported (1:1 fixed mapping)
+ * - ACE: Not supported (1:1 fixed mapping)
  * - ToolChanger: Not supported (tools ARE slots)
  */
 struct ToolMappingCapabilities {

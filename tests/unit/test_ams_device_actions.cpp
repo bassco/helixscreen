@@ -10,7 +10,7 @@
  * - ActionType enum (button, toggle, slider, dropdown, info)
  * - Backend device action interfaces
  * - Mock backend default actions and setters
- * - ValgACE/ToolChanger stub implementations
+ * - ACE/ToolChanger stub implementations
  */
 
 #include "ams_backend_mock.h"
@@ -614,12 +614,12 @@ TEST_CASE("AmsBackendMock execute with different value types", "[ams][device_act
 }
 
 // =============================================================================
-// ValgACE Backend Stub Tests
+// ACE Backend Stub Tests
 // =============================================================================
 
-TEST_CASE("ValgACE device actions stubs", "[ams][device_actions][valgace]") {
-    // Create ValgACE backend with null dependencies (for stub testing)
-    AmsBackendValgACE backend(nullptr, nullptr);
+TEST_CASE("ACE device actions stubs", "[ams][device_actions][ace]") {
+    // Create ACE backend with null dependencies (for stub testing)
+    AmsBackendAce backend(nullptr, nullptr);
 
     SECTION("get_device_sections returns empty vector") {
         auto sections = backend.get_device_sections();

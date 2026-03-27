@@ -3,9 +3,9 @@
 
 /**
  * @file ams_backend_ace.cpp
- * @brief ValgACE (AnyCubic ACE Pro) backend implementation
+ * @brief ACE (AnyCubic ACE Pro) backend implementation
  *
- * Implements AMS backend for ValgACE using REST API polling.
+ * Implements AMS backend for ACE Pro (ValgACE/BunnyACE/DuckACE) using REST API polling.
  * See ams_backend_ace.h for API documentation.
  */
 
@@ -24,11 +24,11 @@ using namespace helix;
 // Construction / Destruction
 // ============================================================================
 
-AmsBackendValgACE::AmsBackendValgACE(MoonrakerAPI* api, MoonrakerClient* client)
+AmsBackendAce::AmsBackendAce(MoonrakerAPI* api, MoonrakerClient* client)
     : api_(api), client_(client) {
-    // Initialize system info with ValgACE defaults
-    system_info_.type = AmsType::VALGACE;
-    system_info_.type_name = "ValgACE";
+    // Initialize system info with ACE defaults
+    system_info_.type = AmsType::ACE;
+    system_info_.type_name = "ACE";
     system_info_.version = "unknown";
     system_info_.supports_bypass = false; // ACE Pro has no bypass mode
 
@@ -42,7 +42,7 @@ AmsBackendValgACE::AmsBackendValgACE(MoonrakerAPI* api, MoonrakerClient* client)
     dryer_info_.supports_fan_control = false; // ACE Pro doesn't expose fan control
 }
 
-AmsBackendValgACE::~AmsBackendValgACE() {
+AmsBackendAce::~AmsBackendAce() {
     // lifetime_ destructor calls invalidate() automatically
     stop();
 }
@@ -51,18 +51,18 @@ AmsBackendValgACE::~AmsBackendValgACE() {
 // Lifecycle
 // ============================================================================
 
-AmsError AmsBackendValgACE::start() {
+AmsError AmsBackendAce::start() {
     if (running_.load()) {
         return AmsErrorHelper::success();
     }
 
     if (!api_ || !client_) {
         return AmsError(AmsResult::NOT_INITIALIZED,
-                        "ValgACE backend requires valid MoonrakerAPI and MoonrakerClient",
+                        "ACE backend requires valid MoonrakerAPI and MoonrakerClient",
                         "Internal error", "Contact support");
     }
 
-    spdlog::info("[ValgACE] Starting backend");
+    spdlog::info("[ACE] Starting backend");
 
     // Reset state
     stop_requested_.store(false);
@@ -70,17 +70,17 @@ AmsError AmsBackendValgACE::start() {
 
     // Start polling thread
     running_.store(true);
-    polling_thread_ = std::thread(&AmsBackendValgACE::polling_thread_func, this);
+    polling_thread_ = std::thread(&AmsBackendAce::polling_thread_func, this);
 
     return AmsErrorHelper::success();
 }
 
-void AmsBackendValgACE::stop() {
+void AmsBackendAce::stop() {
     if (!running_.load()) {
         return;
     }
 
-    spdlog::info("[ValgACE] Stopping backend");
+    spdlog::info("[ACE] Stopping backend");
 
     // Signal thread to stop
     {
@@ -95,10 +95,10 @@ void AmsBackendValgACE::stop() {
     }
 
     running_.store(false);
-    spdlog::info("[ValgACE] Backend stopped");
+    spdlog::info("[ACE] Backend stopped");
 }
 
-bool AmsBackendValgACE::is_running() const {
+bool AmsBackendAce::is_running() const {
     return running_.load();
 }
 
@@ -106,12 +106,12 @@ bool AmsBackendValgACE::is_running() const {
 // Events
 // ============================================================================
 
-void AmsBackendValgACE::set_event_callback(EventCallback callback) {
+void AmsBackendAce::set_event_callback(EventCallback callback) {
     std::lock_guard<std::mutex> lock(callback_mutex_);
     event_callback_ = std::move(callback);
 }
 
-void AmsBackendValgACE::emit_event(const std::string& event, const std::string& data) {
+void AmsBackendAce::emit_event(const std::string& event, const std::string& data) {
     EventCallback cb;
     {
         std::lock_guard<std::mutex> lock(callback_mutex_);
@@ -126,19 +126,19 @@ void AmsBackendValgACE::emit_event(const std::string& event, const std::string& 
 // State Queries
 // ============================================================================
 
-AmsSystemInfo AmsBackendValgACE::get_system_info() const {
+AmsSystemInfo AmsBackendAce::get_system_info() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return system_info_;
 }
 
-AmsType AmsBackendValgACE::get_type() const {
-    return AmsType::VALGACE;
+AmsType AmsBackendAce::get_type() const {
+    return AmsType::ACE;
 }
 
-SlotInfo AmsBackendValgACE::get_slot_info(int slot_index) const {
+SlotInfo AmsBackendAce::get_slot_info(int slot_index) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
-    // ValgACE is a single-unit system
+    // ACE is a single-unit system
     if (system_info_.units.empty()) {
         SlotInfo empty;
         empty.slot_index = -1;
@@ -156,22 +156,22 @@ SlotInfo AmsBackendValgACE::get_slot_info(int slot_index) const {
     return unit.slots[static_cast<size_t>(slot_index)];
 }
 
-AmsAction AmsBackendValgACE::get_current_action() const {
+AmsAction AmsBackendAce::get_current_action() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return system_info_.action;
 }
 
-int AmsBackendValgACE::get_current_tool() const {
+int AmsBackendAce::get_current_tool() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return system_info_.current_tool;
 }
 
-int AmsBackendValgACE::get_current_slot() const {
+int AmsBackendAce::get_current_slot() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return system_info_.current_slot;
 }
 
-bool AmsBackendValgACE::is_filament_loaded() const {
+bool AmsBackendAce::is_filament_loaded() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return system_info_.filament_loaded;
 }
@@ -180,12 +180,12 @@ bool AmsBackendValgACE::is_filament_loaded() const {
 // Path Visualization
 // ============================================================================
 
-PathTopology AmsBackendValgACE::get_topology() const {
+PathTopology AmsBackendAce::get_topology() const {
     // ACE Pro uses a hub topology (4 slots merge to single output)
     return PathTopology::HUB;
 }
 
-PathSegment AmsBackendValgACE::get_filament_segment() const {
+PathSegment AmsBackendAce::get_filament_segment() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
     if (!system_info_.filament_loaded) {
@@ -197,10 +197,10 @@ PathSegment AmsBackendValgACE::get_filament_segment() const {
     return PathSegment::NOZZLE;
 }
 
-PathSegment AmsBackendValgACE::get_slot_filament_segment(int slot_index) const {
+PathSegment AmsBackendAce::get_slot_filament_segment(int slot_index) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
-    // ValgACE is a single-unit system
+    // ACE is a single-unit system
     if (system_info_.units.empty()) {
         return PathSegment::NONE;
     }
@@ -225,7 +225,7 @@ PathSegment AmsBackendValgACE::get_slot_filament_segment(int slot_index) const {
     return PathSegment::NONE;
 }
 
-PathSegment AmsBackendValgACE::infer_error_segment() const {
+PathSegment AmsBackendAce::infer_error_segment() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
     // If we're in an error state, try to infer location
@@ -241,7 +241,7 @@ PathSegment AmsBackendValgACE::infer_error_segment() const {
 // Filament Operations
 // ============================================================================
 
-AmsError AmsBackendValgACE::load_filament(int slot_index) {
+AmsError AmsBackendAce::load_filament(int slot_index) {
     auto err = check_preconditions();
     if (!err.success()) {
         return err;
@@ -252,27 +252,27 @@ AmsError AmsBackendValgACE::load_filament(int slot_index) {
         return err;
     }
 
-    spdlog::info("[ValgACE] Loading filament from slot {}", slot_index);
+    spdlog::info("[ACE] Loading filament from slot {}", slot_index);
     return execute_gcode("ACE_CHANGE_TOOL TOOL=" + std::to_string(slot_index));
 }
 
-AmsError AmsBackendValgACE::unload_filament(int /*slot_index*/) {
+AmsError AmsBackendAce::unload_filament(int /*slot_index*/) {
     auto err = check_preconditions();
     if (!err.success()) {
         return err;
     }
 
-    spdlog::info("[ValgACE] Unloading filament");
+    spdlog::info("[ACE] Unloading filament");
     return execute_gcode("ACE_CHANGE_TOOL TOOL=-1");
 }
 
-AmsError AmsBackendValgACE::select_slot(int slot_index) {
+AmsError AmsBackendAce::select_slot(int slot_index) {
     // ACE Pro doesn't have a "select without load" concept
     // Just do a load operation
     return load_filament(slot_index);
 }
 
-AmsError AmsBackendValgACE::change_tool(int tool_number) {
+AmsError AmsBackendAce::change_tool(int tool_number) {
     // Tool number maps directly to slot index on ACE Pro
     return load_filament(tool_number);
 }
@@ -281,19 +281,19 @@ AmsError AmsBackendValgACE::change_tool(int tool_number) {
 // Recovery Operations
 // ============================================================================
 
-AmsError AmsBackendValgACE::recover() {
-    spdlog::info("[ValgACE] Attempting recovery");
-    // ACE Pro may have a recovery command - TBD based on ValgACE docs
+AmsError AmsBackendAce::recover() {
+    spdlog::info("[ACE] Attempting recovery");
+    // ACE Pro may have a recovery command - TBD based on ACE driver docs
     return execute_gcode("ACE_RECOVER");
 }
 
-AmsError AmsBackendValgACE::reset() {
-    spdlog::info("[ValgACE] Resetting");
+AmsError AmsBackendAce::reset() {
+    spdlog::info("[ACE] Resetting");
     return execute_gcode("ACE_RESET");
 }
 
-AmsError AmsBackendValgACE::cancel() {
-    spdlog::info("[ValgACE] Cancelling operation");
+AmsError AmsBackendAce::cancel() {
+    spdlog::info("[ACE] Cancelling operation");
     // Unload any active filament operation
     return execute_gcode("ACE_CHANGE_TOOL TOOL=-1");
 }
@@ -302,28 +302,28 @@ AmsError AmsBackendValgACE::cancel() {
 // Configuration
 // ============================================================================
 
-AmsError AmsBackendValgACE::set_slot_info(int slot_index, const SlotInfo& info, bool /*persist*/) {
-    // ValgACE may support slot configuration via Spoolman integration
+AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool /*persist*/) {
+    // ACE may support slot configuration via Spoolman integration
     // For now, this is not supported
     (void)slot_index;
     (void)info;
     return AmsErrorHelper::not_supported("Slot configuration");
 }
 
-AmsError AmsBackendValgACE::set_tool_mapping(int tool_number, int slot_index) {
+AmsError AmsBackendAce::set_tool_mapping(int tool_number, int slot_index) {
     // ACE Pro uses 1:1 tool-to-slot mapping
     (void)tool_number;
     (void)slot_index;
     return AmsErrorHelper::not_supported("Tool mapping");
 }
 
-helix::printer::ToolMappingCapabilities AmsBackendValgACE::get_tool_mapping_capabilities() const {
-    // ValgACE has fixed 1:1 mapping - not configurable
+helix::printer::ToolMappingCapabilities AmsBackendAce::get_tool_mapping_capabilities() const {
+    // ACE has fixed 1:1 mapping - not configurable
     return {false, false, ""};
 }
 
-std::vector<int> AmsBackendValgACE::get_tool_mapping() const {
-    // ValgACE has fixed 1:1 mapping - return empty (not supported)
+std::vector<int> AmsBackendAce::get_tool_mapping() const {
+    // ACE has fixed 1:1 mapping - return empty (not supported)
     return {};
 }
 
@@ -331,15 +331,15 @@ std::vector<int> AmsBackendValgACE::get_tool_mapping() const {
 // Bypass Mode (not supported)
 // ============================================================================
 
-AmsError AmsBackendValgACE::enable_bypass() {
+AmsError AmsBackendAce::enable_bypass() {
     return AmsErrorHelper::not_supported("Bypass mode");
 }
 
-AmsError AmsBackendValgACE::disable_bypass() {
+AmsError AmsBackendAce::disable_bypass() {
     return AmsErrorHelper::not_supported("Bypass mode");
 }
 
-bool AmsBackendValgACE::is_bypass_active() const {
+bool AmsBackendAce::is_bypass_active() const {
     return false; // ACE Pro has no bypass
 }
 
@@ -347,12 +347,12 @@ bool AmsBackendValgACE::is_bypass_active() const {
 // Dryer Control
 // ============================================================================
 
-DryerInfo AmsBackendValgACE::get_dryer_info() const {
+DryerInfo AmsBackendAce::get_dryer_info() const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     return dryer_info_;
 }
 
-AmsError AmsBackendValgACE::start_drying(float temp_c, int duration_min, int fan_pct, int unit) {
+AmsError AmsBackendAce::start_drying(float temp_c, int duration_min, int fan_pct, int unit) {
     (void)unit;
     auto err = check_preconditions();
     if (!err.success()) {
@@ -386,7 +386,7 @@ AmsError AmsBackendValgACE::start_drying(float temp_c, int duration_min, int fan
                         "Set duration between 1 and " + std::to_string(max_duration) + " minutes");
     }
 
-    spdlog::info("[ValgACE] Starting drying: {}°C for {} minutes", temp_c, duration_min);
+    spdlog::info("[ACE] Starting drying: {}°C for {} minutes", temp_c, duration_min);
 
     // Fan percentage ignored - ACE Pro doesn't support it
     (void)fan_pct;
@@ -396,13 +396,13 @@ AmsError AmsBackendValgACE::start_drying(float temp_c, int duration_min, int fan
     return execute_gcode(gcode);
 }
 
-AmsError AmsBackendValgACE::stop_drying(int unit) {
+AmsError AmsBackendAce::stop_drying(int unit) {
     (void)unit;
-    spdlog::info("[ValgACE] Stopping drying");
+    spdlog::info("[ACE] Stopping drying");
     return execute_gcode("ACE_STOP_DRYING");
 }
 
-AmsError AmsBackendValgACE::update_drying(float temp_c, int duration_min, int fan_pct) {
+AmsError AmsBackendAce::update_drying(float temp_c, int duration_min, int fan_pct) {
     // ACE Pro may not support updating while running - stop and restart
     auto err = stop_drying();
     if (!err.success()) {
@@ -426,7 +426,7 @@ AmsError AmsBackendValgACE::update_drying(float temp_c, int duration_min, int fa
     return start_drying(target_temp, target_duration, fan_pct);
 }
 
-std::vector<DryingPreset> AmsBackendValgACE::get_drying_presets() const {
+std::vector<DryingPreset> AmsBackendAce::get_drying_presets() const {
     // Return ACE Pro optimized presets
     return get_default_drying_presets();
 }
@@ -435,8 +435,8 @@ std::vector<DryingPreset> AmsBackendValgACE::get_drying_presets() const {
 // Polling Thread
 // ============================================================================
 
-void AmsBackendValgACE::polling_thread_func() {
-    spdlog::debug("[ValgACE] Polling thread started");
+void AmsBackendAce::polling_thread_func() {
+    spdlog::debug("[ACE] Polling thread started");
 
     // First, fetch system info (one-time)
     poll_info();
@@ -452,15 +452,15 @@ void AmsBackendValgACE::polling_thread_func() {
         }
     }
 
-    spdlog::debug("[ValgACE] Polling thread exiting");
+    spdlog::debug("[ACE] Polling thread exiting");
 }
 
-void AmsBackendValgACE::poll_info() {
+void AmsBackendAce::poll_info() {
     if (!api_) {
         return;
     }
 
-    spdlog::debug("[ValgACE] Polling /server/ace/info");
+    spdlog::debug("[ACE] Polling /server/ace/info");
 
     // Use heap-allocated sync state to avoid dangling reference if timeout expires
     struct SyncState {
@@ -485,7 +485,7 @@ void AmsBackendValgACE::poll_info() {
             parse_info_response(resp.data["result"]);
             info_fetched_.store(true);
         } else {
-            spdlog::warn("[ValgACE] Failed to get /server/ace/info: {}", resp.error);
+            spdlog::warn("[ACE] Failed to get /server/ace/info: {}", resp.error);
         }
 
         {
@@ -500,12 +500,12 @@ void AmsBackendValgACE::poll_info() {
     state->cv.wait_for(lock, std::chrono::seconds(5), [state] { return state->done; });
 }
 
-void AmsBackendValgACE::poll_status() {
+void AmsBackendAce::poll_status() {
     if (!api_) {
         return;
     }
 
-    spdlog::trace("[ValgACE] Polling /server/ace/status");
+    spdlog::trace("[ACE] Polling /server/ace/status");
 
     auto token = lifetime_.token();
 
@@ -517,17 +517,17 @@ void AmsBackendValgACE::poll_status() {
                 emit_event(EVENT_STATE_CHANGED);
             }
         } else {
-            spdlog::debug("[ValgACE] Status poll failed: {}", resp.error);
+            spdlog::debug("[ACE] Status poll failed: {}", resp.error);
         }
     });
 }
 
-void AmsBackendValgACE::poll_slots() {
+void AmsBackendAce::poll_slots() {
     if (!api_) {
         return;
     }
 
-    spdlog::trace("[ValgACE] Polling /server/ace/slots");
+    spdlog::trace("[ACE] Polling /server/ace/slots");
 
     auto token = lifetime_.token();
 
@@ -539,7 +539,7 @@ void AmsBackendValgACE::poll_slots() {
                 emit_event(EVENT_SLOT_CHANGED);
             }
         } else {
-            spdlog::debug("[ValgACE] Slots poll failed: {}", resp.error);
+            spdlog::debug("[ACE] Slots poll failed: {}", resp.error);
         }
     });
 }
@@ -548,11 +548,11 @@ void AmsBackendValgACE::poll_slots() {
 // Response Parsing
 // ============================================================================
 
-void AmsBackendValgACE::parse_info_response(const json& data) {
+void AmsBackendAce::parse_info_response(const json& data) {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
     if (data.contains("model") && data["model"].is_string()) {
-        system_info_.type_name = "ValgACE (" + data["model"].get<std::string>() + ")";
+        system_info_.type_name = "ACE";
     }
 
     if (data.contains("version") && data["version"].is_string()) {
@@ -564,13 +564,13 @@ void AmsBackendValgACE::parse_info_response(const json& data) {
 
         // Sanity check: ACE Pro has 4 slots max, be generous with 16
         if (slot_count < 0 || slot_count > 16) {
-            spdlog::warn("[ValgACE] Ignoring invalid slot_count: {}", slot_count);
+            spdlog::warn("[ACE] Ignoring invalid slot_count: {}", slot_count);
             return;
         }
 
         system_info_.total_slots = slot_count;
 
-        // ValgACE is a single-unit system - ensure we have one unit
+        // ACE is a single-unit system - ensure we have one unit
         if (system_info_.units.empty()) {
             system_info_.units.emplace_back();
             system_info_.units[0].name = "ACE Pro";
@@ -592,11 +592,11 @@ void AmsBackendValgACE::parse_info_response(const json& data) {
         }
     }
 
-    spdlog::info("[ValgACE] Detected: {} v{} with {} slots", system_info_.type_name,
+    spdlog::info("[ACE] Detected: {} v{} with {} slots", system_info_.type_name,
                  system_info_.version, system_info_.total_slots);
 }
 
-bool AmsBackendValgACE::parse_status_response(const json& data) {
+bool AmsBackendAce::parse_status_response(const json& data) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     bool changed = false;
 
@@ -661,7 +661,7 @@ bool AmsBackendValgACE::parse_status_response(const json& data) {
     return changed;
 }
 
-bool AmsBackendValgACE::parse_slots_response(const json& data) {
+bool AmsBackendAce::parse_slots_response(const json& data) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     bool changed = false;
 
@@ -673,7 +673,7 @@ bool AmsBackendValgACE::parse_slots_response(const json& data) {
 
     // Sanity check: ACE Pro has 4 slots max, be generous with 16
     if (slots_data.size() > 16) {
-        spdlog::warn("[ValgACE] Ignoring excessive slot count: {}", slots_data.size());
+        spdlog::warn("[ACE] Ignoring excessive slot count: {}", slots_data.size());
         return false;
     }
 
@@ -741,7 +741,7 @@ bool AmsBackendValgACE::parse_slots_response(const json& data) {
                     }
                     color = static_cast<uint32_t>(std::stoul(color_str, nullptr, 16));
                 } catch (const std::exception& e) {
-                    spdlog::debug("[ValgACE] Failed to parse color '{}': {}", color_str, e.what());
+                    spdlog::debug("[ACE] Failed to parse color '{}': {}", color_str, e.what());
                 }
             }
             if (color != slot.color_rgb) {
@@ -775,20 +775,20 @@ bool AmsBackendValgACE::parse_slots_response(const json& data) {
 // Helpers
 // ============================================================================
 
-AmsError AmsBackendValgACE::execute_gcode(const std::string& gcode) {
+AmsError AmsBackendAce::execute_gcode(const std::string& gcode) {
     if (!api_) {
         return AmsErrorHelper::not_connected("No API connection");
     }
 
     // Execute via MoonrakerAPI
     api_->execute_gcode(
-        gcode, []() { spdlog::debug("[ValgACE] G-code executed successfully"); },
+        gcode, []() { spdlog::debug("[ACE] G-code executed successfully"); },
         [gcode](const MoonrakerError& err) {
             if (err.type == MoonrakerErrorType::TIMEOUT) {
-                spdlog::warn("[ValgACE] G-code response timed out (may still be running): {}",
+                spdlog::warn("[ACE] G-code response timed out (may still be running): {}",
                              gcode);
             } else {
-                spdlog::error("[ValgACE] G-code '{}' failed: {}", gcode, err.message);
+                spdlog::error("[ACE] G-code '{}' failed: {}", gcode, err.message);
             }
         },
         MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
@@ -796,9 +796,9 @@ AmsError AmsBackendValgACE::execute_gcode(const std::string& gcode) {
     return AmsErrorHelper::success();
 }
 
-AmsError AmsBackendValgACE::check_preconditions() const {
+AmsError AmsBackendAce::check_preconditions() const {
     if (!running_.load()) {
-        return AmsError(AmsResult::NOT_INITIALIZED, "ValgACE backend not running",
+        return AmsError(AmsResult::NOT_INITIALIZED, "ACE backend not running",
                         "Backend not ready", "Start the backend first");
     }
 
@@ -811,7 +811,7 @@ AmsError AmsBackendValgACE::check_preconditions() const {
     return AmsErrorHelper::success();
 }
 
-AmsError AmsBackendValgACE::validate_slot_index(int slot_index) const {
+AmsError AmsBackendAce::validate_slot_index(int slot_index) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
 
     if (slot_index < 0 || slot_index >= system_info_.total_slots) {
@@ -821,7 +821,7 @@ AmsError AmsBackendValgACE::validate_slot_index(int slot_index) const {
     return AmsErrorHelper::success();
 }
 
-bool AmsBackendValgACE::interruptible_sleep(int ms) {
+bool AmsBackendAce::interruptible_sleep(int ms) {
     std::unique_lock<std::mutex> lock(stop_mutex_);
     return !stop_cv_.wait_for(lock, std::chrono::milliseconds(ms),
                               [this] { return stop_requested_.load(); });
@@ -831,18 +831,18 @@ bool AmsBackendValgACE::interruptible_sleep(int ms) {
 // Device Actions (stub - not yet exposed)
 // ============================================================================
 
-std::vector<helix::printer::DeviceSection> AmsBackendValgACE::get_device_sections() const {
-    // ValgACE doesn't expose device-specific actions yet
+std::vector<helix::printer::DeviceSection> AmsBackendAce::get_device_sections() const {
+    // ACE doesn't expose device-specific actions yet
     // Future: could expose dryer settings here
     return {};
 }
 
-std::vector<helix::printer::DeviceAction> AmsBackendValgACE::get_device_actions() const {
-    // ValgACE doesn't expose device-specific actions yet
+std::vector<helix::printer::DeviceAction> AmsBackendAce::get_device_actions() const {
+    // ACE doesn't expose device-specific actions yet
     return {};
 }
 
-AmsError AmsBackendValgACE::execute_device_action(const std::string& action_id,
+AmsError AmsBackendAce::execute_device_action(const std::string& action_id,
                                                   const std::any& value) {
     (void)action_id;
     (void)value;

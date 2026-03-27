@@ -95,7 +95,7 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
                                    MoonrakerClient* client) {
     spdlog::debug("[PrinterDiscovery] Initializing subsystems from hardware discovery");
 
-    // Initialize AMS backend (AFC, Happy Hare, ValgACE, Tool Changer)
+    // Initialize AMS backend (AFC, Happy Hare, ACE, Tool Changer)
     AmsState::instance().init_backend_from_hardware(hardware, api, client);
 
     // Initialize filament sensor manager

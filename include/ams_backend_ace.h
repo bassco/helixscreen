@@ -20,14 +20,14 @@ class MoonrakerClient;
 
 /**
  * @file ams_backend_ace.h
- * @brief ValgACE (AnyCubic ACE Pro) backend implementation
+ * @brief ACE (Anycubic ACE Pro) backend implementation
  *
  * Implements the AmsBackend interface for AnyCubic ACE Pro systems
- * using the ValgACE Klipper driver. Unlike Happy Hare and AFC which
- * use Moonraker's WebSocket subscriptions, ValgACE exposes a REST API
- * that must be polled for state updates.
+ * using the ValgACE/BunnyACE/DuckACE Klipper drivers. Unlike Happy Hare
+ * and AFC which use Moonraker's WebSocket subscriptions, the ACE backend
+ * exposes a REST API that must be polled for state updates.
  *
- * ValgACE REST Endpoints:
+ * ACE backend REST Endpoints (via ValgACE's Moonraker bridge at /server/ace/):
  * - GET /server/ace/info      - System information (model, version, slots)
  * - GET /server/ace/status    - Current state (dryer, loaded slot, action)
  * - GET /server/ace/slots     - Slot information (colors, materials, status)
@@ -42,19 +42,19 @@ class MoonrakerClient;
  * - State is cached under mutex protection
  * - Callbacks invoked on polling thread (consider posting to main thread)
  */
-class AmsBackendValgACE : public AmsBackend {
+class AmsBackendAce : public AmsBackend {
   public:
     /**
-     * @brief Construct ValgACE backend
+     * @brief Construct ACE backend
      *
      * @param api Pointer to MoonrakerAPI (for REST calls and G-code)
      * @param client Pointer to helix::MoonrakerClient (for connection state)
      *
      * @note Both pointers must remain valid for the lifetime of this backend.
      */
-    AmsBackendValgACE(MoonrakerAPI* api, helix::MoonrakerClient* client);
+    AmsBackendAce(MoonrakerAPI* api, helix::MoonrakerClient* client);
 
-    ~AmsBackendValgACE() override;
+    ~AmsBackendAce() override;
 
     // ========================================================================
     // Lifecycle
@@ -115,7 +115,7 @@ class AmsBackendValgACE : public AmsBackend {
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
-    // ValgACE has fixed 1:1 mapping (tools ARE slots), not configurable
+    // ACE has fixed 1:1 mapping (tools ARE slots), not configurable
     [[nodiscard]] helix::printer::ToolMappingCapabilities
     get_tool_mapping_capabilities() const override;
     [[nodiscard]] std::vector<int> get_tool_mapping() const override;
@@ -129,7 +129,7 @@ class AmsBackendValgACE : public AmsBackend {
     [[nodiscard]] bool is_bypass_active() const override;
 
     // ========================================================================
-    // Dryer Control (ValgACE has built-in dryer)
+    // Dryer Control (ACE Pro has built-in dryer)
     // ========================================================================
 
     [[nodiscard]] DryerInfo get_dryer_info() const override;

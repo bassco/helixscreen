@@ -771,7 +771,7 @@ class AmsBackend {
      * store spool-to-slot mappings in firmware gcode. For these, ToolState
      * mirrors firmware state but doesn't need to persist separately.
      *
-     * Backends without firmware persistence (tool changers, ValgACE) rely on
+     * Backends without firmware persistence (tool changers, ACE) rely on
      * ToolState's own persistence (Moonraker DB + local JSON).
      *
      * @return true if firmware handles spool persistence, false if ToolState should
@@ -784,7 +784,7 @@ class AmsBackend {
      * @brief Check if backend provides per-unit environment sensors (temp/humidity)
      *
      * CFS units have built-in temperature and humidity sensors. Other backends
-     * (Happy Hare, ValgACE, AFC, Tool Changers) do not.
+     * (Happy Hare, ACE, AFC, Tool Changers) do not.
      *
      * @return true if backend provides environment sensor data per unit
      */

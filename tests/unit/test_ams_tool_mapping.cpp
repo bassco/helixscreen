@@ -9,7 +9,7 @@
  * - get_tool_mapping_capabilities() virtual method
  * - get_tool_mapping() virtual method
  * - set_tool_mapping() method
- * - Backend-specific implementations (Mock, AFC, Happy Hare, ValgACE, ToolChanger)
+ * - Backend-specific implementations (Mock, AFC, Happy Hare, ACE, ToolChanger)
  */
 
 #include "ams_backend_mock.h"

@@ -166,12 +166,12 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type) {
         return nullptr;
 #endif
 
-    case AmsType::VALGACE:
+    case AmsType::ACE:
 #ifdef HELIX_ENABLE_MOCKS
-        spdlog::warn("[AMS Backend] ValgACE detected but no API/client provided - using mock");
+        spdlog::warn("[AMS Backend] ACE detected but no API/client provided - using mock");
         return std::make_unique<AmsBackendMock>(config->mock_ams_gate_count);
 #else
-        spdlog::warn("[AMS Backend] ValgACE detected but no API/client provided");
+        spdlog::warn("[AMS Backend] ACE detected but no API/client provided");
         return nullptr;
 #endif
 
@@ -234,13 +234,13 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerA
         spdlog::debug("[AMS Backend] Creating AFC backend");
         return std::make_unique<AmsBackendAfc>(api, client);
 
-    case AmsType::VALGACE:
+    case AmsType::ACE:
         if (!api || !client) {
-            spdlog::error("[AMS Backend] ValgACE requires MoonrakerAPI and MoonrakerClient");
+            spdlog::error("[AMS Backend] ACE requires MoonrakerAPI and MoonrakerClient");
             return nullptr;
         }
-        spdlog::debug("[AMS Backend] Creating ValgACE backend");
-        return std::make_unique<AmsBackendValgACE>(api, client);
+        spdlog::debug("[AMS Backend] Creating ACE backend");
+        return std::make_unique<AmsBackendAce>(api, client);
 
     case AmsType::TOOL_CHANGER:
         if (!api || !client) {

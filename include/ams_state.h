@@ -978,26 +978,26 @@ class AmsState {
     void on_backend_event(int backend_index, const std::string& event, const std::string& data);
 
     /**
-     * @brief Probe for ValgACE via REST endpoint
+     * @brief Probe for ACE via REST endpoint
      *
      * Makes an async REST call to /server/ace/info. If successful,
-     * creates ValgACE backend via lv_async_call to maintain thread safety.
+     * creates ACE backend via lv_async_call to maintain thread safety.
      *
      * @param api MoonrakerAPI instance for REST calls
      * @param client helix::MoonrakerClient instance for the backend
      */
-    void probe_valgace(MoonrakerAPI* api, helix::MoonrakerClient* client);
+    void probe_ace(MoonrakerAPI* api, helix::MoonrakerClient* client);
 
     /**
-     * @brief Create and start ValgACE backend
+     * @brief Create and start ACE backend
      *
-     * Called on main thread after successful ValgACE probe.
+     * Called on main thread after successful ACE probe.
      * Must be called from LVGL thread context.
      *
      * @param api MoonrakerAPI instance
      * @param client helix::MoonrakerClient instance
      */
-    void create_valgace_backend(MoonrakerAPI* api, helix::MoonrakerClient* client);
+    void create_ace_backend(MoonrakerAPI* api, helix::MoonrakerClient* client);
 
     /// Per-backend slot subject storage for secondary backends (index > 0)
     struct BackendSlotSubjects {

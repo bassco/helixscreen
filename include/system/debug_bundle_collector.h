@@ -60,7 +60,7 @@ class DebugBundleCollector {
     /// Collect Moonraker state via REST (server info, printer state, config)
     static nlohmann::json collect_moonraker_info();
 
-    /// Collect filament system data (AFC, Happy Hare, ValgACE, Spoolman, tool changers)
+    /// Collect filament system data (AFC, Happy Hare, ACE, Spoolman, tool changers)
     static nlohmann::json collect_filament_system_info();
 
     /// Filter a Klipper object list to filament-related objects (public for testing)

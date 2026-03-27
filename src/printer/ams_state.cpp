@@ -1210,7 +1210,7 @@ void AmsState::sync_from_backend() {
         bump_slots_version();
     }
 
-    // Sync dryer state (for systems with integrated drying like ValgACE)
+    // Sync dryer state (for systems with integrated drying like ACE)
     sync_dryer_from_backend();
 
     // Sync clog detection meter subjects

@@ -1658,8 +1658,8 @@ nlohmann::json TelemetryManager::build_hw_ams_section(const helix::PrinterDiscov
     case AmsType::AFC:
         ams["type"] = "afc";
         break;
-    case AmsType::VALGACE:
-        ams["type"] = "valgace";
+    case AmsType::ACE:
+        ams["type"] = "ace";
         break;
     case AmsType::TOOL_CHANGER:
         ams["type"] = "tool_changer";

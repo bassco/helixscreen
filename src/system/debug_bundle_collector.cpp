@@ -553,7 +553,7 @@ json DebugBundleCollector::collect_moonraker_info() {
 }
 
 // =============================================================================
-// Filament system info (AFC, Happy Hare, ValgACE, Spoolman, tool changers)
+// Filament system info (AFC, Happy Hare, ACE, Spoolman, tool changers)
 // =============================================================================
 
 json DebugBundleCollector::filter_filament_objects(const json& object_list) {

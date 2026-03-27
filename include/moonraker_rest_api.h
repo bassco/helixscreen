@@ -7,7 +7,7 @@
  *
  * Extracted from MoonrakerAPI to encapsulate all REST endpoint operations
  * and WLED control functionality in a dedicated class. Uses HTTP for
- * Moonraker extension plugins (e.g., ValgACE, WLED bridge).
+ * Moonraker extension plugins (e.g., ACE backend via ValgACE, WLED bridge).
  */
 
 #pragma once
@@ -33,7 +33,7 @@ class MoonrakerClient;
  * @brief REST Endpoint and WLED Control API operations via Moonraker
  *
  * Provides HTTP GET/POST methods for communicating with Moonraker extension
- * plugins that expose REST APIs (e.g., ValgACE at /server/ace/, WLED bridge
+ * plugins that expose REST APIs (e.g., ACE backend at /server/ace/ via ValgACE, WLED bridge
  * at /machine/wled/).
  *
  * These methods differ from the standard MoonrakerClient JSON-RPC methods:
@@ -71,7 +71,7 @@ class MoonrakerRestAPI {
      * @brief Call a Moonraker extension REST endpoint with GET
      *
      * Makes an HTTP GET request to a Moonraker extension endpoint.
-     * Used for plugins like ValgACE that expose REST APIs at /server/xxx/.
+     * Used for plugins like ACE (via ValgACE's Moonraker bridge) that expose REST APIs at /server/xxx/.
      *
      * Example: call_rest_get("/server/ace/status", callback)
      *
@@ -84,7 +84,7 @@ class MoonrakerRestAPI {
      * @brief Call a Moonraker extension REST endpoint with POST
      *
      * Makes an HTTP POST request to a Moonraker extension endpoint.
-     * Used for plugins like ValgACE that accept commands via REST.
+     * Used for plugins like ACE (via ValgACE's Moonraker bridge) that accept commands via REST.
      *
      * Example: call_rest_post("/server/ace/command", {"action": "load"}, callback)
      *

@@ -967,8 +967,8 @@ void ui_wizard_complete() {
                 case AmsType::TOOL_CHANGER:
                     ams_hw_name = "toolchanger"; // Marker for tool changer detection
                     break;
-                case AmsType::VALGACE:
-                    ams_hw_name = "valgace"; // ValgACE marker (REST-based, not a Klipper object)
+                case AmsType::ACE:
+                    ams_hw_name = "ace"; // ACE marker (REST-based, not a Klipper object)
                     break;
                 default:
                     break;

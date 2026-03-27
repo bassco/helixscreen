@@ -1815,7 +1815,7 @@ void MoonrakerRestAPIMock::call_rest_get(const std::string& endpoint, RestCallba
     resp.success = true;
     resp.status_code = 200;
 
-    // Return mock responses for known ValgACE endpoints
+    // Return mock responses for known ACE endpoints (via ValgACE Moonraker plugin)
     if (endpoint == "/server/ace/info") {
         resp.data = {
             {"result", {{"model", "ACE Pro"}, {"version", "1.0.0-mock"}, {"slot_count", 4}}}};

@@ -14,7 +14,7 @@
  *
  * Contains all request/response types used by MoonrakerAPI, separated
  * from the API class for cleaner dependencies. Code that only needs
- * to work with these types (e.g., ValgACE backend) can include just
+ * to work with these types (e.g., ACE backend) can include just
  * this header without pulling in the full API interface.
  */
 
@@ -272,14 +272,14 @@ struct ModifiedPrintResult {
 };
 
 // ============================================================================
-// REST API Types (for Moonraker extensions like ValgACE)
+// REST API Types (for Moonraker extensions like ACE backend)
 // ============================================================================
 
 /**
  * @brief Response from a generic REST API call
  *
  * Used for communicating with Moonraker extension plugins that expose
- * REST endpoints (e.g., ValgACE at /server/ace/). Encapsulates both
+ * REST endpoints (e.g., ACE backend via ValgACE's Moonraker bridge at /server/ace/). Encapsulates both
  * success and error cases in a single structure.
  */
 struct RestResponse {
