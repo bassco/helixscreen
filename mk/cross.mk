@@ -250,7 +250,7 @@ else ifeq ($(PLATFORM_TARGET),ad5x)
     # -funwind-tables: Emit DWARF unwind info so backtrace() can walk the full
     # call stack in crash reports. Small code size cost, zero runtime cost.
     TARGET_CFLAGS := -march=mips32r5 -mtune=mips32r5 -mabi=32 -mnan=2008 -mfp64 \
-        -Os -flto -ffunction-sections -fdata-sections -funwind-tables \
+        -Os -flto -ffunction-sections -fdata-sections -fno-omit-frame-pointer -funwind-tables \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_AD5X
     # -Wl,--gc-sections: Remove unused sections during linking (works with -ffunction-sections)
     # -flto: Must match compiler flag for LTO to work
@@ -341,7 +341,7 @@ else ifneq ($(filter mips k1,$(PLATFORM_TARGET)),)
     #
     TARGET_CFLAGS := -march=mips32r2 -mtune=mips32r2 \
         -Os -flto=auto -ffunction-sections -fdata-sections \
-        -fomit-frame-pointer -funwind-tables \
+        -fno-omit-frame-pointer -funwind-tables \
         -fmerge-all-constants -fno-ident \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_MIPS
     # Linker flags:
@@ -381,7 +381,7 @@ else ifeq ($(PLATFORM_TARGET),k1-dynamic)
     # call stack in crash reports. Small code size cost, zero runtime cost.
     TARGET_CFLAGS := -march=mips32r2 -mtune=mips32r2 -mnan=2008 -mfp64 \
         -Os -ffunction-sections -fdata-sections -funwind-tables \
-        -fomit-frame-pointer \
+        -fno-omit-frame-pointer \
         -isystem include/compat \
         -Wno-error=conversion -Wno-error=sign-conversion \
         -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_K1
@@ -416,7 +416,7 @@ else ifeq ($(PLATFORM_TARGET),k2)
     TARGET_TRIPLE := arm-buildroot-linux-musleabihf
     TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard \
         -Os -flto=auto -ffunction-sections -fdata-sections \
-        -fomit-frame-pointer -fno-unwind-tables -fno-asynchronous-unwind-tables \
+        -fno-omit-frame-pointer -funwind-tables \
         -fmerge-all-constants -fno-ident \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_K2
     TARGET_LDFLAGS := -Wl,--gc-sections -Wl,-O2 -Wl,--as-needed -flto=auto -static
@@ -442,7 +442,7 @@ else ifeq ($(PLATFORM_TARGET),snapmaker-u1)
     TARGET_TRIPLE := aarch64-linux-gnu
     # -funwind-tables: Emit ARM unwind info so backtrace() can walk the full
     # call stack in crash reports. Small code size cost, zero runtime cost.
-    TARGET_CFLAGS := -march=armv8-a -funwind-tables -Os -flto -ffunction-sections -fdata-sections \
+    TARGET_CFLAGS := -march=armv8-a -fno-omit-frame-pointer -funwind-tables -Os -flto -ffunction-sections -fdata-sections \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_SNAPMAKER_U1
     TARGET_LDFLAGS := -Wl,--gc-sections -flto -static
     ENABLE_SSL := yes

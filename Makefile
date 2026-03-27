@@ -150,8 +150,10 @@ DEPFLAGS = -MMD -MP
 
 # Project source flags - warnings enabled, strict mode optional
 # Use WERROR=1 to treat warnings as errors (for CI or `make strict`)
-CFLAGS := -std=c11 -Wall -Wextra -O2 -g -D_GNU_SOURCE -fno-omit-frame-pointer
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -g -fno-omit-frame-pointer
+# -D_FORTIFY_SOURCE=2: compile-time + runtime bounds checking for memcpy/sprintf/etc
+# -fstack-protector-strong: stack canaries on functions with local arrays/alloca
+CFLAGS := -std=c11 -Wall -Wextra -O2 -g -D_GNU_SOURCE -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong
+CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong
 
 # Version information (read from VERSION.txt file)
 # Format: MAJOR.MINOR.PATCH following Semantic Versioning 2.0.0
