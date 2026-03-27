@@ -430,6 +430,7 @@ PanelWidgets live in `src/ui/panel_widgets/` (implementations) and headers along
 | `led` | `LedWidget` | LED on/off toggle with brightness-reactive icon |
 | `power` | `PowerWidget` | Power device toggle |
 | `network` | `NetworkWidget` | Network connection status |
+| `active_spool` | `ActiveSpoolWidget` | Currently loaded Spoolman spool — color, material, brand, weight |
 
 Widgets that are pure XML data binding (filament, probe, humidity, etc.) do NOT need a `PanelWidget` subclass — they work via subject bindings defined in their XML component alone.
 

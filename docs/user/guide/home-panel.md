@@ -223,6 +223,7 @@ The default layout places:
 
 | Widget | Description | Default | Min | Max | Resizable | Hardware Required |
 |--------|-------------|---------|-----|-----|-----------|-------------------|
+| **Active Spool** | Shows the currently loaded Spoolman spool — displays the spool color, material type, brand, and remaining weight. Tap to edit the active spool. At compact sizes (1x1) shows just the colored spool icon; at wider sizes shows material details alongside. | 1x1 | 1x1 | 4x2 | Yes | Spoolman configured |
 | **AMS Status** | Mini view of your multi-material spool slots showing filament colors and status. Tap for the full AMS panel. | 1x1 | 1x1 | 2x2 | Yes | AMS/MMU detected |
 | **Filament Sensor** | Filament runout detection status. Shows whether filament is loaded. | 1x1 | 1x1 | 2x1 | Horizontal only | Filament sensor |
 | **Width Sensor** | Live filament width reading from a diameter sensor. | 1x1 | 1x1 | 2x2 | Yes | Width sensor |
