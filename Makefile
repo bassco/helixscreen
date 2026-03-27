@@ -687,10 +687,8 @@ CXXFLAGS += $(SOUND_CXXFLAGS) $(TRACKER_CXXFLAGS)
 # Feature gates — default ON for all platforms.
 # Disabled per-platform in mk/cross.mk for memory-constrained targets.
 HELIX_HAS_LABEL_PRINTER ?= 1
-HELIX_HAS_LED ?= 1
 HELIX_HAS_CFS ?= 1
 CXXFLAGS += -DHELIX_HAS_LABEL_PRINTER=$(HELIX_HAS_LABEL_PRINTER) \
-            -DHELIX_HAS_LED=$(HELIX_HAS_LED) \
             -DHELIX_HAS_CFS=$(HELIX_HAS_CFS)
 
 # Parallel build control
