@@ -21,36 +21,24 @@ HelixScreen is a touchscreen interface for Klipper 3D printers. It connects to y
 
 ### Which printers are supported?
 
-**Any printer running Klipper + Moonraker** should work. HelixScreen connects to Moonraker's API, not directly to Klipper.
+HelixScreen works with any Klipper-based printer running Moonraker. Tested and supported platforms:
 
-**Tested and confirmed working:**
-- Voron 0.1, Voron 2.4
-- Doron Velta
-- RatRig V-Core
-- FlashForge Adventurer 5M / 5M Pro (with [Forge-X](https://github.com/DrA1ex/ff5m)) — most thoroughly tested on ForgeX 1.4.0 with FlashForge firmware 3.1.5; other versions may work fine
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Voron 0.1, 2.4, Trident | **Tested** | Primary development platforms |
+| Doron Velta / RatRig V-Core | **Tested** | |
+| FlashForge AD5M / 5M Pro | **Tested** | Requires Forge-X or Klipper Mod firmware |
+| QIDI Q2, Max 4 | **Supported** | Requires FreeDi firmware for Moonraker access |
+| Creality K1 / K1C / K1 Max / K1 SE | **Supported** | Requires rooting or Guilouz firmware |
+| Creality K2 / K2 Plus | **Untested** | Binaries available, community testing welcome |
+| Creality Sonic Pad | **Supported** | 32-bit ARM, dedicated build |
+| Snapmaker U1 | **Untested** | Binaries available |
+| FlashForge AD5X | **Testing** | Active testing, IFS integration in progress |
+| SOVOL SV06 / SV08 | **Testing** | Community reports welcome |
+| Elegoo Centauri Carbon 1 | **Testing** | Dedicated build target |
+| Other Klipper printers | **Should work** | Any printer with Moonraker API access |
 
-**Supported with auto-detection:**
-- QIDI Q2 and Max 4 — detection heuristics and print start profile included. Requires [FreeDi](https://github.com/Phil1988/FreeDi) firmware first. **Note:** Most older QIDI models (X-Max 3, X-Plus 3, Plus 4, Q1 Pro, X-Smart 3) use TJC/Nextion HMI serial displays and are NOT supported without a physical screen replacement.
-
-**Binaries available but untested:**
-- Creality K1 series (K1, K1C, K1 Max) — requires [Simple AF](https://github.com/pellcorp/creality) community firmware
-- Creality K2 series (K2, K2 Pro, K2 Plus) — stock firmware has Moonraker on port 4408, no community firmware needed
-- Snapmaker U1 — cross-compile target with 480x320 display support exists but has not been tested on hardware
-
-**Active testing underway:**
-- FlashForge Adventurer 5X — dedicated build target (`ad5x`); requires [ZMOD](https://github.com/ghzserg/zmod) firmware modification
-- SOVOL SV06 — uses Klipper on a Raspberry Pi; install with the [MainsailOS instructions](#raspberry-pi--mainsailos-installation)
-- SOVOL SV08 — uses Klipper on a Raspberry Pi; install with the [MainsailOS instructions](#raspberry-pi--mainsailos-installation)
-- Elegoo Centauri Carbon 1 — dedicated build target (`cc1`); prebuilt binaries included in releases but no installer support yet (manual deployment only)
-
-**Should work but not yet tested:**
-- Other Voron models
-- Prusa (with Klipper mod)
-- Creality Ender (with Klipper)
-- Bambu (with Klipper mod)
-- Any custom Klipper build
-
-If you test on a printer not listed above, please let us know your results!
+> **Note:** "Tested" means the HelixScreen team has verified the platform. "Untested" means binaries exist but haven't been verified on real hardware. See the [Installation Guide](INSTALL.md) for platform-specific instructions.
 
 ### Which displays are supported?
 
