@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <cstdio>
 
+#if HELIX_HAS_LED
+
 using namespace helix;
 using namespace helix::led;
 
@@ -1194,3 +1196,5 @@ void LedControlOverlay::on_brightness_changed_cb(lv_event_t* e) {
     overlay.handle_brightness_change(value);
     LVGL_SAFE_EVENT_CB_END();
 }
+
+#endif // HELIX_HAS_LED

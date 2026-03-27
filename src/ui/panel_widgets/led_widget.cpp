@@ -22,6 +22,8 @@
 
 #include <algorithm>
 
+#if HELIX_HAS_LED
+
 namespace helix {
 
 void register_led_widget() {
@@ -283,3 +285,5 @@ void LedWidget::light_toggle_cb(lv_event_t* e) {
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LED

@@ -15,6 +15,8 @@
 
 #include <algorithm>
 
+#if HELIX_HAS_LED
+
 namespace helix {
 
 void PrinterLedState::init_subjects(bool register_xml) {
@@ -153,3 +155,5 @@ void PrinterLedState::set_tracked_led(const std::string& led_name) {
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LED

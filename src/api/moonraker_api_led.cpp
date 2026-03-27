@@ -11,6 +11,8 @@
 #include <cmath>
 #include <sstream>
 
+#if HELIX_HAS_LED
+
 using namespace moonraker_internal;
 
 // ============================================================================
@@ -78,3 +80,5 @@ void MoonrakerAPI::set_led_off(const std::string& led, SuccessCallback on_succes
                                ErrorCallback on_error) {
     set_led(led, 0.0, 0.0, 0.0, 0.0, on_success, on_error);
 }
+
+#endif // HELIX_HAS_LED

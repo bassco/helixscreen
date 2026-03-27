@@ -215,7 +215,9 @@ void SubjectInitializer::init_panel_subjects(MoonrakerAPI* api) {
     get_fan_control_overlay().init_subjects();
 
     // LED control overlay (opened from Home panel light long-press)
+#if HELIX_HAS_LED
     init_led_control_overlay(get_printer_state());
+#endif // HELIX_HAS_LED
 
     // ConsolePanel is now lazy-initialized by AdvancedPanel (OverlayBase pattern)
 

@@ -19,6 +19,8 @@
 #include <set>
 #include <sstream>
 
+#if HELIX_HAS_LED
+
 namespace {
 
 /// Parse a JSON color value that may be an integer (legacy) or "#RRGGBB" string.
@@ -2154,3 +2156,5 @@ void LedController::rebuild_macro_backend() {
 }
 
 } // namespace helix::led
+
+#endif // HELIX_HAS_LED
