@@ -276,7 +276,7 @@ TEST_CASE("compute_defaults duplicate firmware mapping takes first non-empty",
 // compute_defaults — color matching
 // =============================================================================
 
-TEST_CASE("compute_defaults color match with material mismatch",
+TEST_CASE("compute_defaults material mismatch skips color match, uses positional",
           "[filament_mapper][compute][color]") {
     std::vector<GcodeToolInfo> tools = {{0, 0xFF0000, "PLA"}};
     std::vector<AvailableSlot> slots = {
@@ -285,8 +285,8 @@ TEST_CASE("compute_defaults color match with material mismatch",
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 1);
+    // Color match skips incompatible materials; positional fallback assigns slot 0
     CHECK(result[0].mapped_slot == 0);
-    CHECK(result[0].reason == ToolMapping::MatchReason::COLOR_MATCH);
     CHECK(result[0].material_mismatch);
 }
 
@@ -302,7 +302,7 @@ TEST_CASE("compute_defaults case-insensitive material match no mismatch",
     CHECK_FALSE(result[0].material_mismatch);
 }
 
-TEST_CASE("compute_defaults no color match falls through to auto",
+TEST_CASE("compute_defaults no color match falls through to positional",
           "[filament_mapper][compute][color]") {
     std::vector<GcodeToolInfo> tools = {{0, 0xFF0000, "PLA"}};
     std::vector<AvailableSlot> slots = {
@@ -311,9 +311,9 @@ TEST_CASE("compute_defaults no color match falls through to auto",
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 1);
-    CHECK(result[0].is_auto);
-    CHECK(result[0].reason == ToolMapping::MatchReason::AUTO);
-    CHECK(result[0].mapped_slot == -1);
+    // No color match, but positional fallback assigns slot 0 to tool 0
+    CHECK(result[0].mapped_slot == 0);
+    CHECK_FALSE(result[0].is_auto);
 }
 
 // =============================================================================
@@ -346,7 +346,7 @@ TEST_CASE("compute_defaults multi-tool no conflicts", "[filament_mapper][compute
     }
 }
 
-TEST_CASE("compute_defaults multi-tool with color conflict",
+TEST_CASE("compute_defaults multi-tool with same color both map to best slot",
           "[filament_mapper][compute][multi]") {
     std::vector<GcodeToolInfo> tools = {
         {0, 0xFF0000, "PLA"},
@@ -360,11 +360,12 @@ TEST_CASE("compute_defaults multi-tool with color conflict",
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 2);
 
+    // Both tools map to the best color match (slot re-use allowed)
     CHECK(result[0].mapped_slot == 0);
-    CHECK(result[1].mapped_slot == 1); // next best since slot 0 is claimed
+    CHECK(result[1].mapped_slot == 0);
 }
 
-TEST_CASE("compute_defaults multi-tool conflict exhausts slots",
+TEST_CASE("compute_defaults multi-tool same color with no close alternative",
           "[filament_mapper][compute][multi]") {
     std::vector<GcodeToolInfo> tools = {
         {0, 0xFF0000, "PLA"},
@@ -378,16 +379,17 @@ TEST_CASE("compute_defaults multi-tool conflict exhausts slots",
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 2);
 
+    // Both tools map to slot 0 (re-use allowed, green is too far)
     CHECK(result[0].mapped_slot == 0);
-    CHECK(result[1].is_auto);
-    CHECK(result[1].mapped_slot == -1);
+    CHECK(result[1].mapped_slot == 0);
 }
 
 // =============================================================================
 // compute_defaults — all empty slots
 // =============================================================================
 
-TEST_CASE("compute_defaults all empty slots", "[filament_mapper][compute]") {
+TEST_CASE("compute_defaults empty slots participate in color matching",
+          "[filament_mapper][compute]") {
     std::vector<GcodeToolInfo> tools = {{0, 0xFF0000, "PLA"}, {1, 0x00FF00, "PLA"}};
     std::vector<AvailableSlot> slots = {
         {0, 0, 0xFF0000, "PLA", true, -1},
@@ -396,10 +398,11 @@ TEST_CASE("compute_defaults all empty slots", "[filament_mapper][compute]") {
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 2);
-    for (const auto& m : result) {
-        CHECK(m.is_auto);
-        CHECK(m.mapped_slot == -1);
-    }
+    // Empty slots still match by color (user may plan to load filament)
+    CHECK(result[0].mapped_slot == 0);
+    CHECK(result[0].reason == ToolMapping::MatchReason::COLOR_MATCH);
+    CHECK(result[1].mapped_slot == 1);
+    CHECK(result[1].reason == ToolMapping::MatchReason::COLOR_MATCH);
 }
 
 // =============================================================================
@@ -428,8 +431,11 @@ TEST_CASE("compute_defaults mixed firmware, color, and auto",
     CHECK(result[1].mapped_slot == 1);
     CHECK(result[1].reason == ToolMapping::MatchReason::COLOR_MATCH);
 
-    CHECK(result[2].is_auto);
-    CHECK(result[2].mapped_slot == -1);
+    // T2: blue PETG has no color match (material mismatch with ABS),
+    // falls to positional: slot_index 2 matches tool_index 2
+    CHECK(result[2].mapped_slot == 2);
+    CHECK_FALSE(result[2].is_auto);
+    CHECK(result[2].material_mismatch); // PETG vs ABS
 }
 
 TEST_CASE("compute_defaults empty material strings skip mismatch check",
