@@ -26,7 +26,7 @@ void BrotherPTBluetoothPrinter::set_device(const std::string& mac, int channel) 
 }
 
 std::string BrotherPTBluetoothPrinter::name() const {
-    return "Brother PT (Bluetooth)";
+    return "Brother PT (Bluetooth)";  // i18n: do not translate - product name
 }
 
 std::vector<LabelSize> BrotherPTBluetoothPrinter::supported_sizes() const {
