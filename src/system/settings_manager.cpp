@@ -138,6 +138,11 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(show_widget_labels_subject_, show_widget_labels ? 1 : 0,
                            "show_widget_labels", subjects_);
 
+    // Keep current firmware assignments for filament mapping (default: off)
+    bool keep_current = config->get<bool>(config->df() + "filament/keep_current_assignments", false);
+    UI_MANAGED_SUBJECT_INT(keep_current_assignments_subject_, keep_current ? 1 : 0,
+                           "keep_current_assignments", subjects_);
+
     subjects_initialized_ = true;
 
     // Self-register cleanup — ensures deinit runs before lv_deinit()
@@ -346,6 +351,23 @@ void SettingsManager::set_show_widget_labels(bool show) {
     lv_subject_set_int(&show_widget_labels_subject_, show ? 1 : 0);
     Config* config = Config::get_instance();
     config->set<bool>("/appearance/show_widget_labels", show);
+    config->save();
+}
+
+// ============================================================================
+// Keep Current Assignments
+// ============================================================================
+
+bool SettingsManager::get_keep_current_assignments() const {
+    return lv_subject_get_int(
+               const_cast<lv_subject_t*>(&keep_current_assignments_subject_)) != 0;
+}
+
+void SettingsManager::set_keep_current_assignments(bool keep) {
+    spdlog::info("[SettingsManager] set_keep_current_assignments({})", keep);
+    lv_subject_set_int(&keep_current_assignments_subject_, keep ? 1 : 0);
+    Config* config = Config::get_instance();
+    config->set<bool>(config->df() + "filament/keep_current_assignments", keep);
     config->save();
 }
 

@@ -72,6 +72,13 @@ public:
                                            const std::vector<AvailableSlot>& slots,
                                            const std::vector<SlotKey>& already_used);
 
+    /// Map tools using only current firmware assignments.
+    /// Tools with no firmware assignment become AUTO (unmapped).
+    /// Used when "keep current assignments" setting is enabled.
+    static std::vector<ToolMapping> use_current_assignments(
+        const std::vector<GcodeToolInfo>& tools,
+        const std::vector<AvailableSlot>& slots);
+
     /// Find tool indices that have no resolved mapping (auto with no match).
     /// These are the tools that would trigger a color mismatch warning.
     static std::vector<int> find_unresolved_tools(const std::vector<ToolMapping>& mappings);

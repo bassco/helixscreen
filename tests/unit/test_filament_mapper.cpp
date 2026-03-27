@@ -449,6 +449,100 @@ TEST_CASE("compute_defaults empty material strings skip mismatch check",
 }
 
 // =============================================================================
+// use_current_assignments
+// =============================================================================
+
+TEST_CASE("FilamentMapper use_current_assignments", "[filament_mapper][current_assignments]") {
+    SECTION("maps tools to their firmware-assigned slots") {
+        std::vector<GcodeToolInfo> tools = {
+            {0, 0xFF0000, "PLA"},
+            {1, 0x00FF00, "PETG"},
+        };
+        std::vector<AvailableSlot> slots = {
+            {0, 0, 0x0000FF, "ABS", false, 1},   // slot 0, mapped to T1
+            {1, 0, 0xFF0000, "PLA", false, 0},   // slot 1, mapped to T0
+            {2, 0, 0x00FF00, "PETG", false, -1}, // slot 2, no mapping
+        };
+
+        auto mappings = FilamentMapper::use_current_assignments(tools, slots);
+
+        REQUIRE(mappings.size() == 2);
+
+        // T0 should map to slot 1 (firmware says slot 1 is mapped to T0)
+        CHECK(mappings[0].tool_index == 0);
+        CHECK(mappings[0].mapped_slot == 1);
+        CHECK(mappings[0].mapped_backend == 0);
+        CHECK(mappings[0].reason == ToolMapping::MatchReason::FIRMWARE_MAPPING);
+        CHECK_FALSE(mappings[0].is_auto);
+
+        // T1 should map to slot 0 (firmware says slot 0 is mapped to T1)
+        CHECK(mappings[1].tool_index == 1);
+        CHECK(mappings[1].mapped_slot == 0);
+        CHECK(mappings[1].mapped_backend == 0);
+        CHECK(mappings[1].reason == ToolMapping::MatchReason::FIRMWARE_MAPPING);
+        CHECK_FALSE(mappings[1].is_auto);
+    }
+
+    SECTION("tools with no firmware assignment become AUTO") {
+        std::vector<GcodeToolInfo> tools = {
+            {0, 0xFF0000, "PLA"},
+            {1, 0x00FF00, "PETG"},
+        };
+        std::vector<AvailableSlot> slots = {
+            {0, 0, 0xFF0000, "PLA", false, 0},   // slot 0, mapped to T0
+            {1, 0, 0x00FF00, "PETG", false, -1}, // slot 1, no mapping
+        };
+
+        auto mappings = FilamentMapper::use_current_assignments(tools, slots);
+
+        REQUIRE(mappings.size() == 2);
+
+        CHECK(mappings[0].mapped_slot == 0);
+        CHECK_FALSE(mappings[0].is_auto);
+
+        // T1 has no firmware assignment — should be AUTO
+        CHECK(mappings[1].mapped_slot == -1);
+        CHECK(mappings[1].is_auto);
+        CHECK(mappings[1].reason == ToolMapping::MatchReason::AUTO);
+    }
+
+    SECTION("detects material mismatches") {
+        std::vector<GcodeToolInfo> tools = {
+            {0, 0xFF0000, "PLA"},
+        };
+        std::vector<AvailableSlot> slots = {
+            {0, 0, 0xFF0000, "PETG", false, 0}, // slot 0, mapped to T0, but material mismatch
+        };
+
+        auto mappings = FilamentMapper::use_current_assignments(tools, slots);
+
+        REQUIRE(mappings.size() == 1);
+        CHECK(mappings[0].mapped_slot == 0);
+        CHECK(mappings[0].material_mismatch);
+    }
+
+    SECTION("works across multiple backends") {
+        std::vector<GcodeToolInfo> tools = {
+            {0, 0xFF0000, "PLA"},
+            {1, 0x00FF00, "PETG"},
+        };
+        std::vector<AvailableSlot> slots = {
+            {0, 0, 0xFF0000, "PLA", false, -1},  // backend 0, slot 0, no mapping
+            {0, 1, 0x00FF00, "PETG", false, 1},  // backend 1, slot 0, mapped to T1
+            {1, 1, 0xFF0000, "PLA", false, 0},   // backend 1, slot 1, mapped to T0
+        };
+
+        auto mappings = FilamentMapper::use_current_assignments(tools, slots);
+
+        REQUIRE(mappings.size() == 2);
+        CHECK(mappings[0].mapped_slot == 1);
+        CHECK(mappings[0].mapped_backend == 1);
+        CHECK(mappings[1].mapped_slot == 0);
+        CHECK(mappings[1].mapped_backend == 1);
+    }
+}
+
+// =============================================================================
 // compute_defaults — backend index propagation
 // =============================================================================
 

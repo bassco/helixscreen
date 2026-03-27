@@ -181,6 +181,48 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
     return mappings;
 }
 
+std::vector<ToolMapping> FilamentMapper::use_current_assignments(
+    const std::vector<GcodeToolInfo>& tools,
+    const std::vector<AvailableSlot>& slots) {
+
+    std::vector<ToolMapping> mappings;
+    mappings.reserve(tools.size());
+
+    for (const auto& tool : tools) {
+        ToolMapping mapping;
+        mapping.tool_index = tool.tool_index;
+
+        // Find slot with firmware mapping to this tool
+        bool found = false;
+        for (const auto& slot : slots) {
+            if (slot.is_empty) {
+                continue;
+            }
+            if (slot.current_tool_mapping == tool.tool_index) {
+                mapping.mapped_slot = slot.slot_index;
+                mapping.mapped_backend = slot.backend_index;
+                mapping.reason = ToolMapping::MatchReason::FIRMWARE_MAPPING;
+
+                if (!tool.material.empty() && !slot.material.empty() &&
+                    !materials_match(tool.material, slot.material)) {
+                    mapping.material_mismatch = true;
+                }
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            mapping.is_auto = true;
+            mapping.reason = ToolMapping::MatchReason::AUTO;
+        }
+
+        mappings.push_back(mapping);
+    }
+
+    return mappings;
+}
+
 std::vector<int> FilamentMapper::find_unresolved_tools(const std::vector<ToolMapping>& mappings) {
     std::vector<int> unresolved;
     for (const auto& m : mappings) {

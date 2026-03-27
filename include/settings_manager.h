@@ -228,6 +228,21 @@ class SettingsManager {
         return &show_widget_labels_subject_;
     }
 
+    // =========================================================================
+    // KEEP CURRENT ASSIGNMENTS (owned by SettingsManager — filament mapping)
+    // =========================================================================
+
+    /** @brief Get whether filament mapping should keep current firmware assignments */
+    bool get_keep_current_assignments() const;
+
+    /** @brief Set whether filament mapping should keep current firmware assignments */
+    void set_keep_current_assignments(bool keep);
+
+    /** @brief Keep current assignments subject (integer: 0=off, 1=on) */
+    lv_subject_t* subject_keep_current_assignments() {
+        return &keep_current_assignments_subject_;
+    }
+
   private:
     SettingsManager();
     ~SettingsManager() = default;
@@ -242,6 +257,7 @@ class SettingsManager {
     lv_subject_t toolhead_style_subject_;
     lv_subject_t show_printer_switcher_subject_;
     lv_subject_t show_widget_labels_subject_;
+    lv_subject_t keep_current_assignments_subject_;
 
     // External references
     MoonrakerClient* moonraker_client_ = nullptr;
