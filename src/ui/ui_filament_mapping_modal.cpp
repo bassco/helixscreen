@@ -208,8 +208,18 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
     lv_obj_remove_flag(slot_text, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(slot_text, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    // Material mismatch indicator
-    if (mapping.material_mismatch) {
+    // Warning indicator: material mismatch or empty slot
+    bool mapped_to_empty = false;
+    if (!mapping.is_auto && mapping.mapped_slot >= 0) {
+        for (const auto& s : available_slots_) {
+            if (s.slot_index == mapping.mapped_slot &&
+                s.backend_index == mapping.mapped_backend) {
+                mapped_to_empty = s.is_empty;
+                break;
+            }
+        }
+    }
+    if (mapping.material_mismatch || mapped_to_empty) {
         lv_obj_t* warn = lv_label_create(row);
         lv_label_set_text(warn, ICON_TRIANGLE_EXCLAMATION);
         lv_obj_set_style_text_font(warn, &mdi_icons_24, 0);
