@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.6] - 2026-03-27
+
+This release adds ACE filament system support, overhauls the filament mapping UI with an inline slot picker and smarter color matching, and continues hardening async callback safety across the UI.
+
+### Added
+- ACE filament system support: auto-detection, WebSocket subscription with REST fallback, feed/retract/feed assist device actions, and missing bridge warning
+- Inline slot picker context menu replacing the separate picker modal (#554)
+- Material-aware color matching with positional fallback when no color match is found
+- Warning indicators for tools mapped to empty slots or with material mismatches
+- Auto color map toggle in the filament mapping modal
+- Gcode material label shown on filament mapping tool rows
+- Multi-unit AFC slot label disambiguation
+
+### Fixed
+- Deferred object cleanup in AMS panel and exclude objects overlay to prevent crashes (#555)
+- Async callback safety migrations for controls panel, Z-offset calibration, camera stream, print status, and screensaver (#550, #552, #553, #555)
+- Scrollbar on mapping and picker dialogs when content overflows
+- Wizard skip button blocked by touch overlay, stale callbacks, and sample counter off-by-one
+- Incorrect theme token, invalid flex stretch, and splash screen timeout
+
+### Changed
+- ValgACE renamed to ACE throughout codebase and translations
+- Filament mapper allows slot re-use across backends instead of enforcing uniqueness
+- QR scanner latency reduced via frame subsampling and offloaded decode
+- Updated CJK fonts and added do-not-translate markers for technical terms
+
 ## [0.99.5] - 2026-03-27
 
 This release introduces AsyncLifetimeGuard — a unified mechanism for safe async callback handling that replaces all ad-hoc guard patterns — and migrates every modal, overlay, panel, widget, backend, and state manager to use it. Memory usage on constrained devices is further reduced through compile-time feature gates and runtime optimizations.
@@ -2211,6 +2237,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.6]: https://github.com/prestonbrown/helixscreen/compare/v0.99.5...v0.99.6
 [0.99.5]: https://github.com/prestonbrown/helixscreen/compare/v0.99.4...v0.99.5
 [0.99.4]: https://github.com/prestonbrown/helixscreen/compare/v0.99.3...v0.99.4
 [0.99.3]: https://github.com/prestonbrown/helixscreen/compare/v0.99.2...v0.99.3
