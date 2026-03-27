@@ -1068,26 +1068,14 @@ std::string GCodeLayerRenderer::resolve_object_name(int16_t index) const {
     return {};
 }
 
-bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
-    // Support detection via object name (from EXCLUDE_OBJECT metadata)
-    if (seg.object_name_index < 0) {
-        return false;
-    }
-
-    // Common patterns used by slicers for support structures:
-    // - OrcaSlicer/PrusaSlicer: "support_*", "*_support", "SUPPORT_*"
-    // - Cura: "support", "Support"
-    //
-    // Case-insensitive substring search without allocation (hot path optimization)
+/// Case-insensitive check for "support" substring in an object name.
+/// Used by both the main-thread member function and the background ghost thread.
+static bool name_looks_like_support(const std::string& name) {
     static constexpr const char kSupport[] = "support";
-    static constexpr size_t kSupportLen = 7; // strlen("support")
+    static constexpr size_t kSupportLen = 7;
 
-    const std::string name = resolve_object_name(seg.object_name_index);
-    if (name.size() < kSupportLen) {
-        return false;
-    }
+    if (name.size() < kSupportLen) return false;
 
-    // Scan for "support" substring case-insensitively without allocating
     for (size_t i = 0; i <= name.size() - kSupportLen; ++i) {
         bool match = true;
         for (size_t j = 0; j < kSupportLen; ++j) {
@@ -1096,11 +1084,14 @@ bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
                 break;
             }
         }
-        if (match) {
-            return true;
-        }
+        if (match) return true;
     }
     return false;
+}
+
+bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
+    if (seg.object_name_index < 0) return false;
+    return name_looks_like_support(resolve_object_name(seg.object_name_index));
 }
 
 std::optional<std::string> GCodeLayerRenderer::pick_object_at(int screen_x, int screen_y) const {
@@ -1417,10 +1408,26 @@ void GCodeLayerRenderer::background_ghost_render_thread() {
     // Capture excluded objects for ghost rendering (thread-safe copy)
     const auto local_excluded = excluded_objects_;
 
-    // Local version of should_render_segment using captured flags
-    auto local_should_render = [&](const ToolpathSegment& seg) -> bool {
+    // Capture data source pointers — these may be nulled on the main thread after
+    // cancel_background_ghost_render() joins us, but we must not read the member
+    // fields during iteration (the objects they point to could be destroyed).
+    auto* local_streaming = streaming_controller_;
+    auto* local_gcode = gcode_;
+
+    // Local object name resolver using captured pointers (not member fields)
+    auto local_resolve_name = [local_gcode, local_streaming](int16_t index) -> std::string {
+        if (index < 0) return {};
+        if (local_gcode) return local_gcode->get_object_name(index);
+        if (local_streaming) return local_streaming->get_object_name(index);
+        return {};
+    };
+
+    // Visibility check for a segment given its pre-resolved object name.
+    // Uses name_looks_like_support() (shared with is_support_segment()) to avoid duplication.
+    auto local_should_render = [&](const ToolpathSegment& seg,
+                                   const std::string& obj_name) -> bool {
         if (seg.is_extrusion) {
-            if (is_support_segment(seg)) // Only reads seg fields, safe
+            if (seg.object_name_index >= 0 && name_looks_like_support(obj_name))
                 return local_show_supports;
             return local_show_extrusions;
         }
@@ -1452,20 +1459,23 @@ void GCodeLayerRenderer::background_ghost_render_thread() {
         std::shared_ptr<const std::vector<ToolpathSegment>> segments_holder;
         const std::vector<ToolpathSegment>* segments = nullptr;
 
-        if (streaming_controller_) {
+        if (local_streaming) {
             // Streaming mode: get segments from controller (returns shared_ptr)
             segments_holder =
-                streaming_controller_->get_layer_segments(static_cast<size_t>(layer_idx));
+                local_streaming->get_layer_segments(static_cast<size_t>(layer_idx));
             segments = segments_holder.get();
-        } else if (gcode_) {
-            segments = &gcode_->layers[layer_idx].segments;
+        } else if (local_gcode) {
+            segments = &local_gcode->layers[layer_idx].segments;
         }
 
         if (!segments)
             continue;
 
         for (const auto& seg : *segments) {
-            if (!local_should_render(seg))
+            // Resolve object name once per segment (used for support detection + exclusion)
+            const std::string obj_name = local_resolve_name(seg.object_name_index);
+
+            if (!local_should_render(seg, obj_name))
                 continue;
 
             // Use unified world_to_screen_raw - includes content offset!
@@ -1485,8 +1495,7 @@ void GCodeLayerRenderer::background_ghost_render_thread() {
                 uint8_t tb = tc.blue * kGhostDarkenPercent / 100;
                 seg_color = (255u << 24) | (tr << 16) | (tg << 8) | tb;
             }
-            const std::string& ghost_obj_name = resolve_object_name(seg.object_name_index);
-            if (!ghost_obj_name.empty() && local_excluded.count(ghost_obj_name) > 0) {
+            if (!obj_name.empty() && local_excluded.count(obj_name) > 0) {
                 // Excluded: dim orange-red
                 uint8_t ex_r = kExcludedR * kGhostDarkenPercent / 100;
                 uint8_t ex_g = kExcludedG * kGhostDarkenPercent / 100;

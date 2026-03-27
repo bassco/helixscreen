@@ -103,6 +103,12 @@ class GCodeViewerState {
         // RAII cleanup: signal cancellation and wait for thread
         cancel_build();
 
+        // Renderer holds a raw pointer to streaming_controller_ and may have a
+        // background ghost thread running. Destroy renderer first to join that
+        // thread before the controller is freed.
+        layer_renderer_2d_.reset();
+        streaming_controller_.reset();
+
         // Clean up LVGL timer if pending
         // Guard against LVGL shutdown - timer may already be destroyed
         if (long_press_timer_ && lv_is_initialized()) {
@@ -1060,9 +1066,12 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
     const uint64_t gen = st->bump_generation();
 
     // Clear any existing data sources (mutually exclusive: streaming XOR full-file)
+    // Destroy renderer FIRST — its background ghost thread holds a raw pointer to
+    // the streaming controller; joining that thread before destroying the controller
+    // prevents use-after-free crashes (prestonbrown/helixscreen#XXX).
+    st->layer_renderer_2d_.reset();
     st->streaming_controller_.reset();
     st->gcode_file.reset();
-    st->layer_renderer_2d_.reset(); // Will be recreated on first render
 
     // =========================================================================
     // PHASE 0: Streaming Mode Detection (Phase 6)
@@ -1551,7 +1560,12 @@ void ui_gcode_viewer_set_gcode_data(lv_obj_t* obj, void* gcode_data) {
     if (!st || !gcode_data)
         return;
 
-    // Clear streaming controller (mutually exclusive with gcode_file)
+    // Tell the renderer to drop the streaming controller pointer — this cancels
+    // the background ghost thread before we destroy the controller object.
+    if (st->layer_renderer_2d_) {
+        st->layer_renderer_2d_->set_streaming_controller(nullptr);
+    }
+    // Now safe to destroy the controller (no background thread references it)
     st->streaming_controller_.reset();
 
     // Take ownership of the data (caller must use new to allocate)
@@ -1583,9 +1597,12 @@ void ui_gcode_viewer_clear(lv_obj_t* obj) {
     if (!st)
         return;
 
+    // Destroy renderer FIRST — its background ghost thread holds a raw pointer to
+    // the streaming controller; must join that thread before destroying the controller
+    // to prevent use-after-free crashes.
+    st->layer_renderer_2d_.reset();
     st->gcode_file.reset();
-    st->streaming_controller_.reset();       // Clear streaming controller (Phase 6)
-    st->layer_renderer_2d_.reset();          // Clear 2D renderer to avoid dangling pointer
+    st->streaming_controller_.reset();
     st->has_external_color_override = false; // Clear external color override
     st->tool_color_overrides.clear();        // Clear per-tool AMS colors
     st->viewer_state = GcodeViewerState::Empty;
