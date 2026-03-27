@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "label_renderer.h"
 #include "spoolman_types.h"
 
@@ -546,3 +548,5 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LABEL_PRINTER

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "brother_ql_bt_printer.h"
 #include "bluetooth_loader.h"
 #include "brother_ql_printer.h"
@@ -61,3 +63,5 @@ void BrotherQLBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

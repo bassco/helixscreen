@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "phomemo_protocol.h"
 
 namespace helix::label {
@@ -71,3 +73,5 @@ std::vector<uint8_t> phomemo_build_raster(const LabelBitmap& bitmap,
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

@@ -191,7 +191,9 @@ class AmsEditModal : public Modal {
     void handle_remaining_cancel();
     void handle_reset();
     void handle_save();
+#if HELIX_HAS_LABEL_PRINTER
     void handle_print_label();
+#endif
     void handle_scan_qr();
 
     // === Static Callback Registration ===
@@ -212,7 +214,9 @@ class AmsEditModal : public Modal {
     static void on_manual_entry_cb(lv_event_t* e);
     static void on_change_spool_cb(lv_event_t* e);
     static void on_unlink_cb(lv_event_t* e);
+#if HELIX_HAS_LABEL_PRINTER
     static void on_print_label_cb(lv_event_t* e);
+#endif
     static void on_scan_qr_cb(lv_event_t* e);
     static void on_picker_search_cb(lv_event_t* e);
     static void on_picker_retry_cb(lv_event_t* e);

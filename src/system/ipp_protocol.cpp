@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "ipp_protocol.h"
 
 #include <spdlog/spdlog.h>
@@ -445,3 +447,5 @@ std::string make_printer_uri(const std::string& host, uint16_t port,
 }
 
 }  // namespace helix::ipp
+
+#endif // HELIX_HAS_LABEL_PRINTER

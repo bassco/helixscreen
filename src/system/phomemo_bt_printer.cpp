@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "phomemo_bt_printer.h"
 #include "bluetooth_loader.h"
 #include "bt_print_utils.h"
@@ -97,3 +99,5 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

@@ -105,7 +105,9 @@ class SpoolEditModal : public Modal {
     void handle_field_changed();
     void handle_reset();
     void handle_save();
+#if HELIX_HAS_LABEL_PRINTER
     void handle_print_label();
+#endif
 
     // === Static Callback Registration ===
     static void register_callbacks();
@@ -118,7 +120,9 @@ class SpoolEditModal : public Modal {
     static void on_field_changed_cb(lv_event_t* e);
     static void on_reset_cb(lv_event_t* e);
     static void on_save_cb(lv_event_t* e);
+#if HELIX_HAS_LABEL_PRINTER
     static void on_print_label_cb(lv_event_t* e);
+#endif
 };
 
 } // namespace helix::ui

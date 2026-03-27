@@ -12,7 +12,9 @@
 #include "ui_event_safety.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
+#if HELIX_HAS_LABEL_PRINTER
 #include "ui_settings_label_printer.h"
+#endif
 #include "ui_spoolman_setup.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
@@ -103,9 +105,11 @@ void SpoolmanOverlay::register_callbacks() {
     // Register interval dropdown callback
     lv_xml_register_event_cb(nullptr, "on_ams_spoolman_interval_changed", on_interval_changed);
 
+#if HELIX_HAS_LABEL_PRINTER
     // Label printer sub-panel launcher
     lv_xml_register_event_cb(nullptr, "on_spoolman_label_printer_clicked",
                              on_label_printer_clicked);
+#endif
 
     // Server setup callbacks
     lv_xml_register_event_cb(nullptr, "on_spoolman_connect_clicked", on_connect_clicked);
@@ -446,6 +450,7 @@ void SpoolmanOverlay::on_interval_changed(lv_event_t* e) {
 // LABEL PRINTER SUB-PANEL
 // ============================================================================
 
+#if HELIX_HAS_LABEL_PRINTER
 void SpoolmanOverlay::on_label_printer_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SpoolmanOverlay] on_label_printer_clicked");
     auto& overlay = helix::settings::get_label_printer_settings_overlay();
@@ -453,6 +458,7 @@ void SpoolmanOverlay::on_label_printer_clicked(lv_event_t* /*e*/) {
     overlay.show(spoolman.parent_screen_);
     LVGL_SAFE_EVENT_CB_END();
 }
+#endif
 
 // ============================================================================
 // SERVER SETUP

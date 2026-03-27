@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "brother_ql_protocol.h"
 
 #include <algorithm>
@@ -210,3 +212,5 @@ const LabelSize* brother_ql_match_media(const BrotherQLMedia& media,
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

@@ -21,7 +21,9 @@
 #include "ui_settings_about.h"
 #include "ui_settings_display.h"
 #include "ui_settings_hardware_health.h"
+#if HELIX_HAS_LABEL_PRINTER
 #include "ui_settings_label_printer.h"
+#endif
 #include "ui_settings_led.h"
 #include "ui_settings_machine_limits.h"
 #include "ui_settings_macro_buttons.h"
@@ -789,6 +791,7 @@ void SettingsPanel::handle_security_settings_clicked() {
     overlay.show(parent_screen_);
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void SettingsPanel::handle_label_printer_settings_clicked() {
     spdlog::debug("[{}] Label Printer clicked - delegating to LabelPrinterSettingsOverlay",
                   get_name());
@@ -796,6 +799,7 @@ void SettingsPanel::handle_label_printer_settings_clicked() {
     auto& overlay = helix::settings::get_label_printer_settings_overlay();
     overlay.show(parent_screen_);
 }
+#endif
 
 void SettingsPanel::handle_led_settings_clicked() {
     spdlog::debug("[{}] LED Settings clicked - delegating to LedSettingsOverlay", get_name());
@@ -1182,11 +1186,13 @@ void SettingsPanel::on_security_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void SettingsPanel::on_label_printer_settings_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_label_printer_settings_clicked");
     get_global_settings_panel().handle_label_printer_settings_clicked();
     LVGL_SAFE_EVENT_CB_END();
 }
+#endif
 
 void SettingsPanel::on_led_settings_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_led_settings_clicked");
@@ -1368,7 +1374,9 @@ void register_settings_panel_callbacks() {
         {"on_timelapse_settings_clicked", SettingsPanel::on_timelapse_settings_clicked},
         {"on_sound_settings_clicked", SettingsPanel::on_sound_settings_clicked},
         {"on_security_clicked", SettingsPanel::on_security_clicked},
+#if HELIX_HAS_LABEL_PRINTER
         {"on_label_printer_settings_clicked", SettingsPanel::on_label_printer_settings_clicked},
+#endif
         {"on_estop_confirm_changed", SettingsPanel::on_estop_confirm_changed},
         {"on_cancel_escalation_changed", SettingsPanel::on_cancel_escalation_changed},
         {"on_cancel_escalation_timeout_changed", on_cancel_escalation_timeout_changed},
