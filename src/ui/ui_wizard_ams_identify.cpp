@@ -166,7 +166,7 @@ std::string WizardAmsIdentifyStep::get_ams_type_name() const {
     case AmsType::HAPPY_HARE:
         return "Happy Hare MMU";
     case AmsType::ACE:
-        return "ACE (ACE Pro)";
+        return "ACE";
     case AmsType::TOOL_CHANGER:
         return "Tool Changer";
     default:

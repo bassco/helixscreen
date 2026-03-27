@@ -2,7 +2,6 @@ locale: pt
 translations:
   ' elapsed · ': ' decorrido · '
   ' frames': ' quadros'
-  ' frames captured': ' frames capturados'
   ' left': ' restante'
   '%d more sensors': '%d sensores adicionais'
   '%lu days ago': 'há %lu dias'
@@ -60,9 +59,9 @@ translations:
   90°: 90°
   = Loosen: = Afrouxar
   = Tighten: = Apertar
-  A4T: A4T
   ABS: ABS
   ACCELEROMETERS: ACELERÔMETROS
+  ACE: ACE
   ACTIONS: AÇÕES
   ADXL: ADXL
   AFC: 'AFC'
@@ -92,6 +91,7 @@ translations:
   Action Required: Ação Necessária
   Actions: Ações
   Active: Ativo
+  Active Spool: 'Bobina ativa'
   Add: Adicionar
   Add Filament: Adicionar Filamento
   Add Hidden Network: Adicionar Rede Oculta
@@ -119,7 +119,6 @@ translations:
   Animations: Animações
   Anonymous data to help improve HelixScreen: Dados anônimos para melhorar o HelixScreen
   Anonymous stats — no personal data, ever.: Estatísticas anônimas — sem dados pessoais, nunca.
-  AntHead: 'AntHead'
   Any notes...: Alguma nota...
   App Background: Fundo do Aplicativo
   Apply: Aplicar
@@ -132,7 +131,6 @@ translations:
   Assign a role to enable sensor monitoring: Atribua uma função para habilitar o monitoramento do sensor
   Assisting: Assistindo
   Auto: Automático
-  Auto (best match): Auto (melhor correspondência)
   Auto Bed Mesh: Malha da Mesa Automática
   Auto Cal: Auto Cal
   Auto-Detect: Auto-Detectar
@@ -144,7 +142,6 @@ translations:
   Automatic: Automático
   Automatic Heater Control Calibration: Calibração Automática de Controle de Aquecedor
   Automatic LED Control: Controle Automático de LED
-  Automatically poll Spoolman for weight updates: Consultar automaticamente o Spoolman para atualizações de peso
   Available Networks: Redes Disponíveis
   Available networks: Redes disponíveis
   Average: Média
@@ -189,6 +186,7 @@ translations:
   Both belts need tightening.: 'Ambas as correias precisam ser tensionadas.'
   Brightness: Brilho
   Brightness level when LEDs turn on at startup: Nível de brilho quando os LEDs ligam na inicialização
+  Brother PT (Bluetooth): 'Brother PT (Bluetooth)'
   Brother QL: Brother QL
   Brother QL (Bluetooth): Brother QL (Bluetooth)
   Browse: Navegar
@@ -320,6 +318,7 @@ translations:
   Connection: Conexão
   Connection failed: Conexão falhou
   Connection failed. Check IP/port and try again.: Conexão falhou. Verifique o IP/porta e tente novamente.
+  Connection failed. Check credentials.: 'Conexão falhou. Verifique as credenciais.'
   Connection failed. Check password.: Conexão falhou. Verifique a senha.
   'Connection failed: %s': 'Conexão falhou: %s'
   Connection must be tested successfully to continue: A conexão deve ser testada com sucesso para continuar
@@ -339,6 +338,7 @@ translations:
   Could not check webcam status.\nCheck printer connection.: Não foi possível verificar status da webcam.\nVerifique a conexão da impressora.
   Could not reach Spoolman at: 'Não foi possível alcançar o Spoolman em'
   Could not verify Spoolman status. Moonraker may still be restarting.: Não foi possível verificar o status do Spoolman. O Moonraker pode ainda estar reiniciando.
+  Cover open: 'Tampa aberta'
   Crash report sent — thank you!: Relatório de erro enviado — obrigado!
   Create New Filament: Criar Novo Filamento
   Create New Vendor: Criar Novo Fornecedor
@@ -366,9 +366,9 @@ translations:
   Custom...: Personalizado...
   Customize Macro: 'Personalizar Macro'
   Customize preset temperatures: Personalizar temperaturas predefinidas
+  Cutter jam: 'Atolamento do cortador'
   Cutting filament...: Cortando filamento...
   DETECTED USB PRINTERS: IMPRESSORAS USB DETECTADAS
-  DIAGNOSTICS: DIAGNÓSTICOS
   DISABLED: DESABILITADO
   DISCOVERED PRINTERS: IMPRESSORAS DESCOBERTAS
   Damping (Kd): Amortecimento (Kd)
@@ -379,14 +379,12 @@ translations:
   Date (newest): Data (mais recente)
   Date (oldest): Data (mais antigo)
   Day: Dia
-  Default: Padrão
   Default border thickness: Espessura padrão da borda
   Define macros in your printer.cfg: Defina macros no seu printer.cfg
   Delete: Excluir
   Delete File?: Excluir Arquivo?
   Delete Profile?: Excluir Perfil?
   Delete Spool?: Excluir Carretel?
-  Delete Video?: Excluir vídeo?
   'Delta:': 'Delta:'
   Deploy: Implantar
   Describe the issue (optional): Descreva o problema (opcional)
@@ -396,7 +394,6 @@ translations:
   Dev: Dev
   Dev channel requires dev_url in config: Canal dev requer dev_url na configuração
   Device name is required: Nome do dispositivo é obrigatório
-  'Difference between Path A and B. Ideally under 5 Hz; over 15 Hz needs adjustment.': 'Diferença entre Caminho A e B. Idealmente abaixo de 5 Hz; acima de 15 Hz precisa de ajuste.'
   Disable: Desabilitar
   Disable Motors?: Desligar Motores?
   Disable the security PIN: Desabilitar o PIN de segurança
@@ -421,15 +418,16 @@ translations:
   Downloading...: Baixando...
   Drive Cal: Cal de Drive
   Drop shadow strength (0 = disabled): Intensidade da sombra (0 = desabilitado)
-  Dryer: Secador
-  Dryer Control: Controle do Secador
+  Dryer Controls: 'Controles do secador'
+  Drying: 'Secando'
+  Drying started: 'Secagem iniciada'
+  Drying stopped: 'Secagem interrompida'
   Duplicate: Duplicar
   Duplicated: Duplicado
   Duration: Duração
   E-Stop (M112): E-Stop (M112)
   E-Stop Confirmation: Confirmação de Parada de Emergência
   EDDY CURRENT: EDDY CURRENT
-  EMERGENCY CONTROLS: CONTROLES DE EMERGÊNCIA
   EMERGENCY STOP: PARADA DE EMERGÊNCIA
   Each fan can only be selected once: Cada ventoinha só pode ser selecionada uma vez
   Edit: Editar
@@ -441,7 +439,6 @@ translations:
   Effects: Efeitos
   Eject: Ejetar
   Emergency Stop: Parada de Emergência
-  Emergency Stop (M112): Parada de Emergência (M112)
   Emergency Stop?: Parada de Emergência?
   Emergency stop activated: Parada de emergência ativada
   'Emergency stop failed: not connected': 'Parada de emergência falhou: não conectado'
@@ -494,7 +491,7 @@ translations:
   Extruder PID Tuning: Ajuste PID do Extrusor
   Extruder heats automatically based on material: O extrusor aquece automaticamente com base no material
   FAILED: FALHOU
-  FILAMENT: FILAMENTO
+  FILAMENT MAPPING: 'MAPEAMENTO DE FILAMENTO'
   Factory Reset: Restauração de Fábrica
   Failed: Falhou
   Failed to analyze PRINT_START macro: Falha ao analisar macro PRINT_START
@@ -516,7 +513,6 @@ translations:
   Failed to read config.: Falha ao ler configuração.
   Failed to read config. Check connection.: Falha ao ler configuração. Verifique a conexão.
   Failed to read moonraker.conf.: Falha ao ler moonraker.conf.
-  Failed to render label: 'Falha ao renderizar etiqueta'
   Failed to reset theme: Falha ao redefinir o tema
   Failed to restart Moonraker.: Falha ao reiniciar Moonraker.
   Failed to save changes to Spoolman: 'Falha ao salvar alterações no Spoolman'
@@ -537,6 +533,7 @@ translations:
   Feeding filament forward: Avançando filamento
   Filament: Filamento
   Filament Detected: Filamento Detectado
+  Filament Environment: 'Ambiente do filamento'
   Filament Mapping: Mapeamento de Filamento
   Filament Sensor: Sensor de Filamento
   Filament Used: Filamento Usado
@@ -570,7 +567,6 @@ translations:
   Framerate: Taxa de Quadros
   Freq Graph: Gráfico de Freq
   Frequency Delta: 'Delta de frequência'
-  'Frequency Delta: Difference between Path A and B. ': 'Delta de frequência: Diferença entre Caminho A e B. '
   Front: Frente
   G-code Console: Console G-code
   G-code Preview: Visualização G-code
@@ -630,9 +626,9 @@ translations:
   Hotend: Hotend
   Hotend Fan: Ventoinha do Hotend
   Hotend Heater: Aquecedor do Hotend
+  Hours: 'Horas'
   How Z-axis movement is displayed: Como o movimento do eixo Z é exibido
-  'How closely the vibration profiles match. Above 90% is excellent; below 70% suggests uneven tension.': 'Quão próximos os perfis de vibração correspondem. Acima de 90% é excelente; abaixo de 70% sugere tensão desigual.'
-  How often to check Spoolman for weight updates: Com que frequência verificar o Spoolman para atualizações de peso
+  How many labels to print: 'Quantas etiquetas imprimir'
   How the toolhead icon appears: Como o ícone do cabeçote aparece
   Humidity: Umidade
   Hyperlapse: Hyperlapse
@@ -645,7 +641,6 @@ translations:
   In Progress: Em Andamento
   Inactive: Inativo
   Include Klipper/Moonraker logs: Incluir logs do Klipper/Moonraker
-  Incompatible: Incompatível
   Indexing G-code...: Indexando G-code...
   Initializing...: Inicializando...
   Input: Entrada
@@ -671,7 +666,6 @@ translations:
   Interactive probe offset adjustment: Ajuste interativo de offset da sonda
   Invalid port number: 'Número de porta inválido'
   Issue description: Descrição do problema
-  JabberWocky: JabberWocky
   Job Queue: Fila de Trabalhos
   'Join the HelixScreen community on Discord for discussion, ': 'Participe da comunidade HelixScreen no Discord para discussão, '
   Just now: Agora mesmo
@@ -697,10 +691,11 @@ translations:
   LOADED: CARREGADO
   LOCKED: BLOQUEADO
   LOT-2024-001: LOT-2024-001
-  Label Preset: 'Predefinição de Etiqueta'
   Label Printer: 'Impressora de Etiquetas'
   Label Size: 'Tamanho da Etiqueta'
   Label printed: 'Etiqueta impressa'
+  Labels: 'Etiquetas'
+  Labels Per Sheet: 'Etiquetas por folha'
   Language: Idioma
   Last: 'Última'
   Last print cancelled: Última impressão cancelada
@@ -711,11 +706,9 @@ translations:
   Layer mode captures one frame per layer change. Best for most prints.: O modo por camada captura um quadro por mudança de camada. Melhor para a maioria das impressões.
   'Layer:': 'Camada:'
   Layers: Camadas
-  Layout style for labels: 'Estilo de layout para etiquetas'
   Learn More: Saiba Mais
   'Length:': 'Comprimento:'
   Leveling Gantry...: Nivelando pórtico...
-  Library: 'Biblioteca'
   Lifetime Print Stats: 'Estatísticas de Impressão Totais'
   Light: Claro
   Load: Carregar
@@ -778,10 +771,13 @@ translations:
   Manage configured printers: Gerenciar impressoras configuradas
   Manual: 'Manual'
   Manual Bed Leveling: Nivelamento Manual da Mesa
+  Map to closest colors with matching material: 'Mapear para cores mais próximas com material compatível'
+  Marginal: 'Marginal'
   Markdown Viewer: Visualizador Markdown
   Master volume level: Nível de volume principal
   Match your typical print fan speed: Ajuste a velocidade típica da ventoinha de impressão
   Material: Material
+  Material Comfort: 'Conforto do material'
   Material Design Spinner: Indicador de Carregamento Material Design
   Material Temperatures: Temperaturas de Material
   Max: Máx
@@ -818,7 +814,6 @@ translations:
   Move paper back and forth while adjusting. Stop when paper catches slightly but still slides.: Mova o papel para frente e para trás enquanto ajusta. Pare quando o papel prender levemente, mas ainda deslizar.
   ? Moves the print head to measure vibration frequencies on each axis. Takes 2-3 minutes. The printer will make noise — this is normal.
   : Move o cabeçote para medir frequências de vibração em cada eixo. Leva 2-3 minutos. A impressora fará barulho — isso é normal.
-  Multi Filament System Overview: Visão geral do sistema multi-filamento
   Multi-Filament: Multi-Filamento
   Multi-Filament Overview: 'Visão geral multi-filamento'
   'Multi-Filament:': 'Multi-Filamento:'
@@ -838,6 +833,7 @@ translations:
   Network Name (SSID): Nome da Rede (SSID)
   Network Settings: Configurações de Rede
   Network Test: Teste de Rede
+  Network name cannot be empty: 'O nome da rede não pode estar vazio'
   Never: Nunca
   'New Spool: Step ': 'Nova Bobina: Etapa '
   'New Spool: Step 1 of 3': 'Nova Bobina: Etapa 1 de 3'
@@ -845,6 +841,7 @@ translations:
   New profile name: Novo nome do perfil
   Next: Próximo
   Niimbot (Bluetooth): Niimbot (Bluetooth)
+  No AMS connected: 'Nenhum AMS conectado'
   No AMS system connected: Nenhum sistema AMS conectado
   No AMS system connected.: Nenhum sistema AMS conectado.
   No Bluetooth printers found: Nenhuma impressora Bluetooth encontrada
@@ -855,11 +852,13 @@ translations:
   No Macros Found: Nenhuma Macro Encontrada
   No PRINT_START macro found: Macro PRINT_START não encontrada
   No Power Devices: Sem Dispositivos de Energia
+  No Spool: 'Sem bobina'
   No Spools: Sem Carretéis
   No USB printers found: Nenhuma impressora USB encontrada
   No buffer data available: 'Nenhum dado de buffer disponível'
   No changes selected.\n\nClick Cancel to close.: Nenhuma alteração selecionada.\n\nClique em Cancelar para fechar.
   No changes to revert: Nenhuma alteração para reverter
+  No dryer available. Store filament in a sealed dry box with desiccant for best results.: 'Nenhum secador disponível. Armazene o filamento em uma caixa seca selada com dessecante para melhores resultados.'
   No effects available: Nenhum efeito disponível
   No events queued: Nenhum evento na fila
   No filaments found: Nenhum filamento encontrado
@@ -867,17 +866,16 @@ translations:
   No files available for printing: Nenhum arquivo disponível para impressão
   No images found on USB drive: Nenhuma imagem encontrada na unidade USB
   No jobs in queue: Nenhum trabalho na fila
-  No label printers found: Nenhuma impressora de etiquetas encontrada
   No macros available: Nenhuma macro disponível
   No macros found: 'Nenhuma macro encontrada'
   No matching prints: Nenhuma impressão correspondente
+  No media installed: 'Nenhuma mídia instalada'
   No mesh data: Sem dados de malha
   No mesh loaded: Nenhuma malha carregada
   No network. Scan QR code to report on your phone.: Sem rede. Escaneie o QR code para reportar pelo celular.
   No networks found: Nenhuma rede encontrada
   No notifications: Sem notificações
   No plugins found: Nenhum plugin encontrado
-  No presets: Sem predefinições
   No preview: Sem visualização
   No print history found: Nenhum histórico de impressão
   No print history yet: Ainda sem histórico de impressão
@@ -904,7 +902,6 @@ translations:
   Notifications: Notificações
   Notify when print finishes: Notificar quando a impressão terminar
   Nozzle: Bico
-  'Nozzle ': 'Bico '
   Nozzle / Bed: Bocal / Mesa
   Nozzle Clean: Limpeza do Bico
   Nozzle Max (°C): Bocal Máx (°C)
@@ -913,6 +910,7 @@ translations:
   Nozzle Priming: Preparação do Bico
   Nozzle Temp: Temp. Bico
   Nozzle Temperature: Temperatura do Bico
+  Nozzle Temps: 'Temps do bico'
   Nozzle °C: Bico °C
   'Nozzle:': 'Bico:'
   OD: OD
@@ -926,6 +924,7 @@ translations:
   On and Off macros must be different: Macros de Ligar e Desligar devem ser diferentes
   On/Off (state-aware): Ligar/Desligar (com estado)
   Open: Abrir
+  Open Source Licenses: 'Licenças de código aberto'
   Operations: Operações
   Optimize Your Printing: Otimize Sua Impressão
   Optimizes temperature control for stable, consistent heating.: Otimiza o controle de temperatura para aquecimento estável e consistente.
@@ -933,6 +932,7 @@ translations:
   Oscillating around target...: Oscilando em torno do alvo...
   Out of range: 'Fora do intervalo'
   Output Mode: Modo de Saída
+  Overheating: 'Superaquecimento'
   P: P
   PA: PA
   PETG: PETG
@@ -947,6 +947,7 @@ translations:
   Pair: Parear
   Pair Bluetooth Printer: Parear Impressora Bluetooth
   Pair with: Parear com
+  Paired: 'Emparelhado'
   Paired successfully: Pareado com sucesso
   Pairing failed: Falha ao parear
   Pairing...: Pareando...
@@ -957,6 +958,7 @@ translations:
   Part Fan: Ventoinha da Peça
   Password: Senha
   Password cannot be empty: A senha não pode estar vazia
+  Password is required for secured networks: 'Senha é necessária para redes protegidas'
   Path A: 'Caminho A'
   Path B: 'Caminho B'
   Path Similarity: 'Similaridade de caminho'
@@ -1020,7 +1022,6 @@ translations:
   Print History: Histórico de Impressão
   Print Hours: Horas de Impressão
   Print Label: Imprimir Etiqueta
-  Print Last: 'Reimprimir última'
   Print Library: 'Biblioteca de impressão'
   Print Objects: Objetos de Impressão
   Print Speed: Velocidade de Impressão
@@ -1085,12 +1086,10 @@ translations:
   Reboot: Reiniciar
   Rebooting...: Reiniciando...
   Recalibrate or view detailed results anytime in Settings.: Recalibre ou veja resultados detalhados a qualquer momento em Configurações.
-  Recent: 'Recentes'
   Recent Prints: 'Impressões recentes'
   Recently Printed: 'Impressas recentemente'
   Record Timelapse: Gravar Timelapse
   Record timelapses of your prints: Gravar timelapses das suas impressões
-  Recorded Videos: Vídeos Gravados
   Recorded timelapses will appear here: 'Os timelapses gravados aparecerão aqui'
   Recording Mode: Modo de Gravação
   Recover: Recuperar
@@ -1210,11 +1209,11 @@ translations:
   Select: Selecionar
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: Selecione 'Nenhum' se você não tiver um sensor de filamento, ou se não quiser pausar quando acabar.
   Select Fan: Selecionar Ventoinha
-  Select Filament: Selecionar Filamento
   Select G-Code File: Selecionar Arquivo G-Code
   Select Power Device: Selecionar Dispositivo de Energia
   Select Sensor: Selecionar sensor
   Select Sensors: 'Selecionar Sensores'
+  Select Slot: 'Selecionar slot'
   Select Spool: Selecionar bobina
   Select fan: Selecionar ventoinha
   Select macro for first button: Selecionar macro para o primeiro botão
@@ -1223,7 +1222,6 @@ translations:
   Select macro for third button: Selecionar macro para o terceiro botão
   Select sensor: Selecionar sensor
   Select which devices the home screen power button controls: Selecione quais dispositivos o botão de energia controla
-  Select your label media: 'Selecione sua mídia de etiquetas'
   Selecting slot...: Selecionando slot...
   Self-Test: Autoteste
   Semantic Size Parameter Tests: Testes de Parâmetros de Tamanho Semântico
@@ -1248,8 +1246,8 @@ translations:
   Share Usage Data: Compartilhar Dados de Uso
   Share anonymous usage statistics to help us make HelixScreen better. No personal data is ever collected.: 'Compartilhe estatísticas de uso anônimas para nos ajudar a melhorar o HelixScreen. Nenhum dado pessoal é coletado.'
   'Share this code in Discord or support:': 'Compartilhe este código no Discord ou suporte:'
+  Sheet Label Print: 'Impressão de etiquetas em folha'
   'Shininess:': 'Brilho:'
-  Show Frequency Graph: 'Mostrar gráfico de frequência'
   Show Printer Switcher: Mostrar Seletor de Impressora
   Show Sections: Mostrar Seções
   Show detailed print preparation status: Mostrar status detalhado de preparação de impressão
@@ -1302,8 +1300,11 @@ translations:
   Start Anyway: Iniciar Mesmo Assim
   Start Calibration: Iniciar Calibração
   Start Check: 'Iniciar verificação'
+  Start Drying: 'Iniciar secagem'
   Start Print: Iniciar Impressão
   Start Probing: Iniciar Sondagem
+  Start at: 'Começar em'
+  Start failed: 'Falha ao iniciar'
   Started: Iniciado
   Starting Print...: Iniciando impressão...
   Starting...: Iniciando...
@@ -1313,13 +1314,13 @@ translations:
   Status: Status
   Status icons: Ícones de status
   Std Deviation: Desvio Padrão
-  Stealthburner: Stealthburner
   Step: Etapa
   Step 1 of 3: Etapa 1 de 3
   Step Progress Widget Test: Teste do Widget de Progresso por Etapa
   Stop: Parar
   Stop Drying: Parar Secagem
   Stop Print?: Parar Impressão?
+  Stop failed: 'Falha ao parar'
   Stops all motion. Requires firmware restart.: Para todo movimento. Requer reinício do firmware.
   Stow: Guardar
   Strobe LED: 'LED estroboscópico'
@@ -1354,12 +1355,13 @@ translations:
   Telemetry Data: Dados de Telemetria
   Telemetry queue cleared: Fila de telemetria limpa
   Temp Compensation: Compensação de Temp
+  Temp °C: 'Temp °C'
   Temperature: Temperatura
   Temperature Graph Config: Config do Gráfico de Temperatura
   Temperatures: Temperaturas
+  Template: 'Modelo'
   Temporary adjustment for this print, unless saved on Controls panel: Ajuste temporário para esta impressão, a menos que salvo no painel de Controles
   Tertiary: Terciário
-  Test Again: 'Testar novamente'
   Test Connection: Testar Conexão
   Test Network: Testar Rede
   Test Print: 'Impressão de Teste'
@@ -1371,9 +1373,6 @@ translations:
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : O plugin HelixPrint permite modificações rápidas de G-code diretamente na sua impressora—como pular malha da mesa para reimpressões rápidas.
   The heater will cycle on and off several times.: O aquecedor ligará e desligará várias vezes.
-  'The motor vibrates the belt while a strobe light flashes at the ': 'O motor vibra a correia enquanto uma luz estroboscópica pisca na '
-  ? 'The motor vibrates the belt while a strobe light flashes at the same frequency. When the belt appears to stand still (frozen), you have found the resonant frequency. Use the buttons below to sweep through frequencies.'
-  : 'O motor vibra a correia enquanto uma luz estroboscópica pisca na mesma frequência. Quando a correia parecer parada (congelada), você encontrou a frequência de ressonância. Use os botões abaixo para varrer as frequências.'
   'The runout sensor indicates no filament is loaded. ': 'O sensor de fim de filamento indica que não há filamento carregado. '
   'The toolhead sensor indicates filament is already loaded. ': 'O sensor do cabeçote indica que o filamento já está carregado. '
   'The toolhead sensor indicates no filament is present. ': 'O sensor do cabeçote indica que não há filamento presente. '
@@ -1422,6 +1421,7 @@ translations:
   Toggle: Alternar
   Toggle (fire-and-forget): Alternar (sem rastreamento)
   Toggle Feature: Alternar Recurso
+  Too humid: 'Muito úmido'
   Tool: Ferramenta
   Tool Changer: Trocador de Ferramentas
   Toolhead Style: Estilo do Cabeçote
@@ -1439,6 +1439,7 @@ translations:
   Tune: Ajustar
   Tuning control parameters...: Ajustando parâmetros de controle...
   Tuning tower enabled - start a print to test: Torre de ajuste habilitada - inicie uma impressão para testar
+  Turbo: 'Turbo'
   Turn Off: Desligar
   Turn On: Ligar
   Turn on LEDs when printer starts: Ligar LEDs quando a impressora iniciar
@@ -1447,9 +1448,6 @@ translations:
   UI Sounds: Sons da Interface
   USB: USB
   Understanding Results: 'Entender resultados'
-  'Uneven belt tension causes print artifacts like layer shifts, ': 'Tensão desigual da correia causa artefatos de impressão como deslocamento de camadas, '
-  ? "Uneven belt tension causes print artifacts like layer shifts, VFAs (vertical fine artifacts), and ringing. This tool vibrates each belt path and measures the resonant frequency — matched frequencies mean balanced tension. For CoreXY, Path A and B should be within a few Hz of each other."
-  : 'Tensão desigual da correia causa artefatos de impressão como deslocamento de camadas, VFAs (artefatos finos verticais) e ringing. Esta ferramenta vibra cada caminho de correia e mede a frequência de ressonância — frequências correspondentes significam tensão equilibrada. Para CoreXY, Caminho A e B devem estar dentro de poucos Hz um do outro.'
   Uninstall HelixPrint Plugin: Desinstalar Plugin HelixPrint
   'Uninstall: Coming soon': 'Desinstalar: Em breve'
   Unit: Unidade
@@ -1476,7 +1474,6 @@ translations:
   Upload gcode files to get started: Faça upload de arquivos gcode para começar
   Use G10/G11 firmware retraction: Usar retração de firmware G10/G11
   Use printer type to select image: Usar tipo de impressora para selecionar imagem
-  ValgACE (ACE Pro): ValgACE (ACE Pro)
   Velocity and acceleration limits: Limites de velocidade e aceleração
   Vendor: Fabricante
   Vendor Name: Nome do Fornecedor
@@ -1498,7 +1495,6 @@ translations:
   View Timelapse: Ver Timelapse
   View installed plugins and status: Ver plugins instalados e status
   View print statistics and job history: Ver estatísticas de impressão e histórico de trabalhos
-  Visual Fine-Tune (Strobe): 'Ajuste fino visual (estroboscópio)'
   Visual Fine-Tuning: 'Ajuste fino visual'
   Volume: Volume
   Volume, themes, and UI sounds: Volume, temas e sons da interface
@@ -1509,6 +1505,7 @@ translations:
   Warm Bed: Aquecer Mesa
   Warming Bed...: Aquecendo Mesa...
   Warning: Aviso
+  Weak battery: 'Bateria fraca'
   Webcam: Webcam
   Website (optional): Site (opcional)
   Week: Semana
@@ -1528,6 +1525,7 @@ translations:
   Widget Labels: Rótulos de Widgets
   Width: Largura
   Wrong PIN: PIN incorreto
+  Wrong media: 'Mídia incorreta'
   X: X
   X Axis: Eixo X
   X Offset: Offset X
@@ -1571,9 +1569,11 @@ translations:
   enable: habilitar
   enabled: habilitado
   layers: camadas
+  left: 'restante'
   mm before clog: 'mm antes da obstrução'
   not detected: não detectado
   of: de
+  'off': 'desligado'
   prints: 'impressões'
   remaining before clog detection triggers: restante antes da detecção de obstrução ser acionada
   set to: definido para
