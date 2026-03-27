@@ -7,9 +7,6 @@ Access via the **More** icon in the navigation bar.
 ---
 
 ## G-code Console
-
-![Console Panel](../../images/user/advanced-console.png)
-
 A full-featured G-code terminal for sending commands directly to your printer and viewing Klipper responses in real time.
 
 **Opening the console:**
