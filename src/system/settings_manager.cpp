@@ -138,10 +138,10 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(show_widget_labels_subject_, show_widget_labels ? 1 : 0,
                            "show_widget_labels", subjects_);
 
-    // Keep current firmware assignments for filament mapping (default: off)
-    bool keep_current = config->get<bool>(config->df() + "filament/keep_current_assignments", false);
-    UI_MANAGED_SUBJECT_INT(keep_current_assignments_subject_, keep_current ? 1 : 0,
-                           "keep_current_assignments", subjects_);
+    // Auto color map for filament mapping (default: on)
+    bool auto_color_map = config->get<bool>(config->df() + "filament/auto_color_map", true);
+    UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0,
+                           "auto_color_map", subjects_);
 
     subjects_initialized_ = true;
 
@@ -355,19 +355,19 @@ void SettingsManager::set_show_widget_labels(bool show) {
 }
 
 // ============================================================================
-// Keep Current Assignments
+// Auto Color Map
 // ============================================================================
 
-bool SettingsManager::get_keep_current_assignments() const {
+bool SettingsManager::get_auto_color_map() const {
     return lv_subject_get_int(
-               const_cast<lv_subject_t*>(&keep_current_assignments_subject_)) != 0;
+               const_cast<lv_subject_t*>(&auto_color_map_subject_)) != 0;
 }
 
-void SettingsManager::set_keep_current_assignments(bool keep) {
-    spdlog::info("[SettingsManager] set_keep_current_assignments({})", keep);
-    lv_subject_set_int(&keep_current_assignments_subject_, keep ? 1 : 0);
+void SettingsManager::set_auto_color_map(bool enabled) {
+    spdlog::info("[SettingsManager] set_auto_color_map({})", enabled);
+    lv_subject_set_int(&auto_color_map_subject_, enabled ? 1 : 0);
     Config* config = Config::get_instance();
-    config->set<bool>(config->df() + "filament/keep_current_assignments", keep);
+    config->set<bool>(config->df() + "filament/auto_color_map", enabled);
     config->save();
 }
 

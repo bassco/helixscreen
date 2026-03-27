@@ -229,18 +229,18 @@ class SettingsManager {
     }
 
     // =========================================================================
-    // KEEP CURRENT ASSIGNMENTS (owned by SettingsManager — filament mapping)
+    // AUTO COLOR MAP (owned by SettingsManager — filament mapping)
     // =========================================================================
 
-    /** @brief Get whether filament mapping should keep current firmware assignments */
-    bool get_keep_current_assignments() const;
+    /** @brief Get whether filament mapping should auto-match by color */
+    bool get_auto_color_map() const;
 
-    /** @brief Set whether filament mapping should keep current firmware assignments */
-    void set_keep_current_assignments(bool keep);
+    /** @brief Set whether filament mapping should auto-match by color */
+    void set_auto_color_map(bool enabled);
 
-    /** @brief Keep current assignments subject (integer: 0=off, 1=on) */
-    lv_subject_t* subject_keep_current_assignments() {
-        return &keep_current_assignments_subject_;
+    /** @brief Auto color map subject (integer: 0=off, 1=on) */
+    lv_subject_t* subject_auto_color_map() {
+        return &auto_color_map_subject_;
     }
 
   private:
@@ -257,7 +257,7 @@ class SettingsManager {
     lv_subject_t toolhead_style_subject_;
     lv_subject_t show_printer_switcher_subject_;
     lv_subject_t show_widget_labels_subject_;
-    lv_subject_t keep_current_assignments_subject_;
+    lv_subject_t auto_color_map_subject_;
 
     // External references
     MoonrakerClient* moonraker_client_ = nullptr;

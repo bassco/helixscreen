@@ -50,7 +50,7 @@ class FilamentMappingModal : public Modal {
     std::string get_slot_display_text(const helix::ToolMapping& mapping) const;
 
     void create_toggle_row();
-    void on_toggle_changed(bool keep_current);
+    void on_toggle_changed(bool auto_color);
     void recalculate_mappings();
 
     // State
@@ -59,7 +59,7 @@ class FilamentMappingModal : public Modal {
     std::vector<helix::ToolMapping> mappings_;
     std::vector<helix::ToolMapping> original_mappings_;
     MappingsUpdatedCallback on_updated_cb_;
-    bool keep_current_assignments_ = false;
+    bool auto_color_map_ = false;
 
     // UI
     lv_obj_t* tool_list_ = nullptr;

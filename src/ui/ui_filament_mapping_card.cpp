@@ -79,10 +79,16 @@ void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
     available_slots_ = collect_available_slots();
 
     // Compute mappings based on user preference
-    if (SettingsManager::instance().get_keep_current_assignments()) {
-        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
+    if (SettingsManager::instance().get_auto_color_map()) {
+        // Color matching: clear firmware mappings so they don't override color matches
+        auto slots_for_matching = available_slots_;
+        for (auto& s : slots_for_matching) {
+            s.current_tool_mapping = -1;
+        }
+        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, slots_for_matching);
     } else {
-        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
+        // Positional assignment (T0→slot 0, T1→slot 1, etc.)
+        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
     }
 
     // Build the compact UI
@@ -297,7 +303,8 @@ std::vector<helix::AvailableSlot> FilamentMappingCard::collect_available_slots()
         for (const auto& unit : info.units) {
             for (const auto& slot_info : unit.slots) {
                 helix::AvailableSlot as;
-                as.slot_index = slot_info.slot_index;
+                as.slot_index = slot_info.global_index;
+                as.local_slot_index = slot_info.slot_index;
                 as.backend_index = bi;
                 as.color_rgb = slot_info.color_rgb;
                 as.material = slot_info.material;

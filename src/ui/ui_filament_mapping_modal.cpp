@@ -49,7 +49,7 @@ void FilamentMappingModal::on_show() {
     wire_ok_button("btn_primary");
     wire_cancel_button("btn_secondary");
 
-    keep_current_assignments_ = SettingsManager::instance().get_keep_current_assignments();
+    auto_color_map_ = SettingsManager::instance().get_auto_color_map();
 
     // Snapshot so Cancel can revert
     original_mappings_ = mappings_;
@@ -62,8 +62,8 @@ void FilamentMappingModal::on_show() {
 
     rebuild_rows();
 
-    spdlog::debug("[FilamentMappingModal] Shown with {} tools, {} slots, keep_current={}",
-                  tool_info_.size(), available_slots_.size(), keep_current_assignments_);
+    spdlog::debug("[FilamentMappingModal] Shown with {} tools, {} slots, auto_color_map={}",
+                  tool_info_.size(), available_slots_.size(), auto_color_map_);
 }
 
 void FilamentMappingModal::on_ok() {
@@ -208,25 +208,33 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
         lv_obj_add_flag(warn, LV_OBJ_FLAG_EVENT_BUBBLE);
     }
 
-    // Chevron
-    lv_obj_t* chevron = lv_label_create(row);
-    lv_label_set_text(chevron, ICON_CHEVRON_RIGHT);
-    lv_obj_set_style_text_font(chevron, &mdi_icons_24, 0);
-    lv_obj_set_style_text_color(chevron, theme_manager_get_color("text_muted"), 0);
-    lv_obj_remove_flag(chevron, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_flag(chevron, LV_OBJ_FLAG_EVENT_BUBBLE);
+    if (!auto_color_map_) {
+        // Positional mode: dim the row and disable interaction
+        lv_obj_set_style_opa(row, LV_OPA_50, 0);
+        lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    } else {
+        // Chevron (only when rows are interactive)
+        lv_obj_t* chevron = lv_label_create(row);
+        lv_label_set_text(chevron, ICON_CHEVRON_RIGHT);
+        lv_obj_set_style_text_font(chevron, &mdi_icons_24, 0);
+        lv_obj_set_style_text_color(chevron, theme_manager_get_color("text_muted"), 0);
+        lv_obj_remove_flag(chevron, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(chevron, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    // Click handler (dynamic content exception — rows are rebuilt on each update)
-    lv_obj_add_event_cb(
-        row,
-        [](lv_event_t* e) {
-            auto* self = static_cast<FilamentMappingModal*>(lv_event_get_user_data(e));
-            lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-            int idx = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-            self->on_row_tapped(idx);
-        },
-        LV_EVENT_CLICKED, this);
-    lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<intptr_t>(tool_index)));
+        // Click handler (dynamic content exception — rows are rebuilt on each update)
+        lv_obj_add_event_cb(
+            row,
+            [](lv_event_t* e) {
+                auto* self = static_cast<FilamentMappingModal*>(lv_event_get_user_data(e));
+                lv_obj_t* target =
+                    static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                int idx =
+                    static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
+                self->on_row_tapped(idx);
+            },
+            LV_EVENT_CLICKED, this);
+        lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<intptr_t>(tool_index)));
+    }
 
     return row;
 }
@@ -311,12 +319,12 @@ void FilamentMappingModal::on_slot_selected(int tool_index,
         }
     }
 
-    // Manual override disables "keep current assignments"
-    if (keep_current_assignments_) {
-        keep_current_assignments_ = false;
-        SettingsManager::instance().set_keep_current_assignments(false);
+    // Manual override enables auto color map (user is customizing)
+    if (!auto_color_map_) {
+        auto_color_map_ = true;
+        SettingsManager::instance().set_auto_color_map(true);
         if (toggle_switch_) {
-            lv_obj_remove_state(toggle_switch_, LV_STATE_CHECKED);
+            lv_obj_add_state(toggle_switch_, LV_STATE_CHECKED);
         }
     }
 
@@ -351,13 +359,13 @@ void FilamentMappingModal::create_toggle_row() {
 
     // Label
     lv_obj_t* label = lv_label_create(row);
-    lv_label_set_text(label, lv_tr("Keep current assignments"));
+    lv_label_set_text(label, lv_tr("Map to closest colors"));
     lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), 0);
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
 
     // Switch
     toggle_switch_ = lv_switch_create(row);
-    if (keep_current_assignments_) {
+    if (auto_color_map_) {
         lv_obj_add_state(toggle_switch_, LV_STATE_CHECKED);
     }
 
@@ -371,18 +379,24 @@ void FilamentMappingModal::create_toggle_row() {
         LV_EVENT_VALUE_CHANGED, this);
 }
 
-void FilamentMappingModal::on_toggle_changed(bool keep_current) {
-    keep_current_assignments_ = keep_current;
-    SettingsManager::instance().set_keep_current_assignments(keep_current);
+void FilamentMappingModal::on_toggle_changed(bool auto_color) {
+    auto_color_map_ = auto_color;
+    SettingsManager::instance().set_auto_color_map(auto_color);
     recalculate_mappings();
     rebuild_rows();
 }
 
 void FilamentMappingModal::recalculate_mappings() {
-    if (keep_current_assignments_) {
-        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
+    if (auto_color_map_) {
+        // Color matching: clear firmware mappings so they don't override color matches
+        auto slots_for_matching = available_slots_;
+        for (auto& s : slots_for_matching) {
+            s.current_tool_mapping = -1;
+        }
+        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, slots_for_matching);
     } else {
-        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
+        // Positional assignment (T0→slot 0, T1→slot 1, etc.)
+        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
     }
 }
 
