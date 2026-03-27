@@ -2,6 +2,8 @@
 
 #pragma once
 
+#if HELIX_HAS_CFS
+
 #include "ams_subscription_backend.h"
 
 #include <optional>
@@ -126,3 +128,5 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
 };
 
 } // namespace helix::printer
+
+#endif // HELIX_HAS_CFS

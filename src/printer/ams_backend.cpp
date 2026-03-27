@@ -9,7 +9,9 @@
 #include "ams_backend_mock.h"
 #endif
 #include "ams_backend_ad5x_ifs.h"
+#if HELIX_HAS_CFS
 #include "ams_backend_cfs.h"
+#endif
 #include "ams_backend_toolchanger.h"
 #include "ams_backend_valgace.h"
 #include "moonraker_api.h"
@@ -256,12 +258,17 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerA
         return std::make_unique<AmsBackendAd5xIfs>(api, client);
 
     case AmsType::CFS:
+#if HELIX_HAS_CFS
         if (!api || !client) {
             spdlog::error("[AMS Backend] CFS requires MoonrakerAPI and MoonrakerClient");
             return nullptr;
         }
         spdlog::debug("[AMS Backend] Creating CFS backend");
         return std::make_unique<printer::AmsBackendCfs>(api, client);
+#else
+        spdlog::info("[AMS Backend] CFS support not compiled in");
+        return nullptr;
+#endif
 
     case AmsType::NONE:
     default:
