@@ -1532,7 +1532,6 @@ void AmsBackendMock::set_multi_unit_mode(bool enabled) {
             entry->info.color_rgb = d.color;
             entry->info.color_name = d.color_name;
             entry->info.status = d.status;
-            entry->info.mapped_tool = 0; // All slots share single toolhead
             entry->info.spoolman_id = d.spoolman_id;
             entry->info.total_weight_g = 1000.0f;
             entry->info.remaining_weight_g = d.remaining;
@@ -1561,7 +1560,6 @@ void AmsBackendMock::set_multi_unit_mode(bool enabled) {
             entry->info.color_rgb = d.color;
             entry->info.color_name = d.color_name;
             entry->info.status = d.status;
-            entry->info.mapped_tool = 0; // All slots share single toolhead
             entry->info.spoolman_id = d.spoolman_id;
             entry->info.total_weight_g = 1000.0f;
             entry->info.remaining_weight_g = d.remaining;

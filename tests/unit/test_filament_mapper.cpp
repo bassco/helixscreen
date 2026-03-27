@@ -117,7 +117,7 @@ TEST_CASE("materials_match is case-insensitive", "[filament_mapper][material]") 
 TEST_CASE("find_closest_color_slot with no slots returns invalid key", "[filament_mapper][slot]") {
     std::vector<AvailableSlot> slots;
     std::vector<SlotKey> used;
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     CHECK(result == SlotKey{-1, -1});
 }
 
@@ -129,7 +129,7 @@ TEST_CASE("find_closest_color_slot skips empty slots", "[filament_mapper][slot]"
     std::vector<SlotKey> used;
 
     // Looking for red — slot 0 matches color but is empty
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     CHECK(result == SlotKey{-1, -1});
 }
 
@@ -140,7 +140,7 @@ TEST_CASE("find_closest_color_slot skips already-used slots", "[filament_mapper]
     };
     std::vector<SlotKey> used = {{0, 0}}; // slot 0 backend 0 already used
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     CHECK(result == SlotKey{1, 0});
 }
 
@@ -152,7 +152,7 @@ TEST_CASE("find_closest_color_slot returns closest match", "[filament_mapper][sl
     };
     std::vector<SlotKey> used;
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     CHECK(result == SlotKey{0, 0});
 }
 
@@ -164,7 +164,7 @@ TEST_CASE("find_closest_color_slot returns invalid key when nothing within toler
     };
     std::vector<SlotKey> used;
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     CHECK(result == SlotKey{-1, -1});
 }
 
@@ -453,57 +453,59 @@ TEST_CASE("compute_defaults empty material strings skip mismatch check",
 // =============================================================================
 
 TEST_CASE("FilamentMapper use_current_assignments", "[filament_mapper][current_assignments]") {
-    SECTION("maps tools to their firmware-assigned slots") {
+    SECTION("maps tools to slots positionally") {
         std::vector<GcodeToolInfo> tools = {
             {0, 0xFF0000, "PLA"},
             {1, 0x00FF00, "PETG"},
         };
         std::vector<AvailableSlot> slots = {
-            {0, 0, 0x0000FF, "ABS", false, 1},   // slot 0, mapped to T1
-            {1, 0, 0xFF0000, "PLA", false, 0},   // slot 1, mapped to T0
-            {2, 0, 0x00FF00, "PETG", false, -1}, // slot 2, no mapping
+            {0, 0, 0x0000FF, "ABS", false, -1},  // slot 0
+            {1, 0, 0xFF0000, "PLA", false, -1},  // slot 1
+            {2, 0, 0x00FF00, "PETG", false, -1}, // slot 2
         };
 
         auto mappings = FilamentMapper::use_current_assignments(tools, slots);
 
         REQUIRE(mappings.size() == 2);
 
-        // T0 should map to slot 1 (firmware says slot 1 is mapped to T0)
+        // T0 → first slot (slot 0)
         CHECK(mappings[0].tool_index == 0);
-        CHECK(mappings[0].mapped_slot == 1);
+        CHECK(mappings[0].mapped_slot == 0);
         CHECK(mappings[0].mapped_backend == 0);
-        CHECK(mappings[0].reason == ToolMapping::MatchReason::FIRMWARE_MAPPING);
         CHECK_FALSE(mappings[0].is_auto);
 
-        // T1 should map to slot 0 (firmware says slot 0 is mapped to T1)
+        // T1 → second slot (slot 1)
         CHECK(mappings[1].tool_index == 1);
-        CHECK(mappings[1].mapped_slot == 0);
+        CHECK(mappings[1].mapped_slot == 1);
         CHECK(mappings[1].mapped_backend == 0);
-        CHECK(mappings[1].reason == ToolMapping::MatchReason::FIRMWARE_MAPPING);
         CHECK_FALSE(mappings[1].is_auto);
     }
 
-    SECTION("tools with no firmware assignment become AUTO") {
+    SECTION("more tools than slots results in AUTO for excess") {
         std::vector<GcodeToolInfo> tools = {
             {0, 0xFF0000, "PLA"},
             {1, 0x00FF00, "PETG"},
+            {2, 0x0000FF, "ABS"},
         };
         std::vector<AvailableSlot> slots = {
-            {0, 0, 0xFF0000, "PLA", false, 0},   // slot 0, mapped to T0
-            {1, 0, 0x00FF00, "PETG", false, -1}, // slot 1, no mapping
+            {0, 0, 0xFF0000, "PLA", false, 0},
+            {1, 0, 0x00FF00, "PETG", false, 1},
         };
 
         auto mappings = FilamentMapper::use_current_assignments(tools, slots);
 
-        REQUIRE(mappings.size() == 2);
+        REQUIRE(mappings.size() == 3);
 
         CHECK(mappings[0].mapped_slot == 0);
         CHECK_FALSE(mappings[0].is_auto);
 
-        // T1 has no firmware assignment — should be AUTO
-        CHECK(mappings[1].mapped_slot == -1);
-        CHECK(mappings[1].is_auto);
-        CHECK(mappings[1].reason == ToolMapping::MatchReason::AUTO);
+        CHECK(mappings[1].mapped_slot == 1);
+        CHECK_FALSE(mappings[1].is_auto);
+
+        // T2 has no slot — AUTO
+        CHECK(mappings[2].mapped_slot == -1);
+        CHECK(mappings[2].is_auto);
+        CHECK(mappings[2].reason == ToolMapping::MatchReason::AUTO);
     }
 
     SECTION("detects material mismatches") {
@@ -511,7 +513,7 @@ TEST_CASE("FilamentMapper use_current_assignments", "[filament_mapper][current_a
             {0, 0xFF0000, "PLA"},
         };
         std::vector<AvailableSlot> slots = {
-            {0, 0, 0xFF0000, "PETG", false, 0}, // slot 0, mapped to T0, but material mismatch
+            {0, 0, 0xFF0000, "PETG", false, 0},
         };
 
         auto mappings = FilamentMapper::use_current_assignments(tools, slots);
@@ -521,24 +523,23 @@ TEST_CASE("FilamentMapper use_current_assignments", "[filament_mapper][current_a
         CHECK(mappings[0].material_mismatch);
     }
 
-    SECTION("works across multiple backends") {
+    SECTION("includes empty slots positionally") {
         std::vector<GcodeToolInfo> tools = {
             {0, 0xFF0000, "PLA"},
             {1, 0x00FF00, "PETG"},
         };
         std::vector<AvailableSlot> slots = {
-            {0, 0, 0xFF0000, "PLA", false, -1},  // backend 0, slot 0, no mapping
-            {0, 1, 0x00FF00, "PETG", false, 1},  // backend 1, slot 0, mapped to T1
-            {1, 1, 0xFF0000, "PLA", false, 0},   // backend 1, slot 1, mapped to T0
+            {0, 0, 0xFF0000, "PLA", false, 0},
+            {1, 0, 0x000000, "", true, -1},  // empty slot
         };
 
         auto mappings = FilamentMapper::use_current_assignments(tools, slots);
 
         REQUIRE(mappings.size() == 2);
-        CHECK(mappings[0].mapped_slot == 1);
-        CHECK(mappings[0].mapped_backend == 1);
-        CHECK(mappings[1].mapped_slot == 0);
-        CHECK(mappings[1].mapped_backend == 1);
+        CHECK(mappings[0].mapped_slot == 0);
+        // T1 maps to empty slot (user's choice to keep it)
+        CHECK(mappings[1].mapped_slot == 1);
+        CHECK_FALSE(mappings[1].is_auto);
     }
 }
 
@@ -611,7 +612,7 @@ TEST_CASE("find_closest_color_slot distinguishes backends in used list",
     // Mark slot 0 from backend 0 as used
     std::vector<SlotKey> used = {{0, 0}};
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
     // Should return slot 0 from backend 1 (not skip it due to slot_index match)
     CHECK(result == SlotKey{0, 1});
 }
@@ -853,6 +854,7 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
     SECTION("single-unit slot with material") {
         helix::AvailableSlot slot;
         slot.slot_index = 2;
+        slot.local_slot_index = 2;
         slot.backend_index = 0;
         slot.material = "PLA";
         slot.is_empty = false;
@@ -865,6 +867,7 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
     SECTION("single-unit slot without material") {
         helix::AvailableSlot slot;
         slot.slot_index = 0;
+        slot.local_slot_index = 0;
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = false;
@@ -877,6 +880,7 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
     SECTION("single-unit empty slot") {
         helix::AvailableSlot slot;
         slot.slot_index = 1;
+        slot.local_slot_index = 1;
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = true;
@@ -888,7 +892,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit slot with material") {
         helix::AvailableSlot slot;
-        slot.slot_index = 0;
+        slot.slot_index = 4;         // global index
+        slot.local_slot_index = 0;   // first slot in unit
         slot.backend_index = 0;
         slot.material = "PETG";
         slot.is_empty = false;
@@ -900,7 +905,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit slot without material") {
         helix::AvailableSlot slot;
-        slot.slot_index = 3;
+        slot.slot_index = 7;         // global index
+        slot.local_slot_index = 3;   // 4th slot in unit
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = false;
@@ -912,7 +918,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit empty slot") {
         helix::AvailableSlot slot;
-        slot.slot_index = 1;
+        slot.slot_index = 9;         // global index
+        slot.local_slot_index = 1;   // 2nd slot in unit
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = true;

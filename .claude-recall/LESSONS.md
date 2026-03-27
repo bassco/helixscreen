@@ -68,8 +68,8 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-08 | **Last**: 2026-01-23 | **Category**: gotcha | **Type**: constraint
 > When using lv_timer_create with object pointer as user_data, wrap in struct that captures alive_guard. Check alive_guard BEFORE dereferencing object pointer to prevent use-after-free if object destroyed during timer delay.
 
-### [L052] [***--|****-] Tag thread/network tests as [slow] to prevent hangs
-- **Uses**: 12 | **Velocity**: 3 | **Learned**: 2026-01-09 | **Last**: 2026-03-26 | **Category**: gotcha | **Type**: constraint
+### [L052] [***--|*****] Tag thread/network tests as [slow] to prevent hangs
+- **Uses**: 13 | **Velocity**: 4 | **Learned**: 2026-01-09 | **Last**: 2026-03-27 | **Category**: gotcha | **Type**: constraint
 > Tests using threads (std::thread, std::condition_variable, hv::EventLoop) MUST be tagged [slow] or they cause parallel test shards to HANG indefinitely. This is NOT about speed — it's about concurrency issues that deadlock under parallel execution. Known offenders: hv::EventLoop fixtures (MoonrakerRobustnessFixture, MoonrakerClientSecurityFixture, NewFeaturesTestFixture, EventTestFixture), BedMeshRenderThread tests. The [slow] tag excludes them from `make test-run` which uses filter `~[.] ~[slow]`. When the user reports tests hanging, check for untagged thread-based tests FIRST.
 
 ### [L053] [*----|-----] Reset static fixture state in destructor
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 66 | **Velocity**: 37.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-26 | **Category**: correction | **Type**: constraint
+- **Uses**: 74 | **Velocity**: 45.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-27 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -153,7 +153,7 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 13 | **Velocity**: 8.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-25 | **Category**: i18n
+- **Uses**: 14 | **Velocity**: 9.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-27 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks

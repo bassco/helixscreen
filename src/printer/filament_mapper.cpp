@@ -26,10 +26,10 @@ std::string FilamentMapper::format_slot_label(const AvailableSlot& slot) {
         // Single-unit: "Slot 2" or "Slot 2: PLA"
         if (material_str) {
             snprintf(buf, sizeof(buf), "%s %d: %s",
-                     lv_tr("Slot"), slot.slot_index + 1, material_str);
+                     lv_tr("Slot"), slot.local_slot_index + 1, material_str);
         } else {
             snprintf(buf, sizeof(buf), "%s %d",
-                     lv_tr("Slot"), slot.slot_index + 1);
+                     lv_tr("Slot"), slot.local_slot_index + 1);
         }
     } else {
         // Multi-unit: "Turtle 1 · Slot 2" or "Turtle 1 · Slot 2: PLA"
@@ -37,11 +37,11 @@ std::string FilamentMapper::format_slot_label(const AvailableSlot& slot) {
         if (material_str) {
             snprintf(buf, sizeof(buf), "%s \xc2\xb7 %s %d: %s",
                      slot.unit_display_name.c_str(),
-                     lv_tr("Slot"), slot.slot_index + 1, material_str);
+                     lv_tr("Slot"), slot.local_slot_index + 1, material_str);
         } else {
             snprintf(buf, sizeof(buf), "%s \xc2\xb7 %s %d",
                      slot.unit_display_name.c_str(),
-                     lv_tr("Slot"), slot.slot_index + 1);
+                     lv_tr("Slot"), slot.local_slot_index + 1);
         }
     }
     return buf;
@@ -81,6 +81,7 @@ bool FilamentMapper::materials_match(const std::string& a, const std::string& b)
 }
 
 SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,
+                                                 const std::string& target_material,
                                                  const std::vector<AvailableSlot>& slots,
                                                  const std::vector<SlotKey>& already_used) {
     SlotKey best_key{-1, -1};
@@ -94,6 +95,12 @@ SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,
         // Skip slots already claimed by a higher-priority tool
         auto key = slot.key();
         if (std::find(already_used.begin(), already_used.end(), key) != already_used.end()) {
+            continue;
+        }
+
+        // Skip slots with incompatible materials (unless either side has no info)
+        if (!target_material.empty() && !slot.material.empty() &&
+            !materials_match(target_material, slot.material)) {
             continue;
         }
 
@@ -151,7 +158,7 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
         }
 
         // Priority 2: Color match
-        auto [slot_idx, backend_idx] = find_closest_color_slot(tool.color_rgb, slots, used_slots);
+        auto [slot_idx, backend_idx] = find_closest_color_slot(tool.color_rgb, tool.material, slots, used_slots);
         if (slot_idx >= 0) {
             mapping.mapped_slot = slot_idx;
             mapping.mapped_backend = backend_idx;
@@ -173,8 +180,45 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
             continue;
         }
 
-        // Priority 3: Auto (no match found)
-        mapping.is_auto = true;
+        // Priority 3: Positional fallback — assign to the slot matching the tool index
+        {
+            int tool_idx = tool.tool_index;
+            for (const auto& slot : slots) {
+                if (slot.slot_index == tool_idx && slot.backend_index == 0) {
+                    auto key = slot.key();
+                    if (std::find(used_slots.begin(), used_slots.end(), key) ==
+                        used_slots.end()) {
+                        mapping.mapped_slot = slot.slot_index;
+                        mapping.mapped_backend = slot.backend_index;
+                        mapping.reason = ToolMapping::MatchReason::COLOR_MATCH;
+                        if (!tool.material.empty() && !slot.material.empty() &&
+                            !materials_match(tool.material, slot.material)) {
+                            mapping.material_mismatch = true;
+                        }
+                        used_slots.push_back(key);
+                    }
+                    break;
+                }
+            }
+            // If positional slot was already taken, try any unclaimed slot
+            if (mapping.mapped_slot < 0) {
+                for (const auto& slot : slots) {
+                    auto key = slot.key();
+                    if (std::find(used_slots.begin(), used_slots.end(), key) ==
+                        used_slots.end()) {
+                        mapping.mapped_slot = slot.slot_index;
+                        mapping.mapped_backend = slot.backend_index;
+                        mapping.reason = ToolMapping::MatchReason::COLOR_MATCH;
+                        if (!tool.material.empty() && !slot.material.empty() &&
+                            !materials_match(tool.material, slot.material)) {
+                            mapping.material_mismatch = true;
+                        }
+                        used_slots.push_back(key);
+                        break;
+                    }
+                }
+            }
+        }
         mappings.push_back(mapping);
     }
 
@@ -188,31 +232,23 @@ std::vector<ToolMapping> FilamentMapper::use_current_assignments(
     std::vector<ToolMapping> mappings;
     mappings.reserve(tools.size());
 
-    for (const auto& tool : tools) {
+    // Positional assignment: T0→first slot, T1→second slot, etc.
+    // No color matching, no rearranging — just use slots in order.
+    for (size_t i = 0; i < tools.size(); ++i) {
         ToolMapping mapping;
-        mapping.tool_index = tool.tool_index;
+        mapping.tool_index = tools[i].tool_index;
 
-        // Find slot with firmware mapping to this tool
-        bool found = false;
-        for (const auto& slot : slots) {
-            if (slot.is_empty) {
-                continue;
+        if (i < slots.size()) {
+            const auto& slot = slots[i];
+            mapping.mapped_slot = slot.slot_index;
+            mapping.mapped_backend = slot.backend_index;
+            mapping.reason = ToolMapping::MatchReason::FIRMWARE_MAPPING;
+
+            if (!tools[i].material.empty() && !slot.material.empty() &&
+                !materials_match(tools[i].material, slot.material)) {
+                mapping.material_mismatch = true;
             }
-            if (slot.current_tool_mapping == tool.tool_index) {
-                mapping.mapped_slot = slot.slot_index;
-                mapping.mapped_backend = slot.backend_index;
-                mapping.reason = ToolMapping::MatchReason::FIRMWARE_MAPPING;
-
-                if (!tool.material.empty() && !slot.material.empty() &&
-                    !materials_match(tool.material, slot.material)) {
-                    mapping.material_mismatch = true;
-                }
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
+        } else {
             mapping.is_auto = true;
             mapping.reason = ToolMapping::MatchReason::AUTO;
         }

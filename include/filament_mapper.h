@@ -22,13 +22,14 @@ struct GcodeToolInfo {
 /// This is an intentional abstraction boundary — callers convert from
 /// ams_types.h SlotInfo to keep FilamentMapper free of LVGL dependency.
 struct AvailableSlot {
-    int slot_index;           ///< Slot index within its unit
+    int slot_index;           ///< Global slot index (unique within backend, used for mapping)
     int backend_index;        ///< Which AMS backend (0 = primary)
     uint32_t color_rgb;       ///< Loaded filament color (0xRRGGBB)
     std::string material;     ///< Loaded material type
     bool is_empty;            ///< True if slot has no filament
     int current_tool_mapping; ///< What tool this slot is currently mapped to (-1 = none)
     int unit_index = 0;       ///< Unit index within the backend
+    int local_slot_index = 0; ///< Slot index within its unit (for display labels)
     std::string unit_display_name; ///< Unit name for display (empty = single-unit backend)
 
     /// Unique key for this slot across all backends
@@ -66,9 +67,11 @@ public:
     /// Uses weighted RGB distance (luminance-weighted) with tolerance of 40 units.
     static bool colors_match(uint32_t color_a, uint32_t color_b);
 
-    /// Find the best matching slot for a given color.
+    /// Find the best matching slot for a given color and material.
+    /// Skips slots with incompatible materials (unless either side is empty).
     /// Returns the matching slot's key, or {-1, -1} if no match within tolerance.
     static SlotKey find_closest_color_slot(uint32_t target_color,
+                                           const std::string& target_material,
                                            const std::vector<AvailableSlot>& slots,
                                            const std::vector<SlotKey>& already_used);
 
