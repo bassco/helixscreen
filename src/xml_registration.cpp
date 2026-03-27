@@ -309,7 +309,9 @@ void register_xml_components() {
     register_xml("crash_report_modal.xml");
     register_xml("debug_bundle_modal.xml");
     register_xml("modal_dialog.xml");
+#if HELIX_HAS_LABEL_PRINTER
     register_xml("components/ipp_print_modal.xml");
+#endif
     register_xml("numeric_keypad_panel.xml");
     register_xml("runout_guidance_modal.xml");
     register_xml("shutdown_modal.xml");
@@ -479,7 +481,9 @@ void register_xml_components() {
     register_xml("display_settings_overlay.xml");
     register_xml("sound_settings_overlay.xml");
     register_xml("security_settings_overlay.xml");
+#if HELIX_HAS_LABEL_PRINTER
     register_xml("label_printer_settings.xml");
+#endif
     register_xml("led_settings_overlay.xml");
     register_xml("theme_editor_overlay.xml");
     register_xml("theme_preview_overlay.xml");

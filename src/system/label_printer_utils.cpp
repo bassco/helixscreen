@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "label_printer_utils.h"
 
 #include "bluetooth_loader.h"
@@ -258,3 +260,5 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LABEL_PRINTER

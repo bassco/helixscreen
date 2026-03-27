@@ -8,8 +8,12 @@
 #ifdef HELIX_ENABLE_MOCKS
 #include "ams_backend_mock.h"
 #endif
+#if HELIX_HAS_IFS
 #include "ams_backend_ad5x_ifs.h"
+#endif
+#if HELIX_HAS_CFS
 #include "ams_backend_cfs.h"
+#endif
 #include "ams_backend_toolchanger.h"
 #include "ams_backend_valgace.h"
 #include "moonraker_api.h"
@@ -181,7 +185,7 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type) {
 #endif
 
     case AmsType::AD5X_IFS:
-#ifdef HELIX_ENABLE_MOCKS
+#if HELIX_HAS_IFS && defined(HELIX_ENABLE_MOCKS)
         spdlog::warn("[AMS Backend] AD5X IFS detected but no API/client provided - using mock");
         return std::make_unique<AmsBackendMock>(config->mock_ams_gate_count);
 #else
@@ -248,20 +252,30 @@ std::unique_ptr<AmsBackend> AmsBackend::create(AmsType detected_type, MoonrakerA
         return std::make_unique<AmsBackendToolChanger>(api, client);
 
     case AmsType::AD5X_IFS:
+#if HELIX_HAS_IFS
         if (!api || !client) {
             spdlog::error("[AMS Backend] AD5X IFS requires MoonrakerAPI and MoonrakerClient");
             return nullptr;
         }
         spdlog::debug("[AMS Backend] Creating AD5X IFS backend");
         return std::make_unique<AmsBackendAd5xIfs>(api, client);
+#else
+        spdlog::info("[AMS Backend] IFS support not compiled in");
+        return nullptr;
+#endif
 
     case AmsType::CFS:
+#if HELIX_HAS_CFS
         if (!api || !client) {
             spdlog::error("[AMS Backend] CFS requires MoonrakerAPI and MoonrakerClient");
             return nullptr;
         }
         spdlog::debug("[AMS Backend] Creating CFS backend");
         return std::make_unique<printer::AmsBackendCfs>(api, client);
+#else
+        spdlog::info("[AMS Backend] CFS support not compiled in");
+        return nullptr;
+#endif
 
     case AmsType::NONE:
     default:

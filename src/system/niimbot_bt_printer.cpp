@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "niimbot_bt_printer.h"
 #include "bluetooth_loader.h"
 #include "niimbot_protocol.h"
@@ -319,3 +321,5 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

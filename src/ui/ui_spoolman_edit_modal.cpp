@@ -8,9 +8,11 @@
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
+#if HELIX_HAS_LABEL_PRINTER
 #include "ipp_print_modal.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
+#endif
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "theme_manager.h"
@@ -141,12 +143,14 @@ void SpoolEditModal::init_subjects() {
                            sizeof(save_button_text_buf_), "Close");
     lv_xml_register_subject(nullptr, "spoolman_edit_save_text", &save_button_text_subject_);
 
+#if HELIX_HAS_LABEL_PRINTER
     // Ensure label printer subjects are initialized before we reference them
     helix::LabelPrinterSettingsManager::instance().init_subjects();
     lv_xml_register_subject(
         lv_xml_component_get_scope("spoolman_edit_modal"),
         "label_printer_configured",
         helix::LabelPrinterSettingsManager::instance().subject_printer_configured());
+#endif
 
     subjects_initialized_ = true;
 }
@@ -556,6 +560,7 @@ void SpoolEditModal::handle_save() {
     }
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void SpoolEditModal::handle_print_label() {
     auto& settings = helix::LabelPrinterSettingsManager::instance();
 
@@ -579,6 +584,7 @@ void SpoolEditModal::handle_print_label() {
         helix::print_spool_label(working_spool_, print_cb);
     }
 }
+#endif
 
 // ============================================================================
 // Static Callback Registration
@@ -593,7 +599,9 @@ void SpoolEditModal::register_callbacks() {
     lv_xml_register_event_cb(nullptr, "spoolman_edit_field_changed_cb", on_field_changed_cb);
     lv_xml_register_event_cb(nullptr, "spoolman_edit_reset_cb", on_reset_cb);
     lv_xml_register_event_cb(nullptr, "spoolman_edit_save_cb", on_save_cb);
+#if HELIX_HAS_LABEL_PRINTER
     lv_xml_register_event_cb(nullptr, "spoolman_edit_print_label_cb", on_print_label_cb);
+#endif
 
     callbacks_registered_ = true;
     spdlog::debug("[SpoolEditModal] Callbacks registered");
@@ -642,11 +650,13 @@ void SpoolEditModal::on_save_cb(lv_event_t* e) {
     }
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void SpoolEditModal::on_print_label_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_print_label();
     }
 }
+#endif
 
 } // namespace helix::ui

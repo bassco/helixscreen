@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "pwg_raster.h"
 
 #include <algorithm>
@@ -290,3 +292,5 @@ generate_multi(const std::vector<const LabelBitmap*>& pages,
 }
 
 } // namespace helix::pwg
+
+#endif // HELIX_HAS_LABEL_PRINTER

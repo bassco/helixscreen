@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "makeid_protocol.h"
 
 #include <spdlog/spdlog.h>
@@ -273,3 +275,5 @@ std::vector<LabelSize> makeid_default_sizes() {
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

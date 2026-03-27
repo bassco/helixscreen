@@ -3,6 +3,7 @@
 
 #include "ui_hsv_picker.h"
 
+#include "memory_utils.h"
 #include "ui_update_queue.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
@@ -23,9 +24,17 @@ using namespace helix;
 
 namespace {
 
-// Default sizes
-constexpr int32_t DEFAULT_SV_SIZE = 200;
-constexpr int32_t DEFAULT_HUE_HEIGHT = 24;
+// Default sizes — smaller on constrained devices (saves ~107KB ARGB8888)
+static int32_t default_sv_size() {
+    static const int32_t size =
+        helix::get_system_memory_info().is_constrained_device() ? 128 : 200;
+    return size;
+}
+static int32_t default_hue_height() {
+    static const int32_t size =
+        helix::get_system_memory_info().is_constrained_device() ? 16 : 24;
+    return size;
+}
 constexpr int32_t DEFAULT_GAP = 8;
 constexpr int32_t INDICATOR_RADIUS = 6;
 constexpr int32_t INDICATOR_BORDER = 2;
@@ -344,8 +353,8 @@ static void* ui_hsv_picker_xml_create(lv_xml_parser_state_t* state, const char**
     data_ptr->hue = 0.0f;
     data_ptr->saturation = 100.0f;
     data_ptr->value = 100.0f;
-    data_ptr->sv_size = DEFAULT_SV_SIZE;
-    data_ptr->hue_height = DEFAULT_HUE_HEIGHT;
+    data_ptr->sv_size = default_sv_size();
+    data_ptr->hue_height = default_hue_height();
     data_ptr->gap = DEFAULT_GAP;
     data_ptr->callback = nullptr;
     data_ptr->callback_user_data = nullptr;

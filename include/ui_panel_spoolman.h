@@ -124,7 +124,9 @@ class SpoolmanPanel : public OverlayBase {
     void delete_spool(int spool_id);
 
     void show_edit_modal(int spool_id);
+#if HELIX_HAS_LABEL_PRINTER
     void print_label_for_spool(int spool_id);
+#endif
 
     // === Context Menu ===
     helix::ui::SpoolmanContextMenu context_menu_;

@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "ipp_printer.h"
 #include "ipp_protocol.h"
 #include "pwg_raster.h"
@@ -205,3 +207,5 @@ void IppPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LABEL_PRINTER

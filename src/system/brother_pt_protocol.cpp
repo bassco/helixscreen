@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "brother_pt_protocol.h"
 
 #include <algorithm>
@@ -228,3 +230,5 @@ std::vector<uint8_t> brother_pt_build_raster(const LabelBitmap& bitmap,
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

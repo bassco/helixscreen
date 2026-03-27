@@ -235,8 +235,10 @@ class SpoolmanOverlay : public OverlayBase {
     static constexpr bool DEFAULT_SYNC_ENABLED = true;
     static constexpr int DEFAULT_REFRESH_INTERVAL_SECONDS = 30;
 
+#if HELIX_HAS_LABEL_PRINTER
     // Label printer sub-panel launcher
     static void on_label_printer_clicked(lv_event_t* e);
+#endif
 
     // === Server Setup Methods ===
     void probe_spoolman_server(const std::string& host, const std::string& port);

@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "ui_settings_label_printer.h"
 
 #include "ui_callback_helpers.h"
@@ -1686,3 +1688,5 @@ void LabelPrinterSettingsOverlay::on_pair_cancel(lv_event_t* e) {
 }
 
 } // namespace helix::settings
+
+#endif // HELIX_HAS_LABEL_PRINTER

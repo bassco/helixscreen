@@ -3,6 +3,7 @@
 
 #include "ui_gradient_canvas.h"
 
+#include "memory_utils.h"
 #include "ui_error_reporting.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
@@ -29,9 +30,12 @@ constexpr uint8_t DEFAULT_START_GRAY = 123; // Top-right - brighter
 constexpr uint8_t DEFAULT_END_GRAY = 43;    // Bottom-left - darker
 
 // Pre-rendered gradient buffer size
-// 256x256 ensures full coverage when clipped to rectangular cards (~170x245)
-// Uses ~256KB ARGB8888, reasonable for embedded target
-constexpr int32_t GRADIENT_BUFFER_SIZE = 256;
+// 256x256 on normal devices, 128x128 on constrained (saves 192KB ARGB8888)
+static int32_t gradient_buffer_size() {
+    static const int32_t size =
+        helix::get_system_memory_info().is_constrained_device() ? 128 : 256;
+    return size;
+}
 
 // 4x4 Bayer dither matrix (normalized to 0-15)
 constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
@@ -92,7 +96,7 @@ static void render_gradient_buffer(GradientData* data) {
         return;
 
     uint32_t stride = data->draw_buf->header.stride;
-    int32_t size = GRADIENT_BUFFER_SIZE;
+    int32_t size = gradient_buffer_size();
 
     // For diagonal gradient (top-right to bottom-left), max distance is 2*(size-1)
     float max_dist = static_cast<float>(2 * (size - 1));
@@ -179,7 +183,7 @@ static void* ui_gradient_canvas_xml_create(lv_xml_parser_state_t* state, const c
     // Create draw buffer for gradient
     // Must stay ARGB8888 — render_gradient_buffer() writes lv_color32_t pixels directly
     data_ptr->draw_buf =
-        lv_draw_buf_create(GRADIENT_BUFFER_SIZE, GRADIENT_BUFFER_SIZE, LV_COLOR_FORMAT_ARGB8888, 0);
+        lv_draw_buf_create(gradient_buffer_size(), gradient_buffer_size(), LV_COLOR_FORMAT_ARGB8888, 0);
 
     if (!data_ptr->draw_buf) {
         LOG_ERROR_INTERNAL("[GradientCanvas] Failed to create draw buffer");
@@ -206,8 +210,8 @@ static void* ui_gradient_canvas_xml_create(lv_xml_parser_state_t* state, const c
     // Cleanup handler
     lv_obj_add_event_cb(img, gradient_delete_cb, LV_EVENT_DELETE, nullptr);
 
-    spdlog::trace("[GradientCanvas] Created gradient ({}x{} buffer)", GRADIENT_BUFFER_SIZE,
-                  GRADIENT_BUFFER_SIZE);
+    spdlog::trace("[GradientCanvas] Created gradient ({}x{} buffer)", gradient_buffer_size(),
+                  gradient_buffer_size());
     return static_cast<void*>(img);
 }
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
+#if HELIX_HAS_IFS
 
 #include "ams_subscription_backend.h"
 #include "slot_registry.h"
@@ -109,3 +110,5 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // Async callback safety: shared flag cleared on destruction
     std::shared_ptr<std::atomic<bool>> alive_;
 };
+
+#endif // HELIX_HAS_IFS

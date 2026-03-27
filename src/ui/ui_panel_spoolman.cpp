@@ -15,9 +15,11 @@
 
 #include "ams_state.h"
 #include "app_globals.h"
+#if HELIX_HAS_LABEL_PRINTER
 #include "ipp_print_modal.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
+#endif
 #include "format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
@@ -470,9 +472,11 @@ void SpoolmanPanel::handle_context_action(helix::ui::SpoolmanContextMenu::MenuAc
         show_edit_modal(spool_id);
         break;
 
+#if HELIX_HAS_LABEL_PRINTER
     case MenuAction::PRINT_LABEL:
         print_label_for_spool(spool_id);
         break;
+#endif
 
     case MenuAction::DUPLICATE:
         duplicate_spool(spool_id);
@@ -818,6 +822,7 @@ void SpoolmanPanel::on_search_timer(lv_timer_t* timer) {
     self->populate_spool_list();
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void SpoolmanPanel::print_label_for_spool(int spool_id) {
     auto& settings = helix::LabelPrinterSettingsManager::instance();
 
@@ -847,3 +852,4 @@ void SpoolmanPanel::print_label_for_spool(int spool_id) {
         helix::print_spool_label(*spool, print_cb);
     }
 }
+#endif

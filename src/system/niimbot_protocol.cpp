@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "niimbot_protocol.h"
 
 #include <spdlog/spdlog.h>
@@ -260,3 +262,5 @@ std::vector<LabelSize> niimbot_sizes_for_model(const std::string& device_name) {
 }
 
 }  // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER

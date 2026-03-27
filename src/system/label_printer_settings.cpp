@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "label_printer_settings.h"
 
 #include "config.h"
@@ -278,3 +280,5 @@ bool LabelPrinterSettingsManager::is_configured() const {
     // "network" requires an address (covers both raw and ipp protocols)
     return !get_printer_address().empty();
 }
+
+#endif // HELIX_HAS_LABEL_PRINTER

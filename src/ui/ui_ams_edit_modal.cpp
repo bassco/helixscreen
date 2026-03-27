@@ -13,9 +13,11 @@
 #include "color_utils.h"
 #include "filament_database.h"
 #include "format_utils.h"
+#if HELIX_HAS_LABEL_PRINTER
 #include "ipp_print_modal.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
+#endif
 #include "moonraker_api.h"
 #include "ui_overlay_qr_scanner.h"
 #include "spoolman_slot_saver.h"
@@ -728,6 +730,7 @@ void AmsEditModal::handle_scan_qr() {
         });
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void AmsEditModal::handle_print_label() {
     auto& settings = helix::LabelPrinterSettingsManager::instance();
 
@@ -774,6 +777,7 @@ void AmsEditModal::handle_print_label() {
         helix::print_spool_label(spool_info, print_cb);
     }
 }
+#endif
 
 void AmsEditModal::update_spoolman_button_state() {
     if (!dialog_) {
@@ -820,6 +824,7 @@ void AmsEditModal::update_spoolman_button_state() {
         }
     }
 
+#if HELIX_HAS_LABEL_PRINTER
     lv_obj_t* btn_print = find_widget("btn_print_label");
     if (btn_print) {
         bool show = working_info_.spoolman_id > 0 &&
@@ -827,6 +832,7 @@ void AmsEditModal::update_spoolman_button_state() {
         if (show) lv_obj_remove_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
         else      lv_obj_add_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
     }
+#endif
 }
 
 // ============================================================================
@@ -1322,7 +1328,9 @@ void AmsEditModal::register_callbacks() {
         {"ams_edit_manual_entry_cb", on_manual_entry_cb},
         {"ams_edit_change_spool_cb", on_change_spool_cb},
         {"ams_edit_unlink_cb", on_unlink_cb},
+#if HELIX_HAS_LABEL_PRINTER
         {"ams_edit_print_label_cb", on_print_label_cb},
+#endif
         {"ams_edit_scan_qr_cb", on_scan_qr_cb},
         {"ams_edit_picker_search_cb", on_picker_search_cb},
         {"ams_edit_picker_retry_cb", on_picker_retry_cb},
@@ -1447,12 +1455,14 @@ void AmsEditModal::on_unlink_cb(lv_event_t* e) {
     }
 }
 
+#if HELIX_HAS_LABEL_PRINTER
 void AmsEditModal::on_print_label_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_print_label();
     }
 }
+#endif
 
 void AmsEditModal::on_scan_qr_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);

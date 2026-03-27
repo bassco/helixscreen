@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#if HELIX_HAS_CFS
 
 #include "ams_backend_cfs.h"
 
@@ -653,3 +654,5 @@ AmsError AmsBackendCfs::execute_device_action(const std::string& action_id,
 }
 
 } // namespace helix::printer
+
+#endif // HELIX_HAS_CFS

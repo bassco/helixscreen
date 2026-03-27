@@ -31,6 +31,7 @@ static constexpr float SPOOL_DEPTH = 0.35f; // Depth/width of spool (distance be
 static constexpr int32_t DEFAULT_SIZE = 64;
 static constexpr uint32_t DEFAULT_COLOR = 0xE0E0E0; // Default white/light filament
 
+
 // Note: Spool body colors now come from theme tokens in globals.xml:
 // - spool_body: Front flange color
 // - spool_body_shade: Back flange color (darker shade)

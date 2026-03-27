@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "ipp_print_modal.h"
 
 #include "ipp_printer.h"
@@ -155,3 +157,5 @@ bool maybe_show_ipp_print_modal(const SpoolInfo& spool, PrintCallback callback) 
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LABEL_PRINTER

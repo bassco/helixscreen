@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "label_bitmap.h"
 
 #include <spdlog/spdlog.h>
@@ -102,3 +104,5 @@ LabelBitmap generate_qr_bitmap(const std::string& data, int target_size_px) {
 }
 
 } // namespace helix
+
+#endif // HELIX_HAS_LABEL_PRINTER
