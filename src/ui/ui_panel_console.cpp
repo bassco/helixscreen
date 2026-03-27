@@ -445,7 +445,7 @@ void ConsolePanel::fetch_history() {
 
     // Request gcode history from Moonraker
     // CRITICAL: Callbacks run on libhv background thread - defer LVGL work to main thread
-    // and guard with alive_ to prevent use-after-free if panel is destroyed [L072]
+    // and guard with lifetime_ token to prevent use-after-free if panel is destroyed
     api->get_gcode_store(
         FETCH_COUNT,
         [this, token = lifetime_.token()](

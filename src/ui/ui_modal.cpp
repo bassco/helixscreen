@@ -439,6 +439,9 @@ Modal::~Modal() {
 
 Modal::Modal(Modal&& other) noexcept
     : backdrop_(other.backdrop_), dialog_(other.dialog_), parent_(other.parent_) {
+    // Note: lifetime_ is intentionally NOT moved — AsyncLifetimeGuard is non-movable.
+    // The moved-to Modal gets a fresh guard; the moved-from Modal's guard expires
+    // on destruction, correctly cancelling any outstanding callbacks.
     other.backdrop_ = nullptr;
     other.dialog_ = nullptr;
     other.parent_ = nullptr;
