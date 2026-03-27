@@ -156,6 +156,16 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
     lv_obj_remove_flag(expected_swatch, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(expected_swatch, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+    // Gcode material label (after swatch, before arrow)
+    if (!tool.material.empty()) {
+        lv_obj_t* mat_label = lv_label_create(row);
+        lv_label_set_text(mat_label, tool.material.c_str());
+        lv_obj_set_style_text_font(mat_label, theme_manager_get_font("font_body"), 0);
+        lv_obj_set_style_text_color(mat_label, theme_manager_get_color("text_muted"), 0);
+        lv_obj_remove_flag(mat_label, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_flag(mat_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+    }
+
     // Arrow: gcode → chosen
     lv_obj_t* arrow = lv_label_create(row);
     lv_label_set_text(arrow, ICON_ARROW_RIGHT);
@@ -359,7 +369,8 @@ void FilamentMappingModal::create_toggle_row() {
 
     // Label
     lv_obj_t* label = lv_label_create(row);
-    lv_label_set_text(label, lv_tr("Map to closest colors"));
+    lv_label_set_text(label, lv_tr("Map to closest colors with matching material"));
+    lv_obj_set_flex_grow(label, 1);
     lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), 0);
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
 
