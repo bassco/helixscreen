@@ -231,11 +231,13 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                     get_printer_state().set_spoolman_available(connected);
                                 },
                                 [](const MoonrakerError& err) {
-                                    spdlog::warn(
+                                    spdlog::debug(
                                         "[Moonraker Client] Spoolman status check failed: {}",
                                         err.message);
                                     get_printer_state().set_spoolman_available(false);
-                                });
+                                },
+                                0,     // default timeout
+                                true); // silent — Spoolman not always configured
                         }
                     }
                 }
@@ -268,9 +270,11 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                                                  snapshot_url, flip_h, flip_v);
                     },
                     [](const MoonrakerError& err) {
-                        spdlog::warn("[Moonraker Client] Webcam detection failed: {}", err.message);
+                        spdlog::debug("[Moonraker Client] Webcam detection failed: {}", err.message);
                         get_printer_state().set_webcam_available(false);
-                    });
+                    },
+                    0,     // default timeout
+                    true); // silent — webcams not always configured
 
                 // Fire-and-forget power device detection (silent — not all printers
                 // have the power component, and "Method not found" is expected)
