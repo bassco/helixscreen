@@ -1515,10 +1515,10 @@ void AmsBackendMock::set_multi_unit_mode(bool enabled) {
             float remaining;
         };
         const SlotData bt_slots[] = {
-            {"ASA", "Bambu Lab", 0x000000, "Black", SlotStatus::LOADED, 100, 1000.0f},
-            {"PLA", "Polymaker", 0xFF0000, "Red", SlotStatus::AVAILABLE, 101, 750.0f},
-            {"PETG", "eSUN", 0x00FF00, "Green", SlotStatus::AVAILABLE, 102, 500.0f},
-            {"PLA", "Overture", 0xFFFFFF, "White", SlotStatus::EMPTY, 103, 0.0f},
+            {"ASA", "Bambu Lab", 0x000000, "Black", SlotStatus::LOADED, 7, 1000.0f},
+            {"PLA", "Polymaker", 0xFF0000, "Red", SlotStatus::AVAILABLE, 1, 750.0f},
+            {"PLA", "eSUN", 0x00FF00, "Green", SlotStatus::AVAILABLE, 2, 500.0f},
+            {"PLA", "Overture", 0xFFFFFF, "White", SlotStatus::EMPTY, -1, 0.0f},
         };
         for (int i = 0; i < 4; ++i) {
             auto* entry = slots_.get_mut(i);
@@ -1545,8 +1545,8 @@ void AmsBackendMock::set_multi_unit_mode(bool enabled) {
 
         // Unit 1 slot data (Night Owl, 2 lanes)
         const SlotData no_slots[] = {
-            {"PETG", "Prusa", 0x1E88E5, "Blue", SlotStatus::AVAILABLE, 200, 1000.0f},
-            {"ABS", "Bambu Lab", 0xFDD835, "Yellow", SlotStatus::AVAILABLE, 201, 800.0f},
+            {"PETG", "Prusa", 0x1E88E5, "Blue", SlotStatus::AVAILABLE, 5, 1000.0f},
+            {"PLA", "Bambu Lab", 0xFDD835, "Yellow", SlotStatus::AVAILABLE, 3, 800.0f},
         };
         for (int i = 0; i < 2; ++i) {
             auto* entry = slots_.get_mut(4 + i);

@@ -178,7 +178,7 @@
           <lv_obj width="100%" height="content" style_pad_all="0" style_pad_gap="#space_xs"
                   flex_flow="row" style_flex_cross_place="center" scrollable="false"
                   clickable="false" event_bubble="true">
-            <text_small text="FILAMENT" translation_tag="FILAMENT" clickable="false" event_bubble="true"/>
+            <text_small text="FILAMENT MAPPING" translation_tag="FILAMENT_MAPPING" clickable="false" event_bubble="true"/>
             <icon name="filament_mismatch_icon" src="alert" size="sm" variant="warning"
                   clickable="false" event_bubble="true">
               <bind_flag_if_eq subject="filament_mismatch" flag="hidden" ref_value="0"/>

@@ -121,27 +121,28 @@ TEST_CASE("find_closest_color_slot with no slots returns invalid key", "[filamen
     CHECK(result == SlotKey{-1, -1});
 }
 
-TEST_CASE("find_closest_color_slot skips empty slots", "[filament_mapper][slot]") {
+TEST_CASE("find_closest_color_slot matches empty slots by color", "[filament_mapper][slot]") {
     std::vector<AvailableSlot> slots = {
-        {0, 0, 0xFF0000, "PLA", true, -1},  // empty
+        {0, 0, 0xFF0000, "PLA", true, -1},  // empty but has color
         {1, 0, 0x00FF00, "PLA", false, -1}, // green, not empty
     };
     std::vector<SlotKey> used;
 
-    // Looking for red — slot 0 matches color but is empty
+    // Looking for red — slot 0 matches color even though empty
     auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
-    CHECK(result == SlotKey{-1, -1});
+    CHECK(result == SlotKey{0, 0});
 }
 
-TEST_CASE("find_closest_color_slot skips already-used slots", "[filament_mapper][slot]") {
+TEST_CASE("find_closest_color_slot allows re-use of claimed slots", "[filament_mapper][slot]") {
     std::vector<AvailableSlot> slots = {
         {0, 0, 0xFF0000, "PLA", false, -1},
         {1, 0, 0xFF1010, "PLA", false, -1},
     };
     std::vector<SlotKey> used = {{0, 0}}; // slot 0 backend 0 already used
 
+    // Should still match slot 0 — re-use is allowed for auto-mapping
     auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
-    CHECK(result == SlotKey{1, 0});
+    CHECK(result == SlotKey{0, 0});
 }
 
 TEST_CASE("find_closest_color_slot returns closest match", "[filament_mapper][slot]") {

@@ -138,8 +138,8 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(show_widget_labels_subject_, show_widget_labels ? 1 : 0,
                            "show_widget_labels", subjects_);
 
-    // Auto color map for filament mapping (default: on)
-    bool auto_color_map = config->get<bool>(config->df() + "filament/auto_color_map", true);
+    // Auto color map for filament mapping (default: off — positional assignment)
+    bool auto_color_map = config->get<bool>(config->df() + "filament/auto_color_map", false);
     UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0,
                            "auto_color_map", subjects_);
 

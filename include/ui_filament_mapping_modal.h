@@ -2,7 +2,7 @@
 #pragma once
 
 #include "filament_mapper.h"
-#include "ui_filament_picker_modal.h"
+#include "ui_filament_slot_picker.h"
 #include "ui_modal.h"
 
 #include <functional>
@@ -15,9 +15,9 @@ namespace helix::ui {
  * @brief Modal dialog showing all tool-to-slot filament mappings
  *
  * Displays per-tool rows with color swatches, slot info, and mismatch
- * warnings. Each row is tappable to open the FilamentPickerModal for
- * reassignment. Changes are applied immediately to the internal mappings
- * vector and reported via callback when the user clicks "Done".
+ * warnings. Each row is tappable to open an inline slot picker context
+ * menu for reassignment. Changes are applied immediately to the internal
+ * mappings vector and reported via callback when the user clicks "Done".
  */
 class FilamentMappingModal : public Modal {
   public:
@@ -45,8 +45,8 @@ class FilamentMappingModal : public Modal {
   private:
     void rebuild_rows();
     lv_obj_t* create_tool_row(int tool_index);
-    void on_row_tapped(int tool_index);
-    void on_slot_selected(int tool_index, const FilamentPickerModal::Selection& sel);
+    void on_row_tapped(int tool_index, lv_obj_t* row_widget);
+    void on_slot_selected(int tool_index, const FilamentSlotPicker::Selection& sel);
     std::string get_slot_display_text(const helix::ToolMapping& mapping) const;
 
     void create_toggle_row();
@@ -64,7 +64,7 @@ class FilamentMappingModal : public Modal {
     // UI
     lv_obj_t* tool_list_ = nullptr;
     lv_obj_t* toggle_switch_ = nullptr;
-    FilamentPickerModal picker_modal_;
+    FilamentSlotPicker slot_picker_;
 };
 
 } // namespace helix::ui

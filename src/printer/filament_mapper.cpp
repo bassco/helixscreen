@@ -88,18 +88,8 @@ SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,
     int best_distance = COLOR_MATCH_TOLERANCE + 1; // Must be within tolerance
 
     for (const auto& slot : slots) {
-        if (slot.is_empty) {
-            continue;
-        }
-
-        // Skip slots already claimed by a higher-priority tool
-        auto key = slot.key();
-        if (std::find(already_used.begin(), already_used.end(), key) != already_used.end()) {
-            continue;
-        }
-
         // Skip slots with incompatible materials (unless either side has no info)
-        if (!target_material.empty() && !slot.material.empty() &&
+        if (!slot.is_empty && !target_material.empty() && !slot.material.empty() &&
             !materials_match(target_material, slot.material)) {
             continue;
         }
@@ -107,7 +97,7 @@ SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,
         int dist = color_distance(target_color, slot.color_rgb);
         if (dist < best_distance) {
             best_distance = dist;
-            best_key = key;
+            best_key = slot.key();
         }
     }
 

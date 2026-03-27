@@ -96,7 +96,7 @@ public:
     /// Format a slot label: "Turtle 1 · Slot 2: PLA" or "Slot 2: PLA"
     static std::string format_slot_label(const AvailableSlot& slot);
 
-    static constexpr int COLOR_MATCH_TOLERANCE = 40;
+    static constexpr int COLOR_MATCH_TOLERANCE = 50;
 };
 
 } // namespace helix

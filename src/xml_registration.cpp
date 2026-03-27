@@ -305,7 +305,6 @@ void register_xml_components() {
 
     // Modal dialogs
     register_xml("filament_mapping_modal.xml");
-    register_xml("filament_picker_modal.xml");
     register_xml("crash_report_modal.xml");
     register_xml("debug_bundle_modal.xml");
     register_xml("modal_dialog.xml");

@@ -228,20 +228,12 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
         lv_obj_add_flag(warn, LV_OBJ_FLAG_EVENT_BUBBLE);
     }
 
-    if (!auto_color_map_) {
-        // Positional mode: dim the row and disable interaction
+    if (auto_color_map_) {
+        // Auto color mode: dim rows, mapper handles assignments
         lv_obj_set_style_opa(row, LV_OPA_50, 0);
         lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
     } else {
-        // Chevron (only when rows are interactive)
-        lv_obj_t* chevron = lv_label_create(row);
-        lv_label_set_text(chevron, ICON_CHEVRON_RIGHT);
-        lv_obj_set_style_text_font(chevron, &mdi_icons_24, 0);
-        lv_obj_set_style_text_color(chevron, theme_manager_get_color("text_muted"), 0);
-        lv_obj_remove_flag(chevron, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_flag(chevron, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-        // Click handler (dynamic content exception — rows are rebuilt on each update)
+        // Manual mode: rows are interactive for reassignment
         lv_obj_add_event_cb(
             row,
             [](lv_event_t* e) {
@@ -250,7 +242,7 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
                     static_cast<lv_obj_t*>(lv_event_get_current_target(e));
                 int idx =
                     static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-                self->on_row_tapped(idx);
+                self->on_row_tapped(idx, target);
             },
             LV_EVENT_CLICKED, this);
         lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<intptr_t>(tool_index)));
@@ -285,10 +277,10 @@ std::string FilamentMappingModal::get_slot_display_text(const helix::ToolMapping
 }
 
 // ============================================================================
-// Row tap -> picker modal
+// Row tap -> slot picker
 // ============================================================================
 
-void FilamentMappingModal::on_row_tapped(int tool_index) {
+void FilamentMappingModal::on_row_tapped(int tool_index, lv_obj_t* /*row_widget*/) {
     if (tool_index < 0 || tool_index >= static_cast<int>(tool_info_.size())) {
         return;
     }
@@ -298,17 +290,25 @@ void FilamentMappingModal::on_row_tapped(int tool_index) {
 
     spdlog::debug("[FilamentMappingModal] Row tapped: T{}", tool_index);
 
-    picker_modal_.set_tool_info(tool_index, tool.color_rgb, tool.material);
-    picker_modal_.set_available_slots(available_slots_);
-    picker_modal_.set_current_selection(mapping.mapped_slot, mapping.mapped_backend);
-    picker_modal_.set_on_select([this, tool_index](const FilamentPickerModal::Selection& sel) {
-        on_slot_selected(tool_index, sel);
-    });
-    picker_modal_.show(lv_screen_active());
+    FilamentSlotPicker::Selection current;
+    current.slot_index = mapping.mapped_slot;
+    current.backend_index = mapping.mapped_backend;
+    current.is_auto = mapping.is_auto;
+
+    // Capture click point from the active input device
+    lv_point_t click_pt;
+    lv_indev_get_point(lv_indev_active(), &click_pt);
+
+    slot_picker_.show(
+        lv_screen_active(), click_pt,
+        tool_index, tool.material, available_slots_, current,
+        [this, tool_index](const FilamentSlotPicker::Selection& sel) {
+            on_slot_selected(tool_index, sel);
+        });
 }
 
 void FilamentMappingModal::on_slot_selected(int tool_index,
-                                             const FilamentPickerModal::Selection& selection) {
+                                             const FilamentSlotPicker::Selection& selection) {
     if (tool_index < 0 || tool_index >= static_cast<int>(mappings_.size())) {
         return;
     }
@@ -336,15 +336,6 @@ void FilamentMappingModal::on_slot_selected(int tool_index,
                     break;
                 }
             }
-        }
-    }
-
-    // Manual override enables auto color map (user is customizing)
-    if (!auto_color_map_) {
-        auto_color_map_ = true;
-        SettingsManager::instance().set_auto_color_map(true);
-        if (toggle_switch_) {
-            lv_obj_add_state(toggle_switch_, LV_STATE_CHECKED);
         }
     }
 
