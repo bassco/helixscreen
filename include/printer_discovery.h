@@ -215,6 +215,12 @@ class PrinterDiscovery {
                 has_mmu_ = true;
                 mmu_type_ = AmsType::CFS;
             }
+            // ACE detection (Anycubic ACE Pro — ValgACE/BunnyACE/DuckACE Klipper drivers)
+            else if (name == "ace" && !has_mmu_) {
+                has_mmu_ = true;
+                mmu_type_ = AmsType::ACE;
+                spdlog::info("[PrinterDiscovery] Detected ACE (Anycubic ACE Pro)");
+            }
             // MMU encoder discovery (Happy Hare)
             else if (name.rfind("mmu_encoder ", 0) == 0) {
                 std::string encoder_name = name.substr(12); // Remove "mmu_encoder " prefix
@@ -429,6 +435,8 @@ class PrinterDiscovery {
                 detected_ams_systems_.push_back({AmsType::AD5X_IFS, "AD5X IFS"});
             } else if (mmu_type_ == AmsType::CFS) {
                 detected_ams_systems_.push_back({AmsType::CFS, "CFS"});
+            } else if (mmu_type_ == AmsType::ACE) {
+                detected_ams_systems_.push_back({AmsType::ACE, "ACE"});
             }
         } else if (has_tool_changer_ && !tool_names_.empty()) {
             // Standalone tool changer with no MMU — show parallel topology

@@ -531,17 +531,11 @@ void HardwareValidator::validate_configured_hardware(Config* config,
                         found = true;
                     } else if (hw_name == "toolchanger" && hardware.has_tool_changer()) {
                         found = true;
+                    } else if (hw_name == "ace" && hardware.mmu_type() == AmsType::ACE) {
+                        found = true;
                     }
-                    // ace check remains as-is (REST-based detection)
 
                     if (!found) {
-                        // ACE is detected via REST, not Klipper objects
-                        // For now, skip validation for ace as it requires REST probe
-                        if (hw_name == "ace") {
-                            spdlog::debug("[HardwareValidator] Skipping ACE validation "
-                                          "(REST-based detection required)");
-                            continue;
-                        }
 
                         bool is_optional = is_hardware_optional(config, hw_name);
                         result.expected_missing.push_back(
