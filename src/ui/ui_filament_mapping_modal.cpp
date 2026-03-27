@@ -2,6 +2,7 @@
 
 #include "ui_filament_mapping_modal.h"
 
+#include "settings_manager.h"
 #include "theme_manager.h"
 #include "ui_fonts.h"
 
@@ -48,6 +49,8 @@ void FilamentMappingModal::on_show() {
     wire_ok_button("btn_primary");
     wire_cancel_button("btn_secondary");
 
+    keep_current_assignments_ = SettingsManager::instance().get_keep_current_assignments();
+
     // Snapshot so Cancel can revert
     original_mappings_ = mappings_;
 
@@ -59,8 +62,8 @@ void FilamentMappingModal::on_show() {
 
     rebuild_rows();
 
-    spdlog::debug("[FilamentMappingModal] Shown with {} tools, {} slots",
-                  tool_info_.size(), available_slots_.size());
+    spdlog::debug("[FilamentMappingModal] Shown with {} tools, {} slots, keep_current={}",
+                  tool_info_.size(), available_slots_.size(), keep_current_assignments_);
 }
 
 void FilamentMappingModal::on_ok() {
@@ -85,6 +88,10 @@ void FilamentMappingModal::rebuild_rows() {
     }
 
     lv_obj_clean(tool_list_);
+    toggle_switch_ = nullptr;
+
+    // Toggle row first, then tool rows
+    create_toggle_row();
 
     for (size_t i = 0; i < mappings_.size(); ++i) {
         create_tool_row(static_cast<int>(i));
@@ -304,11 +311,79 @@ void FilamentMappingModal::on_slot_selected(int tool_index,
         }
     }
 
+    // Manual override disables "keep current assignments"
+    if (keep_current_assignments_) {
+        keep_current_assignments_ = false;
+        SettingsManager::instance().set_keep_current_assignments(false);
+        if (toggle_switch_) {
+            lv_obj_remove_state(toggle_switch_, LV_STATE_CHECKED);
+        }
+    }
+
     spdlog::info("[FilamentMappingModal] T{} mapped to: auto={}, slot={}, backend={}",
                  tool_index, selection.is_auto, selection.slot_index, selection.backend_index);
 
     // Rebuild UI to reflect changes
     rebuild_rows();
+}
+
+// ============================================================================
+// Toggle: keep current assignments
+// ============================================================================
+
+void FilamentMappingModal::create_toggle_row() {
+    if (!tool_list_) {
+        return;
+    }
+
+    int32_t row_pad_v = theme_manager_get_spacing("space_sm");
+
+    // Row container
+    lv_obj_t* row = lv_obj_create(tool_list_);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_flex_main_place(row, LV_FLEX_ALIGN_SPACE_BETWEEN, 0);
+    lv_obj_set_style_flex_cross_place(row, LV_FLEX_ALIGN_CENTER, 0);
+    lv_obj_set_style_pad_ver(row, row_pad_v, 0);
+    lv_obj_set_style_pad_hor(row, 0, 0);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Label
+    lv_obj_t* label = lv_label_create(row);
+    lv_label_set_text(label, lv_tr("Keep current assignments"));
+    lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), 0);
+    lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
+
+    // Switch
+    toggle_switch_ = lv_switch_create(row);
+    if (keep_current_assignments_) {
+        lv_obj_add_state(toggle_switch_, LV_STATE_CHECKED);
+    }
+
+    lv_obj_add_event_cb(
+        toggle_switch_,
+        [](lv_event_t* e) {
+            auto* self = static_cast<FilamentMappingModal*>(lv_event_get_user_data(e));
+            bool checked = lv_obj_has_state(self->toggle_switch_, LV_STATE_CHECKED);
+            self->on_toggle_changed(checked);
+        },
+        LV_EVENT_VALUE_CHANGED, this);
+}
+
+void FilamentMappingModal::on_toggle_changed(bool keep_current) {
+    keep_current_assignments_ = keep_current;
+    SettingsManager::instance().set_keep_current_assignments(keep_current);
+    recalculate_mappings();
+    rebuild_rows();
+}
+
+void FilamentMappingModal::recalculate_mappings() {
+    if (keep_current_assignments_) {
+        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
+    } else {
+        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
+    }
 }
 
 } // namespace helix::ui

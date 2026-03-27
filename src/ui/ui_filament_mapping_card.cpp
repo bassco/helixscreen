@@ -4,6 +4,7 @@
 
 #include "ams_state.h"
 #include "color_utils.h"
+#include "settings_manager.h"
 #include "theme_manager.h"
 #include "ui_fonts.h"
 #include "ui_utils.h"
@@ -77,8 +78,12 @@ void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
     // Collect available slots from AMS backends
     available_slots_ = collect_available_slots();
 
-    // Compute default mappings
-    mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
+    // Compute mappings based on user preference
+    if (SettingsManager::instance().get_keep_current_assignments()) {
+        mappings_ = helix::FilamentMapper::use_current_assignments(tool_info_, available_slots_);
+    } else {
+        mappings_ = helix::FilamentMapper::compute_defaults(tool_info_, available_slots_);
+    }
 
     // Build the compact UI
     rebuild_compact_view();

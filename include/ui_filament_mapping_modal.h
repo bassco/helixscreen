@@ -49,15 +49,21 @@ class FilamentMappingModal : public Modal {
     void on_slot_selected(int tool_index, const FilamentPickerModal::Selection& sel);
     std::string get_slot_display_text(const helix::ToolMapping& mapping) const;
 
+    void create_toggle_row();
+    void on_toggle_changed(bool keep_current);
+    void recalculate_mappings();
+
     // State
     std::vector<helix::GcodeToolInfo> tool_info_;
     std::vector<helix::AvailableSlot> available_slots_;
     std::vector<helix::ToolMapping> mappings_;
     std::vector<helix::ToolMapping> original_mappings_;
     MappingsUpdatedCallback on_updated_cb_;
+    bool keep_current_assignments_ = false;
 
     // UI
     lv_obj_t* tool_list_ = nullptr;
+    lv_obj_t* toggle_switch_ = nullptr;
     FilamentPickerModal picker_modal_;
 };
 
