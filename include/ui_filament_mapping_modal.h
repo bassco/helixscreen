@@ -45,7 +45,7 @@ class FilamentMappingModal : public Modal {
   private:
     void rebuild_rows();
     lv_obj_t* create_tool_row(int tool_index);
-    void on_row_tapped(int tool_index, lv_obj_t* row_widget);
+    void on_row_tapped(int tool_index);
     void on_slot_selected(int tool_index, const FilamentSlotPicker::Selection& sel);
     std::string get_slot_display_text(const helix::ToolMapping& mapping) const;
 

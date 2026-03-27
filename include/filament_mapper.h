@@ -68,12 +68,11 @@ public:
     static bool colors_match(uint32_t color_a, uint32_t color_b);
 
     /// Find the best matching slot for a given color and material.
-    /// Skips slots with incompatible materials (unless either side is empty).
+    /// Skips non-empty slots with incompatible materials.
     /// Returns the matching slot's key, or {-1, -1} if no match within tolerance.
     static SlotKey find_closest_color_slot(uint32_t target_color,
                                            const std::string& target_material,
-                                           const std::vector<AvailableSlot>& slots,
-                                           const std::vector<SlotKey>& already_used);
+                                           const std::vector<AvailableSlot>& slots);
 
     /// Map tools using only current firmware assignments.
     /// Tools with no firmware assignment become AUTO (unmapped).

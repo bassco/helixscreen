@@ -116,8 +116,8 @@ TEST_CASE("materials_match is case-insensitive", "[filament_mapper][material]") 
 
 TEST_CASE("find_closest_color_slot with no slots returns invalid key", "[filament_mapper][slot]") {
     std::vector<AvailableSlot> slots;
-    std::vector<SlotKey> used;
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
+
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots);
     CHECK(result == SlotKey{-1, -1});
 }
 
@@ -126,22 +126,9 @@ TEST_CASE("find_closest_color_slot matches empty slots by color", "[filament_map
         {0, 0, 0xFF0000, "PLA", true, -1},  // empty but has color
         {1, 0, 0x00FF00, "PLA", false, -1}, // green, not empty
     };
-    std::vector<SlotKey> used;
 
     // Looking for red — slot 0 matches color even though empty
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
-    CHECK(result == SlotKey{0, 0});
-}
-
-TEST_CASE("find_closest_color_slot allows re-use of claimed slots", "[filament_mapper][slot]") {
-    std::vector<AvailableSlot> slots = {
-        {0, 0, 0xFF0000, "PLA", false, -1},
-        {1, 0, 0xFF1010, "PLA", false, -1},
-    };
-    std::vector<SlotKey> used = {{0, 0}}; // slot 0 backend 0 already used
-
-    // Should still match slot 0 — re-use is allowed for auto-mapping
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots);
     CHECK(result == SlotKey{0, 0});
 }
 
@@ -151,9 +138,8 @@ TEST_CASE("find_closest_color_slot returns closest match", "[filament_mapper][sl
         {1, 0, 0xF00000, "PLA", false, -1}, // slightly off red
         {2, 0, 0x00FF00, "PLA", false, -1}, // green (far)
     };
-    std::vector<SlotKey> used;
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots);
     CHECK(result == SlotKey{0, 0});
 }
 
@@ -163,9 +149,8 @@ TEST_CASE("find_closest_color_slot returns invalid key when nothing within toler
         {0, 0, 0x00FF00, "PLA", false, -1},
         {1, 0, 0x0000FF, "PLA", false, -1},
     };
-    std::vector<SlotKey> used;
 
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots);
     CHECK(result == SlotKey{-1, -1});
 }
 
@@ -254,8 +239,9 @@ TEST_CASE("compute_defaults firmware mapping ignores empty slots",
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
     REQUIRE(result.size() == 1);
-    CHECK(result[0].is_auto);
-    CHECK(result[0].reason == ToolMapping::MatchReason::AUTO);
+    // Firmware mapping skips empty slots, but color matching still finds it
+    CHECK(result[0].mapped_slot == 0);
+    CHECK(result[0].reason == ToolMapping::MatchReason::COLOR_MATCH);
 }
 
 TEST_CASE("compute_defaults duplicate firmware mapping takes first non-empty",
@@ -609,19 +595,16 @@ TEST_CASE("compute_defaults multi-backend firmware mapping uses correct backend"
     CHECK(result[0].reason == ToolMapping::MatchReason::FIRMWARE_MAPPING);
 }
 
-TEST_CASE("find_closest_color_slot distinguishes backends in used list",
+TEST_CASE("find_closest_color_slot picks first matching slot across backends",
           "[filament_mapper][slot][multi_backend]") {
     std::vector<AvailableSlot> slots = {
         {0, 0, 0xFF0000, "PLA", false, -1},
         {0, 1, 0xFF0000, "PLA", false, -1}, // same slot_index, different backend
     };
 
-    // Mark slot 0 from backend 0 as used
-    std::vector<SlotKey> used = {{0, 0}};
-
-    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots, used);
-    // Should return slot 0 from backend 1 (not skip it due to slot_index match)
-    CHECK(result == SlotKey{0, 1});
+    // Slot re-use allowed — always picks the first/best match
+    auto result = FilamentMapper::find_closest_color_slot(0xFF0000, "", slots);
+    CHECK(result == SlotKey{0, 0});
 }
 
 // =============================================================================

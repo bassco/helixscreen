@@ -18,6 +18,7 @@ namespace helix::ui {
 namespace {
 constexpr lv_opa_t SWATCH_BORDER_OPA = 30;
 constexpr lv_opa_t SELECTED_BG_OPA = 40;
+constexpr lv_opa_t DIVIDER_OPA = 38;
 constexpr lv_opa_t BACKDROP_OPA = 128;
 constexpr int32_t CARD_MIN_WIDTH = 320;
 } // namespace
@@ -114,8 +115,6 @@ void FilamentSlotPicker::hide() {
 
 void FilamentSlotPicker::create_header(lv_obj_t* card, int tool_index,
                                         const std::string& material) {
-    int32_t header_pad = theme_manager_get_spacing("space_xs");
-
     lv_obj_t* header = lv_label_create(card);
     char buf[64];
     if (material.empty()) {
@@ -136,7 +135,7 @@ void FilamentSlotPicker::create_header(lv_obj_t* card, int tool_index,
     lv_obj_remove_style_all(divider);
     lv_obj_set_size(divider, LV_PCT(100), 1);
     lv_obj_set_style_bg_color(divider, theme_manager_get_color("text_muted"), 0);
-    lv_obj_set_style_bg_opa(divider, 38, 0);
+    lv_obj_set_style_bg_opa(divider, DIVIDER_OPA, 0);
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(divider, LV_OBJ_FLAG_EVENT_BUBBLE);

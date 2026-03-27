@@ -334,11 +334,6 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     // Update mismatch warning icon via subject binding
     lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
-    // Apply mapped colors to 3D preview (positional or color-matched)
-    if (filament_mapping_card_.is_visible()) {
-        apply_mapped_tool_colors();
-    }
-
     // Show either the interactive mapping card OR the simple color swatches, never both
     if (filament_mapping_card_.is_visible()) {
         // Mapping card is active — hide legacy color swatches

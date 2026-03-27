@@ -82,8 +82,7 @@ bool FilamentMapper::materials_match(const std::string& a, const std::string& b)
 
 SlotKey FilamentMapper::find_closest_color_slot(uint32_t target_color,
                                                  const std::string& target_material,
-                                                 const std::vector<AvailableSlot>& slots,
-                                                 const std::vector<SlotKey>& already_used) {
+                                                 const std::vector<AvailableSlot>& slots) {
     SlotKey best_key{-1, -1};
     int best_distance = COLOR_MATCH_TOLERANCE + 1; // Must be within tolerance
 
@@ -111,9 +110,8 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
     std::vector<ToolMapping> mappings;
     mappings.reserve(tools.size());
 
-    // Track which slots have been claimed so that later tools don't steal
-    // slots from earlier ones. Uses (slot_index, backend_index) pairs since
-    // slot indices are only unique within a backend.
+    // Track which slots have been claimed for positional fallback deduplication.
+    // Color matching allows slot re-use, but positional fallback avoids it.
     std::vector<SlotKey> used_slots;
 
     for (const auto& tool : tools) {
@@ -148,7 +146,7 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
         }
 
         // Priority 2: Color match
-        auto [slot_idx, backend_idx] = find_closest_color_slot(tool.color_rgb, tool.material, slots, used_slots);
+        auto [slot_idx, backend_idx] = find_closest_color_slot(tool.color_rgb, tool.material, slots);
         if (slot_idx >= 0) {
             mapping.mapped_slot = slot_idx;
             mapping.mapped_backend = backend_idx;
@@ -209,6 +207,13 @@ std::vector<ToolMapping> FilamentMapper::compute_defaults(
                 }
             }
         }
+
+        // If no priority matched, mark as AUTO (let firmware decide)
+        if (mapping.mapped_slot < 0) {
+            mapping.is_auto = true;
+            mapping.reason = ToolMapping::MatchReason::AUTO;
+        }
+
         mappings.push_back(mapping);
     }
 

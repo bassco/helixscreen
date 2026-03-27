@@ -242,7 +242,7 @@ lv_obj_t* FilamentMappingModal::create_tool_row(int tool_index) {
                     static_cast<lv_obj_t*>(lv_event_get_current_target(e));
                 int idx =
                     static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
-                self->on_row_tapped(idx, target);
+                self->on_row_tapped(idx);
             },
             LV_EVENT_CLICKED, this);
         lv_obj_set_user_data(row, reinterpret_cast<void*>(static_cast<intptr_t>(tool_index)));
@@ -280,7 +280,7 @@ std::string FilamentMappingModal::get_slot_display_text(const helix::ToolMapping
 // Row tap -> slot picker
 // ============================================================================
 
-void FilamentMappingModal::on_row_tapped(int tool_index, lv_obj_t* /*row_widget*/) {
+void FilamentMappingModal::on_row_tapped(int tool_index) {
     if (tool_index < 0 || tool_index >= static_cast<int>(tool_info_.size())) {
         return;
     }
