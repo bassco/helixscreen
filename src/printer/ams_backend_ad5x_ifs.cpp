@@ -1,5 +1,6 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
+#if HELIX_HAS_IFS
 
 #include "ams_backend_ad5x_ifs.h"
 
@@ -720,3 +721,5 @@ void AmsBackendAd5xIfs::check_action_timeout() {
         system_info_.action = AmsAction::IDLE;
     }
 }
+
+#endif // HELIX_HAS_IFS
