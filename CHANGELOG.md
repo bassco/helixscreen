@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.5] - 2026-03-27
+
+This release introduces AsyncLifetimeGuard — a unified mechanism for safe async callback handling that replaces all ad-hoc guard patterns — and migrates every modal, overlay, panel, widget, backend, and state manager to use it. Memory usage on constrained devices is further reduced through compile-time feature gates and runtime optimizations.
+
+### Added
+- AsyncLifetimeGuard for unified async callback safety, integrated into Modal and OverlayBase base classes
+- Compile-time feature gates (CFS, IFS, label printer) to reduce binary size on constrained devices (#546)
+- Anet ET5 Pro printer detection
+
+### Fixed
+- Crash from gcode renderer use-after-free when destroyed after streaming controller
+- DebugBundleModal upload callback not marshalled to UI thread
+- Premature restart during update when release_info.json not preserved during atomic swap (#547)
+- RGB565 spool canvas breaking transparency on devices with alpha blending
+
+### Changed
+- All async callback handling migrated from ad-hoc guard patterns to AsyncLifetimeGuard
+- Build hardened with FORTIFY_SOURCE, stack protector, and frame pointers across all platforms
+- Reduced memory on constrained devices: smaller canvas sizes, lighter sound theme, tighter gcode cache
+
 ## [0.99.4] - 2026-03-26
 
 ### Added
@@ -2191,6 +2211,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.5]: https://github.com/prestonbrown/helixscreen/compare/v0.99.4...v0.99.5
 [0.99.4]: https://github.com/prestonbrown/helixscreen/compare/v0.99.3...v0.99.4
 [0.99.3]: https://github.com/prestonbrown/helixscreen/compare/v0.99.2...v0.99.3
 [0.99.2]: https://github.com/prestonbrown/helixscreen/compare/v0.99.1...v0.99.2
