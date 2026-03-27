@@ -43,8 +43,8 @@ class GCodeDataSource;
  */
 class GCodeLayerCache {
   public:
-    /// Memory budget for constrained devices like AD5M (4MB) - <256MB total RAM
-    static constexpr size_t DEFAULT_BUDGET_CONSTRAINED = 4 * 1024 * 1024;
+    /// Memory budget for constrained devices like AD5M (2MB) - <256MB total RAM
+    static constexpr size_t DEFAULT_BUDGET_CONSTRAINED = 2 * 1024 * 1024;
 
     /// Memory budget for normal devices (16MB) - 256MB-512MB total RAM
     static constexpr size_t DEFAULT_BUDGET_NORMAL = 16 * 1024 * 1024;

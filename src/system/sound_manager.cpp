@@ -60,9 +60,13 @@ void SoundManager::initialize() {
         return;
     }
 
-    // Load the configured theme
+    // Defer theme loading until sounds are actually needed
     theme_name_ = AudioSettingsManager::instance().get_sound_theme();
-    load_theme(theme_name_);
+    if (AudioSettingsManager::instance().get_sounds_enabled()) {
+        load_theme(theme_name_);
+    } else {
+        spdlog::info("[SoundManager] Sounds disabled, deferring theme load");
+    }
 
     // Create and start the sequencer
     sequencer_ = std::make_unique<SoundSequencer>(backend_);
@@ -111,6 +115,11 @@ void SoundManager::play(const std::string& sound_name, SoundPriority priority) {
     if (!sequencer_ || !backend_) {
         spdlog::debug("[SoundManager] play('{}') skipped - no sequencer/backend", sound_name);
         return;
+    }
+
+    // Lazy-load theme on first use (deferred if sounds were disabled at init)
+    if (current_theme_.sounds.empty() && !theme_name_.empty()) {
+        load_theme(theme_name_);
     }
 
     // Look up sound in current theme
