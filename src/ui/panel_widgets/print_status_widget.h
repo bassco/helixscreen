@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "async_lifetime_guard.h"
 #include "ui_job_queue_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_runout_guidance_modal.h"
@@ -93,8 +94,8 @@ class PrintStatusWidget : public PanelWidget {
     ObserverGuard filament_runout_observer_;
     ObserverGuard job_queue_count_observer_;
 
-    // Alive guard for async thumbnail callbacks and history observer [L072]
-    std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(false);
+    // Lifetime guard for async thumbnail callbacks and history observer [L072]
+    helix::AsyncLifetimeGuard lifetime_;
 
     // History observer for updating idle thumbnail when history loads
     helix::HistoryChangedCallback history_changed_cb_;
