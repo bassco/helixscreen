@@ -1067,14 +1067,10 @@ void ControlsPanel::handle_home_all() {
         api_->motion().home_axes(
             "",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Homing may still be running — response timed out");
                 } else {
@@ -1096,14 +1092,10 @@ void ControlsPanel::handle_home_x() {
         api_->motion().home_axes(
             "X",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Homing may still be running — response timed out");
                 } else {
@@ -1125,14 +1117,10 @@ void ControlsPanel::handle_home_y() {
         api_->motion().home_axes(
             "Y",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Homing may still be running — response timed out");
                 } else {
@@ -1154,14 +1142,10 @@ void ControlsPanel::handle_home_xy() {
         api_->motion().home_axes(
             "XY",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Homing may still be running — response timed out");
                 } else {
@@ -1183,14 +1167,10 @@ void ControlsPanel::handle_home_z() {
         api_->motion().home_axes(
             "Z",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Homing may still be running — response timed out");
                 } else {
@@ -1212,15 +1192,11 @@ void ControlsPanel::handle_qgl() {
         api_->execute_gcode(
             "QUAD_GANTRY_LEVEL",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS("Quad Gantry Level complete");
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("QGL may still be running — response timed out");
                 } else {
@@ -1243,15 +1219,11 @@ void ControlsPanel::handle_z_tilt() {
         api_->execute_gcode(
             "Z_TILT_ADJUST",
             [this]() {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS("Z-Tilt Adjust complete");
             },
             [this](const MoonrakerError& err) {
-                helix::ui::async_call(
-                    [](void* ud) { static_cast<ControlsPanel*>(ud)->operation_guard_.end(); },
-                    this);
+                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING("Z-Tilt may still be running — response timed out");
                 } else {

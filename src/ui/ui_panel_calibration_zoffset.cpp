@@ -7,7 +7,6 @@
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
-#include "ui_update_queue.h"
 #include "ui_z_offset_indicator.h"
 
 #include "app_globals.h"
@@ -400,12 +399,11 @@ void ZOffsetCalibrationPanel::start_calibration() {
             cmd, []() { spdlog::debug("[ZOffsetCal] M140 sent, bed heating"); },
             [this](const MoonrakerError& err) {
                 spdlog::error("[ZOffsetCal] Failed to start bed heating: {}", err.message);
-                helix::ui::async_call(
-                    [](void* ud) {
-                        static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                            false, "Failed to start bed heating");
-                    },
-                    this);
+                lifetime_.defer("ZOffsetCalibrationPanel::on_calibration_result(bed_heat)",
+                                [this]() {
+                                    on_calibration_result(false,
+                                                         "Failed to start bed heating");
+                                });
             });
 
         // Enter WARMING state and observe bed temperature
@@ -474,13 +472,10 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
             gcode,
             [this]() {
                 spdlog::info("[ZOffsetCal] Moved to center at Z0.1, ready for adjustment");
-                helix::ui::async_call(
-                    [](void* ud) {
-                        auto* self = static_cast<ZOffsetCalibrationPanel*>(ud);
-                        self->set_state(State::ADJUSTING);
-                        self->update_z_position(0.1f);
-                    },
-                    this);
+                lifetime_.defer("ZOffsetCalibrationPanel::set_state(ADJUSTING)", [this]() {
+                    set_state(State::ADJUSTING);
+                    update_z_position(0.1f);
+                });
             },
             [this](const MoonrakerError& err) {
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
@@ -488,12 +483,12 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
                     NOTIFY_WARNING("Calibration move may still be running — response timed out");
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to move to position: {}", err.message);
-                    helix::ui::async_call(
-                        [](void* ud) {
-                            static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                                false, "Failed to move to calibration position");
-                        },
-                        this);
+                    lifetime_.defer(
+                        "ZOffsetCalibrationPanel::on_calibration_result(move_fail)",
+                        [this]() {
+                            on_calibration_result(false,
+                                                  "Failed to move to calibration position");
+                        });
                 }
             },
             MoonrakerAdvancedAPI::PROBING_TIMEOUT_MS);
@@ -535,12 +530,12 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
                     NOTIFY_WARNING("Calibration may still be running — response timed out");
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to start calibration: {}", err.message);
-                    helix::ui::async_call(
-                        [](void* ud) {
-                            static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                                false, "Failed to start Z offset calibration");
-                        },
-                        this);
+                    lifetime_.defer(
+                        "ZOffsetCalibrationPanel::on_calibration_result(cal_fail)",
+                        [this]() {
+                            on_calibration_result(false,
+                                                  "Failed to start Z offset calibration");
+                        });
                 }
             },
             MoonrakerAdvancedAPI::PROBING_TIMEOUT_MS);
@@ -560,17 +555,14 @@ void ZOffsetCalibrationPanel::adjust_z(float delta) {
 
         api_->execute_gcode(
             cmd,
-            [this, delta]() {
-                struct Ctx {
-                    ZOffsetCalibrationPanel* panel;
-                    float delta;
-                };
-                auto ctx = std::make_unique<Ctx>(Ctx{this, delta});
-                helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
-                    c->panel->cumulative_z_delta_ += c->delta;
-                    c->panel->update_z_position(0.1f + c->panel->cumulative_z_delta_);
+            [this, delta, token = lifetime_.token()]() {
+                if (token.expired())
+                    return;
+                lifetime_.defer("ZOffsetCalibrationPanel::adjust_z(update)", [this, delta]() {
+                    cumulative_z_delta_ += delta;
+                    update_z_position(0.1f + cumulative_z_delta_);
                     spdlog::debug("[ZOffsetCal] G1 Z adjust: delta={:.3f}, cumulative={:.3f}",
-                                  c->delta, c->panel->cumulative_z_delta_);
+                                  delta, cumulative_z_delta_);
                 });
             },
             [](const MoonrakerError& err) {
@@ -614,43 +606,38 @@ void ZOffsetCalibrationPanel::send_accept() {
                 // Probe printers (e.g., K1C prtouch_v2) need config persistence
                 if (get_printer_state().has_probe()) {
                     spdlog::info("[ZOffsetCal] Probe printer — persisting offset to config");
+                    auto token = lifetime_.token();
                     helix::zoffset::apply_and_save(
                         api_, strategy,
-                        [this]() {
-                            helix::ui::async_call(
-                                [](void* ud) {
-                                    static_cast<ZOffsetCalibrationPanel*>(ud)
-                                        ->on_calibration_result(true, "");
-                                },
-                                this);
+                        [this, token]() {
+                            if (token.expired())
+                                return;
+                            lifetime_.defer(
+                                "ZOffsetCalibrationPanel::on_calibration_result(save_ok)",
+                                [this]() { on_calibration_result(true, ""); });
                         },
-                        [this](const std::string& error) {
-                            struct Ctx {
-                                ZOffsetCalibrationPanel* panel;
-                                std::string msg;
-                            };
-                            auto ctx = std::make_unique<Ctx>(Ctx{this, error});
-                            helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
-                                c->panel->on_calibration_result(false, c->msg);
-                            });
+                        [this, token](const std::string& error) {
+                            if (token.expired())
+                                return;
+                            std::string msg = error;
+                            lifetime_.defer(
+                                "ZOffsetCalibrationPanel::on_calibration_result(save_fail)",
+                                [this, msg = std::move(msg)]() {
+                                    on_calibration_result(false, msg);
+                                });
                         });
                 } else {
-                    helix::ui::async_call(
-                        [](void* ud) {
-                            static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                                true, "");
-                        },
-                        this);
+                    lifetime_.defer(
+                        "ZOffsetCalibrationPanel::on_calibration_result(no_probe_ok)",
+                        [this]() { on_calibration_result(true, ""); });
                 }
             },
             [this](const MoonrakerError& err) {
                 spdlog::error("[ZOffsetCal] SET_GCODE_OFFSET failed: {}", err.message);
-                helix::ui::async_call(
-                    [](void* ud) {
-                        static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                            false, "Failed to set Z-offset");
-                    },
-                    this);
+                lifetime_.defer("ZOffsetCalibrationPanel::on_calibration_result(gcode_fail)",
+                                [this]() {
+                                    on_calibration_result(false, "Failed to set Z-offset");
+                                });
             });
     } else {
         // Probe/endstop: ACCEPT then apply+save
@@ -659,37 +646,40 @@ void ZOffsetCalibrationPanel::send_accept() {
 
         api_->execute_gcode(
             "ACCEPT",
-            [this, strategy]() {
+            [this, strategy, token = lifetime_.token()]() {
+                if (token.expired())
+                    return;
                 spdlog::info("[ZOffsetCal] ACCEPT success, applying and saving");
+                auto token2 = lifetime_.token();
                 helix::zoffset::apply_and_save(
                     api_, strategy,
-                    [this]() {
-                        helix::ui::async_call(
-                            [](void* ud) {
-                                static_cast<ZOffsetCalibrationPanel*>(ud)->on_calibration_result(
-                                    true, "");
-                            },
-                            this);
+                    [this, token2]() {
+                        if (token2.expired())
+                            return;
+                        lifetime_.defer(
+                            "ZOffsetCalibrationPanel::on_calibration_result(accept_ok)",
+                            [this]() { on_calibration_result(true, ""); });
                     },
-                    [this](const std::string& error) {
-                        struct Ctx {
-                            ZOffsetCalibrationPanel* panel;
-                            std::string msg;
-                        };
-                        auto ctx = std::make_unique<Ctx>(Ctx{this, error});
-                        helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
-                            c->panel->on_calibration_result(false, c->msg);
-                        });
+                    [this, token2](const std::string& error) {
+                        if (token2.expired())
+                            return;
+                        std::string msg = error;
+                        lifetime_.defer(
+                            "ZOffsetCalibrationPanel::on_calibration_result(accept_save_fail)",
+                            [this, msg = std::move(msg)]() {
+                                on_calibration_result(false, msg);
+                            });
                     });
             },
-            [this](const MoonrakerError& err) {
-                struct Ctx {
-                    ZOffsetCalibrationPanel* panel;
-                    std::string msg;
-                };
-                auto ctx = std::make_unique<Ctx>(Ctx{this, "ACCEPT failed: " + err.user_message()});
-                helix::ui::queue_update<Ctx>(
-                    std::move(ctx), [](Ctx* c) { c->panel->on_calibration_result(false, c->msg); });
+            [this, token = lifetime_.token()](const MoonrakerError& err) {
+                if (token.expired())
+                    return;
+                std::string msg = "ACCEPT failed: " + err.user_message();
+                lifetime_.defer(
+                    "ZOffsetCalibrationPanel::on_calibration_result(accept_fail)",
+                    [this, msg = std::move(msg)]() {
+                        on_calibration_result(false, msg);
+                    });
             });
     }
 }
