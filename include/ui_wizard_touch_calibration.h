@@ -137,6 +137,11 @@ class WizardTouchCalibrationStep {
     helix::TouchCalibration backup_calibration_;
     bool has_backup_ = false;
 
+    // Next/Skip group reparenting state (brought on top of touch overlay)
+    lv_obj_t* skip_btn_original_parent_ = nullptr;
+    lv_coord_t skip_btn_orig_w_ = 0;
+    lv_coord_t skip_btn_orig_h_ = 0;
+
     // Event handlers (static trampolines)
     static void on_accept_clicked_static(lv_event_t* e);
     static void on_retry_clicked_static(lv_event_t* e);
@@ -163,6 +168,9 @@ class WizardTouchCalibrationStep {
 
     // Update button visibility based on panel state
     void update_button_visibility();
+
+    // Ensure Next/Skip group stays above the touch overlay
+    void ensure_skip_on_top();
 };
 
 // ============================================================================

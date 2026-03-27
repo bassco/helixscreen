@@ -219,7 +219,9 @@ void TouchCalibrationPanel::add_sample(Point raw) {
         sample_buffer_[sample_count_] = {raw.x, raw.y};
         sample_count_++;
 
-        if (sample_progress_callback_) {
+        // Only fire progress callback for intermediate samples, not the final
+        // one that triggers state transition (avoids showing "touch 6 of 5")
+        if (sample_count_ < SAMPLES_REQUIRED && sample_progress_callback_) {
             sample_progress_callback_();
         }
     }

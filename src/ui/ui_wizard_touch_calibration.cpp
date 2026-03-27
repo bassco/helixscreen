@@ -198,6 +198,29 @@ lv_obj_t* WizardTouchCalibrationStep::create(lv_obj_t* parent) {
                       get_name());
     }
 
+    // Bring the Next/Skip button group on top of the touch overlay so it remains
+    // clickable during calibration. The group contains both Next and Skip buttons
+    // (toggled by wizard_show_skip subject), so reparenting the group keeps both
+    // accessible. The overlay captures touches everywhere for calibration targets,
+    // but the buttons must still work.
+    lv_obj_update_layout(lv_screen_active());
+    skip_btn_original_parent_ = nullptr;
+    lv_obj_t* next_skip_group = lv_obj_find_by_name(lv_screen_active(), "next_skip_group");
+    if (next_skip_group) {
+        skip_btn_original_parent_ = lv_obj_get_parent(next_skip_group);
+        skip_btn_orig_w_ = lv_obj_get_style_width(next_skip_group, LV_PART_MAIN);
+        skip_btn_orig_h_ = lv_obj_get_style_height(next_skip_group, LV_PART_MAIN);
+        lv_area_t group_area;
+        lv_obj_get_coords(next_skip_group, &group_area);
+        lv_obj_set_parent(next_skip_group, lv_screen_active());
+        lv_obj_add_flag(next_skip_group, LV_OBJ_FLAG_FLOATING);
+        lv_obj_set_pos(next_skip_group, group_area.x1, group_area.y1);
+        lv_obj_set_size(next_skip_group, lv_area_get_width(&group_area),
+                        lv_area_get_height(&group_area));
+        lv_obj_move_foreground(next_skip_group);
+        spdlog::debug("[{}] Next/Skip group reparented above touch overlay", get_name());
+    }
+
     // Find test area widgets (shown in COMPLETE state)
     test_area_container_ = lv_obj_find_by_name(screen_root_, "test_area_container");
     test_touch_area_ = lv_obj_find_by_name(screen_root_, "test_touch_area");
@@ -208,8 +231,20 @@ lv_obj_t* WizardTouchCalibrationStep::create(lv_obj_t* parent) {
         lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_CENTER, 0);
     }
 
-    // Start in IDLE — first tap anywhere begins calibration
+    // Re-set callbacks (cleanup() clears completion callback to prevent
+    // updates to destroyed UI, so we must restore it for each create cycle)
     if (panel_) {
+        panel_->set_completion_callback(
+            [this](const helix::TouchCalibration* cal) { on_calibration_complete(cal); });
+        panel_->set_failure_callback([this](const char* reason) {
+            spdlog::warn("[{}] Calibration failed: {}", get_name(), reason);
+            if (screen_root_) {
+                calibration_failed_ = true;
+                update_instruction_text();
+                update_crosshair_position();
+                update_button_visibility();
+            }
+        });
         panel_->cancel(); // Reset to IDLE
     }
 
@@ -240,6 +275,16 @@ void WizardTouchCalibrationStep::cleanup() {
     lv_obj_t* subtitle = lv_obj_find_by_name(lv_screen_active(), "wizard_subtitle");
     if (subtitle) {
         lv_obj_set_style_text_align(subtitle, LV_TEXT_ALIGN_LEFT, 0);
+    }
+
+    // Restore Next/Skip group to its original parent before deleting reparented widgets
+    lv_obj_t* next_skip_group = lv_obj_find_by_name(lv_screen_active(), "next_skip_group");
+    if (next_skip_group && skip_btn_original_parent_) {
+        lv_obj_set_parent(next_skip_group, skip_btn_original_parent_);
+        lv_obj_remove_flag(next_skip_group, LV_OBJ_FLAG_FLOATING);
+        lv_obj_set_pos(next_skip_group, 0, 0);
+        lv_obj_set_size(next_skip_group, skip_btn_orig_w_, skip_btn_orig_h_);
+        skip_btn_original_parent_ = nullptr;
     }
 
     // Delete crosshair (it was reparented to screen, not part of screen_root_)
@@ -591,6 +636,17 @@ void WizardTouchCalibrationStep::update_instruction_text() {
     }
 }
 
+void WizardTouchCalibrationStep::ensure_skip_on_top() {
+    // After any lv_obj_move_foreground(touch_overlay), the skip group may end up
+    // behind the overlay. Re-assert its z-order so it stays clickable.
+    if (skip_btn_original_parent_) {
+        lv_obj_t* group = lv_obj_find_by_name(lv_screen_active(), "next_skip_group");
+        if (group) {
+            lv_obj_move_foreground(group);
+        }
+    }
+}
+
 void WizardTouchCalibrationStep::update_crosshair_position() {
     if (!panel_) {
         return;
@@ -610,6 +666,7 @@ void WizardTouchCalibrationStep::update_crosshair_position() {
             lv_obj_remove_flag(touch_overlay, LV_OBJ_FLAG_HIDDEN);
             lv_obj_move_foreground(touch_overlay);
         }
+        ensure_skip_on_top();
         return;
     }
 
@@ -633,6 +690,7 @@ void WizardTouchCalibrationStep::update_crosshair_position() {
         lv_obj_remove_flag(touch_overlay, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(touch_overlay); // Keep on top for click capture
     }
+    ensure_skip_on_top();
 
     int step = 0;
     switch (state) {
