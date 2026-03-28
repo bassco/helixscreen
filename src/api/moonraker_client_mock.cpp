@@ -1080,10 +1080,12 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             set_extruder_target(target);
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Extruder target set to {}°C", target);
+            dispatch_status_update({{"extruder", {{"target", target}}}});
         } else if (gcode.find("HEATER=heater_bed") != std::string::npos) {
             set_bed_target(target);
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Bed target set to {}°C", target);
+            dispatch_status_update({{"heater_bed", {{"target", target}}}});
         }
     }
     // Check for M-code style temperature commands
@@ -1094,6 +1096,7 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             set_extruder_target(target);
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Extruder target set to {}°C (M-code)", target);
+            dispatch_status_update({{"extruder", {{"target", target}}}});
         }
     } else if (gcode.find("M140") != std::string::npos || gcode.find("M190") != std::string::npos) {
         size_t s_pos = gcode.find('S');
@@ -1102,6 +1105,7 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             set_bed_target(target);
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Bed target set to {}°C (M-code)", target);
+            dispatch_status_update({{"heater_bed", {{"target", target}}}});
         }
     }
 
@@ -1161,18 +1165,17 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
         // If no specific axis mentioned, home all
         bool home_all = !has_x && !has_y && !has_z;
 
+        std::string homed;
         {
             std::lock_guard<std::mutex> lock(homed_axes_mutex_);
 
             if (home_all) {
-                // Home all axes
                 homed_axes_ = "xyz";
                 pos_x_.store(0.0);
                 pos_y_.store(0.0);
                 pos_z_.store(0.0);
                 spdlog::info("[MoonrakerClientMock] Homed all axes (G28), homed_axes='xyz'");
             } else {
-                // Home specific axes and update position
                 if (has_x) {
                     if (homed_axes_.find('x') == std::string::npos) {
                         homed_axes_ += 'x';
@@ -1194,9 +1197,10 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                 spdlog::info("[MoonrakerClientMock] Homed axes: X={} Y={} Z={}, homed_axes='{}'",
                              has_x, has_y, has_z, homed_axes_);
             }
+            homed = homed_axes_;
         }
-        // Reset idle timeout when homing
         reset_idle_timeout();
+        dispatch_status_update({{"toolhead", {{"homed_axes", homed}}}});
     }
 
     // Parse movement commands (G0/G1)
@@ -1285,6 +1289,11 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                               pos_y_.load(), pos_z_.load(), is_relative ? "relative" : "absolute");
                 // Reset idle timeout when moving
                 reset_idle_timeout();
+                // Dispatch immediate position update (matches real Moonraker)
+                dispatch_status_update(
+                    {{"toolhead",
+                      {{"position",
+                        {pos_x_.load(), pos_y_.load(), pos_z_.load(), 0.0}}}}});
             }
         }
     }

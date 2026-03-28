@@ -509,7 +509,7 @@ STARTEOF
     [ -f "$start_called" ]
 }
 
-@test "stop_service: systemd ignores HELIX_SELF_UPDATE (NoNewPrivs controls)" {
+@test "stop_service: systemd skips stop during self-update (NoNewPrivs fallback)" {
     INIT_SYSTEM="systemd"
     export HELIX_SELF_UPDATE=1
     local stop_called="$BATS_TEST_TMPDIR/stop_called"
@@ -523,6 +523,7 @@ STARTEOF
 
     stop_service
 
-    # systemd path uses NoNewPrivs check, not HELIX_SELF_UPDATE — stop still called
-    [ -f "$stop_called" ]
+    # _has_no_new_privs() falls back to _is_self_update() when /proc doesn't show
+    # NoNewPrivs — so self-update skips stop (watchdog handles restart)
+    [ ! -f "$stop_called" ]
 }

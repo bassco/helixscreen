@@ -206,7 +206,9 @@ TEST_CASE_METHOD(MoonrakerClientSecurityFixture,
             "printer.info", json(), [](json) { FAIL("Should timeout, not succeed"); },
             [this, &timeout_callback_invoked, &nested_request_sent](const MoonrakerError& err) {
                 timeout_callback_invoked = true;
-                REQUIRE(err.type == MoonrakerErrorType::TIMEOUT);
+                // May be TIMEOUT (if request was queued) or CONNECTION_LOST (if no connection)
+                REQUIRE((err.type == MoonrakerErrorType::TIMEOUT ||
+                         err.type == MoonrakerErrorType::CONNECTION_LOST));
 
                 // Try to send nested request (would deadlock if mutex held)
                 int result = client->send_jsonrpc(

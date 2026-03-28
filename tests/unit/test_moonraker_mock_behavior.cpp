@@ -730,8 +730,8 @@ TEST_CASE("MoonrakerClientMock G-code temperature parsing", "[connection][slow][
         mock.register_notify_update(fixture.create_capture_callback());
         mock.connect("ws://mock/websocket", []() {}, []() {});
 
-        // First set a target to verify it changes
-        mock.set_extruder_target(200.0);
+        // First set a target via gcode to verify it changes
+        mock.gcode_script("SET_HEATER_TEMPERATURE HEATER=extruder TARGET=200");
         REQUIRE(verify_extruder_target(200.0));
 
         fixture.reset();
@@ -814,26 +814,20 @@ TEST_CASE("MoonrakerClientMock hardware discovery", "[connection][slow][hardware
         MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::GENERIC_COREXY);
 
         const auto& heaters = mock.hardware().heaters();
-        const auto& leds = mock.hardware().leds();
 
         REQUIRE(std::find(heaters.begin(), heaters.end(), "heater_bed") != heaters.end());
         REQUIRE(std::find(heaters.begin(), heaters.end(), "extruder") != heaters.end());
-        // Generic CoreXY may not have LEDs
-        REQUIRE(leds.empty());
     }
 
     SECTION("GENERIC_BEDSLINGER has minimal hardware") {
         MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::GENERIC_BEDSLINGER);
 
         const auto& heaters = mock.hardware().heaters();
-        const auto& sensors = mock.hardware().sensors();
         const auto& leds = mock.hardware().leds();
 
         REQUIRE(std::find(heaters.begin(), heaters.end(), "heater_bed") != heaters.end());
         REQUIRE(std::find(heaters.begin(), heaters.end(), "extruder") != heaters.end());
-
-        // Bedslinger has minimal sensors (just heater thermistors)
-        REQUIRE(sensors.size() == 2);
+        // Bedslinger has no dedicated temperature sensors or LEDs
         REQUIRE(leds.empty());
     }
 

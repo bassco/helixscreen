@@ -64,6 +64,11 @@ class AbortManagerTestAccess {
         m.on_heater_interrupt_error();
     }
 
+    static void set_shutdown_recovery(AbortManager& m) {
+        m.abort_state_.store(AbortManager::State::SENT_ESTOP);
+        m.shutdown_recovery_in_progress_.store(true);
+    }
+
     static void on_probe_timeout(AbortManager& m) {
         m.on_probe_timeout();
     }
@@ -652,14 +657,10 @@ TEST_CASE_METHOD(EventTestFixture, "MoonrakerClient suppresses RPC_ERROR during 
     client_->register_event_handler(create_capture_handler());
 
     SECTION("RPC_ERROR not emitted when AbortManager is handling shutdown") {
-        // Set up AbortManager in shutdown handling state
+        // Set up AbortManager directly in SENT_ESTOP state with shutdown recovery flag
         // This simulates the condition after M112 is sent and we're waiting for recovery
         helix::AbortManagerTestAccess::reset(helix::AbortManager::instance());
-        helix::AbortManager::instance().start_abort();
-
-        // Progress to SENT_ESTOP which triggers shutdown recovery handling
-        helix::AbortManagerTestAccess::on_heater_interrupt_error(helix::AbortManager::instance());
-        helix::AbortManagerTestAccess::on_probe_timeout(helix::AbortManager::instance());
+        helix::AbortManagerTestAccess::set_shutdown_recovery(helix::AbortManager::instance());
 
         // Verify AbortManager reports it's handling shutdown
         REQUIRE(helix::AbortManager::instance().is_handling_shutdown() == true);
