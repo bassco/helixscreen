@@ -124,14 +124,20 @@ static void unregister_slot_data(lv_obj_t* obj) {
     if (it != s_slot_registry.end()) {
         std::unique_ptr<AmsSlotData> data(it->second);
         if (data) {
-            // Release ObserverGuard observers before delete to prevent destructors
-            // from calling lv_observer_remove() on already-destroyed subjects
-            data->color_observer.release();
-            data->status_observer.release();
-            data->current_slot_observer.release();
-            data->filament_loaded_observer.release();
-            data->action_observer.release();
-            data->target_slot_observer.release();
+            // Use reset() to properly unsubscribe from subjects (which are alive
+            // during normal widget deletion). This frees the LambdaObserverContext,
+            // expiring weak_alive tokens so deferred callbacks in the UpdateQueue
+            // are safely skipped. Using release() here caused use-after-free:
+            // zombie observers would fire on subject changes, queue callbacks with
+            // stale widget pointers, and crash in apply_slot_status (#579).
+            // Note: cleanup_all_slot_data() uses release() for pre-deinit when
+            // subjects may already be destroyed — that path is correct.
+            data->color_observer.reset();
+            data->status_observer.reset();
+            data->current_slot_observer.reset();
+            data->filament_loaded_observer.reset();
+            data->action_observer.reset();
+            data->target_slot_observer.reset();
         }
         s_slot_registry.erase(it);
     }
