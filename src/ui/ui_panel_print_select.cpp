@@ -1435,9 +1435,9 @@ void PrintSelectPanel::on_activate() {
 
     spdlog::debug(
         "[{}] on_activate called (first_activation={}, file_count={}, usb_active={}, api={}, "
-        "files_changed_while_detail={})",
+        "was_deactivated={}, files_changed_while_detail={})",
         get_name(), first_activation_, file_list_.size(), is_usb_active, (api_ != nullptr),
-        files_changed_while_detail_open_);
+        was_deactivated_, files_changed_while_detail_open_);
 
     // ALWAYS resume polling while panel is visible (must be before early returns)
     if (file_poll_timer_) {
@@ -1446,17 +1446,20 @@ void PrintSelectPanel::on_activate() {
         spdlog::trace("[{}] File list polling resumed", get_name());
     }
 
-    // Skip refresh when returning from detail view if no files changed
-    // This preserves scroll position by avoiding unnecessary repopulate
-    if (!first_activation_ && !file_list_.empty() && !files_changed_while_detail_open_) {
+    // Only skip refresh when returning from detail view within the same panel
+    // and no files changed while it was open. If the panel was fully deactivated
+    // (user navigated to another panel), always refresh to pick up external uploads.
+    if (!first_activation_ && !file_list_.empty() && !was_deactivated_ &&
+        !files_changed_while_detail_open_) {
         spdlog::debug("[{}] Returning from detail view, no file changes - skipping refresh",
                       get_name());
-        files_changed_while_detail_open_ = false; // Reset flag
+        files_changed_while_detail_open_ = false;
         return;
     }
 
-    // Reset the flag after checking
+    // Reset flags after checking
     files_changed_while_detail_open_ = false;
+    was_deactivated_ = false;
 
     if (!is_usb_active && api_) {
         // Printer (Moonraker) source
@@ -1502,6 +1505,9 @@ void PrintSelectPanel::on_deactivate() {
         detail_view_open_ = false;
         spdlog::debug("[{}] Cleared detail_view_open_ on deactivate", get_name());
     }
+
+    // Mark that the panel was fully deactivated so on_activate() knows to refresh
+    was_deactivated_ = true;
 
     // Pause file list polling while panel is hidden — no point polling when not visible
     if (file_poll_timer_) {

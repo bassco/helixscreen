@@ -486,6 +486,7 @@ class PrintSelectPanel : public PanelBase {
     bool first_activation_ = true;                 ///< Skip redundant refresh on first activation
     bool detail_view_open_ = false;                ///< True while detail view overlay is showing
     bool files_changed_while_detail_open_ = false; ///< True if filelist changed while detail open
+    bool was_deactivated_ = false;                 ///< True if panel was fully deactivated (navigated away)
 
     // Debounce timer for view refresh (prevents rebuilding views for each metadata callback)
     lv_timer_t* refresh_timer_ = nullptr;
