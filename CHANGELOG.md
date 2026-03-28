@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AMS slot and path updates deferred to prevent race conditions during hardware discovery (#562, #563)
 - About page marquee scroll on wide screens
 - Installer self-update on SonicPad (kernel 4.9) when sudo is unavailable
+- Startup restart loop on systems with Plymouth boot splash (Armbian, Raspberry Pi OS) (#536)
 
 ## [0.99.6] - 2026-03-27
 
