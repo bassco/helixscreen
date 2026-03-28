@@ -505,6 +505,7 @@ class PrintSelectPanel : public PanelBase {
 
     // USB file source manager (handles Printer/USB source switching)
     std::unique_ptr<helix::ui::PrintSelectUsbSource> usb_source_;
+    UsbManager* pending_usb_manager_ = nullptr;
 
     // File data provider (handles Moonraker file fetching and metadata)
     std::unique_ptr<helix::ui::PrintSelectFileProvider> file_provider_;

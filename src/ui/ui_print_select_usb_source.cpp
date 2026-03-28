@@ -54,7 +54,7 @@ void PrintSelectUsbSource::set_usb_manager(UsbManager* manager) {
     // Check if drive is already inserted (startup race: drive detected before panel exists)
     if (manager && !manager->get_drives().empty() && !moonraker_has_usb_access_ &&
         source_printer_btn_ && source_usb_btn_) {
-        spdlog::debug("[UsbSource] USB drive already present at setup - showing source selector");
+        spdlog::info("[UsbSource] USB drive already present at setup - showing source selector");
         lv_obj_remove_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
     }

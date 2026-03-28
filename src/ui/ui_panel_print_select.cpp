@@ -387,6 +387,10 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     // Initialize USB source manager
     usb_source_ = std::make_unique<helix::ui::PrintSelectUsbSource>();
     usb_source_->setup(panel);
+    // Apply pending USB manager if set_usb_manager was called before setup()
+    if (pending_usb_manager_) {
+        usb_source_->set_usb_manager(pending_usb_manager_);
+    }
     usb_source_->set_on_source_changed([self](FileSource source) {
         if (source == FileSource::PRINTER) {
             self->refresh_files();
@@ -2366,10 +2370,12 @@ void PrintSelectPanel::on_source_usb_clicked() {
 }
 
 void PrintSelectPanel::set_usb_manager(UsbManager* manager) {
+    pending_usb_manager_ = manager;
     if (usb_source_) {
         usb_source_->set_usb_manager(manager);
     }
-    spdlog::trace("[{}] UsbManager set", get_name());
+    spdlog::trace("[{}] UsbManager set (usb_source_={})", get_name(),
+                  usb_source_ != nullptr);
 }
 
 void PrintSelectPanel::on_usb_drive_inserted() {
