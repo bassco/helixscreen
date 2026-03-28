@@ -361,6 +361,7 @@ void register_xml_components() {
     register_xml("components/panel_widget_lock.xml");
     register_xml("components/nozzle_temp_row.xml");
     register_xml("components/nozzle_temp_bed_row.xml");
+    register_xml("components/temp_card_unified.xml");
     register_xml("components/tool_picker_button.xml");
     register_xml("components/panel_widget_tool_switcher.xml");
     register_xml("components/panel_widget_nozzle_temps.xml");
