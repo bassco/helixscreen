@@ -145,6 +145,12 @@ void TempGraphOverlay::on_activate() {
         if (graph_container_) {
             graph_ = ui_temp_graph_create(graph_container_);
             if (graph_) {
+                // Explicitly size chart to fill container (default height is
+                // LV_DPI_DEF*2 which may not fill the flex_grow container)
+                lv_obj_t* chart = ui_temp_graph_get_chart(graph_);
+                if (chart) {
+                    lv_obj_set_size(chart, lv_pct(100), lv_pct(100));
+                }
                 ui_temp_graph_set_temp_range(graph_, Y_AXIS_MIN, y_axis_max_);
                 ui_temp_graph_set_y_axis(graph_, Y_AXIS_STEP, true);
                 ui_temp_graph_set_axis_size(graph_, "sm");
@@ -194,7 +200,6 @@ void TempGraphOverlay::on_deactivate() {
         lv_obj_clean(chip_row_);
     }
 
-    OverlayBase::on_deactivate();
     spdlog::debug("[TempGraphOverlay] Deactivated");
 }
 
