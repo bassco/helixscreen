@@ -1207,6 +1207,34 @@ std::vector<GCodeThumbnail> extract_thumbnails(const std::string& filepath) {
             continue;
         }
 
+        // Creality format: "; png begin W*H SIZE ..."
+        size_t png_begin_pos = line.find("; png begin ");
+        if (png_begin_pos != std::string::npos) {
+            std::string dims = line.substr(png_begin_pos + 12);
+            int w = 0, h = 0, size = 0;
+            if (sscanf(dims.c_str(), "%d*%d %d", &w, &h, &size) >= 2) {
+                current_thumb = GCodeThumbnail();
+                current_thumb.width = w;
+                current_thumb.height = h;
+                base64_data.clear();
+                base64_data.reserve(static_cast<size_t>(size) * 4 / 3 + 100);
+                in_thumbnail_block = true;
+                spdlog::debug("[GCode Parser] Found Creality thumbnail {}x{} in {}", w, h,
+                              filepath);
+            }
+            continue;
+        }
+
+        // Creality end marker: "; png end"
+        if (in_thumbnail_block && line.find("; png end") != std::string::npos) {
+            current_thumb.png_data = base64_decode(base64_data);
+            if (!current_thumb.png_data.empty()) {
+                thumbnails.push_back(std::move(current_thumb));
+            }
+            in_thumbnail_block = false;
+            continue;
+        }
+
         // Look for thumbnail end marker
         if (in_thumbnail_block && line.find("; thumbnail end") != std::string::npos) {
             // Decode accumulated base64 data
@@ -1275,6 +1303,33 @@ std::vector<GCodeThumbnail> extract_thumbnails_from_content(const std::string& c
                 in_thumbnail_block = true;
                 spdlog::debug("[GCode Parser] Found thumbnail {}x{} in content", w, h);
             }
+            continue;
+        }
+
+        // Creality format: "; png begin W*H SIZE ..."
+        size_t png_begin_pos = line.find("; png begin ");
+        if (png_begin_pos != std::string::npos) {
+            std::string dims = line.substr(png_begin_pos + 12);
+            int w = 0, h = 0, size = 0;
+            if (sscanf(dims.c_str(), "%d*%d %d", &w, &h, &size) >= 2) {
+                current_thumb = GCodeThumbnail();
+                current_thumb.width = w;
+                current_thumb.height = h;
+                base64_data.clear();
+                base64_data.reserve(static_cast<size_t>(size) * 4 / 3 + 100);
+                in_thumbnail_block = true;
+                spdlog::debug("[GCode Parser] Found Creality thumbnail {}x{} in content", w, h);
+            }
+            continue;
+        }
+
+        // Creality end marker: "; png end"
+        if (in_thumbnail_block && line.find("; png end") != std::string::npos) {
+            current_thumb.png_data = base64_decode(base64_data);
+            if (!current_thumb.png_data.empty()) {
+                thumbnails.push_back(std::move(current_thumb));
+            }
+            in_thumbnail_block = false;
             continue;
         }
 

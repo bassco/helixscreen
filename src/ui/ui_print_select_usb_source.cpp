@@ -6,7 +6,9 @@
 #include "ui_panel_print_select.h" // For PrintFileData
 #include "ui_print_select_card_view.h"
 
+#include "gcode_parser.h"
 #include "print_file_data.h"
+#include "thumbnail_cache.h"
 #include "usb_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -239,7 +241,19 @@ std::vector<PrintFileData> PrintSelectUsbSource::convert_to_print_file_data() co
 
     const std::string default_thumbnail = PrintSelectCardView::get_default_thumbnail();
     for (const auto& usb_file : usb_files_) {
-        result.push_back(PrintFileData::from_usb_file(usb_file, default_thumbnail));
+        auto file_data = PrintFileData::from_usb_file(usb_file, default_thumbnail);
+
+        auto best = helix::gcode::get_best_thumbnail(usb_file.path);
+        if (!best.png_data.empty()) {
+            auto& cache = get_thumbnail_cache();
+            std::string cache_path =
+                cache.save_raw_png("usb:" + usb_file.filename, best.png_data);
+            if (!cache_path.empty()) {
+                file_data.thumbnail_path = cache_path;
+            }
+        }
+
+        result.push_back(std::move(file_data));
     }
 
     return result;
