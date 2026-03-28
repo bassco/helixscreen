@@ -804,9 +804,21 @@ void NavigationManager::switch_to_panel_impl(int panel_id) {
         }
     }
 
-    // Clear panel stack
+    // Clear panel stack and all overlay tracking maps.
+    // overlay_instances_ must be cleared here — not all overlays are deleted by
+    // their close callbacks (some are only hidden), leaving stale entries that
+    // cause has_open_overlays() to return true and break subsequent home-button
+    // "go to page 0" logic.
     panel_stack_.clear();
-    spdlog::trace("[NavigationManager] Panel stack cleared (nav button clicked)");
+    overlay_instances_.clear();
+    overlay_close_callbacks_.clear();
+    // Delete any remaining dynamic backdrops the loop above didn't reach
+    // (orphaned entries not in panel_stack_), then clear the map.
+    for (auto& [_, backdrop] : overlay_backdrops_) {
+        lv_obj_del(backdrop);
+    }
+    overlay_backdrops_.clear();
+    spdlog::trace("[NavigationManager] Panel stack and overlay maps cleared (nav button clicked)");
 
     // Hide primary backdrop since all overlays are being cleared
     if (overlay_backdrop_) {
