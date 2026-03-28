@@ -145,6 +145,8 @@ class AmsPanel : public PanelBase {
     ObserverGuard external_spool_observer_; ///< Reactive updates when external spool color changes
     helix::AsyncLifetimeGuard lifetime_;    ///< Guards deferred callbacks from accessing destroyed panel
     bool backend_rebuild_pending_ = false;  ///< Coalesces rapid backend count changes
+    bool slot_creation_pending_ = false;    ///< Coalesces rapid slot count changes
+    bool path_update_pending_ = false;      ///< Coalesces rapid path state changes
 
     // === Dynamic Slot State ===
 

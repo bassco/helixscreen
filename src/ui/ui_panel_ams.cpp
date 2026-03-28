@@ -233,7 +233,8 @@ void AmsPanel::init_subjects() {
             }
         });
 
-    // Slot count observer for dynamic slot creation (non-scoped mode only)
+    // Slot count observer for dynamic slot creation (non-scoped mode only).
+    // Deferred via lifetime_ to avoid deleting children during LVGL layout refresh (#563).
     slot_count_observer_ = observe_int_sync<AmsPanel>(
         AmsState::instance().get_slot_count_subject(), this, [](AmsPanel* self, int new_count) {
             if (!self->panel_)
@@ -242,16 +243,29 @@ void AmsPanel::init_subjects() {
             // Don't let the global slot count observer override that.
             if (self->scoped_unit_index_ >= 0)
                 return;
-            spdlog::debug("[AmsPanel] Slot count changed to {}", new_count);
-            self->create_slots(new_count);
+            if (!self->slot_creation_pending_) {
+                self->slot_creation_pending_ = true;
+                self->lifetime_.defer("AmsPanel::create_slots", [self, new_count]() {
+                    self->slot_creation_pending_ = false;
+                    spdlog::debug("[AmsPanel] Slot count changed to {}", new_count);
+                    self->create_slots(new_count);
+                });
+            }
         });
 
-    // Path state observers for filament path visualization
+    // Path state observers for filament path visualization.
+    // Deferred via lifetime_ to avoid modifying widgets during LVGL layout refresh (#563).
     auto path_handler = [](AmsPanel* self, int) {
         if (!self->subjects_initialized_ || !self->panel_)
             return;
-        spdlog::debug("[AmsPanel] Path state changed - updating path canvas");
-        self->update_path_canvas_from_backend();
+        if (!self->path_update_pending_) {
+            self->path_update_pending_ = true;
+            self->lifetime_.defer("AmsPanel::update_path_canvas", [self]() {
+                self->path_update_pending_ = false;
+                spdlog::debug("[AmsPanel] Path state changed - updating path canvas");
+                self->update_path_canvas_from_backend();
+            });
+        }
     };
     path_segment_observer_ = observe_int_sync<AmsPanel>(
         AmsState::instance().get_path_filament_segment_subject(), this, path_handler);

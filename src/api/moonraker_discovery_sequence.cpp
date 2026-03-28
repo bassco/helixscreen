@@ -185,10 +185,12 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
             parse_objects(objects);
 
             // Early hardware discovery callback - allows AMS/MMU backends to initialize
-            // BEFORE the subscription response arrives, so they can receive initial state naturally
+            // BEFORE the subscription response arrives, so they can receive initial state naturally.
+            // Copy hardware_ to prevent data races if callback defers work (#562).
             if (on_hardware_discovered_) {
                 spdlog::debug("[Moonraker Client] Invoking early hardware discovery callback");
-                on_hardware_discovered_(hardware_);
+                auto hw_snapshot = hardware_;
+                on_hardware_discovered_(hw_snapshot);
             }
 
             // Step 2: Get server information
@@ -785,8 +787,11 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
             // Discovery complete - notify observers.
             // on_discovery_complete_ fires first so fans/sensors are initialized
             // before dispatch_status_update processes the initial state.
+            // Copy hardware_ before invoking callback to prevent data races if
+            // the callback defers work while this thread continues mutating (#562).
             if (on_discovery_complete_) {
-                on_discovery_complete_(hardware_);
+                auto hw_snapshot = hardware_;
+                on_discovery_complete_(hw_snapshot);
             }
             if (sub_response.contains("result")) {
                 const auto& status = sub_response["result"]["status"];
