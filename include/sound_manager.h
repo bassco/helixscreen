@@ -84,6 +84,9 @@ class SoundManager {
     /// Check if sound playback is available (backend exists + sounds enabled)
     [[nodiscard]] bool is_available() const;
 
+    /// Check if a sound backend was detected (regardless of sounds_enabled toggle)
+    [[nodiscard]] bool has_backend() const;
+
 #ifdef HELIX_HAS_TRACKER
     /// Play a MOD/MED tracker file
     void play_file(const std::string& path, SoundPriority priority = SoundPriority::EVENT);

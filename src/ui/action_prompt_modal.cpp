@@ -3,6 +3,7 @@
 
 #include "action_prompt_modal.h"
 
+#include "sound_manager.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -324,6 +325,7 @@ void ActionPromptModal::on_button_cb(lv_event_t* e) {
         return;
     }
 
+    SoundManager::instance().play("button_tap");
     cbd->modal->handle_button_click(cbd->gcode);
 }
 

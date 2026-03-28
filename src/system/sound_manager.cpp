@@ -197,6 +197,10 @@ bool SoundManager::is_available() const {
            AudioSettingsManager::instance().get_sounds_enabled();
 }
 
+bool SoundManager::has_backend() const {
+    return initialized_ && backend_ != nullptr;
+}
+
 std::shared_ptr<SoundBackend> SoundManager::create_backend() {
     // Auto-detection order:
     // 1. SDL audio available (desktop build) -> SDLBackend

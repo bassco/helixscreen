@@ -474,11 +474,11 @@ int Application::run(int argc, char** argv) {
     TelemetryManager::instance().set_enabled(
         SystemSettingsManager::instance().get_telemetry_enabled());
 
-    // Initialize SoundManager (beta feature - audio feedback)
-    if (Config::get_instance()->is_beta_features_enabled()) {
-        SoundManager::instance().initialize();
-        SoundManager::instance().play("startup", SoundPriority::EVENT);
-    }
+    // Initialize SoundManager (audio feedback)
+    // Backend detection (PWM, ALSA, SDL) is checked by PrinterCapabilitiesState
+    // to show sound settings even without a Klipper beeper output_pin.
+    SoundManager::instance().initialize();
+    SoundManager::instance().play("startup", SoundPriority::EVENT);
 
     // Update DisplaySettingsManager with theme mode support (must be after both theme and settings
     // init)

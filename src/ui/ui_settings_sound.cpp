@@ -79,6 +79,7 @@ void SoundSettingsOverlay::register_callbacks() {
         {"on_volume_changed", on_volume_changed},
         {"on_sound_theme_changed", on_sound_theme_changed},
         {"on_test_beep", on_test_beep},
+        {"on_test_tracker", on_test_tracker},
     });
 
     spdlog::debug("[{}] Callbacks registered", get_name());
@@ -148,6 +149,16 @@ void SoundSettingsOverlay::on_activate() {
     init_sounds_toggle();
     init_volume_slider();
     init_sound_theme_dropdown();
+
+#ifndef HELIX_HAS_TRACKER
+    // Hide tracker test row on builds without tracker support
+    if (overlay_root_) {
+        lv_obj_t* container = lv_obj_find_by_name(overlay_root_, "container_test_tracker");
+        if (container) {
+            lv_obj_add_flag(container, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+#endif
 }
 
 void SoundSettingsOverlay::on_deactivate() {
@@ -299,6 +310,21 @@ void SoundSettingsOverlay::handle_test_beep() {
     SoundManager::instance().play_test_beep();
 }
 
+void SoundSettingsOverlay::handle_test_tracker() {
+#ifdef HELIX_HAS_TRACKER
+    auto& sm = SoundManager::instance();
+    if (sm.is_tracker_playing()) {
+        spdlog::info("[{}] Stopping tracker playback", get_name());
+        sm.stop_tracker();
+    } else {
+        spdlog::info("[{}] Starting tracker playback: crocketts_theme.mod", get_name());
+        sm.play_file("assets/sounds/crocketts_theme.mod");
+    }
+#else
+    spdlog::warn("[{}] Tracker playback not available (HELIX_HAS_TRACKER not defined)", get_name());
+#endif
+}
+
 // ============================================================================
 // STATIC CALLBACKS
 // ============================================================================
@@ -344,6 +370,12 @@ void SoundSettingsOverlay::on_sound_theme_changed(lv_event_t* e) {
 void SoundSettingsOverlay::on_test_beep(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SoundSettingsOverlay] on_test_beep");
     get_sound_settings_overlay().handle_test_beep();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SoundSettingsOverlay::on_test_tracker(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SoundSettingsOverlay] on_test_tracker");
+    get_sound_settings_overlay().handle_test_tracker();
     LVGL_SAFE_EVENT_CB_END();
 }
 

@@ -10,6 +10,7 @@
 
 #include "printer_capabilities_state.h"
 
+#include "sound_manager.h"
 #include "ui_update_queue.h"
 
 #include "state/subject_macros.h"
@@ -82,8 +83,12 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
     lv_subject_set_int(&printer_has_led_, hardware.has_led() ? 1 : 0);
     lv_subject_set_int(&printer_has_accelerometer_, hardware.has_accelerometer() ? 1 : 0);
 
-    // Speaker capability (for M300 audio feedback)
-    lv_subject_set_int(&printer_has_speaker_, hardware.has_speaker() ? 1 : 0);
+    // Speaker capability (for M300 audio feedback).
+    // Also true when a local sound backend exists (PWM buzzer, ALSA, SDL) —
+    // the device can play sounds even without a Klipper beeper output_pin.
+    lv_subject_set_int(&printer_has_speaker_,
+                       (hardware.has_speaker() || SoundManager::instance().has_backend()) ? 1
+                                                                                         : 0);
 
     // Timelapse capability (Moonraker-Timelapse plugin)
     lv_subject_set_int(&printer_has_timelapse_, hardware.has_timelapse() ? 1 : 0);

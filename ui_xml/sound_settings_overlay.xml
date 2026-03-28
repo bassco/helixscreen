@@ -55,6 +55,15 @@
                             label="Test Sound" label_tag="Test Sound" icon="play" description="Play a test beep"
                             description_tag="Play a test beep" callback="on_test_beep"/>
       </lv_obj>
+      <!-- ================================================================== -->
+      <!-- TEST TRACKER (hidden when master sounds off) -->
+      <!-- ================================================================== -->
+      <lv_obj name="container_test_tracker" width="100%" style_pad_all="0" scrollable="false">
+        <bind_flag_if_eq subject="settings_sounds_enabled" flag="hidden" ref_value="0"/>
+        <setting_action_row name="row_test_tracker"
+                            label="Test Tracker" label_tag="Test Tracker" icon="tune" description="Play / stop Crockett's Theme"
+                            description_tag="Play / stop Crockett's Theme" callback="on_test_tracker"/>
+      </lv_obj>
     </lv_obj>
   </view>
 </component>
