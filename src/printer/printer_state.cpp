@@ -560,6 +560,12 @@ void PrinterState::set_hardware(const helix::PrinterDiscovery& hardware) {
     temperature_state_.set_chamber_sensor_name(chamber_sensor);
     temperature_state_.set_chamber_heater_name(chamber_heater);
 
+    // Update temperature sensor role badges for manual override
+    auto& temp_mgr = helix::sensors::TemperatureSensorManager::instance();
+    if (settings.get_chamber_sensor_assignment() != "auto") {
+        temp_mgr.apply_chamber_sensor_override(chamber_sensor);
+    }
+
     // Update composite subjects for G-code modification options
     // (visibility depends on both plugin status and capability)
     update_gcode_modification_visibility();
