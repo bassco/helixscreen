@@ -451,6 +451,10 @@ void TemperatureSensorManager::apply_chamber_sensor_override(const std::string& 
             sensor->priority = 0;
             spdlog::info("[TemperatureSensorManager] Manual chamber sensor override: {}",
                          klipper_name);
+        } else {
+            spdlog::warn("[TemperatureSensorManager] Manual chamber override '{}' not found in "
+                         "discovered sensors",
+                         klipper_name);
         }
     }
 
