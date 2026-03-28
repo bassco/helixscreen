@@ -16,6 +16,11 @@
 
 using helix::ui::get_time_format_string;
 
+// Internal scale factor: store deci-degrees (×10) in the LVGL chart for 0.1°C precision.
+// Without this, float→int32_t truncation creates visible staircases in the line chart.
+// All public API values remain in degrees; scaling is applied at the LVGL boundary.
+static constexpr int32_t TEMP_SCALE = 10;
+
 // Helper: Find series metadata by ID
 // Returns nullptr if graph, chart, or series is invalid (protects against use-after-free
 // when chart LVGL widget is destroyed but ui_temp_graph_t struct survives)
@@ -59,8 +64,10 @@ static int32_t temp_to_pixel_y(ui_temp_graph_t* graph, float temp) {
     // Map temperature to pixel position within content area (inverted for Y axis)
     // Use chart_height directly (not chart_height-1) to match LVGL's internal formula
     // temp=max_temp → Y=0 (top of content), temp=min_temp → Y=chart_height (bottom)
-    int32_t content_y = chart_height - lv_map((int32_t)temp, (int32_t)graph->min_temp,
-                                              (int32_t)graph->max_temp, 0, chart_height);
+    int32_t content_y = chart_height - lv_map(static_cast<int32_t>(temp * TEMP_SCALE),
+                                              static_cast<int32_t>(graph->min_temp * TEMP_SCALE),
+                                              static_cast<int32_t>(graph->max_temp * TEMP_SCALE),
+                                              0, chart_height);
 
     // Return object-relative Y (includes padding offset)
     return pad_top + content_y;
@@ -142,7 +149,7 @@ static void update_max_visible_temp(ui_temp_graph_t* graph) {
             if (y_points[j] == LV_CHART_POINT_NONE)
                 continue;
 
-            float temp = static_cast<float>(y_points[j]);
+            float temp = static_cast<float>(y_points[j]) / TEMP_SCALE;
             if (temp > graph->min_temp && temp > max_temp) {
                 max_temp = temp;
             }
@@ -654,10 +661,10 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     lv_chart_set_update_mode(graph->chart, LV_CHART_UPDATE_MODE_SHIFT);
     lv_chart_set_point_count(graph->chart, static_cast<uint32_t>(graph->point_count));
 
-    // Set Y-axis range
+    // Set Y-axis range (in deci-degrees for 0.1°C precision)
     lv_chart_set_axis_range(graph->chart, LV_CHART_AXIS_PRIMARY_Y,
-                            static_cast<int32_t>(graph->min_temp),
-                            static_cast<int32_t>(graph->max_temp));
+                            static_cast<int32_t>(graph->min_temp * TEMP_SCALE),
+                            static_cast<int32_t>(graph->max_temp * TEMP_SCALE));
 
     // Cache theme colors for draw callbacks (avoid per-frame theme lookups)
     graph->cached_grid_color = theme_manager_get_color("elevated_bg");
@@ -895,8 +902,9 @@ void ui_temp_graph_update_series(ui_temp_graph_t* graph, int series_id, float te
         return;
     }
 
-    // Add point to series (shifts old data left)
-    lv_chart_set_next_value(graph->chart, meta->chart_series, (int32_t)temp);
+    // Add point to series (shifts old data left, stored as deci-degrees)
+    lv_chart_set_next_value(graph->chart, meta->chart_series,
+                            static_cast<int32_t>(temp * TEMP_SCALE));
 
     // Update max visible temperature for gradient rendering
     update_max_visible_temp(graph);
@@ -915,7 +923,8 @@ void ui_temp_graph_update_series_with_time(ui_temp_graph_t* graph, int series_id
     // This makes the graph start at the actual temperature instead of showing a ramp from 0
     if (!meta->first_value_received) {
         meta->first_value_received = true;
-        lv_chart_set_all_values(graph->chart, meta->chart_series, static_cast<int32_t>(temp));
+        lv_chart_set_all_values(graph->chart, meta->chart_series,
+                                static_cast<int32_t>(temp * TEMP_SCALE));
         spdlog::debug("[TempGraph] Series {} '{}' backfilled with initial temp {:.1f}°C", series_id,
                       meta->name, temp);
     }
@@ -936,8 +945,9 @@ void ui_temp_graph_update_series_with_time(ui_temp_graph_t* graph, int series_id
             timestamp_ms - static_cast<int64_t>(graph->point_count - 1) * 1000;
     }
 
-    // Add point to series (shifts old data left)
-    lv_chart_set_next_value(graph->chart, meta->chart_series, static_cast<int32_t>(temp));
+    // Add point to series (shifts old data left, stored as deci-degrees)
+    lv_chart_set_next_value(graph->chart, meta->chart_series,
+                            static_cast<int32_t>(temp * TEMP_SCALE));
 
     // Update max visible temperature for gradient rendering
     update_max_visible_temp(graph);
@@ -964,7 +974,7 @@ void ui_temp_graph_set_series_data(ui_temp_graph_t* graph, int series_id, const 
     }
 
     for (size_t i = 0; i < static_cast<size_t>(points_to_copy); i++) {
-        values[i] = static_cast<int32_t>(temps[i]);
+        values[i] = static_cast<int32_t>(temps[i] * TEMP_SCALE);
     }
 
     // Set data using public API
@@ -1073,8 +1083,9 @@ void ui_temp_graph_set_temp_range(ui_temp_graph_t* graph, float min, float max) 
     graph->min_temp = min;
     graph->max_temp = max;
 
-    lv_chart_set_axis_range(graph->chart, LV_CHART_AXIS_PRIMARY_Y, static_cast<int32_t>(min),
-                            static_cast<int32_t>(max));
+    lv_chart_set_axis_range(graph->chart, LV_CHART_AXIS_PRIMARY_Y,
+                            static_cast<int32_t>(min * TEMP_SCALE),
+                            static_cast<int32_t>(max * TEMP_SCALE));
 
     // Recalculate all cursor positions since value-to-pixel mapping changed
     update_all_cursor_positions(graph);
