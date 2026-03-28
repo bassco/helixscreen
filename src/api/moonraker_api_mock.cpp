@@ -1362,7 +1362,7 @@ void MoonrakerSpoolmanAPIMock::get_spoolman_spools(SpoolListCallback on_success,
 }
 
 void MoonrakerSpoolmanAPIMock::get_spoolman_spool(int spool_id, SpoolCallback on_success,
-                                                  ErrorCallback /*on_error*/) {
+                                                  ErrorCallback /*on_error*/, bool /*silent*/) {
     // Search mock spools for the requested ID
     for (const auto& spool : mock_spools_) {
         if (spool.id == spool_id) {

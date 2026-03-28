@@ -110,7 +110,7 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
                              ErrorCallback on_error) override;
     void get_spoolman_spools(helix::SpoolListCallback on_success, ErrorCallback on_error) override;
     void get_spoolman_spool(int spool_id, helix::SpoolCallback on_success,
-                            ErrorCallback on_error) override;
+                            ErrorCallback on_error, bool silent = false) override;
     void set_active_spool(int spool_id, SuccessCallback on_success,
                           ErrorCallback on_error) override;
     void update_spoolman_spool_weight(int spool_id, double remaining_weight_g,

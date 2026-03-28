@@ -82,7 +82,7 @@ class MoonrakerSpoolmanAPI {
      * @param on_error Called on failure
      */
     virtual void get_spoolman_spool(int spool_id, helix::SpoolCallback on_success,
-                                    ErrorCallback on_error);
+                                    ErrorCallback on_error, bool silent = false);
 
     /**
      * @brief Set the active spool for filament tracking

@@ -176,7 +176,7 @@ void MoonrakerSpoolmanAPI::get_spoolman_spools(SpoolListCallback on_success,
 }
 
 void MoonrakerSpoolmanAPI::get_spoolman_spool(int spool_id, SpoolCallback on_success,
-                                              ErrorCallback on_error) {
+                                              ErrorCallback on_error, bool silent) {
     spdlog::trace("[SpoolmanAPI] get_spoolman_spool({})", spool_id);
 
     // Use Moonraker's Spoolman proxy to GET /v1/spool/{id}
@@ -201,7 +201,7 @@ void MoonrakerSpoolmanAPI::get_spoolman_spool(int spool_id, SpoolCallback on_suc
                 }
             }
         },
-        on_error);
+        on_error, 0, silent);
 }
 
 void MoonrakerSpoolmanAPI::set_active_spool(int spool_id, SuccessCallback on_success,
