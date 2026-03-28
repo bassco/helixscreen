@@ -9,7 +9,7 @@
 ## Active Lessons
 
 ### [L008] [***--|*****] Design tokens and semantic widgets
-- **Uses**: 13 | **Velocity**: 4 | **Learned**: 2025-12-14 | **Last**: 2026-03-25 | **Category**: pattern | **Type**: informational
+- **Uses**: 14 | **Velocity**: 5 | **Learned**: 2025-12-14 | **Last**: 2026-03-27 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 59.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 66.50375 | **Learned**: 2025-12-27 | **Last**: 2026-03-28 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [*----|***--] Unique XML callback names
@@ -56,8 +56,8 @@
 - **Uses**: 3 | **Velocity**: 1.5 | **Learned**: 2026-01-06 | **Last**: 2026-03-23 | **Category**: gotcha | **Type**: constraint
 > LVGL dropdown options in XML use &#10; (newline entity) as separator: options="Auto&#10;3D View&#10;2D Heatmap". NEVER expand &#10; to literal newlines — XML parsers normalize literal newlines in attributes to SPACES (per XML spec), silently breaking all dropdown options into one entry. The format-xml.py correctly round-trips &#10; through lxml, but any tool that writes literal newlines into XML attributes will destroy them.
 
-### [L046] [*----|-----] XML subject shadows C++ subject
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-01-06 | **Last**: 2026-01-30 | **Category**: correction | **Type**: constraint
+### [L046] [*----|***--] XML subject shadows C++ subject
+- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-01-06 | **Last**: 2026-03-27 | **Category**: correction | **Type**: constraint
 > When XML <subjects> declares a subject with the same name as a C++-registered subject (UI_SUBJECT_INIT_AND_REGISTER_*), the XML component-local subject shadows the global C++ one. XML bindings will find the local subject (stuck at default value) instead of the C++ one. Solution: Don't declare XML subjects for values managed entirely by C++.
 
 ### [L048] [*----|-----] Async tests need queue drain
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 74 | **Velocity**: 45.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-27 | **Category**: correction | **Type**: constraint
+- **Uses**: 80 | **Velocity**: 51.004999999999995 | **Learned**: 2026-02-01 | **Last**: 2026-03-28 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -153,16 +153,16 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 14 | **Velocity**: 9.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-27 | **Category**: i18n
+- **Uses**: 15 | **Velocity**: 10.5 | **Learned**: 2026-02-17 | **Last**: 2026-03-27 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [**---|*****] Never capture bare this in async/WebSocket callbacks
 - **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
-### [L073] [*----|***--] ObserverGuard release vs reset
-- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-02-22 | **Category**: gotcha | **Type**: constraint
-> Use obs.reset() when subjects are ALIVE (normal cleanup, repopulate) — properly unsubscribes. Use obs.release() ONLY when subjects may already be DESTROYED (shutdown, pre-deinit) — avoids double-free. Wrong choice = crash: reset() on dead subject = double-free, release() on live subject = dangling observer = use-after-free.
+### [L073] [*----|****-] ObserverGuard release vs reset
+- **Uses**: 4 | **Velocity**: 3 | **Learned**: 2026-02-22 | **Last**: 2026-03-28 | **Category**: gotcha | **Type**: constraint
+> Use obs.reset() when subjects are ALIVE (normal cleanup, repopulate) — properly unsubscribes and frees the LambdaObserverContext, expiring weak_alive tokens so deferred callbacks are skipped. Use obs.release() ONLY when subjects may already be DESTROYED (shutdown, pre-deinit) — avoids double-free. Wrong choice = crash: reset() on dead subject = double-free, release() on live subject = zombie observer (context stays alive in LVGL, weak_alive never expires, deferred callbacks fire with stale pointers). This caused 17 crash reports (#579): release() in unregister_slot_data left zombie observers that corrupted LVGL rendering state → NEON blend SIGSEGV. Fixed by switching to reset() since subjects are alive during normal widget deletion. The pre-deinit cleanup_all_slot_data() correctly uses release().
 
 ### [L074] [***--|*****] Generation counter for deferred observer callbacks
 - **Uses**: 10 | **Velocity**: 9 | **Learned**: 2026-02-22 | **Last**: 2026-03-25 | **Category**: pattern | **Type**: informational
