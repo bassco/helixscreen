@@ -274,3 +274,74 @@ TEST_CASE("json_number_or handles edge cases", "[moonraker][json][helpers]") {
         REQUIRE(result == 9999999999999LL);
     }
 }
+
+// ============================================================================
+// json_string_list_or() tests
+// ============================================================================
+
+TEST_CASE("json_string_list_or normalizes filament type formats", "[moonraker][helpers]") {
+    SECTION("semicolon-delimited string passes through") {
+        json j = {{"filament_type", "PLA;PLA;ASA;PETG"}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PLA;PLA;ASA;PETG");
+    }
+
+    SECTION("single value string passes through") {
+        json j = {{"filament_type", "PLA"}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PLA");
+    }
+
+    SECTION("JSON array is joined with semicolons") {
+        json j = {{"filament_type", json::array({"PLA", "PLA", "ASA", "PETG"})}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PLA;PLA;ASA;PETG");
+    }
+
+    SECTION("stringified JSON array is parsed and joined") {
+        json j = {{"filament_type", R"(["PLA", "PLA", "ASA", "ABS", "PLA"])"}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PLA;PLA;ASA;ABS;PLA");
+    }
+
+    SECTION("missing key returns empty") {
+        json j = {{"other", "value"}};
+        REQUIRE(json_string_list_or(j, "filament_type").empty());
+    }
+
+    SECTION("empty string returns empty") {
+        json j = {{"filament_type", ""}};
+        REQUIRE(json_string_list_or(j, "filament_type").empty());
+    }
+
+    SECTION("empty JSON array returns empty") {
+        json j = {{"filament_type", json::array()}};
+        REQUIRE(json_string_list_or(j, "filament_type").empty());
+    }
+
+    SECTION("null value returns empty") {
+        json j = {{"filament_type", nullptr}};
+        REQUIRE(json_string_list_or(j, "filament_type").empty());
+    }
+
+    SECTION("single-element JSON array") {
+        json j = {{"filament_type", json::array({"ABS"})}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "ABS");
+    }
+
+    SECTION("single-element stringified array") {
+        json j = {{"filament_type", R"(["PETG"])"}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PETG");
+    }
+
+    SECTION("malformed stringified array treated as plain string") {
+        json j = {{"filament_type", "[not valid json"}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "[not valid json");
+    }
+
+    SECTION("numeric value returns empty") {
+        json j = {{"filament_type", 42}};
+        REQUIRE(json_string_list_or(j, "filament_type").empty());
+    }
+
+    SECTION("mixed array skips non-string elements") {
+        json j = {{"filament_type", json::array({"PLA", 42, "ASA", nullptr, "PETG"})}};
+        REQUIRE(json_string_list_or(j, "filament_type") == "PLA;ASA;PETG");
+    }
+}

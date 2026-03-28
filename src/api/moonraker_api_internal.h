@@ -535,4 +535,51 @@ inline T json_number_or(const nlohmann::json& j, const char* key, T default_val)
     return default_val;
 }
 
+/**
+ * @brief Normalize a Moonraker metadata field that may be a semicolon-delimited string,
+ *        a JSON array, or a stringified JSON array into a semicolon-delimited string.
+ *
+ * Moonraker returns filament_type (and similar fields) in multiple formats depending
+ * on the slicer and firmware:
+ *   - Semicolon-delimited string: "PLA;PLA;ASA;PETG"
+ *   - JSON array: ["PLA", "PLA", "ASA", "PETG"]
+ *   - Stringified JSON array: "[\"PLA\", \"PLA\", \"ASA\"]"
+ *
+ * @param obj JSON object containing the field
+ * @param key Field name to extract
+ * @return Semicolon-delimited string, or empty if not present
+ */
+inline std::string json_string_list_or(const nlohmann::json& obj, const char* key) {
+    if (!obj.contains(key)) return {};
+
+    auto join_array = [](const nlohmann::json& arr) -> std::string {
+        std::string joined;
+        for (const auto& item : arr) {
+            if (item.is_string()) {
+                if (!joined.empty()) joined += ';';
+                joined += item.get<std::string>();
+            }
+        }
+        return joined;
+    };
+
+    const auto& val = obj[key];
+
+    if (val.is_array()) return join_array(val);
+    if (!val.is_string()) return {};
+
+    std::string raw = val.get<std::string>();
+    if (raw.empty()) return {};
+
+    // Stringified JSON array
+    if (raw.front() == '[') {
+        try {
+            auto arr = nlohmann::json::parse(raw);
+            if (arr.is_array()) return join_array(arr);
+        } catch (...) {}
+    }
+
+    return raw;
+}
+
 } // namespace moonraker_internal

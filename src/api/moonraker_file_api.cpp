@@ -399,18 +399,14 @@ FileMetadata MoonrakerFileAPI::parse_file_metadata(const json& response) {
     // Filament info
     metadata.filament_total = get_double("filament_total");
     metadata.filament_weight_total = get_double("filament_weight_total");
-    // Moonraker returns "PLA;PLA;ASA;PETG" for multi-extruder
-    // Preserve full string for per-tool material matching
-    std::string raw_type = get_string("filament_type");
-    if (!raw_type.empty()) {
-        metadata.filament_type = raw_type;
-    }
-    // Full filament name (e.g., "PolyMaker PolyLite ABS") - similarly multi-extruder aware
-    std::string raw_name = get_string("filament_name");
-    if (!raw_name.empty()) {
-        size_t semicolon = raw_name.find(';');
+    // Normalize filament_type: may be semicolon string, JSON array, or stringified array
+    metadata.filament_type = moonraker_internal::json_string_list_or(result, "filament_type");
+    // Full filament name — use first entry only for display
+    std::string all_names = moonraker_internal::json_string_list_or(result, "filament_name");
+    if (!all_names.empty()) {
+        size_t semicolon = all_names.find(';');
         metadata.filament_name =
-            (semicolon != std::string::npos) ? raw_name.substr(0, semicolon) : raw_name;
+            (semicolon != std::string::npos) ? all_names.substr(0, semicolon) : all_names;
     }
     // Layer height info
     metadata.layer_height = get_double("layer_height");

@@ -4,6 +4,7 @@
 #include "moonraker_history_api.h"
 
 #include "display_settings_manager.h"
+#include "moonraker_api_internal.h"
 #include "format_utils.h"
 #include "locale_formats.h"
 #include "moonraker_client.h"
@@ -95,7 +96,7 @@ PrintHistoryJob parse_history_job(const json& job_json) {
     // Metadata (may be nested or null)
     if (job_json.contains("metadata") && job_json["metadata"].is_object()) {
         const auto& meta = job_json["metadata"];
-        job.filament_type = meta.value("filament_type", "");
+        job.filament_type = moonraker_internal::json_string_list_or(meta, "filament_type");
         job.layer_count = json_number_or(meta, "layer_count", 0u);
         job.layer_height = json_number_or(meta, "layer_height", 0.0);
         job.nozzle_temp = json_number_or(meta, "first_layer_extr_temp", 0.0);
