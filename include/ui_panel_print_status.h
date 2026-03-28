@@ -309,7 +309,7 @@ class PrintStatusPanel : public OverlayBase {
 
     // Subject storage buffers
     char progress_text_buf_[32] = "0%";
-    char layer_text_buf_[64] = "Layer 0 / 0";
+    char layer_text_buf_[80] = "Layer 0 / 0";
     char filament_used_text_buf_[32] = "";
     char preparing_operation_buf_[64] = "Preparing...";
     char elapsed_buf_[32] = "0h 00m";
@@ -497,6 +497,7 @@ class PrintStatusPanel : public OverlayBase {
     ObserverGuard gcode_z_offset_observer_;
     ObserverGuard led_state_observer_;
     ObserverGuard print_layer_observer_;
+    ObserverGuard z_position_observer_;
     ObserverGuard print_duration_observer_;
     ObserverGuard print_time_left_observer_;
     ObserverGuard print_start_phase_observer_;

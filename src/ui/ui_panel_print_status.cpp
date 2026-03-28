@@ -134,6 +134,15 @@ PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* ap
         printer_state_.get_print_layer_current_subject(), this,
         [](PrintStatusPanel* self, int layer) { self->on_print_layer_changed(layer); });
 
+    // Re-render layer text when Z position changes (Z updates more frequently than layer count)
+    z_position_observer_ = observe_int_sync<PrintStatusPanel>(
+        printer_state_.get_gcode_position_z_subject(), this,
+        [](PrintStatusPanel* self, int) {
+            int layer = lv_subject_get_int(
+                self->printer_state_.get_print_layer_current_subject());
+            self->on_print_layer_changed(layer);
+        });
+
     // Subscribe to wall-clock elapsed time (total_duration includes prep time)
     print_duration_observer_ = observe_int_sync<PrintStatusPanel>(
         printer_state_.get_print_elapsed_subject(), this,
@@ -1672,9 +1681,17 @@ void PrintStatusPanel::on_print_layer_changed(int current_layer) {
     }
 
     // Update the layer text display (prefix with ~ when estimated from progress)
-    const char* layer_fmt = has_real_data ? "Layer %d / %d" : "Layer ~%d / %d";
-    std::snprintf(layer_text_buf_, sizeof(layer_text_buf_), layer_fmt, lifecycle_.current_layer(),
-                  lifecycle_.total_layers());
+    // Include Z height in centimillimeters when available
+    int z_centimm = lv_subject_get_int(printer_state_.get_gcode_position_z_subject());
+    if (z_centimm > 0) {
+        const char* fmt = has_real_data ? "Layer %d / %d (%.1fmm)" : "Layer ~%d / %d (%.1fmm)";
+        std::snprintf(layer_text_buf_, sizeof(layer_text_buf_), fmt, lifecycle_.current_layer(),
+                      lifecycle_.total_layers(), z_centimm / 100.0);
+    } else {
+        const char* fmt = has_real_data ? "Layer %d / %d" : "Layer ~%d / %d";
+        std::snprintf(layer_text_buf_, sizeof(layer_text_buf_), fmt, lifecycle_.current_layer(),
+                      lifecycle_.total_layers());
+    }
     lv_subject_copy_string(&layer_text_subject_, layer_text_buf_);
 
     // Update G-code viewer ghost layer if panel is active and viewer is visible
