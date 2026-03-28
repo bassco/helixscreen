@@ -1373,21 +1373,26 @@ void PrintSelectPanel::check_moonraker_usb_symlink() {
     api_->files().list_files(
         "gcodes", "usb", false,
         [self](const std::vector<FileInfo>& files) {
-            // If there are any files or the directory exists, symlink is active
-            // Note: An empty directory still counts - the symlink exists even if USB is empty
-            if (!files.empty()) {
+            // Validate that returned files actually live under usb/ — Moonraker may
+            // return the root gcodes listing instead of 404 when usb/ doesn't exist (#610)
+            bool has_usb_files = false;
+            for (const auto& f : files) {
+                if (f.path.find("usb/") == 0) {
+                    has_usb_files = true;
+                    break;
+                }
+            }
+
+            if (has_usb_files || files.empty()) {
                 spdlog::info("[{}] Moonraker has USB symlink access ({} files) - hiding USB tab",
                              self->get_name(), files.size());
                 if (self->usb_source_) {
                     self->usb_source_->set_moonraker_has_usb_access(true);
                 }
             } else {
-                spdlog::trace("[{}] Moonraker USB path exists but empty - symlink likely active",
-                              self->get_name());
-                // Even an empty usb/ directory suggests symlink is set up
-                if (self->usb_source_) {
-                    self->usb_source_->set_moonraker_has_usb_access(true);
-                }
+                spdlog::debug(
+                    "[{}] Moonraker returned {} files but none under usb/ - no symlink",
+                    self->get_name(), files.size());
             }
         },
         [self](const MoonrakerError& error) {
