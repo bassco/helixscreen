@@ -56,6 +56,15 @@ WorkingDirectory=@@INSTALL_DIR@@
 # proceeds.  The ExecStartPost below re-arms the path unit afterward.
 ExecStartPre=+/bin/sh -c '/bin/systemctl stop helixscreen-update.path helixscreen-update.service 2>/dev/null || true'
 
+# Self-heal systemd units from the install dir templates on every start.
+# Ensures: (1) update watcher units (path + oneshot) are installed even if the
+# initial install predated them or was partial, (2) unit files pick up any
+# changes shipped in a new release (ExecStartPre additions, security hardening,
+# etc.), and (3) @@placeholder@@ templating is always applied.
+# Runs as root (+prefix) since it writes to /etc/systemd/system/ and reloads.
+# The script is idempotent — safe to run on every start.
+ExecStartPre=+/bin/sh -c '[ -x "@@INSTALL_DIR@@/config/refresh-service-units.sh" ] && @@INSTALL_DIR@@/config/refresh-service-units.sh || true'
+
 # Stop firmware display-management services that conflict with HelixScreen.
 # Creality SonicPad/Nebula ships display-sleep.sh which kills the backlight
 # when X11 isn't running (it polls xset, fails, and interprets that as "Off").

@@ -842,15 +842,16 @@ If you installed manually or the installer couldn't find your `moonraker.conf`, 
 #   K1/Simple AF: /usr/data/helixscreen
 #   AD5M Klipper Mod: /root/printer_software/helixscreen
 [update_manager helixscreen]
-type: zip
+type: web
 channel: stable
 repo: prestonbrown/helixscreen
 path: ~/helixscreen
-managed_services: helixscreen
-persistent_files:
-    config/settings.json
-    config/.disabled_services
 ```
+
+> **Important:** Do not add `install_script`, `managed_services`, or `persistent_files`
+> to this section — these options are not supported with `type: web` and Moonraker will
+> log warnings about unparsed config options. Service restart after updates is handled
+> automatically by a systemd path unit installed during setup.
 
 Then restart Moonraker:
 ```bash

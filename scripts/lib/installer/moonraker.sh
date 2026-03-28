@@ -133,35 +133,41 @@ migrate_to_web_type() {
     log_success "Migrated to type: web update manager"
 }
 
-# Remove persistent_files from moonraker.conf if present.
-# User config files now live in printer_data/config/helixscreen/ (outside the
-# update_manager's managed path), so persistent_files is no longer needed.
-# Cleans up old installs that had persistent_files.
+# Remove unsupported options from the helixscreen update_manager section.
+# type: web only supports: type, channel, repo, path.
+# Options like persistent_files, managed_services, and install_script are
+# not supported and cause Moonraker to log "unparsed config option" warnings.
 # Args: $1 = moonraker.conf path
-ensure_persistent_files() {
+cleanup_unsupported_options() {
     local conf="$1"
 
-    # Check if persistent_files is present in the helixscreen section
-    if ! awk '/^\[update_manager helixscreen\]/{found=1; next} found && /^\[/{exit} found && /^persistent_files:/{print; exit}' "$conf" | grep -q 'persistent_files'; then
-        return 0  # Not present, nothing to do
+    # Check if any unsupported options exist in the helixscreen section.
+    # persistent_files has indented continuation lines; the others are single-line.
+    if ! awk '
+        /^\[update_manager helixscreen\]/{found=1; next}
+        found && /^\[/{exit}
+        found && /^(persistent_files|managed_services|install_script):/{print; exit}
+    ' "$conf" | grep -q .; then
+        return 0
     fi
 
-    log_info "Removing obsolete persistent_files from moonraker.conf (config now in printer_data)"
+    log_info "Removing unsupported options from [update_manager helixscreen]"
     local fs
     fs=$(file_sudo "$conf")
     $fs cp "$conf" "${conf}.bak.helixscreen" 2>/dev/null || true
 
-    # Remove persistent_files: line and its indented continuation lines
+    # Remove matching key: lines within the helixscreen section.
+    # persistent_files also has indented continuation lines (4-space indent).
     $fs awk '
         /^\[update_manager helixscreen\]/ { in_section=1 }
         in_section && /^\[/ && !/^\[update_manager helixscreen\]/ { in_section=0 }
-        in_section && /^persistent_files:/ { in_persistent=1; next }
-        in_persistent && /^    / { next }
-        in_persistent { in_persistent=0 }
+        in_section && /^(persistent_files|managed_services|install_script):/ { skip_block=1; next }
+        skip_block && /^    / { next }
+        skip_block { skip_block=0 }
         { print }
     ' "$conf" > "${conf}.tmp" && $fs mv "${conf}.tmp" "$conf"
 
-    log_success "Removed persistent_files from moonraker.conf"
+    log_success "Cleaned up unsupported options from moonraker.conf"
 }
 
 # Write release_info.json if not already present
@@ -289,9 +295,9 @@ configure_moonraker_updates() {
 
     if has_update_manager_section "$conf"; then
         log_info "update_manager section already exists in $conf"
-        # Ensure persistent_files is present (added after initial releases).
-        # Without it, Moonraker's shutil.rmtree wipes the config on every update.
-        ensure_persistent_files "$conf"
+        # Remove options not supported by type: web (persistent_files,
+        # managed_services, install_script) that cause Moonraker warnings.
+        cleanup_unsupported_options "$conf"
         # Still ensure asvc is correct even if section already exists
         ensure_moonraker_asvc "$conf"
         return 0
