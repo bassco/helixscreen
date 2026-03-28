@@ -37,7 +37,7 @@
                 flex_flow="row" style_pad_gap="#space_sm" style_flex_cross_place="center">
           <!-- Position Display - vertical stack left of jog pad -->
           <lv_obj name="position_card"
-                  width="content" height="content" style_pad_all="#space_sm" flex_flow="column"
+                  width="content" height="content" style_min_width="115" style_pad_all="#space_sm" flex_flow="column"
                   style_pad_gap="#space_xs" style_flex_main_place="center"
                   style_bg_color="#elevated_bg" style_bg_opa="255" style_radius="#border_radius">
             <lv_obj style_pad_all="0" flex_flow="row" style_pad_gap="#space_xs" style_flex_cross_place="center">
