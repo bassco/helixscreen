@@ -526,6 +526,9 @@ void PrinterState::set_hardware(const helix::PrinterDiscovery& hardware) {
     // No deferral needed — the caller is already inside a queue_update callback.
     spdlog::debug("[PrinterState] set_hardware: has_probe={}", hardware.has_probe());
 
+    // Store for later access by UI (e.g., chamber assignment dropdowns)
+    discovery_ = hardware;
+
     // Pass auto-detected hardware to the override layer
     capability_overrides_.set_hardware(hardware);
 
@@ -538,9 +541,33 @@ void PrinterState::set_hardware(const helix::PrinterDiscovery& hardware) {
         set_kinematics(hardware.kinematics());
     }
 
-    // Tell temperature state which sensor/heater to use for chamber temperature
-    temperature_state_.set_chamber_sensor_name(hardware.chamber_sensor_name());
-    temperature_state_.set_chamber_heater_name(hardware.chamber_heater_name());
+    // Resolve chamber assignments: manual override > auto-detection
+    auto& settings = helix::SettingsManager::instance();
+
+    std::string chamber_sensor = settings.get_chamber_sensor_assignment();
+    if (chamber_sensor == "auto") {
+        chamber_sensor = hardware.chamber_sensor_name();
+    } else if (chamber_sensor == "none") {
+        chamber_sensor = "";
+    }
+
+    std::string chamber_heater = settings.get_chamber_heater_assignment();
+    if (chamber_heater == "auto") {
+        chamber_heater = hardware.chamber_heater_name();
+    } else if (chamber_heater == "none") {
+        chamber_heater = "";
+    }
+
+    spdlog::debug("[PrinterState] Chamber resolved: sensor='{}' heater='{}'",
+                  chamber_sensor, chamber_heater);
+    temperature_state_.set_chamber_sensor_name(chamber_sensor);
+    temperature_state_.set_chamber_heater_name(chamber_heater);
+
+    // Update temperature sensor role badges for manual override
+    auto& temp_mgr = helix::sensors::TemperatureSensorManager::instance();
+    if (settings.get_chamber_sensor_assignment() != "auto") {
+        temp_mgr.apply_chamber_sensor_override(chamber_sensor);
+    }
 
     // Update composite subjects for G-code modification options
     // (visibility depends on both plugin status and capability)

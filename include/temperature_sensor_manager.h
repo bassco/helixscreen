@@ -176,6 +176,19 @@ class TemperatureSensorManager : public ISensorManager {
     void set_sensor_role(const std::string& klipper_name, TemperatureSensorRole role);
 
     /**
+     * @brief Apply manual chamber sensor override
+     *
+     * Clears CHAMBER role from any existing sensor, then assigns it to
+     * the specified sensor (if non-empty). Demoted sensors get their role
+     * re-inferred from their name (MCU, HOST, or AUXILIARY).
+     *
+     * @param klipper_name Full Klipper object name for the new chamber sensor,
+     *                     or empty string to clear chamber assignment entirely.
+     * @note MUST be called from main LVGL thread (updates subjects directly)
+     */
+    void apply_chamber_sensor_override(const std::string& klipper_name);
+
+    /**
      * @brief Enable or disable a sensor
      * @note MUST be called from main LVGL thread (updates subjects directly)
      *

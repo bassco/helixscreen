@@ -420,6 +420,47 @@ void TemperatureSensorManager::set_sensor_role(const std::string& klipper_name,
     }
 }
 
+void TemperatureSensorManager::apply_chamber_sensor_override(const std::string& klipper_name) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // Demote any existing CHAMBER sensor back to an inferred role
+    for (auto& config : sensors_) {
+        if (config.role == TemperatureSensorRole::CHAMBER) {
+            std::string name_lower = config.sensor_name;
+            std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
+            if (name_lower.find("mcu") != std::string::npos) {
+                config.role = TemperatureSensorRole::MCU;
+                config.priority = 10;
+            } else if (name_lower.find("raspberry") != std::string::npos ||
+                       name_lower == "host_temp" || name_lower == "host" ||
+                       name_lower == "rpi") {
+                config.role = TemperatureSensorRole::HOST;
+                config.priority = 20;
+            } else {
+                config.role = TemperatureSensorRole::AUXILIARY;
+                config.priority = 100;
+            }
+        }
+    }
+
+    // Promote the specified sensor to CHAMBER role
+    if (!klipper_name.empty()) {
+        auto* sensor = find_config(klipper_name);
+        if (sensor) {
+            sensor->role = TemperatureSensorRole::CHAMBER;
+            sensor->priority = 0;
+            spdlog::info("[TemperatureSensorManager] Manual chamber sensor override: {}",
+                         klipper_name);
+        } else {
+            spdlog::warn("[TemperatureSensorManager] Manual chamber override '{}' not found in "
+                         "discovered sensors",
+                         klipper_name);
+        }
+    }
+
+    update_subjects();
+}
+
 void TemperatureSensorManager::set_sensor_enabled(const std::string& klipper_name, bool enabled) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
