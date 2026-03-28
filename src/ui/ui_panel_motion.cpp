@@ -402,13 +402,15 @@ void MotionPanel::register_position_observers() {
                                                        });
 
     // Watch for kinematics changes to update Z-axis label ("Bed" vs "Print Head")
+    // Use observe_int_immediate — label/icon updates are safe to do immediately,
+    // and observe_int_sync's deferred callback can be lost during panel recreation (#610)
     bed_moves_observer_ =
-        observe_int_sync<MotionPanel>(get_printer_state().get_printer_bed_moves_subject(), this,
-                                      [](MotionPanel* self, int bed_moves) {
-                                          if (!self->subjects_initialized_)
-                                              return;
-                                          self->update_z_axis_label(bed_moves != 0);
-                                      });
+        helix::ui::observe_int_immediate<MotionPanel>(get_printer_state().get_printer_bed_moves_subject(), this,
+                                           [](MotionPanel* self, int bed_moves) {
+                                               if (!self->subjects_initialized_)
+                                                   return;
+                                               self->update_z_axis_label(bed_moves != 0);
+                                           });
 
     // Observe homed_axes from PrinterState to update homing indicator subjects
     // Same pattern as ControlsPanel - parse "xyz" string into individual integer subjects
