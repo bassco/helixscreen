@@ -16,7 +16,11 @@ using namespace helix;
 
 TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after init",
                  "[display_settings]") {
-    Config::get_instance();
+    // Reset config to defaults so prior tests' set_*() calls don't pollute
+    Config::get_instance()->set<int>("/display/sleep_sec", 1800);
+    Config::get_instance()->set<int>("/display/dim_sec", 300);
+    Config::get_instance()->set<int>("/display/brightness", 80);
+    DisplaySettingsManager::instance().deinit_subjects();
     DisplaySettingsManager::instance().init_subjects();
 
     SECTION("dark_mode defaults to true (dark)") {

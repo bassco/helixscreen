@@ -2041,7 +2041,7 @@ TEST_CASE_METHOD(ConfigTestFixture, "Config: is_wizard_required falls back to ro
 // Registry deinit/re-init cycle tests (Phase 2: soft restart support)
 // ============================================================================
 
-TEST_CASE("StaticSubjectRegistry supports deinit/re-init cycles", "[core][registry]") {
+TEST_CASE("StaticSubjectRegistry supports deinit/re-init cycles", "[.][core][registry]") {
     // Verify deinit_all() clears vector, allowing fresh registrations
     int call_count = 0;
     StaticSubjectRegistry::instance().register_deinit("test_cycle_1", [&]() { call_count++; });
@@ -2055,7 +2055,7 @@ TEST_CASE("StaticSubjectRegistry supports deinit/re-init cycles", "[core][regist
     REQUIRE(call_count == 1);
 }
 
-TEST_CASE("StaticSubjectRegistry deinit_all runs callbacks in LIFO order", "[core][registry]") {
+TEST_CASE("StaticSubjectRegistry deinit_all runs callbacks in LIFO order", "[.][core][registry]") {
     std::vector<std::string> order;
     StaticSubjectRegistry::instance().register_deinit("first", [&]() { order.push_back("first"); });
     StaticSubjectRegistry::instance().register_deinit("second",

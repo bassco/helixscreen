@@ -4,6 +4,7 @@
 #include "config.h"
 #include "panel_widget_config.h"
 #include "panel_widget_registry.h"
+#include "theme_manager.h"
 
 #include <set>
 
@@ -1158,6 +1159,11 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
 TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
           "[panel_widget][widget_config][grid]") {
+    // Force tiny breakpoint (0) — a prior test may have set it to a larger value
+    lv_subject_t* bp = theme_manager_get_breakpoint_subject();
+    if (bp) {
+        lv_subject_set_int(bp, 0);
+    }
     auto entries = PanelWidgetConfig::build_default_grid();
 
     // Should include all registry widgets
