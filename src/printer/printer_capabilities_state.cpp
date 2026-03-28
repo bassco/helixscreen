@@ -161,6 +161,14 @@ void PrinterCapabilitiesState::set_bed_moves(bool bed_moves) {
     }
 }
 
+void PrinterCapabilitiesState::set_has_chamber_sensor(bool available) {
+    lv_subject_set_int(&printer_has_chamber_sensor_, available ? 1 : 0);
+}
+
+void PrinterCapabilitiesState::set_has_chamber_heater(bool available) {
+    lv_subject_set_int(&printer_has_chamber_heater_, available ? 1 : 0);
+}
+
 void PrinterCapabilitiesState::set_power_device_count(int count) {
     // Thread-safe: Use ui_queue_update to update LVGL subject from any thread
     helix::ui::queue_update([this, count]() {

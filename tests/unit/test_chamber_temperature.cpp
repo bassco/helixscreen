@@ -281,3 +281,44 @@ TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
     settings.set_chamber_sensor_assignment("auto");
     settings.set_chamber_heater_assignment("auto");
 }
+
+// 12. Manual assignment updates capability flags for chamber panel visibility
+TEST_CASE("Manual chamber assignment enables capability flags", "[chamber][capabilities]") {
+    LVGLTestFixture fixture;
+
+    PrinterCapabilitiesState caps;
+    caps.init_subjects(false);
+
+    // No "chamber" in any name — auto-detect finds nothing
+    PrinterDiscovery hardware;
+    nlohmann::json objects = {
+        "temperature_sensor enclosure_bme",
+        "heater_generic heated_enclosure",
+        "extruder",
+        "heater_bed"};
+    hardware.parse_objects(objects);
+
+    REQUIRE_FALSE(hardware.has_chamber_sensor());
+    REQUIRE_FALSE(hardware.has_chamber_heater());
+
+    CapabilityOverrides overrides;
+    caps.set_hardware(hardware, overrides);
+
+    // Capability flags are 0 from auto-detection
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_sensor_subject()) == 0);
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_heater_subject()) == 0);
+
+    // Manual override sets capability flags
+    caps.set_has_chamber_sensor(true);
+    caps.set_has_chamber_heater(true);
+
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_sensor_subject()) == 1);
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_heater_subject()) == 1);
+
+    // "none" clears them
+    caps.set_has_chamber_sensor(false);
+    caps.set_has_chamber_heater(false);
+
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_sensor_subject()) == 0);
+    REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_heater_subject()) == 0);
+}

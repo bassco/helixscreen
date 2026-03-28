@@ -104,6 +104,12 @@ class PrinterCapabilitiesState {
      */
     void set_bed_moves(bool bed_moves);
 
+    /** @brief Override chamber sensor capability after manual assignment resolution */
+    void set_has_chamber_sensor(bool available);
+
+    /** @brief Override chamber heater capability after manual assignment resolution */
+    void set_has_chamber_heater(bool available);
+
     /**
      * @brief Set stepper_z position_endstop value (for non-probe printers)
      *

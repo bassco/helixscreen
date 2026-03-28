@@ -563,6 +563,11 @@ void PrinterState::set_hardware(const helix::PrinterDiscovery& hardware) {
     temperature_state_.set_chamber_sensor_name(chamber_sensor);
     temperature_state_.set_chamber_heater_name(chamber_heater);
 
+    // Update capability flags based on resolved chamber assignments
+    // (set_hardware above used discovery flags which miss manual overrides)
+    capabilities_state_.set_has_chamber_sensor(!chamber_sensor.empty());
+    capabilities_state_.set_has_chamber_heater(!chamber_heater.empty());
+
     // Update temperature sensor role badges for manual override
     auto& temp_mgr = helix::sensors::TemperatureSensorManager::instance();
     if (settings.get_chamber_sensor_assignment() != "auto") {
