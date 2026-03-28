@@ -6,6 +6,7 @@
 #include "printer_discovery.h"
 #include "printer_temperature_state.h"
 #include "settings_manager.h"
+#include "temperature_sensor_manager.h"
 
 #include "../catch_amalgamated.hpp"
 #include "hv/json.hpp"
@@ -192,4 +193,37 @@ TEST_CASE("Chamber sensor 'none' disables detection", "[chamber][override]") {
     REQUIRE(lv_subject_get_int(temp_state.get_chamber_temp_subject()) == 0);
 
     settings.set_chamber_sensor_assignment("auto");
+}
+
+// 10. Manual chamber assignment updates role badge
+TEST_CASE("Manual chamber assignment updates sensor role", "[chamber][role]") {
+    LVGLTestFixture fixture;
+
+    auto& mgr = helix::sensors::TemperatureSensorManager::instance();
+    mgr.init_subjects();
+
+    std::vector<std::string> objects = {
+        "temperature_sensor chamber_temp",
+        "temperature_sensor enclosure_bme",
+        "temperature_sensor mcu_temp"};
+    mgr.discover(objects);
+
+    auto sensors = mgr.get_sensors_sorted();
+    auto it = std::find_if(sensors.begin(), sensors.end(),
+        [](const auto& s) { return s.klipper_name == "temperature_sensor enclosure_bme"; });
+    REQUIRE(it != sensors.end());
+    REQUIRE(it->role == helix::sensors::TemperatureSensorRole::AUXILIARY);
+
+    mgr.apply_chamber_sensor_override("temperature_sensor enclosure_bme");
+
+    sensors = mgr.get_sensors_sorted();
+    it = std::find_if(sensors.begin(), sensors.end(),
+        [](const auto& s) { return s.klipper_name == "temperature_sensor enclosure_bme"; });
+    REQUIRE(it != sensors.end());
+    REQUIRE(it->role == helix::sensors::TemperatureSensorRole::CHAMBER);
+
+    auto old_chamber = std::find_if(sensors.begin(), sensors.end(),
+        [](const auto& s) { return s.klipper_name == "temperature_sensor chamber_temp"; });
+    REQUIRE(old_chamber != sensors.end());
+    REQUIRE(old_chamber->role != helix::sensors::TemperatureSensorRole::CHAMBER);
 }
