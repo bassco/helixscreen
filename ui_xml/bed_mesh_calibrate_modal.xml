@@ -30,13 +30,7 @@
       <spinner size="md">
         <bind_flag_if_eq subject="bed_mesh_probe_indeterminate" flag="hidden" ref_value="0"/>
       </spinner>
-      <!-- E-Stop button (prominent, red) -->
-      <ui_button name="btn_emergency_stop"
-                 width="100%" height="#button_height_lg" variant="danger" icon="alert_octagon" text="EMERGENCY STOP" translation_tag="EMERGENCY STOP"
-                 style_margin_top="#space_sm">
-        <event_cb trigger="clicked" callback="on_bed_mesh_emergency_stop"/>
-      </ui_button>
-      <!-- Warning text -->
+      <!-- Warning text about emergency stop -->
       <text_small width="100%" text="Stops all motion. Requires firmware restart." translation_tag="Stops all motion. Requires firmware restart." style_text_align="center"/>
     </lv_obj>
     <!-- ============================================================ -->
@@ -86,9 +80,9 @@
             width="100%" height="#button_height" style_pad_all="0" style_pad_gap="0" flex_flow="row" hidden="true"
             scrollable="false">
       <bind_flag_if_not_eq subject="bed_mesh_calibrate_state" flag="hidden" ref_value="1"/>
-      <!-- Cancel button -->
-      <ui_button name="btn_cancel_probing" height="100%" flex_grow="1" style_radius="0" text="Cancel" translation_tag="Cancel">
-        <event_cb trigger="clicked" callback="on_bed_mesh_calibrate_cancel"/>
+      <!-- Emergency Stop button -->
+      <ui_button name="btn_emergency_stop" height="100%" flex_grow="1" style_radius="0" variant="danger" icon="alert_octagon" text="EMERGENCY STOP" translation_tag="EMERGENCY STOP">
+        <event_cb trigger="clicked" callback="on_bed_mesh_emergency_stop"/>
       </ui_button>
     </lv_obj>
     <!-- ============================================================ -->

@@ -1348,6 +1348,9 @@ void BedMeshPanel::on_calibration_error(const std::string& message) {
 void BedMeshPanel::handle_emergency_stop() {
     spdlog::warn("[BedMeshPanel] Emergency stop during bed mesh calibration");
 
+    // Suppress recovery dialog — user intentionally triggered E-Stop from this modal
+    EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::LONG);
+
     MoonrakerAPI* api = get_moonraker_api();
     if (api) {
         api->emergency_stop([]() { spdlog::info("[BedMeshPanel] Emergency stop sent"); },
