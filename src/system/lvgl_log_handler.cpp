@@ -259,12 +259,13 @@ void lvgl_log_callback(lv_log_level_t level, const char* buf) {
             spdlog::debug("[LVGL] {}", msg);
         } else {
             spdlog::warn("[LVGL] {}", msg);
-            // Detect NULL guard hits from our safety patches (blend, draw, label)
+            // Detect NULL guard hits from our safety patches (blend, draw, label, observer)
             // These indicate a near-crash that was prevented — worth tracking
             if (msg.find("NULL dest_buf") != std::string::npos ||
                 msg.find("NULL font") != std::string::npos ||
                 msg.find("goto_xy returned NULL") != std::string::npos ||
-                msg.find("draw_buf is NULL") != std::string::npos) {
+                msg.find("draw_buf is NULL") != std::string::npos ||
+                msg.find("subject is NULL") != std::string::npos) {
                 TelemetryManager::instance().record_error("display", "null_guard_hit", msg);
             }
         }
