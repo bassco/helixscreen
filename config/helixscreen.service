@@ -26,12 +26,11 @@ After=network.target
 After=systemd-udev-settle.service
 Wants=systemd-udev-settle.service
 
-# Wait for Plymouth boot splash to finish before starting.
-# On Armbian (BTT CB1/CB2) and Raspberry Pi OS, Plymouth grabs the DRM
-# device during boot. If HelixScreen starts before Plymouth releases,
-# Plymouth's quit sequence causes systemd to stop HelixScreen (#536).
-# After= is a no-op when Plymouth is not installed.
-After=plymouth-quit-wait.service
+# Wait for full boot to complete before starting.  Starting earlier causes
+# race conditions with Plymouth (boot splash grabs DRM device), the
+# helixscreen-update.path watcher (triggers a restart mid-startup), and
+# other boot-time services that compete for display resources (#536).
+After=multi-user.target
 
 [Service]
 Type=simple
