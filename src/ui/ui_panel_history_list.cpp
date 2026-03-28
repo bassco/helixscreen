@@ -223,6 +223,8 @@ lv_obj_t* HistoryListPanel::create(lv_obj_t* parent) {
     // Attach scroll event handler for infinite scroll
     if (list_content_) {
         lv_obj_add_event_cb(list_content_, on_scroll_static, LV_EVENT_SCROLL_END, this);
+        // Virtual scroll: update visible rows as user scrolls
+        lv_obj_add_event_cb(list_content_, on_scroll_update_visible, LV_EVENT_SCROLL, this);
     }
 
     // Register connection state observer to auto-refresh when connected
@@ -360,6 +362,11 @@ void HistoryListPanel::on_deactivate() {
     total_job_count_ = 0;
     is_loading_more_ = false;
     has_more_data_ = true;
+
+    // Reset virtual scroll view
+    if (list_view_) {
+        list_view_->reset();
+    }
 
     // Call base class
     OverlayBase::on_deactivate();
@@ -576,58 +583,33 @@ void HistoryListPanel::populate_list() {
         return;
     }
 
-    // Clear existing rows
-    clear_list();
-
     // Update empty state
     update_empty_state();
 
     if (filtered_jobs_.empty()) {
+        if (list_view_) {
+            list_view_->reset();
+        }
         spdlog::debug("[{}] No jobs to display after filtering", get_name());
         return;
     }
 
-    spdlog::debug("[{}] Populating list with {} filtered jobs", get_name(), filtered_jobs_.size());
-
-    for (size_t i = 0; i < filtered_jobs_.size(); ++i) {
-        const auto& job = filtered_jobs_[i];
-
-        // Get status info
-        const char* status_color = get_status_color(job.status);
-        const char* status_text = get_status_text(job.status);
-
-        // Build attrs for row creation
-        const char* attrs[] = {
-            "filename",      job.filename.c_str(),
-            "date",          job.date_str.c_str(),
-            "duration",      job.duration_str.c_str(),
-            "filament_type", job.filament_type.empty() ? "Unknown" : job.filament_type.c_str(),
-            "status",        status_text,
-            "status_color",  status_color,
-            nullptr};
-
-        lv_obj_t* row =
-            static_cast<lv_obj_t*>(lv_xml_create(list_rows_, "history_list_row", attrs));
-
-        if (row) {
-            attach_row_click_handler(row, i);
-        } else {
-            spdlog::warn("[{}] Failed to create row for job {}", get_name(), i);
-        }
+    if (!list_view_) {
+        list_view_ = std::make_unique<helix::ui::HistoryListView>();
+        list_view_->setup(list_rows_, list_content_, [this](size_t index) {
+            handle_row_click(index);
+        });
     }
 
-    spdlog::debug("[{}] List populated with {} rows", get_name(), filtered_jobs_.size());
+    list_view_->populate(filtered_jobs_);
+
+    spdlog::debug("[{}] List populated with {} jobs via virtual scroll", get_name(),
+                  filtered_jobs_.size());
 }
 
 void HistoryListPanel::clear_list() {
-    if (!list_rows_)
-        return;
-
-    // Remove all children from the list container
-    uint32_t child_count = lv_obj_get_child_count(list_rows_);
-    for (int32_t i = child_count - 1; i >= 0; --i) {
-        lv_obj_t* child = lv_obj_get_child(list_rows_, i);
-        helix::ui::safe_delete(child);
+    if (list_view_) {
+        list_view_->reset();
     }
 }
 
@@ -1290,6 +1272,13 @@ void HistoryListPanel::on_scroll_static(lv_event_t* e) {
     }
 }
 
+void HistoryListPanel::on_scroll_update_visible(lv_event_t* e) {
+    auto* panel = static_cast<HistoryListPanel*>(lv_event_get_user_data(e));
+    if (panel && panel->list_view_ && !panel->filtered_jobs_.empty()) {
+        panel->list_view_->update_visible(panel->filtered_jobs_);
+    }
+}
+
 void HistoryListPanel::check_scroll_position() {
     if (!list_content_ || !has_more_data_ || is_loading_more_) {
         return;
@@ -1309,38 +1298,9 @@ void HistoryListPanel::check_scroll_position() {
     }
 }
 
-void HistoryListPanel::append_rows(size_t start_index) {
-    if (!list_rows_ || start_index >= filtered_jobs_.size()) {
-        return;
-    }
-
-    spdlog::debug("[{}] Appending rows from index {} to {}", get_name(), start_index,
-                  filtered_jobs_.size() - 1);
-
-    for (size_t i = start_index; i < filtered_jobs_.size(); ++i) {
-        const auto& job = filtered_jobs_[i];
-
-        // Get status info
-        const char* status_color = get_status_color(job.status);
-        const char* status_text = get_status_text(job.status);
-
-        // Build attrs for row creation
-        const char* attrs[] = {
-            "filename",      job.filename.c_str(),
-            "date",          job.date_str.c_str(),
-            "duration",      job.duration_str.c_str(),
-            "filament_type", job.filament_type.empty() ? "Unknown" : job.filament_type.c_str(),
-            "status",        status_text,
-            "status_color",  status_color,
-            nullptr};
-
-        lv_obj_t* row =
-            static_cast<lv_obj_t*>(lv_xml_create(list_rows_, "history_list_row", attrs));
-
-        if (row) {
-            attach_row_click_handler(row, i);
-        } else {
-            spdlog::warn("[{}] Failed to create row for job {}", get_name(), i);
-        }
+void HistoryListPanel::append_rows(size_t /*start_index*/) {
+    // Virtual scroll handles display - just trigger a re-populate with new data
+    if (list_view_) {
+        list_view_->populate(filtered_jobs_, true); // preserve_scroll=true
     }
 }

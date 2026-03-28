@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "ui_history_list_view.h"
 #include "ui_observer_guard.h"
 
 #include "overlay_base.h"
@@ -10,6 +11,7 @@
 #include "print_history_manager.h"
 #include "subject_managed_panel.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -217,6 +219,8 @@ class HistoryListPanel : public OverlayBase {
     // === Dependencies ===
     //
 
+    std::unique_ptr<helix::ui::HistoryListView> list_view_; ///< Virtual scroll view
+
     PrintHistoryManager* history_manager_ = nullptr; ///< Shared history cache (DRY)
 
     /// Observer callback for history manager changes
@@ -229,7 +233,7 @@ class HistoryListPanel : public OverlayBase {
     bool callbacks_registered_ = false;
 
     // Pagination state for infinite scroll
-    static constexpr int PAGE_SIZE = 100; ///< Jobs per API request
+    static constexpr int PAGE_SIZE = 50; ///< Jobs per API request
     uint64_t total_job_count_ = 0;        ///< Total jobs on server (from API)
     bool is_loading_more_ = false;        ///< True while fetching next page
     bool has_more_data_ = true;           ///< False when all jobs loaded
@@ -488,9 +492,14 @@ class HistoryListPanel : public OverlayBase {
     void check_scroll_position();
 
     /**
-     * @brief Static callback for scroll events
+     * @brief Static callback for scroll events (infinite scroll load-more)
      */
     static void on_scroll_static(lv_event_t* e);
+
+    /**
+     * @brief Static callback for scroll events (virtual scroll update)
+     */
+    static void on_scroll_update_visible(lv_event_t* e);
 
     /**
      * @brief Append rows for newly loaded jobs (without clearing existing rows)
