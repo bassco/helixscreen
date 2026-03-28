@@ -118,6 +118,11 @@ class ToolState {
     /// Save spool assignments only if data has changed since last save
     void save_spool_assignments_if_dirty(MoonrakerAPI* api);
 
+    /// True after load_spool_assignments() has completed (success or fallback).
+    [[nodiscard]] bool spool_assignments_loaded() const {
+        return spool_assignments_loaded_;
+    }
+
     /// Set the config directory for local JSON persistence (default: "config")
     void set_config_dir(const std::string& dir) {
         config_dir_ = dir;
@@ -157,6 +162,7 @@ class ToolState {
     int active_tool_index_ = 0;
     std::string config_dir_ = "config"; ///< Directory for local JSON persistence
     bool spool_dirty_ = false;          ///< True when spool data changed since last save
+    bool spool_assignments_loaded_ = false; ///< True after load_spool_assignments() completes
 
     /// Save spool assignments to local JSON file
     void save_spool_json() const;

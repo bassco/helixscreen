@@ -1194,3 +1194,158 @@ TEST_CASE("ToolState: assigned_spool_ids skips cleared spools", "[tool][tool-sta
 
     ts.deinit_subjects();
 }
+
+// ============================================================================
+// spool_assignments_loaded flag tests
+// ============================================================================
+
+TEST_CASE("ToolState: spool_assignments_loaded initially false", "[tool][tool-state][spool]") {
+    lv_init_safe();
+    auto& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    REQUIRE_FALSE(ts.spool_assignments_loaded());
+
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: spool_assignments_loaded set after load without API",
+          "[tool][tool-state][spool]") {
+    lv_init_safe();
+    auto& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+
+    REQUIRE_FALSE(ts.spool_assignments_loaded());
+
+    // load_spool_assignments with nullptr API takes synchronous JSON fallback path
+    ts.load_spool_assignments(nullptr);
+
+    REQUIRE(ts.spool_assignments_loaded());
+
+    ts.deinit_subjects();
+}
+
+// ============================================================================
+// Toolchanger reverse-sync: ToolState → AmsBackend slot propagation
+// ============================================================================
+
+TEST_CASE("ToolState: assign_spool + sync_from_backend populates toolchanger slot",
+          "[tool][tool-state][spool][ams]") {
+    lv_init_safe();
+
+    // Set up ToolState with a 2-tool toolchanger
+    auto& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+    REQUIRE(ts.tool_count() == 2);
+
+    // Set up AmsState with a toolchanger mock backend (2 slots)
+    // Note: AmsBackendMock pre-populates slots with spoolman_id = i+1
+    auto mock = std::make_unique<AmsBackendMock>(2);
+    mock->set_tool_changer_mode(true);
+    mock->set_operation_delay(0);
+    auto* mock_ptr = mock.get();
+
+    // Clear the mock's pre-populated spoolman data to simulate empty slots
+    for (int i = 0; i < 2; ++i) {
+        SlotInfo empty_slot = mock_ptr->get_slot_info(i);
+        empty_slot.spoolman_id = 0;
+        empty_slot.spool_name.clear();
+        mock_ptr->set_slot_info(i, empty_slot, false);
+    }
+
+    auto& ams = AmsState::instance();
+    ams.deinit_subjects();
+    ams.init_subjects(false);
+    ams.set_backend(std::move(mock));
+    REQUIRE(ams.get_backend() != nullptr);
+    REQUIRE(is_tool_changer(ams.get_backend()->get_type()));
+
+    // Initially: backend slot has no spoolman_id
+    SlotInfo slot_before = mock_ptr->get_slot_info(0);
+    REQUIRE(slot_before.spoolman_id == 0);
+
+    // Assign a spool to tool T0 via ToolState
+    ts.assign_spool(0, 42, "Red PLA", 750.0f, 1000.0f);
+    REQUIRE(ts.tools()[0].spoolman_id == 42);
+
+    // Sync: should reverse-sync from ToolState → backend slot
+    ams.sync_from_backend();
+
+    // Backend slot should now have the spoolman_id
+    SlotInfo slot_after = mock_ptr->get_slot_info(0);
+    REQUIRE(slot_after.spoolman_id == 42);
+    REQUIRE(slot_after.spool_name == "Red PLA");
+
+    // Slot 1 should remain unassigned (tool T1 has spoolman_id=0)
+    REQUIRE(ts.tools()[1].spoolman_id == 0);
+
+    // Cleanup
+    ams.set_backend(nullptr);
+    ams.deinit_subjects();
+    ts.deinit_subjects();
+}
+
+TEST_CASE("ToolState: sync_from_backend does not overwrite existing tool assignment",
+          "[tool][tool-state][spool][ams]") {
+    lv_init_safe();
+
+    auto& ts = ToolState::instance();
+    ts.deinit_subjects();
+    ts.init_subjects(false);
+
+    PrinterDiscovery hw;
+    nlohmann::json objects = nlohmann::json::array(
+        {"toolchanger", "tool T0", "tool T1", "extruder", "extruder1", "heater_bed", "gcode_move"});
+    hw.parse_objects(objects);
+    ts.init_tools(hw);
+
+    // Pre-assign spool 99 to T0
+    ts.assign_spool(0, 99, "Existing Spool", 500.0f, 1000.0f);
+
+    auto mock = std::make_unique<AmsBackendMock>(2);
+    mock->set_tool_changer_mode(true);
+    mock->set_operation_delay(0);
+    auto* mock_ptr = mock.get();
+
+    // Clear mock's pre-populated spoolman data
+    for (int i = 0; i < 2; ++i) {
+        SlotInfo empty_slot = mock_ptr->get_slot_info(i);
+        empty_slot.spoolman_id = 0;
+        empty_slot.spool_name.clear();
+        mock_ptr->set_slot_info(i, empty_slot, false);
+    }
+
+    auto& ams = AmsState::instance();
+    ams.deinit_subjects();
+    ams.init_subjects(false);
+    ams.set_backend(std::move(mock));
+
+    // Sync should propagate spool 99 to the backend via reverse-sync
+    ams.sync_from_backend();
+
+    SlotInfo slot = mock_ptr->get_slot_info(0);
+    REQUIRE(slot.spoolman_id == 99);
+    REQUIRE(slot.spool_name == "Existing Spool");
+
+    // The tool should still have its original assignment
+    REQUIRE(ts.tools()[0].spoolman_id == 99);
+
+    ams.set_backend(nullptr);
+    ams.deinit_subjects();
+    ts.deinit_subjects();
+}

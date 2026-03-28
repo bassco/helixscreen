@@ -69,6 +69,7 @@ void ToolState::deinit_subjects() {
 
     tools_.clear();
     active_tool_index_ = 0;
+    spool_assignments_loaded_ = false;
 
     subjects_.deinit_all();
     subjects_initialized_ = false;
@@ -579,6 +580,7 @@ void ToolState::load_spool_assignments(MoonrakerAPI* api) {
     if (!api) {
         // No API — try local JSON only
         load_spool_json();
+        spool_assignments_loaded_ = true;
         return;
     }
 
@@ -593,6 +595,7 @@ void ToolState::load_spool_assignments(MoonrakerAPI* api) {
                 std::move(data_copy), [this](nlohmann::json* d) {
                     apply_spool_assignments(*d);
                     save_spool_json();
+                    spool_assignments_loaded_ = true;
                     // Re-sync AmsState so slot UI subjects reflect loaded assignments
                     AmsState::instance().sync_from_backend();
                     spdlog::info("[ToolState] Loaded spool assignments from Moonraker DB");
@@ -603,6 +606,7 @@ void ToolState::load_spool_assignments(MoonrakerAPI* api) {
                           err.user_message());
             helix::ui::queue_update<int>(std::make_unique<int>(0), [this](int*) {
                 load_spool_json();
+                spool_assignments_loaded_ = true;
                 // Re-sync AmsState so slot UI subjects reflect loaded assignments
                 AmsState::instance().sync_from_backend();
             });

@@ -157,6 +157,7 @@
 #include "splash_screen.h"
 #include "standard_macros.h"
 #include "tips_manager.h"
+#include "tool_state.h"
 #include "xml_registration.h"
 
 #include <spdlog/spdlog.h>
@@ -2011,13 +2012,68 @@ void Application::setup_discovery_callbacks() {
                     get_printer_state().set_helix_plugin_installed(false);
                 });
 
+            // Auto-assign a Spoolman spool to the active toolchanger tool when
+            // no per-tool assignment has been persisted (Moonraker DB or local
+            // JSON). Must run on the UI thread (called from queue_update lambdas).
+            auto try_assign_active_spool_to_tool = [](const SpoolInfo& spool) {
+                auto* backend = AmsState::instance().get_backend();
+                if (!backend || !is_tool_changer(backend->get_type()))
+                    return;
+
+                auto& tool_state = helix::ToolState::instance();
+                if (!tool_state.spool_assignments_loaded())
+                    return; // assignments haven't loaded yet — can't safely auto-assign
+
+                int tool_idx = tool_state.active_tool_index();
+                if (tool_idx < 0)
+                    return;
+
+                const auto& tools = tool_state.tools();
+                if (tool_idx >= static_cast<int>(tools.size()))
+                    return;
+
+                if (tools[tool_idx].spoolman_id > 0)
+                    return; // already has an assignment
+
+                tool_state.assign_spool(tool_idx, spool.id, spool.display_name(),
+                                        static_cast<float>(spool.remaining_weight_g),
+                                        static_cast<float>(spool.initial_weight_g));
+                AmsState::instance().sync_from_backend();
+                spdlog::info("[Application] Auto-assigned Spoolman spool {} to "
+                             "toolchanger tool {}",
+                             spool.id, tool_idx);
+            };
+
+            // Populate the external spool slot from a SpoolInfo and queue the
+            // result to the UI thread. Used by both startup sync and live
+            // notification paths.
+            auto sync_external_spool = [try_assign_active_spool_to_tool](
+                                           const SpoolInfo& spool,
+                                           std::string log_context) {
+                helix::ui::queue_update(
+                    [spool, try_assign_active_spool_to_tool,
+                     log_context = std::move(log_context)]() {
+                        SlotInfo slot;
+                        slot.slot_index = -2;
+                        slot.global_index = -2;
+                        apply_spool_to_slot(slot, spool);
+                        slot.spool_name = spool.display_name();
+                        slot.multi_color_hexes = spool.multi_color_hexes;
+                        AmsState::instance().set_external_spool_info(slot);
+                        try_assign_active_spool_to_tool(spool);
+                        spdlog::info("[Application] External spool {}: {} (id={})",
+                                     log_context, slot.spool_name, slot.spoolman_id);
+                    });
+            };
+
             // Sync external spool from Moonraker's active Spoolman spool
             // This ensures the filament panel shows the correct spool on startup,
             // even if the active spool was changed via Spoolman's web UI or another client
             {
                 MoonrakerAPI* api_for_spool = c->api;
                 api_for_spool->spoolman().get_spoolman_status(
-                    [api_for_spool](bool connected, int active_spool_id) {
+                    [api_for_spool,
+                     sync_external_spool](bool connected, int active_spool_id) {
                         if (!connected || active_spool_id <= 0) {
                             spdlog::debug("[Application] No active Spoolman spool to sync "
                                           "(connected={}, spool_id={})",
@@ -2040,25 +2096,15 @@ void Application::setup_discovery_callbacks() {
                                      active_spool_id);
                         api_for_spool->spoolman().get_spoolman_spool(
                             active_spool_id,
-                            [active_spool_id](const std::optional<SpoolInfo>& spool_opt) {
+                            [active_spool_id,
+                             sync_external_spool](const std::optional<SpoolInfo>& spool_opt) {
                                 if (!spool_opt) {
                                     spdlog::warn("[Application] Active spool {} not found in "
                                                  "Spoolman",
                                                  active_spool_id);
                                     return;
                                 }
-                                const auto& found = *spool_opt;
-                                helix::ui::queue_update([found]() {
-                                    SlotInfo slot;
-                                    slot.slot_index = -2;
-                                    slot.global_index = -2;
-                                    apply_spool_to_slot(slot, found);
-                                    slot.spool_name = found.display_name();
-                                    slot.multi_color_hexes = found.multi_color_hexes;
-                                    AmsState::instance().set_external_spool_info(slot);
-                                    spdlog::info("[Application] External spool synced: {} (id={})",
-                                                 slot.spool_name, slot.spoolman_id);
-                                });
+                                sync_external_spool(*spool_opt, "synced");
                             },
                             [active_spool_id](const MoonrakerError& err) {
                                 spdlog::warn("[Application] Failed to fetch active spool {}: {}",
@@ -2077,7 +2123,8 @@ void Application::setup_discovery_callbacks() {
                 MoonrakerAPI* api_for_notify = c->api;
                 c->client->register_method_callback(
                     "notify_active_spool_set", "external_spool_sync",
-                    [api_for_notify](const nlohmann::json& data) {
+                    [api_for_notify,
+                     sync_external_spool](const nlohmann::json& data) {
                         int spool_id = 0;
                         if (data.is_array() && !data.empty()) {
                             const auto& params = data[0];
@@ -2098,23 +2145,11 @@ void Application::setup_discovery_callbacks() {
                                      spool_id);
                         api_for_notify->spoolman().get_spoolman_spool(
                             spool_id,
-                            [spool_id](const std::optional<SpoolInfo>& spool_opt) {
+                            [spool_id,
+                             sync_external_spool](const std::optional<SpoolInfo>& spool_opt) {
                                 if (!spool_opt)
                                     return;
-                                const auto& found = *spool_opt;
-                                helix::ui::queue_update([found]() {
-                                    SlotInfo slot;
-                                    slot.slot_index = -2;
-                                    slot.global_index = -2;
-                                    apply_spool_to_slot(slot, found);
-                                    slot.spool_name = found.display_name();
-                                    slot.multi_color_hexes = found.multi_color_hexes;
-                                    AmsState::instance().set_external_spool_info(slot);
-                                    spdlog::info(
-                                        "[Application] External spool updated via notification: "
-                                        "{} (id={})",
-                                        slot.spool_name, slot.spoolman_id);
-                                });
+                                sync_external_spool(*spool_opt, "updated via notification");
                             },
                             [spool_id](const MoonrakerError& err) {
                                 spdlog::warn(
