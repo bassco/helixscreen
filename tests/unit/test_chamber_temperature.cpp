@@ -227,3 +227,57 @@ TEST_CASE("Manual chamber assignment updates sensor role", "[chamber][role]") {
     REQUIRE(old_chamber != sensors.end());
     REQUIRE(old_chamber->role != helix::sensors::TemperatureSensorRole::CHAMBER);
 }
+
+// 11. Full round trip: setting → override → temperature update
+TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
+    LVGLTestFixture fixture;
+
+    auto& settings = helix::SettingsManager::instance();
+    settings.init_subjects();
+
+    PrinterTemperatureState temp_state;
+    temp_state.init_subjects(false);
+
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {
+        "temperature_sensor mcu_temp",
+        "temperature_sensor enclosure_bme",
+        "heater_generic heated_enclosure",
+        "extruder",
+        "heater_bed"};
+    discovery.parse_objects(objects);
+
+    // No "chamber" in any name — auto-detect finds nothing
+    REQUIRE_FALSE(discovery.has_chamber_sensor());
+    REQUIRE_FALSE(discovery.has_chamber_heater());
+
+    // User manually assigns
+    settings.set_chamber_sensor_assignment("temperature_sensor enclosure_bme");
+    settings.set_chamber_heater_assignment("heater_generic heated_enclosure");
+
+    // Resolve (same logic as PrinterState::set_hardware)
+    std::string sensor = settings.get_chamber_sensor_assignment();
+    if (sensor == "auto") sensor = discovery.chamber_sensor_name();
+    else if (sensor == "none") sensor = "";
+
+    std::string heater = settings.get_chamber_heater_assignment();
+    if (heater == "auto") heater = discovery.chamber_heater_name();
+    else if (heater == "none") heater = "";
+
+    temp_state.set_chamber_sensor_name(sensor);
+    temp_state.set_chamber_heater_name(heater);
+
+    // Verify heater temp + target work
+    nlohmann::json status = {
+        {"heater_generic heated_enclosure", {{"temperature", 55.2}, {"target", 60.0}}},
+        {"temperature_sensor enclosure_bme", {{"temperature", 48.1}}}};
+    temp_state.update_from_status(status);
+
+    // Heater is preferred when both are set
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_temp_subject()) == 552);
+    REQUIRE(lv_subject_get_int(temp_state.get_chamber_target_subject()) == 600);
+
+    // Clean up
+    settings.set_chamber_sensor_assignment("auto");
+    settings.set_chamber_heater_assignment("auto");
+}
