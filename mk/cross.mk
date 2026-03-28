@@ -1136,14 +1136,14 @@ help-cross:
 	echo "  $${G}cc1-test$${X}             - Full cycle: docker build + deploy + run (fg)"; \
 	echo "  $${G}cc1-ssh$${X}              - SSH into the CC1"; \
 	echo ""; \
-	echo "$${C}K1 Deployment - Static (UNTESTED):$${X}"; \
+	echo "$${C}K1 Deployment - Static:$${X}"; \
 	echo "  $${G}deploy-k1$${X}            - Deploy and restart in background"; \
 	echo "  $${G}deploy-k1-fg$${X}         - Deploy and run in foreground (debug)"; \
 	echo "  $${G}deploy-k1-bin$${X}        - Deploy binaries only (fast iteration)"; \
 	echo "  $${G}k1-test$${X}              - Full cycle: docker build + deploy + run (fg)"; \
 	echo "  $${G}k1-ssh$${X}               - SSH into the K1"; \
 	echo ""; \
-	echo "$${C}K1 Deployment - Dynamic (UNTESTED):$${X}"; \
+	echo "$${C}K1 Deployment - Dynamic:$${X}"; \
 	echo "  $${G}deploy-k1-dynamic$${X}    - Deploy and restart in background"; \
 	echo "  $${G}deploy-k1-dynamic-fg$${X} - Deploy and run in foreground (debug)"; \
 	echo "  $${G}deploy-k1-dynamic-bin$${X} - Deploy binaries only (fast iteration)"; \
@@ -1719,7 +1719,7 @@ snapmaker-u1-ssh:
 	ssh $(SNAPMAKER_U1_SSH_TARGET)
 
 # =============================================================================
-# K1 Deployment Configuration (UNTESTED)
+# K1 Deployment Configuration
 # =============================================================================
 # Creality K1 series deployment settings
 # Based on pellcorp/creality Simple AF structure
@@ -1737,7 +1737,7 @@ K1_DEPLOY_DIR ?= /usr/data/helixscreen
 K1_SSH_TARGET := $(K1_USER)@$(K1_HOST)
 
 # =============================================================================
-# K1 Deployment Targets (UNTESTED)
+# K1 Deployment Targets
 # =============================================================================
 
 .PHONY: deploy-k1 deploy-k1-fg deploy-k1-bin k1-ssh k1-test
@@ -1747,7 +1747,6 @@ deploy-k1:
 	@test -f build/mips/bin/helix-screen || { echo "$(RED)Error: build/mips/bin/helix-screen not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@test -f build/mips/bin/helix-splash || { echo "$(RED)Error: build/mips/bin/helix-splash not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@echo "$(CYAN)Deploying HelixScreen to $(K1_SSH_TARGET):$(K1_DEPLOY_DIR)...$(RESET)"
-	@echo "$(YELLOW)NOTE: K1 deployment is UNTESTED - please report issues$(RESET)"
 	@# Generate pre-rendered images if missing
 	@if [ ! -f build/assets/images/prerendered/splash-logo-small.bin ]; then \
 		echo "$(DIM)Generating pre-rendered splash images...$(RESET)"; \
@@ -1793,7 +1792,6 @@ deploy-k1:
 deploy-k1-fg:
 	@test -f build/mips/bin/helix-screen || { echo "$(RED)Error: build/mips/bin/helix-screen not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
 	@test -f build/mips/bin/helix-splash || { echo "$(RED)Error: build/mips/bin/helix-splash not found. Run 'make mips-docker' first.$(RESET)"; exit 1; }
-	@echo "$(YELLOW)NOTE: K1 deployment is UNTESTED - please report issues$(RESET)"
 	$(call deploy-common,$(K1_SSH_TARGET),$(K1_DEPLOY_DIR),build/mips/bin)
 	@echo "$(CYAN)Starting helix-screen on $(K1_HOST) (foreground, verbose)...$(RESET)"
 	ssh -t $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && ./bin/helix-launcher.sh --debug"
