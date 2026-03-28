@@ -21,6 +21,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -463,8 +464,18 @@ void PrintTuneOverlay::handle_reset() {
 }
 
 void PrintTuneOverlay::handle_z_offset_changed(double delta) {
-    // Update local display immediately for responsive feel
-    current_z_offset_ += delta;
+    // Clamp to safe range to prevent accidental bed crashes or huge offsets
+    double new_offset = current_z_offset_ + delta;
+    if (new_offset < Z_OFFSET_MIN || new_offset > Z_OFFSET_MAX) {
+        spdlog::warn("[PrintTuneOverlay] Z-offset {:.3f}mm clamped to [{}, {}]", new_offset,
+                     Z_OFFSET_MIN, Z_OFFSET_MAX);
+        new_offset = std::clamp(new_offset, Z_OFFSET_MIN, Z_OFFSET_MAX);
+        delta = new_offset - current_z_offset_;
+        if (std::abs(delta) < 0.0005) return; // Already at limit
+    }
+
+    // Round to nearest micron to prevent floating-point drift from repeated additions
+    current_z_offset_ = std::round((current_z_offset_ + delta) * 1000.0) / 1000.0;
     helix::format::format_distance_mm(current_z_offset_, 3, tune_z_offset_buf_,
                                       sizeof(tune_z_offset_buf_));
     lv_subject_copy_string(&tune_z_offset_subject_, tune_z_offset_buf_);
@@ -488,10 +499,21 @@ void PrintTuneOverlay::handle_z_offset_changed(double delta) {
         }
     }
 
-    // Send SET_GCODE_OFFSET Z_ADJUST command to Klipper
+    // Send SET_GCODE_OFFSET Z_ADJUST command to Klipper.
+    // MOVE=1 makes the toolhead physically move to the new offset immediately,
+    // which is essential for baby stepping during a print. Without it, the offset
+    // only takes effect on the next Z move in gcode. Only add MOVE=1 when all
+    // axes are homed (matching Mainsail behavior) to avoid Klipper errors.
     if (api_) {
-        char gcode[64];
-        std::snprintf(gcode, sizeof(gcode), "SET_GCODE_OFFSET Z_ADJUST=%.3f", delta);
+        bool all_homed = false;
+        if (printer_state_) {
+            const char* axes = lv_subject_get_string(printer_state_->get_homed_axes_subject());
+            all_homed = axes && strchr(axes, 'x') && strchr(axes, 'y') && strchr(axes, 'z');
+        }
+
+        char gcode[96];
+        std::snprintf(gcode, sizeof(gcode), "SET_GCODE_OFFSET Z_ADJUST=%.3f%s", delta,
+                      all_homed ? " MOVE=1" : "");
         api_->execute_gcode(
             gcode, [delta]() { spdlog::debug("[PrintTuneOverlay] Z adjusted {:+.3f}mm", delta); },
             [](const MoonrakerError& err) {
