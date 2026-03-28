@@ -55,24 +55,108 @@ Manual filament control:
 
 ![AMS Panel](../../images/user/ams.png)
 
-For multi-material systems (Happy Hare, AFC-Klipper):
+For multi-material systems (Happy Hare, AFC-Klipper, ACE, Tool Changer, etc.). The AMS panel has two main areas: the **slot view** on the left and the **sidebar** on the right.
 
-### Slot Status
+### Slot View (Left)
 
-- Visual display of all slots with material labels (PLA, PETG, ABS, ASA, etc.)
-- Spool icons with color indicators for loaded filament
-- Active slot highlighted — shows "Currently Loaded" with material and remaining weight
-- Hub and bypass path visualization shows the filament routing
+The left side shows all your filament slots in a visual tray layout:
 
-### Controls
+- **Spool icons** — Each slot displays a 3D spool visualization with its filament color
+- **Material labels** — Material type (PLA, PETG, ABS, etc.) shown above each spool
+- **Status badge** — Slot number with color-coded background (green = loaded, gray = empty, red = error)
+- **Tool badge** — If a slot is assigned to a specific extruder tool (T0, T1, etc.), a badge appears in the corner
 
-- **Load**: Feed filament from selected slot to toolhead
-- **Unload**: Retract filament back to buffer
-- **Home**: Run homing sequence for the AMS
+Below the slot grid, a **filament path diagram** shows the routing from slots through the hub/selector to the toolhead. This updates in real time during load/unload operations.
 
-Tap a slot to select it before load/unload operations.
+### Sidebar (Right)
 
-When an AMS slot is actively loaded, its material information drives the same spool preset behavior described in [External Spool Configuration](#external-spool-configuration) — you'll see the spool preset button on the Filament and Temperature panels, and purge macros receive the correct temperature automatically.
+The right sidebar shows the status of the currently loaded filament and provides quick-access controls.
+
+**Currently loaded section:**
+
+- **"Current: Slot N"** — Header showing which slot is active (or "Current: Bypass" when bypass is enabled)
+- **Color swatch** — Large color indicator matching the loaded filament
+- **Material name** — e.g., "Red PLA", "Prusament PETG"
+- **Remaining weight** — Estimated filament remaining (e.g., "750g"), if available
+- **Clog detection meter** — When your system has flow monitoring (encoder, FlowGuard, or AFC buffer), an arc meter shows the current flow rate percentage
+
+**During load/unload operations**, the sidebar switches to a **step progress display** showing each stage of the operation:
+
+- **Load (fresh):** Heat nozzle → Feed filament → Purge
+- **Load (swap):** Heat nozzle → Cut/form tip → Feed filament → Purge
+- **Unload:** Heat nozzle → Cut/form tip → Retract
+
+Each step updates in real time so you can see exactly where the operation is.
+
+**Action buttons** (hidden while an operation is in progress):
+
+| Button | Action |
+|--------|--------|
+| **Bypass** (toggle) | Feed filament directly to the extruder, bypassing the AMS. Only shown if your hardware supports bypass. |
+| **Unload** | Retract the currently loaded filament back to its slot |
+| **Reset** | Reset the AMS system state (useful after jams or errors) |
+| **Settings** | Open the AMS Management overlay for advanced controls |
+
+### Slot Context Menu
+
+**Tap any slot** to open a context menu with actions for that specific slot:
+
+| Action | Description |
+|--------|-------------|
+| **Load** | Feed filament from this slot to the toolhead. Disabled if the slot is empty. |
+| **Unload** | Retract filament from this slot. Only available if this slot is currently loaded. |
+| **Reset Lane** | Clear an error or jam state on this slot. Only shown if your backend supports per-slot reset. |
+| **Spool Info** | Open the filament editor to view or change material, color, vendor, and remaining weight. |
+| **Select Spool** | Assign a saved Spoolman spool to this slot. Only shown when Spoolman is configured. |
+| **Scan QR Code** | Scan a filament QR code to auto-fill spool data. Only shown when Spoolman is configured. |
+
+For advanced multi-tool setups, the context menu also includes:
+
+- **Tool Mapping** — Assign which extruder tool (T0, T1, etc.) this slot feeds
+- **Backup Slot** (Endless Spool) — Choose a backup slot to automatically switch to if this spool runs out mid-print
+
+### Editing Filament Properties
+
+Tap **Spool Info** in the slot context menu to open the filament editor. This lets you tell HelixScreen what's loaded in each slot — important for systems without automatic detection (RFID).
+
+**What you can edit:**
+
+- **Color** — Tap the color swatch to open a color picker
+- **Vendor** — Select from a dropdown (e.g., Prusament, eSUN, Hatchbox)
+- **Material** — Select the filament type (PLA, PETG, ABS, TPU, Nylon, etc.)
+- **Remaining weight** — Tap the pencil icon to enable a slider and set how full the spool is (0–100%)
+
+**Read-only info:**
+
+- **Nozzle temperature range** — Recommended printing temperatures (e.g., 200–230°C)
+- **Bed temperature** — Recommended bed temperature (e.g., 60°C)
+
+**Spoolman actions** (when Spoolman is configured):
+
+- **Choose Saved Spool** — Browse your Spoolman database and assign a spool. This auto-fills the vendor, material, color, and temperatures.
+- **Scan QR Code** — Scan a filament spool's QR code to look it up in Spoolman
+- **Unlink** — Remove the Spoolman association (appears only when a spool is linked)
+- **Print Label** — Print a physical label for this spool (appears only when a label printer is set up)
+
+Tap **Save** to apply your changes, or **Cancel** to discard them.
+
+### AMS Management (Settings Overlay)
+
+Tap **Settings** in the sidebar to open the AMS Management overlay with advanced controls:
+
+- **Home** — Return the AMS to its home position
+- **Recover** — Attempt to recover from an error state
+- **Abort** — Cancel the current operation immediately
+- **Bypass Mode** — Toggle direct-feed mode (if supported by hardware)
+- **System status** — Current system state and firmware version
+
+Additional device-specific settings may appear as expandable sections depending on your hardware.
+
+### Tips
+
+- When an AMS slot is actively loaded, its material information drives spool preset behavior — you'll see a spool preset button on the Filament and Temperature panels, and purge macros receive the correct temperature automatically. See [External Spool Configuration](#external-spool-configuration) for details.
+- The filament path diagram at the bottom of the slot view is interactive — you can tap slot entry points to trigger a load.
+- During a load or unload, watch the step progress in the sidebar to track exactly where the operation is.
 
 ---
 
