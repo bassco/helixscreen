@@ -82,7 +82,7 @@ void show_splash_screen(int screen_width, int screen_height) {
     // The widget we'll animate and clean up
     lv_obj_t* splash_widget = nullptr;
 
-    // Also check for 3D source PNG fallback (runtime scaling, slower but works)
+    // Also check for 3D source PNG fallback (now has alpha transparency)
     std::string splash_3d_png;
     if (splash_3d_path.empty()) {
         std::string png_rel =
