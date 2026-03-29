@@ -54,9 +54,9 @@
         <lv_obj width="#left_column_width"
                 height="content" style_pad_all="0" flex_flow="column" style_flex_main_place="start"
                 style_flex_cross_place="center" style_pad_gap="#space_sm" scrollable="false">
-          <!-- Tool assignment dropdown -->
-          <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="column"
-                  style_pad_gap="#space_xxs" scrollable="false">
+          <!-- Tool assignment dropdown (hidden when backend doesn't support remapping) -->
+          <lv_obj name="tool_remap_row" width="100%" height="content" style_pad_all="0" flex_flow="column"
+                  style_pad_gap="#space_xxs" scrollable="false" hidden="true">
             <text_small text="Remap Tool" translation_tag="Remap Tool"/>
             <lv_dropdown name="tool_dropdown"
                          width="100%" height="content" style_radius="#border_radius"

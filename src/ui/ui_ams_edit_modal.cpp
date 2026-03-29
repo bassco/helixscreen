@@ -975,23 +975,35 @@ void AmsEditModal::update_ui() {
     update_temp_display();
 
     // Populate tool dropdown with available tools
+    // Show tool remap dropdown only for backends that support it
+    lv_obj_t* tool_remap_row = find_widget("tool_remap_row");
     lv_obj_t* tool_dropdown = find_widget("tool_dropdown");
-    if (tool_dropdown) {
-        // Tool count from AMS backend's tool_to_slot_map (authoritative for all backends)
-        auto* backend = AmsState::instance().get_backend();
-        int tool_count = backend
-                             ? static_cast<int>(backend->get_system_info().tool_to_slot_map.size())
-                             : ToolState::instance().tool_count();
-        std::string tool_options = "None";
+    auto* backend = AmsState::instance().get_backend();
+    bool can_remap = backend && backend->get_system_info().supports_tool_mapping;
+
+    if (tool_remap_row) {
+        if (can_remap) {
+            lv_obj_remove_flag(tool_remap_row, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(tool_remap_row, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (tool_dropdown && can_remap) {
+        int tool_count = static_cast<int>(backend->get_system_info().tool_to_slot_map.size());
+        std::string tool_options;
         for (int i = 0; i < tool_count; i++) {
-            tool_options += '\n';
+            if (!tool_options.empty()) {
+                tool_options += '\n';
+            }
             tool_options += "T" + std::to_string(i);
         }
         lv_dropdown_set_options(tool_dropdown, tool_options.c_str());
 
-        // Set initial selection: mapped_tool -1 → index 0 (None), T0 → index 1, etc.
-        int tool_idx = working_info_.mapped_tool + 1;
-        tool_idx = std::max(0, std::min(tool_idx, tool_count));
+        // Set initial selection: T0 → index 0, T1 → index 1, etc.
+        // Default to T0 if mapped_tool is -1 (shouldn't happen for remappable backends)
+        int tool_idx = std::max(0, working_info_.mapped_tool);
+        tool_idx = std::min(tool_idx, tool_count - 1);
         lv_dropdown_set_selected(tool_dropdown, tool_idx);
     }
 }
@@ -1315,12 +1327,11 @@ void AmsEditModal::handle_remaining_cancel() {
 }
 
 void AmsEditModal::handle_tool_changed(int index) {
-    // Index 0 = "None" (-1), index 1 = T0 (0), index 2 = T1 (1), etc.
-    int new_tool = index - 1;
-    working_info_.mapped_tool = new_tool;
-    working_info_.tool_mapping_override = (new_tool != original_info_.mapped_tool);
-    spdlog::debug("[AmsEditModal] Tool changed to: {} (override={})",
-                  new_tool, working_info_.tool_mapping_override);
+    // No "None" — index 0 = T0, index 1 = T1, etc.
+    working_info_.mapped_tool = index;
+    working_info_.tool_mapping_override = (index != original_info_.mapped_tool);
+    spdlog::debug("[AmsEditModal] Tool changed to: T{} (override={})",
+                  index, working_info_.tool_mapping_override);
     update_sync_button_state();
 }
 
