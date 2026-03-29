@@ -170,10 +170,21 @@ MoonrakerClientMock::~MoonrakerClientMock() {
 
     // Clean up any outstanding calibration timers (PID, MPC, shaper) to prevent
     // use-after-free when a subsequent test calls process_lvgl().
+    // Timer callbacks self-delete via lv_timer_delete, so some tracked pointers
+    // may be stale. Verify each exists in LVGL's timer list before deleting.
     if (lv_is_initialized()) {
-        for (auto* timer : calibration_timers_) {
-            if (timer) {
-                lv_timer_delete(timer);
+        for (auto* tracked : calibration_timers_) {
+            bool still_alive = false;
+            lv_timer_t* t = lv_timer_get_next(nullptr);
+            while (t) {
+                if (t == tracked) {
+                    still_alive = true;
+                    break;
+                }
+                t = lv_timer_get_next(t);
+            }
+            if (still_alive) {
+                lv_timer_delete(tracked);
             }
         }
     }
@@ -1539,8 +1550,6 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                              "PID parameters: pid_Kp=%.3f pid_Ki=%.3f pid_Kd=%.3f", kp, ki, kd);
                     s->mock->dispatch_gcode_response(buf);
 
-                    auto& timers = s->mock->calibration_timers_;
-                    timers.erase(std::remove(timers.begin(), timers.end(), t), timers.end());
                     delete s;
                     lv_timer_delete(t);
                     return;
@@ -1609,8 +1618,6 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                             "fan_ambient_transfer=0.12, 0.18, 0.25 [W/K]");
                     }
 
-                    auto& timers = s->mock->calibration_timers_;
-                    timers.erase(std::remove(timers.begin(), timers.end(), t), timers.end());
                     delete s;
                     lv_timer_delete(t);
                     return;
