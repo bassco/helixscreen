@@ -76,12 +76,11 @@ enum ui_temp_graph_feature {
 struct ui_temp_series_meta_t {
     int id;                           // Series ID (index in series_meta array)
     lv_chart_series_t* chart_series;  // LVGL chart series
-    lv_chart_cursor_t* target_cursor; // Target temperature cursor (horizontal line)
     lv_color_t color;                 // Series color
     char name[32];                    // Series name (e.g., "Nozzle", "Bed")
     bool visible;                     // Show/hide series
     bool show_target;                 // Show/hide target temperature line
-    float target_temp;                // Target temperature for cursor
+    float target_temp;                // Target temperature for dashed line
     lv_opa_t gradient_bottom_opa;     // Bottom gradient opacity
     lv_opa_t gradient_top_opa;        // Top gradient opacity
     bool first_value_received;        // True after first real data point (for backfill)

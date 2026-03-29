@@ -29,7 +29,7 @@ static ui_temp_series_meta_t* find_series(ui_temp_graph_t* graph, int series_id)
         return nullptr;
     }
 
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         if (graph->series_meta[i].id == series_id &&
             graph->series_meta[i].chart_series != nullptr) {
             return &graph->series_meta[i];
@@ -49,50 +49,11 @@ static lv_color_t mute_color(lv_color_t color, lv_opa_t opa, lv_color_t bg) {
     return lv_color_make(r, g, b);
 }
 
-// Helper: Convert temperature value to pixel Y coordinate
-// LVGL chart cursors are drawn with obj->coords.y1 as origin (not content area).
-// So we must add pad_top to convert from content-relative to object-relative.
-static int32_t temp_to_pixel_y(ui_temp_graph_t* graph, float temp) {
-    int32_t chart_height = lv_obj_get_content_height(graph->chart);
-    if (chart_height <= 0) {
-        return 0; // Chart not laid out yet
-    }
-
-    // Get padding offset - cursor origin is at obj->coords.y1, not content area
-    int32_t pad_top = lv_obj_get_style_pad_top(graph->chart, LV_PART_MAIN);
-
-    // Map temperature to pixel position within content area (inverted for Y axis)
-    // Use chart_height directly (not chart_height-1) to match LVGL's internal formula
-    // temp=max_temp → Y=0 (top of content), temp=min_temp → Y=chart_height (bottom)
-    int32_t content_y = chart_height - lv_map(static_cast<int32_t>(temp * TEMP_SCALE),
-                                              static_cast<int32_t>(graph->min_temp * TEMP_SCALE),
-                                              static_cast<int32_t>(graph->max_temp * TEMP_SCALE),
-                                              0, chart_height);
-
-    // Return object-relative Y (includes padding offset)
-    return pad_top + content_y;
-}
-
-// Helper: Update all cursor positions (called on resize)
-static void update_all_cursor_positions(ui_temp_graph_t* graph) {
-    if (!graph)
-        return;
-
-    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
-        ui_temp_series_meta_t* meta = &graph->series_meta[i];
-        if (meta->chart_series && meta->target_cursor && meta->show_target) {
-            int32_t pixel_y = temp_to_pixel_y(graph, meta->target_temp);
-            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, pixel_y);
-        }
-    }
-}
-
-// Event callback: Recalculate cursor positions when chart is resized
+// Event callback: Invalidate chart on resize so custom draw callbacks recalculate
 static void chart_resize_cb(lv_event_t* e) {
     lv_obj_t* chart = lv_event_get_target_obj(e);
-    ui_temp_graph_t* graph = static_cast<ui_temp_graph_t*>(lv_obj_get_user_data(chart));
-    if (graph) {
-        update_all_cursor_positions(graph);
+    if (chart) {
+        lv_obj_invalidate(chart);
     }
 }
 
@@ -112,7 +73,7 @@ static ui_temp_series_meta_t* find_series_by_color(ui_temp_graph_t* graph, lv_co
     if (!graph)
         return nullptr;
 
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         if (graph->series_meta[i].chart_series &&
             lv_color_to_u32(graph->series_meta[i].color) == lv_color_to_u32(color)) {
             return &graph->series_meta[i];
@@ -130,7 +91,7 @@ static void update_max_visible_temp(ui_temp_graph_t* graph) {
     float max_temp = graph->min_temp; // Start at minimum
 
     // Scan all series to find the maximum visible temperature
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         ui_temp_series_meta_t* meta = &graph->series_meta[i];
         if (!meta->chart_series || !meta->visible)
             continue;
@@ -179,7 +140,7 @@ static void draw_gradient_cb(lv_event_t* e) {
 
     // Disable gradients when too many series are visible (visual clutter)
     int visible_count = 0;
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         if (graph->series_meta[i].chart_series && graph->series_meta[i].visible)
             visible_count++;
     }
@@ -218,16 +179,9 @@ static void draw_gradient_cb(lv_event_t* e) {
     if (y_range <= 0)
         return;
 
-    // Global gradient span for opacity calculation
-    int32_t max_vis_pixel_y = cy1 + ch - lv_map(
-        static_cast<int32_t>(graph->max_visible_temp * TEMP_SCALE), y_min, y_max, 0, ch);
-    int32_t grad_span = cy2 - max_vis_pixel_y;
-    if (grad_span <= 0)
-        grad_span = 1;
-
     int32_t pc = static_cast<int32_t>(point_count);
 
-    for (int s = 0; s < graph->series_count; s++) {
+    for (int s = 0; s < UI_TEMP_GRAPH_MAX_SERIES; s++) {
         ui_temp_series_meta_t* meta = &graph->series_meta[s];
         if (!meta->chart_series || !meta->visible)
             continue;
@@ -238,21 +192,8 @@ static void draw_gradient_cb(lv_event_t* e) {
         if (!y_data)
             continue;
 
-        // Find the highest pixel Y (lowest value = highest on screen) across all valid points
-        int32_t peak_y = cy2; // start at chart bottom
-        for (int32_t i = 0; i < pc; i++) {
-            if (y_data[i] == LV_CHART_POINT_NONE)
-                continue;
-            int32_t py = cy1 + ch - lv_map(y_data[i], y_min, y_max, 0, ch);
-            if (py < peak_y)
-                peak_y = py;
-        }
-
-        if (peak_y >= cy2)
-            continue; // no visible data
-
-        // Single fill: full chart width, from peak line Y to chart bottom
-        // Google Finance style: gradient fades from series color at top to transparent at bottom
+        // Per-segment gradient: draw a vertical gradient strip for each pair of adjacent points.
+        // This ensures the gradient hugs the line shape instead of a single rectangle from peak.
         lv_draw_fill_dsc_t fill_dsc;
         lv_draw_fill_dsc_init(&fill_dsc);
         fill_dsc.color = meta->color;
@@ -266,13 +207,109 @@ static void draw_gradient_cb(lv_event_t* e) {
         fill_dsc.grad.stops[1].opa = meta->gradient_top_opa;
         fill_dsc.grad.stops[1].frac = 255;
 
-        lv_area_t rect_area;
-        rect_area.x1 = cx1;
-        rect_area.x2 = cx2;
-        rect_area.y1 = peak_y;
-        rect_area.y2 = cy2;
+        for (int32_t i = 0; i < pc - 1; i++) {
+            int32_t v0 = y_data[i];
+            int32_t v1 = y_data[i + 1];
 
-        lv_draw_fill(layer, &fill_dsc, &rect_area);
+            // Skip if both points have no data
+            if (v0 == LV_CHART_POINT_NONE && v1 == LV_CHART_POINT_NONE)
+                continue;
+
+            // If only one is NONE, use the other point's value
+            if (v0 == LV_CHART_POINT_NONE) v0 = v1;
+            if (v1 == LV_CHART_POINT_NONE) v1 = v0;
+
+            // Pixel X positions for this segment
+            int32_t px0 = cx1 + lv_map(i, 0, pc - 1, 0, cw);
+            int32_t px1 = cx1 + lv_map(i + 1, 0, pc - 1, 0, cw);
+            if (px0 >= px1) continue; // Skip zero-width segments (many points per pixel)
+
+            // Pixel Y positions for both endpoints
+            int32_t py0 = cy1 + ch - lv_map(v0, y_min, y_max, 0, ch);
+            int32_t py1 = cy1 + ch - lv_map(v1, y_min, y_max, 0, ch);
+
+            // Top of gradient strip is the higher point on screen, clamped to content area
+            int32_t top_y = LV_MIN(py0, py1);
+            if (top_y < cy1) top_y = cy1;
+
+            // Skip if nothing visible
+            if (top_y >= cy2)
+                continue;
+
+            lv_area_t rect_area;
+            rect_area.x1 = px0;
+            rect_area.x2 = px1;
+            rect_area.y1 = top_y;
+            rect_area.y2 = cy2;
+
+            lv_draw_fill(layer, &fill_dsc, &rect_area);
+        }
+    }
+}
+
+// Draw custom target temperature lines constrained to the content area.
+// LVGL's built-in cursor drawing extends across the full widget bounds (including Y-axis labels),
+// so we hide those (LV_OPA_TRANSP) and draw our own dashed lines here.
+static void draw_target_lines_cb(lv_event_t* e) {
+    lv_obj_t* chart = lv_event_get_target_obj(e);
+    ui_temp_graph_t* graph = static_cast<ui_temp_graph_t*>(lv_event_get_user_data(e));
+    if (!graph || !graph->chart)
+        return;
+
+    if (!(graph->features & TEMP_GRAPH_FEATURE_TARGET_LINES))
+        return;
+
+    lv_layer_t* layer = lv_event_get_layer(e);
+    if (!layer)
+        return;
+
+    // Content area (inside padding)
+    lv_area_t obj_coords;
+    lv_obj_get_coords(chart, &obj_coords);
+
+    int32_t pad_left = lv_obj_get_style_pad_left(chart, LV_PART_MAIN);
+    int32_t pad_right = lv_obj_get_style_pad_right(chart, LV_PART_MAIN);
+    int32_t pad_top = lv_obj_get_style_pad_top(chart, LV_PART_MAIN);
+    int32_t pad_bottom = lv_obj_get_style_pad_bottom(chart, LV_PART_MAIN);
+
+    int32_t cx1 = obj_coords.x1 + pad_left;
+    int32_t cx2 = obj_coords.x2 - pad_right;
+    int32_t cy1 = obj_coords.y1 + pad_top;
+    int32_t cy2 = obj_coords.y2 - pad_bottom;
+    int32_t chart_height = cy2 - cy1;
+    if (chart_height <= 0)
+        return;
+
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
+        ui_temp_series_meta_t* meta = &graph->series_meta[i];
+        if (!meta->chart_series || !meta->visible || !meta->show_target)
+            continue;
+
+        // Compute pixel Y from target temperature
+        int32_t content_y = chart_height - lv_map(
+            static_cast<int32_t>(meta->target_temp * TEMP_SCALE),
+            static_cast<int32_t>(graph->min_temp * TEMP_SCALE),
+            static_cast<int32_t>(graph->max_temp * TEMP_SCALE),
+            0, chart_height);
+        int32_t abs_y = cy1 + content_y;
+
+        // Skip if outside content area
+        if (abs_y < cy1 || abs_y > cy2)
+            continue;
+
+        lv_draw_line_dsc_t line_dsc;
+        lv_draw_line_dsc_init(&line_dsc);
+        line_dsc.base.layer = layer;
+        line_dsc.color = mute_color(meta->color, LV_OPA_50, graph->cached_graph_bg);
+        line_dsc.width = 1;
+        line_dsc.dash_width = 6;
+        line_dsc.dash_gap = 4;
+        line_dsc.p1.x = cx1;
+        line_dsc.p1.y = abs_y;
+        line_dsc.p2.x = cx2;
+        line_dsc.p2.y = abs_y;
+
+        lv_draw_line(layer, &line_dsc);
     }
 }
 
@@ -677,13 +714,8 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     lv_obj_set_style_width(graph->chart, 0, LV_PART_INDICATOR);
     lv_obj_set_style_height(graph->chart, 0, LV_PART_INDICATOR);
 
-    // Style target temperature cursor (dashed line, thinner than series)
-    // Note: cursor color is set per-cursor in ui_temp_graph_add_series()
-    lv_obj_set_style_line_width(graph->chart, 1, LV_PART_CURSOR);      // Thinner than series (2px)
-    lv_obj_set_style_line_dash_width(graph->chart, 6, LV_PART_CURSOR); // Dash length
-    lv_obj_set_style_line_dash_gap(graph->chart, 4, LV_PART_CURSOR);   // Gap between dashes
-    lv_obj_set_style_width(graph->chart, 0, LV_PART_CURSOR);           // No point marker
-    lv_obj_set_style_height(graph->chart, 0, LV_PART_CURSOR);          // No point marker
+    // No LVGL cursors — we draw our own target lines in draw_target_lines_cb
+    // constrained to the content area (LVGL cursors extend into Y-axis padding).
 
     // Disable LVGL's built-in division lines - we draw custom ones constrained to content area
     lv_chart_set_div_line_count(graph->chart, 0, 0);
@@ -712,6 +744,10 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     // Register Y-axis label draw callback (renders temperature labels directly on canvas)
     lv_obj_add_event_cb(graph->chart, draw_y_axis_labels_cb, LV_EVENT_DRAW_POST, graph);
 
+    // Register custom target line draw callback (replaces LVGL's cursor rendering,
+    // constrained to content area so lines don't bleed into Y-axis labels)
+    lv_obj_add_event_cb(graph->chart, draw_target_lines_cb, LV_EVENT_DRAW_POST, graph);
+
     // Subscribe to theme changes for live color updates
     lv_subject_t* theme_subject = theme_manager_get_changed_subject();
     if (theme_subject) {
@@ -739,7 +775,7 @@ void ui_temp_graph_destroy(ui_temp_graph_t* graph) {
     // Chart may already be deleted by LVGL parent cascade (chart_delete_cb nulls graph->chart).
     if (graph_ptr->chart) {
         // Remove all series (cursors will be cleaned up automatically)
-        for (int i = 0; i < graph_ptr->series_count; i++) {
+        for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
             if (graph_ptr->series_meta[i].chart_series) {
                 lv_chart_remove_series(graph_ptr->chart, graph_ptr->series_meta[i].chart_series);
             }
@@ -811,14 +847,6 @@ int ui_temp_graph_add_series(ui_temp_graph_t* graph, const char* name, lv_color_
     meta->gradient_top_opa = UI_TEMP_GRAPH_GRADIENT_TOP_OPA;
     meta->first_value_received = false;
 
-    // Create target temperature cursor (horizontal dashed line, initially hidden)
-    // Note: We don't use lv_chart_set_cursor_point because that binds the cursor
-    // to a data point which scrolls. Instead we use lv_chart_set_cursor_pos for
-    // a fixed Y position representing the target temperature.
-    // Use moderately muted color so target line is visible but distinct from actual data
-    lv_color_t cursor_color = mute_color(color, LV_OPA_50, graph->cached_graph_bg);
-    meta->target_cursor = lv_chart_add_cursor(graph->chart, cursor_color, LV_DIR_HOR);
-
     graph->series_count++;
 
     spdlog::trace("[TempGraph] Added series {} '{}' (slot {}, color 0x{:06X})", meta->id,
@@ -833,12 +861,6 @@ void ui_temp_graph_remove_series(ui_temp_graph_t* graph, int series_id) {
     if (!meta) {
         spdlog::error("[TempGraph] Series {} not found", series_id);
         return;
-    }
-
-    // Remove cursor (if exists)
-    if (meta->target_cursor) {
-        // LVGL doesn't have lv_chart_remove_cursor, cursor is auto-freed with chart
-        meta->target_cursor = nullptr;
     }
 
     // Remove chart series
@@ -975,7 +997,7 @@ void ui_temp_graph_clear(ui_temp_graph_t* graph) {
     if (!graph || !graph->chart)
         return;
 
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         ui_temp_series_meta_t* meta = &graph->series_meta[i];
         if (meta->chart_series) {
             lv_chart_set_all_values(graph->chart, meta->chart_series, LV_CHART_POINT_NONE);
@@ -1017,24 +1039,9 @@ void ui_temp_graph_set_series_target(ui_temp_graph_t* graph, int series_id, floa
         return;
     }
 
-    // Store the value (used for recalculation on resize)
     meta->target_temp = target;
     meta->show_target = show;
-
-    if (meta->target_cursor) {
-        if (show) {
-            // Convert temperature value to pixel coordinate
-            // This abstraction allows callers to work with temperatures, not pixels
-            lv_obj_update_layout(graph->chart); // Ensure dimensions are current
-            int32_t pixel_y = temp_to_pixel_y(graph, target);
-            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, pixel_y);
-        } else {
-            // LVGL cursors don't have a hide function - move off-screen to hide
-            // Use a large negative value that's definitely outside the chart area
-            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, -10000);
-        }
-        lv_obj_invalidate(graph->chart);
-    }
+    lv_obj_invalidate(graph->chart);
 
     spdlog::debug("[TempGraph] Series {} target: {:.1f}°C ({})", series_id, target,
                   show ? "shown" : "hidden");
@@ -1065,8 +1072,7 @@ void ui_temp_graph_set_temp_range(ui_temp_graph_t* graph, float min, float max) 
                             static_cast<int32_t>(min * TEMP_SCALE),
                             static_cast<int32_t>(max * TEMP_SCALE));
 
-    // Recalculate all cursor positions since value-to-pixel mapping changed
-    update_all_cursor_positions(graph);
+    lv_obj_invalidate(graph->chart);
 
     spdlog::debug("[TempGraph] Temperature range set: {:.0f} - {:.0f}°C", min, max);
 }
@@ -1189,7 +1195,7 @@ void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
 
     // Toggle gradient opacity: zero out when disabled, restore defaults when enabled
     bool want_gradients = (features & TEMP_GRAPH_FEATURE_GRADIENTS) != 0;
-    for (int i = 0; i < graph->series_count; i++) {
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
         ui_temp_series_meta_t* meta = &graph->series_meta[i];
         if (!meta->chart_series)
             continue;
@@ -1201,23 +1207,6 @@ void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
         } else {
             meta->gradient_top_opa = LV_OPA_TRANSP;
             meta->gradient_bottom_opa = LV_OPA_TRANSP;
-        }
-    }
-
-    // Toggle target cursors: move off-screen when disabled
-    bool want_targets = (features & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0;
-    for (int i = 0; i < graph->series_count; i++) {
-        ui_temp_series_meta_t* meta = &graph->series_meta[i];
-        if (!meta->chart_series || !meta->target_cursor)
-            continue;
-
-        if (!want_targets) {
-            // Move cursor far off-screen to hide it
-            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, -10000);
-        } else if (meta->show_target) {
-            // Restore cursor to correct position
-            int32_t pixel_y = temp_to_pixel_y(graph, meta->target_temp);
-            lv_chart_set_cursor_pos_y(graph->chart, meta->target_cursor, pixel_y);
         }
     }
 
