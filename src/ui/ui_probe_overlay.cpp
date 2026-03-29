@@ -321,9 +321,10 @@ void ProbeOverlay::init_subjects() {
     UI_MANAGED_SUBJECT_STRING(probe_acc_stddev_, probe_acc_stddev_buf_, "--", "probe_acc_stddev",
                               subjects_);
 
-    // Individual samples text + error message
-    UI_MANAGED_SUBJECT_STRING(probe_acc_samples_text_, probe_acc_samples_text_buf_, "",
-                              "probe_acc_samples_text", subjects_);
+    // Quality assessment + error message
+    UI_MANAGED_SUBJECT_INT(probe_acc_quality_, 1, "probe_acc_quality", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_acc_quality_text_, probe_acc_quality_text_buf_, "",
+                              "probe_acc_quality_text", subjects_);
     UI_MANAGED_SUBJECT_STRING(probe_acc_error_msg_, probe_acc_error_msg_buf_, "",
                               "probe_acc_error_msg", subjects_);
 
@@ -564,7 +565,6 @@ void ProbeOverlay::handle_probe_accuracy() {
 
     // Reset progress state
     probe_acc_sample_count_ = 0;
-    probe_acc_samples_str_.clear();
 
     // Get expected sample count from config (default 10 if not loaded)
     const char* samples_str = lv_subject_get_string(&probe_cfg_samples_);
@@ -630,12 +630,6 @@ void ProbeOverlay::handle_probe_accuracy() {
                              z_val.c_str());
                     lv_subject_copy_string(&overlay.probe_acc_progress_text_,
                                            overlay.probe_acc_progress_text_buf_);
-
-                    // Accumulate sample list
-                    if (!overlay.probe_acc_samples_str_.empty())
-                        overlay.probe_acc_samples_str_ += "  ";
-                    overlay.probe_acc_samples_str_ +=
-                        "#" + std::to_string(current) + ": " + z_val;
                 });
                 return;
             }
@@ -726,10 +720,21 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
     set_subject(&probe_acc_stddev_, probe_acc_stddev_buf_, sizeof(probe_acc_stddev_buf_),
                 extract_value("standard deviation "));
 
-    // Set individual samples text
-    snprintf(probe_acc_samples_text_buf_, sizeof(probe_acc_samples_text_buf_), "%s",
-             probe_acc_samples_str_.c_str());
-    lv_subject_copy_string(&probe_acc_samples_text_, probe_acc_samples_text_buf_);
+    // Assess quality based on range value
+    std::string range_str = extract_value("range ");
+    double range_val = 0.0;
+    try {
+        range_val = std::stod(range_str);
+    } catch (...) {
+        range_val = 1.0; // Unknown = treat as poor
+    }
+
+    // quality: 1 = good (range < 0.025mm), 0 = poor
+    bool good = range_val < 0.025;
+    lv_subject_set_int(&probe_acc_quality_, good ? 1 : 0);
+    snprintf(probe_acc_quality_text_buf_, sizeof(probe_acc_quality_text_buf_), "%s",
+             good ? lv_tr("Excellent Accuracy") : lv_tr("Poor Accuracy"));
+    lv_subject_copy_string(&probe_acc_quality_text_, probe_acc_quality_text_buf_);
 
     // Transition to RESULTS state
     lv_subject_set_int(&probe_acc_progress_, 100);

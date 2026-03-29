@@ -28,22 +28,28 @@
     <!-- ============================================================ -->
     <lv_obj name="results_container"
             width="100%" height="content" style_pad_left="#space_lg" style_pad_right="#space_lg"
-            style_pad_top="#space_sm" style_pad_bottom="#space_md" flex_flow="column" style_pad_gap="0" hidden="true">
+            style_pad_top="#space_lg" style_pad_bottom="#space_lg" flex_flow="column"
+            style_flex_cross_place="center" style_pad_gap="#space_md" hidden="true">
       <bind_flag_if_not_eq subject="probe_acc_state" flag="hidden" ref_value="2"/>
 
-      <!-- Header -->
-      <lv_obj width="100%" height="content"
-              style_pad_bottom="#space_sm" style_pad_top="#space_sm"
-              flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm">
-        <icon src="target" size="md" variant="info"/>
-        <text_heading text="Probe Accuracy Results" translation_tag="Probe Accuracy Results" style_text_align="left" flex_grow="1"/>
-      </lv_obj>
+      <!-- Quality icon: check for good (quality=1), warning for poor (quality=0) -->
+      <icon src="check_circle" size="lg" variant="success" hidden="true">
+        <bind_flag_if_not_eq subject="probe_acc_quality" flag="hidden" ref_value="1"/>
+      </icon>
+      <icon src="alert_triangle" size="lg" variant="warning" hidden="true">
+        <bind_flag_if_not_eq subject="probe_acc_quality" flag="hidden" ref_value="0"/>
+      </icon>
+
+      <!-- Quality summary text -->
+      <text_heading bind_text="probe_acc_quality_text" width="100%" style_text_align="center"/>
+
+      <!-- Range (hero metric) -->
+      <text_body bind_text="probe_acc_range" width="100%" style_text_align="center"/>
 
       <divider_horizontal/>
 
       <!-- Stats grid -->
-      <lv_obj width="100%" height="content" style_pad_top="#space_sm" style_pad_bottom="#space_sm"
-              flex_flow="column" style_pad_gap="#space_xs">
+      <lv_obj width="100%" height="content" flex_flow="column" style_pad_gap="#space_xs">
 
         <lv_obj width="100%" height="content" flex_flow="row" style_pad_gap="#space_sm">
           <text_small text="Maximum" translation_tag="Maximum" width="130" style_text_color="#text_muted"/>
@@ -56,33 +62,14 @@
         </lv_obj>
 
         <lv_obj width="100%" height="content" flex_flow="row" style_pad_gap="#space_sm">
-          <text_small text="Range" translation_tag="Range" width="130" style_text_color="#text_muted"/>
-          <text_small name="val_range" bind_text="probe_acc_range" flex_grow="1"/>
-        </lv_obj>
-
-        <lv_obj width="100%" height="content" flex_flow="row" style_pad_gap="#space_sm">
           <text_small text="Average" translation_tag="Average" width="130" style_text_color="#text_muted"/>
           <text_small name="val_average" bind_text="probe_acc_average" flex_grow="1"/>
-        </lv_obj>
-
-        <lv_obj width="100%" height="content" flex_flow="row" style_pad_gap="#space_sm">
-          <text_small text="Median" translation_tag="Median" width="130" style_text_color="#text_muted"/>
-          <text_small name="val_median" bind_text="probe_acc_median" flex_grow="1"/>
         </lv_obj>
 
         <lv_obj width="100%" height="content" flex_flow="row" style_pad_gap="#space_sm">
           <text_small text="Std Deviation" translation_tag="Std Deviation" width="130" style_text_color="#text_muted"/>
           <text_small name="val_stddev" bind_text="probe_acc_stddev" flex_grow="1"/>
         </lv_obj>
-      </lv_obj>
-
-      <divider_horizontal/>
-
-      <!-- Individual samples -->
-      <lv_obj width="100%" height="content" style_pad_top="#space_sm" flex_flow="column" style_pad_gap="#space_xs">
-        <text_small text="Samples" translation_tag="Samples" style_text_color="#text_muted"/>
-        <text_tiny name="probe_acc_samples_list" bind_text="probe_acc_samples_text"
-                   width="100%" long_mode="wrap" style_text_font="font_mono_small"/>
       </lv_obj>
     </lv_obj>
 

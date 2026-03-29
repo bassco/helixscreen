@@ -167,9 +167,10 @@ class ProbeOverlay : public OverlayBase {
     char probe_acc_stddev_buf_[32] = {};
     lv_subject_t probe_acc_stddev_{};
 
-    // Individual sample readings displayed in results
-    char probe_acc_samples_text_buf_[512] = {};
-    lv_subject_t probe_acc_samples_text_{};
+    // Quality assessment: 1 = good (range < 0.01), 0 = poor
+    lv_subject_t probe_acc_quality_{};
+    char probe_acc_quality_text_buf_[64] = {};
+    lv_subject_t probe_acc_quality_text_{};
 
     // Error message
     char probe_acc_error_msg_buf_[128] = {};
@@ -180,7 +181,6 @@ class ProbeOverlay : public OverlayBase {
     // Track samples during probing
     int probe_acc_sample_count_ = 0;
     int probe_acc_total_samples_ = 10;
-    std::string probe_acc_samples_str_; // Accumulates "#1: 1.234  #2: 1.235 ..."
 
     // Gcode response handler name (for unregistering)
     std::string probe_acc_handler_name_;
