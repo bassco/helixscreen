@@ -117,6 +117,7 @@ void ui_probe_overlay_register_callbacks() {
         {"on_zoffset_cal",
          [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_zoffset_cal(); }},
         {"on_bed_mesh", [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_bed_mesh(); }},
+
         // BLTouch controls
         {"on_bltouch_deploy",
          [](lv_event_t* /*e*/) {
@@ -142,102 +143,106 @@ void ui_probe_overlay_register_callbacks() {
          [](lv_event_t* /*e*/) {
              send_probe_gcode("SET_BLTOUCH OUTPUT_MODE=OD", "BLTouch Output OD");
          }},
-    });
 
-    // Cartographer controls
-    lv_xml_register_event_cb(nullptr, "on_carto_calibrate", [](lv_event_t* /*e*/) {
-        send_probe_gcode("CARTOGRAPHER_CALIBRATE", "Cartographer Calibrate");
-    });
-    lv_xml_register_event_cb(nullptr, "on_carto_touch_cal", [](lv_event_t* /*e*/) {
-        send_probe_gcode("CARTOGRAPHER_TOUCH_CALIBRATE", "Cartographer Touch Calibrate");
-    });
-    lv_xml_register_event_cb(nullptr, "on_carto_scan_cal", [](lv_event_t* /*e*/) {
-        send_probe_gcode("CARTOGRAPHER_SCAN_CALIBRATE", "Cartographer Scan Calibrate");
-    });
+        // Cartographer controls
+        {"on_carto_calibrate",
+         [](lv_event_t* /*e*/) {
+             send_probe_gcode("CARTOGRAPHER_CALIBRATE", "Cartographer Calibrate");
+         }},
+        {"on_carto_touch_cal",
+         [](lv_event_t* /*e*/) {
+             send_probe_gcode("CARTOGRAPHER_TOUCH_CALIBRATE", "Cartographer Touch Calibrate");
+         }},
+        {"on_carto_scan_cal",
+         [](lv_event_t* /*e*/) {
+             send_probe_gcode("CARTOGRAPHER_SCAN_CALIBRATE", "Cartographer Scan Calibrate");
+         }},
 
-    // Beacon controls
-    lv_xml_register_event_cb(nullptr, "on_beacon_calibrate", [](lv_event_t* /*e*/) {
-        send_probe_gcode("BEACON_CALIBRATE", "Beacon Calibrate");
-    });
-    lv_xml_register_event_cb(nullptr, "on_beacon_auto_cal", [](lv_event_t* /*e*/) {
-        send_probe_gcode("BEACON_AUTO_CALIBRATE", "Beacon Auto-Calibrate");
-    });
+        // Beacon controls
+        {"on_beacon_calibrate",
+         [](lv_event_t* /*e*/) { send_probe_gcode("BEACON_CALIBRATE", "Beacon Calibrate"); }},
+        {"on_beacon_auto_cal",
+         [](lv_event_t* /*e*/) {
+             send_probe_gcode("BEACON_AUTO_CALIBRATE", "Beacon Auto-Calibrate");
+         }},
 
-    // Klicky controls
-    lv_xml_register_event_cb(nullptr, "on_klicky_deploy", [](lv_event_t* /*e*/) {
-        send_probe_gcode("ATTACH_PROBE", "Klicky Deploy");
-    });
-    lv_xml_register_event_cb(nullptr, "on_klicky_dock", [](lv_event_t* /*e*/) {
-        send_probe_gcode("DOCK_PROBE", "Klicky Dock");
-    });
+        // Klicky controls
+        {"on_klicky_deploy",
+         [](lv_event_t* /*e*/) { send_probe_gcode("ATTACH_PROBE", "Klicky Deploy"); }},
+        {"on_klicky_dock",
+         [](lv_event_t* /*e*/) { send_probe_gcode("DOCK_PROBE", "Klicky Dock"); }},
 
-    // Eddy current probe controls (BTT Eddy, Mellow Fly Eddy, etc.)
-    lv_xml_register_event_cb(nullptr, "on_eddy_calibrate", [](lv_event_t* /*e*/) {
-        auto& mgr = ProbeSensorManager::instance();
-        auto sensors = mgr.get_sensors();
-        for (const auto& s : sensors) {
-            if (s.type == ProbeSensorType::EDDY_CURRENT) {
-                std::string cmd = "PROBE_EDDY_CURRENT_CALIBRATE CHIP=" + s.sensor_name;
-                send_probe_gcode(cmd.c_str(), "Eddy Current Calibrate");
-                return;
-            }
-        }
-        spdlog::warn("[Probe] No eddy current sensor found for calibrate");
-    });
-    lv_xml_register_event_cb(nullptr, "on_eddy_drive_current", [](lv_event_t* /*e*/) {
-        auto& mgr = ProbeSensorManager::instance();
-        auto sensors = mgr.get_sensors();
-        for (const auto& s : sensors) {
-            if (s.type == ProbeSensorType::EDDY_CURRENT) {
-                std::string cmd = "LDC_CALIBRATE_DRIVE_CURRENT CHIP=" + s.sensor_name;
-                send_probe_gcode(cmd.c_str(), "Eddy Drive Current Cal");
-                return;
-            }
-        }
-        spdlog::warn("[Probe] No eddy current sensor found for drive current cal");
-    });
+        // Eddy current probe controls (BTT Eddy, Mellow Fly Eddy, etc.)
+        {"on_eddy_calibrate",
+         [](lv_event_t* /*e*/) {
+             auto& mgr = ProbeSensorManager::instance();
+             for (const auto& s : mgr.get_sensors()) {
+                 if (s.type == ProbeSensorType::EDDY_CURRENT) {
+                     std::string cmd = "PROBE_EDDY_CURRENT_CALIBRATE CHIP=" + s.sensor_name;
+                     send_probe_gcode(cmd.c_str(), "Eddy Current Calibrate");
+                     return;
+                 }
+             }
+             spdlog::warn("[Probe] No eddy current sensor found for calibrate");
+         }},
+        {"on_eddy_drive_current",
+         [](lv_event_t* /*e*/) {
+             auto& mgr = ProbeSensorManager::instance();
+             for (const auto& s : mgr.get_sensors()) {
+                 if (s.type == ProbeSensorType::EDDY_CURRENT) {
+                     std::string cmd = "LDC_CALIBRATE_DRIVE_CURRENT CHIP=" + s.sensor_name;
+                     send_probe_gcode(cmd.c_str(), "Eddy Drive Current Cal");
+                     return;
+                 }
+             }
+             spdlog::warn("[Probe] No eddy current sensor found for drive current cal");
+         }},
 
-    // Config edit callbacks
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_x_offset", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit("x_offset", "X Offset",
-                                                      "Horizontal offset from nozzle to probe");
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_y_offset", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit("y_offset", "Y Offset",
-                                                      "Vertical offset from nozzle to probe");
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_samples", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit("samples", "Samples",
-                                                      "Number of probe samples per point");
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_speed", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit("speed", "Probe Speed",
-                                                      "Speed (mm/s) during probing moves");
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_retract", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit("sample_retract_dist", "Retract Distance",
-                                                      "Distance (mm) to retract between samples");
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_cfg_tolerance", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_edit(
-            "samples_tolerance", "Samples Tolerance",
-            "Maximum allowed deviation between samples (mm)");
-    });
+        // Config edit callbacks
+        {"on_probe_cfg_x_offset",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "x_offset", "X Offset", "Horizontal offset from nozzle to probe");
+         }},
+        {"on_probe_cfg_y_offset",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "y_offset", "Y Offset", "Vertical offset from nozzle to probe");
+         }},
+        {"on_probe_cfg_samples",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "samples", "Samples", "Number of probe samples per point");
+         }},
+        {"on_probe_cfg_speed",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "speed", "Probe Speed", "Speed (mm/s) during probing moves");
+         }},
+        {"on_probe_cfg_retract",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "sample_retract_dist", "Retract Distance",
+                 "Distance (mm) to retract between samples");
+         }},
+        {"on_probe_cfg_tolerance",
+         [](lv_event_t* /*e*/) {
+             get_global_probe_overlay().handle_config_edit(
+                 "samples_tolerance", "Samples Tolerance",
+                 "Maximum allowed deviation between samples (mm)");
+         }},
 
-    // Probe accuracy modal callbacks
-    lv_xml_register_event_cb(nullptr, "on_probe_accuracy_close", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_accuracy_close();
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_accuracy_estop", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_accuracy_estop();
-    });
+        // Probe accuracy modal callbacks
+        {"on_probe_accuracy_close",
+         [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_accuracy_close(); }},
+        {"on_probe_accuracy_estop",
+         [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_accuracy_estop(); }},
 
-    // Config edit modal buttons
-    lv_xml_register_event_cb(nullptr, "on_probe_config_save", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_save();
-    });
-    lv_xml_register_event_cb(nullptr, "on_probe_config_cancel", [](lv_event_t* /*e*/) {
-        get_global_probe_overlay().handle_config_cancel();
+        // Config edit modal buttons
+        {"on_probe_config_save",
+         [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_config_save(); }},
+        {"on_probe_config_cancel",
+         [](lv_event_t* /*e*/) { get_global_probe_overlay().handle_config_cancel(); }},
     });
 
     spdlog::trace("[Probe] Event callbacks registered");
@@ -486,6 +491,12 @@ void ProbeOverlay::update_display_subjects() {
     }
 }
 
+void ProbeOverlay::set_accuracy_error(const std::string& msg) {
+    snprintf(probe_acc_error_msg_buf_, sizeof(probe_acc_error_msg_buf_), "%s", msg.c_str());
+    lv_subject_copy_string(&probe_acc_error_msg_, probe_acc_error_msg_buf_);
+    lv_subject_set_int(&probe_acc_state_, 3); // ERROR
+}
+
 // ============================================================================
 // TYPE-SPECIFIC PANEL LOADING
 // ============================================================================
@@ -522,9 +533,6 @@ void ProbeOverlay::load_type_panel() {
         break;
     case ProbeSensorType::EDDY_CURRENT:
         component = "probe_eddy_panel";
-        break;
-    case ProbeSensorType::PRTOUCH_V2:
-        component = "probe_generic_panel";
         break;
     default:
         component = "probe_generic_panel";
@@ -654,12 +662,7 @@ void ProbeOverlay::handle_probe_accuracy() {
 
                 std::string error_msg = line;
                 helix::ui::queue_update([error_msg]() {
-                    auto& overlay = get_global_probe_overlay();
-                    snprintf(overlay.probe_acc_error_msg_buf_,
-                             sizeof(overlay.probe_acc_error_msg_buf_), "%s", error_msg.c_str());
-                    lv_subject_copy_string(&overlay.probe_acc_error_msg_,
-                                           overlay.probe_acc_error_msg_buf_);
-                    lv_subject_set_int(&overlay.probe_acc_state_, 3); // ERROR
+                    get_global_probe_overlay().set_accuracy_error(error_msg);
                 });
             }
         });
@@ -673,14 +676,8 @@ void ProbeOverlay::handle_probe_accuracy() {
             spdlog::error("[Probe] PROBE_ACCURACY failed: {}", err.user_message());
             api->unregister_method_callback("notify_gcode_response", handler_name);
             std::string msg = err.user_message();
-            helix::ui::queue_update([msg]() {
-                auto& overlay = get_global_probe_overlay();
-                snprintf(overlay.probe_acc_error_msg_buf_,
-                         sizeof(overlay.probe_acc_error_msg_buf_), "%s", msg.c_str());
-                lv_subject_copy_string(&overlay.probe_acc_error_msg_,
-                                       overlay.probe_acc_error_msg_buf_);
-                lv_subject_set_int(&overlay.probe_acc_state_, 3); // ERROR
-            });
+            helix::ui::queue_update(
+                [msg]() { get_global_probe_overlay().set_accuracy_error(msg); });
         },
         MoonrakerAdvancedAPI::PROBING_TIMEOUT_MS);
 }
@@ -729,11 +726,22 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
         range_val = 1.0; // Unknown = treat as poor
     }
 
-    // quality: 1 = good (range < 0.025mm), 0 = poor
-    bool good = range_val < 0.025;
+    // quality: 1 = good (range < 0.05mm), 0 = poor
+    // < 0.01 = excellent (Cartographer, Beacon, good BLTouch)
+    // 0.01-0.05 = good (BLTouch, Klicky, prtouch)
+    // > 0.05 = poor (check probe mount, nozzle, or bed)
+    bool good = range_val < 0.05;
+    const char* quality_text = nullptr;
+    if (range_val < 0.01) {
+        quality_text = lv_tr("Excellent Accuracy");
+    } else if (range_val < 0.05) {
+        quality_text = lv_tr("Good Accuracy");
+    } else {
+        quality_text = lv_tr("Poor Accuracy");
+    }
     lv_subject_set_int(&probe_acc_quality_, good ? 1 : 0);
     snprintf(probe_acc_quality_text_buf_, sizeof(probe_acc_quality_text_buf_), "%s",
-             good ? lv_tr("Excellent Accuracy") : lv_tr("Poor Accuracy"));
+             quality_text);
     lv_subject_copy_string(&probe_acc_quality_text_, probe_acc_quality_text_buf_);
 
     // Transition to RESULTS state
