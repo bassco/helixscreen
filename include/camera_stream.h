@@ -74,6 +74,23 @@ class CameraStream {
     }
 
     /**
+     * @brief Set target display size for decode-time downscaling.
+     *
+     * When set, turbojpeg decodes at the smallest scaling factor that produces
+     * output >= target dimensions (accounting for rotation). This avoids
+     * decoding full-resolution frames (e.g. 1920x1080) when the display
+     * widget is much smaller (e.g. 800x480), eliminating expensive LVGL
+     * software scaling during rendering.
+     *
+     * Pass (0, 0) to disable downscaling (decode at full camera resolution).
+     * Thread-safe — takes effect on next decoded frame.
+     */
+    void set_target_size(int w, int h) {
+        target_w_.store(w);
+        target_h_.store(h);
+    }
+
+    /**
      * @brief Configure stream URLs from printer state.
      *
      * Reads webcam URLs from PrinterState and resolves relative URLs via
@@ -130,8 +147,11 @@ class CameraStream {
     /// leak and prevent use-after-free.
     bool was_detached() const { return thread_detached_; }
 
-    /// Called by widget when it has consumed the current frame
-    void frame_consumed();
+    /// Compute scaled decode dimensions for a given source size and target.
+    /// Returns the source dimensions unchanged if no scaling is beneficial.
+    /// Public for unit testing.
+    struct ScaledSize { int w; int h; };
+    ScaledSize compute_scaled_size(int src_w, int src_h) const;
 
   private:
     int process_stream_data();
@@ -172,6 +192,8 @@ class CameraStream {
     std::atomic<bool> flip_h_{false};
     std::atomic<bool> flip_v_{false};
     std::atomic<int> rotation_{0}; // CameraRotation cast to int
+    std::atomic<int> target_w_{0}; // Target display width (0 = no downscaling)
+    std::atomic<int> target_h_{0}; // Target display height
 
     // Draw buffer helpers — use system malloc (thread-safe) instead of
     // lv_draw_buf_create which calls lv_malloc (NOT thread-safe)
@@ -190,9 +212,11 @@ class CameraStream {
     // them via lv_image_set_src until the widget clears the source
     std::vector<lv_draw_buf_t*> retired_bufs_;
 
-    // Scratch buffer for transpose+flip (reused across frames to avoid per-frame alloc)
+    // Scratch buffers reused across frames to avoid per-frame heap allocation
     std::unique_ptr<uint8_t[]> transpose_buf_;
     size_t transpose_buf_size_ = 0;
+    std::unique_ptr<uint8_t[]> decode_temp_;   // temp for decode+transform path
+    size_t decode_temp_size_ = 0;
 
     // MJPEG parser state
     std::vector<uint8_t> recv_buf_;
@@ -208,7 +232,6 @@ class CameraStream {
     // can detect object destruction and bail out before touching members
     helix::AsyncLifetimeGuard lifetime_;
     std::atomic<bool> running_{false};
-    std::atomic<bool> frame_pending_{false};
     std::atomic<bool> got_stream_data_{false}; // Set by http_cb when data arrives
     int stream_fail_count_ = 0;
     bool thread_detached_ = false; // Set by stop() if thread join times out
@@ -230,10 +253,13 @@ class CameraStream {
                                     unsigned char*, int, int, int, int, int);
     using TjDestroy_t = int (*)(void*);
     using TjGetErrorStr2_t = char* (*)(void*);
+    struct TjScalingFactor { int num; int denom; };
+    using TjGetScalingFactors_t = TjScalingFactor* (*)(int*);
     TjDecompressHeader3_t fn_decompress_header_ = nullptr;
     TjDecompress2_t fn_decompress_ = nullptr;
     TjDestroy_t fn_destroy_ = nullptr;
     TjGetErrorStr2_t fn_get_error_ = nullptr;
+    TjGetScalingFactors_t fn_get_scaling_factors_ = nullptr;
 };
 
 } // namespace helix

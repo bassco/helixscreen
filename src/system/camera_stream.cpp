@@ -42,6 +42,9 @@ CameraStream::CameraStream() {
         fn_destroy_ = reinterpret_cast<TjDestroy_t>(dlsym(tj_lib_, "tjDestroy"));
         fn_get_error_ = reinterpret_cast<TjGetErrorStr2_t>(dlsym(tj_lib_, "tjGetErrorStr2"));
 
+        fn_get_scaling_factors_ = reinterpret_cast<TjGetScalingFactors_t>(
+            dlsym(tj_lib_, "tjGetScalingFactors"));
+
         if (fn_init && fn_decompress_header_ && fn_decompress_ && fn_destroy_ && fn_get_error_) {
             tj_ = fn_init();
             if (tj_) {
@@ -115,7 +118,6 @@ void CameraStream::start(const std::string& stream_url, const std::string& snaps
     on_frame_ = std::move(on_frame);
     on_error_ = std::move(on_error);
     stream_fail_count_ = 0;
-    frame_pending_.store(false);
     running_.store(true);
 
     spdlog::info("[CameraStream] Starting — stream={}, snapshot={}", stream_url_, snapshot_url_);
@@ -220,10 +222,6 @@ bool CameraStream::is_running() const {
     return running_.load();
 }
 
-void CameraStream::frame_consumed() {
-    frame_pending_.store(false);
-}
-
 // ============================================================================
 // Boundary Parsing
 // ============================================================================
@@ -322,8 +320,8 @@ void CameraStream::stream_thread_func() {
                 if (data && size > 0) {
                     recv_buf_.insert(recv_buf_.end(), data, data + size);
 
-                    // Cap buffer growth — if camera sends faster than we decode
-                    // (e.g. frame_pending_ blocks consumption), drop stale data
+                    // Cap buffer growth — if camera sends faster than we decode,
+                    // drop stale data to prevent unbounded memory growth
                     if (recv_buf_.size() > 4 * 1024 * 1024) {
                         spdlog::warn("[CameraStream] recv_buf_ exceeded 4MB, clearing");
                         recv_buf_.clear();
@@ -457,10 +455,11 @@ int CameraStream::process_stream_data() {
             jpeg_len--;
         }
 
-        // Consume this part from the buffer (up to the next boundary)
-        // Keep next_bpos as the start so the next iteration finds it
+        // Decode and deliver the frame. No backpressure gate — the natural
+        // decode time (~3ms with downscaling) provides pacing, and the UI
+        // thread processes set_src before the next frame is ready.
         bool decoded = false;
-        if (jpeg_len > 0 && !frame_pending_.load()) {
+        if (jpeg_len > 0) {
             decoded = decode_jpeg(recv_buf_.data() + jpeg_start, jpeg_len);
             if (decoded) {
                 deliver_frame();
@@ -483,9 +482,7 @@ void CameraStream::snapshot_poll_loop() {
     spdlog::info("[CameraStream] Starting snapshot poll loop (interval={}ms)", kSnapshotIntervalMs);
 
     while (!poll_token.expired() && running_.load()) {
-        if (!frame_pending_.load()) {
-            fetch_snapshot();
-        }
+        fetch_snapshot();
         // Sleep in small increments to check running_ flag
         for (int i = 0; i < kSnapshotIntervalMs / 100 && !poll_token.expired() && running_.load();
              i++) {
@@ -674,6 +671,54 @@ void CameraStream::apply_pixel_transform(const uint8_t* src, int src_w, int src_
 }
 
 // ============================================================================
+// Decode-time Downscaling
+// ============================================================================
+
+CameraStream::ScaledSize CameraStream::compute_scaled_size(int src_w, int src_h) const {
+    int tw = target_w_.load();
+    int th = target_h_.load();
+
+    if (tw <= 0 || th <= 0 || !fn_get_scaling_factors_) {
+        return {src_w, src_h};
+    }
+
+    // Account for rotation: if 90/270, the output is transposed,
+    // so we need camera-space targets swapped
+    auto params = resolve_transform(src_w, src_h);
+    if (params.needs_transpose) {
+        std::swap(tw, th);
+    }
+
+    // Already at or below target — no scaling needed
+    if (src_w <= tw && src_h <= th) {
+        return {src_w, src_h};
+    }
+
+    int num_factors = 0;
+    auto* factors = fn_get_scaling_factors_(&num_factors);
+    if (!factors || num_factors <= 0) {
+        return {src_w, src_h};
+    }
+
+    // turbojpeg scaling factors are sorted largest-first (2/1, 15/8, ..., 1/8).
+    // Find the smallest factor where both scaled dimensions >= target.
+    int best_w = src_w;
+    int best_h = src_h;
+    for (int i = 0; i < num_factors; i++) {
+        int sw = (src_w * factors[i].num + factors[i].denom - 1) / factors[i].denom;
+        int sh = (src_h * factors[i].num + factors[i].denom - 1) / factors[i].denom;
+        if (sw >= tw && sh >= th) {
+            best_w = sw;
+            best_h = sh;
+        } else {
+            break; // Factors get smaller, so all subsequent will also be too small
+        }
+    }
+
+    return {best_w, best_h};
+}
+
+// ============================================================================
 // JPEG Decode
 // ============================================================================
 
@@ -722,7 +767,15 @@ bool CameraStream::decode_jpeg_turbojpeg(const uint8_t* data, size_t len) {
         return false;
     }
 
-    auto params = resolve_transform(width, height);
+    // Decode-time downscaling: decode at the smallest turbojpeg scaling factor
+    // that still meets the target display size. For a 1920x1080 camera on an
+    // 800x480 display, this typically picks 1/2 scale (960x540), avoiding
+    // expensive LVGL software scaling during rendering.
+    auto scaled = compute_scaled_size(width, height);
+    int decode_w = scaled.w;
+    int decode_h = scaled.h;
+
+    auto params = resolve_transform(decode_w, decode_h);
     ensure_buffers(params.out_w, params.out_h);
 
     if (!back_buf_) {
@@ -736,29 +789,37 @@ bool CameraStream::decode_jpeg_turbojpeg(const uint8_t* data, size_t len) {
         auto* dst = static_cast<uint8_t*>(back_buf_->data);
         int dst_stride = static_cast<int>(back_buf_->header.stride);
         if (fn_decompress_(tj_, data, static_cast<unsigned long>(len),
-                           dst, width, dst_stride, height,
+                           dst, decode_w, dst_stride, decode_h,
                            kTJPF_BGR, kTJFLAG_FASTDCT) != 0) {
             spdlog::debug("[CameraStream] JPEG decode failed: {}", fn_get_error_(tj_));
             return false;
         }
     } else {
-        // Decode to temp buffer, then transform
-        int src_stride = width * 3;
-        auto temp_size = static_cast<size_t>(src_stride) * static_cast<size_t>(height);
-        auto temp = std::make_unique<uint8_t[]>(temp_size);
+        // Decode to reusable temp buffer, then transform
+        int src_stride = decode_w * 3;
+        auto temp_size = static_cast<size_t>(src_stride) * static_cast<size_t>(decode_h);
+        if (temp_size > decode_temp_size_) {
+            decode_temp_ = std::make_unique<uint8_t[]>(temp_size);
+            decode_temp_size_ = temp_size;
+        }
 
         if (fn_decompress_(tj_, data, static_cast<unsigned long>(len),
-                           temp.get(), width, src_stride, height,
+                           decode_temp_.get(), decode_w, src_stride, decode_h,
                            kTJPF_BGR, kTJFLAG_FASTDCT) != 0) {
             spdlog::debug("[CameraStream] JPEG decode failed: {}", fn_get_error_(tj_));
             return false;
         }
 
-        apply_pixel_transform(temp.get(), width, height, src_stride, false, params);
+        apply_pixel_transform(decode_temp_.get(), decode_w, decode_h, src_stride, false, params);
     }
 
-    spdlog::trace("[CameraStream] Decoded frame {}x{} → {}x{} (turbojpeg)", width, height,
-                  params.out_w, params.out_h);
+    if (decode_w != width || decode_h != height) {
+        spdlog::trace("[CameraStream] Decoded frame {}x{} → {}x{} → {}x{} (turbojpeg, downscaled)",
+                      width, height, decode_w, decode_h, params.out_w, params.out_h);
+    } else {
+        spdlog::trace("[CameraStream] Decoded frame {}x{} → {}x{} (turbojpeg)",
+                      width, height, params.out_w, params.out_h);
+    }
     return true;
 }
 
@@ -834,7 +895,15 @@ void CameraStream::deliver_frame() {
         std::swap(front_buf_, back_buf_);
     }
 
-    frame_pending_.store(true);
+    // No frame_pending_ gate — camera continues decoding immediately.
+    // The callback queues lv_image_set_src() to the UI thread, which
+    // processes it BEFORE rendering (UpdateQueue design). Typically the
+    // ~3ms decode time (with downscaling) exceeds the UI tick interval,
+    // so set_src runs before the next swap. If the UI thread stalls and
+    // two swaps occur between ticks, the camera may write to a buffer
+    // LVGL is still rendering — this can cause a torn frame (visual
+    // artifact) but NOT a crash, since both buffers remain allocated.
+    // The throughput gain (~3x fps) outweighs occasional tearing.
     frame_cb(front_buf_);
 }
 

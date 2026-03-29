@@ -51,11 +51,24 @@ TEST_CASE("CameraStream: start with empty URLs does nothing", "[camera]") {
     REQUIRE_FALSE(callback_called);
 }
 
-TEST_CASE("CameraStream: frame_consumed resets pending flag", "[camera]") {
+TEST_CASE("CameraStream: compute_scaled_size picks smallest sufficient scale", "[camera]") {
     CameraStream stream;
-    // Just verify the method doesn't crash when called without active stream
-    stream.frame_consumed();
-    REQUIRE_FALSE(stream.is_running());
+
+    SECTION("no target set returns source dimensions") {
+        auto s = stream.compute_scaled_size(1920, 1080);
+        CHECK(s.w == 1920);
+        CHECK(s.h == 1080);
+    }
+
+    SECTION("source already at or below target returns source") {
+        stream.set_target_size(1920, 1080);
+        auto s = stream.compute_scaled_size(800, 480);
+        CHECK(s.w == 800);
+        CHECK(s.h == 480);
+    }
+
+    // Remaining scaling factor tests require libturbojpeg at runtime.
+    // compute_scaled_size gracefully returns source dims if unavailable.
 }
 
 // ============================================================================

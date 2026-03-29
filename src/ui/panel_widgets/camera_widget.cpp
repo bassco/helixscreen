@@ -104,14 +104,6 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     lv_obj_set_user_data(widget_obj_, this);
 
-    // ScopedFreeze may have discarded the queue_update() lambda that calls
-    // frame_consumed(), leaving the stream thread blocked on frame_pending_.
-    // Unblock it now — frame_consumed() is idempotent.
-    if (stream_ && stream_->is_running()) {
-        spdlog::trace("[CameraWidget] Unblocking stalled stream thread on reattach");
-        stream_->frame_consumed();
-    }
-
     // Observe printer_has_webcam — URLs may not be available yet at attach
     // time (Moonraker sends webcam list asynchronously). When the subject
     // transitions to 1, try starting the stream if we're active.
@@ -275,6 +267,14 @@ void CameraWidget::start_stream() {
     // Apply user rotation/flip config (XOR'd with Moonraker values)
     apply_transform();
 
+    // Decode at display resolution instead of full camera resolution.
+    // Eliminates expensive LVGL software scaling during rendering.
+    auto* disp = lv_display_get_default();
+    if (disp) {
+        stream_->set_target_size(lv_display_get_horizontal_resolution(disp),
+                                 lv_display_get_vertical_resolution(disp));
+    }
+
     set_status_text("Connecting Camera...");
 
     // Unhide the overlay so the user sees "Connecting Camera..." instead of
@@ -304,12 +304,6 @@ void CameraWidget::start_stream() {
                         lv_obj_add_flag(camera_overlay_, LV_OBJ_FLAG_HIDDEN);
                     }
                 }
-
-                // Always mark frame consumed — even if no target is available
-                // (e.g. during detach→reattach). Without this, frame_pending_
-                // stays true and the stream thread stalls permanently.
-                if (stream_)
-                    stream_->frame_consumed();
             });
         },
         [this, token](const char* msg) {
