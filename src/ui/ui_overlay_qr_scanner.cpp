@@ -158,6 +158,12 @@ void QrScannerOverlay::show_for_active_spool(lv_obj_t* parent,
 
 void QrScannerOverlay::on_activate() {
     OverlayBase::on_activate();
+
+    // Re-lookup viewfinder in case overlay was reused after on_deactivate nulled it
+    if (!viewfinder_ && overlay_root_) {
+        viewfinder_ = lv_obj_find_by_name(overlay_root_, "viewfinder");
+    }
+
     start_scanning();
 
     // Auto-close after 60 seconds if no scan result
@@ -188,12 +194,19 @@ void QrScannerOverlay::on_activate() {
 }
 
 void QrScannerOverlay::on_deactivate() {
+    // Expire all outstanding lifetime tokens FIRST, before any cleanup.
+    // Camera BG thread may be mid-frame with a valid token; invalidating
+    // early ensures queued lambdas are skipped. (#632)
+    lifetime_.invalidate();
+
     stop_scanning();
 
-    // Clear image source before camera is stopped to prevent dangling frame ref
+    // Clear image source to release dangling frame ref, then null the pointer
+    // so any in-flight lambda that slips past the token check hits the null guard.
     if (viewfinder_ && lv_is_initialized()) {
         lv_image_set_src(viewfinder_, nullptr);
     }
+    viewfinder_ = nullptr;
 
     // Cancel pending timers
     if (success_timer_) {
@@ -339,12 +352,15 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
     // frame pointer stays valid until frame_consumed() is called.
     auto tok = lifetime_.token();
     helix::ui::queue_update([this, tok, frame]() {
-        if (!tok.expired() && scan_active_.load()) {
-            if (viewfinder_) {
-                lv_image_set_src(viewfinder_, frame);
-            }
+        if (!tok.expired() && scan_active_.load() && viewfinder_
+            && lv_obj_is_valid(viewfinder_)) {
+            lv_image_set_src(viewfinder_, frame);
         }
-        camera_->frame_consumed();
+        if (camera_) {
+            camera_->frame_consumed();
+        } else {
+            spdlog::warn("[QrScanner] frame_consumed skipped: camera already torn down");
+        }
     });
 
     // Run QR decode on a separate thread so the camera stream thread

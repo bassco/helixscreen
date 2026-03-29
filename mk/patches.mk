@@ -49,6 +49,8 @@ LVGL_PATCHED_FILES := \
 	src/misc/lv_event.c \
 	src/misc/lv_event.h \
 	src/core/lv_obj_pos.c \
+	src/core/lv_obj_tree.c \
+	src/core/lv_obj.c \
 	lv_conf_template.h
 
 # Files modified by libhv patches

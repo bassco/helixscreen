@@ -94,6 +94,22 @@ void NavigationManager::clear_overlay_stack() {
         lv_obj_set_style_translate_x(overlay, 0, LV_PART_MAIN);
         lv_obj_set_style_opa(overlay, LV_OPA_COVER, LV_PART_MAIN);
 
+        // Deactivate the overlay to stop background work (camera, timers, etc.)
+        // and invalidate lifetime tokens. Without this, overlays like QrScanner
+        // keep their camera running after connection loss. (#632)
+        auto inst_it = overlay_instances_.find(overlay);
+        if (inst_it != overlay_instances_.end() && inst_it->second) {
+            inst_it->second->on_deactivate();
+        }
+
+        // Invoke close callback if registered (e.g., destroy-on-close)
+        auto close_it = overlay_close_callbacks_.find(overlay);
+        if (close_it != overlay_close_callbacks_.end()) {
+            auto callback = std::move(close_it->second);
+            overlay_close_callbacks_.erase(close_it);
+            callback();
+        }
+
         // Clean up dynamic backdrop for this overlay (if one was created)
         auto backdrop_it = overlay_backdrops_.find(overlay);
         if (backdrop_it != overlay_backdrops_.end()) {
@@ -777,17 +793,28 @@ void NavigationManager::switch_to_panel_impl(int panel_id) {
     }
 
     // Deactivate overlays, invoke close callbacks, and clean up backdrops
-    // for any overlays being cleared (e.g., settings overlay needs on_deactivate to save)
+    // for any overlays being cleared (e.g., settings overlay needs on_deactivate to save).
+    // Persistent overlays (e.g., PrintStatusPanel) are SKIPPED — they continue
+    // collecting data (temperature history) in the background across navbar switches.
     for (lv_obj_t* panel : panel_stack_) {
-        // Call on_deactivate() if this overlay has a registered instance
-        auto inst_it = overlay_instances_.find(panel);
-        if (inst_it != overlay_instances_.end() && inst_it->second) {
-            spdlog::trace("[NavigationManager] Calling on_deactivate() for overlay {} (navbar)",
-                          (void*)panel);
-            inst_it->second->on_deactivate();
+        bool is_persistent = persistent_overlay_instances_.count(panel) > 0;
+
+        if (!is_persistent) {
+            // Call on_deactivate() if this overlay has a registered instance
+            auto inst_it = overlay_instances_.find(panel);
+            if (inst_it != overlay_instances_.end() && inst_it->second) {
+                spdlog::trace(
+                    "[NavigationManager] Calling on_deactivate() for overlay {} (navbar)",
+                    (void*)panel);
+                inst_it->second->on_deactivate();
+            }
+        } else {
+            spdlog::trace(
+                "[NavigationManager] Skipping on_deactivate() for persistent overlay {} (navbar)",
+                (void*)panel);
         }
 
-        // Invoke close callback if registered
+        // Invoke close callback if registered (persistent overlays don't have one)
         auto it = overlay_close_callbacks_.find(panel);
         if (it != overlay_close_callbacks_.end()) {
             auto callback = std::move(it->second);
@@ -811,9 +838,13 @@ void NavigationManager::switch_to_panel_impl(int panel_id) {
     // overlay_instances_ must be cleared here — not all overlays are deleted by
     // their close callbacks (some are only hidden), leaving stale entries that
     // cause has_open_overlays() to return true and break subsequent home-button
-    // "go to page 0" logic.
+    // "go to page 0" logic. Persistent overlay registrations are preserved.
     panel_stack_.clear();
     overlay_instances_.clear();
+    // Restore persistent overlay registrations so they survive the clear
+    for (auto& [widget, lifecycle] : persistent_overlay_instances_) {
+        overlay_instances_[widget] = lifecycle;
+    }
     overlay_close_callbacks_.clear();
     // Delete any remaining dynamic backdrops the loop above didn't reach
     // (orphaned entries not in panel_stack_), then clear the map.
@@ -1166,15 +1197,20 @@ void NavigationManager::resume_active() {
     }
 }
 
-void NavigationManager::register_overlay_instance(lv_obj_t* widget, IPanelLifecycle* overlay) {
+void NavigationManager::register_overlay_instance(lv_obj_t* widget, IPanelLifecycle* overlay,
+                                                   bool persistent) {
     if (!widget) {
         spdlog::error("[NavigationManager] Cannot register overlay with NULL widget");
         return;
     }
     overlay_instances_[widget] = overlay;
+    if (persistent) {
+        persistent_overlay_instances_[widget] = overlay;
+    }
     if (overlay) {
-        spdlog::trace("[NavigationManager] Registered overlay instance {} for widget {}",
-                      overlay->get_name(), (void*)widget);
+        spdlog::trace("[NavigationManager] Registered overlay instance {} for widget {}"
+                      " (persistent={})",
+                      overlay->get_name(), (void*)widget, persistent);
     } else {
         spdlog::trace("[NavigationManager] Registered overlay widget {} (no lifecycle)",
                       (void*)widget);
@@ -1188,6 +1224,23 @@ void NavigationManager::unregister_overlay_instance(lv_obj_t* widget) {
                       (void*)widget);
         overlay_instances_.erase(it);
     }
+    persistent_overlay_instances_.erase(widget);
+}
+
+IPanelLifecycle* NavigationManager::resolve_overlay_lifecycle(lv_obj_t* overlay_panel) {
+    auto it = overlay_instances_.find(overlay_panel);
+    if (it == overlay_instances_.end()) {
+        // Check persistent map — overlay may have survived a panel switch
+        auto pit = persistent_overlay_instances_.find(overlay_panel);
+        if (pit != persistent_overlay_instances_.end()) {
+            overlay_instances_[overlay_panel] = pit->second;
+            spdlog::trace("[NavigationManager] Restored persistent overlay {} registration",
+                          (void*)overlay_panel);
+            return pit->second;
+        }
+        return nullptr;
+    }
+    return it->second;
 }
 
 void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous) {
@@ -1259,13 +1312,13 @@ void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous
         mgr.overlay_animate_slide_in(overlay_panel);
 
         // Lifecycle: Activate new overlay
-        auto it = mgr.overlay_instances_.find(overlay_panel);
-        if (it == mgr.overlay_instances_.end()) {
+        auto* lifecycle = mgr.resolve_overlay_lifecycle(overlay_panel);
+        if (!lifecycle) {
             spdlog::warn("[NavigationManager] Overlay {} pushed without lifecycle registration",
                          (void*)overlay_panel);
-        } else if (it->second) {
-            spdlog::trace("[NavigationManager] Activating overlay {}", it->second->get_name());
-            it->second->on_activate();
+        } else {
+            spdlog::trace("[NavigationManager] Activating overlay {}", lifecycle->get_name());
+            lifecycle->on_activate();
         }
 
         SoundManager::instance().play("nav_forward");
@@ -1342,12 +1395,12 @@ void NavigationManager::push_overlay_zoom_from(lv_obj_t* overlay_panel, lv_area_
         mgr.overlay_animate_zoom_in(overlay_panel, source_rect);
 
         // Lifecycle: Activate new overlay
-        auto it = mgr.overlay_instances_.find(overlay_panel);
-        if (it == mgr.overlay_instances_.end()) {
+        auto* lifecycle = mgr.resolve_overlay_lifecycle(overlay_panel);
+        if (!lifecycle) {
             spdlog::warn("[NavigationManager] Overlay {} pushed without lifecycle registration",
                          (void*)overlay_panel);
-        } else if (it->second) {
-            it->second->on_activate();
+        } else {
+            lifecycle->on_activate();
         }
 
         SoundManager::instance().play("nav_forward");
@@ -1570,6 +1623,7 @@ void NavigationManager::shutdown() {
     // Note: The actual panel objects are destroyed via StaticPanelRegistry,
     // we just clear our tracking references here
     overlay_instances_.clear();
+    persistent_overlay_instances_.clear();
 
     // Clear panel instances
     for (auto& panel : panel_instances_) {
@@ -1680,6 +1734,7 @@ void NavigationManager::deinit_subjects() {
         panel_instances_[i] = nullptr;
     }
     overlay_instances_.clear();
+    persistent_overlay_instances_.clear();
     overlay_close_callbacks_.clear();
     overlay_backdrops_.clear();
     zoom_source_rects_.clear();

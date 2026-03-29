@@ -180,7 +180,8 @@ class NavigationManager {
      * @param widget Root widget of the overlay (from create())
      * @param overlay Pointer to IPanelLifecycle-implementing instance (OverlayBase or PanelBase)
      */
-    void register_overlay_instance(lv_obj_t* widget, IPanelLifecycle* overlay);
+    void register_overlay_instance(lv_obj_t* widget, IPanelLifecycle* overlay,
+                                   bool persistent = false);
 
     /**
      * @brief Unregister C++ overlay instance
@@ -400,6 +401,10 @@ class NavigationManager {
     void handle_connection_state_change(int state);
     void handle_klippy_state_change(int state);
 
+    // Resolve overlay lifecycle instance, checking persistent map as fallback.
+    // Restores persistent overlay registrations that survived panel switches.
+    IPanelLifecycle* resolve_overlay_lifecycle(lv_obj_t* overlay_panel);
+
     // Event callbacks
     static void backdrop_click_event_cb(lv_event_t* e);
     static void nav_button_clicked_cb(lv_event_t* event);
@@ -417,6 +422,10 @@ class NavigationManager {
 
     // C++ overlay instances for lifecycle dispatch (on_activate/on_deactivate)
     std::unordered_map<lv_obj_t*, IPanelLifecycle*> overlay_instances_;
+
+    // Persistent overlay instances — survive panel switches (navbar navigation).
+    // Used by overlays that cache their widget tree across navigations (e.g., PrintStatusPanel).
+    std::unordered_map<lv_obj_t*, IPanelLifecycle*> persistent_overlay_instances_;
 
     // App layout widget reference
     lv_obj_t* app_layout_widget_ = nullptr;

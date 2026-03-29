@@ -799,8 +799,9 @@ bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
             return false;
         }
 
-        // Register with NavigationManager for lifecycle callbacks
-        NavigationManager::instance().register_overlay_instance(s_cached_panel, &panel);
+        // Register with NavigationManager for lifecycle callbacks (persistent
+        // so the registration survives navbar panel switches while cached)
+        NavigationManager::instance().register_overlay_instance(s_cached_panel, &panel, true);
 
         // Decide whether to destroy the widget tree when the overlay closes.
         // On memory-constrained devices or when currently under pressure, destroy
@@ -862,6 +863,16 @@ void PrintStatusPanel::show_gcode_viewer(bool show) {
         mode = is_2d ? 2 : 1;
     }
     lv_subject_set_int(&gcode_viewer_mode_subject_, mode);
+
+    // When falling back to thumbnail mode, ensure the image source is applied.
+    // During async gcode reload the gradient covers the area — the user should
+    // at least see the cached thumbnail underneath.
+    if (mode == 0 && print_thumbnail_ && !cached_thumbnail_path_.empty()) {
+        const void* current_src = lv_image_get_src(print_thumbnail_);
+        if (!current_src) {
+            lv_image_set_src(print_thumbnail_, cached_thumbnail_path_.c_str());
+        }
+    }
 
     // Pause/resume rendering based on visibility mode (CPU optimization)
     if (gcode_viewer_) {
