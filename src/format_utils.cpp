@@ -256,7 +256,7 @@ std::string format_filament_length(double mm) {
 // Clock Time Formatting
 // =============================================================================
 
-std::string eta_clock_time(int remaining_seconds, std::time_t now) {
+std::string eta_clock_time(int remaining_seconds, std::time_t now, bool use_24h) {
     if (remaining_seconds <= 0) {
         return "";
     }
@@ -271,17 +271,20 @@ std::string eta_clock_time(int remaining_seconds, std::time_t now) {
         return "";
     }
 
-    // Format as "(~H:MM AM/PM)"
     int hour = local_tm.tm_hour;
     int minute = local_tm.tm_min;
-    const char* ampm = (hour >= 12) ? "PM" : "AM";
-    int hour12 = hour % 12;
-    if (hour12 == 0) {
-        hour12 = 12;
-    }
-
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "(~%d:%02d %s)", hour12, minute, ampm);
+
+    if (use_24h) {
+        std::snprintf(buf, sizeof(buf), "(~%d:%02d)", hour, minute);
+    } else {
+        const char* ampm = (hour >= 12) ? "PM" : "AM";
+        int hour12 = hour % 12;
+        if (hour12 == 0) {
+            hour12 = 12;
+        }
+        std::snprintf(buf, sizeof(buf), "(~%d:%02d %s)", hour12, minute, ampm);
+    }
     return std::string(buf);
 }
 

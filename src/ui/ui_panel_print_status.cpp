@@ -1874,7 +1874,8 @@ void PrintStatusPanel::on_print_time_left_changed(int seconds) {
     format_time(lifecycle_.remaining_seconds(), remaining_buf_, sizeof(remaining_buf_));
     lv_subject_copy_string(&remaining_subject_, remaining_buf_);
 
-    auto eta_str = helix::format::eta_clock_time(lifecycle_.remaining_seconds());
+    bool use_24h = DisplaySettingsManager::instance().get_time_format() == TimeFormat::HOUR_24;
+    auto eta_str = helix::format::eta_clock_time(lifecycle_.remaining_seconds(), 0, use_24h);
     std::snprintf(eta_buf_, sizeof(eta_buf_), "%s", eta_str.c_str());
     lv_subject_copy_string(&eta_subject_, eta_buf_);
 

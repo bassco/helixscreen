@@ -386,3 +386,30 @@ TEST_CASE("eta_clock_time produces clock time from remaining seconds", "[format_
         CHECK(eta.back() == ')');
     }
 }
+
+TEST_CASE("eta_clock_time formats 24-hour clock when use_24h is true", "[format_utils][eta]") {
+    SECTION("30 minutes remaining from 14:00 gives 14:30") {
+        auto eta = eta_clock_time(30 * 60, make_ref_time(14, 0), true);
+        CHECK(eta == "(~14:30)");
+    }
+
+    SECTION("crosses midnight — 11 hours from 14:00 is 1:00") {
+        auto eta = eta_clock_time(11 * 3600, make_ref_time(14, 0), true);
+        CHECK(eta == "(~1:00)");
+    }
+
+    SECTION("noon produces 12:00") {
+        auto eta = eta_clock_time(3600, make_ref_time(11, 0), true);
+        CHECK(eta == "(~12:00)");
+    }
+
+    SECTION("midnight produces 0:00") {
+        auto eta = eta_clock_time(3600, make_ref_time(23, 0), true);
+        CHECK(eta == "(~0:00)");
+    }
+
+    SECTION("morning time 9:15") {
+        auto eta = eta_clock_time(15 * 60, make_ref_time(9, 0), true);
+        CHECK(eta == "(~9:15)");
+    }
+}
