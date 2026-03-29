@@ -362,6 +362,13 @@ void AmsState::init_subjects(bool register_xml) {
             lv_xml_register_subject(nullptr, name_buf, &env_ind_humidity_status_[i]);
         }
 
+        lv_subject_init_int(&env_ind_humidity_visible_[i], 0);
+        subjects_.register_subject(&env_ind_humidity_visible_[i]);
+        if (register_xml) {
+            snprintf(name_buf, sizeof(name_buf), "ams_env_ind_%d_humidity_visible", i);
+            lv_xml_register_subject(nullptr, name_buf, &env_ind_humidity_visible_[i]);
+        }
+
         lv_subject_init_int(&env_ind_visible_[i], 0);
         subjects_.register_subject(&env_ind_visible_[i]);
         if (register_xml) {
@@ -682,6 +689,13 @@ lv_subject_t* AmsState::get_env_ind_humidity_status_subject(int unit_index) {
         return nullptr;
     }
     return &env_ind_humidity_status_[unit_index];
+}
+
+lv_subject_t* AmsState::get_env_ind_humidity_visible_subject(int unit_index) {
+    if (unit_index < 0 || unit_index >= MAX_UNITS) {
+        return nullptr;
+    }
+    return &env_ind_humidity_visible_[unit_index];
 }
 
 lv_subject_t* AmsState::get_env_ind_drying_active_subject(int unit_index) {
@@ -1106,10 +1120,19 @@ void AmsState::sync_from_backend() {
             if (lv_subject_get_int(&env_ind_visible_[idx]) != 1) {
                 lv_subject_set_int(&env_ind_visible_[idx], 1);
             }
+
+            // Show/hide humidity based on backend capability
+            int hum_vis = unit.environment->has_humidity ? 1 : 0;
+            if (lv_subject_get_int(&env_ind_humidity_visible_[idx]) != hum_vis) {
+                lv_subject_set_int(&env_ind_humidity_visible_[idx], hum_vis);
+            }
         } else {
             // Hide indicator when no environment data
             if (lv_subject_get_int(&env_ind_visible_[idx]) != 0) {
                 lv_subject_set_int(&env_ind_visible_[idx], 0);
+            }
+            if (lv_subject_get_int(&env_ind_humidity_visible_[idx]) != 0) {
+                lv_subject_set_int(&env_ind_humidity_visible_[idx], 0);
             }
         }
     }
@@ -1151,6 +1174,9 @@ void AmsState::sync_from_backend() {
     for (int i = static_cast<int>(info.units.size()); i < MAX_UNITS; ++i) {
         if (lv_subject_get_int(&env_ind_visible_[i]) != 0) {
             lv_subject_set_int(&env_ind_visible_[i], 0);
+        }
+        if (lv_subject_get_int(&env_ind_humidity_visible_[i]) != 0) {
+            lv_subject_set_int(&env_ind_humidity_visible_[i], 0);
         }
     }
 

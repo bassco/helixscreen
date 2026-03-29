@@ -1007,6 +1007,7 @@ void AmsBackendMock::populate_environment_data(AmsSystemInfo& info) const {
                 slot.environment = EnvironmentData{
                     .temperature_c = slot_temps[idx],
                     .humidity_pct = slot_humidity[idx],
+                    .has_humidity = true,
                 };
             }
         }
@@ -1017,12 +1018,14 @@ void AmsBackendMock::populate_environment_data(AmsSystemInfo& info) const {
                 info.units[u].environment = EnvironmentData{
                     .temperature_c = 24.5f,
                     .humidity_pct = 42.0f,
+                    .has_humidity = true,
                 };
             } else {
                 // Higher humidity on subsequent units to test yellow/red thresholds
                 info.units[u].environment = EnvironmentData{
                     .temperature_c = 26.1f,
                     .humidity_pct = 58.0f,
+                    .has_humidity = true,
                 };
             }
         }

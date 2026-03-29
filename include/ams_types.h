@@ -548,6 +548,7 @@ struct SlotError {
 struct EnvironmentData {
     float temperature_c = 0.0f; ///< Temperature in Celsius
     float humidity_pct = 0.0f;  ///< Relative humidity percentage (0-100)
+    bool has_humidity = false;   ///< true when backend provides humidity sensor
 };
 
 /// Error targeting level for multi-level error reporting

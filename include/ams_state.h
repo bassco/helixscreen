@@ -777,6 +777,9 @@ class AmsState {
     /// Humidity status for indicator (0=ok/green, 1=warn/yellow, 2=danger/red)
     [[nodiscard]] lv_subject_t* get_env_ind_humidity_status_subject(int unit_index);
 
+    /// Humidity visibility flag (1=show, 0=hide - based on backend capability)
+    [[nodiscard]] lv_subject_t* get_env_ind_humidity_visible_subject(int unit_index);
+
     /// Formatted drying text (e.g., "47°C -> 55°C  2:30 left")
     [[nodiscard]] lv_subject_t* get_env_ind_drying_text_subject(int unit_index);
 
@@ -1103,6 +1106,7 @@ class AmsState {
     char env_ind_humidity_text_buf_[MAX_UNITS][ENV_IND_TEXT_BUF_SIZE]{};
     lv_subject_t env_ind_visible_[MAX_UNITS];
     lv_subject_t env_ind_humidity_status_[MAX_UNITS]; // 0=ok, 1=warn, 2=danger
+    lv_subject_t env_ind_humidity_visible_[MAX_UNITS];
     lv_subject_t env_ind_drying_active_[MAX_UNITS];
     lv_subject_t env_ind_drying_text_[MAX_UNITS];
     char env_ind_drying_text_buf_[MAX_UNITS][ENV_IND_DRYING_BUF_SIZE]{};

@@ -325,6 +325,7 @@ AmsSystemInfo AmsBackendCfs::parse_box_status(const nlohmann::json& box_json) {
             } catch (...) {
                 env.humidity_pct = 0.0f;
             }
+            env.has_humidity = true;
             unit.environment = env;
         }
 

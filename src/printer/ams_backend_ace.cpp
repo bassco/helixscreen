@@ -664,6 +664,7 @@ void AmsBackendAce::parse_ace_object(const json& data) {
             system_info_.units[0].environment = EnvironmentData{};
         }
         system_info_.units[0].environment->humidity_pct = data["humidity"].get<float>();
+        system_info_.units[0].environment->has_humidity = true;
     }
 
     // Derive loaded slot state from slot statuses
