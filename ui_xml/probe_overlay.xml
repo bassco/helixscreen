@@ -43,6 +43,34 @@
       <lv_obj name="probe_type_panel" width="100%" height="content" style_pad_all="0" scrollable="false"/>
 
       <!-- ============================================================ -->
+      <!-- ACTIONS (most used — shown first) -->
+      <!-- ============================================================ -->
+      <setting_section_header title="ACTIONS" title_tag="ACTIONS" icon="wrench"/>
+
+      <!-- Probe Accuracy Test -->
+      <ui_button name="btn_probe_accuracy"
+                 width="100%" height="#button_height" variant="secondary"
+                 text="Probe Accuracy Test" translation_tag="Probe Accuracy Test" icon="target">
+        <event_cb trigger="clicked" callback="on_probe_accuracy"/>
+      </ui_button>
+
+      <!-- Z-Offset Calibration -->
+      <setting_action_row name="btn_zoffset"
+                          label="Z-Offset Calibration" label_tag="Z-Offset Calibration" icon="z_closer"
+                          description="Interactive probe offset adjustment"
+                          description_tag="Interactive probe offset adjustment">
+        <event_cb trigger="clicked" callback="on_zoffset_cal"/>
+      </setting_action_row>
+
+      <!-- Bed Mesh -->
+      <setting_action_row name="btn_bedmesh"
+                          label="Bed Mesh" label_tag="Bed Mesh" icon="grid_large"
+                          description="Probe bed surface for compensation"
+                          description_tag="Probe bed surface for compensation">
+        <event_cb trigger="clicked" callback="on_bed_mesh"/>
+      </setting_action_row>
+
+      <!-- ============================================================ -->
       <!-- PROBE CONFIGURATION (hidden until config loaded) -->
       <!-- ============================================================ -->
       <lv_obj name="probe_config_section" width="100%"
@@ -94,34 +122,6 @@
           <event_cb trigger="clicked" callback="on_probe_cfg_tolerance"/>
         </setting_action_row>
       </lv_obj>
-
-      <!-- ============================================================ -->
-      <!-- ACTIONS -->
-      <!-- ============================================================ -->
-      <setting_section_header title="ACTIONS" title_tag="ACTIONS" icon="wrench"/>
-
-      <!-- Probe Accuracy Test (no chevron — runs in-place, shows toast) -->
-      <ui_button name="btn_probe_accuracy"
-                 width="100%" height="#button_height" variant="secondary"
-                 text="Probe Accuracy Test" translation_tag="Probe Accuracy Test" icon="target">
-        <event_cb trigger="clicked" callback="on_probe_accuracy"/>
-      </ui_button>
-
-      <!-- Z-Offset Calibration -->
-      <setting_action_row name="btn_zoffset"
-                          label="Z-Offset Calibration" label_tag="Z-Offset Calibration" icon="z_closer"
-                          description="Interactive probe offset adjustment"
-                          description_tag="Interactive probe offset adjustment">
-        <event_cb trigger="clicked" callback="on_zoffset_cal"/>
-      </setting_action_row>
-
-      <!-- Bed Mesh -->
-      <setting_action_row name="btn_bedmesh"
-                          label="Bed Mesh" label_tag="Bed Mesh" icon="grid_large"
-                          description="Probe bed surface for compensation"
-                          description_tag="Probe bed surface for compensation">
-        <event_cb trigger="clicked" callback="on_bed_mesh"/>
-      </setting_action_row>
 
     </lv_obj>
   </view>
