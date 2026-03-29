@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.10] - 2026-03-29
+
+This release adds spool management enhancements — direct weight editing, tool remapping with dropdown, and remaining filament display — alongside fixes for print status not refreshing after navigation, multiple crash fixes, and expanded platform and internationalization support.
+
+### Added
+- Direct filament weight editing and remaining weight display in spool edit modal (#629)
+- Tool dropdown in spool edit modal for remapping filament to tools (#630)
+- Tool labels (T0, T1, etc.) shown in filament mapping card (#554)
+- Warning-color tool badge when user has overridden the default tool mapping
+- Touch calibration debug logging via HELIX_DEBUG_TOUCH environment variable
+- AD5X IFS (Infinite Filament System) support with bambufy macro compatibility
+
+### Fixed
+- Print preview not showing after switching navbar tabs (#632, #633)
+- Async deletion double-free crash from overlapping parent/child lv_obj_delete_async calls (#632)
+- Use-after-free crash when camera stream thread is detached (#624)
+- Use-after-free crash on shutdown from client destroyed after API/macro managers (#628)
+- Spurious service restart after self-update and NTP clock sync (#536)
+- Slot editing now works on CFS and ACE backends with persistent overrides
+- AFC partial status updates no longer regress slot loaded state (#631)
+- Dryer temperature limits enforced in UI; ACE max corrected to 55°C
+- Humidity UI hidden for backends without humidity sensors (ACE)
+- Stale print data persisting after print complete/cancel (#546)
+- Temperature chart gradient fills restored; overlay lifecycle fixed (#616)
+- Chamber icon corrected to fridge_industrial to match other panels
+- Temperature labels use icons at small breakpoints to prevent clipping
+- K1/K1C SSL enabled for update server connectivity
+- Self-update no longer double-starts via path watcher sentinel
+
+### Changed
+- 190 new strings translated across 8 languages with regenerated CJK fonts
+- Splash screen logo PNGs now include alpha transparency
+
 ## [0.99.9] - 2026-03-28
 
 This release focuses on stability with fixes for multiple crashes, adds manual chamber sensor/heater assignment, and improves print history performance with virtual scrolling.
@@ -2305,6 +2338,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.10]: https://github.com/prestonbrown/helixscreen/compare/v0.99.9...v0.99.10
 [0.99.9]: https://github.com/prestonbrown/helixscreen/compare/v0.99.8...v0.99.9
 [0.99.8]: https://github.com/prestonbrown/helixscreen/compare/v0.99.7...v0.99.8
 [0.99.7]: https://github.com/prestonbrown/helixscreen/compare/v0.99.6...v0.99.7
