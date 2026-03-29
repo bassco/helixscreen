@@ -977,7 +977,11 @@ void AmsEditModal::update_ui() {
     // Populate tool dropdown with available tools
     lv_obj_t* tool_dropdown = find_widget("tool_dropdown");
     if (tool_dropdown) {
-        int tool_count = ToolState::instance().tool_count();
+        // Tool count from AMS backend's tool_to_slot_map (authoritative for all backends)
+        auto* backend = AmsState::instance().get_backend();
+        int tool_count = backend
+                             ? static_cast<int>(backend->get_system_info().tool_to_slot_map.size())
+                             : ToolState::instance().tool_count();
         std::string tool_options = "None";
         for (int i = 0; i < tool_count; i++) {
             tool_options += '\n';
