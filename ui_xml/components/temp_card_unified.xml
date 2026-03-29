@@ -50,7 +50,7 @@
             width="100%" height="content" style_pad_all="0"
             flex_flow="row" style_flex_cross_place="center" hidden="true">
       <!-- Icon label for TINY/SMALL breakpoints -->
-      <icon src="heat_wave" size="sm" variant="muted">
+      <icon src="fridge_industrial" size="sm" variant="muted">
         <bind_flag_if_gt subject="ui_breakpoint" flag="hidden" ref_value="1"/>
       </icon>
       <!-- Text label for MEDIUM+ breakpoints -->
