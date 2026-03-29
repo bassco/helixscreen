@@ -152,6 +152,9 @@ void TempGraphOverlay::on_activate() {
                 lv_obj_t* chart = ui_temp_graph_get_chart(graph_);
                 if (chart) {
                     lv_obj_set_size(chart, lv_pct(100), lv_pct(100));
+                    lv_color_t card_bg = theme_manager_get_color("card_bg");
+                    lv_obj_set_style_bg_color(chart, card_bg, LV_PART_MAIN);
+                    graph_->cached_graph_bg = card_bg;
                 }
                 ui_temp_graph_set_temp_range(graph_, Y_AXIS_MIN, y_axis_max_);
                 ui_temp_graph_set_y_axis(graph_, Y_AXIS_STEP, true);
@@ -235,7 +238,7 @@ void TempGraphOverlay::open(Mode mode, lv_obj_t* parent_screen) {
             return;
         }
 
-        NavigationManager::instance().register_overlay_instance(cached_overlay_, this);
+        NavigationManager::instance().register_overlay_instance(cached_overlay_, this, true);
         spdlog::info("[TempGraphOverlay] Overlay created");
     }
 
@@ -450,7 +453,9 @@ void TempGraphOverlay::toggle_series_visibility(size_t series_idx) {
     if (graph_ && s.series_id >= 0) {
         ui_temp_graph_show_series(graph_, s.series_id, s.visible);
         if (s.has_target) {
-            ui_temp_graph_show_target(graph_, s.series_id, s.visible);
+            // Only show target line if series is visible AND target is non-zero
+            bool show = s.visible && graph_->series_meta[s.series_id].target_temp > 0.0f;
+            ui_temp_graph_show_target(graph_, s.series_id, show);
         }
     }
     update_chip_style(series_idx);

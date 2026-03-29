@@ -164,140 +164,116 @@ static void update_max_visible_temp(ui_temp_graph_t* graph) {
     graph->max_visible_temp = max_temp;
 }
 
-// LVGL 9 draw task callback for gradient fills under chart lines
-// Called for each draw task when LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS is set
-static void draw_task_cb(lv_event_t* e) {
-    lv_draw_task_t* draw_task = lv_event_get_draw_task(e);
-    lv_draw_dsc_base_t* base_dsc =
-        static_cast<lv_draw_dsc_base_t*>(lv_draw_task_get_draw_dsc(draw_task));
-
-    // Only process line draws for chart series (LV_PART_ITEMS)
-    if (base_dsc->part != LV_PART_ITEMS ||
-        lv_draw_task_get_type(draw_task) != LV_DRAW_TASK_TYPE_LINE) {
-        return;
-    }
-
+// Render gradient fills by reading chart data directly.
+// LVGL 9.5 changed DRAW_TASK_ADDED to fire during rendering (after all draw events),
+// so we can no longer add draw tasks from that callback. Instead, we compute pixel
+// positions from the raw chart series data and draw gradient fills in DRAW_MAIN_END.
+static void draw_gradient_cb(lv_event_t* e) {
     lv_obj_t* chart = lv_event_get_target_obj(e);
     ui_temp_graph_t* graph = static_cast<ui_temp_graph_t*>(lv_event_get_user_data(e));
-    if (!graph)
+    if (!graph || !graph->chart || graph->series_count == 0)
         return;
 
-    // Get line draw descriptor early for debug logging
-    lv_draw_line_dsc_t* line_dsc =
-        static_cast<lv_draw_line_dsc_t*>(lv_draw_task_get_draw_dsc(draw_task));
+    if (!(graph->features & TEMP_GRAPH_FEATURE_GRADIENTS))
+        return;
 
-    // Get chart coordinates for bottom reference
-    lv_area_t coords;
-    lv_obj_get_coords(chart, &coords);
-
-    // Filter out garbage/uninitialized data lines:
-    // When the chart has sparse data (few real points among LV_CHART_POINT_NONE values),
-    // LVGL may emit line segments where one endpoint is at the chart's top edge
-    // (from clamped INT32_MAX values). These appear as vertical lines from the top of chart to
-    // data. Skip if either point is at/above chart top (clamped garbage value)
-    int32_t chart_top = coords.y1;
-    if (line_dsc->p1.y <= chart_top || line_dsc->p2.y <= chart_top) {
-        spdlog::trace(
-            "[TempGraph] Skipping garbage line: ({},{}) to ({},{}) - point at/above chart top {}",
-            static_cast<int>(line_dsc->p1.x), static_cast<int>(line_dsc->p1.y),
-            static_cast<int>(line_dsc->p2.x), static_cast<int>(line_dsc->p2.y), chart_top);
-        return; // Skip gradient fill for this garbage line
+    // Disable gradients when too many series are visible (visual clutter)
+    int visible_count = 0;
+    for (int i = 0; i < graph->series_count; i++) {
+        if (graph->series_meta[i].chart_series && graph->series_meta[i].visible)
+            visible_count++;
     }
+    if (visible_count > 3)
+        return;
 
-    // Find the series this line belongs to (match by color)
-    ui_temp_series_meta_t* meta = find_series_by_color(graph, line_dsc->color);
-    lv_opa_t top_opa =
-        meta ? meta->gradient_top_opa : static_cast<lv_opa_t>(UI_TEMP_GRAPH_GRADIENT_TOP_OPA);
-    lv_opa_t bottom_opa =
-        meta ? meta->gradient_bottom_opa : static_cast<lv_opa_t>(UI_TEMP_GRAPH_GRADIENT_BOTTOM_OPA);
-    lv_color_t ser_color = line_dsc->color;
+    lv_layer_t* layer = lv_event_get_layer(e);
+    if (!layer)
+        return;
 
-    // Get line segment Y coordinates
-    int32_t line_y_upper = LV_MIN(line_dsc->p1.y, line_dsc->p2.y);
-    int32_t line_y_lower = LV_MAX(line_dsc->p1.y, line_dsc->p2.y);
-    int32_t chart_bottom = coords.y2;
+    lv_area_t obj_coords;
+    lv_obj_get_coords(chart, &obj_coords);
 
-    // Calculate global gradient span based on max visible temperature
-    // This makes gradient intensity relative to the data range, creating a "heat map" effect
-    // where lower temperatures appear with less intense colors
-    int32_t max_y = temp_to_pixel_y(graph, graph->max_visible_temp);
-    int32_t global_gradient_span = chart_bottom - max_y;
-    if (global_gradient_span <= 0)
-        global_gradient_span = 1;
+    // Content area (inside padding)
+    int32_t pad_left = lv_obj_get_style_pad_left(chart, LV_PART_MAIN);
+    int32_t pad_right = lv_obj_get_style_pad_right(chart, LV_PART_MAIN);
+    int32_t pad_top = lv_obj_get_style_pad_top(chart, LV_PART_MAIN);
+    int32_t pad_bottom = lv_obj_get_style_pad_bottom(chart, LV_PART_MAIN);
 
-    // Calculate where this line sits in the global gradient (0.0 = bottom, 1.0 = max)
-    int32_t line_height_from_bottom = chart_bottom - line_y_upper;
-    float line_fraction =
-        static_cast<float>(line_height_from_bottom) / static_cast<float>(global_gradient_span);
-    line_fraction = LV_CLAMP(0.0f, line_fraction, 1.0f);
+    int32_t cx1 = obj_coords.x1 + pad_left;
+    int32_t cx2 = obj_coords.x2 - pad_right;
+    int32_t cy1 = obj_coords.y1 + pad_top;
+    int32_t cy2 = obj_coords.y2 - pad_bottom;
+    int32_t cw = cx2 - cx1;
+    int32_t ch = cy2 - cy1;
+    if (cw <= 0 || ch <= 0)
+        return;
 
-    // Opacity at the line is proportional to its position in the global gradient
-    lv_opa_t opa_upper = static_cast<lv_opa_t>(bottom_opa + (top_opa - bottom_opa) * line_fraction);
+    uint32_t point_count = lv_chart_get_point_count(graph->chart);
+    if (point_count < 2)
+        return;
 
-    // For opa_lower (at lower vertex of line segment), calculate similarly
-    int32_t lower_height_from_bottom = chart_bottom - line_y_lower;
-    float lower_fraction =
-        static_cast<float>(lower_height_from_bottom) / static_cast<float>(global_gradient_span);
-    lower_fraction = LV_CLAMP(0.0f, lower_fraction, 1.0f);
-    lv_opa_t opa_lower =
-        static_cast<lv_opa_t>(bottom_opa + (top_opa - bottom_opa) * lower_fraction);
+    int32_t y_min = static_cast<int32_t>(graph->min_temp * TEMP_SCALE);
+    int32_t y_max = static_cast<int32_t>(graph->max_temp * TEMP_SCALE);
+    int32_t y_range = y_max - y_min;
+    if (y_range <= 0)
+        return;
 
-    // Draw triangle from line segment down to the lower point
-    // Use maximum gradient stops (8) to reduce visible banding
-    lv_draw_triangle_dsc_t tri_dsc;
-    lv_draw_triangle_dsc_init(&tri_dsc);
-    tri_dsc.p[0].x = line_dsc->p1.x;
-    tri_dsc.p[0].y = line_dsc->p1.y;
-    tri_dsc.p[1].x = line_dsc->p2.x;
-    tri_dsc.p[1].y = line_dsc->p2.y;
-    tri_dsc.p[2].x = line_dsc->p1.y < line_dsc->p2.y ? line_dsc->p1.x : line_dsc->p2.x;
-    tri_dsc.p[2].y = LV_MAX(line_dsc->p1.y, line_dsc->p2.y);
+    // Global gradient span for opacity calculation
+    int32_t max_vis_pixel_y = cy1 + ch - lv_map(
+        static_cast<int32_t>(graph->max_visible_temp * TEMP_SCALE), y_min, y_max, 0, ch);
+    int32_t grad_span = cy2 - max_vis_pixel_y;
+    if (grad_span <= 0)
+        grad_span = 1;
 
-    tri_dsc.grad.dir = LV_GRAD_DIR_VER;
-    // Use 8 stops for smoother triangle gradient
-    constexpr int TRI_STOPS = 8;
-    for (int i = 0; i < TRI_STOPS; i++) {
-        lv_opa_t stop_opa = static_cast<lv_opa_t>(
-            opa_upper + (static_cast<int32_t>(opa_lower) - static_cast<int32_t>(opa_upper)) * i /
-                            (TRI_STOPS - 1));
-        uint8_t stop_frac = static_cast<uint8_t>(255 * i / (TRI_STOPS - 1));
-        tri_dsc.grad.stops[i].color = ser_color;
-        tri_dsc.grad.stops[i].opa = stop_opa;
-        tri_dsc.grad.stops[i].frac = stop_frac;
+    int32_t pc = static_cast<int32_t>(point_count);
+
+    for (int s = 0; s < graph->series_count; s++) {
+        ui_temp_series_meta_t* meta = &graph->series_meta[s];
+        if (!meta->chart_series || !meta->visible)
+            continue;
+        if (meta->gradient_top_opa == LV_OPA_TRANSP && meta->gradient_bottom_opa == LV_OPA_TRANSP)
+            continue;
+
+        int32_t* y_data = lv_chart_get_y_array(graph->chart, meta->chart_series);
+        if (!y_data)
+            continue;
+
+        // Find the highest pixel Y (lowest value = highest on screen) across all valid points
+        int32_t peak_y = cy2; // start at chart bottom
+        for (int32_t i = 0; i < pc; i++) {
+            if (y_data[i] == LV_CHART_POINT_NONE)
+                continue;
+            int32_t py = cy1 + ch - lv_map(y_data[i], y_min, y_max, 0, ch);
+            if (py < peak_y)
+                peak_y = py;
+        }
+
+        if (peak_y >= cy2)
+            continue; // no visible data
+
+        // Single fill: full chart width, from peak line Y to chart bottom
+        // Google Finance style: gradient fades from series color at top to transparent at bottom
+        lv_draw_fill_dsc_t fill_dsc;
+        lv_draw_fill_dsc_init(&fill_dsc);
+        fill_dsc.color = meta->color;
+        fill_dsc.opa = LV_OPA_COVER;
+        fill_dsc.grad.dir = LV_GRAD_DIR_VER;
+        fill_dsc.grad.stops_count = 2;
+        fill_dsc.grad.stops[0].color = meta->color;
+        fill_dsc.grad.stops[0].opa = meta->gradient_bottom_opa;
+        fill_dsc.grad.stops[0].frac = 0;
+        fill_dsc.grad.stops[1].color = meta->color;
+        fill_dsc.grad.stops[1].opa = meta->gradient_top_opa;
+        fill_dsc.grad.stops[1].frac = 255;
+
+        lv_area_t rect_area;
+        rect_area.x1 = cx1;
+        rect_area.x2 = cx2;
+        rect_area.y1 = peak_y;
+        rect_area.y2 = cy2;
+
+        lv_draw_fill(layer, &fill_dsc, &rect_area);
     }
-    tri_dsc.grad.stops_count = TRI_STOPS;
-
-    lv_draw_triangle(base_dsc->layer, &tri_dsc);
-
-    // Draw rectangle from the lower line point down to chart bottom
-    // Use maximum gradient stops (8) to reduce visible banding
-    lv_draw_rect_dsc_t rect_dsc;
-    lv_draw_rect_dsc_init(&rect_dsc);
-    rect_dsc.bg_grad.dir = LV_GRAD_DIR_VER;
-
-    // Use 8 evenly-spaced stops for smoother gradient
-    constexpr int RECT_STOPS = 8;
-    for (int i = 0; i < RECT_STOPS; i++) {
-        lv_opa_t stop_opa = static_cast<lv_opa_t>(
-            opa_lower + (static_cast<int32_t>(bottom_opa) - static_cast<int32_t>(opa_lower)) * i /
-                            (RECT_STOPS - 1));
-        uint8_t stop_frac = static_cast<uint8_t>(255 * i / (RECT_STOPS - 1));
-        rect_dsc.bg_grad.stops[i].color = ser_color;
-        rect_dsc.bg_grad.stops[i].opa = stop_opa;
-        rect_dsc.bg_grad.stops[i].frac = stop_frac;
-    }
-    rect_dsc.bg_grad.stops_count = RECT_STOPS;
-
-    lv_area_t rect_area;
-    rect_area.x1 = static_cast<int32_t>(LV_MIN(line_dsc->p1.x, line_dsc->p2.x));
-    rect_area.x2 = static_cast<int32_t>(LV_MAX(line_dsc->p1.x, line_dsc->p2.x));
-    if (rect_area.x2 <= rect_area.x1) {
-        rect_area.x2 = rect_area.x1 + 1;
-    }
-    rect_area.y1 = static_cast<int32_t>(LV_MAX(line_dsc->p1.y, line_dsc->p2.y));
-    rect_area.y2 = static_cast<int32_t>(coords.y2);
-
-    lv_draw_rect(base_dsc->layer, &rect_dsc, &rect_area);
 }
 
 // Draw X-axis time labels (rendered directly on graph canvas)
@@ -712,9 +688,11 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     // Disable LVGL's built-in division lines - we draw custom ones constrained to content area
     lv_chart_set_div_line_count(graph->chart, 0, 0);
 
-    // Enable LVGL 9 draw task events for gradient fills under chart lines
-    lv_obj_add_flag(graph->chart, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
-    lv_obj_add_event_cb(graph->chart, draw_task_cb, LV_EVENT_DRAW_TASK_ADDED, graph);
+    // Gradient rendering: two-phase approach required for LVGL 9.5+
+    // Phase 1 (DRAW_TASK_ADDED): collect line segments into buffer
+    // Phase 2 (DRAW_POST): render gradient fills from buffered segments
+    // Gradient rendering: compute pixel positions from chart data in DRAW_MAIN_END
+    lv_obj_add_event_cb(graph->chart, draw_gradient_cb, LV_EVENT_DRAW_MAIN_END, graph);
 
     // Store graph pointer in chart user data for retrieval
     lv_obj_set_user_data(graph->chart, graph);
@@ -816,7 +794,7 @@ int ui_temp_graph_add_series(ui_temp_graph_t* graph, const char* name, lv_color_
     }
 
     // Initialize all points to POINT_NONE (no data) so empty chart doesn't show false history.
-    // The draw_task_cb filters out garbage lines from POINT_NONE values (clamped to chart top).
+    // The gradient callback skips POINT_NONE values when iterating series data.
     lv_chart_set_all_values(graph->chart, ser, LV_CHART_POINT_NONE);
 
     // Initialize series metadata

@@ -46,7 +46,7 @@
 #define UI_TEMP_GRAPH_DEFAULT_MAX_TEMP 100.0f // Default Y-axis maximum
 
 // Gradient opacity defaults (stock chart style: visible at line, fades to transparent)
-#define UI_TEMP_GRAPH_GRADIENT_TOP_OPA LV_OPA_20   // At the line (20% = very subtle)
+#define UI_TEMP_GRAPH_GRADIENT_TOP_OPA 26           // At the line (~10%)
 #define UI_TEMP_GRAPH_GRADIENT_BOTTOM_OPA LV_OPA_0 // At chart bottom (fully transparent)
 
 /**
@@ -127,6 +127,7 @@ struct ui_temp_graph_t {
     // Cached theme colors for draw callbacks (avoid per-frame theme lookups)
     lv_color_t cached_grid_color;
     lv_color_t cached_graph_bg;
+
 };
 
 /**
