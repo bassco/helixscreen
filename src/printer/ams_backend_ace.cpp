@@ -225,7 +225,59 @@ AmsError AmsBackendAce::load_filament(int slot_index) {
     }
 
     spdlog::info("[ACE] Loading filament from slot {}", slot_index);
-    return execute_gcode("ACE_CHANGE_TOOL TOOL=" + std::to_string(slot_index));
+
+    // Set action optimistically so sidebar detects the LOADING → IDLE transition.
+    // The ACE Klipper module may not report "status": "loading" during gcode execution,
+    // leaving the sidebar stuck waiting for a transition that never starts.
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::LOADING;
+    }
+    emit_event(EVENT_STATE_CHANGED);
+
+    std::string gcode = "ACE_CHANGE_TOOL TOOL=" + std::to_string(slot_index);
+    auto token = lifetime_.token();
+
+    spdlog::info("[ACE] Executing G-code: {}", gcode);
+    api_->execute_gcode(
+        gcode,
+        [this, token, slot_index]() {
+            if (token.expired()) return;
+            spdlog::info("[ACE] Load slot {} gcode completed", slot_index);
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                system_info_.action = AmsAction::IDLE;
+                system_info_.current_slot = slot_index;
+                system_info_.current_tool = slot_index;
+                system_info_.filament_loaded = true;
+
+                // Update individual slot status so the UI shows it as loaded
+                if (!system_info_.units.empty()) {
+                    auto& unit = system_info_.units[0];
+                    auto si = static_cast<size_t>(slot_index);
+                    if (si < unit.slots.size()) {
+                        unit.slots[si].status = SlotStatus::LOADED;
+                    }
+                }
+            }
+            emit_event(EVENT_STATE_CHANGED);
+        },
+        [this, token, gcode](const MoonrakerError& err) {
+            if (token.expired()) return;
+            if (err.type == MoonrakerErrorType::TIMEOUT) {
+                spdlog::warn("[ACE] Load gcode timed out (may still be running): {}", gcode);
+            } else {
+                spdlog::error("[ACE] Load gcode failed: {} - {}", gcode, err.message);
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                system_info_.action = AmsAction::IDLE;
+            }
+            emit_event(EVENT_STATE_CHANGED);
+        },
+        MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+
+    return AmsErrorHelper::success();
 }
 
 AmsError AmsBackendAce::unload_filament(int /*slot_index*/) {
@@ -235,7 +287,58 @@ AmsError AmsBackendAce::unload_filament(int /*slot_index*/) {
     }
 
     spdlog::info("[ACE] Unloading filament");
-    return execute_gcode("ACE_CHANGE_TOOL TOOL=-1");
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::UNLOADING;
+    }
+    emit_event(EVENT_STATE_CHANGED);
+
+    std::string gcode = "ACE_CHANGE_TOOL TOOL=-1";
+    auto token = lifetime_.token();
+
+    spdlog::info("[ACE] Executing G-code: {}", gcode);
+    api_->execute_gcode(
+        gcode,
+        [this, token]() {
+            if (token.expired()) return;
+            spdlog::info("[ACE] Unload gcode completed");
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+
+                // Revert previously loaded slot to AVAILABLE
+                if (!system_info_.units.empty() && system_info_.current_slot >= 0) {
+                    auto& unit = system_info_.units[0];
+                    auto si = static_cast<size_t>(system_info_.current_slot);
+                    if (si < unit.slots.size() &&
+                        unit.slots[si].status == SlotStatus::LOADED) {
+                        unit.slots[si].status = SlotStatus::AVAILABLE;
+                    }
+                }
+
+                system_info_.action = AmsAction::IDLE;
+                system_info_.current_slot = -1;
+                system_info_.current_tool = -1;
+                system_info_.filament_loaded = false;
+            }
+            emit_event(EVENT_STATE_CHANGED);
+        },
+        [this, token, gcode](const MoonrakerError& err) {
+            if (token.expired()) return;
+            if (err.type == MoonrakerErrorType::TIMEOUT) {
+                spdlog::warn("[ACE] Unload gcode timed out (may still be running): {}", gcode);
+            } else {
+                spdlog::error("[ACE] Unload gcode failed: {} - {}", gcode, err.message);
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                system_info_.action = AmsAction::IDLE;
+            }
+            emit_event(EVENT_STATE_CHANGED);
+        },
+        MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+
+    return AmsErrorHelper::success();
 }
 
 AmsError AmsBackendAce::select_slot(int slot_index) {
@@ -262,6 +365,17 @@ AmsError AmsBackendAce::reset() {
 
 AmsError AmsBackendAce::cancel() {
     spdlog::info("[ACE] Cancelling operation");
+
+    // Invalidate outstanding load/unload callbacks so they don't
+    // overwrite state after cancel completes
+    lifetime_.invalidate();
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::IDLE;
+    }
+    emit_event(EVENT_STATE_CHANGED);
+
     return execute_gcode("ACE_CHANGE_TOOL TOOL=-1");
 }
 
@@ -533,6 +647,23 @@ void AmsBackendAce::parse_ace_object(const json& data) {
     // Parse temperature from top-level (ACE ambient temp near dryer)
     if (data.contains("temp") && data["temp"].is_number()) {
         dryer_info_.current_temp_c = data["temp"].get<float>();
+    }
+
+    // Populate per-unit environment data for the environment overlay.
+    // ACE reports ambient temperature; humidity is not available (left at 0).
+    if (!system_info_.units.empty() && dryer_info_.current_temp_c > 0) {
+        EnvironmentData env;
+        env.temperature_c = dryer_info_.current_temp_c;
+        // humidity_pct stays 0 — ACE doesn't have a humidity sensor
+        system_info_.units[0].environment = env;
+    }
+
+    // Also parse top-level humidity if present (future ValgACE versions)
+    if (!system_info_.units.empty() && data.contains("humidity") && data["humidity"].is_number()) {
+        if (!system_info_.units[0].environment.has_value()) {
+            system_info_.units[0].environment = EnvironmentData{};
+        }
+        system_info_.units[0].environment->humidity_pct = data["humidity"].get<float>();
     }
 
     // Derive loaded slot state from slot statuses

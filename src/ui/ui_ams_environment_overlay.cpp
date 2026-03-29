@@ -258,8 +258,8 @@ void AmsEnvironmentOverlay::update_from_backend() {
     }
     lv_subject_copy_string(&target_temp_text_subject_, target_temp_text_buf_);
 
-    // Update humidity display
-    if (has_env) {
+    // Update humidity display (show "--" if no sensor, i.e. 0%)
+    if (has_env && humidity_pct > 0) {
         snprintf(humidity_text_buf_, sizeof(humidity_text_buf_), "%.0f%%", humidity_pct);
     } else {
         snprintf(humidity_text_buf_, sizeof(humidity_text_buf_), "--");

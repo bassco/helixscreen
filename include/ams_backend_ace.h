@@ -103,9 +103,10 @@ class AmsBackendAce : public AmsSubscriptionBackend {
     [[nodiscard]] bool is_bypass_active() const override;
 
     // ========================================================================
-    // Dryer Control (ACE Pro has built-in dryer)
+    // Environment Sensors & Dryer Control (ACE Pro has built-in dryer + temp)
     // ========================================================================
 
+    [[nodiscard]] bool has_environment_sensors() const override { return true; }
     [[nodiscard]] DryerInfo get_dryer_info() const override;
     AmsError start_drying(float temp_c, int duration_min, int fan_pct = -1,
                            int unit = 0) override;
