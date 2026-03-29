@@ -221,7 +221,11 @@ void PowerDeviceState::on_power_changed(const nlohmann::json& msg) {
 }
 
 void PowerDeviceState::reevaluate_lock_states() {
-    auto* print_subj = get_printer_state().get_print_state_enum_subject();
+    auto& ps = get_printer_state();
+    if (!ps.are_subjects_initialized()) {
+        return;
+    }
+    auto* print_subj = ps.get_print_state_enum_subject();
     if (!print_subj) {
         return;
     }
@@ -253,7 +257,13 @@ void PowerDeviceState::deinit_subjects() {
 
     spdlog::debug("[PowerDeviceState] Deinitializing subjects");
 
-    print_state_observer_.reset();
+    // [L073] The observer watches PrinterState's print_state_enum_ subject —
+    // an external subject whose lifecycle we don't control. During test runs,
+    // PrinterState may have been deinit'd and reinit'd, destroying the original
+    // subject while are_subjects_initialized() returns true (for the new one).
+    // Always release() to avoid SIGSEGV on the stale subject pointer.
+    // The zombie observer is harmless: callback hits empty devices_ map.
+    print_state_observer_.release();
 
     // Destroy lifetime tokens FIRST to expire weak_ptrs in ObserverGuards
     for (auto& [name, info] : devices_) {
