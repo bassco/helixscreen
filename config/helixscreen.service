@@ -60,7 +60,7 @@ ExecStartPre=+/bin/sh -c '/bin/systemctl stop helixscreen-update.path helixscree
 # Ensures: (1) update watcher units (path + oneshot) are installed even if the
 # initial install predated them or was partial, (2) unit files pick up any
 # changes shipped in a new release (ExecStartPre additions, security hardening,
-# etc.), and (3) @@placeholder@@ templating is always applied.
+# etc.), and (3) placeholder templating is always applied.
 # Runs as root (+prefix) since it writes to /etc/systemd/system/ and reloads.
 # The script is idempotent — safe to run on every start.
 ExecStartPre=+/bin/sh -c '[ -x "@@INSTALL_DIR@@/config/refresh-service-units.sh" ] && @@INSTALL_DIR@@/config/refresh-service-units.sh || true'

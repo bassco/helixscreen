@@ -238,7 +238,7 @@ TEST_CASE("NotificationHistory: Filter by severity", "[ui][filter]") {
 // Thread Safety Tests
 // ============================================================================
 
-TEST_CASE("NotificationHistory: Thread-safe concurrent adds", "[ui][thread]") {
+TEST_CASE("NotificationHistory: Thread-safe concurrent adds", "[ui][thread][slow]") {
     NotificationHistory& history = NotificationHistory::instance();
     history.clear();
 
@@ -270,7 +270,7 @@ TEST_CASE("NotificationHistory: Thread-safe concurrent adds", "[ui][thread]") {
     REQUIRE(history.count() == expected);
 }
 
-TEST_CASE("NotificationHistory: Thread-safe concurrent read/write", "[ui][thread]") {
+TEST_CASE("NotificationHistory: Thread-safe concurrent read/write", "[ui][thread][slow]") {
     NotificationHistory& history = NotificationHistory::instance();
     history.clear();
 

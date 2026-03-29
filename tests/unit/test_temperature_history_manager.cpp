@@ -459,7 +459,7 @@ TEST_CASE_METHOD(TemperatureHistoryManagerTestFixture,
 
 TEST_CASE_METHOD(TemperatureHistoryManagerTestFixture,
                  "TemperatureHistoryManager handles concurrent reads and writes",
-                 "[temperature_history]") {
+                 "[temperature_history][slow]") {
     // This is a basic smoke test for thread safety.
     // It verifies that concurrent operations don't crash.
 

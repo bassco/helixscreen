@@ -120,7 +120,7 @@ TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon basic creation works"
 }
 
 TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon updates icon from subject",
-                 "[ui_button][xml][.slow]") { // Marked .slow - hangs in CI environment
+                 "[ui_button][xml][slow]") { // Marked .slow - hangs in CI environment
     // Create button with bind_icon attribute bound to test subject
     const char* attrs[] = {"text", "Test", "bind_icon", "test_icon_subject", nullptr};
 
@@ -164,7 +164,7 @@ TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon updates icon from sub
 }
 
 TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon creates icon if none exists",
-                 "[ui_button][xml][.slow]") { // Marked .slow - hangs in CI environment
+                 "[ui_button][xml][slow]") { // Marked .slow - hangs in CI environment
     // Create button with NO initial icon, but with bind_icon
     const char* attrs[] = {"text", "No Icon", "bind_icon", "test_icon_subject", nullptr};
 
@@ -194,7 +194,7 @@ TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon creates icon if none 
 }
 
 TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon handles missing subject gracefully",
-                 "[ui_button][xml][.slow]") { // Marked .slow - hangs in CI environment
+                 "[ui_button][xml][slow]") { // Marked .slow - hangs in CI environment
     // Create button with bind_icon pointing to non-existent subject
     const char* attrs[] = {"text", "Test", "bind_icon", "nonexistent_subject", nullptr};
 
@@ -209,7 +209,7 @@ TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon handles missing subje
 }
 
 TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon handles empty string value",
-                 "[ui_button][xml][.slow]") { // Marked .slow - hangs in CI environment
+                 "[ui_button][xml][slow]") { // Marked .slow - hangs in CI environment
     // Set subject to empty string first
     set_icon_name("");
 
@@ -227,7 +227,7 @@ TEST_CASE_METHOD(UiButtonTestFixture, "ui_button bind_icon handles empty string 
 
 TEST_CASE_METHOD(UiButtonTestFixture,
                  "ui_button bind_icon works with existing icon attribute overrides",
-                 "[ui_button][xml][.slow]") { // Marked .slow - hangs in CI environment
+                 "[ui_button][xml][slow]") { // Marked .slow - hangs in CI environment
     // Create button with both static icon and bind_icon
     // bind_icon should override the static icon
     const char* attrs[] = {"text", "Test", "icon", "settings", "bind_icon", "test_icon_subject",

@@ -528,10 +528,10 @@ CONF
 }
 
 # =============================================================================
-# ensure_persistent_files
+# cleanup_unsupported_options
 # =============================================================================
 
-@test "ensure_persistent_files: removes persistent_files from section that has it" {
+@test "cleanup_unsupported_options: removes persistent_files from section that has it" {
     local conf
     conf=$(setup_moonraker_home)
     create_moonraker_conf "$conf"
@@ -551,7 +551,7 @@ persistent_files:
 type: git_repo
 CONF
 
-    ensure_persistent_files "$conf"
+    cleanup_unsupported_options "$conf"
 
     # persistent_files should have been removed
     ! awk '/^\[update_manager helixscreen\]/{found=1} found && /^\[update_manager klipper\]/{exit} found' "$conf" | grep -q 'persistent_files:'
@@ -559,7 +559,7 @@ CONF
     ! awk '/^\[update_manager helixscreen\]/{found=1} found && /^\[update_manager klipper\]/{exit} found' "$conf" | grep -q 'config/helixscreen.env'
 }
 
-@test "ensure_persistent_files: no-op when persistent_files already absent" {
+@test "cleanup_unsupported_options: no-op when persistent_files already absent" {
     local conf
     conf=$(setup_moonraker_home)
     create_moonraker_conf "$conf"
@@ -576,13 +576,13 @@ CONF
     local before
     before=$(cat "$conf")
 
-    ensure_persistent_files "$conf"
+    cleanup_unsupported_options "$conf"
 
     # Content should be unchanged — nothing to remove
     [ "$(cat "$conf")" = "$before" ]
 }
 
-@test "ensure_persistent_files: preserves other sections when removing" {
+@test "cleanup_unsupported_options: preserves other sections when removing" {
     local conf
     conf=$(setup_moonraker_home)
     create_moonraker_conf "$conf"
@@ -603,7 +603,7 @@ channel: dev
 path: ~/klipper
 CONF
 
-    ensure_persistent_files "$conf"
+    cleanup_unsupported_options "$conf"
 
     # persistent_files removed
     ! grep -q 'persistent_files:' "$conf"
@@ -615,7 +615,7 @@ CONF
     grep -q 'path: ~/klipper' "$conf"
 }
 
-@test "ensure_persistent_files: removes persistent_files between other config lines" {
+@test "cleanup_unsupported_options: removes persistent_files between other config lines" {
     local conf
     conf=$(setup_moonraker_home)
     create_moonraker_conf "$conf"
@@ -631,7 +631,7 @@ persistent_files:
     config/.disabled_services
 CONF
 
-    ensure_persistent_files "$conf"
+    cleanup_unsupported_options "$conf"
 
     # persistent_files and its continuation lines should be gone
     ! grep -q 'persistent_files:' "$conf"

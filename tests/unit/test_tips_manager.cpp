@@ -573,7 +573,7 @@ TEST_CASE_METHOD(TipsManagerTestFixture,
 // ============================================================================
 
 TEST_CASE_METHOD(TipsManagerTestFixture, "TipsManager: concurrent access is thread-safe",
-                 "[ui][thread_safety]") {
+                 "[ui][thread_safety][slow]") {
     SetUp();
 
     TipsManager* mgr = TipsManager::get_instance();

@@ -320,7 +320,7 @@ TEST_CASE("Destruction flag: flag survives object destruction", "[destruction_fl
     REQUIRE(flag->load() == false);
 }
 
-TEST_CASE("Destruction flag: thread-safe access", "[destruction_flag][async][thread]") {
+TEST_CASE("Destruction flag: thread-safe access", "[destruction_flag][async][thread][slow]") {
     // This test verifies that atomic operations on the flag are thread-safe.
     // We create an object, capture its flag, and verify we can read it
     // from multiple threads without issues.
@@ -366,7 +366,7 @@ TEST_CASE("Destruction flag: thread-safe access", "[destruction_flag][async][thr
 }
 
 TEST_CASE("Destruction flag: concurrent readers during destruction",
-          "[destruction_flag][async][thread]") {
+          "[destruction_flag][async][thread][slow]") {
     constexpr int NUM_READERS = 4;
     constexpr int READS_PER_THREAD = 100;
 
@@ -528,7 +528,7 @@ TEST_CASE("Callback safety: multiple pending callbacks", "[callback][async]") {
     REQUIRE(dead_callbacks.load() == 3);
 }
 
-TEST_CASE("Callback safety: callback in separate thread", "[callback][async][thread]") {
+TEST_CASE("Callback safety: callback in separate thread", "[callback][async][thread][slow]") {
     std::atomic<bool> callback_started{false};
     std::atomic<bool> callback_finished{false};
     std::atomic<bool> was_alive_in_callback{false};

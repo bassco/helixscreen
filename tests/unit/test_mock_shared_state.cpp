@@ -105,7 +105,7 @@ TEST_CASE("MockPrinterState basic operations", "[mock][shared_state]") {
     }
 }
 
-TEST_CASE("MockPrinterState thread safety", "[mock][shared_state][threading]") {
+TEST_CASE("MockPrinterState thread safety", "[mock][shared_state][threading][slow]") {
     MockPrinterState state;
 
     SECTION("Concurrent reads and writes to excluded objects") {

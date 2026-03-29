@@ -285,7 +285,7 @@ TEST_CASE("GCodeLayerCache adaptive mode", "[gcode][cache]") {
     }
 }
 
-TEST_CASE("GCodeLayerCache thread safety", "[gcode][cache][thread]") {
+TEST_CASE("GCodeLayerCache thread safety", "[gcode][cache][thread][slow]") {
     GCodeLayerCache cache(100 * 1024);
 
     SECTION("concurrent reads don't crash") {
