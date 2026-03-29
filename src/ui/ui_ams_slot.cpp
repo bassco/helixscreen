@@ -461,7 +461,7 @@ static void evaluate_pulse_state(AmsSlotData* data) {
  * Shows "T0", "T1", etc. when a tool is mapped to this slot.
  * Hidden when mapped_tool == -1 (no tool assigned).
  */
-static void apply_tool_badge(AmsSlotData* data, int mapped_tool) {
+static void apply_tool_badge(AmsSlotData* data, int mapped_tool, bool is_override) {
     if (!data || !data->tool_badge_bg) {
         return;
     }
@@ -480,13 +480,23 @@ static void apply_tool_badge(AmsSlotData* data, int mapped_tool) {
         lv_label_set_text(data->tool_badge, tool_text);
         lv_obj_remove_flag(data->tool_badge_bg, LV_OBJ_FLAG_HIDDEN);
 
+        // Use warning color for user overrides, muted for firmware defaults
+        if (is_override) {
+            lv_color_t warn_color = theme_manager_get_color("warning");
+            lv_obj_set_style_bg_color(data->tool_badge_bg, warn_color, LV_PART_MAIN);
+        } else {
+            lv_color_t muted_color = theme_manager_get_color("text_muted");
+            lv_obj_set_style_bg_color(data->tool_badge_bg, muted_color, LV_PART_MAIN);
+        }
+
         // Auto-contrast text color based on badge background
         if (data->tool_badge) {
             lv_color_t bg = lv_obj_get_style_bg_color(data->tool_badge_bg, LV_PART_MAIN);
             lv_color_t text_color = theme_manager_get_contrast_color(bg);
             lv_obj_set_style_text_color(data->tool_badge, text_color, LV_PART_MAIN);
         }
-        spdlog::trace("[AmsSlot] Slot {} tool badge: {}", data->slot_index, tool_text);
+        spdlog::trace("[AmsSlot] Slot {} tool badge: {} (override={})",
+                      data->slot_index, tool_text, is_override);
     } else {
         // No tool mapped - hide badge
         lv_obj_add_flag(data->tool_badge_bg, LV_OBJ_FLAG_HIDDEN);
@@ -854,7 +864,7 @@ static void setup_slot_observers(AmsSlotData* data) {
                               slot.material.empty() ? "--" : slot.material.c_str());
         }
         // Update tool badge based on slot's mapped_tool
-        apply_tool_badge(data, slot.mapped_tool);
+        apply_tool_badge(data, slot.mapped_tool, slot.tool_mapping_override);
         // Update error indicator from slot data
         apply_slot_error(data, slot);
     }
@@ -1064,7 +1074,7 @@ void ui_ams_slot_refresh(lv_obj_t* obj) {
             lv_label_set_text(data->material_label,
                               slot.material.empty() ? "--" : slot.material.c_str());
         }
-        apply_tool_badge(data, slot.mapped_tool);
+        apply_tool_badge(data, slot.mapped_tool, slot.tool_mapping_override);
         apply_slot_error(data, slot);
     }
 
