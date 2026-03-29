@@ -951,7 +951,17 @@ void AmsEditModal::update_ui() {
         lv_slider_set_value(remaining_slider, remaining_pct, LV_ANIM_OFF);
     }
 
-    // Update remaining label: "750g / 1000g (75%)" or "75%" if no weight data
+    // Show/hide weight input based on whether we have real weight data
+    lv_obj_t* weight_input = find_widget("remaining_weight_input");
+    if (weight_input) {
+        if (original_info_.total_weight_g > 0) {
+            lv_obj_remove_flag(weight_input, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(weight_input, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    // Update remaining label: "/ 1000g (75%)" or "75%" if no weight data
     format_remaining_label(remaining_pct);
 
     // Update progress bar fill width (shown in view mode)
@@ -1030,17 +1040,26 @@ void AmsEditModal::update_temp_display() {
 }
 
 void AmsEditModal::format_remaining_label(int pct) {
-    // Show grams only when we have real weight data (not synthetic 1000g).
-    // Check original_info_ because update_ui() sets synthetic 1000g on working_info_ first.
-    if (original_info_.total_weight_g > 0) {
-        int remaining_g = static_cast<int>(working_info_.remaining_weight_g);
+    bool has_weight = original_info_.total_weight_g > 0;
+
+    if (has_weight) {
+        // Weight input field shows the remaining grams — label shows "/ Xg (Y%)"
         int total_g = static_cast<int>(working_info_.total_weight_g);
-        snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "%dg / %dg (%d%%)",
-                 remaining_g, total_g, pct);
+        snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "/ %dg (%d%%)", total_g, pct);
     } else {
         helix::format::format_percent(pct, remaining_pct_buf_, sizeof(remaining_pct_buf_));
     }
     lv_subject_copy_string(&remaining_pct_subject_, remaining_pct_buf_);
+
+    // Sync the weight input field if it exists and we have weight data
+    if (has_weight) {
+        lv_obj_t* weight_input = find_widget("remaining_weight_input");
+        if (weight_input) {
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d", static_cast<int>(working_info_.remaining_weight_g));
+            lv_textarea_set_text(weight_input, buf);
+        }
+    }
 }
 
 bool AmsEditModal::is_dirty() const {
@@ -1175,6 +1194,57 @@ void AmsEditModal::handle_remaining_changed(int percent) {
 
     update_sync_button_state();
     spdlog::trace("[AmsEditModal] Remaining changed to {}%", percent);
+}
+
+void AmsEditModal::handle_weight_input_changed() {
+    if (!dialog_) {
+        return;
+    }
+
+    lv_obj_t* weight_input = find_widget("remaining_weight_input");
+    if (!weight_input) {
+        return;
+    }
+
+    const char* text = lv_textarea_get_text(weight_input);
+    if (!text || text[0] == '\0') {
+        return;
+    }
+
+    int grams = std::atoi(text);
+    if (grams < 0) {
+        grams = 0;
+    }
+    int total_g = static_cast<int>(working_info_.total_weight_g);
+    if (total_g > 0 && grams > total_g) {
+        grams = total_g;
+    }
+
+    working_info_.remaining_weight_g = static_cast<float>(grams);
+
+    // Recalculate percentage and update slider + label
+    int pct = (working_info_.total_weight_g > 0)
+                  ? static_cast<int>(100.0f * grams / working_info_.total_weight_g)
+                  : 0;
+    pct = std::max(0, std::min(100, pct));
+
+    lv_obj_t* slider = find_widget("remaining_slider");
+    if (slider) {
+        lv_slider_set_value(slider, pct, LV_ANIM_OFF);
+    }
+
+    lv_obj_t* progress_fill = find_widget("remaining_progress_fill");
+    if (progress_fill) {
+        lv_obj_set_width(progress_fill, lv_pct(pct));
+    }
+
+    // Update the info label ("/ 1000g (75%)") without re-setting the input text
+    int total = static_cast<int>(working_info_.total_weight_g);
+    snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "/ %dg (%d%%)", total, pct);
+    lv_subject_copy_string(&remaining_pct_subject_, remaining_pct_buf_);
+
+    update_sync_button_state();
+    spdlog::trace("[AmsEditModal] Weight input changed to {}g ({}%)", grams, pct);
 }
 
 void AmsEditModal::handle_remaining_edit() {
@@ -1350,6 +1420,7 @@ void AmsEditModal::register_callbacks() {
         // Register handler for spool_item clicks (shared component uses this callback name)
         {"spoolman_spool_item_clicked_cb", on_spool_item_cb},
         {"ams_edit_tool_changed_cb", on_tool_changed_cb},
+        {"ams_edit_weight_changed_cb", on_weight_changed_cb},
     });
 
     callbacks_registered_ = true;
@@ -1508,6 +1579,13 @@ void AmsEditModal::on_tool_changed_cb(lv_event_t* e) {
         auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_target(e));
         int index = lv_dropdown_get_selected(dropdown);
         self->handle_tool_changed(index);
+    }
+}
+
+void AmsEditModal::on_weight_changed_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) {
+        self->handle_weight_input_changed();
     }
 }
 

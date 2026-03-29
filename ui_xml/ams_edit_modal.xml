@@ -50,10 +50,20 @@
       <!-- Content area - HORIZONTAL layout with side-by-side sections -->
       <lv_obj width="100%"
               height="content" style_pad_all="#space_md" flex_flow="row" style_pad_gap="#space_lg" scrollable="false">
-        <!-- LEFT COLUMN: Color preview (tappable) -->
+        <!-- LEFT COLUMN: Tool remap + Color preview -->
         <lv_obj width="#left_column_width"
-                height="100%" style_pad_all="0" flex_flow="column" style_flex_main_place="center"
+                height="content" style_pad_all="0" flex_flow="column" style_flex_main_place="start"
                 style_flex_cross_place="center" style_pad_gap="#space_sm" scrollable="false">
+          <!-- Tool assignment dropdown -->
+          <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="column"
+                  style_pad_gap="#space_xxs" scrollable="false">
+            <text_small text="Remap Tool" translation_tag="Remap Tool"/>
+            <lv_dropdown name="tool_dropdown"
+                         width="100%" height="content" style_radius="#border_radius"
+                         style_border_width="0" options="None">
+              <event_cb trigger="value_changed" callback="ams_edit_tool_changed_cb"/>
+            </lv_dropdown>
+          </lv_obj>
           <!-- Large color swatch (tappable to open picker) -->
           <lv_obj name="color_swatch"
                   width="#color_preview_size" height="#color_preview_size" style_radius="#border_radius"
@@ -106,6 +116,12 @@
               <lv_obj height="content"
                       style_pad_all="0" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
                       scrollable="false">
+                <!-- Weight input (shown when weight data available) -->
+                <text_input name="remaining_weight_input" width="60" max_length="5"
+                            keyboard_hint="numeric" hidden="true">
+                  <event_cb trigger="value_changed" callback="ams_edit_weight_changed_cb"/>
+                </text_input>
+                <!-- Info label: "/ 1000g (75%)" or just "100%" when no weight data -->
                 <text_body name="remaining_pct_label" text="100%"/>
                 <!-- Edit button (shown when edit_remaining_mode=0) -->
                 <ui_button name="btn_remaining_edit"
@@ -158,17 +174,6 @@
               <text_small text="Bed:" translation_tag="Bed:"/>
               <text_small name="temp_bed_label" text="60°C"/>
             </lv_obj>
-          </lv_obj>
-          <!-- Tool assignment dropdown -->
-          <lv_obj width="100%"
-                  height="content" style_pad_all="0" flex_flow="row" style_flex_main_place="start"
-                  style_flex_cross_place="center" style_pad_gap="#space_sm" scrollable="false">
-            <text_small text="Tool" translation_tag="Tool"/>
-            <lv_dropdown name="tool_dropdown"
-                         width="#dropdown_width" height="content" style_radius="#border_radius"
-                         style_border_width="0" options="None">
-              <event_cb trigger="value_changed" callback="ams_edit_tool_changed_cb"/>
-            </lv_dropdown>
           </lv_obj>
         </lv_obj>
       </lv_obj>
