@@ -131,7 +131,7 @@ void PrintStartController::initiate() {
     if (!printer_state_.can_start_new_print()) {
         PrintJobState current_state = printer_state_.get_print_job_state();
         const char* state_str = print_job_state_to_string(current_state);
-        NOTIFY_ERROR("Cannot start print: printer is {}", state_str);
+        NOTIFY_ERROR(lv_tr("Cannot start print: printer is {}"), state_str);
         spdlog::warn("[PrintStartController] Attempted to start print while printer is in {} state",
                      state_str);
         if (update_print_button_) {
@@ -174,7 +174,7 @@ void PrintStartController::execute_print_start() {
     auto* prep_manager = detail_view_ ? detail_view_->get_prep_manager() : nullptr;
     if (!prep_manager) {
         spdlog::error("[PrintStartController] Cannot start print - prep manager not initialized");
-        NOTIFY_ERROR("Cannot start print: internal error");
+        NOTIFY_ERROR(lv_tr("Cannot start print: internal error"));
         if (update_print_button_) {
             update_print_button_(); // Re-enable button on early failure
         }

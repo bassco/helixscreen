@@ -17,6 +17,8 @@
 #include "static_panel_registry.h"
 #include "wizard_config_paths.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstring>
@@ -201,7 +203,7 @@ void WizardHeaterSelectStep::cleanup() {
 
     // Persist to disk
     if (!config->save()) {
-        NOTIFY_ERROR("Failed to save heater configuration");
+        NOTIFY_ERROR(lv_tr("Failed to save heater configuration"));
     }
 
     // Reset UI references

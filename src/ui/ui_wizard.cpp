@@ -1047,7 +1047,7 @@ void ui_wizard_complete() {
 
     // Show success toast when adding a subsequent printer
     if (config && config->get_printer_ids().size() > 1) {
-        NOTIFY_SUCCESS("New printer successfully added");
+        NOTIFY_SUCCESS(lv_tr("New printer successfully added"));
     }
 
     spdlog::info("[Wizard] Wizard complete, transitioning to main UI");

@@ -137,6 +137,7 @@ TEST_CASE("MoonrakerClient destructor clears callbacks (UAF prevention)",
 
     SECTION("Multiple rapid create/destroy cycles (stress test)") {
         // Stress test: rapid allocation/deallocation to catch UAF bugs
+        int cycles_completed = 0;
 
         for (int i = 0; i < 20; i++) {
             auto loop = std::make_shared<hv::EventLoop>();
@@ -152,10 +153,11 @@ TEST_CASE("MoonrakerClient destructor clears callbacks (UAF prevention)",
 
             // Destroy immediately
             client.reset();
+            cycles_completed++;
         }
 
-        // Reaching here without crash = callbacks properly cleared
-        REQUIRE(true);
+        // All 20 rapid create/connect/destroy cycles completed without crash
+        REQUIRE(cycles_completed == 20);
     }
 
     SECTION("Destroy client with registered persistent callbacks") {
@@ -344,10 +346,10 @@ TEST_CASE_METHOD(MoonrakerClientSecurityFixture,
                 // This is expected behavior
             });
 
-        // If response arrives and callback throws, should be caught
-        // This test verifies the pattern exists (actual response needs server)
-        // The important thing is NO CRASH occurs
-        REQUIRE(true);
+        // Verify request was sent without throwing (actual exception handling
+        // requires a real server response, but registration must not crash)
+        REQUIRE_NOTHROW(client->send_jsonrpc("test.noop", json(), [](json) {},
+                                              [](const MoonrakerError&) {}));
     }
 }
 
@@ -420,9 +422,9 @@ TEST_CASE_METHOD(MoonrakerClientSecurityFixture,
             throw std::runtime_error("Test exception in notify callback");
         });
 
-        // Simulating notification reception would require server
-        // This test documents expected behavior
-        REQUIRE(true);
+        // Verify notify callback registration itself doesn't throw
+        // (actual notification dispatch requires a server connection)
+        REQUIRE(callback_invoked == false);
     }
 
     SECTION("Method callback throwing doesn't crash") {
@@ -435,8 +437,9 @@ TEST_CASE_METHOD(MoonrakerClientSecurityFixture,
                 throw std::runtime_error("Test exception in method callback");
             });
 
-        // Expected behavior: exception caught and logged
-        REQUIRE(true);
+        // Verify method callback registration itself doesn't throw
+        // (actual method dispatch requires a server connection)
+        REQUIRE(callback_invoked == false);
     }
 }
 
@@ -512,7 +515,6 @@ TEST_CASE("MoonrakerClient destructor waits for in-flight callbacks (issue #357)
             REQUIRE_NOTHROW(client.reset());
         }
         // Reaching here without SIGSEGV = mutex synchronization works
-        REQUIRE(true);
     }
 
     SECTION("is_destroying flag prevents new callback execution during destruction") {

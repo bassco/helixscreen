@@ -1467,7 +1467,7 @@ void LedSettingsOverlay::rebuild_contextual_controls(const std::string& state_ke
     if (action.action_type == "wled_preset") {
         // Simple spinbox / text for preset ID
         lv_obj_t* label = lv_label_create(container);
-        lv_label_set_text(label, fmt::format("Preset ID: {}", action.wled_preset).c_str());
+        lv_label_set_text(label, fmt::format(lv_tr("Preset ID: {}"), action.wled_preset).c_str());
         lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
 
         lv_obj_t* slider = lv_slider_create(container);
@@ -1490,7 +1490,7 @@ void LedSettingsOverlay::rebuild_contextual_controls(const std::string& state_ke
                 auto* data = static_cast<WledSliderData*>(lv_obj_get_user_data(s));
                 if (data) {
                     int value = lv_slider_get_value(s);
-                    lv_label_set_text(data->label, fmt::format("Preset ID: {}", value).c_str());
+                    lv_label_set_text(data->label, fmt::format(lv_tr("Preset ID: {}"), value).c_str());
                     get_led_settings_overlay().handle_wled_preset_selected(data->key, value);
                 }
                 LVGL_SAFE_EVENT_CB_END();

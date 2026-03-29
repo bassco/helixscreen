@@ -63,6 +63,7 @@ class Config {
     std::string path;
     std::string active_printer_id_;     ///< Currently active printer slug ID
     bool restored_from_backup_ = false; ///< Config was restored from backup during init
+    bool read_only_mode_ = false;       ///< Config directory is on a read-only filesystem
 
   protected:
     json data;
@@ -205,6 +206,17 @@ class Config {
      * @return Absolute path to the loaded configuration file
      */
     std::string get_path();
+
+    /**
+     * @brief Check if the config directory is on a read-only filesystem
+     *
+     * Detected during init() by probing a test file write.
+     * When true, save() will skip writes and return false.
+     * UI code can use this to show a persistent notification.
+     *
+     * @return true if filesystem is read-only
+     */
+    bool is_read_only() const;
 
     /// Check if this config was loaded from a platform preset
     bool has_preset() const;

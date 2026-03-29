@@ -7,6 +7,8 @@
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_step_progress.h"
 #include "ui_temperature_utils.h"
 
@@ -197,9 +199,9 @@ void AmsOperationSidebar::init_observers() {
                     spdlog::info("[AmsSidebar] Unload complete — enabling bypass");
                     AmsError err = backend->enable_bypass();
                     if (err.result == AmsResult::SUCCESS) {
-                        NOTIFY_INFO("Bypass enabled");
+                        NOTIFY_INFO(lv_tr("Bypass enabled"));
                     } else {
-                        NOTIFY_ERROR("Bypass failed: {}", err.user_msg);
+                        NOTIFY_ERROR(lv_tr("Bypass failed: {}"), err.user_msg);
                     }
                 }
             }
@@ -589,7 +591,7 @@ void AmsOperationSidebar::handle_unload() {
 
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
@@ -600,7 +602,7 @@ void AmsOperationSidebar::handle_unload() {
 
     AmsError error = backend->unload_filament();
     if (error.result != AmsResult::SUCCESS) {
-        NOTIFY_ERROR("Unload failed: {}", error.user_msg);
+        NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
     }
 }
 
@@ -609,13 +611,13 @@ void AmsOperationSidebar::handle_reset() {
 
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
     AmsError error = backend->reset();
     if (error.result != AmsResult::SUCCESS) {
-        NOTIFY_ERROR("Reset failed: {}", error.user_msg);
+        NOTIFY_ERROR(lv_tr("Reset failed: {}"), error.user_msg);
     }
 }
 
@@ -624,13 +626,13 @@ void AmsOperationSidebar::handle_bypass_toggle() {
 
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
     AmsSystemInfo info = backend->get_system_info();
     if (info.has_hardware_bypass_sensor) {
-        NOTIFY_WARNING("Bypass controlled by sensor");
+        NOTIFY_WARNING(lv_tr("Bypass controlled by sensor"));
         spdlog::warn("[AmsSidebar] Bypass toggle blocked — hardware sensor controls bypass");
         return;
     }
@@ -641,7 +643,7 @@ void AmsOperationSidebar::handle_bypass_toggle() {
     if (currently_bypassed) {
         error = backend->disable_bypass();
         if (error.result == AmsResult::SUCCESS) {
-            NOTIFY_INFO("Bypass disabled");
+            NOTIFY_INFO(lv_tr("Bypass disabled"));
         }
     } else {
         // If filament is loaded from an AMS slot, unload first (full animation),
@@ -652,10 +654,10 @@ void AmsOperationSidebar::handle_bypass_toggle() {
             pending_bypass_enable_ = true;
             error = backend->unload_filament();
             if (error.result == AmsResult::SUCCESS) {
-                NOTIFY_INFO("Unloading before bypass...");
+                NOTIFY_INFO(lv_tr("Unloading before bypass..."));
             } else {
                 pending_bypass_enable_ = false;
-                NOTIFY_ERROR("Unload failed: {}", error.user_msg);
+                NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
             }
             return;
         }
@@ -663,12 +665,12 @@ void AmsOperationSidebar::handle_bypass_toggle() {
         // No filament loaded — enable bypass directly
         error = backend->enable_bypass();
         if (error.result == AmsResult::SUCCESS) {
-            NOTIFY_INFO("Bypass enabled");
+            NOTIFY_INFO(lv_tr("Bypass enabled"));
         }
     }
 
     if (error.result != AmsResult::SUCCESS) {
-        NOTIFY_ERROR("Bypass toggle failed: {}", error.user_msg);
+        NOTIFY_ERROR(lv_tr("Bypass toggle failed: {}"), error.user_msg);
     }
 }
 

@@ -41,7 +41,7 @@
       <bind_flag_if_eq subject="toast_action_visible" flag="hidden" ref_value="0"/>
     </ui_button>
     <!-- Close button -->
-    <ui_button name="toast_close_btn" width="32" height="32" icon="xmark" variant="ghost">
+    <ui_button name="toast_close_btn" width="40" height="40" icon="xmark" variant="ghost">
       <event_cb trigger="clicked" callback="toast_close_btn_clicked"/>
     </ui_button>
   </view>

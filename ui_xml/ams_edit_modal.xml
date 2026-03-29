@@ -57,7 +57,7 @@
           <!-- Large color swatch (tappable to open picker) -->
           <lv_obj name="color_swatch"
                   width="#color_preview_size" height="#color_preview_size" style_radius="#border_radius"
-                  style_bg_color="0x808080" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
+                  style_bg_color="#card_bg" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
                   style_border_opa="80" scrollable="false" clickable="true">
             <event_cb trigger="clicked" callback="ams_edit_color_clicked_cb"/>
             <!-- Edit overlay hint -->

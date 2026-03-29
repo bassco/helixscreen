@@ -11,13 +11,13 @@
 | **Production UI** | 30 panels, 19 overlays, 13 modals, 187 XML layouts |
 | **First-Run Wizard** | 13-step guided setup (touch cal, WiFi, probe, input shaper, telemetry) |
 | **Moonraker API** | 116 methods, abstraction boundary enforced |
-| **Multi-Material (AMS)** | 5 backends, multi-unit, multi-backend, error visualization |
+| **Multi-Material (AMS)** | 6 backends, multi-unit, multi-backend, error visualization |
 | **Tool Abstraction** | ToolState with tool-backend mapping, multi-extruder temps |
 | **Spoolman** | 23 API methods, full CRUD, Spool Wizard, virtualized list with search |
 | **Plugin System** | Core infrastructure complete |
 | **Test Suite** | 131 test files (99 C++, 32 shell), ~3,400 test cases, 17,600+ assertions |
 | **Platforms** | Pi, AD5M, K1, QIDI, Snapmaker U1, macOS, Linux |
-| **Printer Database** | 63 printer models with auto-detection |
+| **Printer Database** | 71 printer models with auto-detection |
 | **Filament Database** | 48 materials with temp/drying/compatibility data |
 | **Theme System** | Dynamic JSON themes with live preview |
 | **Layout System** | Auto-detection for ultrawide (1920x480) and small (480x320) displays |
@@ -108,9 +108,10 @@ The plugin system launched with version checking, UI injection points, and async
 
 ### 2. Production Hardening
 
+**1.0 hardening audit completed 2026-03-28.** 21 items fixed across crash safety, network resilience, config robustness, UI consistency, i18n, and test quality. See git history for details.
+
 Remaining items for production readiness:
 - [ ] Structured logging with log rotation
-- [ ] Edge case testing (print failures, filesystem errors)
 - [ ] Streaming file operations verified on AD5M with 50MB+ G-code files
 
 ---
@@ -153,15 +154,17 @@ Remaining items for production readiness:
 
 ### Multi-Material (AMS) & Tool Abstraction
 
-**5 backend implementations** supporting diverse hardware:
+**6 backend implementations** supporting diverse hardware:
 
 | Backend | Hardware | Topology | Slots | Key Capabilities |
 |---------|----------|----------|-------|-----------------|
 | **Happy Hare** | ERCF, Tradrack, 3MS, Night Owl | Linear | 1-16 | Tool mapping, bypass, endless spool (read-only) |
-| **AFC** | Box Turtle (AFC-Klipper-Add-On) | Hub | 1-16 | Editable endless spool, auto-heat on load, buffer health, 12+ device actions |
+| **AFC** | Box Turtle, ViViD (AFC-Klipper-Add-On) | Hub | 1-16 | Editable endless spool, auto-heat on load, buffer health, 12+ device actions |
 | **Tool Changer** | viesturz/klipper-toolchanger | Parallel | 1-16 | Mounted/detect state, per-tool filament systems |
 | **ACE** | Anycubic ACE Pro (ValgACE/BunnyACE/DuckACE) | Hub | 4 | Integrated dryer control (temp/duration/fan), REST polling |
-| **Mock** | Development simulation | All | Config | Simulates all 4 types with realistic multi-phase operations |
+| **AD5X IFS** | FlashForge Adventurer 5X | Hub | 4 | Intelligent Filament Switching, ZMOD firmware |
+| **CFS** | Creality K2 series (RS-485) | Hub | 4-20 | Creality Filament System, multi-unit |
+| **Mock** | Development simulation | All | Config | Simulates all backend types with realistic multi-phase operations |
 
 **Multi-backend architecture:**
 - Multiple concurrent filament systems per printer (e.g., tool changer + AFC)
@@ -245,6 +248,15 @@ Remaining items for production readiness:
 | **Camera/Webcam** | Low | Lower priority for local touchscreen use case |
 | **Belt tension visualization** | Future | Accelerometer-based CoreXY belt comparison; reuses frequency chart |
 | **OTA updates** | Future | UpdateChecker downloads + installs; needs auto-apply without user interaction |
+| ~~**Update hash verification**~~ | ~~Low~~ | ✅ Done — SHA256 verified from R2 manifest before install, graceful skip on GitHub fallback |
+| **Pre-migration config backup** | Low | Snapshot config before running versioned migrations, cleanup on success |
+| **Printer DB schema validation** | Low | Validate required fields in printer_database.json entries, detect duplicate IDs |
+| **Text overflow audit** | Medium | 226/282 XML files lack truncation/wrapping for long translated strings |
+| **Breakpoint coverage** | Medium | Only ~10 XML files implement responsive breakpoints; expand to more panels |
+| **UI test coverage** | High | 13% coverage (34/257 src files tested); add panel interaction tests |
+| **Plugin system tests** | Medium | Only mock tests exist; add real plugin load/unload/injection tests |
+| **Error-path integration tests** | High | Disconnect mid-print, settings corruption recovery, AMS hardware desync |
+| **Missing docs** | Medium | SENSOR_MANAGEMENT, GCODE_RENDERING_ARCHITECTURE, ACTION_PROMPTS, BLUETOOTH_SYSTEM, USB_MANAGEMENT |
 
 See `docs/devel/IDEAS.md` for additional ideas and design rationale.
 
@@ -298,7 +310,7 @@ Don't copy features from web UIs just because "competitors have it" — evaluate
 | **Creality K1** | MIPS32 | Static linking |
 | **QIDI** | aarch64 | Detection heuristics + print profile |
 | **Snapmaker U1** | armv7-a | 480x320 display support |
-| **Creality K2** | ARM | Static musl (untested) |
+| **Creality K2** | ARM | Static musl (tested on K2 Max) |
 | **macOS** | x86_64/ARM64 | SDL2 development |
 | **Linux** | x86_64 | SDL2, CI/CD tested |
 

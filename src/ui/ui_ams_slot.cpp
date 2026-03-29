@@ -7,6 +7,7 @@
 #include "ui_icon_codepoints.h"
 #include "ui_observer_guard.h"
 #include "ui_spool_canvas.h"
+#include "ui_update_queue.h"
 
 #include "ams_state.h"
 #include "ams_types.h"
@@ -122,6 +123,8 @@ static void register_slot_data(lv_obj_t* obj, AmsSlotData* data) {
 static void unregister_slot_data(lv_obj_t* obj) {
     auto it = s_slot_registry.find(obj);
     if (it != s_slot_registry.end()) {
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        helix::ui::UpdateQueue::instance().drain();
         std::unique_ptr<AmsSlotData> data(it->second);
         if (data) {
             // Use reset() to properly unsubscribe from subjects (which are alive

@@ -533,17 +533,11 @@ TEST_CASE_METHOD(ExcludeObjectTestFixture, "exclude_object handles null callback
                  "[callbacks][print]") {
     SECTION("Valid object with null callbacks - no crash") {
         // Should not crash with null callbacks
-        api->exclude_object("Part_1", nullptr, nullptr);
-
-        // Test completes without crash
-        REQUIRE(true);
+        REQUIRE_NOTHROW(api->exclude_object("Part_1", nullptr, nullptr));
     }
 
     SECTION("Invalid object with null callbacks - no crash") {
         // Should not crash even with null error callback
-        api->exclude_object("Part\n1", nullptr, nullptr);
-
-        // Test completes without crash (error logged but no callback invoked)
-        REQUIRE(true);
+        REQUIRE_NOTHROW(api->exclude_object("Part\n1", nullptr, nullptr));
     }
 }

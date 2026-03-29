@@ -1140,7 +1140,7 @@ void AmsPanel::handle_bypass_spool_click() {
             case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
                 AmsState::instance().clear_external_spool_info();
                 // bypass display update handled reactively by external_spool_observer_
-                NOTIFY_INFO("External spool cleared");
+                NOTIFY_INFO(lv_tr("External spool cleared"));
                 break;
 
             case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
@@ -1182,7 +1182,7 @@ void AmsPanel::on_path_slot_clicked(int slot_index, void* user_data) {
     // Trigger filament load for the clicked slot
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
@@ -1226,7 +1226,7 @@ void AmsPanel::on_path_slot_clicked(int slot_index, void* user_data) {
             if (error.result == AmsResult::SUCCESS) {
                 // Note: The actual load will be triggered after unload completes
                 // For now, we'll rely on the user clicking again or the backend auto-loading
-                NOTIFY_INFO("Unloading... click again to load slot {}", slot_index + 1);
+                NOTIFY_INFO(lv_tr("Unloading... click again to load slot {}"), slot_index + 1);
             }
         }
     } else {
@@ -1238,7 +1238,7 @@ void AmsPanel::on_path_slot_clicked(int slot_index, void* user_data) {
     }
 
     if (error.result != AmsResult::SUCCESS) {
-        NOTIFY_ERROR("Load failed: {}", error.user_msg);
+        NOTIFY_ERROR(lv_tr("Load failed: {}"), error.user_msg);
     }
 }
 
@@ -1312,14 +1312,14 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
             switch (action) {
             case helix::ui::AmsContextMenu::MenuAction::LOAD:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 // Check if backend is busy
                 {
                     AmsSystemInfo info = backend->get_system_info();
                     if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
-                        NOTIFY_WARNING("AMS is busy: {}", ams_action_to_string(info.action));
+                        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
                         return;
                     }
                 }
@@ -1331,39 +1331,39 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
 
             case helix::ui::AmsContextMenu::MenuAction::UNLOAD:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 {
                     AmsError error = backend->unload_filament(slot);
                     if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR("Unload failed: {}", error.user_msg);
+                        NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
                     }
                 }
                 break;
 
             case helix::ui::AmsContextMenu::MenuAction::EJECT:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 {
                     AmsError error = backend->eject_lane(slot);
                     if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR("Eject failed: {}", error.user_msg);
+                        NOTIFY_ERROR(lv_tr("Eject failed: {}"), error.user_msg);
                     }
                 }
                 break;
 
             case helix::ui::AmsContextMenu::MenuAction::RESET_LANE:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 {
                     AmsError error = backend->reset_lane(slot);
                     if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR("Reset failed: {}", error.user_msg);
+                        NOTIFY_ERROR(lv_tr("Reset failed: {}"), error.user_msg);
                     }
                 }
                 break;
@@ -1392,7 +1392,7 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
 
             case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 {
@@ -1410,9 +1410,9 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
                     auto error = backend->set_slot_info(slot, cleared);
                     if (error.success()) {
                         AmsState::instance().sync_from_backend();
-                        NOTIFY_INFO("Slot {} spool cleared", slot + 1);
+                        NOTIFY_INFO(lv_tr("Slot {} spool cleared"), slot + 1);
                     } else {
-                        NOTIFY_ERROR("Clear failed: {}", error.user_msg);
+                        NOTIFY_ERROR(lv_tr("Clear failed: {}"), error.user_msg);
                     }
                 }
                 break;
@@ -1462,7 +1462,7 @@ void AmsPanel::show_edit_modal(int slot_index) {
             if (result.saved) {
                 AmsState::instance().set_external_spool_info(result.slot_info);
                 // bypass display update handled reactively by external_spool_observer_
-                NOTIFY_INFO("External spool updated");
+                NOTIFY_INFO(lv_tr("External spool updated"));
             }
         });
         edit_modal_->show_for_slot(parent_screen_, -2, initial_info, api_);
@@ -1471,7 +1471,7 @@ void AmsPanel::show_edit_modal(int slot_index) {
 
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
@@ -1493,7 +1493,7 @@ void AmsPanel::show_edit_modal(int slot_index) {
 
                 AmsState::instance().sync_from_backend();
 
-                NOTIFY_INFO("Slot {} updated", result.slot_index + 1);
+                NOTIFY_INFO(lv_tr("Slot {} updated"), result.slot_index + 1);
             }
         }
     });

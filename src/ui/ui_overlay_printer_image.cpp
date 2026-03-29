@@ -479,7 +479,7 @@ void PrinterImageOverlay::handle_auto_detect() {
         auto_path = PrinterImages::get_best_printer_image(printer_type);
     }
     update_preview("", "Auto-Detect", auto_path);
-    NOTIFY_INFO("Printer image set to auto-detect");
+    NOTIFY_INFO(lv_tr("Printer image set to auto-detect"));
 }
 
 void PrinterImageOverlay::handle_image_selected(const std::string& image_id) {

@@ -898,8 +898,29 @@ void Config::init(const std::string& config_path) {
         }
     }
 
+    // Probe for read-only filesystem before attempting any writes.
+    // Try creating a small test file in the config directory — if it fails
+    // with EROFS or EACCES, enable read-only mode and skip all future saves.
+    {
+        fs::path config_dir = fs::path(path).parent_path();
+        std::string probe_path = (config_dir / ".helix-write-probe").string();
+        std::ofstream probe(probe_path);
+        if (!probe.is_open()) {
+            int err = errno;
+            if (err == EROFS || err == EACCES) {
+                read_only_mode_ = true;
+                spdlog::warn("[Config] Read-only filesystem detected ({}): "
+                             "config changes will not be persisted",
+                             strerror(err));
+            }
+        } else {
+            probe.close();
+            std::remove(probe_path.c_str());
+        }
+    }
+
     // Save updated config with any new defaults or migrations
-    if (config_modified) {
+    if (config_modified && !read_only_mode_) {
         std::ofstream o(path);
         o << std::setw(2) << data << std::endl;
         spdlog::debug("[Config] Saved updated config to {}", path);
@@ -1038,10 +1059,29 @@ json& Config::get_json(const std::string& json_path) {
     return data[json::json_pointer(json_path)];
 }
 
+/// Map common errno values to user-friendly descriptions
+static std::string errno_reason(int err) {
+    switch (err) {
+    case ENOSPC:
+        return "disk full";
+    case EROFS:
+        return "read-only filesystem";
+    case EACCES:
+        return "permission denied";
+    default:
+        return strerror(err);
+    }
+}
+
 bool Config::save() {
     if (path.empty()) {
         spdlog::trace("[Config] Skipping save (no config path set)");
         return true;
+    }
+
+    if (read_only_mode_) {
+        spdlog::warn("[Config] Skipping save — filesystem is read-only");
+        return false;
     }
 
     spdlog::trace("[Config] Saving config to {}", path);
@@ -1065,9 +1105,12 @@ bool Config::save() {
         {
             std::ofstream o(tmp_path);
             if (!o.is_open()) {
-                NOTIFY_ERROR("Could not save configuration file");
-                LOG_ERROR_INTERNAL("Failed to open temp file for writing: {}", tmp_path);
-                CONFIG_RECORD_ERROR("file_io", "config_write_failed", "cannot open temp file");
+                std::string reason = errno_reason(errno);
+                NOTIFY_ERROR("Could not save settings: {}", reason);
+                LOG_ERROR_INTERNAL("Failed to open temp file for writing: {} ({})", tmp_path,
+                                   reason);
+                CONFIG_RECORD_ERROR("file_io", "config_write_failed",
+                                    fmt::format("open failed: {}", reason));
                 return false;
             }
 
@@ -1075,9 +1118,11 @@ bool Config::save() {
             o.flush();
 
             if (!o.good()) {
-                NOTIFY_ERROR("Error writing configuration file");
-                LOG_ERROR_INTERNAL("Failed to write config to temp file: {}", tmp_path);
-                CONFIG_RECORD_ERROR("file_io", "config_write_failed", "write error on temp file");
+                std::string reason = errno_reason(errno);
+                NOTIFY_ERROR("Failed to save settings: {}", reason);
+                LOG_ERROR_INTERNAL("Failed to write config to {}: {}", tmp_path, reason);
+                CONFIG_RECORD_ERROR("file_io", "config_write_failed",
+                                    fmt::format("write error: {}", reason));
                 std::remove(tmp_path.c_str());
                 return false;
             }
@@ -1107,6 +1152,10 @@ bool Config::save() {
                             fmt::format("exception: {}", e.what()));
         return false;
     }
+}
+
+bool Config::is_read_only() const {
+    return read_only_mode_;
 }
 
 bool Config::has_preset() const {

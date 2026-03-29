@@ -15,6 +15,8 @@
 #include "ui_ams_slot_layout.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_filament_path_canvas.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_ams.h"
@@ -1113,13 +1115,13 @@ void AmsOverviewPanel::show_detail_context_menu(int slot_index, lv_obj_t* near_w
 
             case helix::ui::AmsContextMenu::MenuAction::UNLOAD:
                 if (!backend) {
-                    NOTIFY_WARNING("AMS not available");
+                    NOTIFY_WARNING(lv_tr("AMS not available"));
                     return;
                 }
                 {
                     AmsError error = backend->unload_filament(slot);
                     if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR("Unload failed: {}", error.user_msg);
+                        NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
                     }
                 }
                 break;
@@ -1218,7 +1220,7 @@ void AmsOverviewPanel::handle_bypass_click() {
             case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
                 AmsState::instance().clear_external_spool_info();
                 // bypass display update handled reactively by external_spool_observer_
-                NOTIFY_INFO("External spool cleared");
+                NOTIFY_INFO(lv_tr("External spool cleared"));
                 break;
 
             case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
@@ -1277,7 +1279,7 @@ void AmsOverviewPanel::show_edit_modal(int slot_index) {
             if (result.saved) {
                 AmsState::instance().set_external_spool_info(result.slot_info);
                 // bypass display update handled reactively by external_spool_observer_
-                NOTIFY_INFO("External spool updated");
+                NOTIFY_INFO(lv_tr("External spool updated"));
             }
         });
         edit_modal_->show_for_slot(parent_screen_, -2, initial_info, api_);
@@ -1287,7 +1289,7 @@ void AmsOverviewPanel::show_edit_modal(int slot_index) {
     // Regular AMS slot
     AmsBackend* backend = AmsState::instance().get_backend();
     if (!backend) {
-        NOTIFY_WARNING("AMS not available");
+        NOTIFY_WARNING(lv_tr("AMS not available"));
         return;
     }
 
@@ -1299,7 +1301,7 @@ void AmsOverviewPanel::show_edit_modal(int slot_index) {
             if (backend) {
                 backend->set_slot_info(result.slot_index, result.slot_info);
                 AmsState::instance().sync_from_backend();
-                NOTIFY_INFO("Slot {} updated", result.slot_index + 1);
+                NOTIFY_INFO(lv_tr("Slot {} updated"), result.slot_index + 1);
             }
         }
     });

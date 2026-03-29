@@ -851,12 +851,12 @@ TEST_CASE("ActionPromptManager: Callbacks", "[action_prompt][callback]") {
     SECTION("Callbacks can be null") {
         ActionPromptManager manager2;
         // No callbacks set - should not crash
-        manager2.process_line("// action:prompt_begin Test");
-        manager2.process_line("// action:prompt_show");
-        manager2.process_line("// action:notify Test");
-        manager2.process_line("// action:prompt_end");
-        // If we get here without crash, test passes
-        REQUIRE(true);
+        REQUIRE_NOTHROW(manager2.process_line("// action:prompt_begin Test"));
+        REQUIRE_NOTHROW(manager2.process_line("// action:prompt_show"));
+        REQUIRE_NOTHROW(manager2.process_line("// action:notify Test"));
+        REQUIRE_NOTHROW(manager2.process_line("// action:prompt_end"));
+        // After full lifecycle with null callbacks, state returns to IDLE
+        REQUIRE_FALSE(manager2.has_active_prompt());
     }
 }
 

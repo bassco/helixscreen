@@ -8,6 +8,8 @@
 #include "ui_component_header_bar.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_exclude_object_map_view.h"
 #include "ui_exclude_objects_list_overlay.h"
 #include "ui_filename_utils.h"
@@ -1174,7 +1176,7 @@ void PrintStatusPanel::handle_pause_button() {
         const auto& pause_info = StandardMacros::instance().get(StandardMacroSlot::Pause);
         if (pause_info.is_empty()) {
             spdlog::warn("[{}] Pause macro slot is empty", get_name());
-            NOTIFY_WARNING("Pause macro not configured");
+            NOTIFY_WARNING(lv_tr("Pause macro not configured"));
             return;
         }
 
@@ -1203,7 +1205,7 @@ void PrintStatusPanel::handle_pause_button() {
         const auto& resume_info = StandardMacros::instance().get(StandardMacroSlot::Resume);
         if (resume_info.is_empty()) {
             spdlog::warn("[{}] Resume macro slot is empty", get_name());
-            NOTIFY_WARNING("Resume macro not configured");
+            NOTIFY_WARNING(lv_tr("Resume macro not configured"));
             return;
         }
 
@@ -1242,7 +1244,7 @@ void PrintStatusPanel::handle_cancel_button() {
     // Check if AbortManager is idle (not already aborting)
     if (helix::AbortManager::instance().is_aborting()) {
         spdlog::warn("[{}] Abort already in progress", get_name());
-        NOTIFY_WARNING("Abort already in progress");
+        NOTIFY_WARNING(lv_tr("Abort already in progress"));
         return;
     }
 
@@ -1273,7 +1275,7 @@ void PrintStatusPanel::handle_reprint_button() {
 
     if (current_print_filename_.empty()) {
         spdlog::warn("[{}] No filename to reprint", get_name());
-        NOTIFY_WARNING("No file to reprint");
+        NOTIFY_WARNING(lv_tr("No file to reprint"));
         return;
     }
 

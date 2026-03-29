@@ -560,7 +560,10 @@ void SettingsPanel::setup_toggle_handlers() {
 #ifndef ENABLE_GLES_3D
             // Without GLES, remove "3D View" option — use reduced set
             // Indices: 0=Auto, 1=2D Layers, 2=Thumbnail Only
-            lv_dropdown_set_options(gcode_dropdown, "Auto\n2D Layers\nThumbnail Only");
+            lv_dropdown_set_options(gcode_dropdown,
+                                       (std::string(lv_tr("Auto")) + "\n" +
+                                        lv_tr("2D Layers") + "\n" +
+                                        lv_tr("Thumbnail Only")).c_str());
             // Map stored render mode to reduced dropdown index
             int mode = display_settings.get_gcode_render_mode();
             int index = 0; // Auto

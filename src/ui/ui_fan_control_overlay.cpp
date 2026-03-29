@@ -17,6 +17,8 @@
 #include "observer_factory.h"
 #include "ui/fan_spin_animation.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstdio>
@@ -328,7 +330,7 @@ void FanControlOverlay::update_fan_speeds() {
 void FanControlOverlay::send_fan_speed(const std::string& object_name, int speed_percent) {
     if (!api_) {
         spdlog::warn("[{}] Cannot send fan speed - no API connection", get_name());
-        NOTIFY_WARNING("No printer connection");
+        NOTIFY_WARNING(lv_tr("No printer connection"));
         return;
     }
 

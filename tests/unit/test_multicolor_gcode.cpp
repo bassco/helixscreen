@@ -185,18 +185,12 @@ TEST_CASE("MultiColor - Set tool color palette", "[gcode][multicolor][geometry]"
 
     SECTION("Set and verify palette") {
         std::vector<std::string> palette = {"#FF0000", "#00FF00", "#0000FF"};
-        builder.set_tool_color_palette(palette);
-
-        // Palette is set - we can't directly verify it's stored correctly
-        // without building geometry, but we verify it doesn't crash
-        REQUIRE(true);
+        REQUIRE_NOTHROW(builder.set_tool_color_palette(palette));
     }
 
     SECTION("Empty palette doesn't crash") {
         std::vector<std::string> empty_palette;
-        builder.set_tool_color_palette(empty_palette);
-
-        REQUIRE(true);
+        REQUIRE_NOTHROW(builder.set_tool_color_palette(empty_palette));
     }
 }
 

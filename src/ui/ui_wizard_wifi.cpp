@@ -520,7 +520,7 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
             });
         } else {
             LOG_ERROR_INTERNAL("WiFi manager not initialized");
-            NOTIFY_ERROR("WiFi unavailable");
+            NOTIFY_ERROR(lv_tr("WiFi unavailable"));
         }
     } else {
         update_wifi_status(get_status_text("disabled"));
@@ -596,7 +596,7 @@ void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
                 });
         } else {
             LOG_ERROR_INTERNAL("WiFi manager not initialized");
-            NOTIFY_ERROR("WiFi unavailable");
+            NOTIFY_ERROR(lv_tr("WiFi unavailable"));
         }
     }
 }

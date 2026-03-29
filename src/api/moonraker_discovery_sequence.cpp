@@ -140,7 +140,8 @@ void MoonrakerDiscoverySequence::continue_discovery() {
             // Extract klippy_state from response
             std::string klippy_state = "unknown";
             if (server_info_response.contains("result") &&
-                server_info_response["result"].contains("klippy_state")) {
+                server_info_response["result"].contains("klippy_state") &&
+                server_info_response["result"]["klippy_state"].is_string()) {
                 klippy_state = server_info_response["result"]["klippy_state"].get<std::string>();
             }
 
@@ -197,7 +198,8 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
             if (!response.contains("result") || !response["result"].contains("objects")) {
                 // Extract error message from response if available
                 std::string error_reason = "Failed to query printer objects from Moonraker";
-                if (response.contains("error") && response["error"].contains("message")) {
+                if (response.contains("error") && response["error"].contains("message") &&
+                    response["error"]["message"].is_string()) {
                     error_reason = response["error"]["message"].get<std::string>();
                     spdlog::error("[Moonraker Client] printer.objects.list failed: {}",
                                   error_reason);
@@ -252,8 +254,12 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                     spdlog::debug("[Moonraker Client] Klippy version: {}", klippy_version);
 
                     if (result.contains("components") && result["components"].is_array()) {
-                        std::vector<std::string> components =
-                            result["components"].get<std::vector<std::string>>();
+                        std::vector<std::string> components;
+                        for (const auto& comp : result["components"]) {
+                            if (comp.is_string()) {
+                                components.push_back(comp.get<std::string>());
+                            }
+                        }
                         spdlog::debug("[Moonraker Client] Server components: {}",
                                       json(components).dump());
 
@@ -418,7 +424,9 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                 sys_response["result"].contains("system_info") &&
                                 sys_response["result"]["system_info"].contains("distribution") &&
                                 sys_response["result"]["system_info"]["distribution"].contains(
-                                    "name")) {
+                                    "name") &&
+                                sys_response["result"]["system_info"]["distribution"]["name"]
+                                    .is_string()) {
                                 std::string os_name =
                                     sys_response["result"]["system_info"]["distribution"]["name"]
                                         .get<std::string>();
@@ -431,7 +439,9 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                 sys_response["result"].contains("system_info") &&
                                 sys_response["result"]["system_info"].contains("cpu_info") &&
                                 sys_response["result"]["system_info"]["cpu_info"].contains(
-                                    "processor")) {
+                                    "processor") &&
+                                sys_response["result"]["system_info"]["cpu_info"]["processor"]
+                                    .is_string()) {
                                 std::string cpu_arch =
                                     sys_response["result"]["system_info"]["cpu_info"]["processor"]
                                         .get<std::string>();
@@ -830,6 +840,8 @@ void MoonrakerDiscoverySequence::parse_objects(const json& objects) {
     all_objects.reserve(objects.size());
 
     for (const auto& obj : objects) {
+        if (!obj.is_string())
+            continue;
         std::string name = obj.template get<std::string>();
 
         // Store all objects for detection heuristics (object_exists, macro_match)

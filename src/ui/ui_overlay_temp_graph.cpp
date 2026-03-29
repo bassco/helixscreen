@@ -22,6 +22,8 @@
 #include "ui_temperature_utils.h"
 #include "ui_utils.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -229,7 +231,7 @@ void TempGraphOverlay::open(Mode mode, lv_obj_t* parent_screen) {
         cached_overlay_ = create(parent_screen);
         if (!cached_overlay_) {
             spdlog::error("[TempGraphOverlay] Failed to create overlay from XML");
-            NOTIFY_ERROR("Failed to open temperature graph");
+            NOTIFY_ERROR(lv_tr("Failed to open temperature graph"));
             return;
         }
 

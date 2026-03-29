@@ -18,6 +18,8 @@
 #include "static_panel_registry.h"
 #include "wizard_config_paths.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstring>
@@ -162,7 +164,7 @@ void WizardLedSelectStep::cleanup() {
             spdlog::debug("[Wizard LED] Saved LED selection: {}", strips.dump());
         }
         if (!config->save()) {
-            NOTIFY_ERROR("Failed to save LED configuration");
+            NOTIFY_ERROR(lv_tr("Failed to save LED configuration"));
         }
     }
 

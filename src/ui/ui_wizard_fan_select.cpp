@@ -18,6 +18,8 @@
 #include "static_panel_registry.h"
 #include "wizard_config_paths.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstring>
@@ -189,7 +191,7 @@ lv_obj_t* WizardFanSelectStep::create(lv_obj_t* parent) {
     screen_root_ = static_cast<lv_obj_t*>(lv_xml_create(parent, "wizard_fan_select", nullptr));
     if (!screen_root_) {
         LOG_ERROR_INTERNAL("[{}] Failed to create screen from XML", get_name());
-        NOTIFY_ERROR("Failed to load fan configuration screen");
+        NOTIFY_ERROR(lv_tr("Failed to load fan configuration screen"));
         return nullptr;
     }
 
@@ -366,7 +368,7 @@ void WizardFanSelectStep::cleanup() {
     Config* config = Config::get_instance();
     if (config) {
         if (!config->save()) {
-            NOTIFY_ERROR("Failed to save fan configuration");
+            NOTIFY_ERROR(lv_tr("Failed to save fan configuration"));
         }
     }
 

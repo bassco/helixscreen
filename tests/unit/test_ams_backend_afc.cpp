@@ -1479,10 +1479,8 @@ TEST_CASE("AFC buffer object parsed via status update", "[ams][afc][buffer][phas
     // Now feed a buffer update
     helper.feed_afc_buffer("Turtle_1", {{"state", "Advancing"}, {"enabled", false}});
 
-    // Buffer state should be tracked (at minimum, no crash)
-    // The test verifies the feed_afc_buffer path doesn't crash
-    // and that buffer names are stored
-    REQUIRE(true); // Placeholder — buffer tracking will expand in implementation
+    // Verify the feed_afc_buffer path doesn't crash
+    REQUIRE_NOTHROW(helper.feed_afc_buffer("Turtle_1", {{"state", "Idle"}, {"enabled", true}}));
 }
 
 TEST_CASE("AFC global quiet_mode parsed from AFC state", "[ams][afc][global][phase2]") {

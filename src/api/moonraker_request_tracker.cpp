@@ -34,18 +34,43 @@ RequestId MoonrakerRequestTracker::send(hv::WebSocketClient& ws, const std::stri
     request.timeout_ms = (timeout_ms > 0) ? timeout_ms : default_request_timeout_ms_;
     request.silent = silent;
 
-    // Register request
+    // Register request — check queue capacity first
+    bool queue_full = false;
     {
         std::lock_guard<std::mutex> lock(requests_mutex_);
-        auto it = pending_requests_.find(id);
-        if (it != pending_requests_.end()) {
-            LOG_ERROR_INTERNAL("[Request Tracker] Request ID {} already has a registered callback",
-                               id);
-            return INVALID_REQUEST_ID;
+
+        if (pending_requests_.size() >= MAX_PENDING_REQUESTS) {
+            spdlog::warn("[Request Tracker] Pending request queue full ({} requests), "
+                         "rejecting {} (id={})",
+                         pending_requests_.size(), method, id);
+            queue_full = true;
+        } else {
+            auto it = pending_requests_.find(id);
+            if (it != pending_requests_.end()) {
+                LOG_ERROR_INTERNAL(
+                    "[Request Tracker] Request ID {} already has a registered callback", id);
+                return INVALID_REQUEST_ID;
+            }
+            pending_requests_.insert({id, request});
+            spdlog::trace(
+                "[Request Tracker] Registered request {} for method {}, total pending: {}", id,
+                method, pending_requests_.size());
         }
-        pending_requests_.insert({id, request});
-        spdlog::trace("[Request Tracker] Registered request {} for method {}, total pending: {}",
-                      id, method, pending_requests_.size());
+    }
+
+    if (queue_full) {
+        if (error_cb) {
+            MoonrakerError err;
+            err.type = MoonrakerErrorType::CONNECTION_LOST;
+            err.method = method;
+            err.message = "Request queue full — too many pending requests";
+            try {
+                error_cb(err);
+            } catch (const std::exception& e) {
+                spdlog::error("[Request Tracker] Queue-full error callback threw: {}", e.what());
+            }
+        }
+        return INVALID_REQUEST_ID;
     }
 
     // Build and send JSON-RPC message with the registered ID

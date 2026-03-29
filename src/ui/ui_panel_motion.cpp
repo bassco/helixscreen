@@ -655,9 +655,9 @@ void MotionPanel::home(char axis) {
             axes_str,
             [axis]() {
                 if (axis == 'A') {
-                    NOTIFY_SUCCESS("All axes homed");
+                    NOTIFY_SUCCESS(lv_tr("All axes homed"));
                 } else {
-                    NOTIFY_SUCCESS("{} axis homed", axis);
+                    NOTIFY_SUCCESS(lv_tr("{} axis homed"), axis);
                 }
             },
             [](const MoonrakerError& err) {

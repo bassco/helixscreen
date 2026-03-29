@@ -543,15 +543,15 @@ void FilamentPanel::handle_preset_button(int material_id) {
     if (api_ && selected_material_ == material_id) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
-            [target = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", target); },
+            [target = nozzle_target_]() { NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Failed to set nozzle temp: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), error.user_message());
             });
         api_->set_temperature(
             "heater_bed", static_cast<double>(bed_target_),
-            [target = bed_target_]() { NOTIFY_SUCCESS("Bed target set to {}°C", target); },
+            [target = bed_target_]() { NOTIFY_SUCCESS(lv_tr("Bed target set to {}°C"), target); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Failed to set bed temp: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), error.user_message());
             });
     }
 }
@@ -607,9 +607,9 @@ void FilamentPanel::handle_custom_nozzle_confirmed(float value) {
     if (api_) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
-            [target = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", target); },
+            [target = nozzle_target_]() { NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Failed to set nozzle temp: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), error.user_message());
             });
     }
 }
@@ -629,9 +629,9 @@ void FilamentPanel::handle_custom_bed_confirmed(float value) {
     if (api_) {
         api_->set_temperature(
             "heater_bed", static_cast<double>(bed_target_),
-            [target = bed_target_]() { NOTIFY_SUCCESS("Bed target set to {}°C", target); },
+            [target = bed_target_]() { NOTIFY_SUCCESS(lv_tr("Bed target set to {}°C"), target); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Failed to set bed temp: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), error.user_message());
             });
     }
 }
@@ -699,12 +699,12 @@ void FilamentPanel::handle_purge_amount_select(int amount) {
 
 void FilamentPanel::handle_load_button() {
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
 
     if (!is_extrusion_allowed()) {
-        NOTIFY_WARNING("Nozzle too cold for filament load ({}°C, min: {}°C)", nozzle_current_,
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament load ({}°C, min: {}°C)"), nozzle_current_,
                        min_extrude_temp_);
         return;
     }
@@ -727,12 +727,12 @@ void FilamentPanel::handle_load_button() {
 
 void FilamentPanel::handle_unload_button() {
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
 
     if (!is_extrusion_allowed()) {
-        NOTIFY_WARNING("Nozzle too cold for filament unload ({}°C, min: {}°C)", nozzle_current_,
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament unload ({}°C, min: {}°C)"), nozzle_current_,
                        min_extrude_temp_);
         return;
     }
@@ -754,13 +754,13 @@ void FilamentPanel::handle_unload_button() {
 
 void FilamentPanel::handle_extrude_button() {
     if (!is_extrusion_allowed()) {
-        NOTIFY_WARNING("Nozzle too cold for extrude ({}°C, min: {}°C)", nozzle_current_,
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for extrude ({}°C, min: {}°C)"), nozzle_current_,
                        min_extrude_temp_);
         return;
     }
 
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
 
@@ -772,26 +772,26 @@ void FilamentPanel::handle_extrude_button() {
 
     // Inline G-code: M83 = relative extrusion, G1 E{amount} F{speed}
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                           [] { NOTIFY_WARNING("Filament operation timed out"); });
+                           [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     int speed_mm_min = helix::SettingsManager::instance().get_extrude_speed() * 60;
     spdlog::info("[{}] Extruding {}mm at F{}", get_name(), purge_amount_, speed_mm_min);
     std::string gcode = fmt::format("M83\nG1 E{} F{}", purge_amount_, speed_mm_min);
-    NOTIFY_INFO("Extruding {}mm...", purge_amount_);
+    NOTIFY_INFO(lv_tr("Extruding {}mm..."), purge_amount_);
 
     api_->execute_gcode(
         gcode,
         [this, amount = purge_amount_]() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_SUCCESS("Extrude complete ({}mm)", amount);
+            NOTIFY_SUCCESS(lv_tr("Extrude complete ({}mm)"), amount);
         },
         [this](const MoonrakerError& error) {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
             if (error.type == MoonrakerErrorType::TIMEOUT) {
-                NOTIFY_WARNING("Extrude may still be running — response timed out");
+                NOTIFY_WARNING(lv_tr("Extrude may still be running — response timed out"));
             } else {
-                NOTIFY_ERROR("Extrude failed: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Extrude failed: {}"), error.user_message());
             }
         },
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
@@ -799,13 +799,13 @@ void FilamentPanel::handle_extrude_button() {
 
 void FilamentPanel::handle_purge_button() {
     if (!is_extrusion_allowed()) {
-        NOTIFY_WARNING("Nozzle too cold for purge ({}°C, min: {}°C)", nozzle_current_,
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for purge ({}°C, min: {}°C)"), nozzle_current_,
                        min_extrude_temp_);
         return;
     }
 
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
 
@@ -819,7 +819,7 @@ void FilamentPanel::handle_purge_button() {
     const auto& info = StandardMacros::instance().get(StandardMacroSlot::Purge);
     if (!info.is_empty()) {
         spdlog::info("[{}] Using StandardMacros purge: {}", get_name(), info.get_macro());
-        NOTIFY_INFO("Purging nozzle...");
+        NOTIFY_INFO(lv_tr("Purging nozzle..."));
 
         // Auto-pass PURGE_TEMP from active material if available.
         // Safe even if the macro doesn't use this param — Klipper ignores unknown params.
@@ -836,9 +836,9 @@ void FilamentPanel::handle_purge_button() {
 
         StandardMacros::instance().execute(
             StandardMacroSlot::Purge, api_, params,
-            []() { NOTIFY_SUCCESS("Purge complete"); },
+            []() { NOTIFY_SUCCESS(lv_tr("Purge complete")); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Purge failed: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Purge failed: {}"), error.user_message());
             },
             MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
         return;
@@ -848,27 +848,27 @@ void FilamentPanel::handle_purge_button() {
     constexpr int PURGE_FALLBACK_MM = 50;
     constexpr int PURGE_FALLBACK_SPEED_MM_MIN = 10 * 60; // 10 mm/s → 600 mm/min
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                           [] { NOTIFY_WARNING("Filament operation timed out"); });
+                           [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     spdlog::info("[{}] Purge fallback: extruding {}mm at F{}", get_name(), PURGE_FALLBACK_MM,
                  PURGE_FALLBACK_SPEED_MM_MIN);
     std::string gcode =
         fmt::format("M83\nG1 E{} F{}", PURGE_FALLBACK_MM, PURGE_FALLBACK_SPEED_MM_MIN);
-    NOTIFY_INFO("Purging {}mm...", PURGE_FALLBACK_MM);
+    NOTIFY_INFO(lv_tr("Purging {}mm..."), PURGE_FALLBACK_MM);
 
     api_->execute_gcode(
         gcode,
         [this]() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_SUCCESS("Purge complete");
+            NOTIFY_SUCCESS(lv_tr("Purge complete"));
         },
         [this](const MoonrakerError& error) {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
             if (error.type == MoonrakerErrorType::TIMEOUT) {
-                NOTIFY_WARNING("Purge may still be running — response timed out");
+                NOTIFY_WARNING(lv_tr("Purge may still be running — response timed out"));
             } else {
-                NOTIFY_ERROR("Purge failed: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Purge failed: {}"), error.user_message());
             }
         },
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
@@ -876,13 +876,13 @@ void FilamentPanel::handle_purge_button() {
 
 void FilamentPanel::handle_retract_button() {
     if (!is_extrusion_allowed()) {
-        NOTIFY_WARNING("Nozzle too cold for retract ({}°C, min: {}°C)", nozzle_current_,
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for retract ({}°C, min: {}°C)"), nozzle_current_,
                        min_extrude_temp_);
         return;
     }
 
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
 
@@ -894,26 +894,26 @@ void FilamentPanel::handle_retract_button() {
 
     // Inline G-code: M83 = relative extrusion, negative E = retract
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                           [] { NOTIFY_WARNING("Filament operation timed out"); });
+                           [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     int speed_mm_min = helix::SettingsManager::instance().get_extrude_speed() * 60;
     spdlog::info("[{}] Retracting {}mm at F{}", get_name(), purge_amount_, speed_mm_min);
     std::string gcode = fmt::format("M83\nG1 E-{} F{}", purge_amount_, speed_mm_min);
-    NOTIFY_INFO("Retracting {}mm...", purge_amount_);
+    NOTIFY_INFO(lv_tr("Retracting {}mm..."), purge_amount_);
 
     api_->execute_gcode(
         gcode,
         [this, amount = purge_amount_]() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_SUCCESS("Retract complete ({}mm)", amount);
+            NOTIFY_SUCCESS(lv_tr("Retract complete ({}mm)"), amount);
         },
         [this](const MoonrakerError& error) {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
             if (error.type == MoonrakerErrorType::TIMEOUT) {
-                NOTIFY_WARNING("Retract may still be running — response timed out");
+                NOTIFY_WARNING(lv_tr("Retract may still be running — response timed out"));
             } else {
-                NOTIFY_ERROR("Retract failed: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Retract failed: {}"), error.user_message());
             }
         },
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
@@ -1079,7 +1079,7 @@ void FilamentPanel::show_external_spool_edit_modal() {
             } else {
                 AmsState::instance().clear_external_spool_info();
             }
-            NOTIFY_INFO("External spool updated");
+            NOTIFY_INFO(lv_tr("External spool updated"));
         }
     });
     edit_modal_->show_for_slot(parent_screen_, -2, initial_info, api_);
@@ -1146,9 +1146,9 @@ void FilamentPanel::handle_extruder_changed() {
     spdlog::info("[{}] User selected tool T{}", get_name(), selected);
 
     ts.request_tool_change(
-        selected, api_, [selected]() { NOTIFY_SUCCESS("Switched to T{}", selected); },
+        selected, api_, [selected]() { NOTIFY_SUCCESS(lv_tr("Switched to T{}"), selected); },
         [this](const std::string& error) {
-            NOTIFY_ERROR("Tool change failed: {}", error);
+            NOTIFY_ERROR(lv_tr("Tool change failed: {}"), error);
             // Revert dropdown to actual active tool on UI thread
             helix::ui::async_call(
                 [](void* ctx) {
@@ -1282,15 +1282,15 @@ void FilamentPanel::handle_spool_preset_button() {
     if (api_) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
-            [t = nozzle_target_]() { NOTIFY_SUCCESS("Nozzle target set to {}°C", t); },
+            [t = nozzle_target_]() { NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), t); },
             [](const MoonrakerError& err) {
-                NOTIFY_ERROR("Failed to set nozzle temp: {}", err.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), err.user_message());
             });
         api_->set_temperature(
             "heater_bed", static_cast<double>(bed_target_),
-            [t = bed_target_]() { NOTIFY_SUCCESS("Bed target set to {}°C", t); },
+            [t = bed_target_]() { NOTIFY_SUCCESS(lv_tr("Bed target set to {}°C"), t); },
             [](const MoonrakerError& err) {
-                NOTIFY_ERROR("Failed to set bed temp: {}", err.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), err.user_message());
             });
     }
 
@@ -1433,9 +1433,9 @@ void FilamentPanel::handle_cooldown() {
         auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
 
         api_->execute_gcode(
-            cooldown.gcode, []() { NOTIFY_SUCCESS("Heaters off"); },
+            cooldown.gcode, []() { NOTIFY_SUCCESS(lv_tr("Heaters off")); },
             [](const MoonrakerError& error) {
-                NOTIFY_ERROR("Failed to turn off heaters: {}", error.user_message());
+                NOTIFY_ERROR(lv_tr("Failed to turn off heaters: {}"), error.user_message());
             });
     }
 
@@ -1532,7 +1532,7 @@ void FilamentPanel::execute_load() {
     if (backend) {
         spdlog::info("[{}] AMS backend active ({}), redirecting to AMS panel for slot selection",
                      get_name(), ams_type_to_string(backend->get_type()));
-        NOTIFY_INFO("Select a filament slot to load");
+        NOTIFY_INFO(lv_tr("Select a filament slot to load"));
         navigate_to_ams_panel();
         return;
     }
@@ -1540,26 +1540,26 @@ void FilamentPanel::execute_load() {
     const auto& info = StandardMacros::instance().get(StandardMacroSlot::LoadFilament);
     if (info.is_empty()) {
         spdlog::warn("[{}] Load filament slot is empty", get_name());
-        NOTIFY_WARNING("Load filament macro not configured");
+        NOTIFY_WARNING(lv_tr("Load filament macro not configured"));
         return;
     }
 
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                           [] { NOTIFY_WARNING("Filament operation timed out"); });
+                           [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     spdlog::info("[{}] Loading filament via StandardMacros: {}", get_name(), info.get_macro());
-    NOTIFY_INFO("Loading filament...");
+    NOTIFY_INFO(lv_tr("Loading filament..."));
     // FilamentPanel is a global singleton, so `this` capture is safe [L012]
     StandardMacros::instance().execute(
         StandardMacroSlot::LoadFilament, api_,
         [this]() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_SUCCESS("Filament loaded");
+            NOTIFY_SUCCESS(lv_tr("Filament loaded"));
         },
         [this](const MoonrakerError& error) {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_ERROR("Filament load failed: {}", error.user_message());
+            NOTIFY_ERROR(lv_tr("Filament load failed: {}"), error.user_message());
         },
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
 }
@@ -1571,19 +1571,19 @@ void FilamentPanel::execute_unload() {
     if (backend) {
         AmsSystemInfo sys_info = backend->get_system_info();
         if (!sys_info.filament_loaded && sys_info.current_slot < 0) {
-            NOTIFY_WARNING("No filament loaded to unload");
+            NOTIFY_WARNING(lv_tr("No filament loaded to unload"));
             return;
         }
 
         operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                               [] { NOTIFY_WARNING("Filament operation timed out"); });
+                               [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
         spdlog::info("[{}] Unloading filament via AMS backend ({})", get_name(),
                      ams_type_to_string(backend->get_type()));
-        NOTIFY_INFO("Unloading filament...");
+        NOTIFY_INFO(lv_tr("Unloading filament..."));
         AmsError err = backend->unload_filament();
         if (!err.success()) {
             operation_guard_.end();
-            NOTIFY_ERROR("Unload failed: {}", err.user_msg);
+            NOTIFY_ERROR(lv_tr("Unload failed: {}"), err.user_msg);
         }
         // Guard ends via timeout — backend tracks completion via state observer
         return;
@@ -1592,26 +1592,26 @@ void FilamentPanel::execute_unload() {
     const auto& info = StandardMacros::instance().get(StandardMacroSlot::UnloadFilament);
     if (info.is_empty()) {
         spdlog::warn("[{}] Unload filament slot is empty", get_name());
-        NOTIFY_WARNING("Unload filament macro not configured");
+        NOTIFY_WARNING(lv_tr("Unload filament macro not configured"));
         return;
     }
 
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
-                           [] { NOTIFY_WARNING("Filament operation timed out"); });
+                           [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     spdlog::info("[{}] Unloading filament via StandardMacros: {}", get_name(), info.get_macro());
-    NOTIFY_INFO("Unloading filament...");
+    NOTIFY_INFO(lv_tr("Unloading filament..."));
     // FilamentPanel is a global singleton, so `this` capture is safe [L012]
     StandardMacros::instance().execute(
         StandardMacroSlot::UnloadFilament, api_,
         [this]() {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_SUCCESS("Filament unloaded");
+            NOTIFY_SUCCESS(lv_tr("Filament unloaded"));
         },
         [this](const MoonrakerError& error) {
             helix::ui::async_call(
                 [](void* ud) { static_cast<FilamentPanel*>(ud)->operation_guard_.end(); }, this);
-            NOTIFY_ERROR("Filament unload failed: {}", error.user_message());
+            NOTIFY_ERROR(lv_tr("Filament unload failed: {}"), error.user_message());
         },
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
 }

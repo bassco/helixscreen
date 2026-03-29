@@ -18,6 +18,8 @@
 #include "static_panel_registry.h"
 #include "z_offset_utils.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstdio>
@@ -343,19 +345,19 @@ void ZOffsetCalibrationPanel::set_state(State new_state) {
         operation_guard_.begin(WARMING_TIMEOUT_MS, [this] {
             turn_off_bed_if_needed();
             set_state(State::ERROR);
-            NOTIFY_WARNING("Bed warming timed out");
+            NOTIFY_WARNING(lv_tr("Bed warming timed out"));
         });
         break;
     case State::PROBING:
         operation_guard_.begin(PROBING_TIMEOUT_MS, [this] {
             set_state(State::ERROR);
-            NOTIFY_WARNING("Z-offset calibration timed out");
+            NOTIFY_WARNING(lv_tr("Z-offset calibration timed out"));
         });
         break;
     case State::SAVING:
         operation_guard_.begin(SAVING_TIMEOUT_MS, [this] {
             set_state(State::ERROR);
-            NOTIFY_WARNING("Z-offset calibration timed out");
+            NOTIFY_WARNING(lv_tr("Z-offset calibration timed out"));
         });
         break;
     case State::ADJUSTING:
@@ -480,7 +482,7 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
             [this](const MoonrakerError& err) {
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     spdlog::warn("[ZOffsetCal] Move to position timed out (may still be running)");
-                    NOTIFY_WARNING("Calibration move may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Calibration move may still be running — response timed out"));
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to move to position: {}", err.message);
                     lifetime_.defer(
@@ -527,7 +529,7 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     spdlog::warn(
                         "[ZOffsetCal] Calibration response timed out (may still be running)");
-                    NOTIFY_WARNING("Calibration may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Calibration may still be running — response timed out"));
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to start calibration: {}", err.message);
                     lifetime_.defer(

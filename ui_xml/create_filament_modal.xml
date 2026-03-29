@@ -59,7 +59,7 @@
           <lv_obj width="content" height="content" flex_flow="row" style_pad_all="0" style_pad_gap="#space_xs"
                   style_flex_cross_place="center" scrollable="false">
             <lv_obj name="filament_color_swatch"
-                    width="28" height="28" style_radius="14" style_bg_color="0x808080" style_bg_opa="255"
+                    width="28" height="28" style_radius="14" style_bg_color="#card_bg" style_bg_opa="255"
                     style_border_width="1" style_border_color="#border"/>
             <ui_button name="pick_color_btn"
                        variant="ghost" text="Pick" translation_tag="Pick" icon="palette">

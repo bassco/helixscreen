@@ -374,6 +374,9 @@ void InputShaperPanel::setup_widgets() {
     // Find legend dot widgets for programmatic color updates
     legend_x_shaper_dot_ = lv_obj_find_by_name(overlay_root_, "legend_x_shaper_dot");
     legend_y_shaper_dot_ = lv_obj_find_by_name(overlay_root_, "legend_y_shaper_dot");
+    if (!legend_x_shaper_dot_ || !legend_y_shaper_dot_) {
+        spdlog::warn("[InputShaper] Legend dot widget(s) not found in XML");
+    }
 
     spdlog::debug("[InputShaper] Widget setup complete");
 }

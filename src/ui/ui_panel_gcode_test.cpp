@@ -13,6 +13,8 @@
 #include "static_panel_registry.h"
 #include "theme_manager.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 using namespace helix;
@@ -201,7 +203,7 @@ void GcodeTestPanel::show_file_picker() {
 
     // Header
     lv_obj_t* header = lv_label_create(card);
-    lv_label_set_text(header, "Select G-Code File");
+    lv_label_set_text(header, lv_tr("Select G-Code File"));
 
     // File list container
     lv_obj_t* list_container = lv_obj_create(card);
@@ -242,7 +244,7 @@ void GcodeTestPanel::show_file_picker() {
     lv_obj_add_event_cb(close_btn, on_file_picker_close_static, LV_EVENT_CLICKED, this);
 
     lv_obj_t* close_label = lv_label_create(close_btn);
-    lv_label_set_text(close_label, "Cancel");
+    lv_label_set_text(close_label, lv_tr("Cancel"));
     lv_obj_center(close_label);
 
     spdlog::debug("[{}] File picker shown with {} files", get_name(), gcode_files_.size());
@@ -267,7 +269,7 @@ void GcodeTestPanel::load_file(const char* filepath) {
 
     // Set stats to "Loading..." immediately
     if (stats_label_) {
-        lv_label_set_text(stats_label_, "Loading...");
+        lv_label_set_text(stats_label_, lv_tr("Loading..."));
     }
 
     ui_gcode_viewer_load_file(gcode_viewer_, filepath);
@@ -283,7 +285,7 @@ void GcodeTestPanel::clear_viewer() {
     ui_gcode_viewer_clear(gcode_viewer_);
 
     if (stats_label_) {
-        lv_label_set_text(stats_label_, "No file loaded");
+        lv_label_set_text(stats_label_, lv_tr("No file loaded"));
     }
 }
 
@@ -598,7 +600,7 @@ void GcodeTestPanel::handle_gcode_load_complete(bool success) {
     if (!success) {
         LOG_ERROR_INTERNAL("[{}] G-code load callback: failed", get_name());
         if (stats_label_) {
-            lv_label_set_text(stats_label_, "Error loading file");
+            lv_label_set_text(stats_label_, lv_tr("Error loading file"));
         }
         return;
     }

@@ -356,7 +356,7 @@ void LabelPrinterSettingsOverlay::init_label_size_dropdown() {
     if (dropdown) {
         // PT printers auto-detect tape — disable size selection
         if (current_printer_auto_detects_size()) {
-            lv_dropdown_set_options(dropdown, "Auto-detect");
+            lv_dropdown_set_options(dropdown, lv_tr("Auto-detect"));
             lv_dropdown_set_selected(dropdown, 0);
             lv_obj_add_state(dropdown, LV_STATE_DISABLED);
             spdlog::trace("[{}] Label size dropdown disabled (auto-detect)", get_name());

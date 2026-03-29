@@ -49,6 +49,8 @@
 #include "printer_discovery.h"
 #include "spdlog/spdlog.h"
 
+#include "hv/Event.h" // TimerID
+
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -656,6 +658,19 @@ class MoonrakerClient : public hv::WebSocketClient {
     // Callbacks take a shared (read) lock; the destructor takes an exclusive (write) lock.
     // This ensures all in-flight callbacks complete before destruction proceeds.
     mutable std::shared_mutex callback_lifecycle_mutex_;
+
+    // Periodic health-check timer (runs on libhv event loop thread)
+    // Checks request timeouts and reconnection staleness independently of message flow
+    hv::TimerID health_timer_id_{0};
+    static constexpr int HEALTH_CHECK_INTERVAL_MS = 5000;
+
+    void start_health_timer();
+    void stop_health_timer();
+
+    // Reconnection staleness detection.
+    // Written/read only from the libhv event loop thread (onclose + health timer).
+    std::chrono::steady_clock::time_point reconnect_started_at_{};
+    static constexpr int MAX_RECONNECT_STALL_MS = 60000;
 
     // Lifetime guard for safe callback execution
     // Callbacks capture a weak_ptr to this sentinel. When the destructor runs,

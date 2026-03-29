@@ -10,6 +10,8 @@
 #include "led/led_controller.h"
 #include "moonraker_api.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
+
 #include <spdlog/spdlog.h>
 
 #include <cstdio>
@@ -109,7 +111,7 @@ void PrintLightTimelapseControls::handle_light_button() {
     auto& led_ctrl = helix::led::LedController::instance();
     if (led_ctrl.selected_strips().empty()) {
         spdlog::warn("[PrintLightTimelapseControls] No LED configured - ignoring button click");
-        NOTIFY_WARNING("No light configured. Set up in Settings > LED Settings.");
+        NOTIFY_WARNING(lv_tr("No light configured. Set up in Settings > LED Settings."));
         return;
     }
 
@@ -179,7 +181,7 @@ void PrintLightTimelapseControls::handle_timelapse_button() {
             });
     } else {
         spdlog::warn("[PrintLightTimelapseControls] API not available - cannot control timelapse");
-        NOTIFY_ERROR("Cannot control timelapse: printer not connected");
+        NOTIFY_ERROR(lv_tr("Cannot control timelapse: printer not connected"));
     }
 }
 

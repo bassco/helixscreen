@@ -82,9 +82,60 @@ MoonrakerClient::MoonrakerClient(EventLoopPtr loop)
       reconnect_max_delay_ms_(2000) { // Default 2 seconds
 }
 
+void MoonrakerClient::start_health_timer() {
+    if (health_timer_id_ != 0) {
+        return; // Already running
+    }
+    auto l = loop();
+    if (!l) {
+        return;
+    }
+    health_timer_id_ = l->setInterval(HEALTH_CHECK_INTERVAL_MS, [this](hv::TimerID) {
+        if (is_destroying_.load(std::memory_order_acquire)) {
+            return;
+        }
+
+        // Check pending request timeouts
+        process_timeouts();
+
+        // Check for stalled reconnection
+        ConnectionState state = connection_state_.load();
+        if (state == ConnectionState::RECONNECTING) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - reconnect_started_at_)
+                    .count();
+            if (elapsed > MAX_RECONNECT_STALL_MS) {
+                spdlog::error("[Moonraker Client] Reconnection stalled for {}ms, giving up",
+                              elapsed);
+                set_connection_state(ConnectionState::FAILED);
+                emit_event(MoonrakerEventType::CONNECTION_FAILED,
+                           "Unable to reach printer. Check power and network connection.", true);
+            }
+        }
+    });
+    spdlog::debug("[Moonraker Client] Health check timer started ({}ms interval)",
+                  HEALTH_CHECK_INTERVAL_MS);
+}
+
+void MoonrakerClient::stop_health_timer() {
+    if (health_timer_id_ == 0) {
+        return;
+    }
+    auto l = loop();
+    if (l) {
+        l->killTimer(health_timer_id_);
+    }
+    health_timer_id_ = 0;
+    spdlog::debug("[Moonraker Client] Health check timer stopped");
+}
+
 MoonrakerClient::~MoonrakerClient() {
     // Set destroying flag FIRST so callbacks see it immediately
     is_destroying_.store(true, std::memory_order_release);
+
+    // Stop health timer before waiting for callbacks (timer fires on event loop thread)
+    stop_health_timer();
 
     // Wait for any in-flight callbacks to finish. Callbacks hold a shared lock;
     // acquiring an exclusive lock here blocks until all shared locks are released.
@@ -141,6 +192,9 @@ void MoonrakerClient::set_connection_state(ConnectionState new_state) {
 
         // Handle state-specific logic
         if (new_state == ConnectionState::RECONNECTING) {
+            if (old_state != ConnectionState::RECONNECTING) {
+                reconnect_started_at_ = std::chrono::steady_clock::now();
+            }
             reconnect_attempts_++;
             if (max_reconnect_attempts_ > 0 && reconnect_attempts_ >= max_reconnect_attempts_) {
                 spdlog::error("[Moonraker Client] Max reconnect attempts ({}) exceeded",
@@ -200,6 +254,9 @@ void MoonrakerClient::disconnect() {
         current_state != ConnectionState::FAILED) {
         spdlog::debug("[Moonraker Client] Disconnecting from WebSocket server");
     }
+
+    // Stop health check timer before teardown
+    stop_health_timer();
 
     // Disable auto-reconnect BEFORE closing to prevent spurious reconnection attempts
     setReconnect(nullptr);
@@ -309,6 +366,9 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
 
             was_connected_ = true;
             set_connection_state(ConnectionState::CONNECTED);
+
+            // Start periodic health checks (timeout detection, reconnect staleness)
+            start_health_timer();
 
             // Reset notification flags on successful connection
             reset_notification_flags();
@@ -463,6 +523,9 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
 
                     // Update klippy state in PrinterState (SHUTDOWN = firmware disconnected)
                     get_printer_state().set_klippy_state(KlippyState::SHUTDOWN);
+
+                    // Clear pending requests — Klippy can't process them anymore
+                    tracker_.cleanup_all();
 
                     // Emit event for UI layer to handle
                     emit_event(MoonrakerEventType::KLIPPY_DISCONNECTED,

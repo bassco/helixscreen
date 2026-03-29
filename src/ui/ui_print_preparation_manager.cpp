@@ -6,6 +6,8 @@
 #include "ui_busy_overlay.h"
 #include "ui_error_reporting.h"
 #include "ui_panel_print_status.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_update_queue.h"
 
 #include "active_print_media_manager.h"
@@ -747,7 +749,7 @@ void PrintPreparationManager::start_print(const std::string& filename,
                                           PrintCompletionCallback on_completion) {
     if (!api_) {
         spdlog::error("[PrintPreparationManager] Cannot start print - not connected to printer");
-        NOTIFY_ERROR("Cannot start print: not connected to printer");
+        NOTIFY_ERROR(lv_tr("Cannot start print: not connected to printer"));
         if (on_completion) {
             on_completion(false, "Not connected to printer");
         }
@@ -1196,7 +1198,7 @@ void PrintPreparationManager::modify_and_print(
     const std::vector<std::pair<std::string, std::string>>& macro_skip_params,
     NavigateToStatusCallback on_navigate_to_status) {
     if (!api_) {
-        NOTIFY_ERROR("Cannot start print - not connected to printer");
+        NOTIFY_ERROR(lv_tr("Cannot start print: not connected to printer"));
         if (printer_state_)
             printer_state_->set_print_in_progress(false);
         return;
@@ -1204,7 +1206,7 @@ void PrintPreparationManager::modify_and_print(
 
     if (!cached_scan_result_.has_value()) {
         spdlog::error("[PrintPreparationManager] modify_and_print called without scan result");
-        NOTIFY_ERROR("Internal error: no scan result");
+        NOTIFY_ERROR(lv_tr("Internal error: no scan result"));
         if (printer_state_)
             printer_state_->set_print_in_progress(false);
         return;
@@ -1256,7 +1258,7 @@ void PrintPreparationManager::modify_and_print_streaming(
 
     // Validate scan_result before proceeding (SERIOUS-3 fix)
     if (!scan_result.has_value()) {
-        NOTIFY_ERROR("Cannot modify G-code: scan result not available");
+        NOTIFY_ERROR(lv_tr("Cannot modify G-code: scan result not available"));
         if (printer_state_)
             printer_state_->set_print_in_progress(false);
         return;
@@ -1265,7 +1267,7 @@ void PrintPreparationManager::modify_and_print_streaming(
     // Get temp directory for intermediate files
     std::string temp_dir = get_temp_directory();
     if (temp_dir.empty()) {
-        NOTIFY_ERROR("Cannot modify G-code: no temp directory available");
+        NOTIFY_ERROR(lv_tr("Cannot modify G-code: no temp directory available"));
         if (printer_state_)
             printer_state_->set_print_in_progress(false);
         return;

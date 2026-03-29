@@ -36,11 +36,11 @@
             style_pad_left="#space_md" style_pad_right="#space_md" style_pad_top="#space_sm" style_pad_bottom="0"
             flex_flow="row" style_pad_gap="#space_sm" scrollable="false">
       <bind_flag_if_not_eq subject="ui_breakpoint" flag="hidden" ref_value="0"/>
-      <ui_button name="btn_tab_presets" height="32" text="Presets" translation_tag="Presets"
+      <ui_button name="btn_tab_presets" height="#button_height_sm" text="Presets" translation_tag="Presets"
                  flex_grow="1" variant="ghost" focusable="false">
         <event_cb trigger="clicked" callback="color_picker_tab_presets_cb"/>
       </ui_button>
-      <ui_button name="btn_tab_custom" height="32" text="Custom" translation_tag="Custom"
+      <ui_button name="btn_tab_custom" height="#button_height_sm" text="Custom" translation_tag="Custom"
                  flex_grow="1" variant="ghost" focusable="false">
         <event_cb trigger="clicked" callback="color_picker_tab_custom_cb"/>
       </ui_button>
@@ -59,7 +59,7 @@
         <!-- Selected color preview swatch -->
         <lv_obj name="selected_color_preview"
                 width="#color_preview_size" height="#color_preview_size_small" style_radius="#border_radius"
-                style_bg_color="0x808080" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
+                style_bg_color="#card_bg" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
                 style_border_opa="80" scrollable="false"/>
         <!-- HSV picker: SV square + horizontal hue bar below -->
         <ui_hsv_picker name="hsv_picker" sv_size="#sv_size" hue_height="#hue_height" gap="#space_sm"/>
@@ -451,7 +451,7 @@
           <!-- Selected color preview swatch -->
           <lv_obj name="selected_color_preview_tiny"
                   width="#color_preview_size" height="#color_preview_size_small" style_radius="#border_radius"
-                  style_bg_color="0x808080" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
+                  style_bg_color="#card_bg" style_bg_opa="255" style_border_width="2" style_border_color="#text_muted"
                   style_border_opa="80" scrollable="false"/>
           <!-- Hex input -->
           <text_input name="hex_input_tiny"

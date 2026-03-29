@@ -5,6 +5,8 @@
 
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_subject_registry.h"
 #include "ui_wizard.h"
 
@@ -524,11 +526,11 @@ void WizardPrinterIdentifyStep::cleanup() {
         if (config->save()) {
             spdlog::debug("[{}] Saved printer identification settings", get_name());
         } else {
-            NOTIFY_ERROR("Failed to save printer configuration");
+            NOTIFY_ERROR(lv_tr("Failed to save printer configuration"));
             LOG_ERROR_INTERNAL("[{}] Failed to save config to disk!", get_name());
         }
     } catch (const std::exception& e) {
-        NOTIFY_ERROR("Error saving printer settings: {}", e.what());
+        NOTIFY_ERROR(lv_tr("Error saving printer settings: {}"), e.what());
         LOG_ERROR_INTERNAL("[{}] Failed to save config: {}", get_name(), e.what());
     }
 

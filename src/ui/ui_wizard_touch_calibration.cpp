@@ -179,11 +179,13 @@ lv_obj_t* WizardTouchCalibrationStep::create(lv_obj_t* parent) {
     // Calibration targets are screen-absolute coordinates, so crosshair must be
     // a direct child of the screen (not nested in wizard content container)
     crosshair_ = lv_obj_find_by_name(screen_root_, "crosshair");
-    if (crosshair_) {
-        lv_obj_set_parent(crosshair_, lv_screen_active());
-        lv_obj_add_flag(crosshair_, LV_OBJ_FLAG_FLOATING); // Ensure no layout interference
-        spdlog::debug("[{}] Crosshair reparented to screen for absolute positioning", get_name());
+    if (!crosshair_) {
+        spdlog::error("[{}] Crosshair widget not found in XML", get_name());
+        return screen_root_;
     }
+    lv_obj_set_parent(crosshair_, lv_screen_active());
+    lv_obj_add_flag(crosshair_, LV_OBJ_FLAG_FLOATING);
+    spdlog::debug("[{}] Crosshair reparented to screen for absolute positioning", get_name());
 
     // Reparent touch capture overlay to screen for full-screen touch capture
     // This allows calibration targets in header/footer areas to be tappable

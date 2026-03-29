@@ -39,6 +39,8 @@ constexpr RequestId INVALID_REQUEST_ID = 0;
  */
 class MoonrakerRequestTracker {
   public:
+    static constexpr size_t MAX_PENDING_REQUESTS = 500;
+
     MoonrakerRequestTracker() = default;
 
     // Non-copyable (has mutex)

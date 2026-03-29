@@ -559,7 +559,7 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                 });
         });
     file_provider_->set_on_error([self](const std::string& error) {
-        NOTIFY_ERROR("Failed to refresh file list");
+        NOTIFY_ERROR(lv_tr("Failed to refresh file list"));
         LOG_ERROR_INTERNAL("[{}] File list refresh error: {}", self->get_name(), error);
     });
 
@@ -2219,7 +2219,7 @@ void PrintSelectPanel::handle_file_click(size_t file_index) {
 void PrintSelectPanel::start_print() {
     if (!print_controller_) {
         spdlog::error("[{}] Cannot start print - controller not initialized", get_name());
-        NOTIFY_ERROR("Cannot start print: internal error");
+        NOTIFY_ERROR(lv_tr("Cannot start print: internal error"));
         return;
     }
 
@@ -2297,12 +2297,12 @@ void PrintSelectPanel::delete_file() {
                     if (c->token.expired()) {
                         return;
                     }
-                    NOTIFY_ERROR("Failed to delete file");
+                    NOTIFY_ERROR(lv_tr("Failed to delete file"));
                     c->panel->hide_delete_confirmation();
                 });
             });
     } else {
-        NOTIFY_WARNING("Cannot delete file: printer not connected");
+        NOTIFY_WARNING(lv_tr("Cannot delete file: printer not connected"));
         hide_delete_confirmation();
     }
 }

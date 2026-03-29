@@ -27,14 +27,14 @@ HelixScreen uses a backend abstraction layer to support multiple multi-filament 
     │  (ams_backend.h)   │  Factory: create() / create_mock()
     └─────────┬──────────┘                         │
      ┌────────┼─────────┬───────────┬──────────────┘
-     ▼        ▼         ▼           ▼           ▼           ▼
-  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-  │Happy   │ │  AFC   │ │  ACE   │ │  Tool    │ │ AD5X IFS │ │  Mock    │
-  │Hare    │ │Backend │ │Backend │ │ Changer  │ │ Backend  │ │ Backend  │
-  └────────┘ └────────┘ └────────┘ └──────────┘ └──────────┘ └──────────┘
-       │          │          │           │            │            │
-  Moonraker  Moonraker   REST API   Moonraker   Moonraker    In-memory
-  WebSocket  WebSocket   Polling    WebSocket   WebSocket    simulation
+     ▼        ▼         ▼           ▼           ▼           ▼           ▼
+  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐
+  │Happy   │ │  AFC   │ │  ACE   │ │  Tool    │ │ AD5X IFS │ │  CFS   │ │  Mock    │
+  │Hare    │ │Backend │ │Backend │ │ Changer  │ │ Backend  │ │Backend │ │ Backend  │
+  └────────┘ └────────┘ └────────┘ └──────────┘ └──────────┘ └────────┘ └──────────┘
+       │          │          │           │            │           │            │
+  Moonraker  Moonraker   REST API   Moonraker   Moonraker  Moonraker    In-memory
+  WebSocket  WebSocket   Polling    WebSocket   WebSocket  WebSocket    simulation
 
                          ┌─────────────┐
                          │  ToolState  │  Singleton: tool abstraction
@@ -57,6 +57,7 @@ HelixScreen uses a backend abstraction layer to support multiple multi-filament 
 | `include/ams_backend_ace.h` | ACE (Anycubic ACE Pro) implementation |
 | `include/ams_backend_toolchanger.h` | Physical tool changer (viesturz/klipper-toolchanger) |
 | `include/ams_backend_ad5x_ifs.h` | FlashForge AD5X IFS (Intelligent Filament Switching) |
+| `include/ams_backend_cfs.h` | Creality Filament System (K2 series, RS-485) |
 | `include/ams_backend_mock.h` | Mock backend for development and testing |
 | `src/printer/ams_backend.cpp` | Factory method implementations |
 | `include/printer_discovery.h` | Hardware detection from Klipper object list |
@@ -278,7 +279,8 @@ enum class AmsType {
     AFC = 2,          // AFC-Klipper-Add-On (AFC object, lane_data database)
     ACE = 3,          // AnyCubic ACE Pro (ValgACE/BunnyACE/DuckACE Klipper drivers)
     TOOL_CHANGER = 4, // Physical tool changer (viesturz/klipper-toolchanger)
-    AD5X_IFS = 5      // FlashForge AD5X IFS (Intelligent Filament Switching)
+    AD5X_IFS = 5,     // FlashForge AD5X IFS (Intelligent Filament Switching)
+    CFS = 6           // Creality Filament System (K2 series, RS-485)
 };
 ```
 

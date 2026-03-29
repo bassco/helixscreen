@@ -406,11 +406,11 @@ TEST_CASE_METHOD(MoonrakerClientLifecycleFixture,
     }
 
     SECTION("Cancel same ID twice returns false on second call") {
-        // We need a connected client to register a pending request
-        // Use direct manipulation of pending requests or skip this test
-        // Since we can't easily test this without a connection that keeps
-        // requests pending, we document the expected behavior.
-        REQUIRE(true); // Placeholder - behavior documented
+        // Cannot test with real pending requests without a connection,
+        // but we can verify that cancelling a non-existent ID returns false
+        // (same code path as second cancel of an already-cancelled request)
+        bool result = client.cancel_request(12345);
+        REQUIRE(result == false);
     }
 }
 
@@ -434,7 +434,8 @@ TEST_CASE_METHOD(MoonrakerClientLifecycleFixture,
         //
         // The cancel_request implementation removes the request from pending_requests_
         // map, so when onmessage handler looks for the request ID, it won't find it.
-        REQUIRE(true); // Behavior verified by code inspection
+        // Verify cancel on non-existent request returns false (same path as post-cancel)
+        REQUIRE(client.cancel_request(99999) == false);
     }
 
     loop_thread->stop();

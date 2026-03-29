@@ -5,6 +5,8 @@
 
 #include "ui_error_reporting.h"
 #include "ui_nav_manager.h"
+
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_update_queue.h"
 
 #include "filament_sensor_manager.h"
@@ -106,7 +108,7 @@ void FilamentRunoutHandler::show_runout_guidance_modal() {
         if (sensor_mgr.has_any_runout()) {
             spdlog::warn(
                 "[FilamentRunoutHandler] User attempted resume but filament still not detected");
-            NOTIFY_WARNING("Insert filament before resuming");
+            NOTIFY_WARNING(lv_tr("Insert filament before resuming"));
             return; // Modal stays open - user needs to load filament first
         }
 
@@ -114,7 +116,7 @@ void FilamentRunoutHandler::show_runout_guidance_modal() {
         const auto& resume_info = StandardMacros::instance().get(StandardMacroSlot::Resume);
         if (resume_info.is_empty()) {
             spdlog::warn("[FilamentRunoutHandler] Resume macro slot is empty");
-            NOTIFY_WARNING("Resume macro not configured");
+            NOTIFY_WARNING(lv_tr("Resume macro not configured"));
             return;
         }
 
@@ -144,7 +146,7 @@ void FilamentRunoutHandler::show_runout_guidance_modal() {
         const auto& cancel_info = StandardMacros::instance().get(StandardMacroSlot::Cancel);
         if (cancel_info.is_empty()) {
             spdlog::warn("[FilamentRunoutHandler] Cancel macro slot is empty");
-            NOTIFY_WARNING("Cancel macro not configured");
+            NOTIFY_WARNING(lv_tr("Cancel macro not configured"));
             return;
         }
 
@@ -171,7 +173,7 @@ void FilamentRunoutHandler::show_runout_guidance_modal() {
         const auto& unload_info = StandardMacros::instance().get(StandardMacroSlot::UnloadFilament);
         if (unload_info.is_empty()) {
             spdlog::warn("[FilamentRunoutHandler] Unload filament macro slot is empty");
-            NOTIFY_WARNING("Unload macro not configured");
+            NOTIFY_WARNING(lv_tr("Unload macro not configured"));
             return;
         }
 
@@ -197,7 +199,7 @@ void FilamentRunoutHandler::show_runout_guidance_modal() {
         const auto& purge_info = StandardMacros::instance().get(StandardMacroSlot::Purge);
         if (purge_info.is_empty()) {
             spdlog::warn("[FilamentRunoutHandler] Purge macro slot is empty");
-            NOTIFY_WARNING("Purge macro not configured");
+            NOTIFY_WARNING(lv_tr("Purge macro not configured"));
             return;
         }
 

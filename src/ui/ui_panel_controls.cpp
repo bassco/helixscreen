@@ -929,7 +929,7 @@ void ControlsPanel::handle_save_z_offset() {
 
     if (!save_z_offset_confirmation_dialog_) {
         LOG_ERROR_INTERNAL("Failed to create save Z-offset confirmation dialog");
-        NOTIFY_ERROR("Failed to show confirmation dialog");
+        NOTIFY_ERROR(lv_tr("Failed to show confirmation dialog"));
         return;
     }
 
@@ -948,7 +948,7 @@ void ControlsPanel::handle_save_z_offset_confirm() {
     save_z_offset_confirmation_dialog_.hide();
 
     if (!api_) {
-        NOTIFY_ERROR("No printer connection");
+        NOTIFY_ERROR(lv_tr("No printer connection"));
         save_z_offset_in_progress_ = false;
         return;
     }
@@ -961,12 +961,12 @@ void ControlsPanel::handle_save_z_offset_confirm() {
 
     auto strategy = printer_state_.get_z_offset_calibration_strategy();
 
-    NOTIFY_INFO("Saving Z-offset...");
+    NOTIFY_INFO(lv_tr("Saving Z-offset..."));
 
     helix::zoffset::apply_and_save(
         api_, strategy,
         [this, offset_mm]() {
-            NOTIFY_SUCCESS("Z-offset saved ({:+.3f}mm). Klipper restarting...", offset_mm);
+            NOTIFY_SUCCESS(lv_tr("Z-offset saved ({:+.3f}mm). Klipper restarting..."), offset_mm);
             save_z_offset_in_progress_ = false;
         },
         [this](const std::string& error) {
@@ -1036,7 +1036,7 @@ void ControlsPanel::handle_secondary_fans_clicked() {
         // Create overlay UI
         fan_control_panel_ = overlay.create(parent_screen_);
         if (!fan_control_panel_) {
-            NOTIFY_ERROR("Failed to load fan control overlay");
+            NOTIFY_ERROR(lv_tr("Failed to load fan control overlay"));
             return;
         }
 
@@ -1058,12 +1058,12 @@ void ControlsPanel::handle_secondary_fans_clicked() {
 void ControlsPanel::handle_home_all() {
     spdlog::debug("[{}] Home All clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
-        NOTIFY_INFO("Homing all axes...");
+        operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
+        NOTIFY_INFO(lv_tr("Homing all axes..."));
         api_->motion().home_axes(
             "",
             [this]() {
@@ -1072,9 +1072,9 @@ void ControlsPanel::handle_home_all() {
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Homing may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Homing failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Homing failed: {}"), err.user_message());
                 }
             });
     }
@@ -1083,12 +1083,12 @@ void ControlsPanel::handle_home_all() {
 void ControlsPanel::handle_home_x() {
     spdlog::debug("[{}] Home X clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
-        NOTIFY_INFO("Homing X...");
+        operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
+        NOTIFY_INFO(lv_tr("Homing X..."));
         api_->motion().home_axes(
             "X",
             [this]() {
@@ -1097,9 +1097,9 @@ void ControlsPanel::handle_home_x() {
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Homing may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Homing failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Homing failed: {}"), err.user_message());
                 }
             });
     }
@@ -1108,12 +1108,12 @@ void ControlsPanel::handle_home_x() {
 void ControlsPanel::handle_home_y() {
     spdlog::debug("[{}] Home Y clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
-        NOTIFY_INFO("Homing Y...");
+        operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
+        NOTIFY_INFO(lv_tr("Homing Y..."));
         api_->motion().home_axes(
             "Y",
             [this]() {
@@ -1122,9 +1122,9 @@ void ControlsPanel::handle_home_y() {
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Homing may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Homing failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Homing failed: {}"), err.user_message());
                 }
             });
     }
@@ -1133,12 +1133,12 @@ void ControlsPanel::handle_home_y() {
 void ControlsPanel::handle_home_xy() {
     spdlog::debug("[{}] Home XY clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
-        NOTIFY_INFO("Homing XY...");
+        operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
+        NOTIFY_INFO(lv_tr("Homing XY..."));
         api_->motion().home_axes(
             "XY",
             [this]() {
@@ -1147,9 +1147,9 @@ void ControlsPanel::handle_home_xy() {
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Homing may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Homing failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Homing failed: {}"), err.user_message());
                 }
             });
     }
@@ -1158,12 +1158,12 @@ void ControlsPanel::handle_home_xy() {
 void ControlsPanel::handle_home_z() {
     spdlog::debug("[{}] Home Z clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(300000, [] { NOTIFY_WARNING("Homing timed out"); });
-        NOTIFY_INFO("Homing Z...");
+        operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
+        NOTIFY_INFO(lv_tr("Homing Z..."));
         api_->motion().home_axes(
             "Z",
             [this]() {
@@ -1172,9 +1172,9 @@ void ControlsPanel::handle_home_z() {
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Homing may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Homing failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Homing failed: {}"), err.user_message());
                 }
             });
     }
@@ -1183,24 +1183,24 @@ void ControlsPanel::handle_home_z() {
 void ControlsPanel::handle_qgl() {
     spdlog::debug("[{}] QGL clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(600000, [] { NOTIFY_WARNING("QGL timed out"); });
-        NOTIFY_INFO("Quad Gantry Level started...");
+        operation_guard_.begin(600000, [] { NOTIFY_WARNING(lv_tr("QGL timed out")); });
+        NOTIFY_INFO(lv_tr("Quad Gantry Level started..."));
         api_->execute_gcode(
             "QUAD_GANTRY_LEVEL",
             [this]() {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
-                NOTIFY_SUCCESS("Quad Gantry Level complete");
+                NOTIFY_SUCCESS(lv_tr("Quad Gantry Level complete"));
             },
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("QGL may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("QGL may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("QGL failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("QGL failed: {}"), err.user_message());
                 }
             },
             MoonrakerAdvancedAPI::LEVELING_TIMEOUT_MS);
@@ -1210,24 +1210,24 @@ void ControlsPanel::handle_qgl() {
 void ControlsPanel::handle_z_tilt() {
     spdlog::debug("[{}] Z-Tilt clicked", get_name());
     if (operation_guard_.is_active()) {
-        NOTIFY_WARNING("Operation already in progress");
+        NOTIFY_WARNING(lv_tr("Operation already in progress"));
         return;
     }
     if (api_) {
-        operation_guard_.begin(600000, [] { NOTIFY_WARNING("Z-Tilt timed out"); });
-        NOTIFY_INFO("Z-Tilt Adjust started...");
+        operation_guard_.begin(600000, [] { NOTIFY_WARNING(lv_tr("Z-Tilt timed out")); });
+        NOTIFY_INFO(lv_tr("Z-Tilt Adjust started..."));
         api_->execute_gcode(
             "Z_TILT_ADJUST",
             [this]() {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
-                NOTIFY_SUCCESS("Z-Tilt Adjust complete");
+                NOTIFY_SUCCESS(lv_tr("Z-Tilt Adjust complete"));
             },
             [this](const MoonrakerError& err) {
                 lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
-                    NOTIFY_WARNING("Z-Tilt may still be running — response timed out");
+                    NOTIFY_WARNING(lv_tr("Z-Tilt may still be running — response timed out"));
                 } else {
-                    NOTIFY_ERROR("Z-Tilt failed: {}", err.user_message());
+                    NOTIFY_ERROR(lv_tr("Z-Tilt failed: {}"), err.user_message());
                 }
             },
             MoonrakerAdvancedAPI::LEVELING_TIMEOUT_MS);
@@ -1255,14 +1255,14 @@ void ControlsPanel::execute_macro(size_t index) {
     spdlog::debug("[{}] Macro {} clicked, executing slot '{}' → {}", get_name(), button_num,
                   info.slot_name, info.get_macro());
 
-    NOTIFY_INFO("Running {}...", info.translated_name());
+    NOTIFY_INFO(lv_tr("Running {}..."), info.translated_name());
     if (!StandardMacros::instance().execute(
             *slot, api_,
-            [name = std::string(info.translated_name())]() { NOTIFY_SUCCESS("{} complete", name); },
+            [name = std::string(info.translated_name())]() { NOTIFY_SUCCESS(lv_tr("{} complete"), name); },
             [](const MoonrakerError& err) {
-                NOTIFY_ERROR("Macro failed: {}", err.user_message());
+                NOTIFY_ERROR(lv_tr("Macro failed: {}"), err.user_message());
             })) {
-        NOTIFY_WARNING("{} macro not configured", info.translated_name());
+        NOTIFY_WARNING(lv_tr("{} macro not configured"), info.translated_name());
     }
 }
 
@@ -1290,7 +1290,7 @@ void ControlsPanel::update_flow_display() {
 
 void ControlsPanel::handle_speed_up() {
     if (!api_) {
-        NOTIFY_ERROR("No printer connection");
+        NOTIFY_ERROR(lv_tr("No printer connection"));
         return;
     }
 
@@ -1307,13 +1307,13 @@ void ControlsPanel::handle_speed_up() {
     api_->execute_gcode(
         gcode, []() { /* Silent success */ },
         [](const MoonrakerError& err) {
-            NOTIFY_ERROR("Speed change failed: {}", err.user_message());
+            NOTIFY_ERROR(lv_tr("Speed change failed: {}"), err.user_message());
         });
 }
 
 void ControlsPanel::handle_speed_down() {
     if (!api_) {
-        NOTIFY_ERROR("No printer connection");
+        NOTIFY_ERROR(lv_tr("No printer connection"));
         return;
     }
 
@@ -1330,13 +1330,13 @@ void ControlsPanel::handle_speed_down() {
     api_->execute_gcode(
         gcode, []() { /* Silent success */ },
         [](const MoonrakerError& err) {
-            NOTIFY_ERROR("Speed change failed: {}", err.user_message());
+            NOTIFY_ERROR(lv_tr("Speed change failed: {}"), err.user_message());
         });
 }
 
 void ControlsPanel::handle_flow_up() {
     if (!api_) {
-        NOTIFY_ERROR("No printer connection");
+        NOTIFY_ERROR(lv_tr("No printer connection"));
         return;
     }
 
@@ -1364,13 +1364,13 @@ void ControlsPanel::handle_flow_up() {
             });
         },
         [](const MoonrakerError& err) {
-            NOTIFY_ERROR("Flow change failed: {}", err.user_message());
+            NOTIFY_ERROR(lv_tr("Flow change failed: {}"), err.user_message());
         });
 }
 
 void ControlsPanel::handle_flow_down() {
     if (!api_) {
-        NOTIFY_ERROR("No printer connection");
+        NOTIFY_ERROR(lv_tr("No printer connection"));
         return;
     }
 
@@ -1398,7 +1398,7 @@ void ControlsPanel::handle_flow_down() {
             });
         },
         [](const MoonrakerError& err) {
-            NOTIFY_ERROR("Flow change failed: {}", err.user_message());
+            NOTIFY_ERROR(lv_tr("Flow change failed: {}"), err.user_message());
         });
 }
 
@@ -1425,7 +1425,7 @@ void ControlsPanel::handle_fan_slider_changed(int value) {
         api_->set_fan_speed(
             "fan", static_cast<double>(value), []() { /* Silent success */ },
             [](const MoonrakerError& err) {
-                NOTIFY_ERROR("Fan control failed: {}", err.user_message());
+                NOTIFY_ERROR(lv_tr("Fan control failed: {}"), err.user_message());
             });
     }
 }
@@ -1444,7 +1444,7 @@ void ControlsPanel::handle_motors_clicked() {
 
     if (!motors_confirmation_dialog_) {
         LOG_ERROR_INTERNAL("Failed to create motors confirmation dialog");
-        NOTIFY_ERROR("Failed to show confirmation dialog");
+        NOTIFY_ERROR(lv_tr("Failed to show confirmation dialog"));
         return;
     }
 
@@ -1459,12 +1459,12 @@ void ControlsPanel::handle_motors_confirm() {
 
     // Send M84 command to disable motors
     if (api_) {
-        NOTIFY_INFO("Disabling motors...");
+        NOTIFY_INFO(lv_tr("Disabling motors..."));
         api_->execute_gcode(
             "M84", // Klipper command to disable steppers
-            []() { NOTIFY_SUCCESS("Motors disabled"); },
+            []() { NOTIFY_SUCCESS(lv_tr("Motors disabled")); },
             [](const MoonrakerError& err) {
-                NOTIFY_ERROR("Motors disable failed: {}", err.message);
+                NOTIFY_ERROR(lv_tr("Motors disable failed: {}"), err.message);
             });
     }
 }
@@ -1679,8 +1679,10 @@ void ControlsPanel::populate_secondary_temps() {
         lv_obj_set_style_text_font(name_label, theme_manager_get_font("font_small"), 0);
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
 
-        // Temperature value label - read initial value from subject
-        auto* subj = tsm.get_temp_subject(sensor.klipper_name);
+        // Temperature value label - read initial value from subject.
+        // SubjectLifetime is local — valid for one-shot read only, not observation.
+        SubjectLifetime lt;
+        auto* subj = tsm.get_temp_subject(sensor.klipper_name, lt);
         int centidegrees = subj ? lv_subject_get_int(subj) : 0;
         int temp_c = centidegrees / 100;
         char temp_buf[16];
