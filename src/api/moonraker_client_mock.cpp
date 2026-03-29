@@ -167,6 +167,17 @@ MoonrakerClientMock::~MoonrakerClientMock() {
 
     // Pass true to skip logging during destruction - spdlog may already be destroyed
     stop_temperature_simulation(true);
+
+    // Clean up any outstanding calibration timers (PID, MPC, shaper) to prevent
+    // use-after-free when a subsequent test calls process_lvgl().
+    if (lv_is_initialized()) {
+        for (auto* timer : calibration_timers_) {
+            if (timer) {
+                lv_timer_delete(timer);
+            }
+        }
+    }
+    calibration_timers_.clear();
 }
 
 int MoonrakerClientMock::connect(const char* url, std::function<void()> on_connected,
@@ -1528,6 +1539,8 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                              "PID parameters: pid_Kp=%.3f pid_Ki=%.3f pid_Kd=%.3f", kp, ki, kd);
                     s->mock->dispatch_gcode_response(buf);
 
+                    auto& timers = s->mock->calibration_timers_;
+                    timers.erase(std::remove(timers.begin(), timers.end(), t), timers.end());
                     delete s;
                     lv_timer_delete(t);
                     return;
@@ -1535,6 +1548,7 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             },
             500, sim);                       // 500ms between cycles for quick mock
         lv_timer_set_repeat_count(timer, 6); // 5 progress + 1 result
+        calibration_timers_.push_back(timer);
 
         return 0; // Success - results come asynchronously via gcode_response
     }
@@ -1595,6 +1609,8 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
                             "fan_ambient_transfer=0.12, 0.18, 0.25 [W/K]");
                     }
 
+                    auto& timers = s->mock->calibration_timers_;
+                    timers.erase(std::remove(timers.begin(), timers.end(), t), timers.end());
                     delete s;
                     lv_timer_delete(t);
                     return;
@@ -1602,6 +1618,7 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             },
             500, sim);
         lv_timer_set_repeat_count(timer, total_phases + 1);
+        calibration_timers_.push_back(timer);
 
         return 0; // Success - results come asynchronously via gcode_response
     }
@@ -3997,6 +4014,8 @@ void MoonrakerClientMock::dispatch_shaper_calibrate_response(char axis) {
             spdlog::info(
                 "[MoonrakerClientMock] Dispatched SHAPER_CALIBRATE response for axis {}",
                 static_cast<char>(std::toupper(static_cast<unsigned char>(s->axis_lower))));
+            auto& timers = s->mock->calibration_timers_;
+            timers.erase(std::remove(timers.begin(), timers.end(), t), timers.end());
             delete s;
             lv_timer_delete(t);
         },
@@ -4004,6 +4023,7 @@ void MoonrakerClientMock::dispatch_shaper_calibrate_response(char axis) {
 
     // Total: 20 sweep + 15 calc + 2 final = 37 steps
     lv_timer_set_repeat_count(timer, 37);
+    calibration_timers_.push_back(timer);
 
     spdlog::info("[MoonrakerClientMock] Started SHAPER_CALIBRATE timer for axis {}", axis);
 }

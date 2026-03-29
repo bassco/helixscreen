@@ -996,6 +996,11 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
 
     // Additional objects for testing (e.g., "mmu", "AFC", "toolchanger")
     std::vector<std::string> additional_objects_;
+
+    // Calibration simulation timers (PID, MPC, shaper) — must be cleaned up
+    // in destructor to prevent use-after-free when mock is destroyed before
+    // LVGL timers fire in a subsequent test's process_lvgl().
+    std::vector<lv_timer_t*> calibration_timers_;
 };
 
 // ============================================================================
