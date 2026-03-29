@@ -79,6 +79,9 @@ class ProbeOverlay : public OverlayBase {
     /// Close the accuracy results modal
     void handle_accuracy_close();
 
+    /// Emergency stop during probe accuracy test
+    void handle_accuracy_estop();
+
     /// Open edit modal for a specific config field
     void handle_config_edit(const std::string& field_key, const std::string& title,
                             const std::string& description);
@@ -142,6 +145,14 @@ class ProbeOverlay : public OverlayBase {
     char probe_config_edit_value_buf_[32] = {};
     lv_subject_t probe_config_edit_value_{};
 
+    // Probe accuracy state machine: 0=idle, 1=probing, 2=results, 3=error
+    lv_subject_t probe_acc_state_{};
+
+    // Probe accuracy progress (probing state)
+    lv_subject_t probe_acc_progress_{}; // 0-100 percentage
+    char probe_acc_progress_text_buf_[64] = {};
+    lv_subject_t probe_acc_progress_text_{};
+
     // Probe accuracy results subjects
     char probe_acc_maximum_buf_[32] = {};
     lv_subject_t probe_acc_maximum_{};
@@ -155,7 +166,24 @@ class ProbeOverlay : public OverlayBase {
     lv_subject_t probe_acc_median_{};
     char probe_acc_stddev_buf_[32] = {};
     lv_subject_t probe_acc_stddev_{};
+
+    // Individual sample readings displayed in results
+    char probe_acc_samples_text_buf_[512] = {};
+    lv_subject_t probe_acc_samples_text_{};
+
+    // Error message
+    char probe_acc_error_msg_buf_[128] = {};
+    lv_subject_t probe_acc_error_msg_{};
+
     lv_obj_t* accuracy_modal_ = nullptr;
+
+    // Track samples during probing
+    int probe_acc_sample_count_ = 0;
+    int probe_acc_total_samples_ = 10;
+    std::string probe_acc_samples_str_; // Accumulates "#1: 1.234  #2: 1.235 ..."
+
+    // Gcode response handler name (for unregistering)
+    std::string probe_acc_handler_name_;
 
     // Config editor
     helix::system::KlipperConfigEditor config_editor_;

@@ -224,9 +224,12 @@ void ui_probe_overlay_register_callbacks() {
             "Maximum allowed deviation between samples (mm)");
     });
 
-    // Probe accuracy results modal
+    // Probe accuracy modal callbacks
     lv_xml_register_event_cb(nullptr, "on_probe_accuracy_close", [](lv_event_t* /*e*/) {
         get_global_probe_overlay().handle_accuracy_close();
+    });
+    lv_xml_register_event_cb(nullptr, "on_probe_accuracy_estop", [](lv_event_t* /*e*/) {
+        get_global_probe_overlay().handle_accuracy_estop();
     });
 
     // Config edit modal buttons
@@ -298,6 +301,12 @@ void ProbeOverlay::init_subjects() {
     UI_MANAGED_SUBJECT_STRING(probe_config_edit_value_, probe_config_edit_value_buf_, "",
                               "probe_config_edit_value", subjects_);
 
+    // Probe accuracy state machine + progress
+    UI_MANAGED_SUBJECT_INT(probe_acc_state_, 0, "probe_acc_state", subjects_);
+    UI_MANAGED_SUBJECT_INT(probe_acc_progress_, 0, "probe_acc_progress", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_acc_progress_text_, probe_acc_progress_text_buf_,
+                              lv_tr("Preparing..."), "probe_acc_progress_text", subjects_);
+
     // Probe accuracy results modal subjects
     UI_MANAGED_SUBJECT_STRING(probe_acc_maximum_, probe_acc_maximum_buf_, "--", "probe_acc_maximum",
                               subjects_);
@@ -311,6 +320,12 @@ void ProbeOverlay::init_subjects() {
                               subjects_);
     UI_MANAGED_SUBJECT_STRING(probe_acc_stddev_, probe_acc_stddev_buf_, "--", "probe_acc_stddev",
                               subjects_);
+
+    // Individual samples text + error message
+    UI_MANAGED_SUBJECT_STRING(probe_acc_samples_text_, probe_acc_samples_text_buf_, "",
+                              "probe_acc_samples_text", subjects_);
+    UI_MANAGED_SUBJECT_STRING(probe_acc_error_msg_, probe_acc_error_msg_buf_, "",
+                              "probe_acc_error_msg", subjects_);
 
     subjects_initialized_ = true;
     spdlog::trace("[Probe] Subjects initialized");
@@ -530,7 +545,7 @@ void ProbeOverlay::handle_probe_accuracy() {
     spdlog::debug("[Probe] Probe accuracy test requested");
 
     if (!api_) {
-        ToastManager::instance().show(ToastSeverity::ERROR, "No printer connection");
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("No printer connection"));
         return;
     }
 
@@ -547,52 +562,130 @@ void ProbeOverlay::handle_probe_accuracy() {
     }
     gcode += "PROBE_ACCURACY";
 
-    ToastManager::instance().show(ToastSeverity::INFO,
-                                  all_homed ? "Probe accuracy test started"
-                                            : "Homing first, then running probe accuracy test");
+    // Reset progress state
+    probe_acc_sample_count_ = 0;
+    probe_acc_samples_str_.clear();
 
-    // Subscribe to gcode responses to capture the results summary line
+    // Get expected sample count from config (default 10 if not loaded)
+    const char* samples_str = lv_subject_get_string(&probe_cfg_samples_);
+    probe_acc_total_samples_ = 10;
+    if (samples_str && samples_str[0] != '-') {
+        int parsed = std::atoi(samples_str);
+        if (parsed > 0)
+            probe_acc_total_samples_ = parsed;
+    }
+
+    // Set initial state and show modal
+    lv_subject_set_int(&probe_acc_state_, 1); // PROBING
+    lv_subject_set_int(&probe_acc_progress_, 0);
+    snprintf(probe_acc_progress_text_buf_, sizeof(probe_acc_progress_text_buf_), "%s",
+             all_homed ? lv_tr("Preparing...") : lv_tr("Homing first..."));
+    lv_subject_copy_string(&probe_acc_progress_text_, probe_acc_progress_text_buf_);
+
+    accuracy_modal_ = Modal::show("probe_accuracy_modal");
+    if (!accuracy_modal_) {
+        spdlog::error("[Probe] Failed to show accuracy modal");
+        lv_subject_set_int(&probe_acc_state_, 0);
+        return;
+    }
+
+    // Unregister any stale handler from a previous run
+    if (!probe_acc_handler_name_.empty()) {
+        api_->unregister_method_callback("notify_gcode_response", probe_acc_handler_name_);
+    }
+
+    // Subscribe to gcode responses for progress + results
     static int s_handler_id = 0;
-    std::string handler_name = "probe_accuracy_" + std::to_string(++s_handler_id);
+    probe_acc_handler_name_ = "probe_accuracy_" + std::to_string(++s_handler_id);
 
     api_->register_method_callback(
-        "notify_gcode_response", handler_name,
-        [handler_name, api = api_](const json& msg) {
+        "notify_gcode_response", probe_acc_handler_name_,
+        [handler_name = probe_acc_handler_name_, api = api_](const json& msg) {
             if (!msg.contains("params") || !msg["params"].is_array() || msg["params"].empty() ||
                 !msg["params"][0].is_string()) {
                 return;
             }
             const std::string& line = msg["params"][0].get_ref<const std::string&>();
 
-            // Klipper outputs: "probe accuracy results: maximum ..., minimum ..., range ...,
-            // average ..., median ..., standard deviation ..."
-            if (line.find("probe accuracy results:") == std::string::npos) {
+            // Check for individual probe sample: "probe at X,Y is z=Z"
+            auto z_pos = line.find(" is z=");
+            if (z_pos != std::string::npos && line.find("probe at ") != std::string::npos) {
+                std::string z_val = line.substr(z_pos + 6); // After " is z="
+                helix::ui::queue_update([z_val]() {
+                    auto& overlay = get_global_probe_overlay();
+                    overlay.probe_acc_sample_count_++;
+                    int current = overlay.probe_acc_sample_count_;
+                    int total = overlay.probe_acc_total_samples_;
+
+                    // Update progress bar
+                    int pct = total > 0 ? (current * 100 / total) : 0;
+                    if (pct > 100)
+                        pct = 100;
+                    lv_subject_set_int(&overlay.probe_acc_progress_, pct);
+
+                    // Update progress text: "Sample 3 of 10: z=1.2341"
+                    snprintf(overlay.probe_acc_progress_text_buf_,
+                             sizeof(overlay.probe_acc_progress_text_buf_),
+                             "%s %d %s %d: z=%s", lv_tr("Sample"), current, lv_tr("of"), total,
+                             z_val.c_str());
+                    lv_subject_copy_string(&overlay.probe_acc_progress_text_,
+                                           overlay.probe_acc_progress_text_buf_);
+
+                    // Accumulate sample list
+                    if (!overlay.probe_acc_samples_str_.empty())
+                        overlay.probe_acc_samples_str_ += "  ";
+                    overlay.probe_acc_samples_str_ +=
+                        "#" + std::to_string(current) + ": " + z_val;
+                });
                 return;
             }
 
-            spdlog::info("[Probe] {}", line);
+            // Check for final results line
+            if (line.find("probe accuracy results:") != std::string::npos) {
+                spdlog::info("[Probe] {}", line);
+                api->unregister_method_callback("notify_gcode_response", handler_name);
 
-            // Unsubscribe now that we have the result
-            api->unregister_method_callback("notify_gcode_response", handler_name);
+                std::string results = line;
+                helix::ui::queue_update([results]() {
+                    get_global_probe_overlay().show_accuracy_results(results);
+                });
+                return;
+            }
 
-            // Show results modal on UI thread
-            std::string results = line;
-            helix::ui::queue_update([results]() {
-                get_global_probe_overlay().show_accuracy_results(results);
-            });
+            // Check for errors
+            if (line.rfind("!! ", 0) == 0 || line.rfind("Error:", 0) == 0 ||
+                line.find("error:") != std::string::npos) {
+                spdlog::error("[Probe] PROBE_ACCURACY error: {}", line);
+                api->unregister_method_callback("notify_gcode_response", handler_name);
+
+                std::string error_msg = line;
+                helix::ui::queue_update([error_msg]() {
+                    auto& overlay = get_global_probe_overlay();
+                    snprintf(overlay.probe_acc_error_msg_buf_,
+                             sizeof(overlay.probe_acc_error_msg_buf_), "%s", error_msg.c_str());
+                    lv_subject_copy_string(&overlay.probe_acc_error_msg_,
+                                           overlay.probe_acc_error_msg_buf_);
+                    lv_subject_set_int(&overlay.probe_acc_state_, 3); // ERROR
+                });
+            }
         });
 
     api_->execute_gcode(
         gcode,
-        [api = api_, handler_name]() {
+        [handler_name = probe_acc_handler_name_]() {
             spdlog::info("[Probe] PROBE_ACCURACY command completed");
         },
-        [api = api_, handler_name](const MoonrakerError& err) {
+        [api = api_, handler_name = probe_acc_handler_name_](const MoonrakerError& err) {
             spdlog::error("[Probe] PROBE_ACCURACY failed: {}", err.user_message());
             api->unregister_method_callback("notify_gcode_response", handler_name);
-            helix::ui::queue_update([]() {
-                ToastManager::instance().show(ToastSeverity::ERROR,
-                                              "Probe accuracy test failed");
+            std::string msg = err.user_message();
+            helix::ui::queue_update([msg]() {
+                auto& overlay = get_global_probe_overlay();
+                snprintf(overlay.probe_acc_error_msg_buf_,
+                         sizeof(overlay.probe_acc_error_msg_buf_), "%s", msg.c_str());
+                lv_subject_copy_string(&overlay.probe_acc_error_msg_,
+                                       overlay.probe_acc_error_msg_buf_);
+                lv_subject_set_int(&overlay.probe_acc_state_, 3); // ERROR
             });
         },
         MoonrakerAdvancedAPI::PROBING_TIMEOUT_MS);
@@ -606,7 +699,6 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
         if (pos == std::string::npos)
             return "--";
         pos += key.length();
-        // Skip whitespace
         while (pos < results_line.size() && results_line[pos] == ' ')
             pos++;
         auto end = results_line.find(',', pos);
@@ -634,17 +726,40 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
     set_subject(&probe_acc_stddev_, probe_acc_stddev_buf_, sizeof(probe_acc_stddev_buf_),
                 extract_value("standard deviation "));
 
-    accuracy_modal_ = Modal::show("probe_accuracy_modal");
-    if (!accuracy_modal_) {
-        spdlog::error("[Probe] Failed to show accuracy results modal");
-    }
+    // Set individual samples text
+    snprintf(probe_acc_samples_text_buf_, sizeof(probe_acc_samples_text_buf_), "%s",
+             probe_acc_samples_str_.c_str());
+    lv_subject_copy_string(&probe_acc_samples_text_, probe_acc_samples_text_buf_);
+
+    // Transition to RESULTS state
+    lv_subject_set_int(&probe_acc_progress_, 100);
+    lv_subject_set_int(&probe_acc_state_, 2); // RESULTS
 }
 
 void ProbeOverlay::handle_accuracy_close() {
+    lv_subject_set_int(&probe_acc_state_, 0); // IDLE
     if (accuracy_modal_) {
         Modal::hide(accuracy_modal_);
         accuracy_modal_ = nullptr;
     }
+}
+
+void ProbeOverlay::handle_accuracy_estop() {
+    spdlog::warn("[Probe] Emergency stop requested during probe accuracy test");
+
+    // Unregister the response handler
+    if (api_ && !probe_acc_handler_name_.empty()) {
+        api_->unregister_method_callback("notify_gcode_response", probe_acc_handler_name_);
+        probe_acc_handler_name_.clear();
+    }
+
+    // Send emergency stop
+    if (api_) {
+        api_->execute_gcode("M112", nullptr, nullptr);
+    }
+
+    // Close the modal
+    handle_accuracy_close();
 }
 
 void ProbeOverlay::handle_zoffset_cal() {
