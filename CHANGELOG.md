@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.9] - 2026-03-28
+
+This release focuses on stability with fixes for multiple crashes, adds manual chamber sensor/heater assignment, and improves print history performance with virtual scrolling.
+
+### Added
+- Manual chamber sensor and heater assignment in temperature sensor settings
+- USB gcode thumbnail extraction with Creality PNG format support (#610)
+- Virtual scroll for print history list, improving performance with large job histories (#619)
+- Sound settings promoted out of beta with tracker test button
+- ACE environment sensor data (temperature, humidity) now exposed
+
+### Fixed
+- Crash from backdrop deletion during AMS notification dispatch (#620, #621)
+- Crash from synchronous widget deletion in picker and busy overlay dismiss
+- Crash from unguarded async gcode callbacks in bed mesh calibration (#611)
+- Crash from null subject API calls during startup or reconnection (#617)
+- Crash from PowerDeviceState observer firing before PrinterState initialized
+- ETA display now respects 12/24-hour time format setting (#597)
+- Touchscreen: NS2009 detection fixed, affine calibration disabled during recalibration (#623)
+- Filament load/unload now routes through AMS backend when active
+- Print history fetches all jobs instead of only the first 500 (#619)
+- Print history lifetime stats now use server totals for accuracy (#619)
+- Temperature chart sizing and double-deactivate in temp graph overlay (#616)
+- Print status memory-aware widget caching and correct temp row height (#617, #618)
+- Systemd unit self-healing and removal of unsupported Moonraker options (#617)
+- NTP time correction no longer triggers unnecessary service restart (#536)
+- Boot race on Plymouth systems resolved by waiting for multi-user.target (#536)
+- Filament type JSON array normalization from Moonraker (#554)
+- USB file browser: K1C /tmp/udisk mount detection, source selector shown on startup (#610)
+- Motion panel: out-of-range errors now show Klipper axis limits (#610)
+- Duplicate T0 extruder entry in multi-tool initialization
+
 ## [0.99.8] - 2026-03-28
 
 This release enriches the print status panel with speed/flow indicators, estimated finish time, Z height, and a unified temperature card with chamber support. It also fixes several crashes and UI issues across filament management, temperature controls, and navigation.
@@ -2273,6 +2305,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.9]: https://github.com/prestonbrown/helixscreen/compare/v0.99.8...v0.99.9
 [0.99.8]: https://github.com/prestonbrown/helixscreen/compare/v0.99.7...v0.99.8
 [0.99.7]: https://github.com/prestonbrown/helixscreen/compare/v0.99.6...v0.99.7
 [0.99.6]: https://github.com/prestonbrown/helixscreen/compare/v0.99.5...v0.99.6
