@@ -37,13 +37,25 @@
               width="content" height="content" style_radius="#space_sm" style_pad_all="#space_xxs" flex_flow="row"
               style_pad_gap="0" scrollable="false">
 
-        <!-- printer files -->
-        <ui_button name="source_printer_btn" width="content" height="#button_height_sm" text="Printer" translation_tag="Printer">
+        <!-- Printer tab: filled (active) when source=printer -->
+        <ui_button name="source_printer_active" width="content" height="#button_height_sm" text="Printer" translation_tag="Printer" hidden="true">
+          <bind_flag_if_not_eq subject="print_source_is_usb" flag="hidden" ref_value="0"/>
+          <event_cb trigger="clicked" callback="on_print_select_source_printer"/>
+        </ui_button>
+        <!-- Printer tab: outline (inactive) when source=usb -->
+        <ui_button name="source_printer_inactive" width="content" height="#button_height_sm" variant="outline" text="Printer" translation_tag="Printer" hidden="true">
+          <bind_flag_if_not_eq subject="print_source_is_usb" flag="hidden" ref_value="1"/>
           <event_cb trigger="clicked" callback="on_print_select_source_printer"/>
         </ui_button>
 
-        <!-- usb files (conditionally hidden) -->
-        <ui_button name="source_usb_btn" width="content" height="#button_height_sm" text="USB">
+        <!-- USB tab: filled (active) when source=usb -->
+        <ui_button name="source_usb_active" width="content" height="#button_height_sm" text="USB" hidden="true">
+          <bind_flag_if_not_eq subject="print_source_is_usb" flag="hidden" ref_value="1"/>
+          <event_cb trigger="clicked" callback="on_print_select_source_usb"/>
+        </ui_button>
+        <!-- USB tab: outline (inactive) when source=printer -->
+        <ui_button name="source_usb_inactive" width="content" height="#button_height_sm" variant="outline" text="USB" hidden="true">
+          <bind_flag_if_not_eq subject="print_source_is_usb" flag="hidden" ref_value="0"/>
           <event_cb trigger="clicked" callback="on_print_select_source_usb"/>
         </ui_button>
       </lv_obj>

@@ -199,22 +199,15 @@ class PrintSelectUsbSource {
         usb_files_.clear();
     }
 
-    // === Button References (for external event handling) ===
-
-    [[nodiscard]] lv_obj_t* get_printer_button() const {
-        return source_printer_btn_;
-    }
-    [[nodiscard]] lv_obj_t* get_usb_button() const {
-        return source_usb_btn_;
-    }
+    /// Initialize the source subject (call once at startup, before XML is parsed)
+    static void init_subjects();
 
   private:
     // === Dependencies ===
     UsbManager* usb_manager_ = nullptr;
 
     // === Widget References ===
-    lv_obj_t* source_printer_btn_ = nullptr;
-    lv_obj_t* source_usb_btn_ = nullptr;
+    lv_obj_t* source_selector_ = nullptr; // Container for all source buttons
 
     // === State ===
     FileSource current_source_ = FileSource::PRINTER;
@@ -228,7 +221,7 @@ class PrintSelectUsbSource {
     // === Internal Methods ===
 
     /**
-     * @brief Update button visual states based on current source
+     * @brief Update source subject — XML bindings handle button appearance
      */
     void update_button_states();
 

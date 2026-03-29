@@ -303,6 +303,9 @@ void PrintSelectPanel::init_subjects() {
     UI_MANAGED_SUBJECT_INT(can_print_subject_, can_print ? 1 : 0, "print_select_can_print",
                            subjects_);
 
+    // Initialize USB source subject (before XML is parsed so bindings resolve)
+    helix::ui::PrintSelectUsbSource::init_subjects();
+
     // Register XML event callbacks (must be done BEFORE XML is created)
     register_xml_callbacks({
         {"on_print_select_view_toggle", on_print_select_view_toggle},

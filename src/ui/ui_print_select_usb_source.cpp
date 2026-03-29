@@ -7,13 +7,31 @@
 #include "ui_print_select_card_view.h"
 
 #include "gcode_parser.h"
+#include "helix-xml/src/xml/lv_xml.h"
 #include "print_file_data.h"
+#include "subject_debug_registry.h"
 #include "thumbnail_cache.h"
 #include "usb_manager.h"
 
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
+
+// Subject for source tab state: 0 = Printer (default), 1 = USB
+static lv_subject_t s_print_source_is_usb;
+static bool s_source_subject_initialized = false;
+
+void PrintSelectUsbSource::init_subjects() {
+    if (s_source_subject_initialized)
+        return;
+    lv_subject_init_int(&s_print_source_is_usb, 0);
+    lv_xml_register_subject(nullptr, "print_source_is_usb", &s_print_source_is_usb);
+    SubjectDebugRegistry::instance().register_subject(&s_print_source_is_usb,
+                                                       "print_source_is_usb", LV_SUBJECT_TYPE_INT,
+                                                       __FILE__, __LINE__);
+    s_source_subject_initialized = true;
+    spdlog::debug("[UsbSource] Subject print_source_is_usb initialized");
+}
 
 // ============================================================================
 // Setup
@@ -24,24 +42,20 @@ bool PrintSelectUsbSource::setup(lv_obj_t* panel) {
         return false;
     }
 
-    // Find source selector buttons by name
-    source_printer_btn_ = lv_obj_find_by_name(panel, "source_printer_btn");
-    source_usb_btn_ = lv_obj_find_by_name(panel, "source_usb_btn");
-
-    if (!source_printer_btn_ || !source_usb_btn_) {
-        spdlog::warn("[UsbSource] Source selector buttons not found");
+    // Find the source selector container
+    source_selector_ = lv_obj_find_by_name(panel, "source_selector");
+    if (!source_selector_) {
+        spdlog::warn("[UsbSource] Source selector container not found");
         return false;
     }
 
-    // Hide both source buttons by default - only show when USB drive is present
-    lv_obj_add_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_add_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
+    // Hide selector by default - only show when USB drive is present
+    lv_obj_add_flag(source_selector_, LV_OBJ_FLAG_HIDDEN);
 
     // Set initial state - Printer is selected by default
     update_button_states();
 
-    spdlog::debug("[UsbSource] Source selector buttons configured (hidden until USB drive "
-                  "inserted)");
+    spdlog::debug("[UsbSource] Source selector configured (hidden until USB drive inserted)");
     return true;
 }
 
@@ -55,10 +69,9 @@ void PrintSelectUsbSource::set_usb_manager(UsbManager* manager) {
 
     // Check if drive is already inserted (startup race: drive detected before panel exists)
     if (manager && !manager->get_drives().empty() && !moonraker_has_usb_access_ &&
-        source_printer_btn_ && source_usb_btn_) {
+        source_selector_) {
         spdlog::info("[UsbSource] USB drive already present at setup - showing source selector");
-        lv_obj_remove_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_remove_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(source_selector_, LV_OBJ_FLAG_HIDDEN);
     }
 
     spdlog::debug("[UsbSource] UsbManager set");
@@ -104,12 +117,11 @@ void PrintSelectUsbSource::select_usb_source() {
 // ============================================================================
 
 void PrintSelectUsbSource::on_drive_inserted() {
-    if (!source_printer_btn_ || !source_usb_btn_) {
+    if (!source_selector_) {
         return;
     }
 
     // If Moonraker has symlink access to USB files, don't show the source selector
-    // (files are already accessible via the Printer source)
     if (moonraker_has_usb_access_) {
         spdlog::debug(
             "[UsbSource] USB drive inserted - but Moonraker has symlink access, keeping "
@@ -118,20 +130,16 @@ void PrintSelectUsbSource::on_drive_inserted() {
     }
 
     spdlog::debug("[UsbSource] USB drive inserted - showing source selector");
-    lv_obj_remove_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_remove_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(source_selector_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void PrintSelectUsbSource::set_moonraker_has_usb_access(bool has_access) {
     moonraker_has_usb_access_ = has_access;
 
-    if (has_access && source_usb_btn_) {
-        // Hide both source buttons permanently - files are accessible via Printer source
+    if (has_access && source_selector_) {
+        // Hide source selector permanently - files are accessible via Printer source
         spdlog::debug("[UsbSource] Moonraker has USB symlink access - hiding source selector permanently");
-        if (source_printer_btn_) {
-            lv_obj_add_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
-        }
-        lv_obj_add_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(source_selector_, LV_OBJ_FLAG_HIDDEN);
 
         // If currently viewing USB source, switch to Printer
         if (current_source_ == FileSource::USB) {
@@ -147,12 +155,9 @@ void PrintSelectUsbSource::set_moonraker_has_usb_access(bool has_access) {
 void PrintSelectUsbSource::on_drive_removed() {
     spdlog::info("[UsbSource] USB drive removed - hiding source selector");
 
-    // Hide both source buttons
-    if (source_printer_btn_) {
-        lv_obj_add_flag(source_printer_btn_, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (source_usb_btn_) {
-        lv_obj_add_flag(source_usb_btn_, LV_OBJ_FLAG_HIDDEN);
+    // Hide source selector container
+    if (source_selector_) {
+        lv_obj_add_flag(source_selector_, LV_OBJ_FLAG_HIDDEN);
     }
 
     // If USB source is currently active, switch to Printer source
@@ -214,24 +219,10 @@ void PrintSelectUsbSource::refresh_files() {
 // ============================================================================
 
 void PrintSelectUsbSource::update_button_states() {
-    if (!source_printer_btn_ || !source_usb_btn_) {
-        return;
-    }
-
-    // Apply LV_STATE_CHECKED to the active source button
-    // Make inactive button transparent for segmented control appearance
-    if (current_source_ == FileSource::PRINTER) {
-        lv_obj_add_state(source_printer_btn_, LV_STATE_CHECKED);
-        lv_obj_remove_state(source_usb_btn_, LV_STATE_CHECKED);
-        // Active tab: normal opacity, Inactive tab: transparent
-        lv_obj_set_style_bg_opa(source_printer_btn_, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(source_usb_btn_, LV_OPA_TRANSP, LV_PART_MAIN);
-    } else {
-        lv_obj_remove_state(source_printer_btn_, LV_STATE_CHECKED);
-        lv_obj_add_state(source_usb_btn_, LV_STATE_CHECKED);
-        // Active tab: normal opacity, Inactive tab: transparent
-        lv_obj_set_style_bg_opa(source_printer_btn_, LV_OPA_TRANSP, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(source_usb_btn_, LV_OPA_COVER, LV_PART_MAIN);
+    // Update subject — XML bind_flag_if_not_eq handles button visibility/appearance
+    if (s_source_subject_initialized) {
+        lv_subject_set_int(&s_print_source_is_usb,
+                           current_source_ == FileSource::USB ? 1 : 0);
     }
 }
 
