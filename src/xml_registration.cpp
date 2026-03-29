@@ -534,6 +534,7 @@ void register_xml_components() {
     register_xml("test_panel.xml");
     register_xml("print_select_panel.xml");
     register_xml("gcode_test_panel.xml");
+    register_xml("step_test_panel.xml");
     register_xml("glyphs_panel.xml");
 
     // App layout

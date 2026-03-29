@@ -12,17 +12,20 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 using namespace helix;
 
 // Internal widget data stored in user_data
 typedef struct {
-    char** label_buffers; // String storage for labels
-    StepState* states;    // Current state for each step
+    char** label_buffers;      // String storage for labels
+    StepState* states;         // Current state for each step
+    lv_obj_t** connectors;     // Connector line objects (step_count - 1)
+    lv_obj_t** step_items;     // Step item objects (step_count)
     int step_count;
     bool horizontal;
-    int32_t circle_size;     // Responsive circle diameter
-    int32_t connector_width; // Responsive connector line thickness
+    int32_t circle_size;       // Responsive circle diameter
+    int32_t connector_width;   // Responsive connector line thickness
 } step_progress_data_t;
 
 // Theme-aware color variables (loaded from component scope or defaults)
@@ -34,57 +37,39 @@ static lv_color_t color_number_active;
 static lv_color_t color_label_active;
 static lv_color_t color_label_inactive;
 
-// Initialize colors from component scope
+// Helper to read a scope color with theme token fallback
+static lv_color_t get_step_color(lv_xml_component_scope_t* scope, bool dark,
+                                 const char* scope_light, const char* scope_dark,
+                                 const char* token_fallback) {
+    if (scope) {
+        const char* val = lv_xml_get_const(scope, dark ? scope_dark : scope_light);
+        if (val) return theme_manager_parse_hex_color(val);
+    }
+    return theme_manager_get_color(token_fallback);
+}
+
+// Initialize colors from component scope or theme tokens
 static void init_step_progress_colors(const char* scope_name) {
     lv_xml_component_scope_t* scope = scope_name ? lv_xml_component_get_scope(scope_name) : nullptr;
-    bool use_dark_mode = theme_manager_is_dark_mode();
+    bool dark = theme_manager_is_dark_mode();
 
-    if (scope) {
-        // Read theme-aware colors from component scope
-        const char* pending =
-            lv_xml_get_const(scope, use_dark_mode ? "step_pending_dark" : "step_pending_light");
-        const char* active =
-            lv_xml_get_const(scope, use_dark_mode ? "step_active_dark" : "step_active_light");
-        const char* completed =
-            lv_xml_get_const(scope, use_dark_mode ? "step_completed_dark" : "step_completed_light");
-        const char* num_pending = lv_xml_get_const(
-            scope, use_dark_mode ? "step_number_pending_dark" : "step_number_pending_light");
-        const char* num_active = lv_xml_get_const(
-            scope, use_dark_mode ? "step_number_active_dark" : "step_number_active_light");
-        const char* lbl_active = lv_xml_get_const(scope, use_dark_mode ? "step_label_active_dark"
-                                                                       : "step_label_active_light");
-        const char* lbl_inactive = lv_xml_get_const(
-            scope, use_dark_mode ? "step_label_inactive_dark" : "step_label_inactive_light");
+    color_pending = get_step_color(scope, dark, "step_pending_light", "step_pending_dark",
+                                   "text_subtle");
+    color_active = get_step_color(scope, dark, "step_active_light", "step_active_dark",
+                                  "primary");
+    color_completed = get_step_color(scope, dark, "step_completed_light", "step_completed_dark",
+                                     "success");
+    color_number_pending = get_step_color(scope, dark, "step_number_pending_light",
+                                          "step_number_pending_dark", "card_bg");
+    color_number_active = get_step_color(scope, dark, "step_number_active_light",
+                                         "step_number_active_dark", "card_bg");
+    color_label_active = get_step_color(scope, dark, "step_label_active_light",
+                                        "step_label_active_dark", "text");
+    color_label_inactive = get_step_color(scope, dark, "step_label_inactive_light",
+                                          "step_label_inactive_dark", "text_subtle");
 
-        color_pending = theme_manager_parse_hex_color(pending ? pending : "#808080");
-        color_active = theme_manager_parse_hex_color(active ? active : "#FF4444");
-        color_completed = theme_manager_parse_hex_color(completed ? completed : "#4CAF50");
-        color_number_pending = theme_manager_parse_hex_color(
-            num_pending ? num_pending : (use_dark_mode ? "#000000" : "#FFFFFF"));
-        color_number_active = theme_manager_parse_hex_color(num_active ? num_active : "#FFFFFF");
-        color_label_active = theme_manager_parse_hex_color(
-            lbl_active ? lbl_active : (use_dark_mode ? "#FFFFFF" : "#000000"));
-        color_label_inactive = theme_manager_parse_hex_color(
-            lbl_inactive ? lbl_inactive : (use_dark_mode ? "#CCCCCC" : "#666666"));
-
-        spdlog::debug("[StepProgress] Colors loaded from scope '{}' for {} mode", scope_name,
-                      use_dark_mode ? "dark" : "light");
-    } else {
-        // Fallback to theme token defaults
-        color_pending = theme_manager_get_color("step_pending");
-        color_active = theme_manager_get_color("step_active");
-        color_completed = theme_manager_get_color("step_completed");
-        color_number_pending =
-            use_dark_mode ? theme_manager_get_color("ams_hub") : theme_manager_get_color("text");
-        color_number_active = theme_manager_get_color("text");
-        color_label_active =
-            use_dark_mode ? theme_manager_get_color("text") : theme_manager_get_color("ams_hub");
-        color_label_inactive = theme_manager_get_color(use_dark_mode ? "step_label_inactive_dark"
-                                                                     : "step_label_inactive_light");
-
-        spdlog::debug("[StepProgress] Using fallback colors for {} mode",
-                      use_dark_mode ? "dark" : "light");
-    }
+    spdlog::debug("[StepProgress] Colors loaded (scope={}, mode={})",
+                  scope_name ? scope_name : "none", dark ? "dark" : "light");
 }
 
 /**
@@ -190,17 +175,22 @@ static void step_progress_delete_cb(lv_event_t* e) {
         // Free nested allocations
         if (data->label_buffers) {
             for (int i = 0; i < data->step_count; i++) {
-                // Use RAII for each label buffer
                 lvgl_unique_ptr<char> label(data->label_buffers[i]);
             }
-            // Wrap array itself
             lvgl_unique_ptr<char*> buffers(data->label_buffers);
         }
 
         if (data->states) {
             lvgl_unique_ptr<StepState> states(data->states);
         }
-        // data itself automatically freed via ~unique_ptr()
+
+        // connectors and step_items are LVGL children — freed by lv_obj_delete, not us
+        if (data->connectors) {
+            lvgl_unique_ptr<lv_obj_t*> conns(data->connectors);
+        }
+        if (data->step_items) {
+            lvgl_unique_ptr<lv_obj_t*> items(data->step_items);
+        }
     }
 }
 
@@ -251,14 +241,19 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
     // Allocate arrays using RAII
     auto label_buffers_ptr = lvgl_make_unique_array<char*>(static_cast<size_t>(step_count));
     auto states_ptr = lvgl_make_unique_array<StepState>(static_cast<size_t>(step_count));
+    auto connectors_ptr = lvgl_make_unique_array<lv_obj_t*>(
+        static_cast<size_t>(step_count > 1 ? step_count - 1 : 0));
+    auto step_items_ptr = lvgl_make_unique_array<lv_obj_t*>(static_cast<size_t>(step_count));
 
-    if (!label_buffers_ptr || !states_ptr) {
+    if (!label_buffers_ptr || !states_ptr || !connectors_ptr || !step_items_ptr) {
         spdlog::error("[Step Progress] Failed to allocate step data arrays");
         return nullptr;
     }
 
     data->label_buffers = label_buffers_ptr.get();
     data->states = states_ptr.get();
+    data->connectors = connectors_ptr.get();
+    data->step_items = step_items_ptr.get();
 
     // Copy initial data
     for (int i = 0; i < step_count; i++) {
@@ -275,6 +270,8 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
     // Release ownership of nested arrays (now owned by data struct)
     label_buffers_ptr.release();
     states_ptr.release();
+    connectors_ptr.release();
+    step_items_ptr.release();
 
     // Create container widget
     lv_obj_t* container = lv_obj_create(parent);
@@ -311,6 +308,8 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
         lv_obj_set_style_border_width(step_item, 0, 0);
         lv_obj_set_style_pad_all(step_item, 0, 0);
         lv_obj_set_style_pad_gap(step_item, 0, 0);
+        lv_obj_set_scrollbar_mode(step_item, LV_SCROLLBAR_MODE_OFF);
+        lv_obj_remove_flag(step_item, LV_OBJ_FLAG_SCROLLABLE);
         // Horizontal: column layout (circle + label stacked), Vertical: row layout
         lv_obj_set_flex_flow(step_item, horizontal ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(step_item, LV_FLEX_ALIGN_START,
@@ -324,6 +323,8 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
         lv_obj_set_style_border_width(indicator_column, 0, 0);
         lv_obj_set_style_pad_all(indicator_column, 0, 0);
         lv_obj_set_style_pad_gap(indicator_column, 0, 0);
+        lv_obj_set_scrollbar_mode(indicator_column, LV_SCROLLBAR_MODE_OFF);
+        lv_obj_remove_flag(indicator_column, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_flex_flow(indicator_column, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(indicator_column, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
                               LV_FLEX_ALIGN_START);
@@ -335,6 +336,8 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
         lv_obj_set_style_border_width(circle, border_width, 0);
         lv_obj_set_style_pad_all(circle, 0, 0);
         lv_obj_set_style_margin_all(circle, 0, 0);
+        lv_obj_set_scrollbar_mode(circle, LV_SCROLLBAR_MODE_OFF);
+        lv_obj_remove_flag(circle, LV_OBJ_FLAG_SCROLLABLE);
 
         // Create step number label (shown for PENDING/ACTIVE states)
         lv_obj_t* step_number = lv_label_create(circle);
@@ -371,107 +374,83 @@ lv_obj_t* ui_step_progress_create(lv_obj_t* parent, const ui_step_t* steps, int 
 
         // Apply initial styling based on state
         apply_step_styling(step_item, steps[i].state);
+
+        // Store step item pointer
+        data->step_items[i] = step_item;
     }
 
     // Create connector lines AFTER layout is calculated
-    // Connectors are positioned to span from one circle edge to the next — no overlap
+    // Connectors use absolute positioning (IGNORE_LAYOUT) spanning circle-edge to circle-edge
     lv_obj_update_layout(container);
 
-    if (!horizontal) {
-        spdlog::debug("[StepProgress] Creating vertical connectors for {} steps", step_count);
+    spdlog::debug("[StepProgress] Creating {} connectors for {} steps",
+                  horizontal ? "horizontal" : "vertical", step_count);
 
-        for (int i = 0; i < step_count - 1; i++) {
-            lv_obj_t* current_step = lv_obj_get_child(container, i);
-            lv_obj_t* next_step = lv_obj_get_child(container, i + 1);
+    for (int i = 0; i < step_count - 1; i++) {
+        lv_obj_t* current_step = data->step_items[i];
+        lv_obj_t* next_step = data->step_items[i + 1];
 
-            if (current_step && next_step) {
-                lv_coord_t current_y = lv_obj_get_y(current_step);
-                lv_coord_t next_y = lv_obj_get_y(next_step);
+        lv_obj_t* current_indicator = lv_obj_get_child(current_step, 0);
+        lv_obj_t* next_indicator = lv_obj_get_child(next_step, 0);
+        if (!current_indicator || !next_indicator) continue;
 
-                // Connector starts at bottom edge of current circle, ends at top edge of next
-                lv_coord_t connector_y = current_y + circle_size;
-                lv_coord_t connector_height = next_y - connector_y;
+        lv_obj_t* current_circle = lv_obj_get_child(current_indicator, 0);
+        lv_obj_t* next_circle = lv_obj_get_child(next_indicator, 0);
+        if (!current_circle || !next_circle) continue;
 
-                // Center the connector line on the circle's center X
-                lv_coord_t connector_x = circle_radius - (connector_thickness / 2);
+        // Compute absolute circle positions within container (step + indicator + circle offsets)
+        auto abs_x = [](lv_obj_t* step, lv_obj_t* ind, lv_obj_t* circ) {
+            return lv_obj_get_x(step) + lv_obj_get_x(ind) + lv_obj_get_x(circ);
+        };
+        auto abs_y = [](lv_obj_t* step, lv_obj_t* ind, lv_obj_t* circ) {
+            return lv_obj_get_y(step) + lv_obj_get_y(ind) + lv_obj_get_y(circ);
+        };
 
-                lv_obj_t* connector = lv_obj_create(container);
-                lv_obj_add_flag(connector, LV_OBJ_FLAG_IGNORE_LAYOUT);
-                lv_obj_remove_flag(connector, LV_OBJ_FLAG_CLICKABLE);
-                lv_obj_set_size(connector, connector_thickness, connector_height);
-                lv_obj_set_pos(connector, connector_x, connector_y);
-                lv_obj_set_style_bg_opa(connector, LV_OPA_COVER, 0);
-                lv_obj_set_style_border_width(connector, 0, 0);
-                lv_obj_set_style_pad_all(connector, 0, 0);
-                lv_obj_set_style_radius(connector, 0, 0);
-                lv_color_t connector_color =
-                    (steps[i].state == StepState::Completed) ? color_completed : color_pending;
-                lv_obj_set_style_bg_color(connector, connector_color, 0);
+        lv_coord_t conn_x, conn_y, conn_w, conn_h;
 
-                spdlog::debug("[StepProgress] Vertical connector {}: y={}..{}, x={}, h={}", i,
-                              connector_y, connector_y + connector_height, connector_x,
-                              connector_height);
-            }
+        if (horizontal) {
+            // Horizontal: spans right edge of current circle to left edge of next
+            lv_coord_t cur_cx = abs_x(current_step, current_indicator, current_circle);
+            lv_coord_t next_cx = abs_x(next_step, next_indicator, next_circle);
+            conn_x = cur_cx + circle_size;
+            conn_w = next_cx - conn_x;
+            conn_h = connector_thickness;
+            conn_y = abs_y(current_step, current_indicator, current_circle) + circle_radius -
+                     (connector_thickness / 2);
+            if (conn_w <= 0) continue;
+        } else {
+            // Vertical: spans bottom edge of current circle to top edge of next
+            lv_coord_t cur_cy = abs_y(current_step, current_indicator, current_circle);
+            lv_coord_t next_cy = abs_y(next_step, next_indicator, next_circle);
+            conn_y = cur_cy + circle_size;
+            conn_h = next_cy - conn_y;
+            conn_w = connector_thickness;
+            conn_x = abs_x(current_step, current_indicator, current_circle) + circle_radius -
+                     (connector_thickness / 2);
+            if (conn_h <= 0) continue;
         }
-    } else {
-        spdlog::debug("[StepProgress] Creating horizontal connectors for {} steps", step_count);
 
-        for (int i = 0; i < step_count - 1; i++) {
-            lv_obj_t* current_step = lv_obj_get_child(container, i);
-            lv_obj_t* next_step = lv_obj_get_child(container, i + 1);
+        lv_obj_t* connector = lv_obj_create(container);
+        lv_obj_add_flag(connector, LV_OBJ_FLAG_IGNORE_LAYOUT);
+        lv_obj_remove_flag(connector, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_size(connector, conn_w, conn_h);
+        lv_obj_set_pos(connector, conn_x, conn_y);
+        lv_obj_set_style_bg_opa(connector, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(connector, 0, 0);
+        lv_obj_set_style_pad_all(connector, 0, 0);
+        lv_obj_set_style_radius(connector, 0, 0);
+        lv_color_t connector_color =
+            (steps[i].state == StepState::Completed) ? color_completed : color_pending;
+        lv_obj_set_style_bg_color(connector, connector_color, 0);
 
-            if (current_step && next_step) {
-                lv_obj_t* current_indicator = lv_obj_get_child(current_step, 0);
-                lv_obj_t* next_indicator = lv_obj_get_child(next_step, 0);
+        // Render behind step items so circles draw on top
+        lv_obj_move_to_index(connector, 0);
 
-                if (!current_indicator || !next_indicator) {
-                    spdlog::warn("[StepProgress] Missing indicator for horizontal connector {}", i);
-                    continue;
-                }
+        // Store connector pointer for updates
+        data->connectors[i] = connector;
 
-                lv_obj_t* current_circle = lv_obj_get_child(current_indicator, 0);
-                lv_obj_t* next_circle = lv_obj_get_child(next_indicator, 0);
-
-                if (!current_circle || !next_circle) {
-                    spdlog::warn("[StepProgress] Missing circle for horizontal connector {}", i);
-                    continue;
-                }
-
-                // Compute absolute X positions of circles within the container
-                lv_coord_t current_circle_x = lv_obj_get_x(current_step) +
-                                              lv_obj_get_x(current_indicator) +
-                                              lv_obj_get_x(current_circle);
-                lv_coord_t next_circle_x = lv_obj_get_x(next_step) + lv_obj_get_x(next_indicator) +
-                                           lv_obj_get_x(next_circle);
-
-                // Connector spans from right edge of current circle to left edge of next
-                lv_coord_t conn_x = current_circle_x + circle_size;
-                lv_coord_t conn_end_x = next_circle_x;
-                lv_coord_t conn_width = conn_end_x - conn_x;
-
-                // Vertically centered on circle
-                lv_coord_t conn_y = lv_obj_get_y(current_step) + lv_obj_get_y(current_indicator) +
-                                    lv_obj_get_y(current_circle) + circle_radius -
-                                    (connector_thickness / 2);
-
-                lv_obj_t* connector = lv_obj_create(container);
-                lv_obj_add_flag(connector, LV_OBJ_FLAG_IGNORE_LAYOUT);
-                lv_obj_remove_flag(connector, LV_OBJ_FLAG_CLICKABLE);
-                lv_obj_set_size(connector, conn_width, connector_thickness);
-                lv_obj_set_pos(connector, conn_x, conn_y);
-                lv_obj_set_style_bg_opa(connector, LV_OPA_COVER, 0);
-                lv_obj_set_style_border_width(connector, 0, 0);
-                lv_obj_set_style_pad_all(connector, 0, 0);
-                lv_obj_set_style_radius(connector, 0, 0);
-
-                lv_color_t connector_color =
-                    (steps[i].state == StepState::Completed) ? color_completed : color_pending;
-                lv_obj_set_style_bg_color(connector, connector_color, 0);
-
-                spdlog::debug("[StepProgress] Horizontal connector {}: x={}..{}, y={}, w={}", i,
-                              conn_x, conn_x + conn_width, conn_y, conn_width);
-            }
-        }
+        spdlog::debug("[StepProgress] Connector {}: pos=({},{}), size={}x{}", i, conn_x, conn_y,
+                      conn_w, conn_h);
     }
 
     return container;
@@ -500,29 +479,18 @@ void ui_step_progress_set_current(lv_obj_t* widget, int step_index) {
         data->states[i] = StepState::Pending;
     }
 
-    // Update styling for all steps and horizontal connectors
-    uint32_t child_count = lv_obj_get_child_count(widget);
-    int step_item_index = 0;
-    int connector_index = 0;
-    for (uint32_t i = 0; i < child_count; i++) {
-        lv_obj_t* child = lv_obj_get_child(widget, static_cast<int32_t>(i));
+    // Update step item styling
+    for (int i = 0; i < data->step_count; i++) {
+        apply_step_styling(data->step_items[i], data->states[i]);
+    }
 
-        // Check if this is a step_item (has children: indicator_column + label)
-        if (lv_obj_get_child_count(child) >= 2) {
-            if (step_item_index < data->step_count) {
-                apply_step_styling(child, data->states[step_item_index]);
-                step_item_index++;
-            }
-        }
-        // Otherwise it's a horizontal connector - update its color based on the step it connects
-        // FROM
-        else if (data->horizontal && connector_index < data->step_count - 1) {
-            // Connector N connects FROM step N (using step N's state for color)
-            lv_color_t connector_color = (data->states[connector_index] == StepState::Completed)
+    // Update connector colors — connector i connects FROM step i, colored by step i's state
+    for (int i = 0; i < data->step_count - 1; i++) {
+        if (data->connectors[i]) {
+            lv_color_t connector_color = (data->states[i] == StepState::Completed)
                                              ? color_completed
                                              : color_pending;
-            lv_obj_set_style_bg_color(child, connector_color, 0);
-            connector_index++;
+            lv_obj_set_style_bg_color(data->connectors[i], connector_color, 0);
         }
     }
 }
@@ -538,11 +506,11 @@ void ui_step_progress_set_completed(lv_obj_t* widget, int step_index) {
     }
 
     data->states[step_index] = StepState::Completed;
+    apply_step_styling(data->step_items[step_index], StepState::Completed);
 
-    // Update styling
-    lv_obj_t* step_item = lv_obj_get_child(widget, step_index);
-    if (step_item) {
-        apply_step_styling(step_item, StepState::Completed);
+    // Update connector from this step (if it exists)
+    if (step_index < data->step_count - 1 && data->connectors[step_index]) {
+        lv_obj_set_style_bg_color(data->connectors[step_index], color_completed, 0);
     }
 }
 
@@ -559,12 +527,9 @@ void ui_step_progress_set_label(lv_obj_t* widget, int step_index, const char* ne
     // Update buffer
     snprintf(data->label_buffers[step_index], 128, "%s", new_label);
 
-    // Update label widget
-    lv_obj_t* step_item = lv_obj_get_child(widget, step_index);
-    if (step_item) {
-        lv_obj_t* label = lv_obj_get_child(step_item, 1); // Label is second child
-        if (label) {
-            lv_label_set_text(label, data->label_buffers[step_index]);
-        }
+    // Update label widget (second child of step_item: indicator_column=0, label=1)
+    lv_obj_t* label = lv_obj_get_child(data->step_items[step_index], 1);
+    if (label) {
+        lv_label_set_text(label, data->label_buffers[step_index]);
     }
 }

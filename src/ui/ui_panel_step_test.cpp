@@ -98,7 +98,7 @@ void StepTestPanel::create_progress_widgets() {
 
     // Create vertical progress widget with theme colors from step_progress_test scope
     vertical_widget_ = ui_step_progress_create(vertical_container, VERTICAL_STEPS,
-                                               VERTICAL_STEP_COUNT, false, "step_progress_test");
+                                               VERTICAL_STEP_COUNT, false, "step_test_panel");
     if (!vertical_widget_) {
         spdlog::error("[{}] Failed to create vertical progress widget", get_name());
         return;
@@ -106,7 +106,7 @@ void StepTestPanel::create_progress_widgets() {
 
     // Create horizontal progress widget with theme colors from step_progress_test scope
     horizontal_widget_ = ui_step_progress_create(horizontal_container, HORIZONTAL_STEPS,
-                                                 HORIZONTAL_STEP_COUNT, true, "step_progress_test");
+                                                 HORIZONTAL_STEP_COUNT, true, "step_test_panel");
     if (!horizontal_widget_) {
         spdlog::error("[{}] Failed to create horizontal progress widget", get_name());
         return;

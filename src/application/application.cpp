@@ -1671,8 +1671,10 @@ void Application::create_overlays() {
     }
 
     if (m_args.overlays.step_test) {
-        if (auto* p = create_overlay_panel(m_screen, "step_progress_test", "step progress")) {
+        get_global_step_test_panel().init_subjects();
+        if (auto* p = create_overlay_panel(m_screen, "step_test_panel", "step progress")) {
             get_global_step_test_panel().setup(p, m_screen);
+            NavigationManager::instance().push_overlay(p);
         }
     }
 

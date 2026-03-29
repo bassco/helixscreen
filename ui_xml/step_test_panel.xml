@@ -20,28 +20,8 @@
     <px name="step_row_gap_small" value="8"/>
     <px name="step_row_gap_medium" value="12"/>
     <px name="step_row_gap_large" value="16"/>
-    <!-- Step progress widget colors (theme-aware) -->
-    <!-- Pending state (not yet started) -->
-    <const name="step_pending_light" value="#A0A0A0"/>
-    <const name="step_pending_dark" value="#808080"/>
-    <!-- Active state (currently in progress) - uses global primary -->
-    <const name="step_active_light" value="#FF4444"/>
-    <const name="step_active_dark" value="#FF4444"/>
-    <!-- Completed state (finished) -->
-    <const name="step_completed_light" value="#4CAF50"/>
-    <const name="step_completed_dark" value="#4CAF50"/>
-    <!-- Number text color for pending steps -->
-    <const name="step_number_pending_light" value="#FFFFFF"/>
-    <const name="step_number_pending_dark" value="#000000"/>
-    <!-- Number/checkmark text color for active/completed steps -->
-    <const name="step_number_active_light" value="#FFFFFF"/>
-    <const name="step_number_active_dark" value="#FFFFFF"/>
-    <!-- Label text color for active steps -->
-    <const name="step_label_active_light" value="#000000"/>
-    <const name="step_label_active_dark" value="#FFFFFF"/>
-    <!-- Label text color for pending/completed steps -->
-    <const name="step_label_inactive_light" value="#666666"/>
-    <const name="step_label_inactive_dark" value="#CCCCCC"/>
+    <!-- Step colors: omitted to use theme token defaults (primary, success, text_subtle, etc.) -->
+    <!-- Override by adding step_pending_light/dark, step_active_light/dark, etc. consts -->
   </consts>
   <!-- Test panel for step progress widget demonstrations -->
   <view extends="lv_obj"
@@ -51,19 +31,21 @@
     <lv_label text="Step Progress Widget Test" translation_tag="Step Progress Widget Test" style_text_font="montserrat_20" style_pad_bottom="20"/>
     <!-- Vertical progress demo section -->
     <lv_obj name="vertical_section"
-            width="90%" height="380" style_pad_all="#space_lg" style_radius="#border_radius" flex_flow="column"
+            width="90%" height="content" style_pad_all="#space_md" style_radius="#border_radius" flex_flow="column"
             style_flex_main_place="start" style_flex_cross_place="start">
-      <text_body text="Vertical Progress (Retract Wizard)" translation_tag="Vertical Progress (Retract Wizard)" style_pad_bottom="16"/>
+      <text_body text="Vertical Progress (Retract Wizard)" translation_tag="Vertical Progress (Retract Wizard)" style_pad_bottom="#space_sm"/>
       <!-- Vertical progress widget container (created in C++) -->
-      <lv_obj name="vertical_progress_container" width="100%" height="200" style_pad_all="0"/>
+      <lv_obj name="vertical_progress_container" width="100%" height="content" style_pad_all="0"
+              style_bg_opa="0" style_border_width="0"/>
     </lv_obj>
     <!-- Horizontal progress demo section -->
     <lv_obj name="horizontal_section"
-            width="100%" height="180" style_pad_all="#space_lg" style_radius="#border_radius" style_pad_top="20"
+            width="100%" height="content" style_pad_all="#space_md" style_radius="#border_radius" style_pad_top="#space_md"
             flex_flow="column" style_flex_main_place="start" style_flex_cross_place="start">
-      <text_body text="Horizontal Progress (Leveling Wizard)" translation_tag="Horizontal Progress (Leveling Wizard)" style_pad_bottom="16"/>
+      <text_body text="Horizontal Progress (Leveling Wizard)" translation_tag="Horizontal Progress (Leveling Wizard)" style_pad_bottom="#space_sm"/>
       <!-- Horizontal progress widget container (created in C++) -->
-      <lv_obj name="horizontal_progress_container" width="100%" height="120" style_pad_all="0"/>
+      <lv_obj name="horizontal_progress_container" width="100%" height="content" style_pad_all="0"
+              style_bg_opa="0" style_border_width="0"/>
     </lv_obj>
     <!-- Control buttons -->
     <lv_obj name="button_row"
