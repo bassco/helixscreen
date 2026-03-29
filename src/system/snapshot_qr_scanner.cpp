@@ -1,0 +1,238 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "snapshot_qr_scanner.h"
+
+#include "hv/requests.h"
+#include "stb_image.h"
+
+#include <spdlog/spdlog.h>
+
+#include <algorithm>
+#include <chrono>
+
+namespace helix {
+
+SnapshotQrScanner::SnapshotQrScanner() = default;
+
+SnapshotQrScanner::~SnapshotQrScanner() {
+    stop();
+}
+
+void SnapshotQrScanner::start(const std::string& snapshot_url,
+                               FrameCallback on_frame,
+                               QrResultCallback on_qr_result,
+                               ErrorCallback on_error) {
+    if (running_.load()) {
+        spdlog::warn("[SnapshotQR] Already running");
+        return;
+    }
+
+    snapshot_url_ = snapshot_url;
+    on_frame_ = std::move(on_frame);
+    on_qr_result_ = std::move(on_qr_result);
+    on_error_ = std::move(on_error);
+    running_ = true;
+    frame_pending_ = false;
+
+    poll_thread_ = std::thread([this]() { poll_loop(); });
+    spdlog::info("[SnapshotQR] Started polling {}", snapshot_url_);
+}
+
+void SnapshotQrScanner::stop() {
+    if (!running_.exchange(false)) return;
+
+    lifetime_.invalidate();
+
+    if (poll_thread_.joinable()) {
+        poll_thread_.join();
+    }
+
+    free_frame_buf();
+    grayscale_buf_.clear();
+    grayscale_buf_.shrink_to_fit();
+
+    on_frame_ = nullptr;
+    on_qr_result_ = nullptr;
+    on_error_ = nullptr;
+
+    spdlog::info("[SnapshotQR] Stopped and freed all buffers");
+}
+
+void SnapshotQrScanner::frame_consumed() {
+    frame_pending_ = false;
+}
+
+void SnapshotQrScanner::poll_loop() {
+    auto token = lifetime_.token();
+    int backoff_ms = 0;
+
+    spdlog::debug("[SnapshotQR] Poll loop started (interval={}ms)", kPollIntervalMs);
+
+    while (!token.expired() && running_.load()) {
+        if (!frame_pending_.load()) {
+            if (fetch_and_decode()) {
+                backoff_ms = 0;
+            } else {
+                backoff_ms = std::min(backoff_ms + 1000, kMaxBackoffMs);
+            }
+        }
+
+        // Sleep in small increments so we can exit quickly
+        int sleep_ms = backoff_ms > 0 ? backoff_ms : kPollIntervalMs;
+        for (int elapsed = 0;
+             elapsed < sleep_ms && !token.expired() && running_.load();
+             elapsed += kPollStepMs) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(kPollStepMs));
+        }
+    }
+
+    spdlog::debug("[SnapshotQR] Poll loop exited");
+}
+
+bool SnapshotQrScanner::fetch_and_decode() {
+    if (snapshot_url_.empty()) return false;
+
+    auto token = lifetime_.token();
+
+    spdlog::trace("[SnapshotQR] Fetching snapshot from {}", snapshot_url_);
+
+    // HTTP GET the snapshot JPEG
+    auto req = std::make_shared<HttpRequest>();
+    req->method = HTTP_GET;
+    req->url = snapshot_url_;
+    req->timeout = 10;
+
+    auto resp = requests::request(req);
+
+    if (token.expired() || !running_.load()) return false;
+
+    if (!resp || resp->status_code < 200 || resp->status_code >= 300) {
+        spdlog::debug("[SnapshotQR] Snapshot fetch failed (status={})",
+                      resp ? static_cast<int>(resp->status_code) : -1);
+        if (on_error_) on_error_("Snapshot fetch failed");
+        return false;
+    }
+
+    if (resp->body.empty() || resp->body.size() > kMaxResponseBytes) {
+        spdlog::debug("[SnapshotQR] Invalid response size: {}", resp->body.size());
+        return false;
+    }
+
+    // Decode JPEG with stb_image
+    int width = 0, height = 0, channels = 0;
+    uint8_t* pixels = stbi_load_from_memory(
+        reinterpret_cast<const uint8_t*>(resp->body.data()),
+        static_cast<int>(resp->body.size()),
+        &width, &height, &channels, 3);
+
+    if (!pixels) {
+        spdlog::debug("[SnapshotQR] JPEG decode failed: {}", stbi_failure_reason());
+        return false;
+    }
+
+    if (width <= 0 || height <= 0 || width > kMaxImageDimension || height > kMaxImageDimension) {
+        spdlog::warn("[SnapshotQR] Invalid image dimensions: {}x{}", width, height);
+        stbi_image_free(pixels);
+        return false;
+    }
+
+    // Ensure frame buffer is allocated/correct size
+    if (!frame_buf_ || frame_width_ != width || frame_height_ != height) {
+        free_frame_buf();
+        frame_buf_ = create_draw_buf(static_cast<uint32_t>(width),
+                                      static_cast<uint32_t>(height));
+        if (!frame_buf_) {
+            spdlog::error("[SnapshotQR] Failed to allocate frame buffer {}x{}", width, height);
+            stbi_image_free(pixels);
+            return false;
+        }
+        frame_width_ = width;
+        frame_height_ = height;
+    }
+
+    // Copy RGB pixels to frame buffer with R<->B swap (stb_image=RGB, LVGL=BGR)
+    auto* dst = static_cast<uint8_t*>(frame_buf_->data);
+    int src_stride = width * 3;
+    int dst_stride = static_cast<int>(frame_buf_->header.stride);
+
+    for (int y = 0; y < height; y++) {
+        const uint8_t* src_row = pixels + y * src_stride;
+        uint8_t* dst_row = dst + y * dst_stride;
+        for (int x = 0; x < width; x++) {
+            dst_row[x * 3 + 0] = src_row[x * 3 + 2]; // B <- R
+            dst_row[x * 3 + 1] = src_row[x * 3 + 1]; // G <- G
+            dst_row[x * 3 + 2] = src_row[x * 3 + 0]; // R <- B
+        }
+    }
+
+    stbi_image_free(pixels);
+
+    // Subsample to grayscale for QR decode
+    int max_dim = std::max(width, height);
+    int step = std::max(1, max_dim / kQrMaxDimension);
+    int qr_w = width / step;
+    int qr_h = height / step;
+
+    grayscale_buf_.resize(static_cast<size_t>(qr_w * qr_h));
+    for (int y = 0; y < qr_h; y++) {
+        const uint8_t* row = dst + (y * step) * dst_stride;
+        for (int x = 0; x < qr_w; x++) {
+            grayscale_buf_[static_cast<size_t>(y * qr_w + x)] =
+                row[(x * step) * 3 + 1]; // Green channel as luma proxy
+        }
+    }
+
+    // Deliver frame to UI
+    frame_pending_ = true;
+    if (on_frame_) {
+        on_frame_(frame_buf_);
+    }
+
+    // Run QR decode
+    auto result = qr_decoder_.decode(grayscale_buf_.data(), qr_w, qr_h);
+    if (result.success && result.spool_id >= 0) {
+        spdlog::info("[SnapshotQR] QR decoded: spool_id={}", result.spool_id);
+        if (on_qr_result_) {
+            on_qr_result_(result.spool_id);
+        }
+    }
+
+    spdlog::trace("[SnapshotQR] Frame {}x{}, QR scan {}x{}", width, height, qr_w, qr_h);
+    return true;
+}
+
+void SnapshotQrScanner::free_frame_buf() {
+    if (frame_buf_) {
+        destroy_draw_buf(frame_buf_);
+        frame_buf_ = nullptr;
+    }
+    frame_width_ = 0;
+    frame_height_ = 0;
+}
+
+lv_draw_buf_t* SnapshotQrScanner::create_draw_buf(uint32_t w, uint32_t h) {
+    auto* buf = static_cast<lv_draw_buf_t*>(calloc(1, sizeof(lv_draw_buf_t)));
+    if (!buf) return nullptr;
+
+    uint32_t stride = lv_draw_buf_width_to_stride(w, LV_COLOR_FORMAT_RGB888);
+    uint32_t data_size = stride * h;
+
+    auto* data = calloc(1, data_size);
+    if (!data) {
+        free(buf);
+        return nullptr;
+    }
+
+    lv_draw_buf_init(buf, w, h, LV_COLOR_FORMAT_RGB888, stride, data, data_size);
+    lv_draw_buf_set_flag(buf, LV_IMAGE_FLAGS_MODIFIABLE);
+    return buf;
+}
+
+void SnapshotQrScanner::destroy_draw_buf(lv_draw_buf_t* buf) {
+    if (buf) {
+        free(buf->data);
+        free(buf);
+    }
+}
+
+} // namespace helix
