@@ -16,28 +16,21 @@
       <text_body bind_text="probe_carto_coil_temp" style_text_color="#text_accent"/>
     </ui_card>
 
-    <!-- Action buttons -->
-    <lv_obj width="100%"
-            height="content" style_pad_all="0" flex_flow="row" flex_wrap="wrap" style_pad_gap="#space_sm"
-            scrollable="false">
-
-      <!-- Calibrate -->
+    <!-- Action buttons — 3 equal-width -->
+    <lv_obj width="100%" height="content" style_pad_all="0" flex_flow="row"
+            style_pad_gap="#space_sm" scrollable="false">
       <ui_button name="btn_carto_calibrate"
-                 width="48%" height="#button_height_sm" variant="secondary" text="Calibrate" translation_tag="Calibrate"
+                 width="1" flex_grow="1" height="#button_height_sm" variant="secondary" text="Calibrate" translation_tag="Calibrate"
                  icon="target">
         <event_cb trigger="clicked" callback="on_carto_calibrate"/>
       </ui_button>
-
-      <!-- Touch Calibrate -->
       <ui_button name="btn_carto_touch_cal"
-                 width="48%" height="#button_height_sm" variant="secondary" text="Touch Cal" translation_tag="Touch Cal"
+                 width="1" flex_grow="1" height="#button_height_sm" variant="secondary" text="Touch Cal" translation_tag="Touch Cal"
                  icon="tune">
         <event_cb trigger="clicked" callback="on_carto_touch_cal"/>
       </ui_button>
-
-      <!-- Scan Calibrate -->
       <ui_button name="btn_carto_scan_cal"
-                 width="48%" height="#button_height_sm" variant="secondary" text="Scan Cal" translation_tag="Scan Cal"
+                 width="1" flex_grow="1" height="#button_height_sm" variant="secondary" text="Scan Cal" translation_tag="Scan Cal"
                  icon="magnify_scan">
         <event_cb trigger="clicked" callback="on_carto_scan_cal"/>
       </ui_button>
