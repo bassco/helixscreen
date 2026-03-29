@@ -142,7 +142,8 @@ RUN export PATH="/opt/k1-toolchain/bin:$PATH" && \
     wget -q https://www.openssl.org/source/openssl-1.1.1w.tar.gz && \
     tar xzf openssl-1.1.1w.tar.gz && \
     cd openssl-1.1.1w && \
-    ./Configure linux-mips32 no-shared \
+    ./Configure linux-generic32 no-shared no-asm \
+        -march=mips32r2 -mnan=2008 -mfp64 \
         --cross-compile-prefix=mipsel-k1-linux-gnu- \
         --prefix=/opt/k1-toolchain/mipsel-k1-linux-gnu/sysroot/usr && \
     make -j$(nproc) && \

@@ -280,6 +280,10 @@ For layout customization, you can edit XML files in `ui_xml/` (no recompilation 
 
 **Yes.** The Macro panel shows your Klipper macros. Access via **Advanced** → **Macros**. You can also configure quick macro buttons in **Settings** → **Macro Buttons**.
 
+### Can I change which macro the Load / Unload / Purge buttons run?
+
+**Yes.** Go to **Settings > Printer > Macro Buttons** and scroll to the **Standard Macros** section. Each button has a dropdown where you can select any macro from your Klipper config, or choose **(Auto)** to let HelixScreen detect it automatically. This works with or without an AMS system — see the [Filament guide](guide/filament.md#customizing-which-macro-runs) for details.
+
 ### Can I customize the printer image on the home screen?
 
 **Yes.** Tap the printer image on the Home Panel to open the Printer Manager, then tap the image again to open the Printer Image picker. You have three options:

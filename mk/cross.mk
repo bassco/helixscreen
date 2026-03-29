@@ -1192,7 +1192,7 @@ help-cross:
 # =============================================================================
 
 # Rsync flags for asset sync: delete stale files, checksum-based skip, exclude junk
-DEPLOY_RSYNC_FLAGS := -avz --delete --checksum
+DEPLOY_RSYNC_FLAGS := -avzz --delete --checksum
 DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
 # Tar-compatible excludes (same patterns, different syntax)
@@ -1233,17 +1233,17 @@ define deploy-common
 	ssh $(1) "mkdir -p $(2)/bin"
 	ssh $(1) "rm -f $(2)/*.xml 2>/dev/null || true"
 	@# Sync binaries and launcher to bin/
-	rsync -avz --progress $(3)/helix-screen $(3)/helix-splash $(1):$(2)/bin/
-	@if [ -f $(3)/helix-watchdog ]; then rsync -avz $(3)/helix-watchdog $(1):$(2)/bin/; fi
+	rsync -avzz --progress $(3)/helix-screen $(3)/helix-splash $(1):$(2)/bin/
+	@if [ -f $(3)/helix-watchdog ]; then rsync -avzz $(3)/helix-watchdog $(1):$(2)/bin/; fi
 	@# Sync Bluetooth plugin if built (runtime-loaded via dlopen, same dir as binary)
 	@BT_SO_DIR=$$(dirname $(3))"/lib/libhelix-bluetooth.so"; \
 	if [ -f "$$BT_SO_DIR" ]; then \
 		echo "$(DIM)Deploying Bluetooth plugin...$(RESET)"; \
-		rsync -avz "$$BT_SO_DIR" $(1):$(2)/bin/; \
+		rsync -avzz "$$BT_SO_DIR" $(1):$(2)/bin/; \
 	fi
-	rsync -avz scripts/helix-launcher.sh $(1):$(2)/bin/
+	rsync -avzz scripts/helix-launcher.sh $(1):$(2)/bin/
 	@# Sync installer script (needed for auto-updates)
-	rsync -avz scripts/$(INSTALLER_FILENAME) $(1):$(2)/
+	rsync -avzz scripts/$(INSTALLER_FILENAME) $(1):$(2)/
 	@# Sync assets (--delete removes stale files)
 	rsync $(DEPLOY_RSYNC_FLAGS) $(DEPLOY_ASSET_EXCLUDES) $(DEPLOY_ASSET_DIRS) $(1):$(2)/
 	@# Sync pre-rendered images
@@ -1354,8 +1354,8 @@ deploy-pi32-bin:
 	@echo "$(CYAN)Deploying binaries only to $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/bin...$(RESET)"
 	ssh $(PI_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null; sleep 0.5; killall -9 helix-watchdog helix-screen helix-splash 2>/dev/null; while pidof helix-screen helix-splash helix-watchdog >/dev/null 2>&1; do sleep 0.2; done; true"
 	ssh $(PI_SSH_TARGET) "mkdir -p $(PI_DEPLOY_DIR)/bin"
-	rsync -avz --progress build/pi32/bin/helix-screen build/pi32/bin/helix-splash $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/bin/
-	@if [ -f build/pi32/bin/helix-watchdog ]; then rsync -avz build/pi32/bin/helix-watchdog $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/bin/; fi
+	rsync -avzz --progress build/pi32/bin/helix-screen build/pi32/bin/helix-splash $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/bin/
+	@if [ -f build/pi32/bin/helix-watchdog ]; then rsync -avzz build/pi32/bin/helix-watchdog $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/bin/; fi
 	@echo "$(GREEN)✓ Binaries deployed$(RESET)"
 	@echo "$(CYAN)Restarting helix-screen on $(PI_HOST)...$(RESET)"
 	@ssh $(PI_SSH_TARGET) "sudo systemctl restart helixscreen 2>/dev/null" \

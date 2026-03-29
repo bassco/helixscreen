@@ -55,13 +55,13 @@ void XmlHotReloader::initial_scan(const std::vector<std::string>& xml_dirs) {
         }
 
         for (const auto& entry : fs::directory_iterator(dir, ec)) {
-            if (!entry.is_regular_file())
+            if (!fs::is_regular_file(entry.path(), ec))
                 continue;
             if (entry.path().extension() != ".xml")
                 continue;
 
             auto abs_path = fs::absolute(entry.path()).string();
-            auto mtime = entry.last_write_time();
+            auto mtime = fs::last_write_time(entry.path(), ec);
 
             file_mtimes_[abs_path] = mtime;
 

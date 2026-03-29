@@ -36,18 +36,26 @@ Manual filament control:
 
 ---
 
-## Load / Unload Filament
+## Load / Unload / Purge
 
-**To load filament:**
+The Filament panel has dedicated **Load**, **Unload**, and **Purge** buttons. These run Klipper macros — HelixScreen auto-detects common names like `LOAD_FILAMENT`, `UNLOAD_FILAMENT`, and `PURGE` from your printer config.
 
-1. Heat the nozzle to appropriate temperature
-2. Insert filament into extruder
-3. Use **Extrude** button (10-25mm increments) until filament flows cleanly
+### Customizing which macro runs
 
-**To unload filament:**
+You can override any of these buttons to run a different macro:
 
-1. Heat the nozzle
-2. Use **Retract** button repeatedly until filament clears the extruder
+1. Go to **Settings > Printer > Macro Buttons**
+2. Scroll to the **Standard Macros** section
+3. Tap the dropdown for **Load Filament**, **Unload Filament**, or **Purge**
+4. Select **(Auto)** to use auto-detection, or pick any macro from your Klipper config
+
+This works whether or not you have an AMS system. If a slot is left empty (no macro detected or configured), the button is disabled.
+
+> **With an AMS system:** The Load and Unload buttons use your AMS backend instead of running a macro — they trigger slot-based load/unload through the AMS panel. The Purge button still uses your configured macro.
+
+### Manual extrude/retract
+
+For manual control without macros, use the **Extrude** and **Retract** buttons on the extrusion widget with selectable amounts (5mm, 10mm, 25mm, 50mm) and speeds.
 
 ---
 

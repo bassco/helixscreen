@@ -118,7 +118,7 @@ std::string PrinterImageManager::get_active_image_path(int screen_width) {
         // .bin missing — scan directory for a raw source image matching this name
         if (fs::exists(custom_dir_)) {
             for (const auto& entry : fs::directory_iterator(custom_dir_)) {
-                if (!entry.is_regular_file())
+                if (!fs::is_regular_file(entry.path()))
                     continue;
                 if (entry.path().stem().string() != name)
                     continue;
@@ -202,7 +202,7 @@ std::vector<PrinterImageManager::ImageInfo> PrinterImageManager::get_custom_imag
     }
 
     for (const auto& entry : fs::directory_iterator(custom_dir_)) {
-        if (!entry.is_regular_file())
+        if (!fs::is_regular_file(entry.path()))
             continue;
 
         std::string filename = entry.path().filename().string();
@@ -242,7 +242,7 @@ std::vector<PrinterImageManager::ImageInfo> PrinterImageManager::get_invalid_cus
     // Collect stems that have a successful .bin conversion
     std::set<std::string> valid_stems;
     for (const auto& entry : fs::directory_iterator(custom_dir_)) {
-        if (!entry.is_regular_file())
+        if (!fs::is_regular_file(entry.path()))
             continue;
         std::string filename = entry.path().filename().string();
         if (filename.size() >= 8 && filename.substr(filename.size() - 8) == "-300.bin") {
@@ -252,7 +252,7 @@ std::vector<PrinterImageManager::ImageInfo> PrinterImageManager::get_invalid_cus
 
     // Find raw files that don't have a corresponding .bin
     for (const auto& entry : fs::directory_iterator(custom_dir_)) {
-        if (!entry.is_regular_file())
+        if (!fs::is_regular_file(entry.path()))
             continue;
 
         std::string ext = entry.path().extension().string();
@@ -319,7 +319,7 @@ std::vector<std::string> PrinterImageManager::scan_for_images(const std::string&
         return results;
 
     for (const auto& entry : fs::directory_iterator(dir)) {
-        if (!entry.is_regular_file())
+        if (!fs::is_regular_file(entry.path()))
             continue;
 
         std::string ext = entry.path().extension().string();

@@ -3,9 +3,9 @@
 #include "ui_spoolman_setup.h"
 
 #include <algorithm>
-#include <charconv>
+#include <cerrno>
+#include <cstdlib>
 #include <string>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -15,12 +15,11 @@ bool SpoolmanSetup::validate_port(const std::string& port) {
     if (port.empty()) {
         return false;
     }
-    int value          = 0;
-    const char* begin  = port.data();
-    const char* end    = port.data() + port.size();
-    auto [ptr, ec]     = std::from_chars(begin, end, value);
+    char* end = nullptr;
+    errno = 0;
+    long value = std::strtol(port.c_str(), &end, 10);
     // Must parse entire string (no trailing chars) and be in valid TCP port range
-    if (ec != std::errc{} || ptr != end) {
+    if (errno != 0 || end != port.c_str() + port.size()) {
         return false;
     }
     return value >= 1 && value <= 65535;

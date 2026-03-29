@@ -63,7 +63,10 @@ StateChangeResult PrintLifecycleState::on_job_state_changed(helix::PrintJobState
 
     if (new_state == current_state_) {
         spdlog::trace("[PrintLifecycleState] state unchanged: {}", print_state_name(new_state));
-        return {.state_changed = false, .old_state = current_state_, .new_state = current_state_};
+        StateChangeResult unchanged{};
+        unchanged.old_state = current_state_;
+        unchanged.new_state = current_state_;
+        return unchanged;
     }
 
     spdlog::debug("[PrintLifecycleState] state transition: {} -> {}",
@@ -118,17 +121,19 @@ StateChangeResult PrintLifecycleState::on_job_state_changed(helix::PrintJobState
     PrintState old_state = current_state_;
     current_state_ = new_state;
 
-    return {.state_changed = true,
-            .print_ended = print_ended,
-            .should_reset_progress_bar = should_reset_progress_bar,
-            .should_clear_excluded_objects = should_clear_excluded_objects,
-            .should_freeze_complete = should_freeze_complete,
-            .should_animate_cancelled = should_animate_cancelled,
-            .should_animate_error = should_animate_error,
-            .clear_gcode_loaded = clear_gcode_loaded,
-            .old_state = old_state,
-            .new_state = new_state,
-            .should_show_viewer = should_show_viewer};
+    StateChangeResult result{};
+    result.state_changed = true;
+    result.print_ended = print_ended;
+    result.should_reset_progress_bar = should_reset_progress_bar;
+    result.should_clear_excluded_objects = should_clear_excluded_objects;
+    result.should_freeze_complete = should_freeze_complete;
+    result.should_animate_cancelled = should_animate_cancelled;
+    result.should_animate_error = should_animate_error;
+    result.clear_gcode_loaded = clear_gcode_loaded;
+    result.old_state = old_state;
+    result.new_state = new_state;
+    result.should_show_viewer = should_show_viewer;
+    return result;
 }
 
 bool PrintLifecycleState::on_progress_changed(int progress) {
