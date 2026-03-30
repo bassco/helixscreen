@@ -54,7 +54,6 @@ class TempGraphWidget : public PanelWidget {
     lv_obj_t* parent_screen_ = nullptr;
 
     std::unique_ptr<TempGraphController> controller_;
-    bool paused_ = false;
 
     int current_colspan_ = 2;
     int current_rowspan_ = 2;

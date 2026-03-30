@@ -1272,8 +1272,9 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
     helix::TempGraphControllerConfig config;
     config.point_count = MINI_GRAPH_POINTS;
     config.axis_size = "xs";
-    config.initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_Y_AXIS
-                            | TEMP_GRAPH_FEATURE_X_AXIS | TEMP_GRAPH_FEATURE_GRADIENTS;
+    config.initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES
+                            | TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS
+                            | TEMP_GRAPH_FEATURE_GRADIENTS;
     config.series = {
         {active_extruder_name_, heaters_[idx(HeaterType::Nozzle)].config.color, true},
         {"heater_bed", heaters_[idx(HeaterType::Bed)].config.color, true},

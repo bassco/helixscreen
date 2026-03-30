@@ -141,9 +141,7 @@ class TempGraphOverlay : public OverlayBase {
     // Cached panel for lazy creation
     lv_obj_t* cached_overlay_ = nullptr;
 
-    // Color palette for series
-    static constexpr int PALETTE_SIZE = 8;
-    static const lv_color_t SERIES_COLORS[PALETTE_SIZE];
+    // Color palette — uses shared TEMP_GRAPH_SERIES_COLORS from temp_graph_controller.h
 };
 
 /**

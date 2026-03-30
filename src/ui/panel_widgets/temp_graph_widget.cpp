@@ -77,19 +77,8 @@ void TempGraphWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     controller_ = std::make_unique<TempGraphController>(widget_obj_, std::move(ctrl_config));
 
-    // Style the chart for widget context (card_bg instead of default graph_bg)
+    // Match container bg to card (chart styling handled by controller)
     if (controller_ && controller_->is_valid()) {
-        lv_obj_t* chart = ui_temp_graph_get_chart(controller_->graph());
-        if (chart) {
-            lv_obj_set_size(chart, LV_PCT(100), LV_PCT(100));
-            lv_obj_set_style_bg_color(chart, theme_manager_get_color("card_bg"), 0);
-            lv_obj_set_style_bg_opa(chart, LV_OPA_COVER, 0);
-            // Let clicks pass through chart to parent container (edit mode needs this)
-            lv_obj_remove_flag(chart, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE);
-        }
-
-        // Match container bg to card
         lv_obj_set_style_bg_color(widget_obj_, theme_manager_get_color("card_bg"), 0);
         lv_obj_set_style_bg_opa(widget_obj_, LV_OPA_COVER, 0);
     }
@@ -122,13 +111,9 @@ void TempGraphWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/
     }
 }
 
-void TempGraphWidget::on_activate() {
-    paused_ = false;
-}
+void TempGraphWidget::on_activate() {}
 
-void TempGraphWidget::on_deactivate() {
-    paused_ = true;
-}
+void TempGraphWidget::on_deactivate() {}
 
 bool TempGraphWidget::on_edit_configure() {
     auto* saved_widget = widget_obj_;

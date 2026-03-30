@@ -51,21 +51,6 @@ static bool mode_to_heater_type(TempGraphOverlay::Mode mode, helix::HeaterType& 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Color palette: nozzle=red, bed=cyan, chamber=green, then 5 more
-// ─────────────────────────────────────────────────────────────────────────────
-
-const lv_color_t TempGraphOverlay::SERIES_COLORS[PALETTE_SIZE] = {
-    lv_color_hex(0xFF4444), // Nozzle (red)
-    lv_color_hex(0x88C0D0), // Bed (cyan / nord8)
-    lv_color_hex(0xA3BE8C), // Chamber (green / nord14)
-    lv_color_hex(0xEBCB8B), // Yellow / nord13
-    lv_color_hex(0xB48EAD), // Purple / nord15
-    lv_color_hex(0xD08770), // Orange / nord12
-    lv_color_hex(0x5E81AC), // Blue / nord10
-    lv_color_hex(0xBF616A), // Dark red / nord11
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Global instance
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -144,15 +129,9 @@ void TempGraphOverlay::on_activate() {
         cfg.series = std::move(specs);
         controller_ = std::make_unique<helix::TempGraphController>(graph_container_, cfg);
 
-        // Size chart to fill container (default height is LV_DPI_DEF*2)
+        // Set cached_graph_bg for gradient rendering (chart sizing handled by controller)
         if (controller_->is_valid()) {
-            lv_obj_t* chart = ui_temp_graph_get_chart(controller_->graph());
-            if (chart) {
-                lv_obj_set_size(chart, lv_pct(100), lv_pct(100));
-                lv_color_t card_bg = theme_manager_get_color("card_bg");
-                lv_obj_set_style_bg_color(chart, card_bg, LV_PART_MAIN);
-                controller_->graph()->cached_graph_bg = card_bg;
-            }
+            controller_->graph()->cached_graph_bg = theme_manager_get_color("card_bg");
         }
     }
 
@@ -244,7 +223,7 @@ void TempGraphOverlay::discover_series() {
         s.display_name = "Nozzle";
         s.heater_name = "extruder";
         s.klipper_name = "extruder";
-        s.color = SERIES_COLORS[color_idx++ % PALETTE_SIZE];
+        s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
         s.has_target = true;
         s.is_dynamic = false;
         series_.push_back(std::move(s));
@@ -262,7 +241,7 @@ void TempGraphOverlay::discover_series() {
             s.display_name = ext->display_name;
             s.heater_name = ext->name;
             s.klipper_name = ext->name;
-            s.color = SERIES_COLORS[color_idx++ % PALETTE_SIZE];
+            s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
             s.has_target = true;
             s.is_dynamic = (extruders.size() > 1); // Dynamic if multi-extruder
             series_.push_back(std::move(s));
@@ -275,7 +254,7 @@ void TempGraphOverlay::discover_series() {
         s.display_name = "Bed";
         s.heater_name = "heater_bed";
         s.klipper_name = "heater_bed";
-        s.color = SERIES_COLORS[color_idx++ % PALETTE_SIZE];
+        s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
         s.has_target = true;
         s.is_dynamic = false;
         series_.push_back(std::move(s));
@@ -289,7 +268,7 @@ void TempGraphOverlay::discover_series() {
             s.display_name = "Chamber";
             s.heater_name = "chamber"; // TemperatureHistoryManager might not track this
             s.klipper_name = temp_state.chamber_heater_name();
-            s.color = SERIES_COLORS[color_idx++ % PALETTE_SIZE];
+            s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
             s.has_target = !s.klipper_name.empty();
             s.is_dynamic = false;
             series_.push_back(std::move(s));
@@ -309,7 +288,7 @@ void TempGraphOverlay::discover_series() {
         s.display_name = sensor.display_name;
         s.heater_name = sensor.klipper_name; // May not have history
         s.klipper_name = sensor.klipper_name;
-        s.color = SERIES_COLORS[color_idx++ % PALETTE_SIZE];
+        s.color = helix::TEMP_GRAPH_SERIES_COLORS[color_idx++ % helix::TEMP_GRAPH_PALETTE_SIZE];
         s.has_target = (sensor.type == helix::sensors::TemperatureSensorType::TEMPERATURE_FAN);
         s.is_dynamic = true;
         series_.push_back(std::move(s));

@@ -322,14 +322,6 @@ void TempGraphController::setup_observers() {
     }
 }
 
-void TempGraphController::teardown_observers() {
-    connection_observer_.reset();
-    for (auto& s : series_) {
-        s.temp_obs.reset();
-        s.target_obs.reset();
-    }
-}
-
 // ============================================================================
 // History backfill
 // ============================================================================
