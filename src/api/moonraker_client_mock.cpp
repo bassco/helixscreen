@@ -3014,9 +3014,10 @@ void MoonrakerClientMock::dispatch_historical_temperatures() {
         return (static_cast<double>(state) / 0x3fffffff) - 1.0;
     };
 
-    // Thermal time constants for exponential cooldown
-    constexpr double ext_tau = 45.0; // Nozzle cools faster (small mass)
-    constexpr double bed_tau = 90.0; // Bed cools slower (large thermal mass)
+    // Thermal time constants — sized so temps are still interesting at end of 2.5min window
+    // (nozzle ~100°C, bed ~40°C at t=150s, gradual ramp not cliff)
+    constexpr double ext_tau = 180.0;
+    constexpr double bed_tau = 350.0;
 
     for (int i = 0; i < HISTORY_SAMPLES; i++) {
         double timestamp_sec = -((HISTORY_SAMPLES - i) * dt_sec);
