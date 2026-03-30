@@ -2419,6 +2419,10 @@ void Application::init_action_prompt() {
                     text = lv_tr("Must home axes first");
                     return;
                 }
+                if (text.find("spi_transfer_response") != std::string::npos) {
+                    text = lv_tr("Accelerometer communication failed. Try again.");
+                    return;
+                }
 
                 // Truncate long messages for toast display
                 constexpr size_t MAX_LEN = 80;
