@@ -154,7 +154,6 @@ class TempGraphController {
     void create_graph();
     void setup_series();
     void setup_observers();
-    void teardown_observers();
     void backfill_history();
     void apply_auto_range();
 

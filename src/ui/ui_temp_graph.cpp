@@ -133,7 +133,7 @@ struct overrange_save_t {
     int32_t* location; // Pointer into LVGL's y_points array
     int32_t value;     // Original value
 };
-static thread_local std::vector<overrange_save_t> s_overrange_saved;
+static std::vector<overrange_save_t> s_overrange_saved;
 
 // DRAW_MAIN_BEGIN: mask over-range points before LVGL draws chart lines
 static void mask_overrange_begin_cb(lv_event_t* e) {
