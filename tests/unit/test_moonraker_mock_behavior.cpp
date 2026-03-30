@@ -2913,7 +2913,7 @@ TEST_CASE("MoonrakerClientMock parses EXCLUDE_OBJECT command", "[slow][mock][gco
  * The E-stop should set klippy state to SHUTDOWN, and restart commands
  * should transition back to READY after a delay.
  */
-TEST_CASE("MoonrakerClientMock handles emergency_stop", "[mock][emergency]") {
+TEST_CASE("MoonrakerClientMock handles emergency_stop", "[mock][emergency][slow]") {
     MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::VORON_24);
     mock.connect("ws://test", []() {}, []() {});
 
@@ -2938,7 +2938,7 @@ TEST_CASE("MoonrakerClientMock handles emergency_stop", "[mock][emergency]") {
     }
 }
 
-TEST_CASE("MoonrakerClientMock handles printer restart commands", "[mock][restart]") {
+TEST_CASE("MoonrakerClientMock handles printer restart commands", "[mock][restart][slow]") {
     MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::VORON_24);
     mock.connect("ws://test", []() {}, []() {});
 
@@ -3172,7 +3172,7 @@ TEST_CASE("MoonrakerClientMock idle_timeout simulation", "[mock][idle_timeout][s
 // gcode_script return value contract: 0 = success, non-zero = error
 // ============================================================================
 
-TEST_CASE("MoonrakerClientMock gcode_script returns 0 on success", "[mock][gcode]") {
+TEST_CASE("MoonrakerClientMock gcode_script returns 0 on success", "[mock][gcode][slow]") {
     MockBehaviorTestFixture fixture;
     auto mock = fixture.create_mock();
     mock->connect("ws://localhost:7125/websocket", [] {}, [] {});
@@ -3212,7 +3212,7 @@ TEST_CASE("MoonrakerClientMock gcode_script returns 0 on success", "[mock][gcode
     mock->disconnect();
 }
 
-TEST_CASE("MoonrakerClientMock gcode_script returns non-zero on error", "[mock][gcode]") {
+TEST_CASE("MoonrakerClientMock gcode_script returns non-zero on error", "[mock][gcode][slow]") {
     MockBehaviorTestFixture fixture;
     auto mock = fixture.create_mock();
     mock->connect("ws://localhost:7125/websocket", [] {}, [] {});

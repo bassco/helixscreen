@@ -123,7 +123,7 @@ class FullStackTestFixture {
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Print workflow with object exclusion",
-                 "[connection][integration][exclude]") {
+                 "[connection][integration][exclude][slow]") {
     SECTION("Excluded objects sync from client to API") {
         // 1. Verify initial state is clean
         REQUIRE(api_->get_excluded_objects_from_mock().empty());
@@ -203,7 +203,7 @@ TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Print workflow with object e
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Temperature control cycle",
-                 "[connection][integration][temperature]") {
+                 "[connection][integration][temperature][slow]") {
     SECTION("API set_temperature sends G-code command") {
         // Set bed target via API - this sends a G-code command
         bool success_called = false;
@@ -251,7 +251,7 @@ TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Temperature control cycle",
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Bed mesh access through API",
-                 "[connection][integration][bedmesh]") {
+                 "[connection][integration][bedmesh][slow]") {
     SECTION("API reports bed mesh state correctly") {
         // Check bed mesh availability through API
         bool api_has_mesh = api_->advanced().has_bed_mesh();
@@ -371,7 +371,7 @@ class EventIntegrationFixture {
 };
 
 TEST_CASE_METHOD(EventIntegrationFixture, "Full stack: Event emission and handling",
-                 "[integration][state][integration]") {
+                 "[integration][state][slow]") {
     SECTION("Registered handler receives events") {
         client_.register_event_handler(create_capture_handler());
 
@@ -434,7 +434,7 @@ TEST_CASE_METHOD(EventIntegrationFixture, "Full stack: Event emission and handli
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: PrinterHardware guessing",
-                 "[integration][printer]") {
+                 "[integration][printer][slow]") {
     // Create PrinterHardware from the API's discovered hardware
     PrinterHardware hw(api_->hardware().heaters(), api_->hardware().sensors(),
                        api_->hardware().fans(), api_->hardware().leds());
@@ -470,7 +470,7 @@ TEST_CASE_METHOD(FullStackTestFixture, "Full stack: PrinterHardware guessing",
 // ============================================================================
 
 TEST_CASE("Full stack: All printer types work correctly",
-          "[connection][integration][all_printers]") {
+          "[connection][integration][all_printers][slow]") {
     PrinterState state;
     state.init_subjects(false);
 
@@ -528,7 +528,7 @@ TEST_CASE("Full stack: All printer types work correctly",
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Concurrent access to shared state",
-                 "[connection][integration][threading]") {
+                 "[connection][integration][threading][slow]") {
     SECTION("Concurrent excluded object operations are thread-safe") {
         std::atomic<bool> stop_flag{false};
         std::atomic<int> add_count{0};
@@ -616,7 +616,7 @@ TEST_CASE_METHOD(FullStackTestFixture, "Full stack: Concurrent access to shared 
 // ============================================================================
 
 TEST_CASE_METHOD(FullStackTestFixture, "Full stack: State reset and cleanup",
-                 "[integration][connection]") {
+                 "[integration][connection][slow]") {
     SECTION("MockPrinterState reset clears all state") {
         // Set up various state
         shared_state_->extruder_temp = 200.0;

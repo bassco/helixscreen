@@ -830,7 +830,7 @@ TEST_CASE("MoonrakerClientMock position in status updates", "[api][position_repo
 // Out-of-Range Movement Error Tests
 // ============================================================================
 
-TEST_CASE("MoonrakerClientMock out-of-range move error handling", "[api][movement][errors]") {
+TEST_CASE("MoonrakerClientMock out-of-range move error handling", "[api][movement][errors][slow]") {
     SECTION("Move beyond X_MAX returns error") {
         MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::VORON_24);
         mock.connect("ws://mock/websocket", []() {}, []() {});

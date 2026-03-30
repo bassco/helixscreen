@@ -453,7 +453,7 @@ TEST_CASE_METHOD(ExcludeObjectTestFixture,
 // ============================================================================
 
 TEST_CASE_METHOD(ExcludeObjectMockTestFixture,
-                 "exclude_object sends correct G-code via mock client", "[mock][print]") {
+                 "exclude_object sends correct G-code via mock client", "[mock][print][slow]") {
     SECTION("Valid object name sends EXCLUDE_OBJECT command") {
         api->exclude_object(
             "Part_1", [this]() { this->success_callback(); },

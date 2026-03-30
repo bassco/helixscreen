@@ -120,7 +120,7 @@ class WiFiBackendTestFixture {
 // Backend Lifecycle Tests
 // ============================================================================
 
-TEST_CASE_METHOD(WiFiBackendTestFixture, "Backend lifecycle", "[network][backend][lifecycle]") {
+TEST_CASE_METHOD(WiFiBackendTestFixture, "Backend lifecycle", "[network][backend][lifecycle][slow]") {
     SECTION("Backend created but not running by default") {
         // CRITICAL: This catches the auto-start bug
         REQUIRE_FALSE(backend->is_running());

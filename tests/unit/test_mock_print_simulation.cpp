@@ -232,7 +232,7 @@ static std::string get_print_state_from_notification(const json& n) {
 
 // DEFERRED: Mock print tests crash with SIGSEGV during fixture destruction
 // Similar to CommandSequencer - mock lifecycle management issue
-TEST_CASE("Mock print phase state machine transitions", "[print][phase]") {
+TEST_CASE("Mock print phase state machine transitions", "[print][phase][slow]") {
     MockPrintTestFixture fixture;
 
     SECTION("initial phase is IDLE") {
@@ -840,7 +840,7 @@ TEST_CASE("Mock print thermal phase behavior", "[print][thermal][slow]") {
 // Status Notification Tests [print][notifications]
 // ============================================================================
 
-TEST_CASE("Mock print status notifications match Moonraker format", "[print][notifications]") {
+TEST_CASE("Mock print status notifications match Moonraker format", "[print][notifications][slow]") {
     MockPrintTestFixture fixture;
 
     SECTION("notifications include print_stats object") {
@@ -1094,7 +1094,7 @@ TEST_CASE("Mock print edge cases and error handling", "[print][edge_cases][slow]
 // Pause/Resume Behavior Tests [print][pause_resume]
 // ============================================================================
 
-TEST_CASE("Mock print pause/resume detailed behavior", "[print][pause_resume]") {
+TEST_CASE("Mock print pause/resume detailed behavior", "[print][pause_resume][slow]") {
     MockPrintTestFixture fixture;
 
     SECTION("pause from PREHEAT succeeds") {

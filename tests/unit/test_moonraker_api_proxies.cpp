@@ -65,22 +65,22 @@ class ProxyTestFixture {
 // ============================================================================
 
 TEST_CASE_METHOD(ProxyTestFixture, "is_connected returns true when client is connected",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     REQUIRE(api->is_connected());
 }
 
-TEST_CASE_METHOD(ProxyTestFixture, "is_connected returns false after disconnect", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "is_connected returns false after disconnect", "[api][proxy][slow]") {
     mock_client.disconnect();
     REQUIRE_FALSE(api->is_connected());
 }
 
-TEST_CASE_METHOD(ProxyTestFixture, "get_connection_state mirrors client state", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "get_connection_state mirrors client state", "[api][proxy][slow]") {
     REQUIRE(api->get_connection_state() == ConnectionState::CONNECTED);
     mock_client.disconnect();
     REQUIRE(api->get_connection_state() == ConnectionState::DISCONNECTED);
 }
 
-TEST_CASE_METHOD(ProxyTestFixture, "get_websocket_url returns client URL", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "get_websocket_url returns client URL", "[api][proxy][slow]") {
     // Mock client's connect() doesn't store last_url_ (private to base class),
     // so this returns empty string. Verify the proxy delegates without crashing.
     std::string url = api->get_websocket_url();
@@ -92,23 +92,23 @@ TEST_CASE_METHOD(ProxyTestFixture, "get_websocket_url returns client URL", "[api
 // Subscription Proxy Tests
 // ============================================================================
 
-TEST_CASE_METHOD(ProxyTestFixture, "subscribe_notifications returns valid ID", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "subscribe_notifications returns valid ID", "[api][proxy][slow]") {
     SubscriptionId id = api->subscribe_notifications([](json) {});
     REQUIRE(id != INVALID_SUBSCRIPTION_ID);
 }
 
 TEST_CASE_METHOD(ProxyTestFixture, "unsubscribe_notifications returns true for valid ID",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     SubscriptionId id = api->subscribe_notifications([](json) {});
     REQUIRE(api->unsubscribe_notifications(id));
 }
 
 TEST_CASE_METHOD(ProxyTestFixture, "unsubscribe_notifications returns false for invalid ID",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     REQUIRE_FALSE(api->unsubscribe_notifications(999999));
 }
 
-TEST_CASE_METHOD(ProxyTestFixture, "subscribe/unsubscribe roundtrip works", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "subscribe/unsubscribe roundtrip works", "[api][proxy][slow]") {
     // Subscribe multiple callbacks
     SubscriptionId id1 = api->subscribe_notifications([](json) {});
     SubscriptionId id2 = api->subscribe_notifications([](json) {});
@@ -129,7 +129,7 @@ TEST_CASE_METHOD(ProxyTestFixture, "subscribe/unsubscribe roundtrip works", "[ap
 // Method Callback Proxy Tests
 // ============================================================================
 
-TEST_CASE_METHOD(ProxyTestFixture, "register/unregister method callback", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "register/unregister method callback", "[api][proxy][slow]") {
     // Register should not throw
     api->register_method_callback("notify_gcode_response", "test_handler", [](json) {});
 
@@ -141,7 +141,7 @@ TEST_CASE_METHOD(ProxyTestFixture, "register/unregister method callback", "[api]
 }
 
 TEST_CASE_METHOD(ProxyTestFixture, "unregister nonexistent method callback returns false",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     REQUIRE_FALSE(api->unregister_method_callback("nonexistent_method", "no_handler"));
 }
 
@@ -149,7 +149,7 @@ TEST_CASE_METHOD(ProxyTestFixture, "unregister nonexistent method callback retur
 // Disconnect Modal Suppression Proxy Tests
 // ============================================================================
 
-TEST_CASE_METHOD(ProxyTestFixture, "suppress_disconnect_modal forwards to client", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "suppress_disconnect_modal forwards to client", "[api][proxy][slow]") {
     // Should not throw, and client should report suppressed
     api->suppress_disconnect_modal(5000);
     REQUIRE(mock_client.is_disconnect_modal_suppressed());
@@ -159,7 +159,7 @@ TEST_CASE_METHOD(ProxyTestFixture, "suppress_disconnect_modal forwards to client
 // Database Operation Proxy Tests
 // ============================================================================
 
-TEST_CASE_METHOD(ProxyTestFixture, "database_get_item sends correct JSON-RPC", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "database_get_item sends correct JSON-RPC", "[api][proxy][slow]") {
     // The mock client will process the JSON-RPC request. Since this is a mock,
     // the request will likely fail or timeout. We verify the callback mechanism works.
     bool callback_invoked = false;
@@ -178,7 +178,7 @@ TEST_CASE_METHOD(ProxyTestFixture, "database_get_item sends correct JSON-RPC", "
     SUCCEED("database_get_item completed without throwing");
 }
 
-TEST_CASE_METHOD(ProxyTestFixture, "database_post_item sends correct JSON-RPC", "[api][proxy]") {
+TEST_CASE_METHOD(ProxyTestFixture, "database_post_item sends correct JSON-RPC", "[api][proxy][slow]") {
     bool callback_invoked = false;
     bool error_invoked = false;
 
@@ -193,13 +193,13 @@ TEST_CASE_METHOD(ProxyTestFixture, "database_post_item sends correct JSON-RPC", 
 }
 
 TEST_CASE_METHOD(ProxyTestFixture, "database_get_item with null error callback doesn't crash",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     api->database_get_item("helix", "key", [](const json&) {}, nullptr);
     SUCCEED("No crash with null error callback");
 }
 
 TEST_CASE_METHOD(ProxyTestFixture, "database_post_item with null callbacks doesn't crash",
-                 "[api][proxy]") {
+                 "[api][proxy][slow]") {
     api->database_post_item("helix", "key", json{{"val", 1}}, nullptr, nullptr);
     SUCCEED("No crash with null callbacks");
 }
