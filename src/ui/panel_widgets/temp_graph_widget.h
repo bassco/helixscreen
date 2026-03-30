@@ -3,11 +3,9 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "panel_widget.h"
+#include "temp_graph_controller.h"
 #include "ui_modal.h"
-#include "ui_observer_guard.h"
-#include "ui_temp_graph.h"
 
 #include "hv/json.hpp"
 
@@ -46,45 +44,20 @@ class TempGraphWidget : public PanelWidget {
     static void on_temp_graph_widget_clicked(lv_event_t* e);
 
   private:
-    /// Per-series metadata for the widget graph
-    struct SeriesInfo {
-        std::string name;        ///< Klipper heater/sensor key (e.g., "extruder", "heater_bed")
-        int series_id = -1;      ///< Graph series ID from ui_temp_graph_add_series()
-        lv_color_t color{};      ///< Series line color
-        ObserverGuard temp_obs;  ///< Temperature observer
-        ObserverGuard target_obs; ///< Target temperature observer
-        SubjectLifetime lifetime; ///< Lifetime token for dynamic subjects
-        bool is_dynamic = false;  ///< Whether this uses a dynamic subject
-        bool has_target = false;  ///< Whether this heater has a controllable target
-    };
-
-    void setup_series();
-    void setup_observers();
-    void apply_auto_range();
     void build_default_config();
-    void backfill_history();
+    std::vector<TempGraphSeriesSpec> build_series_from_config();
 
     std::string instance_id_;
     nlohmann::json config_;
 
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
-    ui_temp_graph_t* graph_ = nullptr;
 
-    std::vector<SeriesInfo> series_;
-    ObserverGuard connection_observer_;
-
-    helix::AsyncLifetimeGuard lifetime_;
-    uint32_t generation_ = 0;
+    std::unique_ptr<TempGraphController> controller_;
     bool paused_ = false;
 
     int current_colspan_ = 2;
     int current_rowspan_ = 2;
-    float y_axis_max_ = 100.0f;  // Dynamic Y-axis ceiling (auto-scaled)
-
-    // Color palette (matches TempGraphOverlay)
-    static constexpr int PALETTE_SIZE = 8;
-    static const lv_color_t SERIES_COLORS[PALETTE_SIZE];
 
     /// Modal for sensor toggle + color picker configuration
     class TempGraphConfigModal : public Modal {
@@ -107,7 +80,7 @@ class TempGraphWidget : public PanelWidget {
             std::string name;       ///< Klipper sensor key
             std::string display;    ///< Human-readable name
             bool enabled = true;
-            int color_idx = 0;      ///< Index into SERIES_COLORS palette
+            int color_idx = 0;      ///< Index into TEMP_GRAPH_SERIES_COLORS palette
             lv_obj_t* swatch = nullptr;
             lv_obj_t* sw = nullptr;
         };
