@@ -72,8 +72,7 @@ void TempGraphWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     ctrl_config.point_count = 300; // 5-minute window at 1Hz (matches mini graph)
     ctrl_config.axis_size = "xs";
     ctrl_config.initial_features = features_for_size(current_colspan_, current_rowspan_);
-    ctrl_config.scale_params = {.step = 50.0f, .floor = 100.0f, .ceiling = 400.0f,
-                                .expand_threshold = 0.90f, .shrink_threshold = 0.50f};
+    // Uses default TempGraphScaleParams (same as mini graph and overlay)
     ctrl_config.series = build_series_from_config();
 
     controller_ = std::make_unique<TempGraphController>(widget_obj_, std::move(ctrl_config));
