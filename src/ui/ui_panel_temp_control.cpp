@@ -1295,6 +1295,10 @@ void TempControlPanel::setup_mini_combined_graph(lv_obj_t* container) {
 
     lv_obj_t* chart = ui_temp_graph_get_chart(mini_graph_);
     lv_obj_set_size(chart, lv_pct(100), lv_pct(100));
+    // Match overlay: set chart background to card_bg for proper contrast
+    lv_color_t card_bg = theme_manager_get_color("card_bg");
+    lv_obj_set_style_bg_color(chart, card_bg, LV_PART_MAIN);
+    mini_graph_->cached_graph_bg = card_bg;
     // Allow taps to bubble up to the parent card's click handler
     lv_obj_remove_flag(chart, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(chart, LV_OBJ_FLAG_EVENT_BUBBLE);
