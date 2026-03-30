@@ -297,18 +297,18 @@ void TempGraphController::setup_observers() {
     }
 
     // Observe printer connection state to clear/rebuild on disconnect/reconnect.
-    // Set last_rebuild_time_ to now so the debounce skips the initial notification
-    // (observer fires immediately with current state, but we just constructed).
-    last_rebuild_time_ = std::chrono::steady_clock::now();
-
+    // Track previous state to skip the initial notification (we just constructed).
     auto* conn_subj = ps.get_printer_connection_state_subject();
     if (conn_subj) {
         auto conn_token = lifetime_.token();
         uint32_t conn_gen = generation_;
+        auto prev_state = std::make_shared<int>(lv_subject_get_int(conn_subj));
         connection_observer_ = observe_int_sync<TempGraphController>(
             conn_subj, this,
-            [conn_token, conn_gen](TempGraphController* self, int state) {
+            [conn_token, conn_gen, prev_state](TempGraphController* self, int state) {
                 if (conn_token.expired() || conn_gen != self->generation_) return;
+                if (state == *prev_state) return;
+                *prev_state = state;
                 if (state == 2) { // Connected
                     spdlog::debug("[TempGraphController] Reconnected, rebuilding");
                     self->rebuild();
