@@ -1624,7 +1624,11 @@ bool NavigationManager::is_panel_in_stack(lv_obj_t* panel) const {
 }
 
 bool NavigationManager::has_open_overlays() const {
-    return !overlay_instances_.empty() || panel_stack_.size() > 1;
+    // Only check the panel stack — it tracks what's actually open/visible.
+    // overlay_instances_ is a registration map (persistent overlays survive
+    // panel switches) and must NOT be used here, or persistent registrations
+    // cause this to return true even when nothing is visibly open.
+    return panel_stack_.size() > 1;
 }
 
 void NavigationManager::shutdown() {

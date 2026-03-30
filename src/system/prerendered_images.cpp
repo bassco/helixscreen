@@ -314,14 +314,29 @@ bool generate_cached_printer_image(const std::string& source_image_path, int wid
         stbi_image_free(pixels);
     }
 
-    // Resize to exact target dimensions (aspect ratio is caller's responsibility —
-    // we trust the layout engine's dimensions)
-    std::vector<uint8_t> resized(static_cast<size_t>(width) * height * 4);
-    int ok = stbir_resize_uint8(rgba_pixels.data(), src_w, src_h, 0, resized.data(), width, height,
-                                0, 4);
+    // Resize preserving aspect ratio ("contain" fit), centered on transparent canvas
+    float scale_x = static_cast<float>(width) / src_w;
+    float scale_y = static_cast<float>(height) / src_h;
+    float scale = std::min(scale_x, scale_y);
+    int fit_w = std::max(1, static_cast<int>(src_w * scale));
+    int fit_h = std::max(1, static_cast<int>(src_h * scale));
+
+    std::vector<uint8_t> fit_pixels(static_cast<size_t>(fit_w) * fit_h * 4);
+    int ok = stbir_resize_uint8(rgba_pixels.data(), src_w, src_h, 0, fit_pixels.data(), fit_w,
+                                fit_h, 0, 4);
     if (!ok) {
-        spdlog::error("[PrinterCache] Resize failed: {}x{} -> {}x{}", src_w, src_h, width, height);
+        spdlog::error("[PrinterCache] Resize failed: {}x{} -> {}x{}", src_w, src_h, fit_w, fit_h);
         return false;
+    }
+
+    // Center the fitted image on a transparent canvas at the full target dimensions
+    std::vector<uint8_t> resized(static_cast<size_t>(width) * height * 4, 0);
+    int offset_x = (width - fit_w) / 2;
+    int offset_y = (height - fit_h) / 2;
+    for (int y = 0; y < fit_h; ++y) {
+        size_t src_row = static_cast<size_t>(y) * fit_w * 4;
+        size_t dst_row = (static_cast<size_t>(y + offset_y) * width + offset_x) * 4;
+        std::memcpy(&resized[dst_row], &fit_pixels[src_row], static_cast<size_t>(fit_w) * 4);
     }
 
     // Convert RGBA → BGRA (LVGL ARGB8888 in little-endian)
