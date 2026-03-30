@@ -3,6 +3,7 @@
 
 #include "moonraker_advanced_api.h"
 
+#include "accel_sensor_manager.h"
 #include "ui_error_reporting.h"
 #include "ui_notification.h"
 
@@ -2329,13 +2330,14 @@ void MoonrakerAdvancedAPI::detect_belt_hardware(BeltHardwareCallback on_complete
             try {
                 auto objects = response.value("objects", json::array());
 
+                // Use AccelSensorManager as the single source of truth for
+                // accelerometer detection (discovers from configfile.config,
+                // handles all chip types including beacon)
+                hw.has_adxl =
+                    helix::sensors::AccelSensorManager::instance().has_sensors();
+
                 for (const auto& obj : objects) {
                     std::string name = obj.get<std::string>();
-                    if (name.find("adxl345") != std::string::npos ||
-                        name.find("lis2dw") != std::string::npos ||
-                        name.find("mpu") != std::string::npos) {
-                        hw.has_adxl = true;
-                    }
                     if (name == "quad_gantry_level") {
                         hw.has_belted_z = true;
                     }
