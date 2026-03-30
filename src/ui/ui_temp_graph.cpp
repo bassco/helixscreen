@@ -206,11 +206,11 @@ static void draw_gradient_cb(lv_event_t* e) {
         fill_dsc.grad.dir = LV_GRAD_DIR_VER;
         fill_dsc.grad.stops_count = 2;
         fill_dsc.grad.stops[0].color = meta->color;
-        fill_dsc.grad.stops[0].opa = meta->gradient_bottom_opa;
-        fill_dsc.grad.stops[0].frac = 0;
+        fill_dsc.grad.stops[0].opa = meta->gradient_top_opa;
+        fill_dsc.grad.stops[0].frac = 0;    // frac=0 = TOP of rect (the line)
         fill_dsc.grad.stops[1].color = meta->color;
-        fill_dsc.grad.stops[1].opa = meta->gradient_top_opa;
-        fill_dsc.grad.stops[1].frac = 255;
+        fill_dsc.grad.stops[1].opa = meta->gradient_bottom_opa;
+        fill_dsc.grad.stops[1].frac = 255;  // frac=255 = BOTTOM of rect (chart floor)
 
         for (int32_t i = 0; i < pc - 1; i++) {
             int32_t v0 = y_data[(sp + i) % pc];
