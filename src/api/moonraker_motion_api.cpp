@@ -313,6 +313,9 @@ void MoonrakerMotionAPI::execute_gcode(const std::string& gcode, SuccessCallback
     if (on_success) {
         success_wrapper = [on_success](json) { on_success(); };
     }
+    // silent=true when caller provides on_error: caller handles error display,
+    // so suppress the global RPC_ERROR toast from request tracker
+    bool silent = (on_error != nullptr);
     client_.send_jsonrpc("printer.gcode.script", params, std::move(success_wrapper), on_error,
-                         timeout_ms);
+                         timeout_ms, silent);
 }

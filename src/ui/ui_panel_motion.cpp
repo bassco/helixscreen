@@ -27,19 +27,35 @@
 
 #include <spdlog/spdlog.h>
 
+#include "hv/json.hpp"
+
 #include <cmath>
 #include <cstring>
 #include <memory>
 
 using namespace helix;
 
-// Strip Klipper error prefixes and truncate for toast display
+// Strip Klipper error prefixes, parse JSON error objects, and truncate for toast display.
+// Some Klipper builds (e.g. K1C) send errors as JSON:
+//   {"code":"key585","msg":"Move out of range: ...","values":[...]}
 static std::string clean_gcode_error(const std::string& msg) {
     std::string cleaned = msg;
 
     // Strip Klipper "!! " error prefix
     if (cleaned.size() > 3 && cleaned.substr(0, 3) == "!! ") {
         cleaned = cleaned.substr(3);
+    }
+
+    // Parse JSON error objects — extract the "msg" field
+    if (!cleaned.empty() && cleaned[0] == '{') {
+        try {
+            auto j = nlohmann::json::parse(cleaned);
+            if (j.contains("msg") && j["msg"].is_string()) {
+                cleaned = j["msg"].get<std::string>();
+            }
+        } catch (...) {
+            // Not valid JSON, use as-is
+        }
     }
 
     // Provide friendly messages for common error patterns

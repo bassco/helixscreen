@@ -2394,7 +2394,40 @@ void Application::init_action_prompt() {
                 return;
             }
 
-            auto process_line = [](const std::string& line) {
+            // Some Klipper builds (e.g. K1C) send errors as JSON objects:
+            //   !! {"code":"key585","msg":"Move out of range: ...","values":[...]}
+            // Extract the "msg" field for human-readable display.
+            auto extract_json_msg = [](std::string& text) {
+                if (!text.empty() && text[0] == '{') {
+                    try {
+                        auto j = nlohmann::json::parse(text);
+                        if (j.contains("msg") && j["msg"].is_string()) {
+                            text = j["msg"].get<std::string>();
+                        }
+                    } catch (...) {
+                        // Not valid JSON, use as-is
+                    }
+                }
+            };
+
+            auto clean_for_toast = [&extract_json_msg](std::string& text) {
+                extract_json_msg(text);
+
+                // Friendly messages for common error patterns
+                if (text.find("Must home axis") != std::string::npos ||
+                    text.find("must home") != std::string::npos) {
+                    text = lv_tr("Must home axes first");
+                    return;
+                }
+
+                // Truncate long messages for toast display
+                constexpr size_t MAX_LEN = 80;
+                if (text.size() > MAX_LEN) {
+                    text = text.substr(0, MAX_LEN - 3) + "...";
+                }
+            };
+
+            auto process_line = [&clean_for_toast](const std::string& line) {
                 if (line.empty()) {
                     return;
                 }
@@ -2404,6 +2437,7 @@ void Application::init_action_prompt() {
                     // Strip "!! " prefix for cleaner display
                     std::string clean =
                         (line.size() > 3 && line[2] == ' ') ? line.substr(3) : line.substr(2);
+                    clean_for_toast(clean);
                     spdlog::error("[GcodeError] Emergency: {}", clean);
                     ui_notification_error("Klipper Error", clean.c_str(), false);
                     return;
@@ -2422,6 +2456,7 @@ void Application::init_action_prompt() {
                         } else if (line.size() > 6 && line[5] == ':') {
                             clean = line.substr(6);
                         }
+                        clean_for_toast(clean);
                         spdlog::error("[GcodeError] {}", clean);
                         ui_notification_error(nullptr, clean.c_str(), false);
                         return;
