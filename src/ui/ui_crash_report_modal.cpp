@@ -59,6 +59,9 @@ bool CrashReportModal::show_modal(lv_obj_t* parent) {
     if (!report_.timestamp.empty()) {
         details += "\nTime: " + report_.timestamp;
     }
+    if (!report_.exception_what.empty()) {
+        details += "\nException: " + report_.exception_what;
+    }
 
     lv_subject_copy_string(&details_subject_, details.c_str());
     lv_subject_copy_string(&status_subject_,

@@ -73,24 +73,28 @@ static void terminate_handler() {
     entered = true;
 
     // Check if there's a current exception we can inspect
+    const char* what = nullptr;
     if (auto eptr = std::current_exception()) {
         try {
             std::rethrow_exception(eptr);
         } catch (const std::exception& e) {
-            fprintf(stderr, "[FATAL] Uncaught exception: %s\n", e.what());
+            what = e.what();
+            fprintf(stderr, "[FATAL] Uncaught exception: %s\n", what);
             fflush(stderr);
         } catch (...) {
             log_fatal("Uncaught non-std::exception");
+            what = "non-std::exception";
         }
     } else {
         log_fatal("std::terminate() called without active exception "
                   "(joinable thread destroyed? noexcept violation?)");
+        what = "std::terminate without active exception";
     }
 
-    // Call abort() to trigger the crash_handler signal handler, which writes
-    // crash.txt for telemetry. Do NOT call std::abort() which may skip our
-    // signal handler on some platforms.
-    abort();
+    // Write crash file BEFORE abort — abort triggers the signal handler which
+    // would overwrite it without the exception message.
+    write_exception_crash_file(what);
+    _exit(1);
 }
 
 int main(int argc, char** argv) {

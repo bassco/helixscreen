@@ -57,6 +57,9 @@ class CrashReporter {
         int uptime_sec = 0;
         std::vector<std::string> backtrace;
 
+        // Exception message (for signal 0 / EXCEPTION crashes)
+        std::string exception_what;
+
         // Fault info (Phase 2 - from siginfo_t)
         std::string fault_addr;
         int fault_code = 0;

@@ -89,6 +89,9 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     report.timestamp = crash_data.value("timestamp", "");
     report.uptime_sec = crash_data.value("uptime_sec", 0);
 
+    if (crash_data.contains("exception"))
+        report.exception_what = crash_data["exception"];
+
     if (crash_data.contains("backtrace") && crash_data["backtrace"].is_array()) {
         for (const auto& addr : crash_data["backtrace"]) {
             report.backtrace.push_back(addr.get<std::string>());
@@ -253,6 +256,11 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
     j["ram_mb"] = report.ram_total_mb;
     j["cpu_cores"] = report.cpu_cores;
 
+    // Exception message (for EXCEPTION crashes)
+    if (!report.exception_what.empty()) {
+        j["exception"] = report.exception_what;
+    }
+
     // Fault info (only when present)
     if (!report.fault_addr.empty()) {
         j["fault_addr"] = report.fault_addr;
@@ -327,7 +335,11 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
     ss << "Signal:    " << report.signal << " (" << report.signal_name << ")\n";
     ss << "Version:   " << report.app_version << "\n";
     ss << "Timestamp: " << report.timestamp << "\n";
-    ss << "Uptime:    " << report.uptime_sec << " seconds\n\n";
+    ss << "Uptime:    " << report.uptime_sec << " seconds\n";
+    if (!report.exception_what.empty()) {
+        ss << "Exception: " << report.exception_what << "\n";
+    }
+    ss << "\n";
 
     if (!report.fault_addr.empty()) {
         ss << "Fault Information\n";
@@ -418,6 +430,9 @@ std::string CrashReporter::generate_github_url(const CrashReport& report) {
     body << "- **Version:** " << report.app_version << "\n";
     body << "- **Platform:** " << report.platform << "\n";
     body << "- **Uptime:** " << report.uptime_sec << "s\n";
+    if (!report.exception_what.empty()) {
+        body << "- **Exception:** " << report.exception_what << "\n";
+    }
     if (!report.fault_code_name.empty()) {
         body << "- **Fault:** " << report.fault_code_name << " at " << report.fault_addr << "\n";
     }
