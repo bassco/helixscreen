@@ -19,6 +19,7 @@ struct PreprintEntry {
     int total_seconds;                  ///< Total pre-print duration
     int64_t timestamp;                  ///< Unix timestamp when entry was recorded
     std::map<int, int> phase_durations; ///< phase_enum -> seconds
+    int temp_bucket{0};                 ///< Nozzle target temp rounded to nearest 25°C (0 = unknown)
 };
 
 /**
@@ -41,11 +42,12 @@ class PreprintPredictor {
     static constexpr int MAX_TOTAL_SECONDS = 900;
 
     /**
-     * @brief Load entries from storage, replacing any existing data
+     * @brief Load entries from storage, optionally filtering by temperature bucket
      *
-     * Trims to MAX_ENTRIES if more are provided.
+     * When temp_bucket > 0, only entries matching that bucket (or with bucket 0
+     * for legacy entries) are loaded. Trims to MAX_ENTRIES.
      */
-    void load_entries(const std::vector<PreprintEntry>& entries);
+    void load_entries(const std::vector<PreprintEntry>& entries, int temp_bucket = 0);
 
     /**
      * @brief Add a single entry, enforcing FIFO and 15-min cap

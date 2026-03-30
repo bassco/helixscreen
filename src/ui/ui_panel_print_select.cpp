@@ -1473,26 +1473,14 @@ void PrintSelectPanel::on_activate() {
     files_changed_while_detail_open_ = false;
     was_deactivated_ = false;
 
+    first_activation_ = false;
+
     if (!is_usb_active && api_) {
-        // Printer (Moonraker) source
-        if (first_activation_ && !file_list_.empty()) {
-            first_activation_ = false;
-            spdlog::debug("[{}] First activation, files already loaded ({}) - skipping refresh",
-                          get_name(), file_list_.size());
-            return;
-        }
-        first_activation_ = false;
+        // Printer (Moonraker) source — always refresh to pick up external uploads
         spdlog::info("[{}] Panel activated, refreshing file list", get_name());
         refresh_files();
     } else if (is_usb_active) {
         // USB source
-        if (first_activation_ && !file_list_.empty()) {
-            first_activation_ = false;
-            spdlog::debug("[{}] First activation, files already loaded - skipping refresh",
-                          get_name());
-            return;
-        }
-        first_activation_ = false;
         spdlog::info("[{}] Panel activated, refreshing USB file list", get_name());
         if (usb_source_) {
             usb_source_->refresh_files();

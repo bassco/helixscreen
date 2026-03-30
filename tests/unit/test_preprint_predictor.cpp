@@ -298,3 +298,69 @@ TEST_CASE("PreprintPredictor: zero elapsed in current phase", "[print][predictor
     // Current: 90-0=90, future: none
     REQUIRE(remaining == 90);
 }
+
+// ============================================================================
+// Temperature Bucket Filtering
+// ============================================================================
+
+TEST_CASE("PreprintPredictor: load_entries filters by temp_bucket", "[print][predictor]") {
+    PreprintPredictor predictor;
+
+    std::vector<PreprintEntry> all_entries = {
+        {60, 1700000000, {{2, 10}, {4, 50}}, 200},  // PLA (200°C bucket)
+        {120, 1700000001, {{2, 15}, {4, 105}}, 250}, // ASA (250°C bucket)
+        {65, 1700000002, {{2, 12}, {4, 53}}, 200},   // PLA (200°C bucket)
+    };
+
+    SECTION("filter to 200°C bucket gets PLA entries only") {
+        predictor.load_entries(all_entries, 200);
+        REQUIRE(predictor.get_entries().size() == 2);
+        REQUIRE(predictor.predicted_total() < 80); // ~63s average
+    }
+
+    SECTION("filter to 250°C bucket gets ASA entry only") {
+        predictor.load_entries(all_entries, 250);
+        REQUIRE(predictor.get_entries().size() == 1);
+        REQUIRE(predictor.predicted_total() == 120);
+    }
+
+    SECTION("filter to unknown bucket gets nothing") {
+        predictor.load_entries(all_entries, 225);
+        REQUIRE(predictor.get_entries().empty());
+    }
+
+    SECTION("no filter (bucket=0) gets all entries") {
+        predictor.load_entries(all_entries, 0);
+        REQUIRE(predictor.get_entries().size() == 3);
+    }
+}
+
+TEST_CASE("PreprintPredictor: legacy entries (bucket=0) match any filter",
+          "[print][predictor]") {
+    PreprintPredictor predictor;
+
+    std::vector<PreprintEntry> entries = {
+        {80, 1700000000, {{2, 10}}, 0},   // legacy (no bucket)
+        {120, 1700000001, {{2, 15}}, 250}, // ASA bucket
+    };
+
+    // Legacy entry matches the 250 bucket filter
+    predictor.load_entries(entries, 250);
+    REQUIRE(predictor.get_entries().size() == 2);
+}
+
+TEST_CASE("PreprintPredictor: temp_bucket stored in entry", "[print][predictor]") {
+    PreprintPredictor predictor;
+
+    PreprintEntry entry;
+    entry.total_seconds = 90;
+    entry.timestamp = 1700000000;
+    entry.phase_durations = {{2, 15}, {4, 75}};
+    entry.temp_bucket = 275;
+
+    predictor.add_entry(entry);
+
+    auto entries = predictor.get_entries();
+    REQUIRE(entries.size() == 1);
+    REQUIRE(entries[0].temp_bucket == 275);
+}

@@ -1943,6 +1943,13 @@ void PrintStatusPanel::on_print_start_phase_changed(int phase) {
         // Preparation complete - lifecycle restored state from current job state
         update_all_displays();
         update_button_states();
+
+        // Reschedule gcode load — the deferred load scheduled before print start
+        // was invalidated when entering Preparing (requested_gcode_filename_ cleared).
+        if (!current_print_filename_.empty() && !gcode_loaded_) {
+            set_filename(current_print_filename_.c_str());
+        }
+
         spdlog::debug("[{}] Restored state to {} after preparation complete", get_name(),
                       static_cast<int>(lifecycle_.state()));
     }

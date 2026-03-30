@@ -3,6 +3,7 @@
 
 #include "print_start_collector.h"
 
+#include "printer_detector.h"
 #include "ui_update_queue.h"
 
 #include "config.h"
@@ -80,6 +81,9 @@ void PrintStartCollector::start() {
         print_start_detected_ = false;
         max_sequential_progress_ = 0;
         phase_enter_times_.clear();
+        // Snapshot stale subject values so fallbacks only trigger on real changes
+        baseline_layer_ = lv_subject_get_int(state_.get_print_layer_current_subject());
+        baseline_progress_ = lv_subject_get_int(state_.get_print_progress_subject());
     }
     fallbacks_enabled_.store(false); // Will be enabled after initial window
     helix::MemoryMonitor::log_now("print_start_collector_start", spdlog::level::debug);
@@ -89,17 +93,31 @@ void PrintStartCollector::start() {
 
     // Ensure we have a profile for pattern matching
     if (!profile_) {
-        profile_ = PrintStartProfile::load_default();
+        // Try printer-specific profile first (printer type may not have been known at init time)
+        std::string printer_type = state_.get_printer_type();
+        if (!printer_type.empty()) {
+            std::string profile_name = PrinterDetector::get_print_start_profile(printer_type);
+            if (!profile_name.empty()) {
+                profile_ = PrintStartProfile::load(profile_name);
+                spdlog::info("[PrintStartCollector] Loaded profile '{}' for '{}'",
+                             profile_name, printer_type);
+            }
+        }
+        if (!profile_) {
+            profile_ = PrintStartProfile::load_default();
+        }
     }
 
-    // Generate unique handler name for G-code response callback
-    static std::atomic<uint64_t> s_collector_id{0};
-    handler_name_ = "print_start_collector_" + std::to_string(++s_collector_id);
-
-    // Register for G-code responses (primary detection method)
     auto self = shared_from_this();
-    client_.register_method_callback("notify_gcode_response", handler_name_,
-                                     [self](const json& msg) { self->on_gcode_response(msg); });
+
+    // Register gcode response handler if not already registered (stays registered
+    // permanently — on_gcode_response() returns early when !active_)
+    if (handler_name_.empty()) {
+        static std::atomic<uint64_t> s_collector_id{0};
+        handler_name_ = "print_start_collector_" + std::to_string(++s_collector_id);
+        client_.register_method_callback("notify_gcode_response", handler_name_,
+                                         [self](const json& msg) { self->on_gcode_response(msg); });
+    }
 
     // Register for printer status updates (fallback for printers with KAMP/custom macros)
     // This watches for _START_PRINT.print_started, START_PRINT.preparation_done, etc.
@@ -194,10 +212,9 @@ void PrintStartCollector::stop() {
     bool was_active = active_.exchange(false);
     bool was_registered = registered_.exchange(false);
 
-    if (was_registered) {
-        client_.unregister_method_callback("notify_gcode_response", handler_name_);
-        spdlog::debug("[PrintStartCollector] Unregistered G-code callback");
-    }
+    // Keep gcode response handler registered permanently — it checks active_ and
+    // returns early when not collecting. This avoids the race where early responses
+    // from START_PRINT are lost because the handler isn't registered yet.
 
     // Unregister macro subscription using atomic exchange to prevent double-unsubscribe
     SubscriptionId sub_id = macro_subscription_id_.exchange(0);
@@ -290,9 +307,11 @@ void PrintStartCollector::check_fallback_completion() {
     // Continuously updates as heaters change, not just on first detection.
     // Only fires when no gcode_response patterns have been matched recently.
     // =========================================================================
-    bool is_temp_detected_phase =
-        (current == PrintStartPhase::IDLE || current == PrintStartPhase::INITIALIZING ||
-         current == PrintStartPhase::HEATING_BED || current == PrintStartPhase::HEATING_NOZZLE);
+    // Allow proactive temperature detection from any non-terminal phase.
+    // On printers like the K1C where gcode responses are sparse, the proactive
+    // detector is the primary way to advance through heating phases.
+    bool is_temp_detected_phase = (current != PrintStartPhase::COMPLETE &&
+                                   current != PrintStartPhase::PURGING);
     if (is_temp_detected_phase) {
         if (bed_heating && (current != PrintStartPhase::HEATING_BED)) {
             // Bed still heating — show bed phase
@@ -329,28 +348,45 @@ void PrintStartCollector::check_fallback_completion() {
     // =========================================================================
 
     // Fallback 1: Layer count (slicer-dependent but reliable when present)
-    int layer = lv_subject_get_int(state_.get_print_layer_current_subject());
-    if (layer >= 1) {
-        spdlog::info("[PrintStartCollector] Fallback: layer {} detected", layer);
-        update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
-        return;
+    // Only use this fallback when no profile is loaded — profiles provide their own
+    // completion detection via gcode response patterns. With a profile active, the
+    // layer count from Klipper's print_stats.info.current_layer can't be trusted
+    // during the first seconds (Klipper may report stale/non-zero values from the
+    // START_PRINT macro before actual layer 1 begins).
+    if (!profile_ || profile_->name().find("Generic") != std::string::npos) {
+        int layer = lv_subject_get_int(state_.get_print_layer_current_subject());
+        if (layer >= 1 && layer != baseline_layer_) {
+            spdlog::info("[PrintStartCollector] Fallback: layer {} detected (baseline={})", layer,
+                         baseline_layer_);
+            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+            return;
+        }
     }
 
     // Fallback 2: Progress threshold with temps at target
     // 2% progress means file has advanced past typical preamble/macros
     int progress = lv_subject_get_int(state_.get_print_progress_subject());
-    if (progress >= 2 && temps_ready) {
-        spdlog::info("[PrintStartCollector] Fallback: progress {}% with temps ready", progress);
+    if (progress >= 2 && progress != baseline_progress_ && temps_ready) {
+        spdlog::info("[PrintStartCollector] Fallback: progress {}% with temps ready (baseline={})",
+                     progress, baseline_progress_);
         update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
         return;
     }
 
     // Fallback 3: Timeout with temps near target (90% of target)
+    // Only applies when no profile phases have been detected — if the profile is
+    // actively matching phases, let it run to completion via its own patterns.
     bool temps_near = (ext_target <= 0 || ext_temp >= static_cast<int>(ext_target * 0.9)) &&
                       (bed_target <= 0 || bed_temp >= static_cast<int>(bed_target * 0.9));
 
     auto elapsed = std::chrono::steady_clock::now() - start_time;
-    if (elapsed > FALLBACK_TIMEOUT && temps_near) {
+    bool has_profile_matches = false;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        has_profile_matches = !detected_phases_.empty();
+    }
+    auto timeout = has_profile_matches ? std::chrono::seconds(300) : FALLBACK_TIMEOUT;
+    if (elapsed > timeout && temps_near) {
         auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         spdlog::info("[PrintStartCollector] Fallback: timeout ({} sec)", elapsed_sec);
         update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
@@ -722,6 +758,20 @@ void PrintStartCollector::update_eta_display() {
     // Always update the int subject for print time integration
     state_.set_preprint_remaining_seconds(remaining);
 
+    // Smooth time-based progress: interpolate based on elapsed vs predicted total.
+    // This gives a steadily advancing progress bar even when gcode responses are
+    // sparse (K1C delivers very few notify_gcode_response messages).
+    int predicted_total = predictor_.predicted_total();
+    if (predicted_total > 0) {
+        int time_progress = std::min(95, total_elapsed * 95 / predicted_total);
+        int phase_progress = calculate_progress();
+        int effective_progress = std::max(time_progress, phase_progress);
+        auto* subj = state_.get_print_start_progress_subject();
+        if (subj && lv_subject_get_int(subj) != effective_progress) {
+            lv_subject_set_int(subj, effective_progress);
+        }
+    }
+
     if (remaining <= 0) {
         state_.set_print_start_time_left("Almost ready");
         return;
@@ -742,12 +792,17 @@ void PrintStartCollector::update_eta_display() {
 void PrintStartCollector::load_prediction_history() {
     auto entries = helix::PreprintPredictor::load_entries_from_config();
 
+    // Filter by temperature bucket if nozzle target is known
+    int ext_target = lv_subject_get_int(state_.get_active_extruder_target_subject()) / 10;
+    int temp_bucket = (ext_target > 0) ? ((ext_target + 12) / 25) * 25 : 0;
+
     std::lock_guard<std::mutex> lock(state_mutex_);
-    predictor_.load_entries(entries);
+    predictor_.load_entries(entries, temp_bucket);
 
     if (!entries.empty()) {
-        spdlog::debug("[PrintStartCollector] Loaded {} prediction entries (predicted total: {}s)",
-                      entries.size(), predictor_.predicted_total());
+        spdlog::debug("[PrintStartCollector] Loaded {} prediction entries for {}°C bucket "
+                      "(predicted total: {}s)",
+                      predictor_.get_entries().size(), temp_bucket, predictor_.predicted_total());
     }
 }
 
@@ -781,20 +836,43 @@ void PrintStartCollector::save_prediction_entry() {
         return;
     }
 
+    // Compute temperature bucket from nozzle target (decidegrees / 10, rounded to 25°C)
+    int ext_target = lv_subject_get_int(state_.get_active_extruder_target_subject()) / 10;
+    int temp_bucket = (ext_target > 0) ? ((ext_target + 12) / 25) * 25 : 0;
+
     helix::PreprintEntry entry;
     entry.total_seconds = total_seconds;
     entry.timestamp = static_cast<int64_t>(std::time(nullptr));
     entry.phase_durations = std::move(phase_durations);
+    entry.temp_bucket = temp_bucket;
 
-    std::vector<helix::PreprintEntry> entries;
+    std::vector<helix::PreprintEntry> bucket_entries;
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         predictor_.add_entry(entry);
-        entries = predictor_.get_entries();
+        bucket_entries = predictor_.get_entries();
     }
 
-    // Persist to config (must be on main thread)
-    helix::ui::queue_update([entries]() {
+    // Persist to config: merge bucket entries with entries from other buckets
+    helix::ui::queue_update([bucket_entries, temp_bucket]() {
+        // Load all existing entries, keep those from OTHER buckets
+        auto all_entries = helix::PreprintPredictor::load_entries_from_config();
+        std::vector<helix::PreprintEntry> merged;
+        for (const auto& e : all_entries) {
+            if (e.temp_bucket != temp_bucket && e.temp_bucket != 0) {
+                merged.push_back(e);
+            }
+        }
+        // Add current bucket's entries
+        for (const auto& e : bucket_entries) {
+            merged.push_back(e);
+        }
+        // Cap total stored entries to prevent unbounded growth
+        constexpr size_t MAX_TOTAL_ENTRIES = 15;
+        while (merged.size() > MAX_TOTAL_ENTRIES) {
+            merged.erase(merged.begin());
+        }
+        auto entries = std::move(merged);
         auto* cfg = Config::get_instance();
         if (!cfg) {
             return;
@@ -818,6 +896,9 @@ void PrintStartCollector::save_prediction_entry() {
                     phases_json[std::to_string(phase)] = duration;
                 }
                 entry_json["phases"] = phases_json;
+                if (e.temp_bucket > 0) {
+                    entry_json["temp_bucket"] = e.temp_bucket;
+                }
                 entries_json.push_back(entry_json);
             }
 

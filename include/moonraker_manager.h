@@ -151,7 +151,8 @@ class MoonrakerManager {
      */
     static inline bool should_start_print_collector(helix::PrintJobState prev_state,
                                                     helix::PrintJobState new_state,
-                                                    int current_progress) {
+                                                    int current_progress,
+                                                    bool is_initial_transition) {
         // Only start on TRANSITION to PRINTING from non-printing state
         bool was_not_printing = (prev_state != helix::PrintJobState::PRINTING &&
                                  prev_state != helix::PrintJobState::PAUSED);
@@ -161,12 +162,12 @@ class MoonrakerManager {
             return false; // Not a transition to printing
         }
 
-        // Mid-print detection: only relevant when prev_state is STANDBY.
-        // STANDBY is the initial state at app boot - if we transition STANDBY → PRINTING
-        // with progress > 0, the app started while a print was already running.
-        // From COMPLETE/CANCELLED/ERROR → PRINTING, progress is stale from the
-        // previous print and should be ignored - this is always a fresh print.
-        if (prev_state == helix::PrintJobState::STANDBY && current_progress > 0) {
+        // Mid-print detection: only applies on the FIRST transition after app boot.
+        // If the app starts while a print is already running (STANDBY → PRINTING
+        // with progress > 0), skip the collector — we joined mid-print.
+        // For all subsequent transitions (after cancel/complete/error), the user
+        // explicitly started a new print and progress is stale from the old one.
+        if (is_initial_transition && current_progress > 0) {
             return false; // App joined mid-print, skip collector
         }
         return true;

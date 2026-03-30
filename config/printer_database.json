@@ -629,6 +629,7 @@
       "image": "creality-k1.png",
       "probe_type": "prtouch_v2",
       "preset": "k1",
+      "print_start_profile": "creality_k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
@@ -712,6 +713,7 @@
       "image": "creality-k1-max.png",
       "probe_type": "prtouch_v2",
       "preset": "k1",
+      "print_start_profile": "creality_k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
@@ -970,6 +972,7 @@
       "image": "creality-k1c.png",
       "probe_type": "prtouch_v2",
       "preset": "k1",
+      "print_start_profile": "creality_k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",
@@ -1035,6 +1038,7 @@
       "toolhead_style": "creality_k1",
       "image": "creality-k1-se.png",
       "probe_type": "prtouch_v2",
+      "print_start_profile": "creality_k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
         "pre_start_gcode": "PRINT_PREPARED",

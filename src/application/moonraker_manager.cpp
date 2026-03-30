@@ -477,6 +477,10 @@ void MoonrakerManager::init_print_start_collector() {
     static PrintJobState s_prev_print_state = PrintJobState::STANDBY;
     s_prev_print_state = static_cast<PrintJobState>(
         lv_subject_get_int(get_printer_state().get_print_state_enum_subject()));
+    // Track whether this is the first transition (app startup mid-print detection).
+    // After the first printing transition, this is cleared so subsequent prints
+    // (after cancel/complete) are never treated as mid-print joins.
+    static bool s_is_initial_transition = true;
     spdlog::debug("[MoonrakerManager] PRINT_START collector observer registered (initial state={})",
                   static_cast<int>(s_prev_print_state));
 
@@ -496,19 +500,23 @@ void MoonrakerManager::init_print_start_collector() {
             int current_progress = s_progress_subject ? lv_subject_get_int(s_progress_subject) : 0;
 
             // Use helper function for testable decision logic
-            if (should_start_print_collector(s_prev_print_state, new_state, current_progress)) {
+            if (should_start_print_collector(s_prev_print_state, new_state, current_progress,
+                                             s_is_initial_transition)) {
                 if (!collector->is_active()) {
                     collector->reset();
                     collector->start();
                     collector->enable_fallbacks();
                     spdlog::info("[MoonrakerManager] PRINT_START collector started");
                 }
-            } else if (s_prev_print_state != PrintJobState::PRINTING &&
+                s_is_initial_transition = false;
+            } else if (s_is_initial_transition &&
+                       s_prev_print_state != PrintJobState::PRINTING &&
                        s_prev_print_state != PrintJobState::PAUSED &&
                        new_state == PrintJobState::PRINTING && current_progress > 0) {
-                // Log when we skip due to mid-print detection
+                // Log when we skip due to mid-print detection (app startup only)
                 spdlog::info("[MoonrakerManager] Skipping PRINT_START collector - mid-print ({}%)",
                              current_progress);
+                s_is_initial_transition = false;
             } else if (new_state != PrintJobState::PRINTING && new_state != PrintJobState::PAUSED) {
                 // No longer printing - stop collector if active
                 if (collector->is_active()) {

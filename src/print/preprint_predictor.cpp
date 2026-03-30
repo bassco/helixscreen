@@ -11,13 +11,23 @@
 
 namespace helix {
 
-void PreprintPredictor::load_entries(const std::vector<PreprintEntry>& entries) {
+void PreprintPredictor::load_entries(const std::vector<PreprintEntry>& entries, int temp_bucket) {
     entries_.clear();
-    if (entries.size() <= static_cast<size_t>(MAX_ENTRIES)) {
-        entries_ = entries;
+
+    if (temp_bucket > 0) {
+        // Filter to matching bucket (or legacy entries with bucket 0)
+        for (const auto& e : entries) {
+            if (e.temp_bucket == temp_bucket || e.temp_bucket == 0) {
+                entries_.push_back(e);
+            }
+        }
     } else {
-        // Keep only the last MAX_ENTRIES
-        entries_.assign(entries.end() - MAX_ENTRIES, entries.end());
+        entries_ = entries;
+    }
+
+    // Keep only the last MAX_ENTRIES
+    while (entries_.size() > static_cast<size_t>(MAX_ENTRIES)) {
+        entries_.erase(entries_.begin());
     }
 }
 
@@ -149,6 +159,7 @@ std::vector<PreprintEntry> PreprintPredictor::load_entries_from_config() {
             PreprintEntry entry;
             entry.total_seconds = ej.value("total", 0);
             entry.timestamp = ej.value("timestamp", static_cast<int64_t>(0));
+            entry.temp_bucket = ej.value("temp_bucket", 0);
             if (ej.contains("phases") && ej["phases"].is_object()) {
                 for (auto& [key, val] : ej["phases"].items()) {
                     entry.phase_durations[std::stoi(key)] = val.get<int>();

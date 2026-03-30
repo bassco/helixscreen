@@ -223,6 +223,10 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     static constexpr int TEMP_TOLERANCE_DECIDEGREES = 50; // 5°C (temps stored as value * 10)
 
     // Fallback detection state (for printers without G-code layer markers)
+    // Baseline values snapshot stale subject data at collector start so fallbacks
+    // only trigger on actual changes, not leftover data from the previous print.
+    int baseline_layer_{0};
+    int baseline_progress_{0};
     std::atomic<bool> fallbacks_enabled_{false};
     std::atomic<helix::SubscriptionId> macro_subscription_id_{0};
 

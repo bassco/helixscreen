@@ -690,3 +690,191 @@ TEST_CASE("PrintStartProfile: capture group substitution in message templates",
         REQUIRE(result.message.find("300") != std::string::npos);
     }
 }
+
+// ============================================================================
+// Creality K1 Profile Tests
+// ============================================================================
+
+static std::shared_ptr<PrintStartProfile> get_creality_k1_profile() {
+    return PrintStartProfile::load("creality_k1");
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 profile loads successfully", "[profile][print][k1]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (profile->name().find("K1") == std::string::npos) {
+        SKIP("creality_k1.json not available");
+    }
+
+    SECTION("Profile has correct name") {
+        REQUIRE(profile->name() == "Creality K1");
+    }
+
+    SECTION("Profile uses weighted progress mode") {
+        REQUIRE(profile->progress_mode() == PrintStartProfile::ProgressMode::WEIGHTED);
+    }
+
+    SECTION("Profile has signal formats for pre-preparation") {
+        REQUIRE(profile->has_signal_formats());
+    }
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 phase weights", "[profile][print][k1]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (profile->name().find("K1") == std::string::npos) {
+        SKIP("creality_k1.json not available");
+    }
+
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::INITIALIZING) == 5);
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::HOMING) == 10);
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::CLEANING) == 15);
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::BED_MESH) == 15);
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::HEATING_NOZZLE) == 30);
+    REQUIRE(profile->get_phase_weight(PrintStartPhase::PURGING) == 20);
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 patterns match real K1C gcode responses",
+          "[profile][print][k1]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (profile->name().find("K1") == std::string::npos) {
+        SKIP("creality_k1.json not available");
+    }
+
+    PrintStartProfile::MatchResult result;
+
+    // These are actual gcode responses captured from a K1C print start
+    struct TestCase {
+        std::string line;
+        PrintStartPhase expected_phase;
+        const char* description;
+    };
+
+    // clang-format off
+    std::vector<TestCase> k1c_lines = {
+        {"// not prepare.",                   PrintStartPhase::INITIALIZING,    "START_PRINT no pre-prep"},
+        {"// x_axes: xyz",                    PrintStartPhase::HOMING,          "CX_ROUGH_G28 complete"},
+        {"// [CLEAR_NOZZLE_QUICK] src_pos[2]:3.28", PrintStartPhase::CLEANING, "CX_NOZZLE_CLEAR"},
+        {"CX_PRINT_LEVELING_CALIBRATION",     PrintStartPhase::BED_MESH,        "leveling calibration"},
+        {"// probe at 50.000,50.000 is z=1.23", PrintStartPhase::BED_MESH,     "probe point"},
+        {"// can_break_flag = 0",             PrintStartPhase::HEATING_NOZZLE,  "heating wait started"},
+        {"// can_break_flag = 3",             PrintStartPhase::PURGING,         "heating done"},
+        {"// can_break_flag is 3",            PrintStartPhase::PURGING,         "heating done (alt)"},
+    };
+    // clang-format on
+
+    for (const auto& tc : k1c_lines) {
+        CAPTURE(tc.description, tc.line);
+        REQUIRE(profile->try_match_pattern(tc.line, result));
+        REQUIRE(result.phase == tc.expected_phase);
+    }
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 signal format matches 'print prepared'",
+          "[profile][print][k1][signal]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (!profile->has_signal_formats()) {
+        SKIP("creality_k1.json not available or no signal formats");
+    }
+
+    PrintStartProfile::MatchResult result;
+
+    SECTION("print prepared signal triggers COMPLETE") {
+        REQUIRE(profile->try_match_signal("// print prepared", result));
+        REQUIRE(result.phase == PrintStartPhase::COMPLETE);
+    }
+
+    SECTION("Unrelated messages don't match signal format") {
+        REQUIRE_FALSE(profile->try_match_signal("// x_axes: xyz", result));
+        REQUIRE_FALSE(profile->try_match_signal("// wait temp end", result));
+    }
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 rejects noise from K1C responses",
+          "[profile][print][k1][negative]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (profile->name().find("K1") == std::string::npos) {
+        SKIP("creality_k1.json not available");
+    }
+
+    PrintStartProfile::MatchResult result;
+
+    // Real K1C noise lines that should NOT match any phase
+    std::vector<std::string> noise = {
+        "// wait temp end",
+        "// wait temp start",
+        "// x_park = -104.5",
+        "// y_park = 104.5",
+        "// Run Current: 0.56A Hold Current: 0.56A",
+        "B:56.8 /55.0 T0:175.3 /220.0",
+        "File opened:Cube_PLA_25m49s.gcode Size:224837",
+        "File selected",
+        "Done printing file",
+    };
+
+    for (const auto& line : noise) {
+        CAPTURE(line);
+        REQUIRE_FALSE(profile->try_match_pattern(line, result));
+    }
+}
+
+TEST_CASE("PrintStartProfile: creality_k1 full print sequence progression",
+          "[profile][print][k1]") {
+    auto profile = get_creality_k1_profile();
+    REQUIRE(profile != nullptr);
+
+    if (profile->name().find("K1") == std::string::npos) {
+        SKIP("creality_k1.json not available");
+    }
+
+    PrintStartProfile::MatchResult result;
+
+    // Walk through the real K1C print sequence and verify phases advance
+    // and weighted progress increases
+    std::set<PrintStartPhase> detected;
+    int total_weight = 0;
+
+    auto process = [&](const std::string& line) {
+        if (profile->try_match_pattern(line, result)) {
+            if (detected.insert(result.phase).second) {
+                total_weight += profile->get_phase_weight(result.phase);
+            }
+        }
+    };
+
+    process("// not prepare.");
+    REQUIRE(detected.count(PrintStartPhase::INITIALIZING) == 1);
+    REQUIRE(total_weight == 5);
+
+    process("// x_axes: xyz");
+    REQUIRE(detected.count(PrintStartPhase::HOMING) == 1);
+    REQUIRE(total_weight == 15);
+
+    process("// [CLEAR_NOZZLE_QUICK] src_pos[2]:3.28");
+    REQUIRE(detected.count(PrintStartPhase::CLEANING) == 1);
+    REQUIRE(total_weight == 30);
+
+    process("CX_PRINT_LEVELING_CALIBRATION");
+    REQUIRE(detected.count(PrintStartPhase::BED_MESH) == 1);
+    REQUIRE(total_weight == 45);
+
+    process("// can_break_flag = 0");
+    REQUIRE(detected.count(PrintStartPhase::HEATING_NOZZLE) == 1);
+    REQUIRE(total_weight == 75);
+
+    // Repeated temp reports should not add new phases
+    process("B:56.8 /55.0 T0:175.3 /220.0");
+    REQUIRE(total_weight == 75);
+
+    process("// can_break_flag = 3");
+    REQUIRE(detected.count(PrintStartPhase::PURGING) == 1);
+    REQUIRE(total_weight == 95);
+}
