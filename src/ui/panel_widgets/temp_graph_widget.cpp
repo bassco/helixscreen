@@ -69,6 +69,7 @@ void TempGraphWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     }
 
     TempGraphControllerConfig ctrl_config;
+    ctrl_config.point_count = 300; // 5-minute window at 1Hz (matches mini graph)
     ctrl_config.axis_size = "xs";
     ctrl_config.initial_features = features_for_size(current_colspan_, current_rowspan_);
     ctrl_config.scale_params = {.step = 50.0f, .floor = 100.0f, .ceiling = 400.0f,
@@ -151,7 +152,8 @@ bool TempGraphWidget::on_edit_configure() {
 // ============================================================================
 
 uint32_t TempGraphWidget::features_for_size(int colspan, int rowspan) {
-    uint32_t features = TEMP_GRAPH_FEATURE_LINES;
+    // Gradients always enabled — the draw callback auto-disables when >3 series visible
+    uint32_t features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_GRADIENTS;
 
     if (colspan >= 2 || rowspan >= 2) {
         // Medium: add target lines and legend
@@ -167,11 +169,6 @@ uint32_t TempGraphWidget::features_for_size(int colspan, int rowspan) {
     if (colspan >= 3) {
         // Wide (3+): add X-axis time labels (too crowded at 2x)
         features |= TEMP_GRAPH_FEATURE_X_AXIS;
-    }
-
-    if (colspan >= 2 && rowspan >= 2) {
-        // Large: add gradients
-        features |= TEMP_GRAPH_FEATURE_GRADIENTS;
     }
 
     if (colspan >= 3 && rowspan >= 2) {
