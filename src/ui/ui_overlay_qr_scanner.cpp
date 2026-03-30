@@ -563,13 +563,18 @@ void QrScannerOverlay::on_spool_found(const SpoolInfo& spool) {
         [](lv_timer_t* timer) {
             auto* d = static_cast<TimerData*>(lv_timer_get_user_data(timer));
             if (!d->token.expired()) {
-                // Null member before delete to prevent double-free in on_deactivate()
-                get_qr_scanner_overlay().success_timer_ = nullptr;
-                // Close the QR overlay FIRST, then fire callback — so the
-                // caller's UI (e.g., edit modal) is back in front when populated
+                auto& overlay = get_qr_scanner_overlay();
+                overlay.success_timer_ = nullptr;
+                // Copy callback — go_back() will destroy the overlay and
+                // invalidate all member pointers
+                auto callback = d->callback;
+                auto spool = d->spool;
+                // Close the overlay properly via navigation (handles backdrop cleanup)
                 NavigationManager::instance().go_back();
-                if (d->callback) {
-                    d->callback(d->spool);
+                // Fire callback AFTER close — the caller (modal) was hidden by
+                // go_back but is re-shown by the modal's own show logic
+                if (callback) {
+                    callback(spool);
                 }
             }
             delete d;

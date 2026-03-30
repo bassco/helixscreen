@@ -778,16 +778,66 @@ void AmsEditModal::handle_spool_details() {
 void AmsEditModal::handle_scan_qr() {
     spdlog::info("[AmsEditModal] Scan QR requested for slot {}", slot_index_);
 
-    auto token = lifetime_.token();
+    int slot = slot_index_;
+    auto* api = api_ ? api_ : get_moonraker_api();
     auto& scanner = helix::ui::get_qr_scanner_overlay();
-    scanner.show(lv_obj_get_screen(dialog()), slot_index_,
-        [this, token](const SpoolInfo& spool) {
-            if (token.expired()) return;
+    scanner.show(lv_obj_get_screen(dialog()), slot,
+        [slot, api](const SpoolInfo& spool) {
+            // QR scan result: apply spool data directly.
+            // The modal and QR overlay are both closing, so we can't populate
+            // the form — instead save the data immediately.
+            SlotInfo info;
+            info.slot_index = slot;
+            info.global_index = slot;
+            info.spoolman_id = spool.id;
+            info.spoolman_filament_id = spool.filament_id;
+            info.spoolman_vendor_id = spool.vendor_id;
+            info.color_name = spool.color_name;
+            info.material = spool.material;
+            info.brand = spool.vendor;
+            info.spool_name = spool.vendor + " " + spool.material;
+            info.remaining_weight_g = static_cast<float>(spool.remaining_weight_g);
+            info.total_weight_g = static_cast<float>(spool.initial_weight_g);
+            info.nozzle_temp_min = spool.nozzle_temp_min;
+            info.nozzle_temp_max = spool.nozzle_temp_max;
+            info.bed_temp = spool.bed_temp_recommended;
+            if (!spool.color_hex.empty()) {
+                uint32_t rgb = 0;
+                if (helix::parse_hex_color(spool.color_hex.c_str(), rgb)) {
+                    info.color_rgb = rgb;
+                }
+            }
 
-            // Add scanned spool to cache so handle_spool_selected() finds it
-            cached_spools_.push_back(spool);
-            handle_spool_selected(spool.id);
+            if (slot == -2) {
+                // External spool
+                AmsState::instance().set_external_spool_info(info);
+                spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to external spool",
+                             spool.id);
+            } else {
+                // AMS slot
+                AmsBackend* be = AmsState::instance().get_backend();
+                if (be) {
+                    AmsError err = be->set_slot_info(slot, info);
+                    if (err.success()) {
+                        AmsState::instance().sync_from_backend();
+                        spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to slot {}",
+                                     spool.id, slot);
+                    } else {
+                        spdlog::error("[AmsEditModal] QR scan save failed: {}", err.user_msg);
+                    }
+                }
+            }
+
+            // Set active spool in Spoolman
+            if (api && spool.id > 0) {
+                api->spoolman().set_active_spool(spool.id, nullptr, nullptr);
+            }
+
+            NOTIFY_INFO("{} {} assigned via QR scan", spool.vendor, spool.material);
         });
+
+    // Close the modal — the QR scanner will handle everything
+    hide();
 }
 
 #if HELIX_HAS_LABEL_PRINTER
@@ -1232,14 +1282,20 @@ void AmsEditModal::show_color_picker() {
 // ============================================================================
 
 void AmsEditModal::fire_completion(bool saved) {
+    spdlog::info("[AmsEditModal] fire_completion saved={} slot={} spoolman_id={} material={}",
+                 saved, slot_index_, working_info_.spoolman_id, working_info_.material);
     if (completion_callback_) {
         EditResult result;
         result.saved = saved;
         result.slot_index = slot_index_;
         result.slot_info = working_info_;
+        spdlog::info("[AmsEditModal] Calling completion callback...");
         completion_callback_(result);
+        spdlog::info("[AmsEditModal] Completion callback returned");
     }
+    spdlog::info("[AmsEditModal] Calling hide()...");
     hide();
+    spdlog::info("[AmsEditModal] hide() returned");
 }
 
 // ============================================================================
