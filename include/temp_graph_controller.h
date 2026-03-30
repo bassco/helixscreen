@@ -169,6 +169,10 @@ class TempGraphController {
     uint32_t generation_ = 0;
     bool paused_ = false;
     float y_axis_max_ = 100.0f;
+
+    /// Debounce rapid rebuilds (e.g., reconnect flapping in Klipper error state)
+    std::chrono::steady_clock::time_point last_rebuild_time_{};
+    static constexpr auto REBUILD_DEBOUNCE = std::chrono::seconds(2);
 };
 
 } // namespace helix

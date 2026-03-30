@@ -948,7 +948,7 @@ void ui_temp_graph_remove_series(ui_temp_graph_t* graph, int series_id) {
 
     graph->series_count--;
 
-    spdlog::debug("[TempGraph] Removed series {} ({} series remaining)", series_id,
+    spdlog::trace("[TempGraph] Removed series {} ({} series remaining)", series_id,
                   graph->series_count);
 }
 
@@ -966,7 +966,7 @@ void ui_temp_graph_show_series(ui_temp_graph_t* graph, int series_id, bool visib
     lv_chart_hide_series(graph->chart, meta->chart_series, !visible);
 
     lv_obj_invalidate(graph->chart);
-    spdlog::debug("[TempGraph] Series {} '{}' {}", series_id, meta->name,
+    spdlog::trace("[TempGraph] Series {} '{}' {}", series_id, meta->name,
                   visible ? "shown" : "hidden");
 }
 
@@ -1001,7 +1001,7 @@ void ui_temp_graph_update_series_with_time(ui_temp_graph_t* graph, int series_id
         meta->first_value_received = true;
         lv_chart_set_all_values(graph->chart, meta->chart_series,
                                 static_cast<int32_t>(temp * TEMP_SCALE));
-        spdlog::debug("[TempGraph] Series {} '{}' backfilled with initial temp {:.1f}°C", series_id,
+        spdlog::trace("[TempGraph] Series {} '{}' backfilled with initial temp {:.1f}°C", series_id,
                       meta->name, temp);
     }
 
@@ -1064,7 +1064,7 @@ void ui_temp_graph_set_series_data(ui_temp_graph_t* graph, int series_id, const 
     // Update max visible temperature for gradient rendering
     update_max_visible_temp(graph);
 
-    spdlog::debug("[TempGraph] Series {} '{}' data set ({} points)", series_id, meta->name,
+    spdlog::trace("[TempGraph] Series {} '{}' data set ({} points)", series_id, meta->name,
                   points_to_copy);
 }
 
@@ -1085,7 +1085,7 @@ void ui_temp_graph_clear(ui_temp_graph_t* graph) {
     // Update max visible temperature for gradient rendering
     update_max_visible_temp(graph);
 
-    spdlog::debug("[TempGraph] All data cleared");
+    spdlog::trace("[TempGraph] All data cleared");
 }
 
 // Clear data for a specific series
@@ -1103,7 +1103,7 @@ void ui_temp_graph_clear_series(ui_temp_graph_t* graph, int series_id) {
     // Update max visible temperature for gradient rendering
     update_max_visible_temp(graph);
 
-    spdlog::debug("[TempGraph] Series {} '{}' cleared", series_id, meta->name);
+    spdlog::trace("[TempGraph] Series {} '{}' cleared", series_id, meta->name);
 }
 
 // Set target temperature and visibility
@@ -1119,7 +1119,7 @@ void ui_temp_graph_set_series_target(ui_temp_graph_t* graph, int series_id, floa
     meta->show_target = show;
     lv_obj_invalidate(graph->chart);
 
-    spdlog::debug("[TempGraph] Series {} target: {:.1f}°C ({})", series_id, target,
+    spdlog::trace("[TempGraph] Series {} target: {:.1f}°C ({})", series_id, target,
                   show ? "shown" : "hidden");
 }
 
@@ -1150,7 +1150,7 @@ void ui_temp_graph_set_temp_range(ui_temp_graph_t* graph, float min, float max) 
 
     lv_obj_invalidate(graph->chart);
 
-    spdlog::debug("[TempGraph] Temperature range set: {:.0f} - {:.0f}°C", min, max);
+    spdlog::trace("[TempGraph] Temperature range set: {:.0f} - {:.0f}°C", min, max);
 }
 
 // Set point count
@@ -1163,7 +1163,7 @@ void ui_temp_graph_set_point_count(ui_temp_graph_t* graph, int count) {
     graph->point_count = count;
     lv_chart_set_point_count(graph->chart, static_cast<uint32_t>(count));
 
-    spdlog::debug("[TempGraph] Point count set: {}", count);
+    spdlog::trace("[TempGraph] Point count set: {}", count);
 }
 
 // Set gradient opacity for a series
@@ -1197,7 +1197,7 @@ void ui_temp_graph_set_y_axis(ui_temp_graph_t* graph, float increment, bool show
     // Force redraw to apply changes
     lv_obj_invalidate(graph->chart);
 
-    spdlog::debug("[TempGraph] Y-axis config: increment={:.0f}°, show={}", increment, show);
+    spdlog::trace("[TempGraph] Y-axis config: increment={:.0f}°, show={}", increment, show);
 }
 
 // Set axis label font size
@@ -1247,7 +1247,7 @@ void ui_temp_graph_set_axis_size(ui_temp_graph_t* graph, const char* size) {
 
     lv_obj_invalidate(graph->chart);
 
-    spdlog::debug("[TempGraph] Axis size: {} -> {} (y_width={}, label_h={})", size ? size : "null",
+    spdlog::trace("[TempGraph] Axis size: {} -> {} (y_width={}, label_h={})", size ? size : "null",
                   font_token, y_axis_width, label_height);
 }
 
@@ -1306,7 +1306,7 @@ void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
 
     lv_obj_invalidate(graph->chart);
 
-    spdlog::debug("[TempGraph] Features set: 0x{:02x} (lines={} targets={} legend={} "
+    spdlog::trace("[TempGraph] Features set: 0x{:02x} (lines={} targets={} legend={} "
                   "y_axis={} x_axis={} gradients={} readouts={})",
                   features, (features & TEMP_GRAPH_FEATURE_LINES) != 0,
                   (features & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0,

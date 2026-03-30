@@ -101,6 +101,15 @@ void TempGraphController::resume() {
 }
 
 void TempGraphController::rebuild() {
+    // Debounce rapid rebuilds — reconnect flapping (e.g., Klipper error state)
+    // can trigger dozens of rebuilds per second, racing with the LVGL render cycle
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_rebuild_time_ < REBUILD_DEBOUNCE) {
+        spdlog::debug("[TempGraphController] Rebuild debounced (too soon after previous)");
+        return;
+    }
+    last_rebuild_time_ = now;
+
     lifetime_.invalidate();
 
     {
@@ -205,7 +214,7 @@ void TempGraphController::setup_series() {
         series_.push_back(std::move(state));
     }
 
-    spdlog::debug("[TempGraphController] Setup {} series", series_.size());
+    spdlog::trace("[TempGraphController] Setup {} series", series_.size());
 }
 
 // ============================================================================
@@ -380,7 +389,7 @@ void TempGraphController::apply_auto_range() {
     ui_temp_graph_set_y_axis(graph_, y_increment, show_y);
 
     if (changed) {
-        spdlog::debug("[TempGraphController] Y-axis range: 0-{}°C (increment={}, show_y={})",
+        spdlog::trace("[TempGraphController] Y-axis range: 0-{}°C (increment={}, show_y={})",
                       y_axis_max_, y_increment, show_y);
     }
 }
