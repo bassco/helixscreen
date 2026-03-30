@@ -2786,6 +2786,52 @@
       ]
     },
     {
+      "id": "rh3d_e3ng",
+      "name": "RH3D E3NG",
+      "manufacturer": "RH3D",
+      "image": "rh3d-e3ng.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_3",
+          "confidence": 60,
+          "reason": "3 independent Z steppers (E3NG triple Z design)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 220,
+          "max_x": 250,
+          "min_y": 220,
+          "max_y": 250,
+          "confidence": 30,
+          "reason": "Build volume ~235x235mm (Ender 3 bed size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "e3ng",
+          "confidence": 95,
+          "reason": "Hostname contains 'e3ng'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "rh3d",
+          "confidence": 85,
+          "reason": "Hostname contains 'rh3d'"
+        }
+      ]
+    },
+    {
       "id": "sovol_sv08",
       "name": "Sovol SV08",
       "manufacturer": "Sovol",
@@ -3552,6 +3598,52 @@
           "pattern": "cartesian",
           "confidence": 20,
           "reason": "Cartesian kinematics"
+        }
+      ]
+    },
+    {
+      "id": "artillery_m1_pro",
+      "name": "Artillery M1 Pro",
+      "manufacturer": "Artillery",
+      "image": "artillery-m1-pro.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 40,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 245,
+          "max_x": 275,
+          "min_y": 245,
+          "max_y": 275,
+          "confidence": 40,
+          "reason": "Build volume ~260x260mm (M1 Pro size)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "artillery",
+          "confidence": 85,
+          "reason": "Hostname contains 'artillery'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "m1-pro",
+          "confidence": 95,
+          "reason": "Hostname contains 'm1-pro'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "m1pro",
+          "confidence": 95,
+          "reason": "Hostname contains 'm1pro'"
         }
       ]
     },
