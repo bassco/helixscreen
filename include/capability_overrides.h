@@ -34,6 +34,7 @@ constexpr const char* Z_TILT = "z_tilt";
 constexpr const char* NOZZLE_CLEAN = "nozzle_clean";
 constexpr const char* HEAT_SOAK = "heat_soak";
 constexpr const char* CHAMBER = "chamber";
+constexpr const char* SPEAKER = "speaker";
 } // namespace capability
 
 /**
@@ -168,6 +169,13 @@ class CapabilityOverrides {
      */
     [[nodiscard]] bool has_chamber() const {
         return is_available(capability::CHAMBER);
+    }
+
+    /**
+     * @brief Check speaker availability (with overrides)
+     */
+    [[nodiscard]] bool has_speaker() const {
+        return is_available(capability::SPEAKER);
     }
 
     /**

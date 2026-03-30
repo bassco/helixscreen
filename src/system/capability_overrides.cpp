@@ -4,6 +4,7 @@
 #include "capability_overrides.h"
 
 #include "config.h"
+#include "sound_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -38,6 +39,7 @@ void CapabilityOverrides::load_from_config() {
     read_override(capability::NOZZLE_CLEAN);
     read_override(capability::HEAT_SOAK);
     read_override(capability::CHAMBER);
+    read_override(capability::SPEAKER);
 
     spdlog::debug("[CapabilityOverrides] Loaded: {}", summary());
 }
@@ -91,6 +93,8 @@ bool CapabilityOverrides::get_auto_value(const std::string& name) const {
         return hardware_.has_heat_soak_macro();
     } else if (name == capability::CHAMBER) {
         return hardware_.supports_chamber();
+    } else if (name == capability::SPEAKER) {
+        return hardware_.has_speaker() || SoundManager::instance().has_backend();
     }
 
     // Unknown capability, default to false
@@ -148,6 +152,7 @@ std::string CapabilityOverrides::summary() const {
     append(capability::NOZZLE_CLEAN);
     append(capability::HEAT_SOAK);
     append(capability::CHAMBER);
+    append(capability::SPEAKER);
 
     return result;
 }

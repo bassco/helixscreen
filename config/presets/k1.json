@@ -18,10 +18,10 @@
       "hotend": "extruder"
     },
     "fans": {
-      "chamber": "",
+      "chamber": "temperature_fan chamber_fan",
       "exhaust": "",
       "hotend": "heater_fan hotend_fan",
-      "part": "temperature_fan chamber_fan"
+      "part": ""
     },
     "leds": {
       "strip": "output_pin LED"
@@ -52,6 +52,9 @@
         "output_pin LED",
         "filament_switch_sensor filament_sensor"
       ]
+    },
+    "capability_overrides": {
+      "speaker": "disable"
     },
     "default_macros": {
       "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0",

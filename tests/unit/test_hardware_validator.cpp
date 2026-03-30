@@ -322,6 +322,51 @@ TEST_CASE("HardwareValidator - New hardware discovery", "[hardware][validator]")
     }
 }
 
+TEST_CASE("HardwareValidator - New fan discovery", "[hardware][validator]") {
+    MoonrakerClientMock client;
+
+    SECTION("Flags fan not assigned to any role") {
+        client.set_heaters({"extruder", "heater_bed"});
+        // "fan" is the default part fan, but "temperature_fan chamber_fan"
+        // is an extra fan with no config role assignment
+        client.set_fans({"fan", "heater_fan hotend_fan", "temperature_fan chamber_fan"});
+
+        HardwareValidator validator;
+        // nullptr config = only "fan" is default part fan role
+        auto result = validator.validate(nullptr, client.hardware());
+
+        bool found_chamber_fan = false;
+        for (const auto& issue : result.newly_discovered) {
+            if (issue.hardware_name == "temperature_fan chamber_fan" &&
+                issue.hardware_type == HardwareType::FAN) {
+                found_chamber_fan = true;
+                break;
+            }
+        }
+        REQUIRE(found_chamber_fan);
+    }
+
+    SECTION("Does not flag fans assigned to roles") {
+        client.set_heaters({"extruder", "heater_bed"});
+        // Only "fan" (default part) and "heater_fan hotend_fan" which is a heater_fan
+        client.set_fans({"fan", "heater_fan hotend_fan"});
+
+        HardwareValidator validator;
+        auto result = validator.validate(nullptr, client.hardware());
+
+        // heater_fan hotend_fan is not assigned to hotend role (no config),
+        // so it should show as newly discovered
+        bool found_part_fan = false;
+        for (const auto& issue : result.newly_discovered) {
+            if (issue.hardware_name == "fan") {
+                found_part_fan = true;
+            }
+        }
+        // "fan" is the default part fan role, should NOT be flagged
+        REQUIRE_FALSE(found_part_fan);
+    }
+}
+
 TEST_CASE("HardwareValidator - Session changes", "[hardware][validator]") {
     SECTION("Detects hardware removed since last session") {
         // Create a "previous" snapshot with LED

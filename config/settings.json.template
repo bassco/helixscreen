@@ -122,6 +122,7 @@
       "nozzle_clean": "auto",
       "heat_soak": "auto",
       "chamber": "auto",
+      "speaker": "auto",
       "_comment": "Override auto-detected printer capabilities. Values: 'auto' (use detection), 'enable' (force on), 'disable' (force off). Use 'enable' for features that work but weren't detected (e.g., heat_soak without chamber heater)."
     }
   },

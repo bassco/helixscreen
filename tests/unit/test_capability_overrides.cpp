@@ -206,6 +206,7 @@ TEST_CASE("CapabilityOverrides - summary", "[printer][overrides]") {
         REQUIRE(summary.find("nozzle_clean=") != std::string::npos);
         REQUIRE(summary.find("heat_soak=") != std::string::npos);
         REQUIRE(summary.find("chamber=") != std::string::npos);
+        REQUIRE(summary.find("speaker=") != std::string::npos);
     }
 
     SECTION("Summary shows auto(Y) for detected capabilities") {
@@ -226,6 +227,45 @@ TEST_CASE("CapabilityOverrides - summary", "[printer][overrides]") {
         std::string summary = overrides.summary();
         REQUIRE(summary.find("bed_mesh=ENABLE") != std::string::npos);
         REQUIRE(summary.find("qgl=DISABLE") != std::string::npos);
+    }
+}
+
+// ============================================================================
+// Speaker Override Tests
+// ============================================================================
+
+TEST_CASE("CapabilityOverrides - speaker override", "[printer][overrides]") {
+    CapabilityOverrides overrides;
+
+    SECTION("Speaker DISABLE hides sound settings") {
+        overrides.set_override(capability::SPEAKER, OverrideState::DISABLE);
+        REQUIRE_FALSE(overrides.has_speaker());
+    }
+
+    SECTION("Speaker ENABLE forces sound settings visible") {
+        overrides.set_override(capability::SPEAKER, OverrideState::ENABLE);
+        REQUIRE(overrides.has_speaker());
+    }
+
+    SECTION("Speaker AUTO with beeper detected returns true") {
+        helix::PrinterDiscovery hardware;
+        json objects = {"output_pin beeper"};
+        hardware.parse_objects(objects);
+        overrides.set_hardware(hardware);
+
+        overrides.set_override(capability::SPEAKER, OverrideState::AUTO);
+        REQUIRE(overrides.has_speaker());
+    }
+
+    SECTION("Speaker AUTO without beeper returns false (no sound backend in test)") {
+        helix::PrinterDiscovery hardware;
+        json objects = {"bed_mesh"};
+        hardware.parse_objects(objects);
+        overrides.set_hardware(hardware);
+
+        overrides.set_override(capability::SPEAKER, OverrideState::AUTO);
+        // No beeper and no sound backend in unit tests
+        REQUIRE_FALSE(overrides.has_speaker());
     }
 }
 

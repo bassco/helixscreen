@@ -450,6 +450,28 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     } catch (...) {
     }
 
+    // Check configured fan (chamber)
+    try {
+        std::string chamber_fan = config->get<std::string>(config->df() + "fans/chamber", "");
+        if (!chamber_fan.empty() && !contains_name(fans, chamber_fan)) {
+            bool is_optional = is_hardware_optional(config, chamber_fan);
+            result.expected_missing.push_back(HardwareIssue::warning(
+                chamber_fan, HardwareType::FAN, "Configured chamber fan not found", is_optional));
+        }
+    } catch (...) {
+    }
+
+    // Check configured fan (exhaust)
+    try {
+        std::string exhaust_fan = config->get<std::string>(config->df() + "fans/exhaust", "");
+        if (!exhaust_fan.empty() && !contains_name(fans, exhaust_fan)) {
+            bool is_optional = is_hardware_optional(config, exhaust_fan);
+            result.expected_missing.push_back(HardwareIssue::warning(
+                exhaust_fan, HardwareType::FAN, "Configured exhaust fan not found", is_optional));
+        }
+    } catch (...) {
+    }
+
     // Check configured LEDs (array format: LED_SELECTED, legacy single: LED_STRIP)
     try {
         std::vector<std::string> configured_leds;
@@ -618,6 +640,37 @@ void HardwareValidator::validate_new_hardware(Config* config,
             result.newly_discovered.push_back(
                 HardwareIssue::info(suggested, HardwareType::LED,
                                     "LED strip available. Add to config for lighting control?"));
+        }
+    }
+
+    // Check for fans not assigned to any role
+    const auto& discovered_fans = hardware.fans();
+    std::vector<std::string> configured_fans;
+    // "fan" is always the default part cooling fan in Klipper
+    configured_fans.push_back("fan");
+    if (config) {
+        // Collect all fans assigned to roles
+        auto add_fan = [&](const std::string& key, const std::string& default_val) {
+            try {
+                std::string name =
+                    config->get<std::string>(config->df() + "fans/" + key, default_val);
+                if (!name.empty()) {
+                    configured_fans.push_back(name);
+                }
+            } catch (...) {
+            }
+        };
+        add_fan("part", "fan");
+        add_fan("hotend", "");
+        add_fan("chamber", "");
+        add_fan("exhaust", "");
+    }
+
+    for (const auto& fan : discovered_fans) {
+        if (!contains_name(configured_fans, fan) && !contains_name(expected_hardware, fan)) {
+            result.newly_discovered.push_back(
+                HardwareIssue::info(fan, HardwareType::FAN,
+                                    "Fan available but not assigned to any role"));
         }
     }
 

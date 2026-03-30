@@ -83,12 +83,10 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
     lv_subject_set_int(&printer_has_led_, hardware.has_led() ? 1 : 0);
     lv_subject_set_int(&printer_has_accelerometer_, hardware.has_accelerometer() ? 1 : 0);
 
-    // Speaker capability (for M300 audio feedback).
-    // Also true when a local sound backend exists (PWM buzzer, ALSA, SDL) —
-    // the device can play sounds even without a Klipper beeper output_pin.
-    lv_subject_set_int(&printer_has_speaker_,
-                       (hardware.has_speaker() || SoundManager::instance().has_backend()) ? 1
-                                                                                         : 0);
+    // Speaker capability — uses override system so presets can disable it
+    // for printers without speakers (e.g., K1C has no beeper/buzzer).
+    // AUTO mode: true if hardware beeper detected OR local sound backend exists.
+    lv_subject_set_int(&printer_has_speaker_, overrides.has_speaker() ? 1 : 0);
 
     // Timelapse capability (Moonraker-Timelapse plugin)
     lv_subject_set_int(&printer_has_timelapse_, hardware.has_timelapse() ? 1 : 0);
