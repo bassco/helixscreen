@@ -1343,7 +1343,8 @@ void MoonrakerSpoolmanAPIMock::init_mock_spools() {
 }
 
 void MoonrakerSpoolmanAPIMock::get_spoolman_status(std::function<void(bool, int)> on_success,
-                                                   ErrorCallback /*on_error*/) {
+                                                   ErrorCallback /*on_error*/,
+                                                   bool /*silent*/) {
     spdlog::debug("[MoonrakerAPIMock] get_spoolman_status() -> connected={}, active={}",
                   mock_spoolman_enabled_, mock_active_spool_id_);
 

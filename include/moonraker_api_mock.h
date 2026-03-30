@@ -107,7 +107,7 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     // ========================================================================
 
     void get_spoolman_status(std::function<void(bool, int)> on_success,
-                             ErrorCallback on_error) override;
+                             ErrorCallback on_error, bool silent = false) override;
     void get_spoolman_spools(helix::SpoolListCallback on_success, ErrorCallback on_error) override;
     void get_spoolman_spool(int spool_id, helix::SpoolCallback on_success,
                             ErrorCallback on_error, bool silent = false) override;

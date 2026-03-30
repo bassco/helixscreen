@@ -2135,9 +2135,10 @@ void Application::setup_discovery_callbacks() {
                             });
                     },
                     [](const MoonrakerError& err) {
-                        spdlog::warn("[Application] Failed to query Spoolman status: {}",
-                                     err.message);
-                    });
+                        spdlog::debug("[Application] Spoolman status unavailable: {}",
+                                      err.message);
+                    },
+                    true); // silent: Spoolman not configured is normal
             }
 
             // Listen for Moonraker active spool changes (user changes spool in

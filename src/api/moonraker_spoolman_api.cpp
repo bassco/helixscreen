@@ -118,7 +118,7 @@ static FilamentInfo parse_filament_info(const nlohmann::json& filament_json) {
 MoonrakerSpoolmanAPI::MoonrakerSpoolmanAPI(MoonrakerClient& client) : client_(client) {}
 
 void MoonrakerSpoolmanAPI::get_spoolman_status(std::function<void(bool, int)> on_success,
-                                               ErrorCallback on_error) {
+                                               ErrorCallback on_error, bool silent) {
     spdlog::debug("[SpoolmanAPI] get_spoolman_status()");
 
     client_.send_jsonrpc(
@@ -142,7 +142,7 @@ void MoonrakerSpoolmanAPI::get_spoolman_status(std::function<void(bool, int)> on
                 on_success(connected, active_spool_id);
             }
         },
-        on_error);
+        on_error, 0, silent);
 }
 
 void MoonrakerSpoolmanAPI::get_spoolman_spools(SpoolListCallback on_success,

@@ -64,7 +64,7 @@ class MoonrakerSpoolmanAPI {
      */
     virtual void
     get_spoolman_status(std::function<void(bool connected, int active_spool_id)> on_success,
-                        ErrorCallback on_error);
+                        ErrorCallback on_error, bool silent = false);
 
     /**
      * @brief Get list of spools from Spoolman
