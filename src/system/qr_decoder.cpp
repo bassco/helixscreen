@@ -58,7 +58,7 @@ QrDecodeResult QrDecoder::decode(const uint8_t* gray_data, int width, int height
     quirc_end(qr_);
 
     int count = quirc_count(qr_);
-    spdlog::debug("QrDecoder: found {} QR code candidates in {}x{} image", count, width, height);
+    spdlog::info("QrDecoder: found {} QR code candidates in {}x{} image", count, width, height);
 
     for (int i = 0; i < count; ++i) {
         struct quirc_code code;
@@ -68,7 +68,7 @@ QrDecodeResult QrDecoder::decode(const uint8_t* gray_data, int width, int height
         quirc_decode_error_t err = quirc_decode(&code, &data);
 
         if (err != QUIRC_SUCCESS) {
-            spdlog::debug("QrDecoder: code {} decode error: {}", i, quirc_strerror(err));
+            spdlog::info("QrDecoder: code {} decode error: {}", i, quirc_strerror(err));
             continue;
         }
 
@@ -76,7 +76,7 @@ QrDecodeResult QrDecoder::decode(const uint8_t* gray_data, int width, int height
         result.text = std::string(reinterpret_cast<const char*>(data.payload), data.payload_len);
         result.spool_id = parse_spoolman_id(result.text);
 
-        spdlog::debug("QrDecoder: decoded QR text='{}' spool_id={}", result.text, result.spool_id);
+        spdlog::info("QrDecoder: decoded QR text='{}' spool_id={}", result.text, result.spool_id);
         break;
     }
 
