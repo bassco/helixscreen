@@ -759,3 +759,56 @@ TEST_CASE_METHOD(TempGraphTestFixture, "Stress tests", "[ui][stress]") {
 
     ui_temp_graph_destroy(graph);
 }
+
+// ============================================================================
+// Over-range Point Masking Tests
+// ============================================================================
+
+TEST_CASE_METHOD(TempGraphTestFixture, "Over-range points stored at full precision", "[ui][data]") {
+    ui_temp_graph_t* graph = ui_temp_graph_create(screen);
+    REQUIRE(graph != nullptr);
+
+    // Set a small Y range: 0-150°C
+    ui_temp_graph_set_temp_range(graph, 0.0f, 150.0f);
+
+    int id = ui_temp_graph_add_series(graph, "Nozzle", lv_color_hex(0xFF5722));
+    REQUIRE(id >= 0);
+
+    // Push values: some in range, some over range
+    ui_temp_graph_update_series(graph, id, 50.0f);   // in range
+    ui_temp_graph_update_series(graph, id, 100.0f);  // in range
+    ui_temp_graph_update_series(graph, id, 250.0f);  // over range
+    ui_temp_graph_update_series(graph, id, 300.0f);  // over range
+    ui_temp_graph_update_series(graph, id, 80.0f);   // in range
+
+    // Verify data is stored at full precision (not clamped at storage time)
+    // so that when Y-axis expands, the full values are available for drawing
+    int32_t* y_data = lv_chart_get_y_array(graph->chart, graph->series_meta[0].chart_series);
+    uint32_t pc = lv_chart_get_point_count(graph->chart);
+    uint32_t sp = lv_chart_get_x_start_point(graph->chart, graph->series_meta[0].chart_series);
+
+    // Read the last 5 values from the circular buffer
+    int32_t last_vals[5];
+    for (int i = 0; i < 5; i++) {
+        last_vals[4 - i] = y_data[(sp + pc - 1 - i) % pc];
+    }
+
+    // Values stored as deci-degrees (x10), over-range values preserved
+    REQUIRE(last_vals[0] == 500);   // 50.0 x 10
+    REQUIRE(last_vals[1] == 1000);  // 100.0 x 10
+    REQUIRE(last_vals[2] == 2500);  // 250.0 x 10 — stored, masked only during draw
+    REQUIRE(last_vals[3] == 3000);  // 300.0 x 10 — stored, masked only during draw
+    REQUIRE(last_vals[4] == 800);   // 80.0 x 10
+
+    // After expanding Y range, previously over-range points become visible again
+    ui_temp_graph_set_temp_range(graph, 0.0f, 350.0f);
+
+    // Data unchanged — same values, now all within range
+    for (int i = 0; i < 5; i++) {
+        last_vals[4 - i] = y_data[(sp + pc - 1 - i) % pc];
+    }
+    REQUIRE(last_vals[2] == 2500);  // Now in range, will draw normally
+    REQUIRE(last_vals[3] == 3000);  // Now in range, will draw normally
+
+    ui_temp_graph_destroy(graph);
+}

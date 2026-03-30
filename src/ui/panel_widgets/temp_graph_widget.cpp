@@ -4,6 +4,7 @@
 #include "temp_graph_widget.h"
 
 #include "app_globals.h"
+#include "ui_temp_graph_scaling.h"
 #include "observer_factory.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
@@ -434,12 +435,9 @@ void TempGraphWidget::backfill_history() {
 void TempGraphWidget::apply_auto_range() {
     if (!graph_) return;
 
-    // Dynamic Y-axis range with hysteresis (same logic as TempGraphOverlay)
-    static constexpr float Y_STEP = 50.0f;
-    static constexpr float Y_FLOOR = 100.0f;
-    static constexpr float Y_CEILING = 400.0f;
-    static constexpr float Y_EXPAND = 0.90f;
-    static constexpr float Y_SHRINK = 0.50f;
+    static constexpr TempGraphScaleParams SCALE{
+        .step = 50.0f, .floor = 100.0f, .ceiling = 400.0f,
+        .expand_threshold = 0.90f, .shrink_threshold = 0.50f};
 
     // Find max visible temp (from data and targets)
     float max_temp = graph_->max_visible_temp;
@@ -454,14 +452,8 @@ void TempGraphWidget::apply_auto_range() {
         }
     }
 
-    // Auto-scale with hysteresis
-    float new_max = y_axis_max_;
-    if (max_temp > y_axis_max_ * Y_EXPAND) {
-        new_max = (std::floor(max_temp / Y_STEP) + 1.0f) * Y_STEP;
-    } else if (max_temp < y_axis_max_ * Y_SHRINK && y_axis_max_ > Y_FLOOR) {
-        new_max = std::max(Y_FLOOR, (std::floor(max_temp / Y_STEP) + 1.0f) * Y_STEP);
-    }
-    new_max = std::clamp(new_max, Y_FLOOR, Y_CEILING);
+    float new_max = calculate_temp_graph_y_max(
+        y_axis_max_, max_temp, graph_->max_visible_temp, SCALE);
 
     bool changed = (new_max != y_axis_max_);
     y_axis_max_ = new_max;
@@ -471,12 +463,9 @@ void TempGraphWidget::apply_auto_range() {
     float y_increment = (y_axis_max_ <= 150.0f) ? 25.0f : 50.0f;
     bool show_y = (features_for_size(current_colspan_, current_rowspan_) & TEMP_GRAPH_FEATURE_Y_AXIS) != 0;
     ui_temp_graph_set_y_axis(graph_, y_increment, show_y);
-    spdlog::debug("[TempGraphWidget:{}] apply_auto_range: max={}, increment={}, show_y={}, "
-                  "graph->show_y_axis={}, graph->y_axis_increment={}",
-                  instance_id_, y_axis_max_, y_increment, show_y,
-                  graph_->show_y_axis, graph_->y_axis_increment);
     if (changed) {
-        spdlog::debug("[TempGraphWidget:{}] Y-axis range changed: 0-{}°C", instance_id_, y_axis_max_);
+        spdlog::debug("[TempGraphWidget:{}] Y-axis range: 0-{}°C (increment={}, show_y={})",
+                      instance_id_, y_axis_max_, y_increment, show_y);
     }
 }
 

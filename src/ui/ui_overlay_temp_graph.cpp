@@ -4,6 +4,7 @@
 #include "ui_overlay_temp_graph.h"
 
 #include "app_globals.h"
+#include "ui_temp_graph_scaling.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "panel_widget_manager.h"
@@ -631,18 +632,12 @@ void TempGraphOverlay::update_y_axis_range() {
         max_temp = graph_->max_visible_temp;
     }
 
-    // Auto-scale with hysteresis
-    float new_max = y_axis_max_;
-    if (max_temp > y_axis_max_ * Y_EXPAND_THRESHOLD) {
-        // Expand: round up to next step
-        new_max = (std::floor(max_temp / Y_AXIS_STEP) + 1.0f) * Y_AXIS_STEP;
-    } else if (max_temp < y_axis_max_ * Y_SHRINK_THRESHOLD && y_axis_max_ > Y_AXIS_FLOOR) {
-        // Shrink: round up to next step (but not below floor)
-        new_max = std::max(Y_AXIS_FLOOR, (std::floor(max_temp / Y_AXIS_STEP) + 1.0f) * Y_AXIS_STEP);
-    }
+    static constexpr TempGraphScaleParams SCALE{
+        .step = Y_AXIS_STEP, .floor = Y_AXIS_FLOOR, .ceiling = Y_AXIS_CEILING,
+        .expand_threshold = Y_EXPAND_THRESHOLD, .shrink_threshold = Y_SHRINK_THRESHOLD};
 
-    new_max = std::min(new_max, Y_AXIS_CEILING);
-    new_max = std::max(new_max, Y_AXIS_FLOOR);
+    float new_max = calculate_temp_graph_y_max(
+        y_axis_max_, max_temp, graph_->max_visible_temp, SCALE);
 
     if (new_max != y_axis_max_) {
         y_axis_max_ = new_max;

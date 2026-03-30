@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <vector>
 
 using helix::ui::get_time_format_string;
 
@@ -123,6 +124,53 @@ static void update_max_visible_temp(ui_temp_graph_t* graph) {
     }
 
     graph->max_visible_temp = max_temp;
+}
+
+// Over-range point masking: temporarily replace data points exceeding the Y-axis range
+// with LV_CHART_POINT_NONE so LVGL draws gaps instead of misleading clamped flat bars.
+// Original values are saved and restored after drawing completes.
+struct overrange_save_t {
+    int32_t* location; // Pointer into LVGL's y_points array
+    int32_t value;     // Original value
+};
+static thread_local std::vector<overrange_save_t> s_overrange_saved;
+
+// DRAW_MAIN_BEGIN: mask over-range points before LVGL draws chart lines
+static void mask_overrange_begin_cb(lv_event_t* e) {
+    auto* graph = static_cast<ui_temp_graph_t*>(lv_event_get_user_data(e));
+    if (!graph || !graph->chart)
+        return;
+
+    s_overrange_saved.clear();
+
+    int32_t y_max = static_cast<int32_t>(graph->max_temp * TEMP_SCALE);
+    uint32_t pc = lv_chart_get_point_count(graph->chart);
+
+    for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
+        ui_temp_series_meta_t* meta = &graph->series_meta[i];
+        if (!meta->chart_series || !meta->visible)
+            continue;
+
+        int32_t* y_data = lv_chart_get_y_array(graph->chart, meta->chart_series);
+        if (!y_data)
+            continue;
+
+        for (uint32_t j = 0; j < pc; j++) {
+            if (y_data[j] != LV_CHART_POINT_NONE && y_data[j] > y_max) {
+                s_overrange_saved.push_back({&y_data[j], y_data[j]});
+                y_data[j] = LV_CHART_POINT_NONE;
+            }
+        }
+    }
+}
+
+// DRAW_MAIN_END: restore original values so gradient callback sees full data
+static void mask_overrange_end_cb(lv_event_t* e) {
+    (void)e;
+    for (auto& saved : s_overrange_saved) {
+        *saved.location = saved.value;
+    }
+    s_overrange_saved.clear();
 }
 
 // Render gradient fills by reading chart data directly.
@@ -741,10 +789,17 @@ ui_temp_graph_t* ui_temp_graph_create(lv_obj_t* parent) {
     // Disable LVGL's built-in division lines - we draw custom ones constrained to content area
     lv_chart_set_div_line_count(graph->chart, 0, 0);
 
-    // Gradient rendering: two-phase approach required for LVGL 9.5+
-    // Phase 1 (DRAW_TASK_ADDED): collect line segments into buffer
-    // Phase 2 (DRAW_POST): render gradient fills from buffered segments
-    // Gradient rendering: compute pixel positions from chart data in DRAW_MAIN_END
+    // Over-range masking: hide points exceeding Y-axis max during LVGL's line drawing
+    // to prevent misleading clamped flat bars. Points are masked in DRAW_MAIN_BEGIN and
+    // restored in DRAW_MAIN_END (before gradient callback) so gradients still fill to
+    // chart top for over-range data — indicating temperature was present but off-scale.
+    lv_obj_add_event_cb(graph->chart, mask_overrange_begin_cb, LV_EVENT_DRAW_MAIN_BEGIN, graph);
+    lv_obj_add_event_cb(graph->chart, mask_overrange_end_cb, LV_EVENT_DRAW_MAIN_END, graph);
+
+    // Gradient rendering: compute pixel positions from chart data in DRAW_MAIN_END.
+    // Registered AFTER mask_overrange_end_cb so original values are restored before
+    // gradient reads them — gradients will clamp to chart top (via lv_map) which is
+    // the desired visual: gradient fills to top indicating off-scale data.
     lv_obj_add_event_cb(graph->chart, draw_gradient_cb, LV_EVENT_DRAW_MAIN_END, graph);
 
     // Store graph pointer in chart user data for retrieval
@@ -1212,7 +1267,25 @@ void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
     graph->show_y_axis = want_y;
 
     // Toggle X-axis
-    graph->show_x_axis = (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0;
+    bool want_x = (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0;
+    graph->show_x_axis = want_x;
+
+    // Update chart padding based on axis visibility
+    int32_t space_xs = theme_manager_get_spacing("space_xs");
+    int32_t space_sm = theme_manager_get_spacing("space_sm");
+    int32_t label_height = theme_manager_get_font_height(graph->axis_font);
+
+    // Left padding: reserve space for Y-axis labels, or use minimal padding
+    int32_t left_pad = want_y ? (graph->y_axis_width + space_sm) : space_xs;
+    lv_obj_set_style_pad_left(graph->chart, left_pad, LV_PART_MAIN);
+
+    // Bottom padding: reserve space for X-axis labels, or use minimal padding
+    int32_t bottom_pad = want_x ? (space_xs + label_height + space_xs) : space_xs;
+    lv_obj_set_style_pad_bottom(graph->chart, bottom_pad, LV_PART_MAIN);
+
+    // Top padding: reserve space for top Y-axis label, or use minimal padding
+    int32_t top_pad = want_y ? LV_MAX(space_sm, label_height) : space_xs;
+    lv_obj_set_style_pad_top(graph->chart, top_pad, LV_PART_MAIN);
 
     // Toggle gradient opacity: zero out when disabled, restore defaults when enabled
     bool want_gradients = (features & TEMP_GRAPH_FEATURE_GRADIENTS) != 0;

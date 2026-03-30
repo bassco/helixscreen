@@ -3,51 +3,71 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+
 /**
  * @file ui_temp_graph_scaling.h
  * @brief Dynamic Y-axis scaling for temperature graphs
  *
- * Provides hysteresis-based scaling to prevent oscillation when temps hover
- * near thresholds. Expands eagerly (at 80% of max) and shrinks conservatively
- * (at 60% of previous step).
+ * Single auto-range implementation used by all temperature graph contexts:
+ * TempControlPanel (mini graph), TempGraphWidget (dashboard), TempGraphOverlay (full-screen).
  */
+
+/// Default auto-range parameters (overridable per-context)
+struct TempGraphScaleParams {
+    float step = 50.0f;
+    float floor = 150.0f;
+    float ceiling = 300.0f;
+    float expand_threshold = 0.80f; // Expand when max_temp > current * this
+    float shrink_threshold = 0.60f; // Shrink when max_temp < current * this
+};
 
 /**
  * @brief Calculate the optimal Y-axis maximum for a temperature graph
  *
- * Implements dynamic scaling with hysteresis:
- * - Expands when nozzle_temp > 80% of current_max (in 50°C steps up to 300°C)
- * - Shrinks when max(nozzle, bed) < 60% of (current_max - 50) (down to 150°C minimum)
+ * Implements dynamic scaling with hysteresis and a buffer-max floor:
+ * - Expands when max_temp > expand_threshold * current_max (in step increments)
+ * - Shrinks when max_temp < shrink_threshold * current_max (in step decrements)
+ * - Never shrinks below the highest value still in the chart buffer
  *
- * @param current_max Current Y-axis maximum (typically 150-300°C)
- * @param nozzle_temp Current nozzle temperature in °C
- * @param bed_temp Current bed temperature in °C
+ * @param current_max Current Y-axis maximum
+ * @param max_temp    Highest relevant temperature (current temps + targets)
+ * @param buffer_max  Highest value in the chart circular buffer (from max_visible_temp)
+ * @param p           Scaling parameters (step, floor, ceiling, thresholds)
  * @return New Y-axis maximum (unchanged if no scaling needed)
- *
- * @note The asymmetric thresholds (80% expand, 60% shrink) create a dead zone
- *       that prevents rapid oscillation when temps hover near a boundary.
  */
-inline float calculate_mini_graph_y_max(float current_max, float nozzle_temp, float bed_temp) {
-    constexpr float Y_MAX_MIN = 150.0f;      // Minimum Y-axis max (good for room temp visibility)
-    constexpr float Y_MAX_MAX = 300.0f;      // Maximum Y-axis max (covers highest nozzle temps)
-    constexpr float Y_STEP = 50.0f;          // Step size for scaling
-    constexpr float EXPAND_THRESHOLD = 0.8f; // Expand at 80% of current max (leaves ~20% headroom)
-    constexpr float SHRINK_THRESHOLD = 0.6f; // Shrink at 60% of previous step
+inline float calculate_temp_graph_y_max(float current_max, float max_temp, float buffer_max,
+                                        const TempGraphScaleParams& p = {}) {
+    float new_max = current_max;
 
-    float max_temp = (nozzle_temp > bed_temp) ? nozzle_temp : bed_temp;
-
-    // Expand: if nozzle approaching current max
-    if (nozzle_temp > current_max * EXPAND_THRESHOLD && current_max < Y_MAX_MAX) {
-        float new_max = current_max + Y_STEP;
-        return (new_max < Y_MAX_MAX) ? new_max : Y_MAX_MAX;
+    // Expand: approaching current max
+    if (max_temp > current_max * p.expand_threshold && current_max < p.ceiling) {
+        new_max = (std::floor(max_temp / p.step) + 1.0f) * p.step;
+        // Ensure we actually expand (rounding can land on current_max)
+        if (new_max <= current_max) new_max = current_max + p.step;
+    }
+    // Shrink: well below current max
+    else if (max_temp < current_max * p.shrink_threshold && current_max > p.floor) {
+        new_max = std::max(p.floor, (std::floor(max_temp / p.step) + 1.0f) * p.step);
     }
 
-    // Shrink: if both temps are well below previous step
-    float shrink_threshold_temp = (current_max - Y_STEP) * SHRINK_THRESHOLD;
-    if (max_temp < shrink_threshold_temp && current_max > Y_MAX_MIN) {
-        float new_max = current_max - Y_STEP;
-        return (new_max > Y_MAX_MIN) ? new_max : Y_MAX_MIN;
-    }
+    // Never shrink below the highest value still in the chart buffer —
+    // otherwise visible historical data gets clipped at max Y
+    float min_for_data = (std::floor(buffer_max / p.step) + 1.0f) * p.step;
+    new_max = std::max(new_max, min_for_data);
 
-    return current_max;
+    return std::clamp(new_max, p.floor, p.ceiling);
+}
+
+/**
+ * @brief Legacy wrapper for TempControlPanel mini graph
+ *
+ * Converts the old (current_max, nozzle, bed) signature to the unified function.
+ * Uses slightly different defaults: Y_MIN=150, Y_MAX=300, expand=0.80, shrink=0.60.
+ */
+inline float calculate_mini_graph_y_max(float current_max, float nozzle_temp, float bed_temp,
+                                        float buffer_max = 0.0f) {
+    float max_temp = std::max(nozzle_temp, bed_temp);
+    return calculate_temp_graph_y_max(current_max, max_temp, buffer_max);
 }

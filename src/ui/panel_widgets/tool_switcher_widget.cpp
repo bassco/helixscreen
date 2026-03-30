@@ -280,7 +280,6 @@ void ToolSwitcherWidget::show_tool_picker() {
 
     int space_xs = resolve_space_token("space_xs", 4);
     int space_sm = resolve_space_token("space_sm", 6);
-    int space_md = resolve_space_token("space_md", 10);
 
     int screen_w = lv_obj_get_width(parent_screen_);
     int screen_h = lv_obj_get_height(parent_screen_);

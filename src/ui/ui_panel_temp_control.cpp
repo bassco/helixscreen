@@ -1370,7 +1370,8 @@ void TempControlPanel::update_mini_graph_y_axis(float nozzle_deg, float bed_deg)
         return;
     }
 
-    float new_y_max = calculate_mini_graph_y_max(mini_graph_y_max_, nozzle_deg, bed_deg);
+    float new_y_max = calculate_mini_graph_y_max(
+        mini_graph_y_max_, nozzle_deg, bed_deg, mini_graph_->max_visible_temp);
 
     if (new_y_max != mini_graph_y_max_) {
         spdlog::debug("[TempPanel] Mini graph Y-axis {} to {}°C",
