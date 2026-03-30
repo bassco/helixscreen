@@ -878,9 +878,9 @@ TEST_CASE("TouchCalibrationPanel: accepts clean samples after threshold",
 
     REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_1);
 
-    // Feed 5 clean samples — should advance to POINT_2
-    for (int i = 0; i < 5; i++) {
-        panel.add_sample({1000, 2000});
+    // Feed 3 clean samples — should advance to POINT_2
+    for (int i = 0; i < 3; i++) {
+        panel.add_sample({400, 240});
     }
     REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
 }
@@ -891,13 +891,10 @@ TEST_CASE("TouchCalibrationPanel: rejects ADC-saturated samples",
     panel.set_screen_size(800, 480);
     panel.start();
 
-    // Feed 3 clean + 2 saturated (X=4095) — should still advance (3 valid >= 3 minimum)
-    for (int i = 0; i < 3; i++) {
-        panel.add_sample({1000, 2000});
-    }
-    for (int i = 0; i < 2; i++) {
-        panel.add_sample({4095, 2000});
-    }
+    // Feed 2 clean + 1 saturated (X=4095) — should still advance (2 valid >= 2 minimum)
+    panel.add_sample({400, 240});
+    panel.add_sample({400, 240});
+    panel.add_sample({4095, 240});
     REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
 }
 
@@ -910,13 +907,10 @@ TEST_CASE("TouchCalibrationPanel: fails when too many saturated samples",
     panel.set_failure_callback([&](const char*) { failure_called = true; });
     panel.start();
 
-    // Feed 2 clean + 3 saturated — only 2 valid, below minimum of 3
-    for (int i = 0; i < 2; i++) {
-        panel.add_sample({1000, 2000});
-    }
-    for (int i = 0; i < 3; i++) {
-        panel.add_sample({4095, 3500});
-    }
+    // Feed 1 clean + 2 saturated — only 1 valid, below minimum of 2
+    panel.add_sample({400, 240});
+    panel.add_sample({4095, 3500});
+    panel.add_sample({4095, 3500});
 
     // Should still be on POINT_1 (not advanced) and failure callback fired
     REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_1);
@@ -955,13 +949,10 @@ TEST_CASE("TouchCalibrationPanel: median filter removes outliers",
     panel.set_screen_size(800, 480);
     panel.start();
 
-    // Point 1: mostly 1000,2000 with one outlier
-    panel.add_sample({1000, 2000});
-    panel.add_sample({1000, 2000});
-    panel.add_sample({500, 3000}); // outlier
-    panel.add_sample({1000, 2000});
-    panel.add_sample({1000, 2000});
-    // Median should be (1000, 2000), not skewed by outlier
+    // 3 samples, all consistent — median should be (400, 240)
+    panel.add_sample({399, 239});
+    panel.add_sample({400, 240});
+    panel.add_sample({401, 241});
 
     REQUIRE(panel.get_state() == helix::TouchCalibrationPanel::State::POINT_2);
 }

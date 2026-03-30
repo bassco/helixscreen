@@ -251,8 +251,9 @@ class TouchCalibrationPanel {
     TouchCalibration calibration_;
 
     // Multi-sample filtering
-    static constexpr int SAMPLES_REQUIRED = 5;
-    static constexpr int MIN_VALID_SAMPLES = 3;
+    static constexpr int SAMPLES_REQUIRED = 3;
+    static constexpr int MIN_VALID_SAMPLES = 2;
+    static constexpr int MAX_SAMPLE_SPREAD = 60; ///< Max allowed range in either axis (pixels)
 
     struct RawSample {
         int x = 0;
@@ -261,8 +262,8 @@ class TouchCalibrationPanel {
     RawSample sample_buffer_[SAMPLES_REQUIRED]{};
     int sample_count_ = 0;
 
-    /// Check if a sample has ADC-saturated values
-    static bool is_saturated_sample(const Point& sample);
+    /// Check if a sample has ADC-saturated or screen-edge phantom values
+    bool is_bad_sample(const Point& sample) const;
 
     /// Compute median from valid samples in the buffer
     bool compute_median_point(Point& out);

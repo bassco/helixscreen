@@ -756,3 +756,55 @@ TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
     REQUIRE(completion_called_ == true);
     REQUIRE(completion_valid_ == true);
 }
+
+// ============================================================================
+// Multi-Sample Noise Rejection Tests (via add_sample)
+// ============================================================================
+
+TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
+                 "TouchCalibrationPanel: consistent samples produce valid median",
+                 "[touch-calibration][sampling]") {
+    panel_->start();
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_1);
+
+    // 3 consistent samples near (100, 120)
+    panel_->add_sample(Point{98, 118});
+    panel_->add_sample(Point{100, 121});
+    panel_->add_sample(Point{102, 119});
+
+    // Should advance to POINT_2
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_2);
+    REQUIRE(failure_called_ == false);
+}
+
+TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
+                 "TouchCalibrationPanel: spread check rejects noisy samples",
+                 "[touch-calibration][sampling][noise]") {
+    panel_->start();
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_1);
+
+    // 3 samples with Y spread > 60px threshold
+    panel_->add_sample(Point{395, 67});
+    panel_->add_sample(Point{396, 215});
+    panel_->add_sample(Point{395, 65});
+
+    // Should still be in POINT_1 (rejected, asked for retry)
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_1);
+    REQUIRE(failure_called_ == true);
+}
+
+TEST_CASE_METHOD(TouchCalibrationPanelFailureFixture,
+                 "TouchCalibrationPanel: saturated sample excluded, remaining 2 valid",
+                 "[touch-calibration][sampling][saturation]") {
+    panel_->start();
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_1);
+
+    // 2 good + 1 saturated (ADC max) — 2 valid meets MIN_VALID_SAMPLES
+    panel_->add_sample(Point{100, 120});
+    panel_->add_sample(Point{4095, 4095}); // saturated
+    panel_->add_sample(Point{102, 119});
+
+    // Saturated sample removed, remaining 2 are consistent
+    REQUIRE(panel_->get_state() == TouchCalibrationPanel::State::POINT_2);
+    REQUIRE(failure_called_ == false);
+}

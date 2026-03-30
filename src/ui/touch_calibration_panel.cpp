@@ -161,7 +161,8 @@ void TouchCalibrationPanel::capture_point(Point raw) {
     }
 }
 
-bool TouchCalibrationPanel::is_saturated_sample(const Point& sample) {
+bool TouchCalibrationPanel::is_bad_sample(const Point& sample) const {
+    // ADC saturation (12-bit or 16-bit max)
     return sample.x == 4095 || sample.y == 4095 || sample.x == 65535 || sample.y == 65535;
 }
 
@@ -173,7 +174,7 @@ bool TouchCalibrationPanel::compute_median_point(Point& out) {
     std::vector<int> valid_x, valid_y;
     for (int i = 0; i < sample_count_; i++) {
         Point p{sample_buffer_[i].x, sample_buffer_[i].y};
-        if (!is_saturated_sample(p)) {
+        if (!is_bad_sample(p)) {
             valid_x.push_back(p.x);
             valid_y.push_back(p.y);
         }
@@ -187,16 +188,31 @@ bool TouchCalibrationPanel::compute_median_point(Point& out) {
 
     std::sort(valid_x.begin(), valid_x.end());
     std::sort(valid_y.begin(), valid_y.end());
-    size_t mid = valid_x.size() / 2;
-    out.x = valid_x[mid];
-    out.y = valid_y[mid];
+
+    // Reject if samples have excessive spread (noisy controller)
+    int x_spread = valid_x.back() - valid_x.front();
+    int y_spread = valid_y.back() - valid_y.front();
+    if (x_spread > MAX_SAMPLE_SPREAD || y_spread > MAX_SAMPLE_SPREAD) {
+        spdlog::warn("[TouchCalibrationPanel] Sample spread too large "
+                     "(x_spread={}, y_spread={}, max={})",
+                     x_spread, y_spread, MAX_SAMPLE_SPREAD);
+        return false;
+    }
+
+    size_t mid_x = valid_x.size() / 2;
+    size_t mid_y = valid_y.size() / 2;
+    out.x = valid_x[mid_x];
+    out.y = valid_y[mid_y];
 
     if (is_touch_debug_enabled()) {
-        spdlog::warn("[TouchDebug] median computation: {}/{} valid samples", valid_x.size(), sample_count_);
+        spdlog::warn("[TouchDebug] median computation: {}/{} valid samples", valid_x.size(),
+                     sample_count_);
         for (size_t i = 0; i < valid_x.size(); i++) {
             spdlog::warn("[TouchDebug]   valid[{}]: ({},{})", i, valid_x[i], valid_y[i]);
         }
-        spdlog::warn("[TouchDebug]   median: ({},{}) (index {})", out.x, out.y, mid);
+        spdlog::warn("[TouchDebug]   spread: x={}, y={} (max={})", x_spread, y_spread,
+                     MAX_SAMPLE_SPREAD);
+        spdlog::warn("[TouchDebug]   median: ({},{})", out.x, out.y);
     }
 
     spdlog::debug("[TouchCalibrationPanel] Median from {}/{} valid samples: ({}, {})",
@@ -248,7 +264,7 @@ void TouchCalibrationPanel::add_sample(Point raw) {
             spdlog::warn("[TouchDebug] sample {}/{} for point {}: raw=({},{}){}",
                          sample_count_, SAMPLES_REQUIRED, p.point_num,
                          raw.x, raw.y,
-                         is_saturated_sample(raw) ? " SATURATED" : "");
+                         is_bad_sample(raw) ? " REJECTED" : "");
         }
 
         // Only fire progress callback for intermediate samples, not the final
@@ -264,7 +280,7 @@ void TouchCalibrationPanel::add_sample(Point raw) {
             capture_point(median);
         } else {
             if (failure_callback_) {
-                failure_callback_("Too much noise — tap the target again with a firm press.");
+                failure_callback_("Too much noise — tap the target again slowly and precisely.");
             }
         }
         reset_samples();
