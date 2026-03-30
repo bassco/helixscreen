@@ -21,8 +21,8 @@ TEST_CASE("Y-axis scaling returns unchanged value when no scaling needed", "[sca
     }
 
     SECTION("High temps but below threshold - stays at current max") {
-        // 90% of 200 = 180, so 170 shouldn't trigger expansion
-        float result = calculate_mini_graph_y_max(200.0f, 170.0f, 60.0f);
+        // 80% of 200 = 160, so 155 shouldn't trigger expansion
+        float result = calculate_mini_graph_y_max(200.0f, 155.0f, 60.0f);
         REQUIRE(result == 200.0f);
     }
 }
@@ -32,21 +32,21 @@ TEST_CASE("Y-axis scaling returns unchanged value when no scaling needed", "[sca
 // ============================================================================
 
 TEST_CASE("Y-axis expands when nozzle approaches max", "[scaling][expand]") {
-    SECTION("Expand from 150 to 200 at 90% threshold") {
-        // 90% of 150 = 135, so 136 should trigger expansion
-        float result = calculate_mini_graph_y_max(150.0f, 136.0f, 25.0f);
+    SECTION("Expand from 150 to 200 at 80% threshold") {
+        // 80% of 150 = 120, so 121 should trigger expansion
+        float result = calculate_mini_graph_y_max(150.0f, 121.0f, 25.0f);
         REQUIRE(result == 200.0f);
     }
 
     SECTION("Expand from 200 to 250") {
-        // 90% of 200 = 180
-        float result = calculate_mini_graph_y_max(200.0f, 185.0f, 60.0f);
+        // 80% of 200 = 160
+        float result = calculate_mini_graph_y_max(200.0f, 165.0f, 60.0f);
         REQUIRE(result == 250.0f);
     }
 
     SECTION("Expand from 250 to 300") {
-        // 90% of 250 = 225
-        float result = calculate_mini_graph_y_max(250.0f, 230.0f, 60.0f);
+        // 80% of 250 = 200
+        float result = calculate_mini_graph_y_max(250.0f, 205.0f, 60.0f);
         REQUIRE(result == 300.0f);
     }
 
@@ -110,8 +110,8 @@ TEST_CASE("Y-axis shrinks when temps drop below threshold", "[scaling][shrink]")
 
 TEST_CASE("Hysteresis prevents oscillation near thresholds", "[scaling][hysteresis]") {
     SECTION("Dead zone between expand and shrink thresholds") {
-        // At max=200: expand threshold = 180, shrink threshold = 90
-        // Temps between 90 and 180 should not change anything
+        // At max=200: expand threshold = 160, shrink threshold = 90
+        // Temps between 90 and 160 should not change anything
 
         float result1 = calculate_mini_graph_y_max(200.0f, 100.0f, 60.0f);
         REQUIRE(result1 == 200.0f);
@@ -119,18 +119,18 @@ TEST_CASE("Hysteresis prevents oscillation near thresholds", "[scaling][hysteres
         float result2 = calculate_mini_graph_y_max(200.0f, 150.0f, 60.0f);
         REQUIRE(result2 == 200.0f);
 
-        float result3 = calculate_mini_graph_y_max(200.0f, 175.0f, 60.0f);
+        float result3 = calculate_mini_graph_y_max(200.0f, 155.0f, 60.0f);
         REQUIRE(result3 == 200.0f);
     }
 
     SECTION("After expansion, won't immediately shrink") {
-        // Expand from 150 to 200 at 136°C
-        float after_expand = calculate_mini_graph_y_max(150.0f, 136.0f, 25.0f);
+        // Expand from 150 to 200 at 121°C
+        float after_expand = calculate_mini_graph_y_max(150.0f, 121.0f, 25.0f);
         REQUIRE(after_expand == 200.0f);
 
-        // Now at 200, with nozzle at 136 - should NOT shrink
+        // Now at 200, with nozzle at 121 - should NOT shrink
         // Shrink threshold for 200 is 90°C
-        float next = calculate_mini_graph_y_max(200.0f, 136.0f, 25.0f);
+        float next = calculate_mini_graph_y_max(200.0f, 121.0f, 25.0f);
         REQUIRE(next == 200.0f);
     }
 
@@ -140,7 +140,7 @@ TEST_CASE("Hysteresis prevents oscillation near thresholds", "[scaling][hysteres
         REQUIRE(after_shrink == 150.0f);
 
         // Now at 150, temp rises to 100 - should NOT expand yet
-        // Expand threshold for 150 is 135°C
+        // Expand threshold for 150 is 120°C
         float next = calculate_mini_graph_y_max(150.0f, 100.0f, 25.0f);
         REQUIRE(next == 150.0f);
     }
@@ -162,13 +162,13 @@ TEST_CASE("Edge cases for Y-axis scaling", "[scaling][edge]") {
     }
 
     SECTION("Exactly at expand threshold") {
-        // 90% of 150 = 135 exactly
-        float result = calculate_mini_graph_y_max(150.0f, 135.0f, 25.0f);
+        // 80% of 150 = 120 exactly
+        float result = calculate_mini_graph_y_max(150.0f, 120.0f, 25.0f);
         REQUIRE(result == 150.0f); // Should NOT expand (need > threshold)
     }
 
     SECTION("Just above expand threshold") {
-        float result = calculate_mini_graph_y_max(150.0f, 135.1f, 25.0f);
+        float result = calculate_mini_graph_y_max(150.0f, 120.1f, 25.0f);
         REQUIRE(result == 200.0f); // Should expand
     }
 
@@ -201,16 +201,16 @@ TEST_CASE("Multi-step scaling scenarios", "[scaling][integration]") {
         y_max = calculate_mini_graph_y_max(y_max, 25.0f, 25.0f);
         REQUIRE(y_max == 150.0f);
 
-        // Heat up - trigger first expansion at 136°C
-        y_max = calculate_mini_graph_y_max(y_max, 140.0f, 50.0f);
+        // Heat up - trigger first expansion at 121°C (80% of 150 = 120)
+        y_max = calculate_mini_graph_y_max(y_max, 125.0f, 50.0f);
         REQUIRE(y_max == 200.0f);
 
-        // Continue heating - trigger second expansion at 181°C
-        y_max = calculate_mini_graph_y_max(y_max, 190.0f, 60.0f);
+        // Continue heating - trigger second expansion at 161°C (80% of 200 = 160)
+        y_max = calculate_mini_graph_y_max(y_max, 165.0f, 60.0f);
         REQUIRE(y_max == 250.0f);
 
-        // Continue to high temp - trigger third expansion at 226°C
-        y_max = calculate_mini_graph_y_max(y_max, 245.0f, 60.0f);
+        // Continue to high temp - trigger third expansion at 201°C (80% of 250 = 200)
+        y_max = calculate_mini_graph_y_max(y_max, 205.0f, 60.0f);
         REQUIRE(y_max == 300.0f);
 
         // At max, stabilize (can't expand further)

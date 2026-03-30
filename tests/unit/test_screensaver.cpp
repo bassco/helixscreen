@@ -148,6 +148,7 @@ TEST_CASE_METHOD(LVGLTestFixture, "FlyingToasterScreensaver creates overlay on l
     REQUIRE(children_after > children_before);
 
     ss.stop();
+    lv_timer_handler(); // Flush async deletions from stop()
     int children_final = lv_obj_get_child_count(lv_layer_top());
     REQUIRE(children_final == children_before);
 }

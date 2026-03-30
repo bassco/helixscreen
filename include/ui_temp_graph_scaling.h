@@ -8,7 +8,7 @@
  * @brief Dynamic Y-axis scaling for temperature graphs
  *
  * Provides hysteresis-based scaling to prevent oscillation when temps hover
- * near thresholds. Expands eagerly (at 90% of max) and shrinks conservatively
+ * near thresholds. Expands eagerly (at 80% of max) and shrinks conservatively
  * (at 60% of previous step).
  */
 
