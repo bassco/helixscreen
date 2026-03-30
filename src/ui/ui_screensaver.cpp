@@ -166,9 +166,11 @@ void FlyingToasterScreensaver::stop() {
     // Clear object list (LVGL objects are children of overlay, deleted with it)
     m_objects.clear();
 
-    // Delete overlay (deletes all children too)
+    // Async delete — stop() runs inside lv_timer_handler (via check_display_sleep),
+    // so synchronous deletion corrupts LVGL's event linked list (#316)
     if (m_overlay) {
-        lv_obj_delete(m_overlay);
+        lv_obj_add_flag(m_overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_delete_async(m_overlay);
     }
     m_overlay = nullptr;
 

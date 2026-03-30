@@ -341,6 +341,7 @@ void QrScannerOverlay::start_scanning() {
     // Start USB barcode scanner monitor
     auto tok_usb = lifetime_.token();
     usb_monitor_.start([this, tok_usb](int spool_id) {
+        if (tok_usb.expired()) return;
         lifetime_.defer([this, spool_id]() {
             on_spool_id_detected(spool_id);
         });
