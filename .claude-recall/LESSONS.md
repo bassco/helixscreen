@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [****-|*****] Interactive UI testing requires user
-- **Uses**: 96 | **Velocity**: 67.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-29 | **Category**: correction | **Type**: constraint
+- **Uses**: 97 | **Velocity**: 68.005 | **Learned**: 2026-02-01 | **Last**: 2026-03-29 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -184,7 +184,7 @@
 - **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-13 | **Last**: 2026-03-13 | **Category**: gotcha
 > LVGL transform_scale on lv_obj with transparent background only affects the object's own draw (border/bg), not children. Children are separate draw units. Use opacity (lv_style_set_opa) for press feedback on transparent containers like back buttons, since it applies to the entire object layer including children.
 
-### [L079] [-----|-----] LVGL 9.5 DRAW_TASK_ADDED cannot add draw tasks
-- **Uses**: 0 | **Velocity**: 0 | **Learned**: 2026-03-29 | **Last**: 2026-03-29 | **Category**: lvgl
+### [L079] [*----|***--] LVGL 9.5 DRAW_TASK_ADDED cannot add draw tasks
+- **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-03-29 | **Last**: 2026-03-29 | **Category**: lvgl
 > LVGL 9.5 changed the draw pipeline: DRAW_TASK_ADDED callbacks fire during rendering (AFTER DRAW_MAIN_END/DRAW_POST), so lv_draw_rect/lv_draw_triangle/lv_draw_fill calls from within them produce NO visible output. This broke chart gradient fills that worked in 9.4-pre. Fix: use DRAW_MAIN_END to draw custom fills, computing pixel positions from chart data directly via lv_chart_get_y_array() + lv_map(). Also: lv_draw_fill VER gradient frac=0 is BOTTOM of rect, frac=255 is TOP (counterintuitive). Use lv_draw_fill instead of lv_draw_rect for gradient-only fills to avoid solid bg_color bleeding through.
 
