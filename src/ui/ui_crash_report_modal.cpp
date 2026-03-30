@@ -3,6 +3,7 @@
 
 #include "ui_crash_report_modal.h"
 
+#include "display_manager.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
@@ -83,6 +84,14 @@ void CrashReportModal::on_show() {
 void CrashReportModal::on_hide() {
     spdlog::debug("[CrashReportModal] on_hide");
     active_instance_ = nullptr;
+
+    // Clear the framebuffer so stale crash dialog pixels don't bleed through
+    // during app shutdown or LVGL re-init (the dialog renders before the
+    // normal UI is fully up, so there's no LVGL content behind it).
+    auto* dm = DisplayManager::instance();
+    if (dm && dm->backend()) {
+        dm->backend()->clear_framebuffer(0xFF000000);
+    }
 
     // Self-delete: this modal is heap-allocated in application.cpp startup
     // and has no other owner. Deferred so hide() finishes before destruction.
