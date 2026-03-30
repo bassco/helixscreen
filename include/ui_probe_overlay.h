@@ -198,6 +198,9 @@ class ProbeOverlay : public OverlayBase {
     // Type-specific panel container
     lv_obj_t* type_panel_container_ = nullptr;
 
+    // Transition accuracy modal to error state (call from UI thread only)
+    void set_accuracy_error(const std::string& msg);
+
     // Load type-specific panel based on detected probe type
     void load_type_panel();
 
