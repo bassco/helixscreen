@@ -338,10 +338,18 @@ void TempGraphController::backfill_history() {
     auto* history_mgr = get_temperature_history_manager();
     if (!graph_ || !history_mgr) return;
 
+    // Only fetch samples that fit in the chart buffer to avoid pushing
+    // thousands of points through the circular buffer (wastes CPU and
+    // corrupts X-axis timestamp tracking)
+    int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+    int64_t cutoff_ms = now_ms - static_cast<int64_t>(config_.point_count) * 1000;
+
     for (auto& s : series_) {
         if (s.series_id < 0) continue;
 
-        auto samples = history_mgr->get_samples(s.klipper_name);
+        auto samples = history_mgr->get_samples_since(s.klipper_name, cutoff_ms);
         if (samples.empty()) continue;
 
         for (const auto& sample : samples) {
