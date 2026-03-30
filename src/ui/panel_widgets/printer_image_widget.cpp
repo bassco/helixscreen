@@ -159,21 +159,27 @@ void PrinterImageWidget::reload_from_config() {
     // Update printer image
     refresh_printer_image();
 
-    // Update printer type/host overlay
-    // Always visible (even for localhost) to maintain consistent flex layout.
-    // Hidden flag removes elements from flex, causing printer image to scale differently.
+    // Update printer info overlay
+    // Always visible to maintain consistent flex layout (hidden flag removes from flex).
     std::string host = config->get<std::string>(config->df() + helix::wizard::MOONRAKER_HOST, "");
+    std::string printer_name =
+        config->get<std::string>(config->df() + "printer_name", "");
 
-    if (host.empty() || host == "127.0.0.1" || host == "localhost") {
+    // Show printer name if set, otherwise fall back to printer type
+    if (!printer_name.empty()) {
+        lv_subject_copy_string(&s_printer_type_subject, printer_name.c_str());
+    } else if (!printer_type.empty()) {
+        lv_subject_copy_string(&s_printer_type_subject, printer_type.c_str());
+    } else {
         // Space keeps the text_small at its font height for consistent layout
         lv_subject_copy_string(&s_printer_type_subject, " ");
-        lv_subject_set_int(&s_printer_info_visible, 1);
-    } else {
-        const char* type_str = printer_type.empty() ? "Printer" : printer_type.c_str();
-        lv_subject_copy_string(&s_printer_type_subject, type_str);
-        lv_subject_copy_string(&s_printer_host_subject, host.c_str());
-        lv_subject_set_int(&s_printer_info_visible, 1);
     }
+
+    if (!host.empty() && host != "127.0.0.1" && host != "localhost") {
+        lv_subject_copy_string(&s_printer_host_subject, host.c_str());
+    }
+
+    lv_subject_set_int(&s_printer_info_visible, 1);
 }
 
 void PrinterImageWidget::refresh_printer_image() {
