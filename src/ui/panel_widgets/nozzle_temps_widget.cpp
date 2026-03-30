@@ -207,27 +207,67 @@ void NozzleTempsWidget::rebuild_rows() {
     update_row_display(bed_temp_label_, bed_target_label_, bed_progress_bar_, cached_bed_temp_,
                        cached_bed_target_, true);
 
-    // Use compact font when widget is narrow (1x column width, typically < 200px)
-    if (widget_obj_) {
-        int widget_w = lv_obj_get_width(widget_obj_);
-        if (widget_w > 0 && widget_w < 200) {
-            const lv_font_t* compact_font = theme_manager_get_font("font_xs");
-            if (compact_font) {
-                auto set_font = [compact_font](lv_obj_t* lbl) {
-                    if (lbl)
-                        lv_obj_set_style_text_font(lbl, compact_font, LV_PART_MAIN);
-                };
-                for (auto& row : extruder_rows_) {
-                    set_font(row.temp_label);
-                    set_font(row.target_label);
-                }
-                set_font(bed_temp_label_);
-                set_font(bed_target_label_);
-            }
+    spdlog::debug("[NozzleTempsWidget] Rebuilt with {} extruder rows + bed", extruder_rows_.size());
+}
+
+void NozzleTempsWidget::on_size_changed(int colspan, int rowspan, int /*width_px*/,
+                                        int /*height_px*/) {
+    if (!widget_obj_)
+        return;
+
+    auto* container = lv_obj_find_by_name(widget_obj_, "nozzle_temps_container");
+    if (!container)
+        return;
+
+    // Wide layout (2x1): use row-wrap so items flow into 2 columns
+    bool wide = (colspan >= 2 && rowspan <= 1);
+    if (wide) {
+        lv_obj_set_style_flex_flow(container, LV_FLEX_FLOW_ROW_WRAP, 0);
+        lv_obj_set_style_pad_column(container, theme_manager_get_spacing("space_md"), 0);
+        lv_obj_set_style_flex_main_place(container, LV_FLEX_ALIGN_SPACE_EVENLY, 0);
+        // Each row takes just under half so two fit per line
+        for (auto& row : extruder_rows_) {
+            if (row.row_obj)
+                lv_obj_set_width(row.row_obj, lv_pct(45));
+        }
+        if (bed_row_) {
+            lv_obj_set_width(bed_row_, lv_pct(45));
+            // Remove divider border + its top padding in wide layout
+            lv_obj_set_style_border_width(bed_row_, 0, 0);
+            lv_obj_set_style_pad_top(bed_row_, 0, 0);
+        }
+    } else {
+        lv_obj_set_style_flex_flow(container, LV_FLEX_FLOW_COLUMN, 0);
+        lv_obj_set_style_pad_column(container, 0, 0);
+        lv_obj_set_style_flex_main_place(container, LV_FLEX_ALIGN_START, 0);
+        for (auto& row : extruder_rows_) {
+            if (row.row_obj)
+                lv_obj_set_width(row.row_obj, lv_pct(100));
+        }
+        if (bed_row_) {
+            lv_obj_set_width(bed_row_, lv_pct(100));
+            lv_obj_set_style_border_width(bed_row_, 1, 0);
+            lv_obj_set_style_pad_top(bed_row_, theme_manager_get_spacing("space_xxs"), 0);
         }
     }
 
-    spdlog::debug("[NozzleTempsWidget] Rebuilt with {} extruder rows + bed", extruder_rows_.size());
+    // Use compact font when widget is narrow (single column)
+    const lv_font_t* text_font =
+        (colspan <= 1) ? theme_manager_get_font("font_xs") : nullptr;
+    if (text_font) {
+        auto set_font = [text_font](lv_obj_t* lbl) {
+            if (lbl)
+                lv_obj_set_style_text_font(lbl, text_font, LV_PART_MAIN);
+        };
+        for (auto& row : extruder_rows_) {
+            set_font(row.temp_label);
+            set_font(row.target_label);
+        }
+        set_font(bed_temp_label_);
+        set_font(bed_target_label_);
+    }
+
+    spdlog::debug("[NozzleTempsWidget] on_size_changed {}x{} wide={}", colspan, rowspan, wide);
 }
 
 void NozzleTempsWidget::create_extruder_row(lv_obj_t* container, ExtruderRow& row) {
