@@ -267,8 +267,11 @@ void AmsEditModal::on_show() {
 }
 
 void AmsEditModal::on_hide() {
-    // Clear static active instance
-    s_active_instance_ = nullptr;
+    // Only clear active instance if WE are the active one — a deferred on_hide()
+    // from a previous show/hide cycle must not clear a freshly-set instance
+    if (s_active_instance_ == this) {
+        s_active_instance_ = nullptr;
+    }
 
     // Check if LVGL is initialized - may be called from destructor during static destruction
     if (!lv_is_initialized()) {
@@ -693,6 +696,81 @@ void AmsEditModal::handle_unlink() {
     update_spoolman_button_state();
 }
 
+void AmsEditModal::handle_spool_details() {
+    if (working_info_.spoolman_id <= 0 || !api_) {
+        return;
+    }
+
+    // Find the SpoolInfo in our cache, or build a minimal one
+    SpoolInfo spool_info;
+    bool found = false;
+    for (const auto& spool : cached_spools_) {
+        if (spool.id == working_info_.spoolman_id) {
+            spool_info = spool;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        spool_info.id = working_info_.spoolman_id;
+        spool_info.filament_id = working_info_.spoolman_filament_id;
+        spool_info.vendor = working_info_.brand;
+        spool_info.material = working_info_.material;
+        spool_info.color_name = working_info_.color_name;
+        spool_info.remaining_weight_g = working_info_.remaining_weight_g;
+        spool_info.initial_weight_g = working_info_.total_weight_g;
+        if (working_info_.color_rgb != 0) {
+            char hex_buf[8];
+            snprintf(hex_buf, sizeof(hex_buf), "#%06X", working_info_.color_rgb);
+            spool_info.color_hex = hex_buf;
+        }
+    }
+
+    // When spool details are saved, re-fetch the spool data to update our form
+    auto token = lifetime_.token();
+    spool_edit_modal_.set_completion_callback([this, token](bool saved) {
+        if (!saved || token.expired() || !api_) {
+            return;
+        }
+        // Re-fetch the spool to pick up any changes (color, weight, etc.)
+        int spool_id = working_info_.spoolman_id;
+        api_->spoolman().get_spoolman_spool(
+            spool_id,
+            [this, token, spool_id](const std::optional<SpoolInfo>& spool) {
+                if (token.expired() || !spool.has_value()) {
+                    return;
+                }
+                lifetime_.defer([this, spool = *spool]() {
+                    // Update working_info_ from refreshed spool data
+                    working_info_.brand = spool.vendor;
+                    working_info_.material = spool.material;
+                    working_info_.color_name = spool.color_name;
+                    if (!spool.color_hex.empty()) {
+                        uint32_t rgb = 0;
+                        if (helix::parse_hex_color(spool.color_hex.c_str(), rgb)) {
+                            working_info_.color_rgb = rgb;
+                        }
+                    }
+                    if (spool.remaining_weight_g > 0 && spool.initial_weight_g > 0) {
+                        working_info_.remaining_weight_g =
+                            static_cast<float>(spool.remaining_weight_g);
+                        working_info_.total_weight_g =
+                            static_cast<float>(spool.initial_weight_g);
+                    }
+                    update_ui();
+                });
+            },
+            [spool_id](const MoonrakerError& err) {
+                spdlog::warn("[AmsEditModal] Failed to refresh spool {} after edit: {}",
+                             spool_id, err.message);
+            });
+    });
+
+    lv_obj_t* parent = dialog_ ? lv_obj_get_parent(dialog_) : lv_screen_active();
+    spool_edit_modal_.show_for_spool(parent, spool_info, api_);
+}
+
 void AmsEditModal::handle_scan_qr() {
     spdlog::info("[AmsEditModal] Scan QR requested for slot {}", slot_index_);
 
@@ -784,21 +862,29 @@ void AmsEditModal::update_spoolman_button_state() {
     lv_obj_t* btn_change = find_widget("btn_change_spool");
     lv_obj_t* btn_unlink = find_widget("btn_unlink_spool");
 
+    lv_obj_t* btn_details = find_widget("btn_edit_spool_details");
+
     if (working_info_.spoolman_id > 0) {
-        // Linked: show "Change Saved Spool" and "Unlink"
+        // Linked: show "Change Saved Spool", "Spool Details", and "Unlink"
         if (btn_change) {
             ui_button_set_text(btn_change, lv_tr("Change Saved Spool"));
         }
         if (btn_unlink) {
             lv_obj_remove_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
         }
+        if (btn_details) {
+            lv_obj_remove_flag(btn_details, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
-        // Not linked: show "Choose Saved Spool", hide "Unlink"
+        // Not linked: show "Choose Saved Spool", hide "Unlink" and "Spool Details"
         if (btn_change) {
             ui_button_set_text(btn_change, lv_tr("Choose Saved Spool"));
         }
         if (btn_unlink) {
             lv_obj_add_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (btn_details) {
+            lv_obj_add_flag(btn_details, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
@@ -1430,6 +1516,7 @@ void AmsEditModal::register_callbacks() {
         {"ams_edit_print_label_cb", on_print_label_cb},
 #endif
         {"ams_edit_scan_qr_cb", on_scan_qr_cb},
+        {"ams_edit_spool_details_cb", on_spool_details_cb},
         {"ams_edit_picker_search_cb", on_picker_search_cb},
         {"ams_edit_picker_retry_cb", on_picker_retry_cb},
         // Register handler for spool_item clicks (shared component uses this callback name)
@@ -1568,6 +1655,13 @@ void AmsEditModal::on_scan_qr_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_scan_qr();
+    }
+}
+
+void AmsEditModal::on_spool_details_cb(lv_event_t* e) {
+    auto* self = get_instance_from_event(e);
+    if (self) {
+        self->handle_spool_details();
     }
 }
 
