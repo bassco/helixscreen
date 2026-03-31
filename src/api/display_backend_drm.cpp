@@ -435,9 +435,8 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
         }
     }
 
-    if (touch_path) {
-        lv_free(touch_path);
-    }
+    // Don't free touch_path — it points into LVGL's internal devices[] array
+    // (lv_libinput_find_dev returns a direct pointer, not a copy)
 
     // If no touch was found, try evdev fallback on common device paths
     if (!pointer_) {
@@ -452,7 +451,7 @@ lv_indev_t* DisplayBackendDRM::create_input_pointer() {
                 spdlog::warn("[DRM Backend] Failed to create libinput device for: {}",
                              pointer_path);
             }
-            lv_free(pointer_path);
+            // Don't free — points into LVGL's internal devices[] array
         }
     }
 
