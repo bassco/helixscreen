@@ -7,6 +7,7 @@
 
 #include <lvgl.h>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,7 +26,8 @@ enum class FanType {
     HEATER_FAN,      ///< Hotend cooling fan (auto-controlled, not user-adjustable)
     CONTROLLER_FAN,  ///< Electronics cooling (auto-controlled)
     TEMPERATURE_FAN, ///< Thermostatically controlled fan (auto-controlled)
-    GENERIC_FAN      ///< User-controllable generic fan (fan_generic)
+    GENERIC_FAN,     ///< User-controllable generic fan (fan_generic)
+    OUTPUT_PIN_FAN   ///< Creality-style output_pin fan (controllable via M106 P<index>)
 };
 
 /**
@@ -57,6 +59,7 @@ struct FanInfo {
     FanType type = FanType::GENERIC_FAN;
     int speed_percent = 0;        ///< Current speed 0-100%
     bool is_controllable = false; ///< true for fan_generic, false for heater_fan/controller_fan
+    std::optional<int> rpm;       ///< RPM from fan_feedback or Klipper rpm field
 };
 
 /**

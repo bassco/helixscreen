@@ -1112,3 +1112,53 @@ TEST_CASE("Fan role config: canonical 'fan' part_fan does not create redundant o
         REQUIRE(fans[0].type == helix::FanType::PART_COOLING);
     }
 }
+
+TEST_CASE("Fan characterization: output_pin fan type classification",
+          "[characterization][fan][type][output_pin]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "output_pin fan2",
+                     "heater_fan hotend_fan"});
+
+    const auto& fans = state.get_fans();
+
+    SECTION("output_pin fan0 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[0].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("output_pin fan1 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[1].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("output_pin fan2 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[2].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("OUTPUT_PIN_FAN is controllable") {
+        REQUIRE(fans[0].is_controllable == true);
+    }
+
+    SECTION("heater_fan is still HEATER_FAN") {
+        REQUIRE(fans[3].type == FanType::HEATER_FAN);
+    }
+}
+
+TEST_CASE("Fan characterization: FanInfo rpm field", "[characterization][fan][rpm]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0"});
+
+    const auto& fans = state.get_fans();
+
+    SECTION("rpm is nullopt by default") {
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+}

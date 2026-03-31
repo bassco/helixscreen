@@ -126,6 +126,13 @@ FanType PrinterFanState::classify_fan_type(const std::string& object_name) const
         return FanType::CONTROLLER_FAN;
     } else if (object_name.rfind("temperature_fan ", 0) == 0) {
         return FanType::TEMPERATURE_FAN;
+    } else if (object_name.rfind("output_pin ", 0) == 0) {
+        // Check if the short name starts with "fan" (e.g., "output_pin fan0")
+        std::string short_name = object_name.substr(11);
+        if (short_name.rfind("fan", 0) == 0) {
+            return FanType::OUTPUT_PIN_FAN;
+        }
+        return FanType::GENERIC_FAN;
     } else {
         return FanType::GENERIC_FAN;
     }
@@ -140,7 +147,8 @@ std::string PrinterFanState::get_role_display_name(const std::string& object_nam
 }
 
 bool PrinterFanState::is_fan_controllable(FanType type) {
-    return type == FanType::PART_COOLING || type == FanType::GENERIC_FAN;
+    return type == FanType::PART_COOLING || type == FanType::GENERIC_FAN ||
+           type == FanType::OUTPUT_PIN_FAN;
 }
 
 void PrinterFanState::init_fans(const std::vector<std::string>& fan_objects,
