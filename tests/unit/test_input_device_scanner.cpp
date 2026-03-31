@@ -396,6 +396,95 @@ TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]")
     }
 }
 
+TEST_CASE("find_keyboard_device excludes barcode scanners", "[input]") {
+    using helix::input::find_keyboard_device;
+
+    SECTION("skips device with 'barcode' in name") {
+        MockInputTree tree("kb_excl_barcode");
+        tree.add_device(1, "Tera Barcode Scanner", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("skips device with 'scanner' in name (case-insensitive)") {
+        MockInputTree tree("kb_excl_scanner");
+        tree.add_device(1, "QR SCANNER Pro", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("skips device matching exclude_vendor_product") {
+        MockInputTree tree("kb_excl_vid");
+        tree.add_device_with_ids(1, "TMS HIDKeyBoard", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        }, "0003", "1a2c", "4c5e");
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir, "1a2c:4c5e");
+        REQUIRE_FALSE(result.has_value());
+    }
+
+    SECTION("returns real keyboard when scanner is excluded by vendor:product") {
+        MockInputTree tree("kb_excl_with_real");
+        tree.add_device_with_ids(1, "TMS HIDKeyBoard", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        }, "0003", "1a2c", "4c5e");
+        tree.add_device(2, "USB Keyboard", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir, "1a2c:4c5e");
+        REQUIRE(result.has_value());
+        REQUIRE(result->name == "USB Keyboard");
+    }
+
+    SECTION("returns real keyboard when scanner is excluded by name") {
+        MockInputTree tree("kb_excl_name_real");
+        tree.add_device(1, "Tera Barcode Scanner", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+        tree.add_device(2, "USB Keyboard", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.has_value());
+        REQUIRE(result->name == "USB Keyboard");
+    }
+
+    SECTION("no exclude param still returns generic HID keyboard") {
+        MockInputTree tree("kb_excl_none");
+        tree.add_device(1, "TMS HIDKeyBoard", {
+            {"key", "40000000"},
+            {"rel", "0"},
+            {"abs", "0"}
+        });
+
+        auto result = find_keyboard_device(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.has_value());
+        REQUIRE(result->name == "TMS HIDKeyBoard");
+    }
+}
+
 TEST_CASE("find_hid_keyboard_devices detects USB HID keyboards for scanner use", "[input]") {
     using helix::input::find_hid_keyboard_devices;
 

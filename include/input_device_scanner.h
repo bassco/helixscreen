@@ -39,9 +39,14 @@ std::optional<ScannedDevice> find_mouse_device(const std::string& dev_base,
                                                 const std::string& sysfs_base);
 
 /// Scan /dev/input/event* for keyboard devices (KEY_A set).
+/// Skips devices that look like barcode scanners ("barcode"/"scanner" in name).
+/// If exclude_vendor_product is non-empty (format "vendor:product"), also skips
+/// that specific device. This prevents LVGL from claiming a barcode scanner as
+/// its keyboard input.
 std::optional<ScannedDevice> find_keyboard_device();
 std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
-                                                   const std::string& sysfs_base);
+                                                   const std::string& sysfs_base,
+                                                   const std::string& exclude_vendor_product = "");
 
 /// Scan /dev/input/event* for USB HID keyboard-like devices suitable for barcode scanning.
 /// Returns ALL matching devices (USB/BT bus, has KEY_A, not a touchscreen).

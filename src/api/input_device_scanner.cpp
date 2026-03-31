@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "input_device_scanner.h"
+#include "settings_manager.h"
 #include "touch_calibration.h"
 
 #include <algorithm>
@@ -58,6 +59,8 @@ constexpr int BUS_BLUETOOTH = 0x05;
 }  // namespace
 
 namespace helix::input {
+
+using helix::SettingsManager;
 
 bool check_capability_bit(const std::string& hex_bitmask, int bit) {
     if (bit < 0 || hex_bitmask.empty()) {
@@ -187,7 +190,19 @@ std::optional<ScannedDevice> find_mouse_device() {
 }
 
 std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
-                                                   const std::string& sysfs_base) {
+                                                   const std::string& sysfs_base,
+                                                   const std::string& exclude_vendor_product) {
+    // Parse exclusion vendor:product pair if provided
+    std::string exclude_vendor;
+    std::string exclude_product;
+    if (!exclude_vendor_product.empty()) {
+        auto colon = exclude_vendor_product.find(':');
+        if (colon != std::string::npos) {
+            exclude_vendor = exclude_vendor_product.substr(0, colon);
+            exclude_product = exclude_vendor_product.substr(colon + 1);
+        }
+    }
+
     auto dir = std::unique_ptr<DIR, decltype(&closedir)>(opendir(dev_base.c_str()), closedir);
     if (!dir) {
         spdlog::debug("[InputScanner] Cannot open {}", dev_base);
@@ -223,6 +238,30 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
         }
 
         std::string name = read_device_name(sysfs_base, event_num);
+
+        // Skip devices with "barcode" or "scanner" in the name — these are
+        // barcode scanners that happen to present as USB HID keyboards.
+        std::string lower_name = name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (lower_name.find("barcode") != std::string::npos ||
+            lower_name.find("scanner") != std::string::npos) {
+            spdlog::info("[InputScanner] Skipping scanner device for keyboard: {} ({})",
+                         device_path, name);
+            continue;
+        }
+
+        // Skip device matching the user's configured scanner vendor:product
+        if (!exclude_vendor.empty()) {
+            std::string vendor = read_vendor_id(sysfs_base, event_num);
+            std::string product = read_product_id(sysfs_base, event_num);
+            if (vendor == exclude_vendor && product == exclude_product) {
+                spdlog::info("[InputScanner] Skipping configured scanner for keyboard: {} ({})",
+                             device_path, name);
+                continue;
+            }
+        }
+
         spdlog::info("[InputScanner] Found keyboard: {} ({})", device_path, name);
         return ScannedDevice{device_path, name, event_num};
     }
@@ -231,7 +270,13 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 }
 
 std::optional<ScannedDevice> find_keyboard_device() {
-    return find_keyboard_device("/dev/input", "/sys/class/input");
+    std::string exclude_id;
+    try {
+        exclude_id = SettingsManager::instance().get_scanner_device_id();
+    } catch (...) {
+        // SettingsManager may not be initialized yet during early startup
+    }
+    return find_keyboard_device("/dev/input", "/sys/class/input", exclude_id);
 }
 
 std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
