@@ -30,6 +30,8 @@
 class MoonrakerAPI;
 
 namespace helix::ui {
+class ScannerPickerModal;
+
 
 /**
  * @class SpoolmanOverlay
@@ -239,6 +241,15 @@ class SpoolmanOverlay : public OverlayBase {
     // Label printer sub-panel launcher
     static void on_label_printer_clicked(lv_event_t* e);
 #endif
+
+    // === Barcode Scanner Picker ===
+    lv_subject_t scanner_device_status_subject_;
+    char scanner_status_buf_[64] = {0};
+    std::unique_ptr<ScannerPickerModal> scanner_picker_modal_;
+
+    static void on_barcode_scanner_clicked(lv_event_t* e);
+    void handle_barcode_scanner_clicked();
+    void update_scanner_status_text();
 
     // === Server Setup Methods ===
     void probe_spoolman_server(const std::string& host, const std::string& port);

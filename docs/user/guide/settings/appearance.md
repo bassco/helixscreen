@@ -10,6 +10,12 @@ Choose the display language for all UI text. Currently English is the only suppo
 
 ---
 
+## Time Format
+
+Choose between 12-hour and 24-hour clock display. Affects all timestamps shown throughout the UI.
+
+---
+
 ## Animations
 
 Toggle UI motion effects (transitions, panel slides, confetti). Disable for better performance on slower hardware like Raspberry Pi 3.
@@ -35,7 +41,6 @@ Tap **Display Settings** to open an overlay with detailed display options:
 | **Screen Dim** | When the screen dims to lower brightness: Never, 30s, 1m, 2m, or 5m of inactivity. |
 | **Display Sleep** | When the screen turns off completely: Never, 1m, 5m, 10m, or 30m of inactivity. |
 | **Sleep While Printing** | Allow the display to sleep during active prints. Off by default so you can monitor progress. |
-| **Time Format** | 12-hour or 24-hour clock display. |
 
 > **Tip:** Touch the screen to wake from sleep.
 
@@ -58,6 +63,25 @@ HelixScreen automatically selects the best layout for your display size:
 | **Compact** | 480x320 | Small 3.5" screens |
 
 Override with the `--layout` command-line flag if auto-detection picks the wrong layout.
+
+---
+
+## Toolhead Style
+
+Choose the toolhead icon shown on the Home Panel and Print Status screen. Options:
+
+| Option | Description |
+|--------|-------------|
+| **Auto** (default) | HelixScreen detects your toolhead from the printer database or Klipper config |
+| **Default** | Generic toolhead icon |
+| **A4T** | Armored Turtle toolhead |
+| **Anthead** | Anthead toolhead |
+| **Jabberwocky** | Jabberwocky toolhead |
+| **StealthBurner** | Voron StealthBurner toolhead |
+| **Creality K1** | Creality K1 series toolhead |
+| **Creality K2** | Creality K2 series toolhead |
+
+Most users can leave this on **Auto**. Change it if HelixScreen picks the wrong icon or if you've swapped to an aftermarket toolhead.
 
 ---
 

@@ -54,6 +54,24 @@ struct MockInputTree {
         for (const auto& [cap_name, hex_value] : caps) {
             std::ofstream(sysfs_path + "/device/capabilities/" + cap_name) << hex_value;
         }
+
+        // Write vendor/product ID files if the bustype is USB or Bluetooth
+        if (bustype == "0003" || bustype == "0005") {
+            std::ofstream(sysfs_path + "/device/id/vendor") << "1a2c";
+            std::ofstream(sysfs_path + "/device/id/product")
+                << std::string("000") + std::to_string(event_num);
+        }
+    }
+
+    void add_device_with_ids(int event_num, const std::string& name,
+                             const std::map<std::string, std::string>& caps,
+                             const std::string& bustype,
+                             const std::string& vendor, const std::string& product) {
+        add_device(event_num, name, caps, bustype);
+        std::string sysfs_path = sysfs_dir + "/event" + std::to_string(event_num);
+        // Overwrite the default IDs written by add_device
+        std::ofstream(sysfs_path + "/device/id/vendor") << vendor;
+        std::ofstream(sysfs_path + "/device/id/product") << product;
     }
 };
 
@@ -475,6 +493,104 @@ TEST_CASE("find_hid_keyboard_devices detects USB HID keyboards for scanner use",
     SECTION("empty directory returns empty vector") {
         MockInputTree tree("hid_empty");
         auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("configured vendor:product device wins over named scanner") {
+        MockInputTree tree("hid_configured");
+        tree.add_device_with_ids(1, "Tera Barcode Scanner", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "aaaa", "bbbb");
+        tree.add_device_with_ids(2, "TMS HIDKeyBoard", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "1a2c", "4c5e");
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir, "1a2c:4c5e");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].name == "TMS HIDKeyBoard");
+    }
+
+    SECTION("configured device not found falls back to normal priority") {
+        MockInputTree tree("hid_configured_missing");
+        tree.add_device_with_ids(1, "Tera Barcode Scanner", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "aaaa", "bbbb");
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir, "1a2c:4c5e");
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].name == "Tera Barcode Scanner");
+    }
+
+    SECTION("empty configured string uses normal priority") {
+        MockInputTree tree("hid_configured_empty");
+        tree.add_device_with_ids(1, "USBKey Module", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "1234", "5678");
+        tree.add_device_with_ids(2, "Tera Barcode Scanner", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "aaaa", "bbbb");
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir, "");
+        REQUIRE(result.size() == 2);
+        REQUIRE(result[0].name == "Tera Barcode Scanner");
+    }
+}
+
+TEST_CASE("enumerate_usb_hid_devices returns devices with vendor/product IDs", "[input]") {
+    using helix::input::enumerate_usb_hid_devices;
+
+    SECTION("returns device with correct vendor/product IDs") {
+        MockInputTree tree("enum_basic");
+        tree.add_device_with_ids(2, "TMS HIDKeyBoard", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        }, "0003", "1a2c", "4c5e");
+
+        auto result = enumerate_usb_hid_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].name == "TMS HIDKeyBoard");
+        REQUIRE(result[0].vendor_id == "1a2c");
+        REQUIRE(result[0].product_id == "4c5e");
+        REQUIRE(result[0].event_path.find("event2") != std::string::npos);
+    }
+
+    SECTION("returns multiple devices") {
+        MockInputTree tree("enum_multi");
+        tree.add_device_with_ids(1, "USB Keyboard", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "04d9", "a070");
+        tree.add_device_with_ids(3, "TMS HIDKeyBoard", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0003", "1a2c", "4c5e");
+
+        auto result = enumerate_usb_hid_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.size() == 2);
+    }
+
+    SECTION("skips non-USB devices") {
+        MockInputTree tree("enum_skip_platform");
+        tree.add_device(0, "MCE IR Keyboard", {
+            {"key", "40000000"}, {"abs", "0"}, {"rel", "0"}
+        }, "0019");
+
+        auto result = enumerate_usb_hid_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("skips touchscreens") {
+        MockInputTree tree("enum_skip_touch");
+        tree.add_device_with_ids(0, "Goodix TS", {
+            {"abs", "3"}, {"key", "40000000"}, {"rel", "0"}
+        }, "0003", "1234", "5678");
+
+        auto result = enumerate_usb_hid_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("empty directory returns empty vector") {
+        MockInputTree tree("enum_empty");
+        auto result = enumerate_usb_hid_devices(tree.dev_dir, tree.sysfs_dir);
         REQUIRE(result.empty());
     }
 }

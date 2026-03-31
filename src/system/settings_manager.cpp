@@ -149,6 +149,14 @@ void SettingsManager::init_subjects() {
     chamber_sensor_assignment_ =
         config->get<std::string>(config->df() + "printer/chamber_sensor", "auto");
 
+    // Load scanner device selection
+    scanner_device_id_ = config->get<std::string>(config->df() + "scanner/usb_vendor_product", "");
+    scanner_device_name_ = config->get<std::string>(config->df() + "scanner/usb_device_name", "");
+    if (!scanner_device_id_.empty()) {
+        spdlog::info("[SettingsManager] Loaded scanner device: {} ({})",
+                     scanner_device_name_, scanner_device_id_);
+    }
+
     subjects_initialized_ = true;
 
     // Self-register cleanup — ensures deinit runs before lv_deinit()
@@ -483,5 +491,33 @@ void SettingsManager::clear_external_spool_info() {
     } catch (...) {
         // /filament doesn't exist or isn't an object, nothing to clear
     }
+    config->save();
+}
+
+// ============================================================================
+// Barcode Scanner Settings
+// ============================================================================
+
+std::string SettingsManager::get_scanner_device_id() const {
+    return scanner_device_id_;
+}
+
+void SettingsManager::set_scanner_device_id(const std::string& vendor_product) {
+    spdlog::info("[SettingsManager] set_scanner_device_id({})", vendor_product);
+    scanner_device_id_ = vendor_product;
+    Config* config = Config::get_instance();
+    config->set<std::string>(config->df() + "scanner/usb_vendor_product", vendor_product);
+    config->save();
+}
+
+std::string SettingsManager::get_scanner_device_name() const {
+    return scanner_device_name_;
+}
+
+void SettingsManager::set_scanner_device_name(const std::string& name) {
+    spdlog::info("[SettingsManager] set_scanner_device_name({})", name);
+    scanner_device_name_ = name;
+    Config* config = Config::get_instance();
+    config->set<std::string>(config->df() + "scanner/usb_device_name", name);
     config->save();
 }

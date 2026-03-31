@@ -3,6 +3,7 @@
 
 #include "input_device_scanner.h"
 #include "qr_decoder.h"
+#include "settings_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -76,10 +77,11 @@ int UsbScannerMonitor::check_spoolman_pattern(const std::string& input)
 
 std::vector<std::string> UsbScannerMonitor::find_scanner_devices()
 {
-    // find_hid_keyboard_devices() returns named scanners ("barcode"/"scanner"
-    // in name) first, then generic USB HID keyboards. We only open the first
-    // device to avoid treating a real keyboard as a barcode scanner.
-    auto devices = helix::input::find_hid_keyboard_devices();
+    // Check if user has manually configured a specific scanner device
+    std::string configured_id = helix::SettingsManager::instance().get_scanner_device_id();
+
+    auto devices = helix::input::find_hid_keyboard_devices(
+        "/dev/input", "/sys/class/input", configured_id);
     if (devices.empty()) return {};
 
     spdlog::info("UsbScannerMonitor: using HID device: {} ({})",

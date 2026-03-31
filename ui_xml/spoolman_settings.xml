@@ -137,6 +137,13 @@
                           description="Configure label printer and auto-discovery"
                           description_tag="Configure label printer and auto-discovery"
                           callback="on_spoolman_label_printer_clicked"/>
+      <!-- ================================================================== -->
+      <!-- Barcode Scanner (opens device picker)                              -->
+      <!-- ================================================================== -->
+      <setting_action_row name="row_barcode_scanner"
+                          label="Barcode Scanner" label_tag="Barcode Scanner" icon="qrcode_scan"
+                          bind_description="scanner_device_status"
+                          callback="on_barcode_scanner_clicked"/>
     </lv_obj>
   </view>
 </component>

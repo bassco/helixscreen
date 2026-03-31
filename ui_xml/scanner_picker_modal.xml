@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2025-2026 356C LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Scanner Device Picker Modal -->
+<!-- Lists connected USB HID devices for manual barcode scanner selection -->
+<component>
+  <view name="scanner_picker_modal"
+        extends="ui_dialog" width="70%" height="80%" align="center"
+        flex_flow="column" style_flex_main_place="start" style_pad_gap="0">
+    <!-- Header row: icon + title + close (X) button -->
+    <lv_obj width="100%" height="content"
+            style_pad_left="#space_lg" style_pad_right="#space_sm" style_pad_top="#space_lg"
+            style_pad_bottom="#space_sm" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm"
+            scrollable="false">
+      <icon src="qrcode_scan" size="md" variant="accent"/>
+      <text_heading text="Barcode Scanner" translation_tag="Barcode Scanner" style_text_align="left" flex_grow="1"/>
+      <ui_button name="btn_close" width="40" height="40" variant="ghost" icon="close" focusable="false">
+        <event_cb trigger="clicked" callback="on_modal_cancel_clicked"/>
+      </ui_button>
+    </lv_obj>
+    <!-- Scrollable device list -->
+    <lv_obj name="scanner_device_list"
+            width="100%" flex_grow="1" flex_flow="column" style_pad_gap="0"
+            style_pad_left="#space_md" style_pad_right="#space_md"
+            style_pad_top="#space_sm" style_pad_bottom="#space_sm"
+            scrollable="true" scroll_dir="ver"/>
+    <!-- Empty state message (shown when no devices found) -->
+    <lv_obj name="scanner_empty_state"
+            width="100%" flex_grow="1" style_pad_all="#space_lg" flex_flow="column"
+            style_flex_main_place="center" style_flex_cross_place="center"
+            style_pad_gap="#space_sm" scrollable="false">
+      <text_body name="empty_text"
+                 text="No USB HID devices detected." translation_tag="No USB HID devices detected."
+                 style_text_align="center" width="100%"/>
+      <text_small text="Plug in your scanner and tap Refresh." translation_tag="Plug in your scanner and tap Refresh."
+                  style_text_color="#text_muted" style_text_align="center" width="100%"/>
+    </lv_obj>
+    <!-- Bottom buttons: Refresh + Cancel -->
+    <modal_button_row
+        secondary_text="Refresh" secondary_tag="Refresh" secondary_callback="on_scanner_refresh"
+        primary_text="Cancel" primary_tag="Cancel" primary_callback="on_modal_cancel_clicked"/>
+  </view>
+</component>

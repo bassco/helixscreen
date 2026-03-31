@@ -15,11 +15,13 @@
 #if HELIX_HAS_LABEL_PRINTER
 #include "ui_settings_label_printer.h"
 #endif
+#include "ui_modal_scanner_picker.h"
 #include "ui_spoolman_setup.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
+#include "settings_manager.h"
 #include "hv/requests.h"
 #include "moonraker_api.h"
 #include "moonraker_config_manager.h"
@@ -71,6 +73,7 @@ SpoolmanOverlay::~SpoolmanOverlay() {
     if (subjects_initialized_ && lv_is_initialized()) {
         lv_subject_deinit(&sync_enabled_subject_);
         lv_subject_deinit(&refresh_interval_subject_);
+        lv_subject_deinit(&scanner_device_status_subject_);
     }
     spdlog::trace("[{}] Destroyed", get_name());
 }
@@ -92,6 +95,15 @@ void SpoolmanOverlay::init_subjects() {
     lv_subject_init_int(&refresh_interval_subject_, DEFAULT_REFRESH_INTERVAL_SECONDS);
     lv_xml_register_subject(nullptr, "ams_spoolman_refresh_interval", &refresh_interval_subject_);
 
+    // Initialize scanner device status subject
+    auto scanner_name = helix::SettingsManager::instance().get_scanner_device_name();
+    auto scanner_id = helix::SettingsManager::instance().get_scanner_device_id();
+    const char* status = scanner_id.empty() ? "Auto-detect" : scanner_name.c_str();
+    snprintf(scanner_status_buf_, sizeof(scanner_status_buf_), "%s", status);
+    lv_subject_init_string(&scanner_device_status_subject_, scanner_status_buf_, nullptr,
+                           sizeof(scanner_status_buf_), scanner_status_buf_);
+    lv_xml_register_subject(nullptr, "scanner_device_status", &scanner_device_status_subject_);
+
     subjects_initialized_ = true;
     spdlog::debug("[{}] Subjects initialized", get_name());
 }
@@ -108,6 +120,9 @@ void SpoolmanOverlay::register_callbacks() {
     lv_xml_register_event_cb(nullptr, "on_spoolman_label_printer_clicked",
                              on_label_printer_clicked);
 #endif
+
+    // Barcode scanner picker callback
+    lv_xml_register_event_cb(nullptr, "on_barcode_scanner_clicked", on_barcode_scanner_clicked);
 
     // Server setup callbacks
     lv_xml_register_event_cb(nullptr, "on_spoolman_connect_clicked", on_connect_clicked);
@@ -470,6 +485,39 @@ void SpoolmanOverlay::set_setup_status(const char* text, bool is_error) {
                                     LV_PART_MAIN);
     }
 }
+
+// ============================================================================
+// BARCODE SCANNER PICKER
+// ============================================================================
+
+void SpoolmanOverlay::on_barcode_scanner_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SpoolmanOverlay] on_barcode_scanner_clicked");
+    get_spoolman_overlay().handle_barcode_scanner_clicked();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SpoolmanOverlay::handle_barcode_scanner_clicked() {
+    spdlog::debug("[{}] Barcode Scanner clicked - opening picker", get_name());
+
+    // Create picker modal owned by overlay (survives until next open or overlay destruction)
+    scanner_picker_modal_ = std::make_unique<ScannerPickerModal>(
+        [this](const std::string& /*vendor_product*/, const std::string& /*device_name*/) {
+            update_scanner_status_text();
+        });
+    scanner_picker_modal_->show(lv_screen_active());
+}
+
+void SpoolmanOverlay::update_scanner_status_text() {
+    auto id = helix::SettingsManager::instance().get_scanner_device_id();
+    auto name = helix::SettingsManager::instance().get_scanner_device_name();
+    const char* status = id.empty() ? "Auto-detect" : name.c_str();
+    snprintf(scanner_status_buf_, sizeof(scanner_status_buf_), "%s", status);
+    lv_subject_copy_string(&scanner_device_status_subject_, scanner_status_buf_);
+}
+
+// ============================================================================
+// SERVER SETUP
+// ============================================================================
 
 void SpoolmanOverlay::on_connect_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[SpoolmanOverlay] on_connect_clicked");

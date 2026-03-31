@@ -92,11 +92,11 @@ If this option doesn't appear in your Settings, your screen type doesn't normall
 
 ---
 
-## Hardware Health
+## Hardware Issues
 
 > Only shown when hardware issues are detected.
 
-Tap to open the Hardware Health overlay, which lists detected issues:
+Tap to open the Hardware Issues overlay, which lists detected issues:
 
 | Category | Meaning |
 |----------|---------|

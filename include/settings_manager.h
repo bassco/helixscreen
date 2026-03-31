@@ -259,6 +259,22 @@ class SettingsManager {
         return &auto_color_map_subject_;
     }
 
+    // =========================================================================
+    // BARCODE SCANNER (owned by SettingsManager — manual device selection)
+    // =========================================================================
+
+    /** @brief Get configured scanner vendor:product ID (empty = auto-detect) */
+    std::string get_scanner_device_id() const;
+
+    /** @brief Set scanner vendor:product ID (empty = clear, auto-detect) */
+    void set_scanner_device_id(const std::string& vendor_product);
+
+    /** @brief Get configured scanner device display name */
+    std::string get_scanner_device_name() const;
+
+    /** @brief Set configured scanner device display name */
+    void set_scanner_device_name(const std::string& name);
+
   private:
     SettingsManager();
     ~SettingsManager() = default;
@@ -281,6 +297,10 @@ class SettingsManager {
     // Chamber assignment settings (plain strings, no LVGL subjects needed)
     std::string chamber_heater_assignment_{"auto"};
     std::string chamber_sensor_assignment_{"auto"};
+
+    // Scanner device selection (plain strings, no LVGL subjects needed)
+    std::string scanner_device_id_;       // "vendor:product" or empty
+    std::string scanner_device_name_;     // display name for UI
 
     // State
     bool subjects_initialized_ = false;

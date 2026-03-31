@@ -18,6 +18,14 @@ struct ScannedDevice {
     int event_num = -1;
 };
 
+/// USB HID device with vendor/product identification for manual scanner selection.
+struct UsbHidDevice {
+    std::string name;         // e.g., "TMS HIDKeyBoard"
+    std::string vendor_id;    // e.g., "1a2c" (hex from sysfs)
+    std::string product_id;   // e.g., "4c5e" (hex from sysfs)
+    std::string event_path;   // e.g., "/dev/input/event5"
+};
+
 /// Check if a specific bit is set in a sysfs capability hex bitmask.
 /// The kernel prints space-separated hex words (unsigned long), rightmost = lowest bits.
 /// Handles both 32-bit and 64-bit word widths automatically by inferring
@@ -41,6 +49,20 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 std::vector<ScannedDevice> find_hid_keyboard_devices();
 std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
                                                       const std::string& sysfs_base);
+
+/// Like find_hid_keyboard_devices(), but if configured_vendor_product is non-empty
+/// (format "vendor:product", e.g. "1a2c:4c5e"), the matching device is returned
+/// as the sole result with highest priority. Falls back to name-based priority
+/// if the configured device is not found.
+std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
+                                                      const std::string& sysfs_base,
+                                                      const std::string& configured_vendor_product);
+
+/// Enumerate all USB HID keyboard-capable devices with vendor/product IDs.
+/// Used by the scanner picker UI. Returns all matching devices (no prioritization).
+std::vector<UsbHidDevice> enumerate_usb_hid_devices();
+std::vector<UsbHidDevice> enumerate_usb_hid_devices(const std::string& dev_base,
+                                                     const std::string& sysfs_base);
 
 /// Read a single line from a sysfs file (returns empty string on failure)
 std::string read_sysfs_line(const std::string& path);
