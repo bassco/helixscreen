@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sys/stat.h>
 
 #include "../catch_amalgamated.hpp"
 
@@ -1591,6 +1592,12 @@ TEST_CASE_METHOD(ConfigTestFixture,
 TEST_CASE_METHOD(ConfigTestFixture,
                  "Config: fresh config gets version stamp and sounds default to false",
                  "[core][config][migration][versioning]") {
+    // System-level backup at /var/lib/helixscreen/ takes priority over HOME-based
+    // fallback and would be restored instead of creating a truly fresh config.
+    struct stat st {};
+    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
+        SKIP("System backup exists at /var/lib/helixscreen/ — would override fresh config defaults");
+
     // Brand new config — no file exists
     std::string temp_dir = std::filesystem::temp_directory_path().string() + "/helix_fresh_test_" +
                            std::to_string(rand());
@@ -2197,6 +2204,12 @@ TEST_CASE("Config::init migrates helixconfig.json to settings.json", "[config]")
 
 TEST_CASE("Config::init() recovers from corrupt config by restoring backup",
           "[core][config][corruption]") {
+    // System-level backup at /var/lib/helixscreen/ takes priority over the
+    // HOME-based fallback this test sets up, causing wrong data to be restored.
+    struct stat st {};
+    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
+        SKIP("System backup exists at /var/lib/helixscreen/ — would override test backup");
+
     std::string temp_dir = "/tmp/helix_test_corrupt_backup_" + std::to_string(getpid());
     std::filesystem::remove_all(temp_dir);
     std::filesystem::create_directories(temp_dir);
