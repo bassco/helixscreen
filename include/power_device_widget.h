@@ -4,6 +4,7 @@
 #pragma once
 
 #include "async_lifetime_guard.h"
+#include "sensor_state.h"
 #include "ui_observer_guard.h"
 
 #include "panel_widget.h"
@@ -61,6 +62,23 @@ class PowerDeviceWidget : public PanelWidget {
     lv_obj_t* picker_backdrop_ = nullptr;
     static PowerDeviceWidget* s_active_picker_;
 
+    // Sensor/energy page members
+    std::string sensor_id_;
+    lv_obj_t* carousel_ = nullptr;
+    lv_obj_t* energy_page_ = nullptr;
+    lv_obj_t* energy_power_label_ = nullptr;
+    lv_obj_t* energy_voltage_label_ = nullptr;
+    lv_obj_t* energy_current_label_ = nullptr;
+    lv_obj_t* energy_energy_label_ = nullptr;
+    ObserverGuard power_observer_;
+    ObserverGuard voltage_observer_;
+    ObserverGuard current_observer_;
+    ObserverGuard energy_observer_;
+    SubjectLifetime power_lifetime_;
+    SubjectLifetime voltage_lifetime_;
+    SubjectLifetime current_lifetime_;
+    SubjectLifetime energy_lifetime_;
+
     MoonrakerAPI* get_api() const;
     void update_display(int status);
     void show_device_picker();
@@ -68,6 +86,12 @@ class PowerDeviceWidget : public PanelWidget {
     void select_device(const std::string& name);
     void select_icon(const std::string& name);
     void save_config();
+    void setup_carousel();
+    void teardown_carousel();
+    void attach_sensor_observers();
+    void detach_sensor_observers();
+    void update_energy_label(const std::string& key, lv_obj_t* label, int centi_value);
+    std::string auto_match_sensor() const;
 };
 
 } // namespace helix

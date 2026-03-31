@@ -2,6 +2,8 @@
 
 #include "power_device_widget.h"
 
+#include "sensor_state.h"
+#include "ui_carousel.h"
 #include "ui_emergency_stop.h"
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
@@ -129,6 +131,9 @@ void PowerDeviceWidget::set_config(const nlohmann::json& config) {
     if (config.contains("icon") && config["icon"].is_string()) {
         icon_name_ = config["icon"].get<std::string>();
     }
+    if (config.contains("sensor") && config["sensor"].is_string()) {
+        sensor_id_ = config["sensor"].get<std::string>();
+    }
     spdlog::debug("[PowerDeviceWidget] Config: {}={} icon={}", instance_id_,
                   device_name_.empty() ? "(unconfigured)" : device_name_,
                   icon_name_.empty() ? kDefaultIcon : icon_name_);
@@ -185,11 +190,21 @@ void PowerDeviceWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
         update_display(-1);
     }
 
+    // Auto-match sensor if none configured and only one energy sensor + one power device
+    if (sensor_id_.empty() && !device_name_.empty()) {
+        sensor_id_ = auto_match_sensor();
+        if (!sensor_id_.empty()) {
+            save_config();
+        }
+    }
+    setup_carousel();
+
     spdlog::debug("[PowerDeviceWidget] Attached {} (device: {})", instance_id_,
                   device_name_.empty() ? "none" : device_name_);
 }
 
 void PowerDeviceWidget::detach() {
+    teardown_carousel();
     lifetime_.invalidate();
     dismiss_device_picker();
 
@@ -531,6 +546,7 @@ void PowerDeviceWidget::show_device_picker() {
 
     // Icon grid (wrap flow)
     lv_obj_t* icon_grid = lv_obj_create(card);
+    lv_obj_set_name(icon_grid, "picker_icon_grid");
     lv_obj_set_width(icon_grid, LV_PCT(100));
     lv_obj_set_height(icon_grid, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(icon_grid, LV_FLEX_FLOW_ROW_WRAP);
@@ -587,6 +603,124 @@ void PowerDeviceWidget::show_device_picker() {
                 LVGL_SAFE_EVENT_CB_END();
             },
             LV_EVENT_CLICKED, nullptr);
+    }
+
+    // Sensor picker section — only show if energy sensors exist
+    auto energy_ids = SensorState::instance().energy_sensor_ids();
+    if (!energy_ids.empty()) {
+        std::sort(energy_ids.begin(), energy_ids.end());
+
+        // Divider
+        lv_obj_t* sensor_divider = lv_obj_create(card);
+        lv_obj_set_width(sensor_divider, LV_PCT(100));
+        lv_obj_set_height(sensor_divider, 1);
+        lv_obj_set_style_bg_color(sensor_divider, theme_manager_get_color("text_muted"), 0);
+        lv_obj_set_style_bg_opa(sensor_divider, 38, 0);
+        lv_obj_set_style_pad_all(sensor_divider, 0, 0);
+        lv_obj_set_style_border_width(sensor_divider, 0, 0);
+        lv_obj_remove_flag(sensor_divider, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_remove_flag(sensor_divider, LV_OBJ_FLAG_CLICKABLE);
+
+        // Section title
+        lv_obj_t* sensor_title = lv_label_create(card);
+        lv_label_set_text(sensor_title, lv_tr("Energy Sensor"));
+        lv_obj_set_style_text_font(sensor_title, lv_font_get_default(), 0);
+        lv_obj_set_style_text_color(sensor_title, theme_manager_get_color("text"), 0);
+        lv_obj_set_width(sensor_title, LV_PCT(100));
+
+        // Sensor chip container (wrap flow)
+        lv_obj_t* sensor_grid = lv_obj_create(card);
+        lv_obj_set_width(sensor_grid, LV_PCT(100));
+        lv_obj_set_height(sensor_grid, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(sensor_grid, LV_FLEX_FLOW_ROW_WRAP);
+        lv_obj_set_flex_align(sensor_grid, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_START);
+        lv_obj_set_style_pad_all(sensor_grid, 0, 0);
+        lv_obj_set_style_pad_gap(sensor_grid, space_xs, 0);
+        lv_obj_set_style_bg_opa(sensor_grid, 0, 0);
+        lv_obj_set_style_border_width(sensor_grid, 0, 0);
+        lv_obj_remove_flag(sensor_grid, LV_OBJ_FLAG_SCROLLABLE);
+
+        // Helper to create a sensor chip
+        auto make_chip = [&](const char* label_text, const std::string& sensor_id, bool selected) {
+            lv_obj_t* chip = lv_obj_create(sensor_grid);
+            lv_obj_set_height(chip, LV_SIZE_CONTENT);
+            lv_obj_set_width(chip, LV_SIZE_CONTENT);
+            lv_obj_set_style_pad_ver(chip, space_xs, 0);
+            lv_obj_set_style_pad_hor(chip, space_sm, 0);
+            lv_obj_set_style_radius(chip, 12, 0);
+            lv_obj_remove_flag(chip, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_add_flag(chip, LV_OBJ_FLAG_CLICKABLE);
+
+            // Highlight if selected
+            if (selected) {
+                lv_obj_set_style_border_width(chip, 2, 0);
+                lv_obj_set_style_border_color(chip, theme_manager_get_color("primary"), 0);
+                lv_obj_set_style_bg_opa(chip, 20, 0);
+                lv_obj_set_style_bg_color(chip, theme_manager_get_color("primary"), 0);
+            } else {
+                lv_obj_set_style_border_width(chip, 1, 0);
+                lv_obj_set_style_border_color(chip, theme_manager_get_color("border"), 0);
+                lv_obj_set_style_bg_opa(chip, 0, 0);
+            }
+
+            // Pressed feedback
+            lv_obj_set_style_bg_color(chip, theme_manager_get_color("text_muted"),
+                                      LV_PART_MAIN | LV_STATE_PRESSED);
+            lv_obj_set_style_bg_opa(chip, LV_OPA_20, LV_PART_MAIN | LV_STATE_PRESSED);
+
+            lv_obj_t* lbl = lv_label_create(chip);
+            lv_label_set_text(lbl, label_text);
+            lv_obj_set_style_text_font(lbl, lv_font_get_default(), 0);
+            lv_obj_set_style_text_color(lbl, theme_manager_get_color("text"), 0);
+            lv_obj_remove_flag(lbl, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_flag(lbl, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+            // Store sensor ID as user_data (heap-allocated string)
+            auto* id_copy = new std::string(sensor_id);
+            lv_obj_set_user_data(chip, id_copy);
+
+            // Free heap string on deletion (L069 pattern)
+            lv_obj_add_event_cb(
+                chip,
+                [](lv_event_t* ev) {
+                    delete static_cast<std::string*>(lv_event_get_user_data(ev));
+                },
+                LV_EVENT_DELETE, id_copy);
+
+            // Click handler
+            lv_obj_add_event_cb(
+                chip,
+                [](lv_event_t* ev) {
+                    LVGL_SAFE_EVENT_CB_BEGIN("[PowerDeviceWidget] sensor_chip_cb");
+                    auto* target = static_cast<lv_obj_t*>(lv_event_get_current_target(ev));
+                    auto* id_ptr = static_cast<std::string*>(lv_obj_get_user_data(target));
+                    if (!id_ptr || !PowerDeviceWidget::s_active_picker_)
+                        return;
+
+                    auto* self = PowerDeviceWidget::s_active_picker_;
+                    std::string new_sensor = *id_ptr;
+
+                    // Teardown old carousel, update sensor, setup new one
+                    self->teardown_carousel();
+                    self->sensor_id_ = new_sensor;
+                    self->save_config();
+                    self->setup_carousel();
+                    self->dismiss_device_picker();
+                    LVGL_SAFE_EVENT_CB_END();
+                },
+                LV_EVENT_CLICKED, nullptr);
+        };
+
+        // "None" chip
+        make_chip(lv_tr("None"), "", sensor_id_.empty());
+
+        // One chip per energy sensor
+        for (const auto& sid : energy_ids) {
+            auto* info = SensorState::instance().get_sensor_info(sid);
+            std::string label = info ? info->friendly_name : sid;
+            make_chip(label.c_str(), sid, sid == sensor_id_);
+        }
     }
 
     s_active_picker_ = this;
@@ -699,23 +833,16 @@ void PowerDeviceWidget::select_icon(const std::string& name) {
 
     // Update icon grid highlights if picker is still open
     if (picker_backdrop_) {
-        // The icon grid is inside: backdrop -> card -> icon_grid
-        // Walk card children to find grid and update highlights
-        lv_obj_t* card = lv_obj_get_child(picker_backdrop_, 0);
-        if (card) {
-            // Icon grid is the last child of the card
-            uint32_t child_count = lv_obj_get_child_count(card);
-            if (child_count > 0) {
-                lv_obj_t* icon_grid = lv_obj_get_child(card, child_count - 1);
-                std::string effective_icon = icon_name_.empty() ? kDefaultIcon : icon_name_;
-                uint32_t grid_count = lv_obj_get_child_count(icon_grid);
-                for (uint32_t i = 0; i < grid_count; ++i) {
-                    lv_obj_t* cell = lv_obj_get_child(icon_grid, i);
-                    auto idx =
-                        static_cast<size_t>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(cell)));
-                    if (idx < kPowerIconCount) {
-                        apply_icon_cell_highlight(cell, kPowerIcons[idx] == effective_icon);
-                    }
+        lv_obj_t* icon_grid = lv_obj_find_by_name(picker_backdrop_, "picker_icon_grid");
+        if (icon_grid) {
+            std::string effective_icon = icon_name_.empty() ? kDefaultIcon : icon_name_;
+            uint32_t grid_count = lv_obj_get_child_count(icon_grid);
+            for (uint32_t i = 0; i < grid_count; ++i) {
+                lv_obj_t* cell = lv_obj_get_child(icon_grid, i);
+                auto idx =
+                    static_cast<size_t>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(cell)));
+                if (idx < kPowerIconCount) {
+                    apply_icon_cell_highlight(cell, kPowerIcons[idx] == effective_icon);
                 }
             }
         }
@@ -730,7 +857,176 @@ void PowerDeviceWidget::save_config() {
     config["device"] = device_name_;
     if (!icon_name_.empty())
         config["icon"] = icon_name_;
+    if (!sensor_id_.empty())
+        config["sensor"] = sensor_id_;
     save_widget_config(config);
-    spdlog::debug("[PowerDeviceWidget] Saved config: {}={} icon={}", instance_id_, device_name_,
-                  icon_name_.empty() ? kDefaultIcon : icon_name_);
+    spdlog::debug("[PowerDeviceWidget] Saved config: {}={} icon={} sensor={}", instance_id_,
+                  device_name_, icon_name_.empty() ? kDefaultIcon : icon_name_,
+                  sensor_id_.empty() ? "(none)" : sensor_id_);
+}
+
+std::string PowerDeviceWidget::auto_match_sensor() const {
+    auto energy_ids = SensorState::instance().energy_sensor_ids();
+    auto device_names = PowerDeviceState::instance().device_names();
+    if (energy_ids.size() == 1 && device_names.size() == 1) {
+        return energy_ids[0];
+    }
+    return "";
+}
+
+void PowerDeviceWidget::setup_carousel() {
+    if (sensor_id_.empty() || !widget_obj_)
+        return;
+
+    // Verify sensor exists
+    auto* info = SensorState::instance().get_sensor_info(sensor_id_);
+    if (!info) {
+        spdlog::debug("[PowerDeviceWidget] Sensor '{}' not found, skipping carousel", sensor_id_);
+        return;
+    }
+
+    // Collect existing children of widget_ before creating carousel
+    std::vector<lv_obj_t*> existing_children;
+    uint32_t child_count = lv_obj_get_child_count(widget_obj_);
+    for (uint32_t i = 0; i < child_count; ++i) {
+        existing_children.push_back(lv_obj_get_child(widget_obj_, static_cast<int32_t>(i)));
+    }
+
+    // Create carousel as child of widget_
+    carousel_ = ui_carousel_create_obj(widget_obj_);
+    if (!carousel_) {
+        spdlog::warn("[PowerDeviceWidget] Failed to create carousel");
+        return;
+    }
+
+    lv_obj_set_size(carousel_, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_pad_all(carousel_, 0, 0);
+    lv_obj_set_style_bg_opa(carousel_, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(carousel_, 0, 0);
+
+    auto* state = ui_carousel_get_state(carousel_);
+    if (state) {
+        state->wrap = true;
+        state->show_indicators = true;
+    }
+
+    // Page 1 (control): create a container and reparent existing children into it
+    lv_obj_t* control_page = lv_obj_create(carousel_);
+    lv_obj_set_size(control_page, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_pad_all(control_page, 0, 0);
+    lv_obj_set_style_bg_opa(control_page, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(control_page, 0, 0);
+    lv_obj_remove_flag(control_page, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Copy the original widget's flex layout to the control page
+    lv_obj_set_flex_flow(control_page, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(control_page, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    // Allow click events to bubble up from control page
+    lv_obj_add_flag(control_page, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(control_page, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+    for (auto* child : existing_children) {
+        lv_obj_set_parent(child, control_page);
+    }
+
+    ui_carousel_add_item(carousel_, control_page);
+
+    // Page 2 (energy): create container and instantiate XML component
+    lv_obj_t* energy_container = lv_obj_create(carousel_);
+    lv_obj_set_size(energy_container, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_pad_all(energy_container, 0, 0);
+    lv_obj_set_style_bg_opa(energy_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(energy_container, 0, 0);
+    lv_obj_remove_flag(energy_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(energy_container, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(energy_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+    energy_page_ = static_cast<lv_obj_t*>(
+        lv_xml_create(energy_container, "power_device_energy_page", nullptr));
+    if (!energy_page_) {
+        spdlog::warn("[PowerDeviceWidget] Failed to create energy page XML");
+        // Remove the carousel and restore children
+        for (auto* child : existing_children) {
+            lv_obj_set_parent(child, widget_obj_);
+        }
+        lv_obj_delete(carousel_);
+        carousel_ = nullptr;
+        return;
+    }
+
+    ui_carousel_add_item(carousel_, energy_container);
+
+    // Cache label pointers from the energy page XML
+    energy_power_label_ = lv_obj_find_by_name(energy_page_, "energy_power_label");
+    energy_voltage_label_ = lv_obj_find_by_name(energy_page_, "energy_voltage_label");
+    energy_current_label_ = lv_obj_find_by_name(energy_page_, "energy_current_label");
+    energy_energy_label_ = lv_obj_find_by_name(energy_page_, "energy_energy_label");
+
+    // Rebuild indicators to show 2 dots
+    ui_carousel_rebuild_indicators(carousel_);
+
+    attach_sensor_observers();
+
+    spdlog::debug("[PowerDeviceWidget] Carousel setup complete for sensor '{}'", sensor_id_);
+}
+
+void PowerDeviceWidget::teardown_carousel() {
+    detach_sensor_observers();
+
+    energy_page_ = nullptr;
+    energy_power_label_ = nullptr;
+    energy_voltage_label_ = nullptr;
+    energy_current_label_ = nullptr;
+    energy_energy_label_ = nullptr;
+    carousel_ = nullptr;
+}
+
+void PowerDeviceWidget::attach_sensor_observers() {
+    if (sensor_id_.empty())
+        return;
+    auto& sensor_state = SensorState::instance();
+    auto token = lifetime_.token();
+
+    auto observe_key = [&](const std::string& key, lv_obj_t* label, ObserverGuard& guard,
+                           SubjectLifetime& lt) {
+        lt = {};
+        auto* subj = sensor_state.get_value_subject(sensor_id_, key, lt);
+        if (!subj || !label)
+            return;
+        std::string key_copy = key;
+        guard = helix::ui::observe_int_sync<PowerDeviceWidget>(
+            subj, this,
+            [token, key_copy, label](PowerDeviceWidget* self, int centi_value) {
+                if (token.expired())
+                    return;
+                self->update_energy_label(key_copy, label, centi_value);
+            },
+            lt);
+    };
+
+    observe_key("power", energy_power_label_, power_observer_, power_lifetime_);
+    observe_key("voltage", energy_voltage_label_, voltage_observer_, voltage_lifetime_);
+    observe_key("current", energy_current_label_, current_observer_, current_lifetime_);
+    observe_key("energy", energy_energy_label_, energy_observer_, energy_lifetime_);
+}
+
+void PowerDeviceWidget::detach_sensor_observers() {
+    power_observer_.reset();
+    voltage_observer_.reset();
+    current_observer_.reset();
+    energy_observer_.reset();
+    power_lifetime_ = {};
+    voltage_lifetime_ = {};
+    current_lifetime_ = {};
+    energy_lifetime_ = {};
+}
+
+void PowerDeviceWidget::update_energy_label(const std::string& key, lv_obj_t* label,
+                                            int centi_value) {
+    if (!label)
+        return;
+    auto text = SensorState::format_value(key, centi_value);
+    lv_label_set_text(label, text.c_str());
 }
