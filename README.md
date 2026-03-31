@@ -2,7 +2,7 @@
   <img src="assets/images/helix-icon-256.png" alt="HelixScreen" width="128"/>
   <br>
   <h1 align="center">HelixScreen</h1>
-  <p align="center"><em>A modern touch interface for Klipper/Moonraker 3D printers</em></p>
+  <p align="center"><strong>A modern touch interface for Klipper 3D printers</strong></p>
   <p align="center"><a href="https://helixscreen.org">helixscreen.org</a></p>
 </p>
 
@@ -22,38 +22,21 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 
 ---
 
-> **Release Candidate — v0.99**
->
-> On the doorstep of 1.0 (targeting early April 2026). Multi-page home screen, exclude object map, temperature graph, Creality K2/CFS support, tool changer widgets, and preheat macros — plus dozens of crash fixes.
->
-> **Tested on:** Voron 2.4 (Raspberry Pi 5), Voron 0.2, Doron Velta, RatRig V-Core, Flashforge AD5M Pro ([Forge-X](https://github.com/DrA1ex/ff5m) firmware), Sovol SV06, Sovol SV08, BTT CB2, Creality K1C, Creality K2 Max, x86 Mini ITX PC (Debian Bookworm, 7" HDMI touchscreen)
->
-> **Raspberry Pi:** Both 64-bit and 32-bit Raspberry Pi OS are supported (Pi 4, Pi 5, CM4, Zero 2 W).
->
-> **QIDI:** Q2 and Max 4 supported with auto-detection. Requires [FreeDi](https://github.com/Phil1988/FreeDi) firmware. Older models (X-Max 3, X-Plus 3, Plus 4, Q1 Pro, X-Smart 3) have TJC serial displays and are not compatible without a screen replacement.
->
-> **Flashforge:** AD5M/Pro (Forge-X firmware), AD5X (ZMOD firmware).
->
-> **Creality:** Sonic Pad, K1/K1C/K1 Max, and K2 Max binaries are included. CFS (Creality Filament System) support is in progress.
->
-> **Ready to help?** See [Installation](#installation). Found a bug? [Open an issue](https://github.com/prestonbrown/helixscreen/issues). Have an idea? [Request a feature](https://github.com/prestonbrown/helixscreen/issues/new?labels=enhancement). Want to chat? [Join our Discord](https://discord.gg/RZCT2StKhr).
-
----
-
 **Quick Links:** [Website](https://helixscreen.org) · [Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [User Guide](docs/user/USER_GUIDE.md) · [FAQ](#faq) · [Contributing](docs/devel/DEVELOPMENT.md#contributing) · [Changelog](CHANGELOG.md) · [Discord](https://discord.gg/RZCT2StKhr)
 
 ---
 
 ## Why HelixScreen?
 
-- **Customizable dashboard** — Multi-page grid with drag-to-reposition, edge resize, and 25+ widgets including temperature graphs, fan arcs, and power toggles
-- **Every feature at your fingertips** — 30+ panels, 18 overlays, 13 modals, 250+ XML layouts
-- **Runs on anything** — ~10MB RAM, from a Creality K1 to a Raspberry Pi 5
-- **71 printers in the database** — Auto-detects your hardware and configures itself
+- **Customizable dashboard** — Multi-page grid with drag-to-reposition, edge resize, and 30+ widgets including temperature graphs, fan arcs, and power toggles
+- **Every feature at your fingertips** — 30+ panels, 20+ overlays, 20+ modals, 280+ XML layouts
+- **Runs on anything** — ~15MB RAM, from a Creality K1 to a Raspberry Pi 5
+- **70+ printers in the database** — Auto-detects your hardware and configures itself
 - **Multi-material ready** — AFC, Happy Hare, ACE, AD5X IFS, CFS, tool changers, Spoolman
 - **Exclude objects** — Tap-to-exclude overhead map view with object outlines during prints
 - **Looks great** — Light/dark themes with 17 presets, responsive layouts, GPU-accelerated blur
-- **First-run wizard** — 13-step guided setup discovers your printer's capabilities
+- **First-run wizard** — Guided setup discovers your printer's capabilities
+- **9 languages** — English, German, Spanish, French, Italian, Japanese, Portuguese, Russian, and Chinese
 
 <details>
 <summary><strong>Technical comparison</strong></summary>
@@ -62,12 +45,13 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 |---------|-------------|-------------|---------------|
 | UI Framework | LVGL 9 XML | LVGL 8 C | GTK 3 (Python) |
 | Declarative UI | Full XML with reactive bindings | C only | Python only |
-| RAM Usage | ~10MB | ~15-20MB | ~50MB |
-| Disk Size | ~70-80MB | ~60-80MB | ~50MB |
+| RAM Usage | ~15MB | ~15-20MB | ~50MB |
+| Disk Size | ~110-150MB | ~60-80MB | ~50MB |
 | Multi-Material | 6 backends | Limited | Basic |
-| Printer Database | 71 models | — | Manual config |
+| Printer Database | 70+ models | — | Manual config |
 | Display Layouts | Auto-detecting (tiny to ultrawide) | Fixed | Configurable |
-| Status | Release Candidate (active) | Inactive | Mature (maintenance) |
+| Internationalization | 9 languages | — | 40+ languages |
+| Status | 1.0 (active) | Inactive | Mature (maintenance) |
 | Language | C++17 | C | Python 3 |
 
 </details>
@@ -113,61 +97,62 @@ See [docs/devel/GALLERY.md](docs/devel/GALLERY.md) for the full gallery.
 
 ## Features
 
-**Dashboard** — Customizable grid layout with drag-to-reposition, edge resize, widget catalog, per-breakpoint persistence. Includes clock, job queue, shutdown/reboot, temperature, fan, network, power, and more.
+**Dashboard** — Customizable multi-page grid with drag-to-reposition, edge resize, and a catalog of 30+ widgets. Temperature graphs, fan arcs, power toggles, camera feeds, active spool, favorite macros — add what matters, hide what doesn't. Per-breakpoint layout persistence.
 
-**Printer Control** — Print management with G-code preview, motion controls, temperature presets with per-material overrides, multi-fan control, Z-offset, speed/flow tuning, live filament consumption tracking, power device management
+**Printer Control** — Print management with G-code preview, motion controls, temperature presets with per-material overrides, multi-fan control, Z-offset, speed/flow tuning, live filament consumption tracking, power device management.
 
-**Multi-Material** — 6 filament system backends: AFC (Box Turtle, ViViD), Happy Hare (ERCF, 3MS, Tradrack), ACE (Anycubic ACE Pro), AD5X IFS, Creality CFS, and tool changers. Multi-unit and multi-backend support. Full Spoolman integration with spool creation wizard.
+**Multi-Material** — 6 filament system backends: AFC (Box Turtle, ViViD), Happy Hare (ERCF, 3MS, Tradrack, Night Owl), ACE (Anycubic ACE Pro), AD5X IFS, Creality CFS, and tool changers. Multi-unit and multi-backend support. Full Spoolman integration with spool creation wizard.
 
-**Visualization** — 3D G-code layer preview with memory-aware geometry budgets, 3D bed mesh with async rendering, print thumbnails, frequency response charts, unified temperature graph
+**Visualization** — 3D G-code layer preview with memory-aware geometry budgets, 3D bed mesh with async rendering, print thumbnails, frequency response charts, unified temperature graph.
 
-**Calibration** — Input shaper with frequency response charts, PID tuning with live graph, MPC calibration (Kalico), bed mesh, screws tilt adjust, Z-offset, firmware retraction, probe management
+**Calibration** — Input shaper with frequency response charts, PID tuning with live graph, MPC calibration (Kalico), belt tension tuning, bed mesh, screws tilt adjust, Z-offset, firmware retraction, probe management.
 
-**Integrations** — HelixPrint plugin, power devices with quick-toggle, print history with dashboard, timelapse (Moonraker plugin), exclude objects with per-object thumbnails, LED control (5 backends), sound alerts (SDL/PWM/M300)
+**Integrations** — HelixPrint plugin, power devices with quick-toggle, print history, timelapse (Moonraker plugin), exclude objects with tap-to-exclude map view, LED control (5 backends), sound alerts (SDL/PWM/M300), Bluetooth label printing (Brother QL/PT, Niimbot, MakeID).
 
-**Display** — Auto-detecting layout system (480x320, 800x480, 1024x600, 1920x480 ultrawide), display rotation (0/90/180/270) with auto-detection, light/dark themes with 17 presets and live theme editor, GPU-accelerated backdrop blur, screensavers
+**Display** — Auto-detecting layout system (480x320 to 1920x480 ultrawide), display rotation (0/90/180/270) with auto-detection, light/dark themes with 17 presets and live theme editor, GPU-accelerated backdrop blur, screensavers.
 
-**System** — 13-step first-run wizard, 71 printer models with auto-detection, opt-in crash reporting with debug bundles, KIAUH installer, versioned config migration, i18n translation system
+**System** — First-run wizard with guided hardware discovery, 70+ printer models with auto-detection, 9 languages, opt-in crash reporting with debug bundles, KIAUH installer, versioned config migration.
 
 ## Supported Platforms
 
 | Platform | Architecture | Status |
 |----------|-------------|--------|
-| Raspberry Pi 4/5 (64-bit) | aarch64 | Tested |
+| Raspberry Pi 4/5, CM4, Zero 2 W (64-bit) | aarch64 | Tested |
 | Raspberry Pi (32-bit) | armhf | Tested |
 | BTT Pad / CB1 / CB2 / Manta | aarch64 | Tested |
-| Flashforge AD5M/Pro | armv7-a | Tested |
-| Flashforge AD5X | MIPS32 | Supported |
-| QIDI (Q2, Max 4) | aarch64 | Untested¹ |
+| Creality K1 / K1C / K1 Max | MIPS32 | Tested |
+| Creality K2 Max / K2 Plus | ARM (musl) | Tested |
 | Creality Sonic Pad | armhf | Tested |
-| Creality K1/K1C/K1 Max | MIPS32 | Tested |
-| Creality K2 Max/Plus | ARM (musl) | Tested |
-| Sovol SV06/SV08 | Pi build | Active testing |
+| Flashforge AD5M / AD5M Pro | armv7-a | Tested |
+| Flashforge AD5X | MIPS32 | Tested |
+| QIDI Q2, Max 4 | aarch64 | Supported¹ |
+| Sovol SV06 / SV08 | Pi build | Tested |
 | Elegoo Centauri Carbon | Dedicated build | Active testing |
 | x86 Mini PC (Debian) | x86_64 | Tested |
-| macOS / Linux desktop | x86_64/ARM64 | Development / CI |
+| macOS / Linux desktop | x86_64 / ARM64 | Development / CI |
 
-¹ Only QIDI models with Linux framebuffer displays (Q2, Max 4) are compatible. Older models (X-Max 3, X-Plus 3, Plus 4, Q1 Pro, X-Smart 3) use TJC/Nextion HMI serial displays and are **not supported** without a screen replacement.
+¹ QIDI models with Linux framebuffer displays (Q2, Max 4) only. Requires [FreeDi](https://github.com/Phil1988/FreeDi) firmware. Older models (X-Max 3, X-Plus 3, Plus 4, Q1 Pro, X-Smart 3) use TJC/Nextion serial displays and are **not compatible** without a screen replacement.
 
 ## Installation
 
 > **Run these commands on your printer's host computer, not your local machine.**
->
-> SSH into your Raspberry Pi, BTT CB1/CB2/Manta, or similar host. For all-in-one printers (Creality K1, K2 series, Flashforge AD5M/Pro), SSH directly into the printer itself.
+> SSH into your Raspberry Pi, BTT board, or similar host. For all-in-one printers (Creality K1/K2, Flashforge AD5M/Pro), SSH directly into the printer.
 
-**One-line install (Raspberry Pi, Creality, QIDI, Sovol, and more):**
+**One-line install:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
 ```
 
-The installer auto-detects your platform, downloads the correct binary, sets up the service, and launches the first-run wizard. Updates are just `--update`:
+The installer auto-detects your platform, downloads the correct binary, sets up the service, and launches the first-run wizard. To update:
 ```bash
 curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh -s -- --update
 ```
 
+Also available through [KIAUH](https://github.com/dw-0/kiauh) as an extension.
+
 **Flashforge AD5M/Pro:** We provide a [ready-made firmware image](https://github.com/prestonbrown/ff5m) (Forge-X fork with HelixScreen pre-configured) — just flash from a USB drive. Or install manually on an existing Forge-X/Klipper Mod setup.
 
-See [Installation Guide](docs/user/INSTALL.md) for detailed instructions, display configuration, and troubleshooting.
+See the [Installation Guide](docs/user/INSTALL.md) for detailed instructions, display configuration, and troubleshooting.
 
 ## Development
 
@@ -193,23 +178,20 @@ make test-run
 
 **Controls:** Click navigation icons, press 'S' for screenshot, use `-v` (INFO), `-vv` (DEBUG), or `-vvv` (TRACE) for logging.
 
-**Test suite:** 390+ test files with comprehensive coverage of printer state, UI components, XML parsing, and more.
+**Test suite:** 6,000+ test cases across 400 test files covering printer state, UI components, XML parsing, multi-material, and more.
 
 See [docs/devel/DEVELOPMENT.md](docs/devel/DEVELOPMENT.md) for detailed setup, cross-compilation, and contributing guidelines.
 
 ## FAQ
 
-**Is HelixScreen production-ready?**
-Release candidate status, approaching 1.0. Core features are stable with 390+ test files and opt-in crash reporting. Suitable for daily use on any Klipper printer.
-
 **How is this different from GuppyScreen/KlipperScreen?**
-More features, way less resource usage (~10MB RAM vs ~50MB for KlipperScreen), and actively developed. See the [comparison table](#why-helixscreen).
+More features, less resource usage (~15MB RAM vs ~50MB for KlipperScreen), and actively developed. See the [comparison table](#why-helixscreen).
 
 **Which printers are supported?**
-Any Klipper + Moonraker printer. 71 models in the auto-detection database spanning Voron, Creality, QIDI, Anycubic, Flashforge, Sovol, RatRig, FLSUN, Elegoo, Prusa, and more. The wizard auto-discovers your printer's capabilities even if it's not in the database.
+Any Klipper + Moonraker printer. 70+ models in the auto-detection database spanning Voron, Creality, QIDI, Anycubic, Flashforge, Sovol, RatRig, FLSUN, Elegoo, Prusa, and more. The wizard auto-discovers your printer's capabilities even if it's not in the database.
 
 **What screen sizes are supported?**
-800x480, 1024x600, and 1920x480 (ultrawide) are fully supported with auto-detecting layouts. Display rotation (0/90/180/270) is supported with auto-detection. Smaller displays like 480x320 are a work-in-progress.
+480x320, 800x480, 1024x600, and 1920x480 (ultrawide) with auto-detecting layouts. Display rotation (0/90/180/270) with auto-detection.
 
 **What multi-material systems work?**
 AFC (Box Turtle, ViViD), Happy Hare (ERCF, 3MS, Tradrack, Night Owl), ACE (Anycubic ACE Pro), AD5X IFS, Creality CFS, and tool changers (viesturz/klipper-toolchanger). Full Spoolman integration for spool management.
@@ -263,12 +245,12 @@ See [docs/user/TROUBLESHOOTING.md](docs/user/TROUBLESHOOTING.md) for more soluti
 
 ## License
 
-GPL v3 — See individual source files for copyright headers.
+GPL v3 — See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
 **Inspired by:** [GuppyScreen](https://github.com/ballaswag/guppyscreen) (general architecture, LVGL-based approach), [KlipperScreen](https://github.com/KlipperScreen/KlipperScreen) (feature inspiration)
 
-**Stack:** [LVGL 9.5](https://lvgl.io/), [Klipper](https://www.klipper3d.org/), [Moonraker](https://github.com/Arksine/moonraker), [libhv](https://github.com/ithewei/libhv), [spdlog](https://github.com/gabime/spdlog), [SDL2](https://www.libsdl.org/)
+**Built with:** [LVGL 9.5](https://lvgl.io/), [Klipper](https://www.klipper3d.org/), [Moonraker](https://github.com/Arksine/moonraker), [libhv](https://github.com/ithewei/libhv), [spdlog](https://github.com/gabime/spdlog), [SDL2](https://www.libsdl.org/)
 
-**AI-Assisted Development:** HelixScreen was developed with the assistance of [Claude Code](https://github.com/anthropics/claude-code) and [Anthropic](https://www.anthropic.com/)'s Claude AI models
+**AI-Assisted Development:** Built with [Claude Code](https://github.com/anthropics/claude-code) by [Anthropic](https://www.anthropic.com/)
