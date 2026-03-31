@@ -109,6 +109,9 @@ class PrinterFanState {
      */
     void update_fan_speed(const std::string& object_name, double speed);
 
+    /// Update RPM reading for a fan (from fan_feedback or Klipper rpm field)
+    void update_fan_rpm(const std::string& object_name, int rpm);
+
     // Subject accessors
     lv_subject_t* get_fan_speed_subject() {
         return &fan_speed_;

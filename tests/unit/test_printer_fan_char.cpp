@@ -1217,3 +1217,45 @@ TEST_CASE("Fan characterization: output_pin fan speed from value field",
         REQUIRE(fans[2].speed_percent == 50);  // heater_fan hotend_fan
     }
 }
+
+TEST_CASE("Fan characterization: fan_feedback RPM updates",
+          "[characterization][fan][update][fan_feedback]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "output_pin fan2"});
+
+    SECTION("fan_feedback maps fanN_speed to output_pin fanN rpm") {
+        json status = {{"fan_feedback", {{"fan0_speed", 16000},
+                                         {"fan1_speed", 3692},
+                                         {"fan2_speed", 0}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].rpm.has_value());
+        REQUIRE(fans[0].rpm.value() == 16000);
+        REQUIRE(fans[1].rpm.has_value());
+        REQUIRE(fans[1].rpm.value() == 3692);
+        REQUIRE(fans[2].rpm.has_value());
+        REQUIRE(fans[2].rpm.value() == 0);
+    }
+
+    SECTION("fan_feedback for unknown fanN is ignored") {
+        json status = {{"fan_feedback", {{"fan5_speed", 1000}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+
+    SECTION("fan_feedback with non-numeric value is ignored") {
+        json status = {{"fan_feedback", {{"fan0_speed", nullptr}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+}

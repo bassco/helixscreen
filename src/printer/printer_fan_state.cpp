@@ -127,6 +127,20 @@ void PrinterFanState::update_from_status(const nlohmann::json& status) {
             }
         }
     }
+
+    // Parse fan_feedback RPM data (Creality-specific tachometer module)
+    if (status.contains("fan_feedback")) {
+        const auto& fb = status["fan_feedback"];
+        if (fb.is_object()) {
+            for (int i = 0; i < 10; i++) {
+                std::string key = "fan" + std::to_string(i) + "_speed";
+                if (fb.contains(key) && fb[key].is_number()) {
+                    int rpm = fb[key].get<int>();
+                    update_fan_rpm("output_pin fan" + std::to_string(i), rpm);
+                }
+            }
+        }
+    }
 }
 
 FanType PrinterFanState::classify_fan_type(const std::string& object_name) const {
@@ -301,6 +315,15 @@ void PrinterFanState::update_fan_speed(const std::string& object_name, double sp
         }
     }
     // Fan not in list - this is normal during initial status before discovery
+}
+
+void PrinterFanState::update_fan_rpm(const std::string& object_name, int rpm) {
+    for (auto& fan : fans_) {
+        if (fan.object_name == object_name) {
+            fan.rpm = rpm;
+            return;
+        }
+    }
 }
 
 lv_subject_t* PrinterFanState::get_fan_speed_subject(const std::string& object_name,
