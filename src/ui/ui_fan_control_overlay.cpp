@@ -258,8 +258,14 @@ void FanControlOverlay::populate_fans() {
                 send_fan_speed(fan_id, speed_percent);
             });
 
-            // Long-press to rename
+            // Long-press to rename — registered on both card root and arc.
+            // The arc is interactive (speed control) so it can't bubble long-press
+            // to the card root. Each gets its own FanRenameData, freed on DELETE.
             attach_long_press_rename(afd.dial->get_root(), fan.object_name, fan.display_name);
+            lv_obj_t* dial_arc = lv_obj_find_by_name(afd.dial->get_root(), "dial_arc");
+            if (dial_arc) {
+                attach_long_press_rename(dial_arc, fan.object_name, fan.display_name);
+            }
 
             animated_fan_dials_.push_back(std::move(afd));
 
@@ -299,9 +305,11 @@ void FanControlOverlay::populate_fans() {
                 }
 
                 // Find arc and make read-only (fan_arc_core is interactive by default)
+                // Also bubble events so long-press reaches the card
                 lv_obj_t* arc = lv_obj_find_by_name(card, "dial_arc");
                 if (arc) {
                     lv_obj_remove_flag(arc, LV_OBJ_FLAG_CLICKABLE);
+                    lv_obj_add_flag(arc, LV_OBJ_FLAG_EVENT_BUBBLE);
                     lv_obj_set_style_bg_opa(arc, LV_OPA_TRANSP, LV_PART_KNOB);
                     lv_obj_set_style_shadow_width(arc, 0, LV_PART_KNOB);
                     lv_obj_set_style_outline_width(arc, 0, LV_PART_KNOB);

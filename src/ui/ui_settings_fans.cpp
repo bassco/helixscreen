@@ -236,20 +236,22 @@ void FanSettingsOverlay::populate_fan_list(lv_obj_t* list, bool controllable) {
             lv_label_set_text(speed_label, speed_buf);
         }
 
-        // Wire click callback on the name label for rename
-        lv_obj_t* name_label = lv_obj_find_by_name(row, "name_label");
-        if (name_label) {
-            // Store object name as user data for the rename callback
+        // Wire click callback on the entire row for rename
+        {
             auto* obj_name = new std::string(fan.object_name);
+            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+            // Touch feedback: dim on press
+            lv_obj_set_style_opa(row, LV_OPA_70, LV_PART_MAIN | LV_STATE_PRESSED);
             lv_obj_add_event_cb(
-                name_label,
+                row,
                 [](lv_event_t* e) {
-                    LVGL_SAFE_EVENT_CB_BEGIN("[FanSettingsOverlay] name_label clicked");
+                    LVGL_SAFE_EVENT_CB_BEGIN("[FanSettingsOverlay] row clicked");
                     auto* name = static_cast<std::string*>(lv_event_get_user_data(e));
                     if (name) {
-                        // Find current display name from the label text
-                        lv_obj_t* label = lv_event_get_target_obj(e);
-                        const char* current = lv_label_get_text(label);
+                        lv_obj_t* r = lv_event_get_current_target_obj(e);
+                        lv_obj_t* label = lv_obj_find_by_name(r, "name_label");
+                        const char* current =
+                            label ? lv_label_get_text(label) : "";
                         get_fan_settings_overlay().handle_fan_rename(
                             *name, current ? current : "");
                     }
@@ -257,12 +259,10 @@ void FanSettingsOverlay::populate_fan_list(lv_obj_t* list, bool controllable) {
                 },
                 LV_EVENT_CLICKED, obj_name);
 
-            // Clean up the allocated string when the label is deleted
             lv_obj_add_event_cb(
-                name_label,
+                row,
                 [](lv_event_t* e) {
-                    auto* name = static_cast<std::string*>(lv_event_get_user_data(e));
-                    delete name;
+                    delete static_cast<std::string*>(lv_event_get_user_data(e));
                 },
                 LV_EVENT_DELETE, obj_name);
         }

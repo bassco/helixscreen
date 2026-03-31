@@ -43,6 +43,7 @@ const std::unordered_set<std::string> STRIP_PREFIXES = {
     "controller_fan",
     "fan_generic",
     "temperature_fan",
+    "output_pin",
     // Heaters
     "heater_generic",
     // Temperature sensors
