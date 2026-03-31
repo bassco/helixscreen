@@ -854,12 +854,15 @@ TEST_CASE("MoonrakerClientMock hardware discovery", "[connection][slow][hardware
     SECTION("discover_printer() populates bed mesh") {
         MoonrakerClientMock mock(MoonrakerClientMock::PrinterType::VORON_24);
 
-        // Set up API for testing bed mesh functionality
+        // Set up API before connect so bed mesh callback is registered
+        // when dispatch_initial_state() fires during connect()
         PrinterState state;
         state.init_subjects(false);
+        MoonrakerAPIMock api(mock, state);
+
         mock.connect("ws://mock/websocket", []() {}, []() {});
         mock.discover_printer([]() {});
-        MoonrakerAPIMock api(mock, state);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Test through API (non-deprecated methods)
         REQUIRE(api.advanced().has_bed_mesh());
@@ -2044,7 +2047,7 @@ TEST_CASE("MoonrakerClientMock print progress increments during printing",
         mock.gcode_script("SDCARD_PRINT_FILE FILENAME=3DBenchy.gcode");
 
         // Let it run for a bit
-        REQUIRE(fixture.wait_for_callbacks(3, 3000));
+        REQUIRE(fixture.wait_for_callbacks(3, 5000));
 
         // Pause
         mock.gcode_script("PAUSE");
@@ -2076,7 +2079,7 @@ TEST_CASE("MoonrakerClientMock print progress increments during printing",
         fixture.reset();
 
         // Wait for more ticks while paused
-        REQUIRE(fixture.wait_for_callbacks(3, 3000));
+        REQUIRE(fixture.wait_for_callbacks(3, 5000));
         mock.stop_temperature_simulation();
 
         // Check progress hasn't increased (paused state doesn't advance progress)

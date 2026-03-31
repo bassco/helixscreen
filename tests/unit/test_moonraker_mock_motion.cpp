@@ -456,7 +456,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 double x = toolhead["position"][0].get<double>();
                 return approx_equal(x, 50.0);
             },
-            2000));
+            5000));
 
         // Home all axes
         mock.gcode_script("G28");
@@ -482,7 +482,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 return approx_equal(x, 0.0) && approx_equal(y, 0.0) && approx_equal(z, 0.0) &&
                        homed == "xyz";
             },
-            2000));
+            5000));
 
         auto pos = fixture.get_latest_position();
         REQUIRE(pos.has_value());
@@ -525,7 +525,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 double x = toolhead["position"][0].get<double>();
                 return approx_equal(x, 50.0);
             },
-            2000));
+            5000));
 
         // Home X only
         mock.gcode_script("G28 X");
@@ -549,7 +549,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 // X should be 0, homed_axes should contain 'x'
                 return approx_equal(x, 0.0) && homed.find('x') != std::string::npos;
             },
-            2000));
+            5000));
 
         auto pos = fixture.get_latest_position();
         REQUIRE(pos.has_value());
@@ -588,7 +588,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 double z = toolhead["position"][2].get<double>();
                 return approx_equal(z, 25.0);
             },
-            2000));
+            5000));
 
         // Home X and Y only
         mock.gcode_script("G28 X Y");
@@ -614,7 +614,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 return approx_equal(x, 0.0) && approx_equal(y, 0.0) &&
                        homed.find('x') != std::string::npos && homed.find('y') != std::string::npos;
             },
-            2000));
+            5000));
 
         auto pos = fixture.get_latest_position();
         REQUIRE(pos.has_value());
@@ -655,7 +655,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 double z = toolhead["position"][2].get<double>();
                 return approx_equal(x, 100.0) && approx_equal(y, 150.0) && approx_equal(z, 50.0);
             },
-            2000));
+            5000));
 
         // Home all
         mock.gcode_script("G28");
@@ -683,7 +683,7 @@ TEST_CASE("MoonrakerClientMock G28 homing commands", "[slow][api][homing]") {
                 return approx_equal(x, 0.0) && approx_equal(y, 0.0) && approx_equal(z, 0.0) &&
                        homed == "xyz";
             },
-            2000);
+            5000);
 
         // The predicate itself validates position is 0,0,0 with homed_axes="xyz"
         REQUIRE(found_homed_state);

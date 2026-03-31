@@ -20,6 +20,7 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after i
     Config::get_instance()->set<int>("/display/sleep_sec", 1800);
     Config::get_instance()->set<int>("/display/dim_sec", 300);
     Config::get_instance()->set<int>("/display/brightness", 80);
+    Config::get_instance()->set<bool>("/display/animations_enabled", true);
     DisplaySettingsManager::instance().deinit_subjects();
     DisplaySettingsManager::instance().init_subjects();
 
