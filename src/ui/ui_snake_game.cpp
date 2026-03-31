@@ -600,8 +600,8 @@ void render_tick(lv_timer_t* /*timer*/) {
 
     // Update food pulse animation
     g_render.food_pulse_phase += dt * 2.0f * 3.14159265f * 2.0f; // 2Hz
-    if (g_render.food_pulse_phase > 100.0f) {
-        g_render.food_pulse_phase -= 100.0f * 3.14159265f * 2.0f;
+    if (g_render.food_pulse_phase > 6.28318f) {
+        g_render.food_pulse_phase -= 6.28318f;
     }
 
     // Update particles
@@ -954,7 +954,7 @@ void draw_cb(lv_event_t* e) {
         lv_draw_rect(layer, &flash_dsc, &flash_area);
     }
 
-    // Show game over label after DEATH_CARD_TIME
+    // Show game over label after DEATH_CARD_TIME (fade in over ~200ms)
     if (g_game.game_over && g_render.death_start_ms > 0 && death_elapsed >= DEATH_CARD_TIME) {
         if (g_gameover_label && lv_obj_has_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN)) {
             bool new_high =
@@ -966,7 +966,14 @@ void draw_cb(lv_event_t* e) {
                 snprintf(buf, sizeof(buf), "Game Over!\nScore: %d\nTap to restart", g_game.score);
             }
             lv_label_set_text(g_gameover_label, buf);
+            lv_obj_set_style_opa(g_gameover_label, LV_OPA_TRANSP, LV_PART_MAIN);
             lv_obj_remove_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (g_gameover_label) {
+            uint32_t fade_elapsed = death_elapsed - DEATH_CARD_TIME;
+            uint32_t fade_duration = DEATH_INPUT_READY_TIME - DEATH_CARD_TIME; // ~300ms
+            float fade = LV_MIN(1.0f, static_cast<float>(fade_elapsed) / static_cast<float>(fade_duration));
+            lv_obj_set_style_opa(g_gameover_label, static_cast<lv_opa_t>(LV_OPA_COVER * fade), LV_PART_MAIN);
         }
     }
 }
@@ -976,8 +983,12 @@ void draw_cb(lv_event_t* e) {
 // ============================================================================
 
 void dpad_cb(lv_event_t* e) {
-    if (g_game.game_over)
+    if (g_game.game_over) {
+        if (g_render.death_input_ready) {
+            init_game();
+        }
         return;
+    }
     auto* btn = lv_event_get_target_obj(e);
     if (btn == g_dpad_up)
         g_input.push_direction(Direction::UP, g_game.direction);
@@ -1065,7 +1076,8 @@ void input_cb(lv_event_t* e) {
         uint32_t key = lv_event_get_key(e);
 
         if (key == LV_KEY_ESC) {
-            SnakeGame::hide();
+            // Defer destruction — never safe_delete() during input event processing
+            lv_async_call([](void*) { SnakeGame::hide(); }, nullptr);
             return;
         }
 
@@ -1099,7 +1111,8 @@ void input_cb(lv_event_t* e) {
 }
 
 void close_cb(lv_event_t* /*e*/) {
-    SnakeGame::hide();
+    // Defer destruction — never safe_delete() during input event processing
+    lv_async_call([](void*) { SnakeGame::hide(); }, nullptr);
 }
 
 // ============================================================================
@@ -1291,16 +1304,15 @@ void destroy_overlay() {
     }
 
     // Clean up overlay
-    if (helix::ui::safe_delete(g_overlay)) {
-        g_game_area = nullptr;
-        g_score_label = nullptr;
-        g_gameover_label = nullptr;
-        g_close_btn = nullptr;
-        g_dpad_up = nullptr;
-        g_dpad_down = nullptr;
-        g_dpad_left = nullptr;
-        g_dpad_right = nullptr;
-    }
+    helix::ui::safe_delete(g_overlay);
+    g_game_area = nullptr;
+    g_score_label = nullptr;
+    g_gameover_label = nullptr;
+    g_close_btn = nullptr;
+    g_dpad_up = nullptr;
+    g_dpad_down = nullptr;
+    g_dpad_left = nullptr;
+    g_dpad_right = nullptr;
 
     // Reset state
     g_game.snake.clear();
