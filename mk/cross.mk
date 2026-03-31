@@ -1194,10 +1194,12 @@ help-cross:
 # Rsync flags for asset sync: delete stale files, checksum-based skip, exclude junk
 DEPLOY_RSYNC_FLAGS := -avzz --delete --checksum
 DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
-	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
+	--exclude='assets/fonts/*.c' --exclude='assets/fonts/*.ttf' --exclude='assets/fonts/*.otf' --exclude='assets/fonts/.clang-format' \
+	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
 # Tar-compatible excludes (same patterns, different syntax)
 DEPLOY_TAR_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
-	--exclude='assets/fonts/*.c' --exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
+	--exclude='assets/fonts/*.c' --exclude='assets/fonts/*.ttf' --exclude='assets/fonts/*.otf' --exclude='assets/fonts/.clang-format' \
+	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
 # Exclude tracker files (MOD/MED) on platforms without HELIX_HAS_TRACKER
 # rsync syntax:
 DEPLOY_NO_TRACKER := --exclude='*.mod' --exclude='*.med'
@@ -1492,7 +1494,7 @@ deploy-ad5m-legacy:
 	@if [ -f build/ad5m/bin/helix-watchdog ]; then scp -O build/ad5m/bin/helix-watchdog $(AD5M_SSH_TARGET):$(AD5M_DEPLOY_DIR)/bin/; fi
 	scp -O scripts/helix-launcher.sh $(AD5M_SSH_TARGET):$(AD5M_DEPLOY_DIR)/bin/
 	@echo "$(DIM)Transferring assets (excluding test files)...$(RESET)"
-	COPYFILE_DISABLE=1 tar -cf - --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='.claude-recall' --exclude='._*' ui_xml assets config | ssh $(AD5M_SSH_TARGET) "cd $(AD5M_DEPLOY_DIR) && tar -xf -"
+	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) ui_xml assets config | ssh $(AD5M_SSH_TARGET) "cd $(AD5M_DEPLOY_DIR) && tar -xf -"
 	@if [ -d build/assets/images/prerendered ] && ls build/assets/images/prerendered/*.bin >/dev/null 2>&1; then \
 		echo "$(DIM)Transferring pre-rendered splash images...$(RESET)"; \
 		ssh $(AD5M_SSH_TARGET) "mkdir -p $(AD5M_DEPLOY_DIR)/assets/images/prerendered"; \
@@ -2018,11 +2020,16 @@ RELEASE_VERSION := v$(VERSION)
 RELEASE_ASSETS := assets/fonts assets/images
 
 # Clean up release assets: remove files that are compiled into the binary or dev-only
-# .c font files are compiled into the binary at build time (28 MB savings)
+# .c font files are compiled into the binary at build time
+# .ttf/.otf source fonts are only used by font regen scripts, not at runtime (~35 MB savings)
 # .icns is a macOS icon format, not used on embedded targets
 # mdi-icon-metadata is dev-only (icon search tooling)
+# .clang-format is dev-only
 define release-clean-assets
 	@find $(1)/assets/fonts -name '*.c' -delete 2>/dev/null || true
+	@find $(1)/assets/fonts -name '*.ttf' -delete 2>/dev/null || true
+	@find $(1)/assets/fonts -name '*.otf' -delete 2>/dev/null || true
+	@find $(1)/assets/fonts -name '.clang-format' -delete 2>/dev/null || true
 	@find $(1)/assets -name '*.icns' -delete 2>/dev/null || true
 	@find $(1)/assets -name 'mdi-icon-metadata.json.gz' -delete 2>/dev/null || true
 endef

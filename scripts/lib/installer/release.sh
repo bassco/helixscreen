@@ -876,6 +876,20 @@ extract_release() {
 
     # Cleanup
     rm -rf "$extract_dir"
+
+    # Remove legacy files that were shipped in older releases but are no longer needed.
+    # Source fonts (.ttf/.otf) are only used by font regen scripts during development,
+    # not at runtime. Removes ~35 MB of dead weight on embedded devices.
+    local _legacy_removed=0
+    for _ext in ttf otf; do
+        for _f in "${INSTALL_DIR}"/assets/fonts/*."${_ext}"; do
+            [ -f "$_f" ] || continue
+            $(file_sudo "${INSTALL_DIR}") rm -f "$_f" 2>/dev/null && _legacy_removed=$((_legacy_removed + 1))
+        done
+    done
+    $(file_sudo "${INSTALL_DIR}") rm -f "${INSTALL_DIR}/assets/fonts/.clang-format" 2>/dev/null && _legacy_removed=$((_legacy_removed + 1))
+    [ "$_legacy_removed" -gt 0 ] && log_info "Removed $_legacy_removed legacy dev-only files from assets/fonts"
+
     log_success "Extracted to ${INSTALL_DIR}"
 }
 
