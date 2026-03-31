@@ -1490,9 +1490,9 @@ TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: Artillery Sidewinder 
 
     REQUIRE(result.detected());
     REQUIRE(result.type_name ==
-            "Creality K1 Max"); // Database matches K1 Max (Artillery might not be in database)
-    // Hostname + dual Z + build volume = medium-high confidence
-    REQUIRE(result.confidence >= 70); // Lowered from 75
+            "Artillery M1 Pro"); // Hostname "artillery" matches Artillery M1 Pro entry
+    // Hostname match is the dominant signal here
+    REQUIRE(result.confidence >= 70);
 }
 
 TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: BIQU B1 fingerprint",

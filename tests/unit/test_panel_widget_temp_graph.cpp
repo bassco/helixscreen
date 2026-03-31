@@ -169,14 +169,14 @@ TEST_CASE("TempGraphWidget: registered in widget registry", "[temp_graph][panel_
 TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
           "[temp_graph][panel_widget][features]") {
 
-    SECTION("1x1: lines only") {
+    SECTION("1x1: lines + gradients only") {
         uint32_t f = TempGraphWidget::features_for_size(1, 1);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_TARGET_LINES) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) == 0);
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 
@@ -187,7 +187,7 @@ TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);  // X-axis needs 3+ cols
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) == 0);
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 
@@ -198,7 +198,7 @@ TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) != 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) == 0);
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 

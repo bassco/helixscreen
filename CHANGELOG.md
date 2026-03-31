@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.12] - 2026-03-30
+
+This release adds fan management with output_pin support and RPM display, temperature graph overhaul via TempGraphController, touch calibration for DRM displays, K1 pre-print phase detection, and flexible nozzle temp widget layouts — alongside crash fixes, graph rendering improvements, and printer database additions.
+
+### Added
+- Fan management overlay in Settings with fan listing, type classification, and long-press rename
+- Output_pin fan support with M106 P<index> control, fan_feedback RPM display, and Creality fan role detection
+- Touch calibration support for DRM backend (#643)
+- K1 series pre-print phase detection and progress display
+- Nozzle temps widget now supports 1×1 and 2×1 layouts
+- Printer name displayed on homescreen widget (#641)
+- RH3D E3NG and Artillery M1 Pro added to printer database (#646)
+- Exception message plumbed through crash reporter pipeline (#645)
+
+### Fixed
+- Temperature graph: consistent scaling across all contexts, correct 5-min and 20-min windows, gradient support at all sizes, target lines on mini graph
+- Temperature graph: skip spurious initial rebuild on panel switch, limit history backfill to buffer capacity
+- AFC spool assignment routed through AFC backend instead of bypassing it (#644)
+- Print cancel RPC timeout increased to 5 minutes for large prints
+- Fan role mapping corrected for K1/K1C, unconfigured fans detected, speaker override added
+- Accelerometer detection uses AccelSensorManager instead of raw objects list
+- GCode viewport scaling uses extrusion-only bounding box
+- Smart home button with persistent overlays, printer image aspect ratio fix (#607)
+- Touch press-on-capture fix for ns2009 calibration on Ender 3 V3 KE
+- Guard against null callback in MoonrakerClient::connect (#639)
+- Guard lv_obj_delete_async_cb against use-after-free (#638)
+- Control/Filament buttons disabled on startup when Klipper not running (#640)
+- IFS: removed unsupported SHOW=0 param, seed Moonraker DB on first load
+- ACE: subscribe to ace Klipper object for realtime filament updates
+- Friendly error message for accelerometer SPI communication failures
+- Graph time axis uses POSIX strftime %I for musl compatibility
+- M141 fan role hint corrected from Chamber Circulation to Chamber Exhaust
+- Fan rename modal stripped down to fix MIPS SEGV crash at startup
+
+### Changed
+- Temperature graph internals refactored to TempGraphController for unified state management
+- TempControlPanel renamed to TemperatureService
+- Framebuffer cleared when crash report dialog closes
+- HELIX_DEBUG_TOUCH and HELIX_DEBUG_TOUCHES environment variables unified
+
 ## [0.99.11] - 2026-03-30
 
 This release adds QR scanner improvements and probe accuracy UX, alongside performance enhancements for Spoolman and camera handling, plus fixes for modal stale callbacks, temperature graph rendering, and multiple crash fixes.
@@ -2374,6 +2414,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.12]: https://github.com/prestonbrown/helixscreen/compare/v0.99.11...v0.99.12
 [0.99.11]: https://github.com/prestonbrown/helixscreen/compare/v0.99.10...v0.99.11
 [0.99.10]: https://github.com/prestonbrown/helixscreen/compare/v0.99.9...v0.99.10
 [0.99.9]: https://github.com/prestonbrown/helixscreen/compare/v0.99.8...v0.99.9

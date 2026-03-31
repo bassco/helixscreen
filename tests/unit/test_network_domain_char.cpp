@@ -21,7 +21,7 @@
  * - printer_connection_state_: 0 (disconnected)
  * - printer_connection_message_: "Disconnected"
  * - network_status_: 2 (connected - mock mode default)
- * - klippy_state_: 0 (ready)
+ * - klippy_state_: 2 (shutdown - default until confirmed ready)
  * - nav_buttons_enabled_: 0 (starts disabled)
  */
 
@@ -405,7 +405,7 @@ TEST_CASE("Network characterization: observer fires when klippy_state changes",
 
     // Initial notification
     REQUIRE(user_data[0] == 1);
-    REQUIRE(user_data[1] == 0); // Initial value is 0 (ready)
+    REQUIRE(user_data[1] == 2); // Initial value is SHUTDOWN (2) until confirmed ready
 
     // Update klippy state
     state.set_klippy_state_sync(KlippyState::ERROR);
@@ -493,7 +493,7 @@ TEST_CASE("Network characterization: subjects survive reset_for_testing cycle",
     REQUIRE(std::string(lv_subject_get_string(state.get_printer_connection_message_subject())) ==
             "Disconnected");
     REQUIRE(lv_subject_get_int(state.get_network_status_subject()) == 2); // Mock mode default
-    REQUIRE(lv_subject_get_int(state.get_klippy_state_subject()) == 0);
+    REQUIRE(lv_subject_get_int(state.get_klippy_state_subject()) == 2); // SHUTDOWN default
     REQUIRE(lv_subject_get_int(state.get_nav_buttons_enabled_subject()) == 0);
     // was_ever_connected_ stays true - it tracks session lifetime, not subject state
     REQUIRE(state.was_ever_connected() == true);

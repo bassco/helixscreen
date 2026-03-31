@@ -54,9 +54,9 @@ TEST_CASE("NozzleTempsWidget: default rowspan is 2 (1x2 preferred)", "[nozzle_te
     REQUIRE(def->colspan == 1);
     REQUIRE(def->rowspan == 2);
 
-    // Can scale from 1x2 to 2x3 (min_rowspan=2 to prevent unusable 1x1)
+    // Can scale from 1x1 to 2x3 (supports compact 1x1 and 2x1 layouts)
     REQUIRE(def->effective_min_colspan() == 1);
-    REQUIRE(def->effective_min_rowspan() == 2);
+    REQUIRE(def->effective_min_rowspan() == 1);
     REQUIRE(def->effective_max_colspan() == 2);
     REQUIRE(def->effective_max_rowspan() == 3);
 }

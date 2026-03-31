@@ -1379,15 +1379,15 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
         REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
     }
 
-    SECTION("1% progress with temps at target - no heaters heating so stays IDLE") {
+    SECTION("1% progress with temps at target triggers COMPLETE (threshold is >= 1%)") {
         set_progress_and_layer(1, 0);
         set_all_temps(600, 600, 2100, 2100);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        // 1% is not enough, and no heaters heating, so stays IDLE
-        REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
+        // 1% with temps ready triggers fallback completion (threshold is >= 1%)
+        REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
     }
 
     SECTION("2% progress but temps NOT ready - triggers heating detection") {
