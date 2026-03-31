@@ -40,6 +40,9 @@ struct TempConfigFixture {
 
         // Initialize Config singleton with temp path
         Config::get_instance()->init(config_path);
+
+        // Clear any external spool state leaked from other tests in this shard
+        SettingsManager::instance().clear_external_spool_info();
     }
 
     ~TempConfigFixture() {
