@@ -779,8 +779,20 @@ static void setup_slot_observers(AmsSlotData* data) {
         data->color_observer =
             observe_int_sync<lv_obj_t>(color_subject, obj, [](lv_obj_t* o, int color_int) {
                 auto* d = get_slot_data(o);
-                if (d)
-                    apply_slot_color(d, color_int);
+                if (!d)
+                    return;
+                apply_slot_color(d, color_int);
+
+                // Also refresh material label — there's no dedicated material subject,
+                // but material changes always accompany color updates from sync_from_backend().
+                if (d->material_label) {
+                    AmsBackend* be = AmsState::instance().get_backend();
+                    if (be) {
+                        SlotInfo slot = be->get_slot_info(d->slot_index);
+                        lv_label_set_text(d->material_label,
+                                          slot.material.empty() ? "--" : slot.material.c_str());
+                    }
+                }
             });
     }
     if (status_subject) {
