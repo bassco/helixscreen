@@ -128,6 +128,35 @@ void SensorState::set_sensors(const std::vector<SensorInfo>& sensors) {
     spdlog::info("[SensorState] Initialized {} sensors", sensors.size());
 }
 
+void SensorState::set_sensors(const std::vector<SensorInfo>& sensors,
+                              const nlohmann::json& initial_values) {
+    // Create subjects first
+    set_sensors(sensors);
+
+    // Apply initial values atomically (already on UI thread, subjects just created)
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    for (auto it = initial_values.begin(); it != initial_values.end(); ++it) {
+        const std::string& sensor_id = it.key();
+        auto sit = sensors_.find(sensor_id);
+        if (sit == sensors_.end())
+            continue;
+
+        for (auto vit = it.value().begin(); vit != it.value().end(); ++vit) {
+            if (!vit.value().is_number())
+                continue;
+
+            auto kit = sit->second.value_subjects.find(vit.key());
+            if (kit == sit->second.value_subjects.end() || !kit->second->initialized)
+                continue;
+
+            double raw = vit.value().get<double>();
+            int centi = to_centi_units(vit.key(), raw);
+            lv_subject_set_int(&kit->second->subject, centi);
+            spdlog::trace("[SensorState] Initial value {}.{} = {}", sensor_id, vit.key(), centi);
+        }
+    }
+}
+
 lv_subject_t* SensorState::get_value_subject(const std::string& sensor_id, const std::string& key,
                                               SubjectLifetime& lt) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);

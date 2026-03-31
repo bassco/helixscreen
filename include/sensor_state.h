@@ -55,6 +55,10 @@ class SensorState {
     /// Set discovered sensors (called from discovery sequence)
     void set_sensors(const std::vector<SensorInfo>& sensors);
 
+    /// Set discovered sensors with initial values applied atomically
+    void set_sensors(const std::vector<SensorInfo>& sensors,
+                     const nlohmann::json& initial_values);
+
     /// Get value subject for a sensor+key pair. Returns nullptr if not found.
     lv_subject_t* get_value_subject(const std::string& sensor_id, const std::string& key,
                                     SubjectLifetime& lt);

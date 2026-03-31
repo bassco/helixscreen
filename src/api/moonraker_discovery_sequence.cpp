@@ -11,6 +11,7 @@
 #include "led/led_controller.h"
 #include "macro_fan_analyzer.h"
 #include "macro_param_cache.h"
+#include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "power_device_state.h"
 #include "printer_state.h"
@@ -134,77 +135,27 @@ void MoonrakerDiscoverySequence::discover_power_devices() {
 }
 
 void MoonrakerDiscoverySequence::discover_sensors() {
-    // Fire-and-forget sensor detection (silent — not all printers have sensors,
-    // and server.sensors.list may not exist on older Moonraker).
-    client_.send_jsonrpc(
-        "server.sensors.list", json::object(),
-        [](json response) {
-            std::vector<helix::SensorInfo> sensors;
-            nlohmann::json initial_values;
+    // Fire-and-forget sensor detection via MoonrakerAPI (reuses its parsing logic).
+    auto* api = get_moonraker_api();
+    if (!api) {
+        spdlog::debug("[Moonraker Client] Sensor detection skipped — no API instance");
+        return;
+    }
 
-            if (response.contains("result") && response["result"].contains("sensors") &&
-                response["result"]["sensors"].is_object()) {
-                for (auto it = response["result"]["sensors"].begin();
-                     it != response["result"]["sensors"].end(); ++it) {
-                    const std::string& sensor_id = it.key();
-                    const auto& sensor_data = it.value();
-                    if (!sensor_data.is_object())
-                        continue;
-
-                    helix::SensorInfo info;
-                    info.id = sensor_id;
-                    info.friendly_name = sensor_data.value("friendly_name", sensor_id);
-                    info.type = sensor_data.value("type", "unknown");
-
-                    if (sensor_data.contains("values") && sensor_data["values"].is_object()) {
-                        nlohmann::json sensor_vals;
-                        for (auto vit = sensor_data["values"].begin();
-                             vit != sensor_data["values"].end(); ++vit) {
-                            info.value_keys.push_back(vit.key());
-                            if (vit.value().is_object() && vit.value().contains("value") &&
-                                vit.value()["value"].is_number()) {
-                                sensor_vals[vit.key()] = vit.value()["value"].get<double>();
-                            }
-                        }
-                        if (!sensor_vals.empty()) {
-                            initial_values[sensor_id] = std::move(sensor_vals);
-                        }
-                    }
-
-                    if (!info.id.empty()) {
-                        sensors.push_back(std::move(info));
-                    }
-                }
-            }
-
+    api->get_sensors(
+        [](const std::vector<helix::SensorInfo>& sensors, const nlohmann::json& initial_values) {
             spdlog::info("[Moonraker Client] Sensor detection: {} sensors", sensors.size());
-            auto sensors_copy = std::make_shared<std::vector<helix::SensorInfo>>(std::move(sensors));
-            auto values_copy = std::make_shared<nlohmann::json>(std::move(initial_values));
+            get_printer_state().set_sensor_count(static_cast<int>(sensors.size()));
+            auto sensors_copy = std::make_shared<std::vector<helix::SensorInfo>>(sensors);
+            auto values_copy = std::make_shared<nlohmann::json>(initial_values);
             helix::ui::queue_update("SensorState::set_sensors", [sensors_copy, values_copy]() {
-                helix::SensorState::instance().set_sensors(*sensors_copy);
-                // Apply initial values to newly created subjects
-                for (auto it = values_copy->begin(); it != values_copy->end(); ++it) {
-                    const std::string& sensor_id = it.key();
-                    for (auto vit = it.value().begin(); vit != it.value().end(); ++vit) {
-                        if (!vit.value().is_number())
-                            continue;
-                        double raw = vit.value().get<double>();
-                        int centi = helix::SensorState::to_centi_units(vit.key(), raw);
-                        SubjectLifetime slt;
-                        auto* subj = helix::SensorState::instance().get_value_subject(
-                            sensor_id, vit.key(), slt);
-                        if (subj) {
-                            lv_subject_set_int(subj, centi);
-                        }
-                    }
-                }
+                helix::SensorState::instance().set_sensors(*sensors_copy, *values_copy);
             });
         },
         [](const MoonrakerError& err) {
             spdlog::debug("[Moonraker Client] Sensor detection failed: {}", err.message);
-        },
-        0,     // default timeout
-        true); // silent — sensors are optional
+            get_printer_state().set_sensor_count(0);
+        });
 }
 
 void MoonrakerDiscoverySequence::continue_discovery() {

@@ -610,6 +610,11 @@ void PrinterState::set_power_device_count(int count) {
     capabilities_state_.set_power_device_count(count);
 }
 
+void PrinterState::set_sensor_count(int count) {
+    // Delegate to capabilities_state_ component (handles thread-safety)
+    capabilities_state_.set_sensor_count(count);
+}
+
 void PrinterState::set_spoolman_available(bool available) {
     // Delegate to capabilities_state_ component (handles thread-safety)
     capabilities_state_.set_spoolman_available(available);

@@ -1200,6 +1200,25 @@ class PrinterState {
     }
 
     /**
+     * @brief Set Moonraker sensor count (async update from discovery)
+     *
+     * Thread-safe: Can be called from any thread, defers LVGL update to main thread.
+     *
+     * @param count Number of discovered Moonraker sensors
+     */
+    void set_sensor_count(int count);
+
+    /**
+     * @brief Get Moonraker sensor count subject for XML binding
+     *
+     * Integer subject holding the number of discovered Moonraker sensors.
+     * 0 = no sensors, used to hide/show sensor-related UI elements.
+     */
+    lv_subject_t* get_sensor_count_subject() {
+        return capabilities_state_.get_sensor_count_subject();
+    }
+
+    /**
      * @brief Set Spoolman availability status
      *
      * Called after checking Moonraker's server.info components and verifying

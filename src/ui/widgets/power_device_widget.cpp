@@ -975,6 +975,34 @@ void PowerDeviceWidget::setup_carousel() {
 void PowerDeviceWidget::teardown_carousel() {
     detach_sensor_observers();
 
+    if (carousel_ && widget_obj_) {
+        // Get carousel state to access the scroll container
+        auto* state = ui_carousel_get_state(carousel_);
+        if (state && state->scroll_container) {
+            // Page 0 is the control page — reparent its children back to widget_
+            lv_obj_t* first_tile =
+                lv_obj_get_child(state->scroll_container, 0);
+            if (first_tile) {
+                // The tile wraps a control_page container; get the control_page
+                lv_obj_t* control_page = lv_obj_get_child(first_tile, 0);
+                if (control_page) {
+                    // Collect children before reparenting (iteration invalidation)
+                    std::vector<lv_obj_t*> children;
+                    uint32_t count = lv_obj_get_child_count(control_page);
+                    for (uint32_t i = 0; i < count; ++i) {
+                        children.push_back(
+                            lv_obj_get_child(control_page, static_cast<int32_t>(i)));
+                    }
+                    for (auto* child : children) {
+                        lv_obj_set_parent(child, widget_obj_);
+                    }
+                }
+            }
+        }
+
+        lv_obj_delete(carousel_);
+    }
+
     energy_page_ = nullptr;
     energy_power_label_ = nullptr;
     energy_voltage_label_ = nullptr;

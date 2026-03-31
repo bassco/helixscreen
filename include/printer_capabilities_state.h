@@ -141,6 +141,15 @@ class PrinterCapabilitiesState {
      */
     void set_power_device_count(int count);
 
+    /**
+     * @brief Set Moonraker sensor count (async update from discovery)
+     *
+     * Thread-safe: Uses helix::ui::queue_update() for main-thread execution.
+     *
+     * @param count Number of discovered Moonraker sensors
+     */
+    void set_sensor_count(int count);
+
     // ========================================================================
     // Subject accessors
     // ========================================================================
@@ -255,6 +264,11 @@ class PrinterCapabilitiesState {
         return const_cast<lv_subject_t*>(&power_device_count_);
     }
 
+    /// Number of discovered Moonraker sensors (0 = none)
+    lv_subject_t* get_sensor_count_subject() const {
+        return const_cast<lv_subject_t*>(&sensor_count_);
+    }
+
     // ========================================================================
     // Convenience methods
     // ========================================================================
@@ -302,6 +316,7 @@ class PrinterCapabilitiesState {
     bool webcam_flip_v_ = false;                      // flip vertical
     lv_subject_t printer_has_extra_fans_{};          // extra controllable fans beyond part cooling
     lv_subject_t power_device_count_{};              // number of power devices (0 = none)
+    lv_subject_t sensor_count_{};                   // number of Moonraker sensors (0 = none)
 };
 
 } // namespace helix
