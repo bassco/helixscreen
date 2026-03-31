@@ -7,17 +7,20 @@
 # HelixScreen renders directly to the framebuffer (/dev/fb0), so the stock
 # Snapmaker touchscreen UI must be stopped to release the display.
 #
-# The stock touchscreen UI binary is /usr/bin/unisrv. The camera service is /usr/bin/lmd.
-# SSH access: lava@<ip> (password: snapmaker) via extended firmware
-# Touch input: /dev/input/event0
+# Stock UI: /usr/bin/unisrv (started by S99screen init script, ~116MB RSS)
+# Camera: /usr/bin/lmd (started by S90lmd)
+# Touch: CHSC6x capacitive controller (S37touch_chsc6x)
+# Display: 480x320 32bpp rockchipdrmfb (/dev/fb0)
+# SSH access: root@<ip> (password: snapmaker) via extended firmware
 
 # Stop Snapmaker's stock touchscreen UI so HelixScreen can access the framebuffer.
 platform_stop_competing_uis() {
-    # Stop Snapmaker's stock UI service (name may vary with firmware version)
-    for svc in unisrv lmd snapmaker-ui snapmaker-screen snapmaker-touch; do
-        if systemctl is-active "$svc" >/dev/null 2>&1; then
+    # Stop Snapmaker's stock UI and camera via init scripts
+    # U1 uses SysV init (not systemd): S99screen starts unisrv, S90lmd starts lmd
+    for svc in /etc/init.d/S99screen /etc/init.d/S90lmd; do
+        if [ -x "$svc" ]; then
             echo "Stopping $svc..."
-            systemctl stop "$svc" 2>/dev/null || true
+            "$svc" stop 2>/dev/null || true
         fi
     done
 

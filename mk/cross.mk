@@ -443,7 +443,7 @@ else ifeq ($(PLATFORM_TARGET),k2)
 else ifeq ($(PLATFORM_TARGET),snapmaker-u1)
     # -------------------------------------------------------------------------
     # Snapmaker U1 - Rockchip RK3562 ARM64 (aarch64)
-    # Specs: 3.5" display (resolution unconfirmed — needs fbset on real hw), Debian Trixie, glibc
+    # Specs: 3.5" 480x320 32bpp display, 961MB RAM, Debian Trixie, glibc
     # -------------------------------------------------------------------------
     # FULLY STATIC BUILD: Avoids glibc version mismatches across Debian versions.
     # Uses same aarch64-linux-gnu toolchain as Pi but with static linking.
