@@ -85,12 +85,15 @@ class MoonrakerRequestTracker {
      *
      * @param msg Parsed JSON message containing "id" field
      * @param emit_event Function to emit transport events (type, message, is_error, details)
+     * @param suppress_error_toast Optional predicate — when it returns true, RPC error
+     *        events are logged at debug level instead of error (e.g., during shutdown)
      * @return true if message was a tracked response, false if not a response or unknown ID
      */
     bool route_response(
         const json& msg,
         std::function<void(MoonrakerEventType, const std::string&, bool, const std::string&)>
-            emit_event);
+            emit_event,
+        std::function<bool()> suppress_error_toast = nullptr);
 
     /**
      * @brief Cancel a pending request (no callbacks invoked)

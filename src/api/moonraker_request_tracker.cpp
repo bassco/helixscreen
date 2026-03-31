@@ -3,9 +3,6 @@
 
 #include "moonraker_request_tracker.h"
 
-#include "ui_error_reporting.h"
-
-#include "abort_manager.h"
 #include "hv/WebSocketClient.h"
 
 #include <spdlog/fmt/fmt.h>
@@ -47,7 +44,7 @@ RequestId MoonrakerRequestTracker::send(hv::WebSocketClient& ws, const std::stri
         } else {
             auto it = pending_requests_.find(id);
             if (it != pending_requests_.end()) {
-                LOG_ERROR_INTERNAL(
+                spdlog::error("[INTERNAL] "
                     "[Request Tracker] Request ID {} already has a registered callback", id);
                 return INVALID_REQUEST_ID;
             }
@@ -139,7 +136,8 @@ int MoonrakerRequestTracker::send_fire_and_forget(hv::WebSocketClient& ws,
 bool MoonrakerRequestTracker::route_response(
     const json& msg,
     std::function<void(MoonrakerEventType, const std::string&, bool, const std::string&)>
-        emit_event) {
+        emit_event,
+    std::function<bool()> suppress_error_toast) {
     // Check if this is a response message (has "id" field)
     if (!msg.contains("id")) {
         return false;
@@ -147,7 +145,7 @@ bool MoonrakerRequestTracker::route_response(
 
     // Validate 'id' field type
     if (!msg["id"].is_number_integer()) {
-        LOG_ERROR_INTERNAL("[Request Tracker] Invalid 'id' type in response: {}",
+        spdlog::error("[INTERNAL] ""[Request Tracker] Invalid 'id' type in response: {}",
                            msg["id"].type_name());
         return false;
     }
@@ -193,9 +191,8 @@ bool MoonrakerRequestTracker::route_response(
 
     // Invoke callbacks outside the lock to avoid deadlock
     if (has_error) {
-        // Suppress toast notifications during shutdown handling to avoid
-        // confusing errors appearing behind the abort modal
-        bool suppress_toast = AbortManager::instance().is_handling_shutdown();
+        // Check if error toasts should be suppressed (e.g., during shutdown)
+        bool suppress_toast = suppress_error_toast && suppress_error_toast();
 
         if (!is_silent && !suppress_toast) {
             spdlog::error("[Request Tracker] Request {} failed: {}", method_name, error.message);
@@ -219,7 +216,7 @@ bool MoonrakerRequestTracker::route_response(
         try {
             success_cb(msg);
         } catch (const std::exception& e) {
-            LOG_ERROR_INTERNAL("[Request Tracker] Success callback for '{}' threw exception: {}",
+            spdlog::error("[INTERNAL] ""[Request Tracker] Success callback for '{}' threw exception: {}",
                                method_name, e.what());
             // Do NOT re-throw: stack unwinding between here and the outer
             // handler can leave libhv's event loop in a corrupt state,
@@ -282,11 +279,11 @@ void MoonrakerRequestTracker::check_timeouts(
                         try {
                             cb(error);
                         } catch (const std::exception& e) {
-                            LOG_ERROR_INTERNAL("[Request Tracker] Timeout error callback for {} "
+                            spdlog::error("[INTERNAL] ""[Request Tracker] Timeout error callback for {} "
                                                "threw exception: {}",
                                                method_name, e.what());
                         } catch (...) {
-                            LOG_ERROR_INTERNAL("[Request Tracker] Timeout error callback for {} "
+                            spdlog::error("[INTERNAL] ""[Request Tracker] Timeout error callback for {} "
                                                "threw unknown exception",
                                                method_name);
                         }
@@ -341,11 +338,11 @@ void MoonrakerRequestTracker::cleanup_all() {
                         try {
                             cb(error);
                         } catch (const std::exception& e) {
-                            LOG_ERROR_INTERNAL("[Request Tracker] Cleanup error callback for {} "
+                            spdlog::error("[INTERNAL] ""[Request Tracker] Cleanup error callback for {} "
                                                "threw exception: {}",
                                                method_name, e.what());
                         } catch (...) {
-                            LOG_ERROR_INTERNAL("[Request Tracker] Cleanup error callback for {} "
+                            spdlog::error("[INTERNAL] ""[Request Tracker] Cleanup error callback for {} "
                                                "threw unknown exception",
                                                method_name);
                         }
