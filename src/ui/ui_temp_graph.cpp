@@ -15,7 +15,7 @@
 #include <time.h>
 #include <vector>
 
-using helix::ui::get_time_format_string;
+using helix::ui::format_time;
 
 // Internal scale factor: store deci-degrees (×10) in the LVGL chart for 0.1°C precision.
 // Without this, float→int32_t truncation creates visible staircases in the line chart.
@@ -392,6 +392,7 @@ static void draw_x_axis_labels_cb(lv_event_t* e) {
     if (!layer || !graph || !graph->show_x_axis || graph->visible_point_count == 0) {
         return; // No data to label yet or X-axis disabled
     }
+
     spdlog::trace("[TempGraph] Drawing X-axis labels: {} points, first={}ms, latest={}ms",
                   graph->visible_point_count, graph->first_point_time_ms,
                   graph->latest_point_time_ms);
@@ -471,19 +472,16 @@ static void draw_x_axis_labels_cb(lv_event_t* e) {
             continue;
         }
 
-        // Format time string based on user preference (12H or 24H)
+        // Format time via central formatter (handles 12H/24H, leading zero strip)
         time_t time_sec = static_cast<time_t>(label_time_ms / 1000);
         struct tm* tm_info = localtime(&time_sec);
-        // Use static buffer array - LVGL may defer draw and need persistent strings
-        // Buffer sized for 12H format: "12:30 PM" + null = 9 chars
+        std::string formatted = format_time(tm_info);
+        // Copy to static buffer — LVGL draw tasks need persistent string pointers
         static char time_str_buf[8][12]; // 8 labels max, 12 chars each
         static int time_str_idx = 0;
         char* time_str = time_str_buf[time_str_idx++ % 8];
-        strftime(time_str, 12, get_time_format_string(), tm_info);
-        // Trim leading space from %l (space-padded hour in 12H format)
-        if (time_str[0] == ' ') {
-            memmove(time_str, time_str + 1, strlen(time_str));
-        }
+        strncpy(time_str, formatted.c_str(), 11);
+        time_str[11] = '\0';
 
         // Skip duplicate labels (same HH:MM)
         if (strcmp(time_str, prev_label) == 0) {
@@ -508,13 +506,10 @@ static void draw_x_axis_labels_cb(lv_event_t* e) {
     if (graph->visible_point_count >= (graph->point_count * 4 / 5)) {
         time_t now_sec = static_cast<time_t>(latest_ms / 1000);
         struct tm* tm_info = localtime(&now_sec);
-        // Use static buffer for the "now" label (sized for 12H format)
+        std::string now_formatted = format_time(tm_info);
         static char now_str[12];
-        strftime(now_str, sizeof(now_str), get_time_format_string(), tm_info);
-        // Trim leading space from %l (space-padded hour in 12H format)
-        if (now_str[0] == ' ') {
-            memmove(now_str, now_str + 1, strlen(now_str));
-        }
+        strncpy(now_str, now_formatted.c_str(), 11);
+        now_str[11] = '\0';
 
         // Only draw if different from last label
         if (strcmp(now_str, prev_label) != 0) {
@@ -610,14 +605,11 @@ static void draw_y_axis_labels_cb(lv_event_t* e) {
     lv_obj_get_coords(chart, &coords);
     int32_t pad_top = lv_obj_get_style_pad_top(chart, LV_PART_MAIN);
 
-    // Chart content area (where data is drawn)
-    // Account for extra X-axis label space in bottom padding (matches create() formula)
-    int32_t x_axis_label_height =
-        theme_manager_get_font_height(theme_manager_get_font("font_small"));
-    int32_t space_sm = theme_manager_get_spacing("space_sm");
-    int32_t space_md = theme_manager_get_spacing("space_md");
+    // Chart content area (where data is drawn) — read actual padding from style
+    // so this stays in sync with set_axis_size() and set_features() adjustments
+    int32_t pad_bottom = lv_obj_get_style_pad_bottom(chart, LV_PART_MAIN);
     int32_t content_top = coords.y1 + pad_top;
-    int32_t content_bottom = coords.y2 - (space_sm + x_axis_label_height + space_md);
+    int32_t content_bottom = coords.y2 - pad_bottom;
     int32_t content_height = content_bottom - content_top;
 
     // Setup label descriptor - same style as X-axis
@@ -1263,11 +1255,27 @@ void ui_temp_graph_set_features(ui_temp_graph_t* graph, uint32_t features) {
     graph->show_y_axis = want_y;
 
     // Toggle X-axis
-    graph->show_x_axis = (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0;
+    bool want_x = (features & TEMP_GRAPH_FEATURE_X_AXIS) != 0;
+    graph->show_x_axis = want_x;
 
-    // NOTE: Padding is managed by set_axis_size(), not here. Changing padding in
-    // set_features() caused X-axis labels to disappear on the overlay by overwriting
-    // the more generous padding that set_axis_size() calculated.
+    // Adjust padding based on which axes are visible. Uses the font set by
+    // set_axis_size() (which must be called first). This tightens padding when
+    // axes are hidden (e.g., small widget without X/Y labels).
+    int32_t space_xs = theme_manager_get_spacing("space_xs");
+    int32_t space_sm = theme_manager_get_spacing("space_sm");
+    int32_t label_height = theme_manager_get_font_height(graph->axis_font);
+
+    // Left padding: reserve space for Y-axis labels, or use minimal padding
+    int32_t left_pad = want_y ? (graph->y_axis_width + space_sm) : space_xs;
+    lv_obj_set_style_pad_left(graph->chart, left_pad, LV_PART_MAIN);
+
+    // Bottom padding: reserve space for X-axis labels, or use minimal padding
+    int32_t bottom_pad = want_x ? (space_xs + label_height + space_xs) : space_xs;
+    lv_obj_set_style_pad_bottom(graph->chart, bottom_pad, LV_PART_MAIN);
+
+    // Top padding: reserve space for top Y-axis label, or use minimal padding
+    int32_t top_pad = want_y ? LV_MAX(space_sm, label_height) : space_xs;
+    lv_obj_set_style_pad_top(graph->chart, top_pad, LV_PART_MAIN);
 
     // Toggle gradient opacity: zero out when disabled, restore defaults when enabled
     bool want_gradients = (features & TEMP_GRAPH_FEATURE_GRADIENTS) != 0;

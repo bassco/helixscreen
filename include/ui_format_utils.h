@@ -98,15 +98,8 @@ std::string format_short_date(time_t timestamp);
  */
 std::string format_time(const struct tm* tm_info);
 
-/**
- * @brief Get strftime format string for current time format setting
- *
- * Returns "%H:%M" for 24-hour or "%l:%M %p" for 12-hour format.
- * Useful when you need to incorporate time into a larger format string.
- *
- * @return Format string for strftime
- */
-const char* get_time_format_string();
+// get_time_format_string() is intentionally NOT public. Use format_time()
+// which handles POSIX-safe formatting and leading-zero stripping.
 
 /**
  * @brief Format a relative time from milliseconds elapsed
