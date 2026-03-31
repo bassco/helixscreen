@@ -28,6 +28,7 @@
 #include "../test_helpers/printer_state_test_access.h"
 #include "../ui_test_utils.h"
 #include "app_globals.h"
+#include "config.h"
 #include "printer_state.h"
 
 #include "../catch_amalgamated.hpp"
@@ -1111,4 +1112,183 @@ TEST_CASE("Fan role config: canonical 'fan' part_fan does not create redundant o
     SECTION("still classified as PART_COOLING") {
         REQUIRE(fans[0].type == helix::FanType::PART_COOLING);
     }
+}
+
+TEST_CASE("Fan characterization: output_pin fan type classification",
+          "[characterization][fan][type][output_pin]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "output_pin fan2",
+                     "heater_fan hotend_fan"});
+
+    const auto& fans = state.get_fans();
+
+    SECTION("output_pin fan0 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[0].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("output_pin fan1 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[1].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("output_pin fan2 is OUTPUT_PIN_FAN type") {
+        REQUIRE(fans[2].type == FanType::OUTPUT_PIN_FAN);
+    }
+
+    SECTION("OUTPUT_PIN_FAN is controllable") {
+        REQUIRE(fans[0].is_controllable == true);
+    }
+
+    SECTION("heater_fan is still HEATER_FAN") {
+        REQUIRE(fans[3].type == FanType::HEATER_FAN);
+    }
+}
+
+TEST_CASE("Fan characterization: FanInfo rpm field", "[characterization][fan][rpm]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0"});
+
+    const auto& fans = state.get_fans();
+
+    SECTION("rpm is nullopt by default") {
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+}
+
+TEST_CASE("Fan characterization: output_pin fan speed from value field",
+          "[characterization][fan][update][output_pin]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "heater_fan hotend_fan"});
+
+    SECTION("output_pin value 1.0 -> 100%") {
+        json status = {{"output_pin fan0", {{"value", 1.0}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 100);
+    }
+
+    SECTION("output_pin value 0.5 -> 50%") {
+        json status = {{"output_pin fan0", {{"value", 0.5}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 50);
+    }
+
+    SECTION("output_pin value 0.0 -> 0%") {
+        json status = {{"output_pin fan0", {{"value", 0.0}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 0);
+    }
+
+    SECTION("multiple output_pin updates in one status") {
+        json status = {{"output_pin fan0", {{"value", 0.75}}},
+                       {"output_pin fan1", {{"value", 0.25}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 75);
+        REQUIRE(fans[1].speed_percent == 25);
+    }
+
+    SECTION("output_pin update does not affect heater_fan") {
+        json status = {{"output_pin fan0", {{"value", 1.0}}},
+                       {"heater_fan hotend_fan", {{"speed", 0.5}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].speed_percent == 100); // output_pin fan0
+        REQUIRE(fans[2].speed_percent == 50);  // heater_fan hotend_fan
+    }
+}
+
+TEST_CASE("Fan characterization: fan_feedback RPM updates",
+          "[characterization][fan][update][fan_feedback]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "output_pin fan2"});
+
+    SECTION("fan_feedback maps fanN_speed to output_pin fanN rpm") {
+        json status = {{"fan_feedback", {{"fan0_speed", 16000},
+                                         {"fan1_speed", 3692},
+                                         {"fan2_speed", 0}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE(fans[0].rpm.has_value());
+        REQUIRE(fans[0].rpm.value() == 16000);
+        REQUIRE(fans[1].rpm.has_value());
+        REQUIRE(fans[1].rpm.value() == 3692);
+        REQUIRE(fans[2].rpm.has_value());
+        REQUIRE(fans[2].rpm.value() == 0);
+    }
+
+    SECTION("fan_feedback for unknown fanN is ignored") {
+        json status = {{"fan_feedback", {{"fan5_speed", 1000}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+
+    SECTION("fan_feedback with non-numeric value is ignored") {
+        json status = {{"fan_feedback", {{"fan0_speed", nullptr}}}};
+        state.update_from_status(status);
+
+        const auto& fans = state.get_fans();
+        REQUIRE_FALSE(fans[0].rpm.has_value());
+    }
+}
+
+TEST_CASE("Fan characterization: custom display names from config",
+          "[characterization][fan][names]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // Simulate saved custom names in config
+    auto* config = Config::get_instance();
+    config->set(config->df() + "fans/names/output_pin fan0", std::string("Part Fan"));
+    config->set(config->df() + "fans/names/output_pin fan1", std::string("Electronics Fan"));
+
+    state.init_fans({"output_pin fan0", "output_pin fan1", "output_pin fan2"});
+
+    const auto& fans = state.get_fans();
+
+    SECTION("fan with custom name uses it") {
+        REQUIRE(fans[0].display_name == "Part Fan");
+        REQUIRE(fans[1].display_name == "Electronics Fan");
+    }
+
+    SECTION("fan without custom name gets auto-generated name") {
+        // fan2 has no custom name, should get default
+        REQUIRE_FALSE(fans[2].display_name.empty());
+    }
+
+    // Cleanup to avoid polluting other tests
+    config->set(config->df() + "fans/names/output_pin fan0", std::string(""));
+    config->set(config->df() + "fans/names/output_pin fan1", std::string(""));
 }

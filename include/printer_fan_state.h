@@ -7,6 +7,7 @@
 
 #include <lvgl.h>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,7 +26,8 @@ enum class FanType {
     HEATER_FAN,      ///< Hotend cooling fan (auto-controlled, not user-adjustable)
     CONTROLLER_FAN,  ///< Electronics cooling (auto-controlled)
     TEMPERATURE_FAN, ///< Thermostatically controlled fan (auto-controlled)
-    GENERIC_FAN      ///< User-controllable generic fan (fan_generic)
+    GENERIC_FAN,     ///< User-controllable generic fan (fan_generic)
+    OUTPUT_PIN_FAN   ///< Creality-style output_pin fan (controllable via M106 P<index>)
 };
 
 /**
@@ -57,6 +59,7 @@ struct FanInfo {
     FanType type = FanType::GENERIC_FAN;
     int speed_percent = 0;        ///< Current speed 0-100%
     bool is_controllable = false; ///< true for fan_generic, false for heater_fan/controller_fan
+    std::optional<int> rpm;       ///< RPM from fan_feedback or Klipper rpm field
 };
 
 /**
@@ -105,6 +108,20 @@ class PrinterFanState {
      * @param speed Speed as 0.0-1.0 (Moonraker format)
      */
     void update_fan_speed(const std::string& object_name, double speed);
+
+    /// Update RPM reading for a fan (from fan_feedback or Klipper rpm field)
+    void update_fan_rpm(const std::string& object_name, int rpm);
+
+    /**
+     * @brief Rename a fan (update display_name) and persist to config
+     *
+     * Saves the new name to Config, updates the in-memory FanInfo,
+     * and bumps fans_version_ to trigger UI rebuilds.
+     *
+     * @param object_name Moonraker object name (e.g., "heater_fan hotend_fan")
+     * @param new_name New display name (empty string clears custom name)
+     */
+    void rename_fan(const std::string& object_name, const std::string& new_name);
 
     // Subject accessors
     lv_subject_t* get_fan_speed_subject() {

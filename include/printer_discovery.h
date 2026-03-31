@@ -152,13 +152,21 @@ class PrinterDiscovery {
                 leds_.push_back(name);
                 has_led_ = true;
             }
-            // Output pins with LED/LIGHT in name or speaker/buzzer
-            else if (name.rfind("output_pin ", 0) == 0) {
+            // Output pins - classify as fan, LED, or speaker based on name
+            else if (name == "fan_feedback") {
+                has_fan_feedback_ = true;
+            } else if (name.rfind("output_pin ", 0) == 0) {
                 std::string pin_name = name.substr(11); // Remove "output_pin " prefix
                 std::string upper_pin = to_upper(pin_name);
-                if (upper_pin.find("LIGHT") != std::string::npos ||
-                    upper_pin.find("LED") != std::string::npos ||
-                    upper_pin.find("LAMP") != std::string::npos) {
+
+                // Fan detection: name starts with "FAN" (e.g., fan0, fan1, fan2)
+                if (upper_pin.rfind("FAN", 0) == 0) {
+                    fans_.push_back(name);
+                }
+                // LED detection
+                else if (upper_pin.find("LIGHT") != std::string::npos ||
+                         upper_pin.find("LED") != std::string::npos ||
+                         upper_pin.find("LAMP") != std::string::npos) {
                     leds_.push_back(name);
                     has_led_ = true;
                 }
@@ -572,6 +580,7 @@ class PrinterDiscovery {
         has_screws_tilt_ = false;
         has_klippain_shaketune_ = false;
         has_speaker_ = false;
+        has_fan_feedback_ = false;
         is_kalico_ = false;
         mmu_type_ = AmsType::NONE;
         detected_ams_systems_.clear();
@@ -712,6 +721,10 @@ class PrinterDiscovery {
 
     [[nodiscard]] bool has_speaker() const {
         return has_speaker_;
+    }
+
+    [[nodiscard]] bool has_fan_feedback() const {
+        return has_fan_feedback_;
     }
 
     /**
@@ -1132,6 +1145,7 @@ class PrinterDiscovery {
     bool has_screws_tilt_ = false;
     bool has_klippain_shaketune_ = false;
     bool has_speaker_ = false;
+    bool has_fan_feedback_ = false;
     bool is_kalico_ = false;
     AmsType mmu_type_ = AmsType::NONE;
     std::vector<DetectedAmsSystem> detected_ams_systems_;

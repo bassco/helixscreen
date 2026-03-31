@@ -109,6 +109,37 @@ void PrinterFanState::update_from_status(const nlohmann::json& status) {
                 }
             }
         }
+
+        // Handle output_pin fan objects (Creality-style)
+        // These report {"value": 0.0-1.0} instead of {"speed": 0.0-1.0}
+        if (key.rfind("output_pin ", 0) == 0) {
+            if (value.is_object() && value.contains("value") && value["value"].is_number()) {
+                double speed = value["value"].get<double>();
+                update_fan_speed(key, speed);
+
+                // If this is the configured part fan, also update the main fan_speed_ subject
+                if (!roles_.part_fan.empty() && key == roles_.part_fan) {
+                    int speed_pct = units::to_percent(speed);
+                    if (lv_subject_get_int(&fan_speed_) != speed_pct) {
+                        lv_subject_set_int(&fan_speed_, speed_pct);
+                    }
+                }
+            }
+        }
+    }
+
+    // Parse fan_feedback RPM data (Creality-specific tachometer module)
+    if (status.contains("fan_feedback")) {
+        const auto& fb = status["fan_feedback"];
+        if (fb.is_object()) {
+            for (int i = 0; i < 10; i++) {
+                std::string key = "fan" + std::to_string(i) + "_speed";
+                if (fb.contains(key) && fb[key].is_number()) {
+                    int rpm = fb[key].get<int>();
+                    update_fan_rpm("output_pin fan" + std::to_string(i), rpm);
+                }
+            }
+        }
     }
 }
 
@@ -126,6 +157,13 @@ FanType PrinterFanState::classify_fan_type(const std::string& object_name) const
         return FanType::CONTROLLER_FAN;
     } else if (object_name.rfind("temperature_fan ", 0) == 0) {
         return FanType::TEMPERATURE_FAN;
+    } else if (object_name.rfind("output_pin ", 0) == 0) {
+        // Check if the short name starts with "fan" (e.g., "output_pin fan0")
+        std::string short_name = object_name.substr(11);
+        if (short_name.rfind("fan", 0) == 0) {
+            return FanType::OUTPUT_PIN_FAN;
+        }
+        return FanType::GENERIC_FAN;
     } else {
         return FanType::GENERIC_FAN;
     }
@@ -140,7 +178,8 @@ std::string PrinterFanState::get_role_display_name(const std::string& object_nam
 }
 
 bool PrinterFanState::is_fan_controllable(FanType type) {
-    return type == FanType::PART_COOLING || type == FanType::GENERIC_FAN;
+    return type == FanType::PART_COOLING || type == FanType::GENERIC_FAN ||
+           type == FanType::OUTPUT_PIN_FAN;
 }
 
 void PrinterFanState::init_fans(const std::vector<std::string>& fan_objects,
@@ -191,10 +230,20 @@ void PrinterFanState::init_fans(const std::vector<std::string>& fan_objects,
         FanInfo info;
         info.object_name = obj_name;
 
-        // Use role-based display name if configured, otherwise auto-generate
-        std::string role_name = get_role_display_name(obj_name);
-        info.display_name =
-            role_name.empty() ? get_display_name(obj_name, DeviceType::FAN) : role_name;
+        // Name priority: custom name > role name > auto-generated
+        auto* config = Config::get_instance();
+        std::string custom_name;
+        if (config) {
+            custom_name = config->get<std::string>(
+                config->df() + "fans/names/" + obj_name, "");
+        }
+        if (!custom_name.empty()) {
+            info.display_name = custom_name;
+        } else {
+            std::string role_name = get_role_display_name(obj_name);
+            info.display_name =
+                role_name.empty() ? get_display_name(obj_name, DeviceType::FAN) : role_name;
+        }
 
         info.type = classify_fan_type(obj_name);
         info.is_controllable = is_fan_controllable(info.type);
@@ -276,6 +325,43 @@ void PrinterFanState::update_fan_speed(const std::string& object_name, double sp
         }
     }
     // Fan not in list - this is normal during initial status before discovery
+}
+
+void PrinterFanState::update_fan_rpm(const std::string& object_name, int rpm) {
+    for (auto& fan : fans_) {
+        if (fan.object_name == object_name) {
+            fan.rpm = rpm;
+            return;
+        }
+    }
+}
+
+void PrinterFanState::rename_fan(const std::string& object_name, const std::string& new_name) {
+    // Persist to config
+    auto* config = Config::get_instance();
+    if (config) {
+        config->set(config->df() + "fans/names/" + object_name, new_name);
+        spdlog::info("[PrinterFanState] Saved custom name for '{}': '{}'", object_name, new_name);
+    }
+
+    // Update in-memory display name
+    for (auto& fan : fans_) {
+        if (fan.object_name == object_name) {
+            if (new_name.empty()) {
+                // Revert to auto-generated name
+                std::string role_name = get_role_display_name(object_name);
+                fan.display_name =
+                    role_name.empty() ? get_display_name(object_name, DeviceType::FAN) : role_name;
+            } else {
+                fan.display_name = new_name;
+            }
+            spdlog::debug("[PrinterFanState] Renamed '{}' -> '{}'", object_name, fan.display_name);
+            break;
+        }
+    }
+
+    // Bump version to trigger UI rebuilds
+    lv_subject_set_int(&fans_version_, lv_subject_get_int(&fans_version_) + 1);
 }
 
 lv_subject_t* PrinterFanState::get_fan_speed_subject(const std::string& object_name,

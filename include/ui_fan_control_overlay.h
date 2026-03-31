@@ -172,9 +172,10 @@ class FanControlOverlay : public OverlayBase {
         std::string object_name;
         lv_obj_t* card = nullptr;
         lv_obj_t* speed_label = nullptr;
-        lv_obj_t* arc = nullptr;      ///< Arc widget for live speed updates
-        lv_obj_t* fan_icon = nullptr; ///< Fan icon for spin animation
-        int last_speed_pct = 0;       ///< Cached speed for animation refresh
+        lv_obj_t* name_label = nullptr; ///< Fan name label (for long-press rename)
+        lv_obj_t* arc = nullptr;        ///< Arc widget for live speed updates
+        lv_obj_t* fan_icon = nullptr;   ///< Fan icon for spin animation
+        int last_speed_pct = 0;         ///< Cached speed for animation refresh
     };
     std::vector<AutoFanCard> auto_fan_cards_;
 
@@ -195,6 +196,28 @@ class FanControlOverlay : public OverlayBase {
 
     void update_auto_fan_animation(AutoFanCard& card, int speed_pct);
     void refresh_all_auto_fan_animations();
+
+  public:
+    //
+    // === Fan Rename ===
+    //
+
+    /// Show rename modal for a fan
+    void show_rename_modal(const std::string& object_name, const std::string& current_name);
+
+    /// Confirm rename from modal input
+    void confirm_rename(const std::string& new_name);
+
+    /// Hide the rename modal
+    void hide_rename_modal();
+
+  private:
+
+    lv_obj_t* rename_modal_widget_ = nullptr; ///< Active rename modal, if any
+    std::string pending_rename_object_;        ///< Object name of fan being renamed
+    lv_subject_t fan_rename_old_name_{};       ///< Subject for current name display
+    char rename_old_name_buf_[128]{};          ///< Buffer for old name subject
+    bool rename_subjects_initialized_ = false;
 
 };
 
