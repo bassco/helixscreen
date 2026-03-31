@@ -11,13 +11,14 @@ Quick answers to common questions about HelixScreen.
 HelixScreen is a touchscreen interface for Klipper 3D printers. It connects to your Moonraker instance and provides a modern, touch-friendly UI for controlling your printer.
 
 **Key features:**
-- 30 panels and 48 overlays covering all printer operations
+- 30+ panels, 20+ overlays, and a customizable multi-page widget dashboard
 - 3D G-code preview, bed mesh visualization, frequency response charts
-- First-run wizard with telemetry opt-in
-- Theme editor with 17 presets (dark and light)
-- Sound system, timelapse integration, filament tracking
-- Auto-detecting layout system for multiple display sizes
-- Designed for embedded displays (low memory, no desktop required)
+- 6 multi-material backends (AFC, Happy Hare, ACE, AD5X IFS, CFS, tool changers) with Spoolman integration
+- First-run wizard with auto-detection of 70+ printer models
+- Theme editor with 17 presets (dark and light), 9 languages
+- Sound system, timelapse integration, label printing, exclude objects
+- Auto-detecting layout system for displays from 480x320 to 1920x480
+- ~15MB RAM — designed for embedded displays, no desktop required
 
 ### Which printers are supported?
 
@@ -30,9 +31,9 @@ HelixScreen works with any Klipper-based printer running Moonraker. Tested and s
 | FlashForge AD5M / 5M Pro | **Tested** | Requires Forge-X or Klipper Mod firmware |
 | QIDI Q2, Max 4 | **Supported** | Requires FreeDi firmware for Moonraker access |
 | Creality K1 / K1C / K1 Max / K1 SE | **Supported** | Requires rooting or Guilouz firmware |
-| Creality K2 / K2 Plus | **Untested** | Binaries available, community testing welcome |
+| Creality K2 Max / K2 Plus | **Tested** | Runs natively with CFS support |
 | Creality Sonic Pad | **Supported** | 32-bit ARM, dedicated build |
-| FlashForge AD5X | **Testing** | Active testing, IFS integration in progress |
+| FlashForge AD5X | **Tested** | IFS filament system integrated |
 | SOVOL SV06 / SV08 | **Testing** | Community reports welcome |
 | Elegoo Centauri Carbon 1 | **Testing** | Dedicated build target |
 | Other Klipper printers | **Should work** | Any printer with Moonraker API access |
@@ -67,33 +68,20 @@ If you test on hardware not listed above, please let us know your results!
 |---------|-------------|---------------|-------------|
 | **UI Framework** | LVGL 9 XML | GTK 3 (Python) | LVGL 8 (C) |
 | **Declarative UI** | Full XML | Python only | C only |
-| **Disk Size** | ~70-80MB | ~50MB | ~60-80MB |
-| **RAM Usage** | ~10MB | ~50MB | ~15-20MB |
+| **Disk Size** | ~75-115MB | ~50MB | ~60-80MB |
+| **RAM Usage** | ~15MB | ~50MB | ~15-20MB |
 | **Reactive Binding** | Built-in | Manual | Manual |
 | **3D G-code preview** | Yes | 2D layers | No |
 | **3D bed mesh** | Yes | 2D heatmap | 2D heatmap |
-| **Status** | Beta | Mature (maintenance) | Unmaintained |
+| **Status** | 1.0 (active) | Mature (maintenance) | Unmaintained |
 
 **HelixScreen advantages:**
-- Lowest memory footprint
+- Low memory footprint (~15MB vs ~50MB for KlipperScreen)
 - Declarative XML layouts (change UI without recompiling)
-- Modern reactive architecture
-- 3D visualizations
-
-### Is HelixScreen production-ready?
-
-HelixScreen is currently in **beta**. This means:
-
-- ✅ Core features are complete and tested
-- ✅ Daily use on real printers works well
-- ⚠️ Some edge cases may have bugs
-- ⚠️ Some advanced features still in development
-- ⚠️ Breaking changes may occur between releases
-
-We recommend it for enthusiasts comfortable with:
-- SSH access to their printer
-- Reading logs for troubleshooting
-- Reporting bugs on GitHub
+- Modern reactive architecture with 6 multi-material backends
+- 3D visualizations (G-code preview, bed mesh)
+- 70+ printer auto-detection database
+- 9 languages at 100% string coverage
 
 ---
 

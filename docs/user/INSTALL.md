@@ -13,7 +13,7 @@ This guide walks you through installing HelixScreen on your 3D printer's touchsc
 - [MainsailOS Installation](#mainsailos-installation)
 - [Flashforge Adventurer 5M Installation](#flashforge-adventurer-5m-installation)
 - [Creality K1 Installation](#creality-k1-series)
-- [Creality K2 Series (Untested)](#creality-k2-series-untested)
+- [Creality K2 Series](#creality-k2-series-untested)
 - [FlashForge Adventurer 5X (Testing)](#flashforge-adventurer-5x-testing)
 - [Elegoo Centauri Carbon 1 (Testing)](#elegoo-centauri-carbon-1-testing)
 - [Creality Sonic Pad](#creality-sonic-pad)
@@ -172,12 +172,10 @@ sh /usr/data/install.sh --local /usr/data/helixscreen-k1-vX.Y.Z.tar.gz
 
 Installs to `/usr/data/helixscreen/`, boot service at `/etc/init.d/S99helixscreen`.
 
-### Creality K2 Series (Untested)
-
-> **⚠️ This platform has not been tested on real hardware.** The build target exists and produces a binary, but no one has run it on an actual K2 yet. If you have a K2 with SSH access, we'd love your help validating it!
+### Creality K2 Series
 
 - **Hardware:**
-  - Creality K2, K2 Pro, K2 Plus, or K2 SE
+  - Creality K2 Max, K2 Plus, or K2 Pro
   - Stock 4.3" touchscreen display (480x800)
   - Network connection
 
@@ -186,19 +184,16 @@ Installs to `/usr/data/helixscreen/`, boot service at `/etc/init.d/S99helixscree
   - SSH access (`root@<printer-ip>`, password: `creality_2024`)
   - Moonraker is included in stock firmware on port 4408
 
+**Install:**
+```bash
+wget -O - http://dl.helixscreen.org/install.sh | sh
+```
+
 **What's different from K1:**
 - ARM processor (Allwinner, not MIPS) — standard cross-compilation
-- Stock Moonraker — no community firmware (Simple AF, etc.) required
+- Stock Moonraker — no community firmware required
 - OpenWrt-based init system (procd, not SysV)
-- Display may be portrait orientation (480x800) — rotation support may be needed
-
-**Current status:**
-- Build target: `make k2-docker` produces a static ARM binary
-- Deploy targets exist: `make deploy-k2 K2_HOST=<ip>`
-- No installer script support yet — manual deployment only
-- See `docs/printer-research/CREALITY_K2_PLUS_RESEARCH.md` for full research and open questions
-
-**If you want to help test**, run the diagnostic commands in the research doc (Section 13) and report back via [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues).
+- CFS (Creality Filament System) support for RS-485 filament management
 
 ### FlashForge Adventurer 5X (Testing)
 
