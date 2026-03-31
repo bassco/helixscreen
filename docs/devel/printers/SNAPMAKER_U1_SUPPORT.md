@@ -8,9 +8,13 @@ HelixScreen supports the Snapmaker U1 toolchanger as an alternative touchscreen 
 
 | Spec | Value |
 |------|-------|
-| SoC | Rockchip ARM64 (aarch64) |
-| Display | 4.3" touch, 480x320 framebuffer (`/dev/fb0`) |
+| SoC | Rockchip RK3562 — quad Cortex-A53 @ 2GHz (aarch64) |
+| GPU | Mali-G52 2EE (OpenGL ES 3.2) |
+| RAM | Unknown (RK3562 supports up to 4GB LPDDR4) |
+| Display | 3.5" touch, framebuffer (`/dev/fb0`) — **resolution unconfirmed** (build assumes 480x320, community reports suggest 800x480 or 1024x600; needs hardware verification via `fbset`) |
 | Touch Input | `/dev/input/event0` |
+| Storage | 26GB eMMC (SquashFS rootfs read-only, `/home/lava/` writable) |
+| Recovery | A/B firmware slots + Rockchip MaskRom (unbrickable) |
 | Firmware | Klipper + Moonraker |
 | OS | Debian Trixie (ARM64) |
 | Drivers | TMC2240 steppers |
@@ -90,9 +94,57 @@ make snapmaker-u1-ssh SNAPMAKER_U1_HOST=192.168.1.xxx
 
 Default SSH user is `lava` (override with `SNAPMAKER_U1_USER`). Default deploy directory is `/opt/helixscreen` (override with `SNAPMAKER_U1_DEPLOY_DIR`).
 
+## Reversible Deployment Strategy
+
+HelixScreen can be deployed to the U1 without modifying the stock firmware. The approach is fully reversible at multiple levels.
+
+### Level 1: Manual SSH Deployment (Simplest, Fully Reversible)
+
+Deploy HelixScreen to the writable `/home/lava/` or `/opt/helixscreen/` partition:
+
+1. Install [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware) for SSH access
+2. SSH in: `ssh root@<ip>` (password: `snapmaker`)
+3. Identify and stop the stock UI: `killall unisrv` (stock UI binary is `/usr/bin/unisrv`)
+4. Deploy HelixScreen to writable storage (does NOT touch read-only rootfs)
+5. Run HelixScreen directly on the framebuffer
+
+**To revert**: Kill HelixScreen, restart stock UI (`/usr/bin/unisrv`), or simply reboot. The stock UI is on the read-only SquashFS rootfs and cannot be damaged.
+
+### Level 2: Systemd Override (Persistent, Reversible)
+
+Create a systemd override to start HelixScreen instead of the stock UI on boot:
+
+1. Create override in writable storage that masks the stock UI service
+2. Create a HelixScreen systemd service file
+3. HelixScreen starts on boot; stock UI stays dormant
+
+**To revert**: Remove the systemd override files and reboot. Stock UI resumes automatically.
+
+### Level 3: Extended Firmware Overlay (Cleanest, Reversible)
+
+Package HelixScreen as an overlay in paxx12's Extended Firmware build system:
+
+1. Add a HelixScreen overlay that deploys the binary and service file
+2. Build a custom firmware .bin with the overlay included
+3. Flash via USB like any firmware update
+
+**To revert**: Flash stock firmware (or Extended Firmware without the HelixScreen overlay) via USB. A/B firmware slots ensure the previous firmware is preserved.
+
+### Safety Guarantees
+
+| Risk | Mitigation |
+|------|-----------|
+| Bricked device | Impossible — Rockchip MaskRom mode provides hardware-level recovery |
+| Lost stock UI | Stock UI lives on read-only SquashFS — cannot be accidentally deleted |
+| Klipper/Moonraker disrupted | HelixScreen only replaces the display UI; Klipper (S60klipper) and Moonraker (S61moonraker) are independent services |
+| Can't revert | Multiple revert paths: reboot, kill process, remove override, reflash firmware |
+| Firmware slot corruption | A/B slots — switch with `updateEngine --misc=other --reboot` |
+
 ### Display Backend
 
-HelixScreen renders directly to `/dev/fb0`. The stock Snapmaker touchscreen UI must be stopped first to release the display. The platform hooks script (`config/platform/hooks-snapmaker-u1.sh`) handles this automatically during deployment by stopping known Snapmaker UI services and killing residual processes.
+HelixScreen renders directly to `/dev/fb0`. The exact display resolution needs hardware verification — the build assumes 480x320 but community sources suggest 800x480. HelixScreen auto-detects resolution from the framebuffer via `FBIOGET_VSCREENINFO`, so this will work regardless. The stock Snapmaker touchscreen UI must be stopped first to release the display. The platform hooks script (`config/platform/hooks-snapmaker-u1.sh`) handles this automatically during deployment by stopping known Snapmaker UI services and killing residual processes.
+
+The stock Snapmaker touchscreen UI is `/usr/bin/unisrv` (Universal Service). It renders directly to `/dev/fb0` and handles touch input from `/dev/input/event0`. The exact systemd service name is unconfirmed — the platform hooks script attempts to stop several candidate names.
 
 ### Touch Input
 
@@ -149,9 +201,13 @@ These are resolution-specific issues, not Snapmaker-specific. Any 480x320 device
 - **Not in CI/release pipeline** -- Must be built manually. No automated release artifacts yet.
 - **480x320 UI needs work** -- Multiple panels have layout issues at this resolution (see above).
 - **Extended firmware required** -- SSH access (needed for deployment) requires the community extended firmware. Stock firmware does not provide SSH.
-- **Snapmaker firmware is closed source** -- The Klipper/Moonraker fork is proprietary. Open source release was planned before March 2026. This may affect API compatibility.
+- **Snapmaker Klipper/Moonraker source released March 30, 2026** ([u1-klipper](https://github.com/Snapmaker/u1-klipper), [u1-moonraker](https://github.com/Snapmaker/u1-moonraker)). Touchscreen UI remains proprietary.
 
 ## Future Work
+
+### Analyze Snapmaker Klipper Fork
+
+The [u1-klipper](https://github.com/Snapmaker/u1-klipper) source reveals the exact Moonraker API surface. The `lava/` directory contains Snapmaker-specific modules and configs. Key investigation: what objects/fields are exposed for tool state, tool switching, and RFID filament. This unblocks proper toolchanger UI implementation.
 
 ### RFID Filament Integration
 
@@ -165,9 +221,9 @@ The U1's 4-channel RFID reader could be integrated following the existing AMS ba
 
 HelixScreen could be packaged as an extended firmware overlay for cleaner installation (vs. manual SSH deployment).
 
-### Open Source Firmware
+### Open Source Firmware Analysis
 
-When Snapmaker releases their Klipper fork as open source, the full Moonraker API surface will be documented. This may enable proper toolchanger detection and tool-switching UI.
+Snapmaker released their Klipper and Moonraker forks on March 30, 2026 ([u1-klipper](https://github.com/Snapmaker/u1-klipper), [u1-moonraker](https://github.com/Snapmaker/u1-moonraker)). The full Moonraker API surface can now be documented. This enables proper toolchanger detection and tool-switching UI.
 
 ## Community Testing
 
@@ -187,4 +243,8 @@ Even a quick "it boots and shows the home screen" report is valuable.
 - **[U1 Config Example](https://github.com/JNP-1/Snapmaker-U1-Config)** -- Community reverse-engineered Klipper configuration
 - **[Snapmaker Forum](https://forum.snapmaker.com/c/snapmaker-products/87)** -- Official U1 discussion
 - **[Toolchanger Research](printer-research/SNAPMAKER_U1_RESEARCH.md)** -- Detailed analysis of U1's toolchanger implementation vs. standard Klipper toolchanger module
+- **[Snapmaker/u1-klipper](https://github.com/Snapmaker/u1-klipper)** -- Open source Klipper fork
+- **[Snapmaker/u1-moonraker](https://github.com/Snapmaker/u1-moonraker)** -- Open source Moonraker fork
+- **[Snapmaker/u1-fluidd](https://github.com/Snapmaker/u1-fluidd)** -- Open source Fluidd fork
+- **[paxx12/u1-firmware-tools](https://github.com/paxx12/u1-firmware-tools)** -- Firmware unpack/repack tools
 - **[480x320 UI Audit](480x320_UI_AUDIT.md)** -- Panel-by-panel breakdown of layout issues at this resolution

@@ -1,7 +1,7 @@
 # Snapmaker U1 Toolchanger Research
 
-**Date**: 2026-02-02
-**Status**: Investigation complete - compatibility gap identified
+**Date**: 2026-02-02 (updated 2026-03-31)
+**Status**: Source code released - implementation path clear
 
 ## Overview
 
@@ -12,7 +12,7 @@ The Snapmaker U1 is a 4-toolhead color 3D printer using the "SnapSwap" system. E
 - **Park positions**: Spaced at ~67.5mm intervals along Y=332.2
 - **Max speed**: 500mm/s
 - **Tool swap rating**: 1,000,000 swaps (system), 250,000 per toolhead (pogo pins)
-- **Firmware**: Modified Klipper + Moonraker (closed source until ~March 2026)
+- **Firmware**: Modified Klipper + Moonraker (open source as of March 2026)
 - **Web UI**: Fluidd (unmodified)
 
 ---
@@ -20,9 +20,12 @@ The Snapmaker U1 is a 4-toolhead color 3D printer using the "SnapSwap" system. E
 ## Firmware Architecture
 
 ### What They Use
-Snapmaker runs a **custom fork** of Klipper and Moonraker:
-- Modifications are proprietary (for now)
-- Open source release planned before March 2026
+Snapmaker runs a **custom fork** of Klipper and Moonraker, now open source:
+- **Klipper fork**: https://github.com/Snapmaker/u1-klipper
+- **Moonraker fork**: https://github.com/Snapmaker/u1-moonraker
+- The `lava/` directory in u1-klipper contains Snapmaker-specific configs and customizations
+- Klipper uses `ACTIVATE_EXTRUDER` internally for tool switching, with custom macros in the `lava/` dir
+- T0-T3 gcode commands for tool selection
 - Fluidd web interface is stock/unmodified
 
 ### What They DON'T Use
@@ -93,6 +96,16 @@ Each tool has:
 
 ---
 
+## Moonraker API Surface (from open source)
+
+Now that the source is available, we can examine exactly what objects/fields the U1 exposes by reading their Klipper fork. Key areas to check:
+
+- **Custom Klipper objects**: Does their Klipper expose any custom objects beyond standard multi-extruder? Check `lava/` directory for any `[snap_*]` or custom module registrations.
+- **Tool management macros**: What macros are available for tool management? The `lava/` dir should contain the T0-T3 macro definitions, parking logic, and `ACTIVATE_EXTRUDER` wrappers.
+- **Custom Moonraker endpoints**: Does the u1-moonraker fork add any custom API endpoints beyond stock Moonraker? Check for additional route registrations or custom components.
+
+---
+
 ## HelixScreen Compatibility Gap
 
 ### Current Detection Logic (`PrinterDiscovery`)
@@ -118,10 +131,11 @@ U1 would show up with:
 
 ## Options for U1 Support
 
-### Option 1: Wait for Open Source (Recommended)
-**Timeline**: Before March 2026
-**Pros**: Get real API documentation, may adopt standard patterns
-**Cons**: Unknown timeline, may still be non-standard
+### Option 1: Analyze Open Source Klipper Fork (Recommended, now actionable)
+**Source**: https://github.com/Snapmaker/u1-klipper / https://github.com/Snapmaker/u1-moonraker
+**Key task**: Examine the `lava/` directory in u1-klipper to understand the full Moonraker API surface exposed by their modifications.
+**Pros**: Real source code available, can determine exact API surface
+**Cons**: May still be non-standard, but at least we know exactly what we're dealing with
 
 ### Option 2: Detect U1 Specifically
 Look for U1-specific markers:
@@ -161,4 +175,4 @@ Treat any printer with multiple `[extruder*]` + parking macros as a toolchanger 
 
 The Snapmaker U1 is a toolchanger that **doesn't present itself as one** via Moonraker. It uses native Klipper multi-extruder primitives instead of the viesturz/klipper-toolchanger module that HelixScreen expects.
 
-**Recommendation**: Wait for Snapmaker's open source release to understand the full API surface before implementing support. In the meantime, document this gap and track the open source timeline.
+**Path forward**: The source code is now available. The next step is to analyze the released u1-klipper and u1-moonraker repositories (particularly the `lava/` directory) to understand the exact API surface. From there, implement either a U1-specific detection bridge or a generic multi-extruder toolchanger mode that handles printers using `ACTIVATE_EXTRUDER` + T-commands rather than the viesturz `[toolchanger]` module.

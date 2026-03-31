@@ -7,13 +7,14 @@
 # HelixScreen renders directly to the framebuffer (/dev/fb0), so the stock
 # Snapmaker touchscreen UI must be stopped to release the display.
 #
+# The stock touchscreen UI binary is /usr/bin/unisrv. The camera service is /usr/bin/lmd.
 # SSH access: lava@<ip> (password: snapmaker) via extended firmware
 # Touch input: /dev/input/event0
 
 # Stop Snapmaker's stock touchscreen UI so HelixScreen can access the framebuffer.
 platform_stop_competing_uis() {
     # Stop Snapmaker's stock UI service (name may vary with firmware version)
-    for svc in snapmaker-ui snapmaker-screen snapmaker-touch; do
+    for svc in unisrv lmd snapmaker-ui snapmaker-screen snapmaker-touch; do
         if systemctl is-active "$svc" >/dev/null 2>&1; then
             echo "Stopping $svc..."
             systemctl stop "$svc" 2>/dev/null || true
@@ -21,7 +22,7 @@ platform_stop_competing_uis() {
     done
 
     # Kill any remaining UI processes
-    for ui in snapmaker-ui snapmaker-screen KlipperScreen klipperscreen; do
+    for ui in unisrv lmd snapmaker-ui snapmaker-screen KlipperScreen klipperscreen; do
         if command -v killall >/dev/null 2>&1; then
             killall "$ui" 2>/dev/null || true
         else

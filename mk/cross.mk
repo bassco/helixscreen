@@ -432,8 +432,8 @@ else ifeq ($(PLATFORM_TARGET),k2)
 
 else ifeq ($(PLATFORM_TARGET),snapmaker-u1)
     # -------------------------------------------------------------------------
-    # Snapmaker U1 - Rockchip ARM64 (aarch64)
-    # Specs: 480x320 display, Debian Trixie, glibc
+    # Snapmaker U1 - Rockchip RK3562 ARM64 (aarch64)
+    # Specs: 3.5" display (resolution unconfirmed — needs fbset on real hw), Debian Trixie, glibc
     # -------------------------------------------------------------------------
     # FULLY STATIC BUILD: Avoids glibc version mismatches across Debian versions.
     # Uses same aarch64-linux-gnu toolchain as Pi but with static linking.
@@ -1663,7 +1663,7 @@ cc1-test: cc1-docker deploy-cc1-fg
 # Snapmaker U1 Deployment Configuration
 # =============================================================================
 # Snapmaker U1 deployment settings
-# Specs: Rockchip ARM64, 480x320 display, Debian Trixie
+# Specs: Rockchip RK3562 ARM64, 3.5" display (resolution TBD), Debian Trixie
 #
 # Example: make deploy-snapmaker-u1 SNAPMAKER_U1_HOST=192.168.1.100
 # Note: U1 runs Debian with standard tools (scp, ssh, tar)
