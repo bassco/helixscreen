@@ -45,6 +45,7 @@ void PrinterCapabilitiesState::init_subjects(bool register_xml) {
     INIT_SUBJECT_INT(printer_bed_moves, 0, subjects_, register_xml); // 0=gantry moves, 1=bed moves
     INIT_SUBJECT_INT(printer_has_chamber_sensor, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(printer_has_chamber_heater, 0, subjects_, register_xml);
+    INIT_SUBJECT_INT(printer_has_chamber, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(printer_has_screws_tilt, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(printer_has_webcam, 0, subjects_, register_xml);
     INIT_SUBJECT_INT(printer_has_extra_fans, 0, subjects_, register_xml);
@@ -99,6 +100,8 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
     // Chamber temperature sensor and heater capabilities
     lv_subject_set_int(&printer_has_chamber_sensor_, hardware.has_chamber_sensor() ? 1 : 0);
     lv_subject_set_int(&printer_has_chamber_heater_, hardware.has_chamber_heater() ? 1 : 0);
+    lv_subject_set_int(&printer_has_chamber_,
+                       (hardware.has_chamber_sensor() || hardware.has_chamber_heater()) ? 1 : 0);
 
     // Screws tilt adjust capability
     lv_subject_set_int(&printer_has_screws_tilt_, hardware.has_screws_tilt() ? 1 : 0);
@@ -162,10 +165,18 @@ void PrinterCapabilitiesState::set_bed_moves(bool bed_moves) {
 
 void PrinterCapabilitiesState::set_has_chamber_sensor(bool available) {
     lv_subject_set_int(&printer_has_chamber_sensor_, available ? 1 : 0);
+    update_has_chamber();
 }
 
 void PrinterCapabilitiesState::set_has_chamber_heater(bool available) {
     lv_subject_set_int(&printer_has_chamber_heater_, available ? 1 : 0);
+    update_has_chamber();
+}
+
+void PrinterCapabilitiesState::update_has_chamber() {
+    bool has_any = lv_subject_get_int(&printer_has_chamber_sensor_) != 0 ||
+                   lv_subject_get_int(&printer_has_chamber_heater_) != 0;
+    lv_subject_set_int(&printer_has_chamber_, has_any ? 1 : 0);
 }
 
 void PrinterCapabilitiesState::set_power_device_count(int count) {

@@ -234,6 +234,11 @@ class PrinterCapabilitiesState {
         return const_cast<lv_subject_t*>(&printer_has_chamber_heater_);
     }
 
+    /// 1 if printer has any chamber capability (sensor OR heater)
+    lv_subject_t* get_printer_has_chamber_subject() const {
+        return const_cast<lv_subject_t*>(&printer_has_chamber_);
+    }
+
     /// 1 if printer has screws_tilt_adjust
     lv_subject_t* get_printer_has_screws_tilt_subject() const {
         return const_cast<lv_subject_t*>(&printer_has_screws_tilt_);
@@ -285,6 +290,9 @@ class PrinterCapabilitiesState {
   private:
     friend class PrinterCapabilitiesStateTestAccess;
 
+    /// Update combined printer_has_chamber_ from sensor and heater flags
+    void update_has_chamber();
+
     SubjectManager subjects_;
     bool subjects_initialized_ = false;
 
@@ -308,6 +316,7 @@ class PrinterCapabilitiesState {
     lv_subject_t printer_bed_moves_{};               // 0=gantry moves on Z, 1=bed moves on Z
     lv_subject_t printer_has_chamber_sensor_{};      // chamber temperature sensor
     lv_subject_t printer_has_chamber_heater_{};      // active chamber heater (heater_generic)
+    lv_subject_t printer_has_chamber_{};             // combined: sensor OR heater
     lv_subject_t printer_has_screws_tilt_{};         // screws_tilt_adjust
     lv_subject_t printer_has_webcam_{};              // enabled webcam configured
     std::string webcam_stream_url_;                   // MJPEG stream URL

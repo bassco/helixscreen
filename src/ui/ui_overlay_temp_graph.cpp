@@ -266,7 +266,7 @@ void TempGraphOverlay::discover_series() {
 
     // 3. Chamber (if present)
     {
-        lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber_sensor");
+        lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber");
         if (chamber_gate && lv_subject_get_int(chamber_gate) != 0) {
             SeriesInfo s;
             s.display_name = "Chamber";

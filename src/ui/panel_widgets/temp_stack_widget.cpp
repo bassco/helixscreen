@@ -285,7 +285,7 @@ void TempStackWidget::attach_carousel(lv_obj_t* widget_obj) {
     }
 
     // Chamber page (only if sensor present)
-    lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber_sensor");
+    lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber");
     if (chamber_gate && lv_subject_get_int(chamber_gate) != 0) {
         lv_obj_t* chamber_page = create_temp_page("fridge_industrial", "carousel_chamber_icon",
                                                   "chamber_temp", "chamber_temp", "chamber");

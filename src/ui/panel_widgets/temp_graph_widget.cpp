@@ -206,7 +206,7 @@ void TempGraphWidget::build_default_config() {
     sensors.push_back({{"name", "heater_bed"}, {"enabled", true}, {"color", 0x88C0D0}});
 
     // Check for chamber
-    lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber_sensor");
+    lv_subject_t* chamber_gate = lv_xml_get_subject(nullptr, "printer_has_chamber");
     if (chamber_gate && lv_subject_get_int(chamber_gate) != 0) {
         sensors.push_back({{"name", "chamber"}, {"enabled", false}, {"color", 0xA3BE8C}});
     }
