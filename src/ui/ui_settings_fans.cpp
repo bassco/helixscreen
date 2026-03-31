@@ -9,6 +9,7 @@
 #include "ui_settings_fans.h"
 
 #include "ui_event_safety.h"
+#include "ui_fan_control_overlay.h"
 #include "ui_nav_manager.h"
 #include "ui_utils.h"
 
@@ -313,11 +314,8 @@ void FanSettingsOverlay::handle_fan_rename(const std::string& object_name,
     spdlog::debug("[{}] Rename requested for fan: {} (current: {})", get_name(), object_name,
                   current_name);
 
-    // Use confirmation modal with text input for rename
-    // Task 10 will implement the full rename UI with keyboard modal.
-    // For now, log the intent — the plumbing is in place.
-    spdlog::info("[{}] Fan rename deferred to Task 10 (RPM display + long-press rename)",
-                 get_name());
+    // Use the FanControlOverlay's rename modal (shares the same XML component and subjects)
+    get_fan_control_overlay().show_rename_modal(object_name, current_name);
 }
 
 } // namespace helix::settings
