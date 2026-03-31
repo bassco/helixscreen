@@ -540,20 +540,8 @@ lv_indev_t* DisplayBackendDRM::create_input_keyboard() {
         spdlog::warn("[DRM Backend] Could not open specified keyboard device: {}", env_device);
     }
 
-    // Priority 2: Auto-discover via libinput
-    char* kb_path = lv_libinput_find_dev(LV_LIBINPUT_CAPABILITY_KEYBOARD, true);
-    if (kb_path) {
-        keyboard_ = lv_libinput_create(LV_INDEV_TYPE_KEYPAD, kb_path);
-        if (keyboard_) {
-            spdlog::info("[DRM Backend] Keyboard created on {}", kb_path);
-            lv_free(kb_path);
-            return keyboard_;
-        }
-        spdlog::warn("[DRM Backend] Failed to create keyboard device on {}", kb_path);
-        lv_free(kb_path);
-    }
-
-    // Priority 3: Fall back to sysfs evdev scanning
+    // Priority 2: sysfs evdev scanning (bypasses libinput which has heap
+    // corruption bugs in _reset_scanned_devices — see issue #648)
     auto kb_dev = helix::input::find_keyboard_device();
     if (kb_dev) {
         keyboard_ = lv_evdev_create(LV_INDEV_TYPE_KEYPAD, kb_dev->path.c_str());
