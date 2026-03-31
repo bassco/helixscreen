@@ -9,6 +9,7 @@
 #include "gcode_parser.h"
 #include "power_device_state.h"
 #include "runtime_config.h"
+#include "sensor_state.h"
 #include "timelapse_state.h"
 
 #include <spdlog/spdlog.h>
@@ -635,6 +636,27 @@ void MoonrakerAPIMock::set_device_power(const std::string& device, const std::st
 
     // Simulate notify_power_changed so PowerDeviceState updates subjects
     helix::PowerDeviceState::instance().update_device_status(device, new_state ? "on" : "off");
+}
+
+// ============================================================================
+// Sensor Mock
+// ============================================================================
+
+void MoonrakerAPIMock::get_sensors(SensorsCallback on_success, ErrorCallback /*on_error*/) {
+    spdlog::info("[MoonrakerAPIMock] Returning mock sensors");
+
+    std::vector<helix::SensorInfo> sensors = {
+        {"mock_energy", "Mock Energy Monitor", "mqtt", {"power", "voltage", "current", "energy"}},
+    };
+
+    nlohmann::json initial_values = {
+        {"mock_energy",
+         {{"power", 45.0}, {"voltage", 230.5}, {"current", 0.195}, {"energy", 123.4}}},
+    };
+
+    if (on_success) {
+        on_success(sensors, initial_values);
+    }
 }
 
 // ============================================================================

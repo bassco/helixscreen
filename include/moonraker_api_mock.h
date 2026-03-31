@@ -481,6 +481,12 @@ class MoonrakerAPIMock : public MoonrakerAPI {
                           SuccessCallback on_success, ErrorCallback on_error) override;
 
     // ========================================================================
+    // Overridden Sensor Methods (return mock data)
+    // ========================================================================
+
+    void get_sensors(SensorsCallback on_success, ErrorCallback on_error) override;
+
+    // ========================================================================
     // Shared State Methods
     // ========================================================================
 
