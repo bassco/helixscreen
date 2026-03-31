@@ -35,10 +35,9 @@ Use these checklists before starting common tasks to avoid frequent mistakes.
 
 - [ ] **GPL v3 copyright header:** Required in all `.c`, `.cpp`, `.h`, `.xml` files
 - [ ] **Use correct template:** See `docs/COPYRIGHT_HEADERS.md` for variants
-- [ ] **Public API documentation:** Add Doxygen comments (`@brief`, `@param`, `@return`)
 - [ ] **Follow naming conventions:** Study similar existing files first
 
-**Reference:** COPYRIGHT_HEADERS.md, DOXYGEN_GUIDE.md
+**Reference:** COPYRIGHT_HEADERS.md
 
 ---
 
@@ -53,7 +52,6 @@ Use these checklists before starting common tasks to avoid frequent mistakes.
 ### Documentation
 - [ ] **Update HANDOFF.md:** If changing active work or priorities
 - [ ] **Keep HANDOFF lean:** Delete completed work, max 150 lines
-- [ ] **API docs complete:** All public methods have Doxygen comments
 
 ### Git
 - [ ] **Meaningful commit message:** Use `.gitmessage` template format

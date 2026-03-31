@@ -99,6 +99,5 @@ All developer documentation lives here. When working on features, look up the re
 | `LVGL_XML_SITUATION.md` | LVGL XML licensing history and resolution (extracted to helix-xml) |
 | `SLOT_COMPONENT_DESIGNS.md` | Slot component design patterns (ready to implement) |
 | `plans/2026-02-18-helix-xml-plan.md` | Helix XML engine: extraction, upgrade & extension plan |
-| `DOXYGEN_GUIDE.md` | Doxygen documentation setup |
 | `FLAG_ICONS_SOURCE.md` | Flag icon asset sources |
 | `480x320_UI_AUDIT.md` | Small display UI audit |
