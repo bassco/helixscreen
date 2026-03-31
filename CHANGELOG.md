@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.14] - 2026-03-31
+
+### Added
+- Spoolman fuzzy search with Levenshtein distance for typo-tolerant filament lookups
+- Manual barcode scanner selection via USB vendor:product ID for devices not auto-detected
+
+### Fixed
+- Barcode scanners excluded from LVGL keyboard input to prevent ghost keypresses (#659)
+- AMS material label not refreshing when slot color changes
+
+### Changed
+- CJK font files use RLE compression (~1MB savings)
+- Source fonts excluded from release builds (~35MB savings)
+
 ## [0.99.13] - 2026-03-31
 
 ### Added
@@ -2439,6 +2453,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.14]: https://github.com/prestonbrown/helixscreen/compare/v0.99.13...v0.99.14
 [0.99.13]: https://github.com/prestonbrown/helixscreen/compare/v0.99.12...v0.99.13
 [0.99.12]: https://github.com/prestonbrown/helixscreen/compare/v0.99.11...v0.99.12
 [0.99.11]: https://github.com/prestonbrown/helixscreen/compare/v0.99.10...v0.99.11
