@@ -16,14 +16,15 @@ INSPECTOR_SRC := $(TOOLS_DIR)/moonraker_inspector.cpp
 INSPECTOR_INTERACTIVE_SRC := $(TOOLS_DIR)/moonraker_inspector_interactive.cpp
 INSPECTOR_OBJ := $(OBJ_DIR)/tools/moonraker_inspector.o
 INSPECTOR_INTERACTIVE_OBJ := $(OBJ_DIR)/tools/moonraker_inspector_interactive.o
-INSPECTOR_STUB_OBJ := $(OBJ_DIR)/tools/ui_notification_stub.o
+CPP_TERMINAL_VERSION_STUB_OBJ := $(OBJ_DIR)/tools/cpp_terminal_version_stub.o
 
-# Inspector needs moonraker_client and its dependencies, but NOT UI code
-# Extract just the Moonraker-related objects (no LVGL, no UI, no SDL2)
+# Inspector needs JSON-RPC request tracking (no LVGL, no UI, no SDL2)
+# The tracker + format_utils have zero app dependencies after refactoring
 INSPECTOR_DEPS := \
-	$(OBJ_DIR)/moonraker_client.o \
+	$(OBJ_DIR)/api/moonraker_request_tracker.o \
+	$(OBJ_DIR)/format_utils.o \
 	$(INSPECTOR_INTERACTIVE_OBJ) \
-	$(INSPECTOR_STUB_OBJ) \
+	$(CPP_TERMINAL_VERSION_STUB_OBJ) \
 	$(CPP_TERMINAL_OBJS)
 
 # Simplified linker flags (no SDL2, no UI frameworks)
@@ -69,6 +70,15 @@ endif
 		exit 1; \
 	}
 
+# Compile cpp-terminal version stub (cmake normally generates version.cpp)
+$(CPP_TERMINAL_VERSION_STUB_OBJ): $(TOOLS_DIR)/cpp_terminal_version_stub.cpp
+	$(Q)mkdir -p $(dir $@)
+	$(ECHO) "$(BLUE)[CXX]$(RESET) $<"
+	$(Q)$(CXX) $(CXXFLAGS) $(CPP_TERMINAL_INC) -c $< -o $@ || { \
+		echo "$(RED)$(BOLD)✗ Compilation failed:$(RESET) $<"; \
+		exit 1; \
+	}
+
 # Compile cpp-terminal library (use SUBMODULE_CXXFLAGS to suppress third-party warnings)
 $(OBJ_DIR)/cpp-terminal/%.o: $(CPP_TERMINAL_DIR)/%.cpp
 	$(Q)mkdir -p $(dir $@)
@@ -77,18 +87,6 @@ ifeq ($(V),1)
 	$(Q)echo "$(YELLOW)Command:$(RESET) $(CXX) $(SUBMODULE_CXXFLAGS) $(CPP_TERMINAL_INC) -c $< -o $@"
 endif
 	$(Q)$(CXX) $(SUBMODULE_CXXFLAGS) $(CPP_TERMINAL_INC) -c $< -o $@ || { \
-		echo "$(RED)$(BOLD)✗ Compilation failed:$(RESET) $<"; \
-		exit 1; \
-	}
-
-# Compile UI notification stubs (needed for moonraker_client linkage)
-$(INSPECTOR_STUB_OBJ): $(TOOLS_DIR)/ui_notification_stub.cpp
-	$(Q)mkdir -p $(dir $@)
-	$(ECHO) "$(BLUE)[CXX]$(RESET) $<"
-ifeq ($(V),1)
-	$(Q)echo "$(YELLOW)Command:$(RESET) $(CXX) $(CXXFLAGS) -c $< -o $@"
-endif
-	$(Q)$(CXX) $(CXXFLAGS) -c $< -o $@ || { \
 		echo "$(RED)$(BOLD)✗ Compilation failed:$(RESET) $<"; \
 		exit 1; \
 	}

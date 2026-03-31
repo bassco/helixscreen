@@ -14,10 +14,14 @@
  * Built with cpp-terminal - modern C++ TUI library
  */
 
-#include "moonraker_client.h"
-#include <json.hpp>  // nlohmann/json from libhv
-#include <spdlog/spdlog.h>
+#include "moonraker_error.h"
+#include "moonraker_request_tracker.h"
+
+#include <hv/WebSocketClient.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
+
+#include "hv/json.hpp"
 
 #include "cpp-terminal/color.hpp"
 #include "cpp-terminal/exception.hpp"
@@ -38,6 +42,7 @@
 #include <vector>
 
 using json = nlohmann::json;
+using helix::MoonrakerRequestTracker;
 
 // Tree node for hierarchical data display
 struct TreeNode {
@@ -64,13 +69,14 @@ struct InteractiveState {
     json printer_info;
     json objects_list;
     bool data_ready;
-    MoonrakerClient* client;  // For querying object details
+    hv::WebSocketClient* ws_client;       // For WebSocket transport
+    MoonrakerRequestTracker* tracker;     // For JSON-RPC request tracking
     TreeNode* selected_node;  // Track actual selected node (not just index)
     bool need_redraw;  // Flag to trigger redraw from async callbacks
     size_t spinner_frame;  // For animated spinner
     int pending_queries;  // Track pending async queries
 
-    InteractiveState() : selected_index(0), data_ready(false), client(nullptr), selected_node(nullptr), need_redraw(false), spinner_frame(0), pending_queries(0) {}
+    InteractiveState() : selected_index(0), data_ready(false), ws_client(nullptr), tracker(nullptr), selected_node(nullptr), need_redraw(false), spinner_frame(0), pending_queries(0) {}
 };
 
 static InteractiveState* g_state = nullptr;
@@ -147,8 +153,8 @@ void add_json_to_tree(TreeNode* parent, const std::string& key, const json& val,
 }
 
 // Query Moonraker for detailed object data
-void query_object_data(TreeNode* node, MoonrakerClient* client) {
-    if (!node || node->object_name.empty() || node->data_fetched || !client) {
+void query_object_data(TreeNode* node, hv::WebSocketClient* ws_client, MoonrakerRequestTracker* tracker) {
+    if (!node || node->object_name.empty() || node->data_fetched || !ws_client || !tracker) {
         return;
     }
 
@@ -167,8 +173,8 @@ void query_object_data(TreeNode* node, MoonrakerClient* client) {
     params["objects"] = json::object();
     params["objects"][node->object_name] = json::value_t::null;  // Query all fields
 
-    client->send_jsonrpc("printer.objects.query", params,
-        [node](json response) {
+    tracker->send(*ws_client, "printer.objects.query", params,
+        [node](const json& response) {
             if (g_state) {
                 g_state->pending_queries--;  // Query completed
             }
@@ -784,12 +790,12 @@ void handle_input(InteractiveState* state, Term::Key key) {
                 spdlog::debug("Toggled expansion: was_expanded={}, now_expanded={}", was_expanded, node->expanded);
 
                 // If expanding and has object name, query Moonraker for details
-                if (!was_expanded && !node->object_name.empty() && !node->data_fetched && state->client) {
+                if (!was_expanded && !node->object_name.empty() && !node->data_fetched && state->ws_client) {
                     spdlog::debug("Triggering query_object_data for: {}", node->object_name);
-                    query_object_data(node, state->client);
+                    query_object_data(node, state->ws_client, state->tracker);
                 } else {
                     spdlog::debug("NOT querying: was_expanded={}, object_name='{}', data_fetched={}, client={}",
-                                 was_expanded, node->object_name, node->data_fetched, state->client != nullptr);
+                                 was_expanded, node->object_name, node->data_fetched, state->ws_client != nullptr);
                 }
 
                 state->selected_node = node;
@@ -834,9 +840,14 @@ int run_interactive(const std::string& ip, int port) {
 
         // Connect to Moonraker
         std::string url = "ws://" + ip + ":" + std::to_string(port) + "/websocket";
-        MoonrakerClient client;
-        client.configure_timeouts(5000, 10000, 10000, 200, 2000);
-        state.client = &client;
+        hv::WebSocketClient ws_client;
+        MoonrakerRequestTracker tracker;
+        tracker.set_default_timeout(10000);
+        ws_client.setConnectTimeout(5000);
+        ws_client.setPingInterval(10);
+
+        state.ws_client = &ws_client;
+        state.tracker = &tracker;
 
         bool connected = false;
 
@@ -844,24 +855,24 @@ int run_interactive(const std::string& ip, int port) {
             connected = true;
 
             // Query all data
-            client.send_jsonrpc("server.info", json::object(),
-                [&](json response) {
+            tracker.send(ws_client, "server.info", json::object(),
+                [&](const json& response) {
                     if (response.contains("result")) {
                         state.server_info = response["result"];
                     }
                 },
                 [](const MoonrakerError&) {});
 
-            client.send_jsonrpc("printer.info", json::object(),
-                [&](json response) {
+            tracker.send(ws_client, "printer.info", json::object(),
+                [&](const json& response) {
                     if (response.contains("result")) {
                         state.printer_info = response["result"];
                     }
                 },
                 [](const MoonrakerError&) {});
 
-            client.send_jsonrpc("printer.objects.list", json::object(),
-                [&](json response) {
+            tracker.send(ws_client, "printer.objects.list", json::object(),
+                [&](const json& response) {
                     if (response.contains("result")) {
                         state.objects_list = response["result"];
                         state.data_ready = true;
@@ -874,7 +885,20 @@ int run_interactive(const std::string& ip, int port) {
 
         auto on_disconnect = []() {};
 
-        int result = client.connect(url.c_str(), on_connect, on_disconnect);
+        // Route incoming messages through the tracker
+        ws_client.onmessage = [&](const std::string& msg) {
+            try {
+                auto response = json::parse(msg);
+                tracker.route_response(response,
+                    [](MoonrakerEventType, const std::string&, bool, const std::string&) {});
+            } catch (const json::parse_error& e) {
+                spdlog::warn("Failed to parse JSON response: {}", e.what());
+            }
+        };
+
+        ws_client.onopen = [&]() { on_connect(); };
+        ws_client.onclose = [&]() { on_disconnect(); };
+        int result = ws_client.open(url.c_str());
         if (result != 0) {
             Term::cerr << Term::color_fg(Term::Color::Name::Red) << "Failed to connect to " << url
                       << Term::color_fg(Term::Color::Name::Default) << std::endl;

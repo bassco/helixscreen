@@ -15,10 +15,14 @@
  * - Configuration details
  */
 
-#include "moonraker_client.h"
 #include "ansi_colors.h"
-#include <json.hpp>  // nlohmann/json from libhv
+#include "moonraker_error.h"
+#include "moonraker_request_tracker.h"
+
+#include <hv/WebSocketClient.h>
 #include <spdlog/spdlog.h>
+
+#include "hv/json.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -27,6 +31,7 @@
 #include <thread>
 
 using json = nlohmann::json;
+using helix::MoonrakerRequestTracker;
 
 // Global flag for color support (auto-detected or disabled via --no-color)
 static bool use_colors = true;
@@ -350,11 +355,14 @@ int main(int argc, char** argv) {
     std::cout << "Target: " << ip << ":" << port << "\n";
     std::cout << "WebSocket URL: " << url << "\n";
 
-    // Create Moonraker client
-    MoonrakerClient client;
+    // Create WebSocket client and JSON-RPC tracker
+    hv::WebSocketClient ws_client;
+    MoonrakerRequestTracker tracker;
+    tracker.set_default_timeout(10000);
 
-    // Configure timeouts
-    client.configure_timeouts(5000, 10000, 10000, 200, 2000);
+    // Configure WebSocket
+    ws_client.setConnectTimeout(5000);
+    ws_client.setPingInterval(10);  // keepalive (seconds)
 
     // Set up connection callbacks
     std::cout << "\nConnecting";
@@ -365,8 +373,8 @@ int main(int argc, char** argv) {
         std::cout << " ✓\n";
 
         // Query 1: Server info
-        client.send_jsonrpc("server.info", json::object(),
-            [&](json response) {
+        tracker.send(ws_client, "server.info", json::object(),
+            [&](const json& response) {
                 if (response.contains("result")) {
                     state.server_info = response["result"];
                     state.server_info_received = true;
@@ -377,8 +385,8 @@ int main(int argc, char** argv) {
             });
 
         // Query 2: Printer info
-        client.send_jsonrpc("printer.info", json::object(),
-            [&](json response) {
+        tracker.send(ws_client, "printer.info", json::object(),
+            [&](const json& response) {
                 if (response.contains("result")) {
                     state.printer_info = response["result"];
                     state.printer_info_received = true;
@@ -389,8 +397,8 @@ int main(int argc, char** argv) {
             });
 
         // Query 3: Objects list
-        client.send_jsonrpc("printer.objects.list", json::object(),
-            [&](json response) {
+        tracker.send(ws_client, "printer.objects.list", json::object(),
+            [&](const json& response) {
                 if (response.contains("result")) {
                     state.objects_list = response["result"];
                     state.objects_received = true;
@@ -414,8 +422,23 @@ int main(int argc, char** argv) {
         }
     };
 
+    // Route incoming messages through the tracker
+    ws_client.onmessage = [&](const std::string& msg) {
+        try {
+            auto response = json::parse(msg);
+            tracker.route_response(response,
+                [](MoonrakerEventType, const std::string&, bool, const std::string&) {
+                    // CLI tool -- no event system needed
+                });
+        } catch (const json::parse_error& e) {
+            spdlog::warn("Failed to parse JSON response: {}", e.what());
+        }
+    };
+
     // Connect
-    int result = client.connect(url.c_str(), on_connect, on_disconnect);
+    ws_client.onopen = [&]() { on_connect(); };
+    ws_client.onclose = [&]() { on_disconnect(); };
+    int result = ws_client.open(url.c_str());
     if (result != 0) {
         std::cerr << "Failed to initiate connection (error code: " << result << ")\n";
         return 1;
