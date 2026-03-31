@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "usb_scanner_monitor.h"
 
+#include "input_device_scanner.h"
 #include "qr_decoder.h"
 
 #include <spdlog/spdlog.h>
 
 #ifdef __linux__
-#include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include <algorithm>
-#include <cctype>
+#include <chrono>
 #include <cstring>
 #endif
 
@@ -30,28 +29,18 @@ char UsbScannerMonitor::keycode_to_char(int keycode, bool shift)
     // Number row: KEY_1(2)..KEY_9(10), KEY_0(11)
     if (keycode >= 2 && keycode <= 10) {
         if (shift) {
-            // Shifted number row: !@#$%^&*(
             static const char shifted_nums[] = "!@#$%^&*(";
             return shifted_nums[keycode - 2];
         }
-        return '0' + (keycode - 1);  // KEY_1=2 -> '1', KEY_2=3 -> '2', etc.
+        return '0' + (keycode - 1);
     }
-    if (keycode == 11) {  // KEY_0
-        return shift ? ')' : '0';
-    }
+    if (keycode == 11) return shift ? ')' : '0';
 
-    // KEY_MINUS(12), KEY_EQUAL(13)
     if (keycode == 12) return shift ? '_' : '-';
     if (keycode == 13) return shift ? '+' : '=';
 
-    // Letter keys - mapped by keyboard physical layout (not alphabetical)
-    // Row 1: Q(16) W(17) E(18) R(19) T(20) Y(21) U(22) I(23) O(24) P(25)
-    // Row 2: A(30) S(31) D(32) F(33) G(34) H(35) J(36) K(37) L(38)
-    // Row 3: Z(44) X(45) C(46) V(47) B(48) N(49) M(50)
-    static const struct {
-        int keycode;
-        char lower;
-    } letter_map[] = {
+    // Letter keys by physical layout
+    static const struct { int keycode; char lower; } letter_map[] = {
         {16, 'q'}, {17, 'w'}, {18, 'e'}, {19, 'r'}, {20, 't'},
         {21, 'y'}, {22, 'u'}, {23, 'i'}, {24, 'o'}, {25, 'p'},
         {30, 'a'}, {31, 's'}, {32, 'd'}, {33, 'f'}, {34, 'g'},
@@ -59,20 +48,23 @@ char UsbScannerMonitor::keycode_to_char(int keycode, bool shift)
         {44, 'z'}, {45, 'x'}, {46, 'c'}, {47, 'v'}, {48, 'b'},
         {49, 'n'}, {50, 'm'},
     };
-
     for (const auto& entry : letter_map) {
-        if (entry.keycode == keycode) {
+        if (entry.keycode == keycode)
             return shift ? static_cast<char>(std::toupper(entry.lower)) : entry.lower;
-        }
     }
 
-    // Punctuation keys
-    if (keycode == 39) return shift ? ':' : ';';   // KEY_SEMICOLON
-    if (keycode == 51) return shift ? '<' : ',';   // KEY_COMMA
-    if (keycode == 52) return shift ? '>' : '.';   // KEY_DOT
-    if (keycode == 53) return shift ? '?' : '/';   // KEY_SLASH
+    if (keycode == 39) return shift ? ':' : ';';
+    if (keycode == 40) return shift ? '"' : '\'';
+    if (keycode == 41) return shift ? '~' : '`';
+    if (keycode == 43) return shift ? '|' : '\\';
+    if (keycode == 26) return shift ? '{' : '[';
+    if (keycode == 27) return shift ? '}' : ']';
+    if (keycode == 51) return shift ? '<' : ',';
+    if (keycode == 52) return shift ? '>' : '.';
+    if (keycode == 53) return shift ? '?' : '/';
+    if (keycode == 57) return ' ';   // KEY_SPACE
 
-    return 0;  // Unmapped
+    return 0;
 }
 
 int UsbScannerMonitor::check_spoolman_pattern(const std::string& input)
@@ -84,61 +76,15 @@ int UsbScannerMonitor::check_spoolman_pattern(const std::string& input)
 
 std::vector<std::string> UsbScannerMonitor::find_scanner_devices()
 {
-    std::vector<std::string> devices;
+    // find_hid_keyboard_devices() returns named scanners ("barcode"/"scanner"
+    // in name) first, then generic USB HID keyboards. We only open the first
+    // device to avoid treating a real keyboard as a barcode scanner.
+    auto devices = helix::input::find_hid_keyboard_devices();
+    if (devices.empty()) return {};
 
-    // Strategy 1: Check /dev/input/by-id/ for devices with barcode/scanner in name
-    DIR* dir = opendir("/dev/input/by-id/");
-    if (dir) {
-        struct dirent* entry = nullptr;
-        while ((entry = readdir(dir)) != nullptr) {
-            std::string name(entry->d_name);
-            // Case-insensitive check for barcode or scanner
-            std::string lower_name = name;
-            std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (lower_name.find("barcode") != std::string::npos ||
-                lower_name.find("scanner") != std::string::npos) {
-                std::string path = "/dev/input/by-id/" + name;
-                devices.push_back(path);
-                spdlog::info("UsbScannerMonitor: found scanner device by-id: {}", path);
-            }
-        }
-        closedir(dir);
-    }
-
-    // Strategy 2: Check all /dev/input/event* devices via EVIOCGNAME
-    if (devices.empty()) {
-        dir = opendir("/dev/input/");
-        if (dir) {
-            struct dirent* entry = nullptr;
-            while ((entry = readdir(dir)) != nullptr) {
-                std::string name(entry->d_name);
-                if (name.find("event") != 0) continue;
-
-                std::string path = "/dev/input/" + name;
-                int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
-                if (fd < 0) continue;
-
-                char dev_name[256] = {0};
-                if (ioctl(fd, EVIOCGNAME(sizeof(dev_name)), dev_name) >= 0) {
-                    std::string dev_name_str(dev_name);
-                    std::string lower_name = dev_name_str;
-                    std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
-                                   [](unsigned char c) { return std::tolower(c); });
-                    if (lower_name.find("barcode") != std::string::npos ||
-                        lower_name.find("scanner") != std::string::npos) {
-                        devices.push_back(path);
-                        spdlog::info("UsbScannerMonitor: found scanner device by name '{}': {}",
-                                     dev_name_str, path);
-                    }
-                }
-                close(fd);
-            }
-            closedir(dir);
-        }
-    }
-
-    return devices;
+    spdlog::info("UsbScannerMonitor: using HID device: {} ({})",
+                 devices[0].path, devices[0].name);
+    return {devices[0].path};
 }
 
 void UsbScannerMonitor::start(ScanCallback on_scan)
@@ -166,7 +112,6 @@ void UsbScannerMonitor::stop()
 
     running_.store(false);
 
-    // Wake up poll() by writing to stop pipe
     if (stop_pipe_[1] >= 0) {
         char c = 'x';
         (void)write(stop_pipe_[1], &c, 1);
@@ -176,14 +121,8 @@ void UsbScannerMonitor::stop()
         monitor_thread_.join();
     }
 
-    if (stop_pipe_[0] >= 0) {
-        close(stop_pipe_[0]);
-        stop_pipe_[0] = -1;
-    }
-    if (stop_pipe_[1] >= 0) {
-        close(stop_pipe_[1]);
-        stop_pipe_[1] = -1;
-    }
+    if (stop_pipe_[0] >= 0) { close(stop_pipe_[0]); stop_pipe_[0] = -1; }
+    if (stop_pipe_[1] >= 0) { close(stop_pipe_[1]); stop_pipe_[1] = -1; }
 
     spdlog::info("UsbScannerMonitor: stopped");
 }
@@ -194,27 +133,29 @@ void UsbScannerMonitor::monitor_thread_func()
 
     std::vector<int> device_fds;
     std::string accumulator;
+    bool capslock_on = false;
     bool shift_held = false;
+    std::chrono::steady_clock::time_point last_key_time{};
 
     auto open_devices = [&]() {
-        // Close any previously open devices
-        for (int fd : device_fds) {
-            close(fd);
-        }
+        for (int fd : device_fds) close(fd);
         device_fds.clear();
+        capslock_on = false;
+        shift_held = false;
+        accumulator.clear();
 
         auto paths = find_scanner_devices();
         for (const auto& path : paths) {
-            int fd = open(path.c_str(), O_RDONLY);
+            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
             if (fd < 0) {
                 spdlog::warn("UsbScannerMonitor: failed to open {}: {}", path, strerror(errno));
                 continue;
             }
-            // Try to grab exclusively so keystrokes don't go to console
-            if (ioctl(fd, EVIOCGRAB, 1) != 0) {
-                spdlog::debug("UsbScannerMonitor: EVIOCGRAB failed for {} (non-fatal): {}",
-                              path, strerror(errno));
-            }
+            // NOTE: Do NOT use EVIOCGRAB! Many barcode scanners toggle Caps Lock
+            // before/after typing characters. The kernel's `leds` handler must
+            // receive the Caps Lock event to send the LED state update back to
+            // the scanner. Without it, the scanner waits forever for LED
+            // confirmation and retries Caps Lock indefinitely.
             device_fds.push_back(fd);
         }
     };
@@ -227,12 +168,8 @@ void UsbScannerMonitor::monitor_thread_func()
         pfds.push_back({stop_pipe_[0], POLLIN, 0});
 
         if (device_fds.empty()) {
-            // No devices found - poll on just the stop pipe with 5s timeout for re-scan
             int ret = poll(pfds.data(), pfds.size(), 5000);
-            if (ret > 0 && (pfds[0].revents & POLLIN)) {
-                break;  // Stop signal
-            }
-            // Re-scan for hot-plugged devices
+            if (ret > 0 && (pfds[0].revents & POLLIN)) break;
             open_devices();
             continue;
         }
@@ -247,97 +184,101 @@ void UsbScannerMonitor::monitor_thread_func()
             spdlog::error("UsbScannerMonitor: poll error: {}", strerror(errno));
             break;
         }
+        if (ret == 0) continue;
+        if (pfds[0].revents & POLLIN) break;
 
-        // Check stop pipe
-        if (pfds[0].revents & POLLIN) {
-            break;
+        // Clear stale partial scans (e.g. interrupted mid-barcode)
+        if (!accumulator.empty()) {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_key_time);
+            if (elapsed.count() >= 3) {
+                spdlog::debug("UsbScannerMonitor: clearing stale accumulator ({}s idle)",
+                              elapsed.count());
+                accumulator.clear();
+            }
         }
 
-        // Check device fds
         bool device_error = false;
         for (size_t i = 1; i < pfds.size(); ++i) {
             if (!(pfds[i].revents & POLLIN)) continue;
 
-            struct input_event ev {};
-            ssize_t n = read(pfds[i].fd, &ev, sizeof(ev));
-            if (n < static_cast<ssize_t>(sizeof(ev))) {
-                if (n < 0 && errno != EAGAIN) {
-                    spdlog::warn("UsbScannerMonitor: device read error, will re-scan");
-                    device_error = true;
-                }
-                continue;
-            }
-
-            if (ev.type != EV_KEY) continue;
-
-            // Track shift state
-            if (ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT) {
-                shift_held = (ev.value != 0);  // 1=press, 0=release, 2=repeat
-                continue;
-            }
-
-            // Only process key-down events (value == 1)
-            if (ev.value != 1) continue;
-
-            if (ev.code == KEY_ENTER || ev.code == KEY_KPENTER) {
-                // End of scan - check pattern
-                if (!accumulator.empty()) {
-                    spdlog::debug("UsbScannerMonitor: scanned text: '{}'", accumulator);
-                    int spool_id = check_spoolman_pattern(accumulator);
-                    if (spool_id >= 0 && callback_) {
-                        spdlog::info("UsbScannerMonitor: detected Spoolman spool ID: {}",
-                                     spool_id);
-                        callback_(spool_id);
-                    } else if (spool_id < 0) {
-                        spdlog::debug("UsbScannerMonitor: text '{}' is not a Spoolman QR code",
-                                      accumulator);
+            // Drain all available events — scanners send rapid bursts
+            while (true) {
+                struct input_event ev {};
+                ssize_t n = read(pfds[i].fd, &ev, sizeof(ev));
+                if (n < static_cast<ssize_t>(sizeof(ev))) {
+                    if (n < 0 && errno != EAGAIN) {
+                        spdlog::warn("UsbScannerMonitor: device read error, will re-scan");
+                        device_error = true;
                     }
-                    accumulator.clear();
+                    break;
                 }
-                continue;
-            }
 
-            char ch = keycode_to_char(static_cast<int>(ev.code), shift_held);
-            if (ch != 0) {
-                accumulator += ch;
+                if (ev.type != EV_KEY) continue;
+
+                // Track Caps Lock — scanners toggle it for uppercase letters.
+                if (ev.code == KEY_CAPSLOCK) {
+                    if (ev.value == 1) capslock_on = !capslock_on;
+                    continue;
+                }
+
+                if (ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT) {
+                    shift_held = (ev.value != 0);
+                    continue;
+                }
+
+                if (ev.value != 1) continue;
+
+                last_key_time = std::chrono::steady_clock::now();
+
+                if (ev.code == KEY_ENTER || ev.code == KEY_KPENTER) {
+                    if (!accumulator.empty()) {
+                        spdlog::debug("UsbScannerMonitor: scanned text: '{}'", accumulator);
+                        int spool_id = check_spoolman_pattern(accumulator);
+                        if (spool_id >= 0 && callback_) {
+                            spdlog::info("UsbScannerMonitor: detected Spoolman spool ID: {}",
+                                         spool_id);
+                            callback_(spool_id);
+                        } else if (spool_id < 0) {
+                            spdlog::debug("UsbScannerMonitor: text '{}' not a Spoolman QR code",
+                                          accumulator);
+                        }
+                        accumulator.clear();
+                    }
+                    continue;
+                }
+
+                // Caps Lock affects only letter keys; Shift affects everything.
+                int code = static_cast<int>(ev.code);
+                bool is_letter = (code >= 16 && code <= 25) ||  // Q-P
+                                 (code >= 30 && code <= 38) ||  // A-L
+                                 (code >= 44 && code <= 50);    // Z-M
+                bool effective_shift = is_letter ? (shift_held ^ capslock_on) : shift_held;
+                char ch = keycode_to_char(code, effective_shift);
+                if (ch != 0) {
+                    accumulator += ch;
+                }
             }
         }
 
         if (device_error) {
-            // Re-scan for devices (one may have been unplugged)
             open_devices();
         }
     }
 
-    // Clean up device fds
-    for (int fd : device_fds) {
-        close(fd);
-    }
+    for (int fd : device_fds) close(fd);
 
     spdlog::debug("UsbScannerMonitor: monitor thread exiting");
 }
 
 #else  // !__linux__
 
-std::vector<std::string> UsbScannerMonitor::find_scanner_devices()
-{
-    return {};
+std::vector<std::string> UsbScannerMonitor::find_scanner_devices() { return {}; }
+void UsbScannerMonitor::start(ScanCallback) {
+    spdlog::warn("UsbScannerMonitor: only supported on Linux");
 }
-
-void UsbScannerMonitor::start(ScanCallback /*on_scan*/)
-{
-    spdlog::warn("UsbScannerMonitor: USB barcode scanner monitoring is only supported on Linux");
-}
-
-void UsbScannerMonitor::stop()
-{
-    // No-op on non-Linux
-}
-
-void UsbScannerMonitor::monitor_thread_func()
-{
-    // No-op on non-Linux
-}
+void UsbScannerMonitor::stop() {}
+void UsbScannerMonitor::monitor_thread_func() {}
 
 #endif  // __linux__
 

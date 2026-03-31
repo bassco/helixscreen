@@ -39,7 +39,7 @@ private:
 
     std::thread monitor_thread_;
     std::atomic<bool> running_{false};
-    int stop_pipe_[2] = {-1, -1};  // For waking up poll()
+    int stop_pipe_[2] = {-1, -1};
     ScanCallback callback_;
 };
 

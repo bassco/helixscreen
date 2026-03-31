@@ -377,3 +377,104 @@ TEST_CASE("find_keyboard_device detects USB HID keyboards via sysfs", "[input]")
         REQUIRE_FALSE(result.has_value());
     }
 }
+
+TEST_CASE("find_hid_keyboard_devices detects USB HID keyboards for scanner use", "[input]") {
+    using helix::input::find_hid_keyboard_devices;
+
+    SECTION("detects generic USB HID keyboard (e.g. QR scanner reporting as USBKey)") {
+        MockInputTree tree("hid_generic");
+        tree.add_device(0, "goodix-ts", {
+            {"abs", "3"},
+            {"key", "0"},
+            {"rel", "0"}
+        }, "0018");
+        tree.add_device(2, "USBKey Chip USBKey Module", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].name == "USBKey Chip USBKey Module");
+    }
+
+    SECTION("named barcode scanner is returned before generic keyboard") {
+        MockInputTree tree("hid_priority");
+        tree.add_device(1, "USBKey Chip USBKey Module", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+        tree.add_device(2, "Tera Barcode Scanner", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.size() == 2);
+        // Named scanner should come first
+        REQUIRE(result[0].name == "Tera Barcode Scanner");
+        REQUIRE(result[1].name == "USBKey Chip USBKey Module");
+    }
+
+    SECTION("skips touchscreen devices") {
+        MockInputTree tree("hid_skip_touch");
+        tree.add_device(0, "goodix-ts", {
+            {"abs", "3"},
+            {"key", "40000000"},
+            {"rel", "0"}
+        });
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("skips non-USB devices") {
+        MockInputTree tree("hid_skip_platform");
+        tree.add_device(0, "MCE IR Keyboard", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        }, "0019");
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("skips devices without KEY_A") {
+        MockInputTree tree("hid_skip_no_keya");
+        tree.add_device(0, "Power Button", {
+            {"key", "100000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+
+    SECTION("returns multiple USB HID devices") {
+        MockInputTree tree("hid_multi");
+        tree.add_device(1, "USB Keyboard", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+        tree.add_device(3, "QR Scanner", {
+            {"key", "40000000"},
+            {"abs", "0"},
+            {"rel", "0"}
+        });
+
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.size() == 2);
+    }
+
+    SECTION("empty directory returns empty vector") {
+        MockInputTree tree("hid_empty");
+        auto result = find_hid_keyboard_devices(tree.dev_dir, tree.sysfs_dir);
+        REQUIRE(result.empty());
+    }
+}

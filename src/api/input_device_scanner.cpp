@@ -3,6 +3,7 @@
 #include "input_device_scanner.h"
 #include "touch_calibration.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <dirent.h>
@@ -221,6 +222,85 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 
 std::optional<ScannedDevice> find_keyboard_device() {
     return find_keyboard_device("/dev/input", "/sys/class/input");
+}
+
+std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
+                                                      const std::string& sysfs_base) {
+    std::vector<ScannedDevice> named_scanners;   // "barcode"/"scanner" in name — high priority
+    std::vector<ScannedDevice> generic_keyboards; // any other USB HID keyboard
+
+    auto dir = std::unique_ptr<DIR, decltype(&closedir)>(opendir(dev_base.c_str()), closedir);
+    if (!dir) {
+        spdlog::debug("[InputScanner] Cannot open {}", dev_base);
+        return {};
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir.get())) != nullptr) {
+        if (strncmp(entry->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        int event_num = -1;
+        if (sscanf(entry->d_name, "event%d", &event_num) != 1 || event_num < 0) {
+            continue;
+        }
+
+        std::string device_path = dev_base + "/" + entry->d_name;
+        if (access(device_path.c_str(), R_OK) != 0) {
+            continue;
+        }
+
+        // Only accept USB or Bluetooth devices
+        int bus = read_bus_type(sysfs_base, event_num);
+        if (bus != BUS_USB && bus != BUS_BLUETOOTH) {
+            continue;
+        }
+
+        // Require KEY_A (bit 30) — real keyboard-like device
+        std::string key_caps = read_sysfs_capability(sysfs_base, event_num, "key");
+        if (!check_capability_bit(key_caps, 30)) {
+            continue;
+        }
+
+        // Skip touchscreens (have ABS_X/ABS_Y or ABS_MT_POSITION_X/Y)
+        std::string abs_caps = read_sysfs_capability(sysfs_base, event_num, "abs");
+        bool has_legacy_abs = check_capability_bit(abs_caps, 0) &&
+                              check_capability_bit(abs_caps, 1);
+        bool has_mt_abs = check_capability_bit(abs_caps, 53) &&
+                          check_capability_bit(abs_caps, 54);
+        if (has_legacy_abs || has_mt_abs) {
+            continue;
+        }
+
+        std::string name = read_device_name(sysfs_base, event_num);
+        ScannedDevice dev{device_path, name, event_num};
+
+        // Prioritize devices with "barcode" or "scanner" in the name
+        std::string lower_name = name;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (lower_name.find("barcode") != std::string::npos ||
+            lower_name.find("scanner") != std::string::npos) {
+            spdlog::info("[InputScanner] Found named scanner device: {} ({})", device_path, name);
+            named_scanners.push_back(std::move(dev));
+        } else {
+            spdlog::info("[InputScanner] Found USB HID keyboard device: {} ({})",
+                         device_path, name);
+            generic_keyboards.push_back(std::move(dev));
+        }
+    }
+
+    // Return named scanners first, then generic keyboards
+    std::vector<ScannedDevice> result;
+    result.reserve(named_scanners.size() + generic_keyboards.size());
+    for (auto& d : named_scanners) result.push_back(std::move(d));
+    for (auto& d : generic_keyboards) result.push_back(std::move(d));
+    return result;
+}
+
+std::vector<ScannedDevice> find_hid_keyboard_devices() {
+    return find_hid_keyboard_devices("/dev/input", "/sys/class/input");
 }
 
 std::string read_sysfs_line(const std::string& path) {

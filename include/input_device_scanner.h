@@ -4,6 +4,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace helix {
 struct AbsCapabilities;
@@ -33,6 +34,13 @@ std::optional<ScannedDevice> find_mouse_device(const std::string& dev_base,
 std::optional<ScannedDevice> find_keyboard_device();
 std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
                                                    const std::string& sysfs_base);
+
+/// Scan /dev/input/event* for USB HID keyboard-like devices suitable for barcode scanning.
+/// Returns ALL matching devices (USB/BT bus, has KEY_A, not a touchscreen).
+/// Prioritizes devices with "barcode"/"scanner" in name, then any other HID keyboard.
+std::vector<ScannedDevice> find_hid_keyboard_devices();
+std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
+                                                      const std::string& sysfs_base);
 
 /// Read a single line from a sysfs file (returns empty string on failure)
 std::string read_sysfs_line(const std::string& path);

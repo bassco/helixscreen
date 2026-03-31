@@ -28,6 +28,25 @@
 #include <algorithm>
 #include <thread>
 
+namespace {
+
+// Disable/enable all LVGL keyboard input devices. Barcode scanners appear as
+// USB HID keyboards — we suppress LVGL keyboard processing while the scanner
+// monitor is active to prevent keystrokes from triggering UI navigation.
+void disable_lvgl_keyboards(bool disable)
+{
+    lv_indev_t* indev = nullptr;
+    while ((indev = lv_indev_get_next(indev)) != nullptr) {
+        if (lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD) {
+            lv_indev_enable(indev, !disable);
+            spdlog::debug("[QR Scanner] {} keyboard indev",
+                          disable ? "Disabled" : "Re-enabled");
+        }
+    }
+}
+
+}  // namespace
+
 namespace helix::ui {
 
 // ============================================================================
@@ -358,6 +377,11 @@ void QrScannerOverlay::start_scanning() {
     }
 #endif
 
+    // Disable LVGL keyboard input while the scanner monitor is active.
+    // Barcode scanners appear as USB HID keyboards — without this, their
+    // keystrokes trigger unintended UI navigation.
+    disable_lvgl_keyboards(true);
+
     // Start USB barcode scanner monitor
     auto tok_usb = lifetime_.token();
     usb_monitor_.start([this, tok_usb](int spool_id) {
@@ -402,6 +426,9 @@ void QrScannerOverlay::stop_scanning() {
     if (usb_monitor_.is_running()) {
         usb_monitor_.stop();
     }
+
+    // Re-enable LVGL keyboard input
+    disable_lvgl_keyboards(false);
 
     spdlog::debug("[QR Scanner] Scanning stopped");
 }

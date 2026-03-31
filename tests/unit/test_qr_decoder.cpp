@@ -30,6 +30,24 @@ TEST_CASE("parse_spoolman_id: URL with trailing slash", "[qr_decoder]")
     REQUIRE(QrDecoder::parse_spoolman_id("https://host/spool/99/") == 99);
 }
 
+TEST_CASE("parse_spoolman_id: URL with /spool/show/ path (issue #660)", "[qr_decoder]")
+{
+    REQUIRE(QrDecoder::parse_spoolman_id("https://spoolman-hostname/spool/show/7") == 7);
+    REQUIRE(QrDecoder::parse_spoolman_id("https://spoolman.local:7912/spool/show/42/") == 42);
+    REQUIRE(QrDecoder::parse_spoolman_id("http://10.0.0.5/spool/show/123") == 123);
+}
+
+TEST_CASE("parse_spoolman_id: scanner with unshifted characters", "[qr_decoder]")
+{
+    // USB barcode scanners that only use Caps Lock (not Shift) send
+    // '=' instead of '+' and ';' instead of ':'
+    REQUIRE(QrDecoder::parse_spoolman_id("web=spoolman;s-42") == 42);
+    REQUIRE(QrDecoder::parse_spoolman_id("web=spoolman;s-97") == 97);
+
+    // SM:SPOOL= format still works (camera reads correctly)
+    REQUIRE(QrDecoder::parse_spoolman_id("SM:SPOOL=123") == 123);
+}
+
 TEST_CASE("parse_spoolman_id: rejects non-Spoolman text", "[qr_decoder]")
 {
     REQUIRE(QrDecoder::parse_spoolman_id("Hello World") == -1);
