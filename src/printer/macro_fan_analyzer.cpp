@@ -92,7 +92,7 @@ void MacroFanAnalyzer::extract_m141_roles(const std::string& gcode,
         }
         int index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
         std::string obj_name = "output_pin fan" + std::to_string(index);
-        result.role_hints[obj_name] = "Chamber Circulation";
+        result.role_hints[obj_name] = "Chamber Exhaust";
         pos = digit_end;
     }
 }

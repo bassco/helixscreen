@@ -90,9 +90,9 @@ TEST_CASE("MacroFanAnalyzer: extracts role hints from M141 macro",
     MacroFanAnalyzer analyzer;
     auto result = analyzer.analyze(config);
 
-    SECTION("fan1 referenced in M141 gets chamber_circulation role hint") {
+    SECTION("fan1 referenced in M141 gets chamber exhaust role hint") {
         REQUIRE(result.role_hints.count("output_pin fan1") == 1);
-        REQUIRE(result.role_hints["output_pin fan1"] == "Chamber Circulation");
+        REQUIRE(result.role_hints["output_pin fan1"] == "Chamber Exhaust");
     }
 }
 
