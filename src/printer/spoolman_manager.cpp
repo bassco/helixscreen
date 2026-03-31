@@ -155,11 +155,6 @@ void SpoolmanManager::refresh_spoolman_weights() {
         return;
     }
 
-    auto* backend = AmsState::instance().get_backend(0);
-    if (!backend) {
-        return;
-    }
-
     uint32_t now = lv_tick_get();
 
     // Circuit breaker: if open, check if backoff period has elapsed
@@ -186,15 +181,18 @@ void SpoolmanManager::refresh_spoolman_weights() {
     }
     last_refresh_ms_ = now;
 
-    // When the backend tracks weight locally (e.g., AFC decrements weight
-    // via extruder position), we still need total_weight_g (initial weight)
-    // from Spoolman — the backend only provides remaining weight.
-    bool local_weight = backend->tracks_weight_locally();
-
-    int slot_count = backend->get_system_info().total_slots;
     int linked_count = 0;
 
-    for (int i = 0; i < slot_count; ++i) {
+    // Refresh AMS backend slots (if a backend is active)
+    auto* backend = AmsState::instance().get_backend(0);
+    if (backend) {
+        // When the backend tracks weight locally (e.g., AFC decrements weight
+        // via extruder position), we still need total_weight_g (initial weight)
+        // from Spoolman — the backend only provides remaining weight.
+        bool local_weight = backend->tracks_weight_locally();
+        int slot_count = backend->get_system_info().total_slots;
+
+        for (int i = 0; i < slot_count; ++i) {
         SlotInfo slot = backend->get_slot_info(i);
         if (slot.spoolman_id > 0) {
             ++linked_count;
@@ -339,7 +337,8 @@ void SpoolmanManager::refresh_spoolman_weights() {
                 },
                 /*silent=*/true);
         }
-    }
+        }
+    } // if (backend)
 
     // Also refresh external spool if it has a Spoolman link
     auto ext_spool = AmsState::instance().get_external_spool_info();
