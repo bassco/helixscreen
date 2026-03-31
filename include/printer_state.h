@@ -809,15 +809,6 @@ class PrinterState {
     }
 
     /**
-     * @brief Rename a fan and persist to config, triggers UI rebuild
-     * @param object_name Moonraker object name
-     * @param new_name New display name (empty to revert to auto-generated)
-     */
-    void rename_fan(const std::string& object_name, const std::string& new_name) {
-        fan_state_.rename_fan(object_name, new_name);
-    }
-
-    /**
      * @brief Get G-code Z offset subject for tune panel
      *
      * Returns current Z-offset from gcode_move.homing_origin[2] in microns.

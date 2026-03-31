@@ -2,7 +2,7 @@
 
 #include "macro_fan_analyzer.h"
 
-#include <regex>
+#include <cctype>
 #include <spdlog/spdlog.h>
 
 namespace helix {
@@ -50,17 +50,27 @@ MacroFanAnalysis MacroFanAnalyzer::analyze(const nlohmann::json& config_settings
     return result;
 }
 
+/// Find all "SET_PIN PIN=fanN" patterns in gcode text using simple string search.
+/// Avoids std::regex which causes stack overflow on MIPS embedded targets.
 void MacroFanAnalyzer::extract_set_pin_fans(const std::string& gcode,
                                             MacroFanAnalysis& result) const {
-    // Match SET_PIN PIN=fanN where N is one or more digits
-    std::regex pattern(R"(SET_PIN\s+PIN=fan(\d+))");
-    auto begin = std::sregex_iterator(gcode.begin(), gcode.end(), pattern);
-    auto end = std::sregex_iterator();
-
-    for (auto it = begin; it != end; ++it) {
-        int index = std::stoi((*it)[1].str());
+    const std::string needle = "SET_PIN PIN=fan";
+    size_t pos = 0;
+    while ((pos = gcode.find(needle, pos)) != std::string::npos) {
+        size_t digit_start = pos + needle.size();
+        if (digit_start >= gcode.size() || !std::isdigit(gcode[digit_start])) {
+            pos = digit_start;
+            continue;
+        }
+        // Extract digits
+        size_t digit_end = digit_start;
+        while (digit_end < gcode.size() && std::isdigit(gcode[digit_end])) {
+            digit_end++;
+        }
+        int index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
         std::string obj_name = "output_pin fan" + std::to_string(index);
         result.fan_indices[obj_name] = index;
+        pos = digit_end;
     }
 }
 
@@ -68,14 +78,22 @@ void MacroFanAnalyzer::extract_m141_roles(const std::string& gcode,
                                           MacroFanAnalysis& result) const {
     // M141 is the chamber temperature command. Any SET_PIN PIN=fanN in M141
     // indicates that fanN is used for chamber circulation/ventilation.
-    std::regex pattern(R"(SET_PIN\s+PIN=fan(\d+))");
-    auto begin = std::sregex_iterator(gcode.begin(), gcode.end(), pattern);
-    auto end = std::sregex_iterator();
-
-    for (auto it = begin; it != end; ++it) {
-        int index = std::stoi((*it)[1].str());
+    const std::string needle = "SET_PIN PIN=fan";
+    size_t pos = 0;
+    while ((pos = gcode.find(needle, pos)) != std::string::npos) {
+        size_t digit_start = pos + needle.size();
+        if (digit_start >= gcode.size() || !std::isdigit(gcode[digit_start])) {
+            pos = digit_start;
+            continue;
+        }
+        size_t digit_end = digit_start;
+        while (digit_end < gcode.size() && std::isdigit(gcode[digit_end])) {
+            digit_end++;
+        }
+        int index = std::stoi(gcode.substr(digit_start, digit_end - digit_start));
         std::string obj_name = "output_pin fan" + std::to_string(index);
         result.role_hints[obj_name] = "Chamber Circulation";
+        pos = digit_end;
     }
 }
 

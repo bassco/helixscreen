@@ -4,7 +4,6 @@
 #include "ui_fan_control_overlay.h"
 
 #include "ui_error_reporting.h"
-#include "ui_event_safety.h"
 #include "ui_fan_arc_resize.h"
 #include "ui_global_panel_helper.h"
 #include "ui_modal.h"
@@ -25,33 +24,8 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdio>
-#include <cstring>
 
 using namespace helix;
-
-// ============================================================================
-// STATIC CALLBACKS FOR FAN RENAME MODAL
-// ============================================================================
-
-static void on_fan_rename_cancel_cb(lv_event_t* /*e*/) {
-    get_fan_control_overlay().hide_rename_modal();
-}
-
-static void on_fan_rename_confirm_cb(lv_event_t* /*e*/) {
-    // Find the text input in the modal (search layer_top first, then active screen)
-    lv_obj_t* input = lv_obj_find_by_name(lv_layer_top(), "fan_rename_new_name_input");
-    if (!input) {
-        input = lv_obj_find_by_name(lv_screen_active(), "fan_rename_new_name_input");
-    }
-
-    if (input) {
-        const char* text = lv_textarea_get_text(input);
-        if (text && std::strlen(text) > 0) {
-            get_fan_control_overlay().confirm_rename(std::string(text));
-        }
-    }
-    get_fan_control_overlay().hide_rename_modal();
-}
 
 // ============================================================================
 // GLOBAL INSTANCE
@@ -82,12 +56,6 @@ FanControlOverlay::~FanControlOverlay() {
     animated_fan_dials_.clear();
     auto_fan_cards_.clear();
 
-    // Deinit rename subject
-    if (rename_subjects_initialized_) {
-        lv_subject_deinit(&fan_rename_old_name_);
-        rename_subjects_initialized_ = false;
-    }
-
     spdlog::trace("[FanControlOverlay] Destroyed");
 }
 
@@ -99,15 +67,6 @@ void FanControlOverlay::init_subjects() {
     if (subjects_initialized_) {
         spdlog::warn("[{}] init_subjects() called twice - ignoring", get_name());
         return;
-    }
-
-    // Initialize rename modal subject
-    if (!rename_subjects_initialized_) {
-        std::memset(rename_old_name_buf_, 0, sizeof(rename_old_name_buf_));
-        lv_subject_init_string(&fan_rename_old_name_, rename_old_name_buf_,
-                               nullptr, sizeof(rename_old_name_buf_), 0);
-        lv_xml_register_subject(nullptr, "fan_rename_old_name", &fan_rename_old_name_);
-        rename_subjects_initialized_ = true;
     }
 
     subjects_initialized_ = true;
@@ -140,11 +99,6 @@ lv_obj_t* FanControlOverlay::create(lv_obj_t* parent) {
 
 void FanControlOverlay::register_callbacks() {
     // Back button is handled by overlay_panel base component
-
-    // Fan rename modal callbacks
-    lv_xml_register_event_cb(nullptr, "on_fan_rename_cancel", on_fan_rename_cancel_cb);
-    lv_xml_register_event_cb(nullptr, "on_fan_rename_confirm", on_fan_rename_confirm_cb);
-
     spdlog::trace("[{}] Callbacks registered", get_name());
 }
 
@@ -213,9 +167,6 @@ void FanControlOverlay::on_deactivate() {
 void FanControlOverlay::cleanup() {
     spdlog::debug("[{}] Cleanup", get_name());
 
-    // Hide rename modal if open
-    hide_rename_modal();
-
     // Freeze queue, drain pending deferred callbacks, THEN tear down observers
     // and animations to prevent use-after-free from stale queued callbacks.
     {
@@ -273,34 +224,6 @@ void FanControlOverlay::populate_fans() {
                 send_fan_speed(fan_id, speed_percent);
             });
 
-            // Add long-press rename on the name label
-            lv_obj_t* dial_root = afd.dial->get_root();
-            lv_obj_t* name_label = dial_root ? lv_obj_find_by_name(dial_root, "name_label") : nullptr;
-            if (name_label) {
-                lv_obj_add_flag(name_label, LV_OBJ_FLAG_CLICKABLE);
-                auto* ctx = new std::pair<std::string, std::string>(fan.object_name, fan.display_name);
-                lv_obj_add_event_cb(
-                    name_label,
-                    [](lv_event_t* e) {
-                        LVGL_SAFE_EVENT_CB_BEGIN("[FanControlOverlay] name long-press");
-                        auto* c = static_cast<std::pair<std::string, std::string>*>(
-                            lv_event_get_user_data(e));
-                        if (c) {
-                            get_fan_control_overlay().show_rename_modal(c->first, c->second);
-                        }
-                        LVGL_SAFE_EVENT_CB_END();
-                    },
-                    LV_EVENT_LONG_PRESSED, ctx);
-                lv_obj_add_event_cb(
-                    name_label,
-                    [](lv_event_t* e) {
-                        auto* c = static_cast<std::pair<std::string, std::string>*>(
-                            lv_event_get_user_data(e));
-                        delete c;
-                    },
-                    LV_EVENT_DELETE, ctx);
-            }
-
             animated_fan_dials_.push_back(std::move(afd));
 
             spdlog::trace("[{}] Created AnimatedFanDial for '{}' ({}%)", get_name(),
@@ -338,34 +261,6 @@ void FanControlOverlay::populate_fans() {
                     }
                 }
 
-                // Find name label for long-press rename
-                lv_obj_t* name_label = lv_obj_find_by_name(card, "name_label");
-                if (name_label) {
-                    lv_obj_add_flag(name_label, LV_OBJ_FLAG_CLICKABLE);
-                    auto* ctx = new std::pair<std::string, std::string>(
-                        fan.object_name, fan.display_name);
-                    lv_obj_add_event_cb(
-                        name_label,
-                        [](lv_event_t* e) {
-                            LVGL_SAFE_EVENT_CB_BEGIN("[FanControlOverlay] auto name long-press");
-                            auto* c = static_cast<std::pair<std::string, std::string>*>(
-                                lv_event_get_user_data(e));
-                            if (c) {
-                                get_fan_control_overlay().show_rename_modal(c->first, c->second);
-                            }
-                            LVGL_SAFE_EVENT_CB_END();
-                        },
-                        LV_EVENT_LONG_PRESSED, ctx);
-                    lv_obj_add_event_cb(
-                        name_label,
-                        [](lv_event_t* e) {
-                            auto* c = static_cast<std::pair<std::string, std::string>*>(
-                                lv_event_get_user_data(e));
-                            delete c;
-                        },
-                        LV_EVENT_DELETE, ctx);
-                }
-
                 // Find arc and make read-only (fan_arc_core is interactive by default)
                 lv_obj_t* arc = lv_obj_find_by_name(card, "dial_arc");
                 if (arc) {
@@ -389,7 +284,6 @@ void FanControlOverlay::populate_fans() {
                 afc.object_name = fan.object_name;
                 afc.card = card;
                 afc.speed_label = speed_label;
-                afc.name_label = name_label;
                 afc.arc = arc;
                 afc.fan_icon = fan_icon;
                 afc.last_speed_pct = fan.speed_percent;
@@ -551,46 +445,3 @@ void FanControlOverlay::refresh_all_auto_fan_animations() {
     }
 }
 
-// ============================================================================
-// FAN RENAME MODAL
-// ============================================================================
-
-void FanControlOverlay::show_rename_modal(const std::string& object_name,
-                                          const std::string& current_name) {
-    // Close any existing rename modal
-    hide_rename_modal();
-
-    pending_rename_object_ = object_name;
-    lv_subject_copy_string(&fan_rename_old_name_, current_name.c_str());
-
-    rename_modal_widget_ = helix::ui::modal_show("fan_rename_modal");
-    if (rename_modal_widget_) {
-        // Register keyboard for the text input
-        lv_obj_t* input = lv_obj_find_by_name(rename_modal_widget_, "fan_rename_new_name_input");
-        if (input) {
-            helix::ui::modal_register_keyboard(rename_modal_widget_, input);
-            // Pre-fill with current name
-            lv_textarea_set_text(input, current_name.c_str());
-        }
-    }
-    spdlog::debug("[{}] Showing rename modal for: {} ('{}')", get_name(), object_name, current_name);
-}
-
-void FanControlOverlay::confirm_rename(const std::string& new_name) {
-    if (pending_rename_object_.empty()) {
-        spdlog::warn("[{}] confirm_rename called with no pending object", get_name());
-        return;
-    }
-
-    spdlog::info("[{}] Renaming fan '{}' -> '{}'", get_name(), pending_rename_object_, new_name);
-    printer_state_.rename_fan(pending_rename_object_, new_name);
-    pending_rename_object_.clear();
-}
-
-void FanControlOverlay::hide_rename_modal() {
-    if (rename_modal_widget_) {
-        helix::ui::modal_hide(rename_modal_widget_);
-        rename_modal_widget_ = nullptr;
-    }
-    pending_rename_object_.clear();
-}

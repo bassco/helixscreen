@@ -336,34 +336,6 @@ void PrinterFanState::update_fan_rpm(const std::string& object_name, int rpm) {
     }
 }
 
-void PrinterFanState::rename_fan(const std::string& object_name, const std::string& new_name) {
-    // Persist to config
-    auto* config = Config::get_instance();
-    if (config) {
-        config->set(config->df() + "fans/names/" + object_name, new_name);
-        spdlog::info("[PrinterFanState] Saved custom name for '{}': '{}'", object_name, new_name);
-    }
-
-    // Update in-memory display name
-    for (auto& fan : fans_) {
-        if (fan.object_name == object_name) {
-            if (new_name.empty()) {
-                // Revert to auto-generated name
-                std::string role_name = get_role_display_name(object_name);
-                fan.display_name =
-                    role_name.empty() ? get_display_name(object_name, DeviceType::FAN) : role_name;
-            } else {
-                fan.display_name = new_name;
-            }
-            spdlog::debug("[PrinterFanState] Renamed '{}' -> '{}'", object_name, fan.display_name);
-            break;
-        }
-    }
-
-    // Bump version to trigger UI rebuilds
-    lv_subject_set_int(&fans_version_, lv_subject_get_int(&fans_version_) + 1);
-}
-
 lv_subject_t* PrinterFanState::get_fan_speed_subject(const std::string& object_name,
                                                      SubjectLifetime& lifetime) {
     auto it = fan_speed_subjects_.find(object_name);

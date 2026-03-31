@@ -311,11 +311,8 @@ void FanSettingsOverlay::populate_fans() {
 
 void FanSettingsOverlay::handle_fan_rename(const std::string& object_name,
                                            const std::string& current_name) {
-    spdlog::debug("[{}] Rename requested for fan: {} (current: {})", get_name(), object_name,
-                  current_name);
-
-    // Use the FanControlOverlay's rename modal (shares the same XML component and subjects)
-    get_fan_control_overlay().show_rename_modal(object_name, current_name);
+    spdlog::info("[{}] Fan rename not available (feature disabled): {} (current: {})", get_name(),
+                 object_name, current_name);
 }
 
 } // namespace helix::settings
