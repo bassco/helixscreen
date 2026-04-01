@@ -1119,22 +1119,31 @@ void close_cb(lv_event_t* /*e*/) {
 // D-PAD CREATION
 // ============================================================================
 
-lv_obj_t* create_dpad_button(lv_obj_t* parent, const char* symbol, lv_align_t align, int32_t x_ofs,
-                             int32_t y_ofs) {
+// MDI chevron codepoints for D-pad arrows (use DPAD_ prefix to avoid
+// collision with ICON_CHEVRON_* macros from ui_fonts.h)
+static constexpr const char* DPAD_CHEVRON_UP = "\xF3\xB0\x85\x83";    // F0143
+static constexpr const char* DPAD_CHEVRON_DOWN = "\xF3\xB0\x85\x80";  // F0140
+static constexpr const char* DPAD_CHEVRON_LEFT = "\xF3\xB0\x85\x81";  // F0141
+static constexpr const char* DPAD_CHEVRON_RIGHT = "\xF3\xB0\x85\x82"; // F0142
+
+lv_obj_t* create_dpad_button(lv_obj_t* parent, const char* icon_utf8, lv_align_t align,
+                             int32_t x_ofs, int32_t y_ofs) {
     lv_obj_t* btn = lv_button_create(parent);
     lv_obj_set_size(btn, 48, 48);
     lv_obj_align(btn, align, x_ofs, y_ofs);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x444444), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_30, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_50, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_20, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_40, LV_PART_MAIN | LV_STATE_PRESSED);
     lv_obj_set_style_radius(btn, 24, LV_PART_MAIN);
     lv_obj_set_style_border_width(btn, 0, LV_PART_MAIN);
     lv_obj_add_flag(btn, LV_OBJ_FLAG_FLOATING);
     lv_obj_add_event_cb(btn, dpad_cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* label = lv_label_create(btn);
-    lv_label_set_text(label, symbol);
+    lv_label_set_text(label, icon_utf8);
+    lv_obj_set_style_text_font(label, theme_manager_get_font("icon_font_sm"), LV_PART_MAIN);
     lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_opa(label, LV_OPA_50, LV_PART_MAIN);
     lv_obj_center(label);
 
     return btn;
@@ -1145,12 +1154,13 @@ void create_dpad(lv_obj_t* parent) {
     int32_t cx = 0;
     int32_t base_y = -20;
 
-    g_dpad_up = create_dpad_button(parent, LV_SYMBOL_UP, LV_ALIGN_BOTTOM_MID, cx, base_y - 100);
-    g_dpad_down = create_dpad_button(parent, LV_SYMBOL_DOWN, LV_ALIGN_BOTTOM_MID, cx, base_y);
+    g_dpad_up = create_dpad_button(parent, DPAD_CHEVRON_UP, LV_ALIGN_BOTTOM_MID, cx, base_y - 100);
+    g_dpad_down =
+        create_dpad_button(parent, DPAD_CHEVRON_DOWN, LV_ALIGN_BOTTOM_MID, cx, base_y);
     g_dpad_left =
-        create_dpad_button(parent, LV_SYMBOL_LEFT, LV_ALIGN_BOTTOM_MID, cx - 52, base_y - 50);
+        create_dpad_button(parent, DPAD_CHEVRON_LEFT, LV_ALIGN_BOTTOM_MID, cx - 52, base_y - 50);
     g_dpad_right =
-        create_dpad_button(parent, LV_SYMBOL_RIGHT, LV_ALIGN_BOTTOM_MID, cx + 52, base_y - 50);
+        create_dpad_button(parent, DPAD_CHEVRON_RIGHT, LV_ALIGN_BOTTOM_MID, cx + 52, base_y - 50);
 }
 
 // ============================================================================
