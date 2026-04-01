@@ -224,6 +224,9 @@ class Config {
     /// Get the preset name (e.g., "ad5m"), or empty string if no preset
     std::string get_preset() const;
 
+    /// Set the preset name (written during auto-detection from printer database)
+    void set_preset(const std::string& preset_name);
+
     /**
      * @brief Check if first-run wizard is required
      *

@@ -1459,6 +1459,11 @@ bool PrinterDetector::auto_detect_and_save(const helix::PrinterDiscovery& discov
 
         // Save to config
         config->set<std::string>(config->df() + helix::wizard::PRINTER_TYPE, result.type_name);
+        if (!result.preset.empty()) {
+            config->set_preset(result.preset);
+            spdlog::info("[PrinterDetector] Auto-detected preset '{}' for printer '{}'",
+                         result.preset, result.type_name);
+        }
         config->save();
 
         // Update PrinterState so home panel gets correct image and capabilities

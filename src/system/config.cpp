@@ -1226,6 +1226,14 @@ std::string Config::get_preset() const {
     return "";
 }
 
+void Config::set_preset(const std::string& preset_name) {
+    if (preset_name.empty()) {
+        return;
+    }
+    data["preset"] = preset_name;
+    spdlog::info("[Config] Preset set to '{}'", preset_name);
+}
+
 bool Config::is_wizard_required() {
     // Check per-printer wizard_completed first (v3 config)
     if (!active_printer_id_.empty()) {
