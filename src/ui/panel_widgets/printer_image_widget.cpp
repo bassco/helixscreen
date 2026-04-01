@@ -162,18 +162,10 @@ void PrinterImageWidget::reload_from_config() {
     // Update printer info overlay
     // Always visible to maintain consistent flex layout (hidden flag removes from flex).
     std::string host = config->get<std::string>(config->df() + helix::wizard::MOONRAKER_HOST, "");
-    std::string printer_name =
-        config->get<std::string>(config->df() + "printer_name", "");
 
-    // Show printer name if set, otherwise fall back to printer type
-    if (!printer_name.empty()) {
-        lv_subject_copy_string(&s_printer_type_subject, printer_name.c_str());
-    } else if (!printer_type.empty()) {
-        lv_subject_copy_string(&s_printer_type_subject, printer_type.c_str());
-    } else {
-        // Space keeps the text_small at its font height for consistent layout
-        lv_subject_copy_string(&s_printer_type_subject, " ");
-    }
+    // Show printer name if set, otherwise fall back to printer type, then " " for layout
+    std::string display_name = helix::get_printer_display_name(" ");
+    lv_subject_copy_string(&s_printer_type_subject, display_name.c_str());
 
     if (!host.empty() && host != "127.0.0.1" && host != "localhost") {
         lv_subject_copy_string(&s_printer_host_subject, host.c_str());

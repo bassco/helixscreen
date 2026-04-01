@@ -413,11 +413,8 @@ void PrinterManagerOverlay::refresh_printer_info() {
         return;
     }
 
-    // Printer name from config (user-given name, or fallback)
-    std::string name = config->get<std::string>(config->df() + helix::wizard::PRINTER_NAME, "");
-    if (name.empty()) {
-        name = "My Printer";
-    }
+    // Printer name: saved name → model/type → "My Printer"
+    std::string name = helix::get_printer_display_name();
     std::strncpy(name_buf_, name.c_str(), sizeof(name_buf_) - 1);
     name_buf_[sizeof(name_buf_) - 1] = '\0';
     lv_subject_copy_string(&printer_manager_name_, name_buf_);
