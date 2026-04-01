@@ -313,11 +313,122 @@ Package HelixScreen as an Extended Firmware overlay for one-click installation v
 
 ### RFID Filament UI
 
-The `AmsBackendSnapmaker` backend already parses RFID data from `filament_detect.info` (material type, color, temperature ranges, spool weight). The filament panel UI needs to be tested and refined to properly display this data.
+The `AmsBackendSnapmaker` backend parses RFID data from `filament_detect.info` when the RFID reader is enabled. With the RFID reader disabled (default on Extended Firmware via `disable-rfid-reader.cfg`), all RFID fields return `"NONE"` and `print_task_config` is the authoritative filament data source.
 
 ### Virtual Slot Mapping
 
 The U1 supports an `extruder_map_table` with 32 virtual slots mapped to 4 physical extruders. This could enable more advanced filament management workflows.
+
+## Moonraker Object Reference
+
+The U1's Klipper exposes several custom objects. `AmsBackendSnapmaker` subscribes to and parses these during the Moonraker subscription phase.
+
+### `print_task_config` — Authoritative filament data (HANDLED)
+
+The primary source for filament info. Populated by the stock firmware's task manager regardless of RFID reader state.
+
+| Field | Example | Handled | Notes |
+|-------|---------|---------|-------|
+| `filament_type` | `["PLA","PLA","PLA","PLA"]` | ✅ | Material per slot |
+| `filament_sub_type` | `["SnapSpeed",...]` | ✅ | Appended to type (e.g., "PLA SnapSpeed") |
+| `filament_vendor` | `["Snapmaker",...]` | ✅ | Brand per slot |
+| `filament_color_rgba` | `["080A0DFF",...]` | ✅ | RGBA hex → RGB uint32 |
+| `filament_exist` | `[true,true,true,true]` | ✅ | Slot presence |
+| `filament_color` | `[4278716941,...]` | — | Redundant with `_rgba`, not parsed |
+| `filament_official` | `[true,...]` | ❌ | Could show official/third-party badge |
+| `filament_sku` | `[900001,...]` | ❌ | Snapmaker product SKU |
+| `filament_soft` | `[false,...]` | ❌ | Soft filament flag (TPU etc.) |
+| `filament_edit` | `[false,...]` | ❌ | Whether user has edited filament info |
+| `extruder_map_table` | `[0,1,2,3,0,...(x32)]` | ❌ | Virtual→physical slot mapping for multi-material |
+| `extruders_used` | `[false,...]` | ❌ | Which extruders are used in current print |
+| `extruders_replenished` | `[0,1,2,3]` | ❌ | Auto-replenish mapping |
+| `auto_replenish_filament` | `true` | ❌ | Auto-replenish enabled |
+| `filament_entangle_detect` | `false` | ❌ | Entangle detection enabled |
+| `filament_entangle_sen` | `"medium"` | ❌ | Sensitivity level |
+| `flow_calibrate` | `false` | ❌ | Flow calibration pre-print option |
+| `shaper_calibrate` | `false` | ❌ | Input shaper calibration pre-print option |
+| `time_lapse_camera` | `false` | ❌ | Timelapse pre-print option |
+| `auto_bed_leveling` | `false` | ❌ | ABL pre-print option |
+
+### `filament_detect` — RFID tag data (HANDLED)
+
+Per-channel RFID tag reads. All fields return `"NONE"`/`0` when the RFID reader is disabled.
+
+| Field | Example | Handled | Notes |
+|-------|---------|---------|-------|
+| `state` | `[1,1,1,1]` | ✅ | 1=filament present, 0=empty |
+| `info[].MAIN_TYPE` | `"NONE"` or `"PLA"` | ✅ | Skipped when `"NONE"` |
+| `info[].SUB_TYPE` | `"NONE"` or `"Silk"` | ✅ | Skipped when `"NONE"` |
+| `info[].MANUFACTURER` | `"NONE"` or `"Snapmaker"` | ✅ | |
+| `info[].VENDOR` | `"NONE"` | ✅ | Fallback for brand |
+| `info[].ARGB_COLOR` | `4294967295` | ✅ | ARGB → RGB mask |
+| `info[].HOTEND_MIN/MAX_TEMP` | `0` | ✅ | |
+| `info[].BED_TEMP` | `0` | ✅ | |
+| `info[].WEIGHT` | `0` | ✅ | |
+| `info[].DIAMETER` | `0` | ❌ | Filament diameter (1.75mm) |
+| `info[].LENGTH` | `0` | ❌ | Spool length |
+| `info[].DRYING_TEMP/TIME` | `0` | ❌ | Recommended drying params |
+| `info[].OFFICIAL` | `false` | ❌ | Official Snapmaker filament |
+| `info[].CARD_UID` | `0` | ❌ | RFID tag unique ID |
+| `info[].SKU` | `0` | ❌ | Product SKU |
+| `config.startup_stay` | `false` | ❌ | Unknown purpose |
+
+### `filament_feed left` / `filament_feed right` — Feed module state (HANDLED)
+
+Per-extruder filament feed state. Left module serves extruder0/1, right serves extruder2/3.
+
+| Field | Example | Handled | Notes |
+|-------|---------|---------|-------|
+| `extruderN.filament_detected` | `true` | ✅ | Filament presence |
+| `extruderN.channel_state` | `"load_finish"` | ✅ | Load/unload progress |
+| `extruderN.channel_error` | `"ok"` | ✅ | Error detection |
+| `extruderN.channel_error_state` | `"none"` | ❌ | Error sub-state |
+| `extruderN.channel_action_state` | `"load_finish"` | ❌ | Redundant with channel_state |
+| `extruderN.module_exist` | `true` | ❌ | Feed module physically present |
+| `extruderN.disable_auto` | `false` | ❌ | Auto-feed disabled |
+
+Known `channel_state` values: `"idle"`, `"preloading"`, `"loading"`, `"load_finish"`, `"unloading"`
+
+### `machine_state_manager` — Machine state (NOT HANDLED)
+
+| Field | Example | Handled | Notes |
+|-------|---------|---------|-------|
+| `main_state` | `0` | ❌ | Top-level machine state (0=idle) |
+| `action_code` | `0` | ❌ | Current action code |
+
+Likely redundant with `print_stats.state` for most purposes.
+
+### `defect_detection` — Print defect detection (NOT SUBSCRIBED)
+
+AI-based print defect detection system. Not subscribed because it's not directly relevant to AMS/filament management.
+
+| Field | Example | Notes |
+|-------|---------|-------|
+| `main_enable` | `true` | Master enable |
+| `clean_bed.enable` | `true` | Dirty bed detection |
+| `noodle.enable` | `true` | Spaghetti/noodle detection |
+| `residue.enable` | `false` | Residue detection |
+| `nozzle.enable` | `false` | Nozzle clog detection |
+
+### `purifier` — Air purifier (NOT SUBSCRIBED)
+
+Built-in HEPA/carbon air purifier. Not subscribed because we don't have UI for it yet.
+
+| Field | Example | Notes |
+|-------|---------|-------|
+| `fan_speed` | `0.0` | Purifier fan speed (0-1) |
+| `fan_rpm` | `0.0` | Actual RPM |
+| `work_time` | `0` | Total runtime (seconds) |
+| `power_detected` | `false` | External power connected |
+| `delay_time` | `180` | Post-print run time (seconds) |
+
+### `filament_entangle_detect` — Tangle detection (NOT SUBSCRIBED)
+
+Per-extruder filament tangle detection. Not subscribed.
+
+| Field | Example | Notes |
+|-------|---------|-------|
+| `detect_factor` | `1.0` | Tangle confidence (0-1, lower=tangled) |
 
 ## Verified Hardware
 

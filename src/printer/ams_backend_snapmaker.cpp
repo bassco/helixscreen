@@ -353,21 +353,24 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
         const auto& fd = status["filament_detect"];
 
         // Parse RFID info per channel — filament_detect.info is a JSON array [ch0, ch1, ch2, ch3]
+        // Only apply RFID data when it contains real values (not "NONE").
+        // print_task_config is the authoritative source; RFID supplements it when tags are present.
         if (fd.contains("info") && fd["info"].is_array()) {
             const auto& info_arr = fd["info"];
             for (int i = 0; i < NUM_TOOLS && i < static_cast<int>(info_arr.size()); i++) {
                 if (!info_arr[i].is_object()) continue;
                 auto rfid = parse_rfid_info(info_arr[i]);
 
+                // Skip entirely if RFID reader is disabled or no tag present
+                if (rfid.main_type == "NONE") continue;
+
                 auto* slot = system_info_.units[0].get_slot(i);
                 if (slot) {
-                    // RFID returns "NONE" when no tag is present or reader is disabled
-                    slot->material = (rfid.main_type == "NONE") ? "" : rfid.main_type;
-                    // Prefer MANUFACTURER over VENDOR for brand
+                    slot->material = rfid.main_type;
                     auto brand = !rfid.manufacturer.empty() ? rfid.manufacturer : rfid.vendor;
-                    slot->brand = (brand == "NONE") ? "" : brand;
+                    if (brand != "NONE") slot->brand = brand;
                     slot->color_rgb = rfid.color_rgb;
-                    slot->color_name = (rfid.sub_type == "NONE") ? "" : rfid.sub_type;
+                    if (rfid.sub_type != "NONE") slot->color_name = rfid.sub_type;
                     slot->nozzle_temp_min = rfid.hotend_min_temp;
                     slot->nozzle_temp_max = rfid.hotend_max_temp;
                     slot->bed_temp = rfid.bed_temp;
@@ -405,7 +408,8 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
             for (int i = 0; i < NUM_TOOLS; i++) {
                 std::string ext_key = (i == 0) ? "extruder0" : fmt::format("extruder{}", i);
                 if (feed.contains(ext_key) && feed[ext_key].is_object()) {
-                    bool detected = feed[ext_key].value("filament_detected", false);
+                    const auto& ch = feed[ext_key];
+                    bool detected = ch.value("filament_detected", false);
                     auto* slot = system_info_.units[0].get_slot(i);
                     if (slot) {
                         if (detected &&
@@ -415,6 +419,28 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
                             changed = true;
                         } else if (!detected && slot->status != SlotStatus::LOADED) {
                             slot->status = SlotStatus::EMPTY;
+                            changed = true;
+                        }
+                    }
+
+                    // Parse channel_state for load/unload action tracking
+                    auto state = ch.value("channel_state", "");
+                    auto error = ch.value("channel_error", "ok");
+                    if (error != "ok" && !error.empty() && error != "none") {
+                        system_info_.action = AmsAction::ERROR;
+                        system_info_.operation_detail = error;
+                        changed = true;
+                    } else if (state == "loading" || state == "preloading") {
+                        system_info_.action = AmsAction::LOADING;
+                        changed = true;
+                    } else if (state == "unloading") {
+                        system_info_.action = AmsAction::UNLOADING;
+                        changed = true;
+                    } else if (state == "load_finish" || state == "idle") {
+                        if (system_info_.action == AmsAction::LOADING ||
+                            system_info_.action == AmsAction::UNLOADING) {
+                            system_info_.action = AmsAction::IDLE;
+                            system_info_.operation_detail.clear();
                             changed = true;
                         }
                     }
