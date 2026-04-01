@@ -487,16 +487,6 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
     }
 
     if (changed) {
-        // Log slot state summary for debugging
-        for (int i = 0; i < NUM_TOOLS; i++) {
-            const auto* slot = system_info_.units[0].get_slot(i);
-            if (slot) {
-                spdlog::debug("[AMS Snapmaker] Slot {}: status={}, material='{}', brand='{}', "
-                              "color=0x{:06X}",
-                              i, static_cast<int>(slot->status), slot->material, slot->brand,
-                              slot->color_rgb);
-            }
-        }
         emit_event(EVENT_STATE_CHANGED);
     }
 }
