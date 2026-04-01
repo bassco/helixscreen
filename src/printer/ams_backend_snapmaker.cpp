@@ -489,17 +489,7 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
                 auto* slot = system_info_.units[0].get_slot(i);
                 if (slot) {
                     auto type = type_arr[i].get<std::string>();
-                    // Append sub_type if available (e.g., "PLA SnapSpeed")
-                    if (ptc.contains("filament_sub_type") && ptc["filament_sub_type"].is_array()) {
-                        const auto& sub_arr = ptc["filament_sub_type"];
-                        if (i < static_cast<int>(sub_arr.size()) && sub_arr[i].is_string()) {
-                            auto sub = sub_arr[i].get<std::string>();
-                            if (!sub.empty() && sub != "generic") {
-                                type += " " + sub;
-                            }
-                        }
-                    }
-                    slot->material = type;
+                    slot->material = type;  // Base type only (e.g., "PLA") for compact display
                     changed = true;
                 }
             }
