@@ -79,12 +79,12 @@ class AbortManager {
     };
 
     /**
-     * @brief Kalico firmware detection status (cached after first probe)
+     * @brief Kalico firmware detection status (resolved from printer.info at first abort)
      */
     enum class KalicoStatus {
-        UNKNOWN,    ///< Not yet probed
-        DETECTED,   ///< HEATER_INTERRUPT succeeded - Kalico present
-        NOT_PRESENT ///< HEATER_INTERRUPT failed - stock Klipper
+        UNKNOWN,    ///< Not yet resolved (printer.info not available)
+        DETECTED,   ///< printer.info "app" == "Kalico"
+        NOT_PRESENT ///< Stock Klipper (no Kalico app field)
     };
 
     /**
@@ -124,8 +124,9 @@ class AbortManager {
      *
      * Begins the progressive abort state machine. If already aborting,
      * this call is ignored. State transitions are:
-     * - If KalicoStatus is UNKNOWN or DETECTED -> TRY_HEATER_INTERRUPT
-     * - If KalicoStatus is NOT_PRESENT -> PROBE_QUEUE (skip heater interrupt)
+     * - Resolves KalicoStatus from printer.info "app" field if UNKNOWN
+     * - If DETECTED -> TRY_HEATER_INTERRUPT (soft interrupt for M109 waits)
+     * - If NOT_PRESENT or UNKNOWN -> PROBE_QUEUE (skip heater interrupt)
      */
     void start_abort();
 

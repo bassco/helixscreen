@@ -116,21 +116,29 @@ void AbortManager::start_abort() {
         last_result_message_.clear();
     }
 
-    // Decide starting state based on cached Kalico status
-    if (kalico_status_ == KalicoStatus::NOT_PRESENT) {
-        // Skip HEATER_INTERRUPT, go directly to PROBE_QUEUE
-        spdlog::debug("[AbortManager] Kalico NOT_PRESENT cached, skipping to PROBE_QUEUE");
-        set_state(State::PROBE_QUEUE);
-        set_progress_message("Stopping print...");
-        start_probe();
-    } else {
-        // Unknown or DETECTED - try HEATER_INTERRUPT
-        // For DETECTED, we still send it as a soft interrupt (helps with M109 waits)
-        spdlog::debug("[AbortManager] Trying HEATER_INTERRUPT (Kalico status: {})",
-                      kalico_status_ == KalicoStatus::UNKNOWN ? "UNKNOWN" : "DETECTED");
+    // Detect Kalico from printer.info "app" field (set during discovery)
+    // This avoids sending HEATER_INTERRUPT as a probe, which errors on vanilla Klipper
+    // and clutters the user's console (prestonbrown/helixscreen#685)
+    if (kalico_status_ == KalicoStatus::UNKNOWN && printer_state_) {
+        bool kalico = printer_state_->get_capability_overrides().is_kalico();
+        kalico_status_ = kalico ? KalicoStatus::DETECTED : KalicoStatus::NOT_PRESENT;
+        spdlog::info("[AbortManager] Kalico detection from printer.info: {}",
+                     kalico ? "DETECTED" : "NOT_PRESENT");
+    }
+
+    // Decide starting state based on Kalico status
+    if (kalico_status_ == KalicoStatus::DETECTED) {
+        // Kalico present - send HEATER_INTERRUPT as a soft interrupt (helps with M109 waits)
+        spdlog::debug("[AbortManager] Kalico detected, sending HEATER_INTERRUPT");
         set_state(State::TRY_HEATER_INTERRUPT);
         set_progress_message("Stopping print...");
         try_heater_interrupt();
+    } else {
+        // Not Kalico or unknown - skip HEATER_INTERRUPT, go directly to PROBE_QUEUE
+        spdlog::debug("[AbortManager] Kalico not present, skipping to PROBE_QUEUE");
+        set_state(State::PROBE_QUEUE);
+        set_progress_message("Stopping print...");
+        start_probe();
     }
 }
 
