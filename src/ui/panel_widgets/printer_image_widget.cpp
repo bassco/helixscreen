@@ -140,8 +140,8 @@ void PrinterImageWidget::detach() {
 }
 
 void PrinterImageWidget::on_activate() {
-    // Re-check printer image (may have changed in settings overlay)
-    refresh_printer_image();
+    // Re-check printer image and name (may have changed in printer manager overlay)
+    reload_from_config();
 }
 
 void PrinterImageWidget::reload_from_config() {
