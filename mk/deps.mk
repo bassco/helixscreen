@@ -388,6 +388,12 @@ ifneq ($(CROSS_COMPILE),)
 	$(Q)if [ -f "$(LIBNL_DIR)/Makefile" ]; then \
 		$(MAKE) -C $(LIBNL_DIR) distclean 2>/dev/null || true; \
 	fi
+	@# Apply patches for GCC 14+ compatibility (implicit function declaration is now an error)
+	$(Q)for p in patches/libnl-*.patch; do \
+		[ -f "$$p" ] && git -C $(LIBNL_DIR) apply --check "../../$$p" 2>/dev/null && \
+			git -C $(LIBNL_DIR) apply "../../$$p" && \
+			echo "$(CYAN)→ Applied $$(basename $$p)$(RESET)" || true; \
+	done
 	$(Q)cd $(LIBNL_DIR) && \
 		CC="$(CC)" \
 		AR="$(AR)" \
