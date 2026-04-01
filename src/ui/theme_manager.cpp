@@ -1478,6 +1478,10 @@ static lv_obj_tree_walk_res_t gradient_swap_cb(lv_obj_t* obj, void* user_data) {
     if (!src)
         return LV_OBJ_TREE_WALK_NEXT;
 
+    // Skip draw_buf sources (e.g., dynamically rendered gradients from PrintSelectCardView)
+    if (lv_image_src_get_type(src) != LV_IMAGE_SRC_FILE)
+        return LV_OBJ_TREE_WALK_NEXT;
+
     const char* path = static_cast<const char*>(src);
     std::string path_str(path);
 

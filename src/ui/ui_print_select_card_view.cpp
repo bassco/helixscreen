@@ -4,6 +4,7 @@
 #include "ui_print_select_card_view.h"
 
 #include "ui_filename_utils.h"
+#include "ui_gradient_canvas.h"
 #include "ui_panel_print_select.h" // For PrintFileData, CardDimensions
 
 #include "prerendered_images.h"
@@ -53,6 +54,9 @@ PrintSelectCardView::PrintSelectCardView(PrintSelectCardView&& other) noexcept
       card_pool_indices_(std::move(other.card_pool_indices_)),
       card_data_pool_(std::move(other.card_data_pool_)), cards_per_row_(other.cards_per_row_),
       visible_start_row_(other.visible_start_row_), visible_end_row_(other.visible_end_row_),
+      cached_gradient_(other.cached_gradient_), cached_gradient_w_(other.cached_gradient_w_),
+      cached_gradient_h_(other.cached_gradient_h_), cached_gradient_dark_(other.cached_gradient_dark_),
+      theme_observer_(std::move(other.theme_observer_)),
       on_file_click_(std::move(other.on_file_click_)),
       on_metadata_fetch_(std::move(other.on_metadata_fetch_)) {
     other.container_ = nullptr;
@@ -60,6 +64,7 @@ PrintSelectCardView::PrintSelectCardView(PrintSelectCardView&& other) noexcept
     other.trailing_spacer_ = nullptr;
     other.visible_start_row_ = -1;
     other.visible_end_row_ = -1;
+    other.cached_gradient_ = nullptr;
 }
 
 PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other) noexcept {
@@ -75,6 +80,11 @@ PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other)
         cards_per_row_ = other.cards_per_row_;
         visible_start_row_ = other.visible_start_row_;
         visible_end_row_ = other.visible_end_row_;
+        cached_gradient_ = other.cached_gradient_;
+        cached_gradient_w_ = other.cached_gradient_w_;
+        cached_gradient_h_ = other.cached_gradient_h_;
+        cached_gradient_dark_ = other.cached_gradient_dark_;
+        theme_observer_ = std::move(other.theme_observer_);
         on_file_click_ = std::move(other.on_file_click_);
         on_metadata_fetch_ = std::move(other.on_metadata_fetch_);
 
@@ -83,6 +93,7 @@ PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other)
         other.trailing_spacer_ = nullptr;
         other.visible_start_row_ = -1;
         other.visible_end_row_ = -1;
+        other.cached_gradient_ = nullptr;
     }
     return *this;
 }
@@ -124,6 +135,17 @@ void PrintSelectCardView::cleanup() {
         }
     }
 
+    // Release theme observer before freeing gradient buffer
+    theme_observer_.reset();
+
+    // Free cached gradient buffer
+    if (cached_gradient_) {
+        lv_draw_buf_destroy(cached_gradient_);
+        cached_gradient_ = nullptr;
+        cached_gradient_w_ = 0;
+        cached_gradient_h_ = 0;
+    }
+
     // Clear data structures
     card_data_pool_.clear();
     card_pool_.clear();
@@ -138,6 +160,46 @@ void PrintSelectCardView::cleanup() {
     last_leading_height_ = -1;
     last_trailing_height_ = -1;
     spdlog::debug("[PrintSelectCardView] cleanup()");
+}
+
+// ============================================================================
+// Gradient Cache
+// ============================================================================
+
+void PrintSelectCardView::ensure_gradient_cache(int32_t card_width, int32_t card_height) {
+    bool dark = theme_manager_is_dark_mode();
+
+    // Already cached at this size and theme mode?
+    if (cached_gradient_ && cached_gradient_w_ == card_width &&
+        cached_gradient_h_ == card_height && cached_gradient_dark_ == dark) {
+        return;
+    }
+
+    // Free old buffer
+    if (cached_gradient_) {
+        lv_draw_buf_destroy(cached_gradient_);
+    }
+
+    cached_gradient_ = ui_gradient_canvas_create_buf(card_width, card_height, dark);
+    cached_gradient_w_ = card_width;
+    cached_gradient_h_ = card_height;
+    cached_gradient_dark_ = dark;
+
+    // Update ALL pool cards to reference the new buffer immediately,
+    // preventing dangling pointers from the destroyed old buffer
+    for (auto* card : card_pool_) {
+        apply_gradient_to_card(card);
+    }
+}
+
+void PrintSelectCardView::apply_gradient_to_card(lv_obj_t* card) {
+    if (!cached_gradient_ || !card)
+        return;
+
+    lv_obj_t* gradient_bg = lv_obj_find_by_name(card, "gradient_bg");
+    if (gradient_bg) {
+        lv_image_set_src(gradient_bg, cached_gradient_);
+    }
 }
 
 // ============================================================================
@@ -261,8 +323,26 @@ void PrintSelectCardView::init_pool(const CardDimensions& dims) {
         }
     }
 
-    // Swap gradient images to match current theme (XML hardcodes -dark.bin)
-    theme_manager_swap_gradients(container_);
+    // Render shared gradient at exact card dimensions (applies to all pool cards)
+    ensure_gradient_cache(dims.card_width, dims.card_height);
+
+    // Observe theme changes to re-render gradient for dark/light switch
+    lv_subject_t* theme_subject = theme_manager_get_changed_subject();
+    if (theme_subject) {
+        theme_observer_ = ObserverGuard(
+            theme_subject,
+            [](lv_observer_t* observer, lv_subject_t*) {
+                auto* self =
+                    static_cast<PrintSelectCardView*>(lv_observer_get_user_data(observer));
+                if (self && self->cached_gradient_) {
+                    // Force cache invalidation by resetting dark mode flag
+                    self->cached_gradient_dark_ = !theme_manager_is_dark_mode();
+                    self->ensure_gradient_cache(self->cached_gradient_w_,
+                                               self->cached_gradient_h_);
+                }
+            },
+            this);
+    }
 
     spdlog::debug("[PrintSelectCardView] Pool initialized with {} cards", card_pool_.size());
 }
@@ -350,9 +430,10 @@ void PrintSelectCardView::configure_card(lv_obj_t* card, size_t pool_index, size
     // are handled declaratively via folder_type_subject bindings.
     // Overlay is content-sized so it adapts automatically.
 
-    // Update card sizing
+    // Update card sizing (ensure_gradient_cache updates all cards if dims changed)
     lv_obj_set_width(card, dims.card_width);
     lv_obj_set_height(card, dims.card_height);
+    ensure_gradient_cache(dims.card_width, dims.card_height);
 
     // Store file index for click handler
     lv_obj_set_user_data(card, reinterpret_cast<void*>(file_index));

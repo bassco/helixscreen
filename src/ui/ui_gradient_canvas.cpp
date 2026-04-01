@@ -29,6 +29,10 @@ namespace {
 constexpr uint8_t DEFAULT_START_GRAY = 123; // Top-right - brighter
 constexpr uint8_t DEFAULT_END_GRAY = 43;    // Bottom-left - darker
 
+// Light theme gradient colors (from pre-rendered gradient-card-*-light.bin)
+constexpr uint8_t LIGHT_START_GRAY = 235; // Top-right - brighter
+constexpr uint8_t LIGHT_END_GRAY = 188;   // Bottom-left - darker
+
 // Pre-rendered gradient buffer size
 // 256x256 on normal devices, 128x128 on constrained (saves 192KB ARGB8888)
 static int32_t gradient_buffer_size() {
@@ -81,50 +85,45 @@ static inline int16_t bayer_threshold(int32_t x, int32_t y) {
 }
 
 /**
- * @brief Render gradient to draw buffer
+ * @brief Render diagonal gradient into an ARGB8888 draw buffer
  *
- * Creates a pre-rendered gradient that can be scaled by LVGL.
+ * Renders bright at top-right, dark at bottom-left.
  * Uses ordered dithering for smooth appearance on 16-bit displays.
+ * Supports arbitrary (non-square) buffer dimensions.
  */
-static void render_gradient_buffer(GradientData* data) {
-    if (!data || !data->draw_buf)
+static void render_gradient_to_buf(lv_draw_buf_t* buf, uint8_t start_r, uint8_t start_g,
+                                   uint8_t start_b, uint8_t end_r, uint8_t end_g, uint8_t end_b,
+                                   bool dither) {
+    if (!buf || !buf->data)
         return;
 
-    // Get buffer data pointer and stride directly from struct
-    uint8_t* buf_data = data->draw_buf->data;
-    if (!buf_data)
-        return;
+    uint8_t* buf_data = buf->data;
+    uint32_t stride = buf->header.stride;
+    int32_t w = buf->header.w;
+    int32_t h = buf->header.h;
 
-    uint32_t stride = data->draw_buf->header.stride;
-    int32_t size = gradient_buffer_size();
-
-    // For diagonal gradient (top-right to bottom-left), max distance is 2*(size-1)
-    float max_dist = static_cast<float>(2 * (size - 1));
+    // For diagonal gradient (top-right to bottom-left), max distance is (w-1)+(h-1)
+    float max_dist = static_cast<float>((w - 1) + (h - 1));
     if (max_dist < 1.0f)
         max_dist = 1.0f;
 
-    // Pre-calculate color deltas
-    int16_t dr = data->end_r - data->start_r;
-    int16_t dg = data->end_g - data->start_g;
-    int16_t db = data->end_b - data->start_b;
+    int16_t dr = end_r - start_r;
+    int16_t dg = end_g - start_g;
+    int16_t db = end_b - start_b;
 
-    // Render pixel by pixel with diagonal gradient and dithering
-    for (int32_t y = 0; y < size; y++) {
+    for (int32_t y = 0; y < h; y++) {
         lv_color32_t* row =
             reinterpret_cast<lv_color32_t*>(buf_data + static_cast<uint32_t>(y) * stride);
 
-        for (int32_t x = 0; x < size; x++) {
+        for (int32_t x = 0; x < w; x++) {
             // Diagonal interpolation: top-right (bright) to bottom-left (dark)
-            // Distance from top-right corner: (size-1-x) + y
-            float t = static_cast<float>((size - 1 - x) + y) / max_dist;
+            float t = static_cast<float>((w - 1 - x) + y) / max_dist;
 
-            // Interpolate RGB
-            int16_t r = data->start_r + static_cast<int16_t>(t * dr);
-            int16_t g = data->start_g + static_cast<int16_t>(t * dg);
-            int16_t b = data->start_b + static_cast<int16_t>(t * db);
+            int16_t r = start_r + static_cast<int16_t>(t * dr);
+            int16_t g = start_g + static_cast<int16_t>(t * dg);
+            int16_t b = start_b + static_cast<int16_t>(t * db);
 
-            if (data->dither) {
-                // Apply Bayer dithering
+            if (dither) {
                 int16_t threshold = bayer_threshold(x, y);
                 r = std::clamp<int16_t>(r + threshold, 0, 255);
                 g = std::clamp<int16_t>(g + threshold, 0, 255);
@@ -137,6 +136,14 @@ static void render_gradient_buffer(GradientData* data) {
             row[x].alpha = 255;
         }
     }
+}
+
+/// Convenience wrapper for GradientData (used by the XML widget)
+static void render_gradient_buffer(GradientData* data) {
+    if (!data || !data->draw_buf)
+        return;
+    render_gradient_to_buf(data->draw_buf, data->start_r, data->start_g, data->start_b,
+                           data->end_r, data->end_g, data->end_b, data->dither);
 }
 
 /**
@@ -297,4 +304,25 @@ void ui_gradient_canvas_set_dither(lv_obj_t* obj, bool enable) {
         helix::ui::async_call(
             obj, [](void* data) { lv_obj_invalidate(static_cast<lv_obj_t*>(data)); }, obj);
     }
+}
+
+lv_draw_buf_t* ui_gradient_canvas_create_buf(int32_t width, int32_t height, bool dark_mode) {
+    if (width <= 0 || height <= 0)
+        return nullptr;
+
+    lv_draw_buf_t* buf = lv_draw_buf_create(width, height, LV_COLOR_FORMAT_ARGB8888, 0);
+    if (!buf) {
+        spdlog::error("[GradientCanvas] Failed to allocate {}x{} draw buffer", width, height);
+        return nullptr;
+    }
+
+    uint8_t start_gray = dark_mode ? DEFAULT_START_GRAY : LIGHT_START_GRAY;
+    uint8_t end_gray = dark_mode ? DEFAULT_END_GRAY : LIGHT_END_GRAY;
+
+    render_gradient_to_buf(buf, start_gray, start_gray, start_gray, end_gray, end_gray, end_gray,
+                           true);
+
+    spdlog::debug("[GradientCanvas] Created shared {}x{} gradient buffer ({})",
+                  width, height, dark_mode ? "dark" : "light");
+    return buf;
 }

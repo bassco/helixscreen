@@ -49,6 +49,22 @@ void ui_gradient_canvas_redraw(lv_obj_t* canvas);
  */
 void ui_gradient_canvas_set_dither(lv_obj_t* canvas, bool enable);
 
+/**
+ * @brief Create a gradient draw buffer at exact dimensions
+ *
+ * Renders a diagonal gradient (bright top-right, dark bottom-left) into an
+ * ARGB8888 draw buffer at the specified dimensions. The returned buffer can
+ * be shared across multiple lv_image widgets via lv_image_set_src().
+ *
+ * Caller owns the returned buffer and must call lv_draw_buf_destroy() when done.
+ *
+ * @param width Buffer width in pixels
+ * @param height Buffer height in pixels
+ * @param dark_mode true for dark theme colors, false for light
+ * @return Owned lv_draw_buf_t*, or nullptr on allocation failure
+ */
+lv_draw_buf_t* ui_gradient_canvas_create_buf(int32_t width, int32_t height, bool dark_mode);
+
 #ifdef __cplusplus
 }
 #endif

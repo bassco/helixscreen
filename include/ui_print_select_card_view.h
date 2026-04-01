@@ -3,10 +3,13 @@
 
 #pragma once
 
+#include "ui_observer_guard.h"
+
 #include <functional>
 #include <lvgl.h>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Forward declarations
@@ -228,6 +231,21 @@ class PrintSelectCardView {
     // === Cached Spacer Heights (avoid redundant lv_obj_set_height → relayout) ===
     int last_leading_height_ = -1;
     int last_trailing_height_ = -1;
+
+    // === Cached Gradient Buffer (shared across all cards) ===
+    lv_draw_buf_t* cached_gradient_ = nullptr;
+    int32_t cached_gradient_w_ = 0;
+    int32_t cached_gradient_h_ = 0;
+    bool cached_gradient_dark_ = true;
+
+    /// Ensure gradient buffer matches current card dimensions and theme
+    void ensure_gradient_cache(int32_t card_width, int32_t card_height);
+
+    /// Apply cached gradient to a card's gradient_bg image
+    void apply_gradient_to_card(lv_obj_t* card);
+
+    // === Theme Observer (re-renders gradient on dark/light switch) ===
+    ObserverGuard theme_observer_;
 
     // === Callbacks ===
     FileClickCallback on_file_click_;

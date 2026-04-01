@@ -78,6 +78,14 @@ class TimelapseVideosOverlay : public OverlayBase {
 
     std::string pending_delete_filename_;
     lv_obj_t* delete_confirmation_dialog_ = nullptr;
+
+    // Cached gradient buffer (shared across all video cards)
+    lv_draw_buf_t* cached_gradient_ = nullptr;
+    int32_t cached_gradient_w_ = 0;
+    int32_t cached_gradient_h_ = 0;
+    bool cached_gradient_dark_ = true;
+
+    void ensure_gradient_cache(int32_t card_width, int32_t card_height);
 };
 
 TimelapseVideosOverlay& get_global_timelapse_videos();

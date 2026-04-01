@@ -5,6 +5,8 @@
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "static_panel_registry.h"
+#include "theme_manager.h"
+#include "ui_gradient_canvas.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_processor.h"
 #include "timelapse_state.h"
@@ -163,8 +165,29 @@ void TimelapseVideosOverlay::on_deactivate() {
 }
 
 void TimelapseVideosOverlay::cleanup() {
+    if (cached_gradient_) {
+        lv_draw_buf_destroy(cached_gradient_);
+        cached_gradient_ = nullptr;
+        cached_gradient_w_ = 0;
+        cached_gradient_h_ = 0;
+    }
     spdlog::debug("[{}] cleanup()", get_name());
     OverlayBase::cleanup();
+}
+
+void TimelapseVideosOverlay::ensure_gradient_cache(int32_t card_width, int32_t card_height) {
+    bool dark = theme_manager_is_dark_mode();
+    if (cached_gradient_ && cached_gradient_w_ == card_width &&
+        cached_gradient_h_ == card_height && cached_gradient_dark_ == dark) {
+        return;
+    }
+    if (cached_gradient_) {
+        lv_draw_buf_destroy(cached_gradient_);
+    }
+    cached_gradient_ = ui_gradient_canvas_create_buf(card_width, card_height, dark);
+    cached_gradient_w_ = card_width;
+    cached_gradient_h_ = card_height;
+    cached_gradient_dark_ = dark;
 }
 
 // ============================================================================
@@ -380,11 +403,11 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
         lv_obj_set_height(card, dims.card_height);
         lv_obj_set_style_flex_grow(card, 0, LV_PART_MAIN);
 
-        // Resize gradient background to match card dimensions
+        // Apply shared gradient buffer to card
+        ensure_gradient_cache(dims.card_width, dims.card_height);
         lv_obj_t* gradient_bg = lv_obj_find_by_name(card, "gradient_bg");
-        if (gradient_bg) {
-            lv_obj_set_width(gradient_bg, dims.card_width);
-            lv_obj_set_height(gradient_bg, dims.card_height);
+        if (gradient_bg && cached_gradient_) {
+            lv_image_set_src(gradient_bg, cached_gradient_);
         }
 
         // Store filename in user_data for click handler (heap-allocated copy)
