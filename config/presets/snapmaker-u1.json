@@ -1,0 +1,84 @@
+{
+  "preset": "snapmaker_u1",
+  "wizard_completed": false,
+  "display": {
+    "rotate": 0,
+    "rotation_probed": true
+  },
+  "printer": {
+    "moonraker_host": "127.0.0.1",
+    "moonraker_port": 7125,
+    "heaters": {
+      "bed": "heater_bed",
+      "hotend": "extruder"
+    },
+    "temp_sensors": {
+      "bed": "heater_bed",
+      "hotend": "extruder"
+    },
+    "fans": {
+      "chamber": "",
+      "exhaust": "",
+      "hotend": "heater_fan power_fan",
+      "part": "fan"
+    },
+    "leds": {
+      "strip": "led cavity_led",
+      "selected_strips": ["led cavity_led"],
+      "startup_brightness": 80,
+      "led_on_at_start": false
+    },
+    "filament_sensors": {
+      "master_enabled": true,
+      "sensors": [
+        {
+          "enabled": true,
+          "klipper_name": "filament_motion_sensor e0_filament",
+          "role": "runout",
+          "type": "motion"
+        },
+        {
+          "enabled": true,
+          "klipper_name": "filament_motion_sensor e1_filament",
+          "role": "none",
+          "type": "motion"
+        },
+        {
+          "enabled": true,
+          "klipper_name": "filament_motion_sensor e2_filament",
+          "role": "none",
+          "type": "motion"
+        },
+        {
+          "enabled": true,
+          "klipper_name": "filament_motion_sensor e3_filament",
+          "role": "none",
+          "type": "motion"
+        }
+      ]
+    },
+    "hardware": {
+      "expected": [
+        "heater_bed",
+        "extruder",
+        "extruder1",
+        "extruder2",
+        "extruder3",
+        "fan",
+        "heater_fan power_fan",
+        "led cavity_led",
+        "filament_motion_sensor e0_filament",
+        "filament_motion_sensor e1_filament",
+        "filament_motion_sensor e2_filament",
+        "filament_motion_sensor e3_filament"
+      ]
+    },
+    "default_macros": {
+      "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0",
+      "load_filament": { "label": "Load", "gcode": "LOAD_FILAMENT" },
+      "unload_filament": { "label": "Unload", "gcode": "UNLOAD_FILAMENT" },
+      "macro_1": { "label": "Clean Nozzle", "gcode": "HELIX_CLEAN_NOZZLE" },
+      "macro_2": { "label": "Bed Level", "gcode": "HELIX_BED_MESH_IF_NEEDED" }
+    }
+  }
+}
