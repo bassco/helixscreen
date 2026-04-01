@@ -17,6 +17,10 @@ translations:
   '- Check [resonance_tester] in printer.cfg': '- 检查 printer.cfg 中的 [resonance_tester]'
   '- Ensure ADXL345 is connected': '- 确保 ADXL345 已连接'
   '- Try Measure Noise first': '- 先尝试测量噪声'
+  -- A: '-- A'
+  -- V: '-- V'
+  -- W: '-- W'
+  -- kWh: '-- kWh'
   --°C: --°C
   -0.5 Hz: '-0.5 Hz'
   0 = computed: '0 = 自动计算'
@@ -79,6 +83,7 @@ translations:
   AMS not available: AMS 不可用
   API not available: API 不可用
   APPEARANCE: 外观
+  AUTO FANS: '自动风扇'
   AUTO STATE: 自动状态
   AUTOMATION: 自动化
   Abort: 中止
@@ -89,8 +94,11 @@ translations:
   Accel to Decel: 加速到减速
   Acceleration to deceleration limit (mm/s²): 加速到减速限制 (mm/s²)
   Accelerometer: '加速度传感器'
+  Accelerometer communication failed. Try again.: '加速度计通信失败，请重试。'
   Accept: 接受
   'Accepted Z Position: 0.000': '已接受 Z 位置: 0.000'
+  Accuracy: '精度'
+  'Act:': '实际：'
   Action Required: 需要操作
   Actions: 操作
   Active: 活动
@@ -111,6 +119,7 @@ translations:
   Alert: 警报
   Alerts: 警报
   All: 全部
+  All Devices: '所有设备'
   All axes homed: 所有轴已归位
   Allow display to sleep during active prints: 打印时允许屏幕休眠
   Allwinner: Allwinner
@@ -123,6 +132,7 @@ translations:
   Animations: 动画
   Anonymous data to help improve HelixScreen: 匿名数据以帮助改进 HelixScreen
   Anonymous stats — no personal data, ever.: 匿名统计 — 绝不收集个人数据。
+  Anonymous usage statistics: '匿名使用统计'
   Any notes...: 备注...
   App Background: 应用背景
   Apply: 应用
@@ -134,6 +144,7 @@ translations:
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: 分配 Klipper 宏通过开/关、切换或预设控制 LED
   Assign a role to enable sensor monitoring: 分配角色以启用传感器监控
   Assisting: 辅助中
+  Authentication failed: '认证失败'
   Auto: 自动
   Auto Bed Mesh: 自动热床网格
   Auto Cal: 自动校准
@@ -156,6 +167,7 @@ translations:
   BLUETOOTH PRINTERS: 蓝牙打印机
   Back: 返回
   Back to Results: '返回结果'
+  Barcode Scanner: '条码扫描器'
   Bed: 热床
   Bed Heater: 热床加热器
   Bed Level: 热床调平
@@ -221,12 +233,15 @@ translations:
   COLORS REQUIRED: 所需颜色
   CONFIGURATION: 配置
   CONNECTION TYPE: 连接类型
+  CONTROLLABLE FANS: '可控风扇'
   CRITICAL: 严重
   CUSTOM IMAGES: 自定义图片
   Calibrate: 校准
   Calibrate All: 全部校准
   Calibrate X: 校准 X 轴
   Calibrate Y: 校准 Y 轴
+  Calibrate input shaping to reduce ringing artifacts in prints: '校准输入整形以减少打印中的振纹'
+  Calibrate your touchscreen for accurate input: '校准触摸屏以确保输入准确'
   Calibrated: 已校准
   Calibrating...: 正在校准...
   Calibration & Tools: 校准与工具
@@ -326,11 +341,13 @@ translations:
   Configure Graph: 配置图表
   Configure PRINT_START: 配置 PRINT_START
   Configure Spoolman integration and weight sync settings.: 配置 Spoolman 集成和重量同步设置。
+  Configure WiFi for this device, or skip if you're using Ethernet: '为此设备配置 WiFi，如使用以太网可跳过'
   Configure devices in Moonraker: 在 Moonraker 中配置设备
   Configure label printer and auto-discovery: 配置标签打印机及自动发现
   Configure printer sensors: 配置打印机传感器
   Configure quick buttons and standard macros: 配置快捷按钮和标准宏
   Configure timelapse recording: 配置延时录像
+  Configure your printer's cooling fans: '配置打印机的冷却风扇'
   Configuring Moonraker...: 正在配置 Moonraker...
   Connect: 连接
   Connect a USB label printer first: 请先连接 USB 标签打印机
@@ -343,6 +360,7 @@ translations:
   'Connected to ': '已连接到 '
   Connected! Discovering printer...: 已连接！正在发现打印机...
   Connected, discovering...: 已连接，正在发现...
+  'Connecting to ': '正在连接 '
   Connecting to %s...: '正在连接 %s...'
   Connecting to network...: 正在连接网络...
   Connecting...: 正在连接...
@@ -354,11 +372,13 @@ translations:
   'Connection failed: %s': '连接失败：%s'
   Connection must be tested successfully to continue: 必须成功测试连接才能继续
   Connection successful!: 连接成功！
+  Connection timeout: '连接超时'
   Console: 控制台
   Control optional print start features: 控制可选的打印启动功能
   Control power relays and smart outlets: 控制电源继电器和智能插座
   Control power switches and relays: 控制电源开关和继电器
   Controlled by hardware sensor: 由硬件传感器控制
+  Controller: '控制器'
   Cool Down: 冷却
   Cooling: 冷却中
   Copied to clipboard!: 已复制到剪贴板！
@@ -421,10 +441,12 @@ translations:
   Deploy: 部署
   Describe the issue (optional): 描述问题（可选）
   Detailed: 详细
+  Detecting printer type...: '正在检测打印机类型...'
   Detection Length: '检测长度'
   Detection Mode: '检测模式'
   Dev: 开发版
   Dev channel requires dev_url in config: 开发频道需要在配置中设置 dev_url
+  Device: '设备'
   Device name is required: 设备名称为必填项
   Disable: 禁用
   Disable Motors?: 关闭电机？
@@ -509,6 +531,7 @@ translations:
   Escalation Timeout: 升级超时
   Ethernet: 以太网
   Events appear here after sessions and prints: 会话和打印后事件将显示在此处
+  Excellent Accuracy: '精度极佳'
   Exclude: 排除
   Excluded: 已排除
   Exclusion cancelled: 排除已取消
@@ -663,9 +686,11 @@ translations:
   G-code Preview: G-code 预览
   G-code commands will appear here: G-code 命令将显示在此处
   Gear sync: 齿轮同步
+  Generic: '通用'
   Get help and share feedback: 获取帮助和反馈
   'Ghost:': 残影：
   Good: '良好'
+  Good Accuracy: '精度良好'
   Got it: 知道了
   Gray: 灰色
   Guides and reference: 指南与参考
@@ -717,6 +742,7 @@ translations:
   Homing Z...: 正在归位 Z...
   Homing all axes...: 正在归位所有轴...
   'Homing failed: {}': '归位失败: {}'
+  Homing first...: '正在先归位...'
   Homing may still be running — response timed out: 归位可能仍在运行 — 响应超时
   Homing timed out: 归位超时
   Homing...: 正在归零...
@@ -737,6 +763,7 @@ translations:
   'IP:': IP：
   Icon: '图标'
   Idle: 空闲
+  If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: '如果 Moonraker 在本地或屏幕直接连接到打印机，将自动连接'
   Ignore: 忽略
   'Import failed: {}': '导入失败: {}'
   Imported {}: 已导入 {}
@@ -819,11 +846,13 @@ translations:
   Load Filament: 加载耗材
   'Load failed: {}': '加载失败: {}'
   Load filament macro not configured: 加载耗材宏未配置
+  Load may still be running — response timed out: '加载可能仍在运行 — 响应超时'
   Load the required filaments or start anyway?: 加载所需耗材还是直接开始？
   Loaded: 已加载
   Loading Bed Mesh...: 正在加载热床网格...
   Loading Error: 加载错误
   Loading G-code...: 正在加载 G-code...
+  Loading filament ({}mm)...: '正在加载耗材 ({}mm)...'
   Loading filament...: 正在加载耗材...
   Loading filaments...: 正在加载耗材...
   Loading history...: 正在加载历史...
@@ -855,11 +884,13 @@ translations:
   Macro Browser: 宏浏览器
   Macro Buttons: 宏按钮
   Macro analysis not initialized: 宏分析未初始化
+  Macro complete: '宏执行完成'
   'Macro failed: {}': '宏执行失败: {}'
   Macro for bed mesh calibration: 热床网格校准宏
   Macro for chamber/bed heat soak: 腔体/热床预热浸泡宏
   Macro for physical bed leveling (QGL/Z-Tilt): 物理热床调平宏（QGL/Z-Tilt）
   Macro handles heating: 宏控制加热
+  Macro may still be running — response timed out: '宏可能仍在运行 — 响应超时'
   Macro to cancel an active print: 取消当前打印的宏
   Macro to clean/wipe the nozzle: 清洁/擦拭喷嘴的宏
   Macro to load filament into extruder: 将耗材加载到挤出机的宏
@@ -928,6 +959,7 @@ translations:
   Multi-Filament Overview: '多耗材概览'
   'Multi-Filament:': 多耗材：
   Multi-Material: 多材料
+  Multi-Material System Detected: '检测到多材料系统'
   Must home axes first: 请先归位
   My Custom Theme: 我的自定义主题
   My Panel: 我的面板
@@ -949,6 +981,7 @@ translations:
   'New Spool: Step ': '新料盘：步骤 '
   'New Spool: Step 1 of 3': 新料盘：步骤 1 / 3
   New Version Available: 发现新版本
+  New fan name: '新风扇名称'
   New printer successfully added: 新打印机已成功添加
   New profile name: 新配置名称
   Next: 下一步
@@ -966,6 +999,7 @@ translations:
   No Power Devices: 无电源设备
   No Spool: '无料盘'
   No Spools: 无料盘
+  No USB HID devices detected.: '未检测到 USB HID 设备。'
   No USB printers found: 未找到 USB 打印机
   No buffer data available: '无可用缓冲区数据'
   No changes selected.\n\nClick Cancel to close.: '未选择任何更改。\n\n点击取消以关闭。'
@@ -973,6 +1007,7 @@ translations:
   No dryer available. Store filament in a sealed dry box with desiccant for best results.: '无可用烘干机。建议将耗材存放在带干燥剂的密封干燥箱中。'
   No effects available: 无可用特效
   No events queued: 无排队事件
+  No fans detected: '未检测到风扇'
   No filament loaded to unload: 没有已加载的耗材可卸载
   No filaments found: 未找到耗材
   No file loaded: 未加载文件
@@ -1008,6 +1043,7 @@ translations:
   'None': 无
   Not Now: 暂不
   Not calibrated: 未校准
+  Not configured: '未配置'
   Not connected: 未连接
   Not connected to printer: 未连接到打印机
   Not connected to printer.: 未连接到打印机。
@@ -1052,10 +1088,12 @@ translations:
   Operations: 操作
   Optimize Your Printing: 优化您的打印
   Optimizes temperature control for stable, consistent heating.: 优化温度控制，实现稳定一致的加热。
+  Optional - select your main lighting source, or skip if your printer doesn't have one: '可选 - 选择主照明源，如打印机没有可跳过'
   Or Enter Manually: 或手动输入
   Oscillating around target...: 正在围绕目标振荡...
   Out of range: '超出范围'
   Output Mode: 输出模式
+  Output Pin: '输出引脚'
   Overheating: '过热'
   Override auto-detection if your chamber sensor or heater isn't named 'chamber'.: 如果仓室传感器或加热器名称不是 'chamber'，可覆盖自动检测。
   P: 件
@@ -1111,6 +1149,7 @@ translations:
   Please enter an IP address or hostname.: 请输入 IP 地址或主机名。
   Please wait while the printer homes and probes.: 请等待打印机归位和探测。
   Please wait while the printer probes each screw position.: 请等待打印机探测每个螺丝位置。
+  Plug in your scanner and tap Refresh.: '插入扫描器并点击刷新。'
   Plugin already installed: 插件已安装
   Plugin disabled: 插件已禁用
   Plugin installed successfully: 插件安装成功
@@ -1119,6 +1158,7 @@ translations:
   Plugins: 插件
   Plugins are discovered on application startup: 插件在应用程序启动时被发现
   Polymaker: Polymaker
+  Poor Accuracy: '精度较差'
   Port: 端口
   Position: 位置
   Power: 电源
@@ -1167,6 +1207,17 @@ translations:
   Printer Image: 打印机图片
   Printer Manager: 打印机管理
   Printer Name: 打印机名称
+  'Printer Setup: Connection': '打印机设置：连接'
+  'Printer Setup: Fans': '打印机设置：风扇'
+  'Printer Setup: Filament Sensor': '打印机设置：耗材传感器'
+  'Printer Setup: Heaters': '打印机设置：加热器'
+  'Printer Setup: Identity': '打印机设置：身份'
+  'Printer Setup: Input Shaping': '打印机设置：输入整形'
+  'Printer Setup: LEDs': '打印机设置：LED'
+  'Printer Setup: Language': '打印机设置：语言'
+  'Printer Setup: Network': '打印机设置：网络'
+  'Printer Setup: Review': '打印机设置：检查'
+  'Printer Setup: Touch Calibration': '打印机设置：触摸校准'
   Printer Shutdown: 打印机关机
   Printer Type: 打印机类型
   Printer image set to auto-detect: 打印机图片已设为自动检测
@@ -1180,6 +1231,7 @@ translations:
   Prints Trend: 打印趋势
   'Private:': 私有：
   Probe: 探针
+  Probe Accuracy Failed: '探针精度测试失败'
   Probe Accuracy Results: 探针精度结果
   Probe Accuracy Test: 探针精度测试
   Probe Management: 探针管理
@@ -1244,16 +1296,19 @@ translations:
   Reduce ringing and ghosting artifacts: 减少振纹和残影
   Reduce vibration artifacts like ringing and ghosting: 减少振纹和残影等振动伪影
   Refining stability...: 正在精细调整稳定性...
+  Refresh: '刷新'
   Refresh Interval: 刷新间隔
   Release all stepper motors. Position will be lost.: 释放所有步进电机。位置信息将丢失。
   Remaining: 剩余
   Remaining (g): 剩余 (g)
   Remaining Weight (g): 剩余重量（克）
+  Remap Tool: '重映射工具'
   Remove: 移除
   Remove PIN: 移除 PIN
   Remove Spoolman?: 移除 Spoolman？
   Remove plugin from printer: 从打印机移除插件
   Rename: 重命名
+  Rename Fan: '重命名风扇'
   Rename Mesh Profile: 重命名网格配置
   Rename failed at load step: 重命名在加载步骤失败
   Rename failed at remove step: 重命名在删除步骤失败
@@ -1301,6 +1356,7 @@ translations:
   Retry: 重试
   Review detected hardware validation issues: 查看检测到的硬件验证问题
   Review your changes: 查看您的更改
+  Review your configuration below, then click Finish to save: '请检查以下配置，然后点击完成以保存'
   Rewinding: 回卷中
   'Role:': 角色：
   Rotation: 旋转
@@ -1319,6 +1375,7 @@ translations:
   STYLE PROPERTIES: 样式属性
   SWITCH SENSORS: '开关传感器'
   SYSTEM: 系统
+  Sample: '样本'
   Sample %d/%d: 样本 %d/%d
   Sample Dialog: 示例对话框
   Samples: 采样次数
@@ -1380,7 +1437,10 @@ translations:
   Select macro for second button: 为第二个按钮选择宏
   Select macro for third button: 为第三个按钮选择宏
   Select sensor: 选择传感器
+  Select the heaters Klipper uses for your bed and hotend: '选择 Klipper 用于热床和热端的加热器'
   Select which devices the home screen power button controls: 选择主页电源按钮控制的设备
+  Select which sensor triggers pause on filament runout: '选择耗材用尽时触发暂停的传感器'
+  Select your preferred language: '选择您的首选语言'
   Selecting slot...: 正在选择料仓...
   Self-Test: 自检
   Semantic Size Parameter Tests: 语义大小参数测试
@@ -1388,6 +1448,7 @@ translations:
   Send commands directly to printer: 直接向打印机发送命令
   Send this crash report to help improve HelixScreen.: 发送此崩溃报告以帮助改进 HelixScreen。
   Sending...: 正在发送...
+  Sensor: '传感器'
   Sensor Response: 传感器响应
   Sensor Temperature: 传感器温度
   Sensors: 传感器
@@ -1432,6 +1493,7 @@ translations:
   Sound Theme: 声音主题
   Sounds: 声音
   Source: '来源'
+  Space Debris mod by Markus 'Captain' Kaarlonen: "Space Debris mod by Markus 'Captain' Kaarlonen"
   Speaker: 扬声器
   'Specular:': 镜面反射：
   Speed: 速度
@@ -1439,6 +1501,7 @@ translations:
   Speed of prime movement: 预挤移动速度
   Speed of retraction movement: 回抽移动速度
   Spool: 料盘
+  Spool Details: '料盘详情'
   Spool Info: 料盘信息
   Spool Visualization (Pseudo-3D Canvas): 料盘可视化（伪 3D 画布）
   Spool Weight (g): 料盘重量（克）
@@ -1519,6 +1582,7 @@ translations:
   Target Temperature: 目标温度
   Telemetry Data: 遥测数据
   Telemetry queue cleared: 遥测队列已清除
+  Temp: '温度'
   Temp Compensation: 温度补偿
   Temp °C: 'Temp °C'
   Temperature: 温度
@@ -1628,7 +1692,9 @@ translations:
   'Unload failed: {}': '卸载失败: {}'
   Unload filament macro not configured: 卸载耗材宏未配置
   Unload macro not configured: 卸载宏未配置
+  Unload may still be running — response timed out: '卸载可能仍在运行 — 响应超时'
   Unloading before bypass...: 旁通前正在卸载...
+  Unloading filament ({}mm)...: '正在卸载耗材 ({}mm)...'
   Unloading filament...: 正在卸载耗材...
   Unloading... click again to load slot {}: 正在卸载... 再次点击加载槽位 {}
   Unmapped: 未映射
@@ -1666,6 +1732,7 @@ translations:
   View Presets: 查看预设
   View Telemetry Data: 查看遥测数据
   View Timelapse: 查看延时摄影
+  View and rename fans: '查看和重命名风扇'
   View installed plugins and status: 查看已安装的插件和状态
   View print statistics and job history: 查看打印统计和作业历史
   Visual Fine-Tuning: '视觉微调'
@@ -1690,6 +1757,8 @@ translations:
   "When starting a print, you'll be able to choose whether to run %s. ": '开始打印时，您可以选择是否运行 %s。 '
   White: 白色
   WiFi: WiFi
+  WiFi Disabled: 'WiFi 已禁用'
+  WiFi Enabled: 'WiFi 已启用'
   WiFi Network: WiFi 网络
   WiFi and Ethernet: WiFi 和以太网
   WiFi and Ethernet configuration: WiFi 和以太网配置
@@ -1719,6 +1788,7 @@ translations:
   Your PRINT_START macro will be updated to give you control over:\n\n: '您的 PRINT_START 宏将被更新，以便您控制以下内容：\n\n'
   Your completed prints will appear here: 您完成的打印将显示在此处
   Your print start is already fully configured!: 您的打印启动已完全配置！
+  Your printer has an automatic filament changer: '您的打印机配有自动换色系统'
   Z: Z
   Z Calibration: Z 轴校准
   Z Movement: Z 轴移动

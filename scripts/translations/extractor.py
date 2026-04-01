@@ -6,6 +6,7 @@ Extractor module - scans XML and C++ files for translatable text strings.
 Extracts text from XML:
 - text="..." attributes on any element
 - label="...", description="...", title="...", subtitle="..." props
+- value_tag="..." on <str> const elements (wizard step titles/subtitles)
 
 Extracts text from C++:
 - Strings passed to lv_label_set_text() and similar functions
@@ -385,6 +386,15 @@ def extract_strings_from_xml(xml_path: Path) -> Set[str]:
             if not should_skip_text(text):
                 result.add(text)
 
+    # Extract value_tag from <str> const elements (wizard step titles/subtitles)
+    for match in re.finditer(r'value_tag="([^"]*)"', content):
+        text = match.group(1)
+        if not text or text.startswith("$"):
+            continue
+        text = _decode_xml_entities(text)
+        if not should_skip_text(text):
+            result.add(text)
+
     # Extract individual options from options_tag attributes
     # options_tag values use &#10; as separator in raw XML
     for match in re.finditer(r'options_tag="([^"]*)"', content):
@@ -450,6 +460,19 @@ def extract_strings_with_locations(xml_path: Path) -> Dict[str, List[Tuple[str, 
             if text not in result:
                 result[text] = []
             result[text].append((filename, line_num))
+
+    # Extract value_tag from <str> const elements (wizard step titles/subtitles)
+    for match in re.finditer(r'value_tag="([^"]*)"', content):
+        text = match.group(1)
+        if not text or text.startswith("$"):
+            continue
+        text = _decode_xml_entities(text)
+        if should_skip_text(text):
+            continue
+        line_num = content[: match.start()].count("\n") + 1
+        if text not in result:
+            result[text] = []
+        result[text].append((filename, line_num))
 
     # Extract individual options from options_tag attributes
     for match in re.finditer(r'options_tag="([^"]*)"', content):

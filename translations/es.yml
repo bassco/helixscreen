@@ -17,6 +17,10 @@ translations:
   '- Check [resonance_tester] in printer.cfg': '- Verifique [resonance_tester] en printer.cfg'
   '- Ensure ADXL345 is connected': '- Asegúrese de que el ADXL345 esté conectado'
   '- Try Measure Noise first': '- Intente Medir Ruido primero'
+  -- A: '-- A'
+  -- V: '-- V'
+  -- W: '-- W'
+  -- kWh: '-- kWh'
   --°C: --°C
   -0.5 Hz: '-0,5 Hz'
   0 = computed: '0 = calculado'
@@ -79,6 +83,7 @@ translations:
   AMS not available: AMS no disponible
   API not available: API no disponible
   APPEARANCE: APARIENCIA
+  AUTO FANS: 'VENTILADORES AUTO'
   AUTO STATE: ESTADO AUTO
   AUTOMATION: AUTOMATIZACIÓN
   Abort: Abortar
@@ -89,8 +94,11 @@ translations:
   Accel to Decel: Acel a Desacel
   Acceleration to deceleration limit (mm/s²): Límite de aceleración a desaceleración (mm/s²)
   Accelerometer: 'Acelerómetro'
+  Accelerometer communication failed. Try again.: 'Error de comunicación con el acelerómetro. Intente de nuevo.'
   Accept: Aceptar
   'Accepted Z Position: 0.000': 'Posición Z aceptada: 0.000'
+  Accuracy: 'Precisión'
+  'Act:': 'Act:'
   Action Required: Acción Requerida
   Actions: Acciones
   Active: Activo
@@ -111,6 +119,7 @@ translations:
   Alert: Alerta
   Alerts: Alertas
   All: Todo
+  All Devices: 'Todos los Dispositivos'
   All axes homed: Todos los ejes en origen
   Allow display to sleep during active prints: Permitir que la pantalla se apague durante impresiones activas
   Allwinner: Allwinner
@@ -123,6 +132,7 @@ translations:
   Animations: Animaciones
   Anonymous data to help improve HelixScreen: Datos anónimos para mejorar HelixScreen
   Anonymous stats — no personal data, ever.: Estadísticas anónimas — sin datos personales, nunca.
+  Anonymous usage statistics: 'Estadísticas de uso anónimas'
   Any notes...: Notas...
   App Background: Fondo de la Aplicación
   Apply: Aplicar
@@ -134,6 +144,7 @@ translations:
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Asignar macros de Klipper para controlar LEDs vía encendido/apagado, alternar o preajustes
   Assign a role to enable sensor monitoring: Asigne un rol para habilitar el monitoreo del sensor
   Assisting: Asistiendo
+  Authentication failed: 'Error de autenticación'
   Auto: Automático
   Auto Bed Mesh: Malla de Cama Automática
   Auto Cal: Auto Cal
@@ -156,6 +167,7 @@ translations:
   BLUETOOTH PRINTERS: IMPRESORAS BLUETOOTH
   Back: Volver
   Back to Results: 'Volver a resultados'
+  Barcode Scanner: 'Escáner de Código de Barras'
   Bed: Cama
   Bed Heater: Calentador de Cama
   Bed Level: Nivel de Cama
@@ -221,12 +233,15 @@ translations:
   COLORS REQUIRED: COLORES REQUERIDOS
   CONFIGURATION: CONFIGURACIÓN
   CONNECTION TYPE: TIPO DE CONEXIÓN
+  CONTROLLABLE FANS: 'VENTILADORES CONTROLABLES'
   CRITICAL: CRÍTICO
   CUSTOM IMAGES: IMÁGENES PERSONALIZADAS
   Calibrate: Calibrar
   Calibrate All: Calibrar Todo
   Calibrate X: Calibrar X
   Calibrate Y: Calibrar Y
+  Calibrate input shaping to reduce ringing artifacts in prints: 'Calibrar input shaping para reducir artefactos de resonancia en impresiones'
+  Calibrate your touchscreen for accurate input: 'Calibrar la pantalla táctil para una entrada precisa'
   Calibrated: Calibrado
   Calibrating...: Calibrando...
   Calibration & Tools: Calibración y herramientas
@@ -326,11 +341,13 @@ translations:
   Configure Graph: Configurar Gráfico
   Configure PRINT_START: Configurar PRINT_START
   Configure Spoolman integration and weight sync settings.: Configurar integración de Spoolman y ajustes de sincronización de peso.
+  Configure WiFi for this device, or skip if you're using Ethernet: 'Configura WiFi para este dispositivo, u omite si usas Ethernet'
   Configure devices in Moonraker: Configurar dispositivos en Moonraker
   Configure label printer and auto-discovery: Configurar impresora de etiquetas y detección automática
   Configure printer sensors: Configurar sensores de impresora
   Configure quick buttons and standard macros: Configurar botones rápidos y macros estándar
   Configure timelapse recording: Configurar grabación de timelapse
+  Configure your printer's cooling fans: 'Configura los ventiladores de enfriamiento de tu impresora'
   Configuring Moonraker...: Configurando Moonraker...
   Connect: Conectar
   Connect a USB label printer first: Conecte primero una impresora de etiquetas USB
@@ -343,6 +360,7 @@ translations:
   'Connected to ': 'Conectado a '
   Connected! Discovering printer...: ¡Conectado! Descubriendo impresora...
   Connected, discovering...: Conectado, descubriendo...
+  'Connecting to ': 'Conectando a '
   Connecting to %s...: Conectando a %s...
   Connecting to network...: Conectando a la red...
   Connecting...: Conectando...
@@ -354,11 +372,13 @@ translations:
   'Connection failed: %s': 'Conexión fallida: %s'
   Connection must be tested successfully to continue: La conexión debe probarse exitosamente para continuar
   Connection successful!: ¡Conexión exitosa!
+  Connection timeout: 'Tiempo de conexión agotado'
   Console: Consola
   Control optional print start features: Controlar funciones opcionales de inicio de impresión
   Control power relays and smart outlets: Controlar relés y enchufes inteligentes
   Control power switches and relays: Controlar interruptores y relés
   Controlled by hardware sensor: Controlado por sensor de hardware
+  Controller: 'Controlador'
   Cool Down: Enfriar
   Cooling: Enfriamiento
   Copied to clipboard!: ¡Copiado al portapapeles!
@@ -421,10 +441,12 @@ translations:
   Deploy: Desplegar
   Describe the issue (optional): 'Describa el problema (opcional)'
   Detailed: Detallado
+  Detecting printer type...: 'Detectando tipo de impresora...'
   Detection Length: 'Longitud de detección'
   Detection Mode: 'Modo de detección'
   Dev: Dev
   Dev channel requires dev_url in config: Canal de desarrollo requiere dev_url en la configuración
+  Device: 'Dispositivo'
   Device name is required: El nombre del dispositivo es requerido
   Disable: Desactivar
   Disable Motors?: ¿Desactivar Motores?
@@ -509,6 +531,7 @@ translations:
   Escalation Timeout: Tiempo de Espera de Escalado
   Ethernet: Ethernet
   Events appear here after sessions and prints: Los eventos aparecen aquí después de sesiones e impresiones
+  Excellent Accuracy: 'Precisión Excelente'
   Exclude: Excluir
   Excluded: Excluido
   Exclusion cancelled: Exclusión cancelada
@@ -663,9 +686,11 @@ translations:
   G-code Preview: Vista Previa de G-code
   G-code commands will appear here: Los comandos G-code aparecerán aquí
   Gear sync: Sincronización de engranaje
+  Generic: 'Genérico'
   Get help and share feedback: Obtén ayuda y comparte comentarios
   'Ghost:': 'Fantasma:'
   Good: 'Bueno'
+  Good Accuracy: 'Buena Precisión'
   Got it: Entendido
   Gray: Gris
   Guides and reference: Guías y referencia
@@ -717,6 +742,7 @@ translations:
   Homing Z...: Posicionando Z...
   Homing all axes...: Posicionando todos los ejes...
   'Homing failed: {}': 'Error en posicionamiento: {}'
+  Homing first...: 'Posicionando primero...'
   Homing may still be running — response timed out: El posicionamiento puede seguir en curso — tiempo de espera agotado
   Homing timed out: Posicionamiento — tiempo de espera agotado
   Homing...: Posicionando...
@@ -737,6 +763,7 @@ translations:
   'IP:': 'IP:'
   Icon: 'Icono'
   Idle: Inactivo
+  If Moonraker is local or your screen is attached to the printer directly, we'll connect automatically: 'Si Moonraker es local o tu pantalla está conectada directamente a la impresora, nos conectaremos automáticamente'
   Ignore: Ignorar
   'Import failed: {}': 'Error al importar: {}'
   Imported {}: '{} importado'
@@ -819,11 +846,13 @@ translations:
   Load Filament: Cargar Filamento
   'Load failed: {}': 'Error al cargar: {}'
   Load filament macro not configured: Macro de carga de filamento no configurado
+  Load may still be running — response timed out: 'La carga puede seguir en curso — tiempo de espera agotado'
   Load the required filaments or start anyway?: ¿Cargar los filamentos requeridos o iniciar de todos modos?
   Loaded: Cargado
   Loading Bed Mesh...: Cargando malla de cama...
   Loading Error: Error de Carga
   Loading G-code...: Cargando G-code...
+  Loading filament ({}mm)...: 'Cargando filamento ({}mm)...'
   Loading filament...: Cargando filamento...
   Loading filaments...: Cargando filamentos...
   Loading history...: Cargando historial...
@@ -855,11 +884,13 @@ translations:
   Macro Browser: Explorador de Macros
   Macro Buttons: Botones de Macro
   Macro analysis not initialized: Análisis de macro no inicializado
+  Macro complete: 'Macro completado'
   'Macro failed: {}': 'Error en macro: {}'
   Macro for bed mesh calibration: Macro para calibración de malla de cama
   Macro for chamber/bed heat soak: Macro para estabilización térmica de cámara/cama
   Macro for physical bed leveling (QGL/Z-Tilt): Macro para nivelación física de cama (QGL/Z-Tilt)
   Macro handles heating: El macro controla el calentamiento
+  Macro may still be running — response timed out: 'El macro puede seguir en curso — tiempo de espera agotado'
   Macro to cancel an active print: Macro para cancelar una impresión activa
   Macro to clean/wipe the nozzle: Macro para limpiar la boquilla
   Macro to load filament into extruder: Macro para cargar filamento en el extrusor
@@ -928,6 +959,7 @@ translations:
   Multi-Filament Overview: 'Vista general multi-filamento'
   'Multi-Filament:': 'Multi-Filamento:'
   Multi-Material: Multi-Material
+  Multi-Material System Detected: 'Sistema Multi-Material Detectado'
   Must home axes first: Debe posicionar los ejes primero
   My Custom Theme: Mi Tema Personalizado
   My Panel: Mi Panel
@@ -949,6 +981,7 @@ translations:
   'New Spool: Step ': 'Nueva Bobina: Paso '
   'New Spool: Step 1 of 3': 'Nueva Bobina: Paso 1 de 3'
   New Version Available: Nueva versión disponible
+  New fan name: 'Nuevo nombre de ventilador'
   New printer successfully added: Nueva impresora añadida correctamente
   New profile name: Nombre del nuevo perfil
   Next: Siguiente
@@ -966,6 +999,7 @@ translations:
   No Power Devices: Sin Dispositivos de Energía
   No Spool: 'Sin bobina'
   No Spools: Sin Bobinas
+  No USB HID devices detected.: 'No se detectaron dispositivos USB HID.'
   No USB printers found: No se encontraron impresoras USB
   No buffer data available: 'Sin datos de búfer disponibles'
   No changes selected.\n\nClick Cancel to close.: No se seleccionaron cambios.\n\nHaga clic en Cancelar para cerrar.
@@ -973,6 +1007,7 @@ translations:
   No dryer available. Store filament in a sealed dry box with desiccant for best results.: 'Sin secador disponible. Almacena el filamento en una caja seca sellada con desecante para mejores resultados.'
   No effects available: No hay efectos disponibles
   No events queued: No hay eventos en cola
+  No fans detected: 'No se detectaron ventiladores'
   No filament loaded to unload: No hay filamento cargado para descargar
   No filaments found: No se encontraron filamentos
   No file loaded: Sin archivo cargado
@@ -1008,6 +1043,7 @@ translations:
   'None': Ninguno
   Not Now: Ahora No
   Not calibrated: No calibrado
+  Not configured: 'No configurado'
   Not connected: No conectado
   Not connected to printer: No conectado a la impresora
   Not connected to printer.: No conectado a la impresora.
@@ -1052,10 +1088,12 @@ translations:
   Operations: Operaciones
   Optimize Your Printing: Optimice su Impresión
   Optimizes temperature control for stable, consistent heating.: Optimiza el control de temperatura para un calentamiento estable y consistente.
+  Optional - select your main lighting source, or skip if your printer doesn't have one: 'Opcional - selecciona tu fuente de iluminación principal, u omite si tu impresora no tiene una'
   Or Enter Manually: O Ingrese Manualmente
   Oscillating around target...: Oscilando alrededor del objetivo...
   Out of range: 'Fuera de rango'
   Output Mode: Modo de Salida
+  Output Pin: 'Pin de Salida'
   Overheating: 'Sobrecalentamiento'
   Override auto-detection if your chamber sensor or heater isn't named 'chamber'.: "Anular auto-detección si su sensor o calentador de cámara no se llama 'chamber'."
   P: P
@@ -1111,6 +1149,7 @@ translations:
   Please enter an IP address or hostname.: Ingrese una dirección IP o nombre de host.
   Please wait while the printer homes and probes.: Por favor espere mientras la impresora hace origen y sondea.
   Please wait while the printer probes each screw position.: Por favor espere mientras la impresora sondea cada posición de tornillo.
+  Plug in your scanner and tap Refresh.: 'Conecta tu escáner y toca Actualizar.'
   Plugin already installed: Plugin ya instalado
   Plugin disabled: Plugin desactivado
   Plugin installed successfully: Plugin instalado exitosamente
@@ -1119,6 +1158,7 @@ translations:
   Plugins: Plugins
   Plugins are discovered on application startup: Los plugins se descubren al iniciar la aplicación
   Polymaker: Polymaker
+  Poor Accuracy: 'Precisión Baja'
   Port: Puerto
   Position: Posición
   Power: Energía
@@ -1167,6 +1207,17 @@ translations:
   Printer Image: Imagen de Impresora
   Printer Manager: Gestor de Impresora
   Printer Name: Nombre de Impresora
+  'Printer Setup: Connection': 'Config. Impresora: Conexión'
+  'Printer Setup: Fans': 'Config. Impresora: Ventiladores'
+  'Printer Setup: Filament Sensor': 'Config. Impresora: Sensor de Filamento'
+  'Printer Setup: Heaters': 'Config. Impresora: Calentadores'
+  'Printer Setup: Identity': 'Config. Impresora: Identidad'
+  'Printer Setup: Input Shaping': 'Config. Impresora: Input Shaping'
+  'Printer Setup: LEDs': 'Config. Impresora: LEDs'
+  'Printer Setup: Language': 'Config. Impresora: Idioma'
+  'Printer Setup: Network': 'Config. Impresora: Red'
+  'Printer Setup: Review': 'Config. Impresora: Revisión'
+  'Printer Setup: Touch Calibration': 'Config. Impresora: Calibración Táctil'
   Printer Shutdown: Apagado de Impresora
   Printer Type: Tipo de Impresora
   Printer image set to auto-detect: Imagen de impresora configurada en auto-detectar
@@ -1180,6 +1231,7 @@ translations:
   Prints Trend: Tendencia de Impresiones
   'Private:': 'Privado:'
   Probe: Sonda
+  Probe Accuracy Failed: 'Prueba de Precisión de Sonda Fallida'
   Probe Accuracy Results: Resultados de Precisión de Sonda
   Probe Accuracy Test: Prueba de Precisión de Sonda
   Probe Management: Gestión de Sonda
@@ -1244,16 +1296,19 @@ translations:
   Reduce ringing and ghosting artifacts: Reducir artefactos de resonancia y fantasma
   Reduce vibration artifacts like ringing and ghosting: Reducir artefactos de vibración como resonancia y fantasma
   Refining stability...: Refinando estabilidad...
+  Refresh: 'Actualizar'
   Refresh Interval: Intervalo de Actualización
   Release all stepper motors. Position will be lost.: Liberar todos los motores paso a paso. Se perderá la posición.
   Remaining: Restante
   Remaining (g): Restante (g)
   Remaining Weight (g): Peso Restante (g)
+  Remap Tool: 'Reasignar Herramienta'
   Remove: Eliminar
   Remove PIN: Eliminar PIN
   Remove Spoolman?: '¿Eliminar Spoolman?'
   Remove plugin from printer: Eliminar plugin de la impresora
   Rename: Renombrar
+  Rename Fan: 'Renombrar Ventilador'
   Rename Mesh Profile: Renombrar Perfil de Malla
   Rename failed at load step: Error al renombrar en paso de carga
   Rename failed at remove step: Error al renombrar en paso de eliminación
@@ -1301,6 +1356,7 @@ translations:
   Retry: Reintentar
   Review detected hardware validation issues: Revisar problemas de validación de hardware detectados
   Review your changes: Revisar sus cambios
+  Review your configuration below, then click Finish to save: 'Revisa tu configuración abajo, luego toca Finalizar para guardar'
   Rewinding: Rebobinando
   'Role:': 'Rol:'
   Rotation: Rotación
@@ -1319,6 +1375,7 @@ translations:
   STYLE PROPERTIES: PROPIEDADES DE ESTILO
   SWITCH SENSORS: SENSORES DE INTERRUPTOR
   SYSTEM: SISTEMA
+  Sample: 'Muestra'
   Sample %d/%d: Muestra %d/%d
   Sample Dialog: Diálogo de Ejemplo
   Samples: Muestras
@@ -1380,7 +1437,10 @@ translations:
   Select macro for second button: Seleccionar macro para el segundo botón
   Select macro for third button: Seleccionar macro para el tercer botón
   Select sensor: Seleccionar sensor
+  Select the heaters Klipper uses for your bed and hotend: 'Selecciona los calentadores que Klipper usa para tu cama y hotend'
   Select which devices the home screen power button controls: Seleccione qué dispositivos controla el botón de encendido
+  Select which sensor triggers pause on filament runout: 'Selecciona qué sensor activa la pausa al agotarse el filamento'
+  Select your preferred language: 'Selecciona tu idioma preferido'
   Selecting slot...: Seleccionando ranura...
   Self-Test: Autoprueba
   Semantic Size Parameter Tests: Pruebas de Parámetros de Tamaño Semántico
@@ -1388,6 +1448,7 @@ translations:
   Send commands directly to printer: Enviar comandos directamente a la impresora
   Send this crash report to help improve HelixScreen.: Envíe este reporte de fallo para ayudar a mejorar HelixScreen.
   Sending...: Enviando...
+  Sensor: 'Sensor'
   Sensor Response: Respuesta del sensor
   Sensor Temperature: Temperatura del Sensor
   Sensors: Sensores
@@ -1432,6 +1493,7 @@ translations:
   Sound Theme: Tema de sonido
   Sounds: Sonidos
   Source: Fuente
+  Space Debris mod by Markus 'Captain' Kaarlonen: "Space Debris mod por Markus 'Captain' Kaarlonen"
   Speaker: Altavoz
   'Specular:': 'Especular:'
   Speed: Velocidad
@@ -1439,6 +1501,7 @@ translations:
   Speed of prime movement: Velocidad del movimiento de cebado
   Speed of retraction movement: Velocidad del movimiento de retracción
   Spool: Bobina
+  Spool Details: 'Detalles de Bobina'
   Spool Info: Info de bobina
   Spool Visualization (Pseudo-3D Canvas): Visualización de Bobina (Lienzo Pseudo-3D)
   Spool Weight (g): Peso de Bobina (g)
@@ -1519,6 +1582,7 @@ translations:
   Target Temperature: Temperatura Objetivo
   Telemetry Data: Datos de telemetría
   Telemetry queue cleared: Cola de telemetría limpiada
+  Temp: 'Temp'
   Temp Compensation: Compensación de Temp
   Temp °C: 'Temp °C'
   Temperature: Temperatura
@@ -1628,7 +1692,9 @@ translations:
   'Unload failed: {}': 'Error al descargar: {}'
   Unload filament macro not configured: Macro de descarga de filamento no configurado
   Unload macro not configured: Macro de descarga no configurado
+  Unload may still be running — response timed out: 'La descarga puede seguir en curso — tiempo de espera agotado'
   Unloading before bypass...: Descargando antes del bypass...
+  Unloading filament ({}mm)...: 'Descargando filamento ({}mm)...'
   Unloading filament...: Descargando filamento...
   Unloading... click again to load slot {}: Descargando... toque de nuevo para cargar ranura {}
   Unmapped: Sin mapear
@@ -1666,6 +1732,7 @@ translations:
   View Presets: Ver Preajustes
   View Telemetry Data: Ver datos de telemetría
   View Timelapse: Ver Timelapse
+  View and rename fans: 'Ver y renombrar ventiladores'
   View installed plugins and status: Ver plugins instalados y estado
   View print statistics and job history: Ver estadísticas de impresión e historial de trabajos
   Visual Fine-Tuning: 'Ajuste fino visual'
@@ -1690,6 +1757,8 @@ translations:
   "When starting a print, you'll be able to choose whether to run %s. ": "Al iniciar una impresión, podrá elegir si ejecutar %s. "
   White: Blanco
   WiFi: WiFi
+  WiFi Disabled: 'WiFi Desactivado'
+  WiFi Enabled: 'WiFi Activado'
   WiFi Network: Red WiFi
   WiFi and Ethernet: WiFi y Ethernet
   WiFi and Ethernet configuration: Configuración de WiFi y Ethernet
@@ -1719,6 +1788,7 @@ translations:
   Your PRINT_START macro will be updated to give you control over:\n\n: Su macro PRINT_START se actualizará para darle control sobre:\n\n
   Your completed prints will appear here: Sus impresiones completadas aparecerán aquí
   Your print start is already fully configured!: ¡Su inicio de impresión ya está completamente configurado!
+  Your printer has an automatic filament changer: 'Tu impresora tiene un cambiador de filamento automático'
   Z: Z
   Z Calibration: Calibración Z
   Z Movement: Movimiento Z
