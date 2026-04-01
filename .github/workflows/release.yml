@@ -53,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [pi, pi32, ad5m, cc1, k1, ad5x, k2, x86]
+        platform: [pi, pi32, ad5m, cc1, k1, ad5x, k2, x86, snapmaker-u1]
         include:
           - platform: pi
             display_name: "Raspberry Pi"
@@ -80,6 +80,8 @@ jobs:
           - platform: x86
             display_name: "x86_64 Debian"
             build_target: x86-both
+          - platform: snapmaker-u1
+            display_name: "Snapmaker U1"
 
     steps:
     - name: Checkout repository
@@ -397,6 +399,17 @@ jobs:
         # Download and extract
         wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/helixscreen-x86-${{ steps.version.outputs.version }}.tar.gz
         tar -xzf helixscreen-x86-${{ steps.version.outputs.version }}.tar.gz
+        cd helixscreen
+
+        # Run
+        ./helix-screen
+        ```
+
+        ### Snapmaker U1
+        ```bash
+        # Download and extract
+        wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/helixscreen-snapmaker-u1-${{ steps.version.outputs.version }}.tar.gz
+        tar -xzf helixscreen-snapmaker-u1-${{ steps.version.outputs.version }}.tar.gz
         cd helixscreen
 
         # Run
