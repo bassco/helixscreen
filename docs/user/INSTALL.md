@@ -17,6 +17,7 @@ This guide walks you through installing HelixScreen on your 3D printer's touchsc
 - [FlashForge Adventurer 5X (Testing)](#flashforge-adventurer-5x-testing)
 - [Elegoo Centauri Carbon 1 (Testing)](#elegoo-centauri-carbon-1-testing)
 - [Creality Sonic Pad](#creality-sonic-pad)
+- [Snapmaker U1](#snapmaker-u1)
 - [First Boot & Setup Wizard](#first-boot--setup-wizard)
 - [Display Configuration](#display-configuration)
 - [Starting on Boot](#starting-on-boot)
@@ -48,6 +49,12 @@ No SSL required — uses plain HTTP. See [Creality K1 Series](#creality-k1-serie
 **Flashforge Adventurer 5M:** The easiest option is our [ready-made firmware image](https://github.com/prestonbrown/ff5m) — just flash from a USB drive. For manual installation on existing Forge-X or Klipper Mod setups, see [Flashforge Adventurer 5M Installation](#flashforge-adventurer-5m-installation).
 
 **Flashforge Adventurer 5X:** Install [ZMOD](https://github.com/ghzserg/zmod), which manages HelixScreen installation and updates. See [FlashForge Adventurer 5X (Testing)](#flashforge-adventurer-5x-testing).
+
+**Snapmaker U1:** Run directly on the printer via SSH (requires [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware)):
+```bash
+curl -sSL https://releases.helixscreen.org/install.sh | sh
+```
+See [Snapmaker U1](#snapmaker-u1) for details.
 
 > **Note:** Both `bash` and `sh` work. The installer is POSIX-compatible for BusyBox environments.
 
@@ -267,6 +274,19 @@ The installer detects the Sonic Pad as a 32-bit ARM platform and downloads the `
 - Moonraker runs on `localhost:7125` (default)
 - The `display-sleep` service is automatically stopped to prevent backlight conflicts
 
+### Snapmaker U1
+
+The Snapmaker U1 is an all-in-one printer with a built-in touchscreen. HelixScreen replaces the stock UI and launches automatically on boot.
+
+- **Hardware:**
+  - Snapmaker U1
+  - Built-in touchscreen display
+  - Network connection
+
+- **Software:**
+  - [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware) installed (required for SSH access)
+  - SSH access (`root@<printer-ip>` or `lava@<printer-ip>`, password: `snapmaker`)
+
 ---
 
 ## Raspberry Pi / MainsailOS Installation
@@ -484,6 +504,72 @@ After reboot, HelixScreen will start automatically on the touchscreen.
 ### Step 5: Complete Setup
 
 Use the touchscreen to complete the setup wizard. The printer should auto-detect since it's running locally.
+
+---
+
+## Snapmaker U1 Installation
+
+> **Requires [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware).** Stock firmware does not provide SSH access. Install Extended Firmware first before proceeding.
+
+SSH into the printer:
+
+```bash
+ssh root@<printer-ip>
+# or: ssh lava@<printer-ip>
+# password: snapmaker
+```
+
+### Quick Install (Recommended)
+
+```bash
+curl -sSL https://releases.helixscreen.org/install.sh | sh
+```
+
+The installer automatically detects the Snapmaker U1 and installs to `/userdata/helixscreen/`. It configures autostart so HelixScreen launches instead of the stock UI on boot.
+
+### Manual Install
+
+If you prefer to install manually or the one-liner doesn't work on your network:
+
+**Step 1: Download the release archive**
+
+```bash
+wget https://releases.helixscreen.org/stable/helix-screen-snapmaker-u1.tar.gz
+```
+
+**Step 2: Extract to the install directory**
+
+```bash
+mkdir -p /userdata/helixscreen && tar xzf helix-screen-snapmaker-u1.tar.gz -C /userdata/helixscreen
+```
+
+**Step 3: Configure autostart**
+
+```bash
+bash /userdata/helixscreen/scripts/snapmaker-u1-setup-autostart.sh /userdata/helixscreen
+```
+
+This replaces the stock UI (`unisrv`) on boot with HelixScreen.
+
+**Step 4: Start HelixScreen**
+
+```bash
+killall unisrv 2>/dev/null; /userdata/helixscreen/bin/helix-launcher.sh &
+```
+
+### Reverting to Stock UI
+
+```bash
+rm -rf /userdata/helixscreen
+reboot
+```
+
+The stock UI resumes automatically when HelixScreen is not found.
+
+**Notes:**
+- Extended firmware is required — stock firmware does not provide SSH access
+- Display resolution may need manual configuration if the screen appears stretched or misaligned (see [Display Configuration](#display-configuration))
+- The stock UI can be restored at any time by removing `/userdata/helixscreen` and rebooting
 
 ---
 
