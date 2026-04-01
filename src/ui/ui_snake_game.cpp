@@ -5,10 +5,10 @@
  * @file ui_snake_game.cpp
  * @brief Snake easter egg - filament tube edition
  *
- * Grid-based Snake game rendered using custom draw callbacks.
+ * Grid-based Snake game with interpolated rendering at ~60fps.
  * Snake body drawn as 3D filament tubes (shadow/body/highlight layers).
  * Food drawn as spool boxes using ui_draw_spool_box().
- * Input via swipe gestures + arrow keys.
+ * Input via swipe gestures (touchscreen) or D-pad overlay (SDL/desktop).
  */
 
 #include "ui_snake_game.h"
@@ -17,14 +17,19 @@
 #include "ui_utils.h"
 
 #include "config.h"
+#include "display_backend.h"
+#include "display_manager.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <deque>
+#include <vector>
 
 namespace helix {
 
@@ -35,9 +40,18 @@ namespace helix {
 static constexpr int32_t CELL_SIZE = 20;
 static constexpr uint32_t INITIAL_TICK_MS = 150;
 static constexpr uint32_t MIN_TICK_MS = 70;
-static constexpr int SPEED_UP_INTERVAL = 5; // Speed up every N food items
+static constexpr int SPEED_UP_INTERVAL = 5;
+static constexpr uint32_t RENDER_TICK_MS = 16; // ~60fps render timer
+static constexpr uint32_t DT_CLAMP_MS = 200;   // Spiral-of-death clamp
+
 // Config key for persisted high score (non-obvious name)
 static constexpr const char* HIGH_SCORE_KEY = "/display/frame_counter";
+
+// Death animation timing (ms)
+static constexpr uint32_t DEATH_FLASH_DURATION = 50;
+static constexpr uint32_t DEATH_SHRINK_DURATION = 200;
+static constexpr uint32_t DEATH_CARD_TIME = 300;
+static constexpr uint32_t DEATH_INPUT_READY_TIME = 600;
 
 // Filament colors for snake body (random at game start)
 static constexpr uint32_t FILAMENT_COLORS[] = {
@@ -67,11 +81,24 @@ static constexpr uint32_t FOOD_COLORS[] = {
 static constexpr int NUM_FOOD_COLORS =
     static_cast<int>(sizeof(FOOD_COLORS) / sizeof(FOOD_COLORS[0]));
 
+// Speed tier border colors
+static constexpr uint32_t TIER_COLORS[] = {
+    0x666666, // Neutral gray (tier 0)
+    0x00A651, // Green (tier 1)
+    0xFFF200, // Yellow (tier 2)
+    0xF7941D, // Orange (tier 3)
+    0xED1C24, // Red (tier 4+)
+};
+static constexpr int NUM_TIER_COLORS =
+    static_cast<int>(sizeof(TIER_COLORS) / sizeof(TIER_COLORS[0]));
+
 // ============================================================================
 // TYPES
 // ============================================================================
 
 enum class Direction { UP, DOWN, LEFT, RIGHT };
+
+enum class InputMode { SWIPE, DPAD };
 
 struct GridPos {
     int x;
@@ -79,54 +106,169 @@ struct GridPos {
     bool operator==(const GridPos& o) const {
         return x == o.x && y == o.y;
     }
+    bool operator!=(const GridPos& o) const {
+        return !(*this == o);
+    }
+};
+
+struct Particle {
+    float x;
+    float y;
+    float vx;
+    float vy;
+    float life;     // Remaining life in seconds
+    float max_life; // Starting life for opacity calc
+    lv_color_t color;
+    bool active;
 };
 
 // ============================================================================
-// GAME STATE (namespace-level, static)
+// STATE STRUCTS
+// ============================================================================
+
+struct GridState {
+    int cols = 0;
+    int rows = 0;
+    int offset_x = 0;
+    int offset_y = 0;
+    std::vector<GridPos> free_cells;
+
+    void rebuild_free_cells(const std::deque<GridPos>& snake) {
+        free_cells.clear();
+        free_cells.reserve(cols * rows);
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                GridPos p{x, y};
+                if (std::find(snake.begin(), snake.end(), p) == snake.end()) {
+                    free_cells.push_back(p);
+                }
+            }
+        }
+    }
+
+    void remove_cell(const GridPos& p) {
+        for (size_t i = 0; i < free_cells.size(); i++) {
+            if (free_cells[i] == p) {
+                free_cells[i] = free_cells.back();
+                free_cells.pop_back();
+                return;
+            }
+        }
+    }
+
+    void add_cell(const GridPos& p) {
+        free_cells.push_back(p);
+    }
+};
+
+struct GameState {
+    std::deque<GridPos> snake;
+    std::deque<GridPos> prev_snake; // Snapshot before last logic tick
+    Direction direction = Direction::RIGHT;
+    Direction prev_direction = Direction::RIGHT;
+    int score = 0;
+    int high_score = 0;
+    GridPos food = {0, 0};
+    lv_color_t food_color = {};
+    lv_color_t snake_color = {};
+    uint32_t tick_ms = INITIAL_TICK_MS;
+    int speed_tier = 0;
+    bool game_over = false;
+    bool game_started = false;
+};
+
+struct RenderState {
+    float interp = 0.0f;
+    float tick_accumulator = 0.0f;
+    uint32_t last_render_ms = 0;
+    float food_pulse_phase = 0.0f;
+
+    // Head squash effect
+    bool squash_active = false;
+    uint32_t squash_start_ms = 0;
+
+    // Eat particles
+    std::array<Particle, 8> particles = {};
+
+    // Death animation
+    uint32_t death_start_ms = 0;
+    bool death_input_ready = false;
+};
+
+struct InputState {
+    InputMode mode = InputMode::SWIPE;
+    // 2-deep direction queue
+    Direction queue[2] = {Direction::RIGHT, Direction::RIGHT};
+    int queue_count = 0;
+
+    // Swipe tracking
+    lv_point_t touch_start = {0, 0};
+    bool swipe_handled = false;
+
+    void push_direction(Direction dir, Direction current_dir) {
+        // Determine what the effective direction would be after applying queued inputs
+        Direction check_against = current_dir;
+        if (queue_count > 0) {
+            check_against = queue[queue_count - 1];
+        }
+        // 180-degree reversal prevention
+        if ((dir == Direction::UP && check_against == Direction::DOWN) ||
+            (dir == Direction::DOWN && check_against == Direction::UP) ||
+            (dir == Direction::LEFT && check_against == Direction::RIGHT) ||
+            (dir == Direction::RIGHT && check_against == Direction::LEFT)) {
+            return;
+        }
+        if (queue_count < 2) {
+            queue[queue_count++] = dir;
+        }
+    }
+
+    bool pop_direction(Direction& out) {
+        if (queue_count == 0)
+            return false;
+        out = queue[0];
+        // Shift down
+        queue[0] = queue[1];
+        queue_count--;
+        return true;
+    }
+};
+
+// ============================================================================
+// GAME STATE (anonymous namespace)
 // ============================================================================
 
 namespace {
 
-lv_obj_t* g_overlay = nullptr;        // Full-screen backdrop
-lv_obj_t* g_game_area = nullptr;      // Game rendering area
-lv_obj_t* g_score_label = nullptr;    // Score display
-lv_obj_t* g_gameover_label = nullptr; // Game over text
-lv_obj_t* g_close_btn = nullptr;      // X close button
-lv_timer_t* g_game_timer = nullptr;   // Game tick timer
+// UI objects
+lv_obj_t* g_overlay = nullptr;
+lv_obj_t* g_game_area = nullptr;
+lv_obj_t* g_score_label = nullptr;
+lv_obj_t* g_gameover_label = nullptr;
+lv_obj_t* g_close_btn = nullptr;
+lv_timer_t* g_render_timer = nullptr;
 
-// Grid dimensions (calculated from screen size)
-int g_grid_cols = 0;
-int g_grid_rows = 0;
-int g_grid_offset_x = 0; // Pixel offset to center grid in game area
-int g_grid_offset_y = 0;
+// D-pad buttons (only created in DPAD mode)
+lv_obj_t* g_dpad_up = nullptr;
+lv_obj_t* g_dpad_down = nullptr;
+lv_obj_t* g_dpad_left = nullptr;
+lv_obj_t* g_dpad_right = nullptr;
 
-// Snake state
-std::deque<GridPos> g_snake;
-Direction g_direction = Direction::RIGHT;
-Direction g_next_direction = Direction::RIGHT; // Buffered input
-bool g_game_over = false;
-bool g_game_started = false;
-
-// Food state
-GridPos g_food = {0, 0};
-lv_color_t g_food_color = {};
-
-// Score and speed
-int g_score = 0;
-int g_high_score = 0;
-uint32_t g_current_tick_ms = INITIAL_TICK_MS;
-
-// Visual
-lv_color_t g_snake_color = {};
+// Organized state
+GridState g_grid;
+GameState g_game;
+RenderState g_render;
+InputState g_input;
 
 // ============================================================================
 // FORWARD DECLARATIONS
 // ============================================================================
 
 void init_game();
-void game_tick(lv_timer_t* timer);
+void game_logic_tick();
+void render_tick(lv_timer_t* timer);
 void draw_cb(lv_event_t* e);
-void gesture_cb(lv_event_t* e);
+void touch_cb(lv_event_t* e);
 void input_cb(lv_event_t* e);
 void close_cb(lv_event_t* e);
 void place_food();
@@ -134,9 +276,12 @@ void update_score_label();
 void show_game_over();
 void create_overlay();
 void destroy_overlay();
+void detect_input_mode();
+void spawn_eat_particles(int32_t px, int32_t py, lv_color_t color);
+void update_particles(float dt);
 
 // ============================================================================
-// TUBE DRAWING (local reimplementation of filament path pattern)
+// TUBE DRAWING
 // ============================================================================
 
 /// Draw a flat line segment (base primitive for tube layers)
@@ -192,8 +337,17 @@ void draw_tube_segment(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, in
 
 /// Convert grid position to pixel center coordinates
 void grid_to_pixel(const GridPos& pos, int32_t& px, int32_t& py) {
-    px = g_grid_offset_x + pos.x * CELL_SIZE + CELL_SIZE / 2;
-    py = g_grid_offset_y + pos.y * CELL_SIZE + CELL_SIZE / 2;
+    px = g_grid.offset_x + pos.x * CELL_SIZE + CELL_SIZE / 2;
+    py = g_grid.offset_y + pos.y * CELL_SIZE + CELL_SIZE / 2;
+}
+
+/// Interpolate between two grid positions and return pixel coords
+void lerp_grid_to_pixel(const GridPos& from, const GridPos& to, float t, int32_t& px,
+                        int32_t& py) {
+    float fx = static_cast<float>(from.x) + (static_cast<float>(to.x - from.x)) * t;
+    float fy = static_cast<float>(from.y) + (static_cast<float>(to.y - from.y)) * t;
+    px = g_grid.offset_x + static_cast<int32_t>(fx * CELL_SIZE + CELL_SIZE / 2);
+    py = g_grid.offset_y + static_cast<int32_t>(fy * CELL_SIZE + CELL_SIZE / 2);
 }
 
 /// Pick a random filament color
@@ -207,43 +361,113 @@ lv_color_t random_food_color() {
 }
 
 // ============================================================================
+// INPUT MODE DETECTION
+// ============================================================================
+
+void detect_input_mode() {
+    auto* dm = DisplayManager::instance();
+    if (dm && dm->backend() && dm->backend()->type() == DisplayBackendType::SDL) {
+        g_input.mode = InputMode::DPAD;
+    } else {
+        g_input.mode = InputMode::SWIPE;
+    }
+    spdlog::debug("[SnakeGame] Input mode: {}", g_input.mode == InputMode::DPAD ? "DPAD" : "SWIPE");
+}
+
+// ============================================================================
+// PARTICLES
+// ============================================================================
+
+void spawn_eat_particles(int32_t px, int32_t py, lv_color_t color) {
+    int spawned = 0;
+    for (auto& p : g_render.particles) {
+        if (!p.active && spawned < 8) {
+            p.active = true;
+            p.x = static_cast<float>(px);
+            p.y = static_cast<float>(py);
+            p.vx = static_cast<float>((rand() % 241) - 120); // -120..120
+            p.vy = static_cast<float>((rand() % 241) - 120);
+            p.life = 0.3f;
+            p.max_life = 0.3f;
+            p.color = color;
+            spawned++;
+        }
+    }
+}
+
+void update_particles(float dt) {
+    for (auto& p : g_render.particles) {
+        if (!p.active)
+            continue;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+        if (p.life <= 0.0f) {
+            p.active = false;
+        }
+    }
+}
+
+// ============================================================================
 // GAME LOGIC
 // ============================================================================
 
 void load_high_score() {
     auto* cfg = Config::get_instance();
     if (cfg) {
-        g_high_score = cfg->get<int>(HIGH_SCORE_KEY, 0);
+        g_game.high_score = cfg->get<int>(HIGH_SCORE_KEY, 0);
     }
-    spdlog::debug("[SnakeGame] Loaded high score: {}", g_high_score);
+    spdlog::debug("[SnakeGame] Loaded high score: {}", g_game.high_score);
 }
 
 void save_high_score() {
     auto* cfg = Config::get_instance();
     if (cfg) {
-        cfg->set(HIGH_SCORE_KEY, g_high_score);
+        cfg->set(HIGH_SCORE_KEY, g_game.high_score);
         cfg->save();
     }
-    spdlog::info("[SnakeGame] Saved new high score: {}", g_high_score);
+    spdlog::info("[SnakeGame] Saved new high score: {}", g_game.high_score);
 }
 
 void init_game() {
-    g_snake.clear();
-    g_direction = Direction::RIGHT;
-    g_next_direction = Direction::RIGHT;
-    g_game_over = false;
-    g_game_started = true;
-    g_score = 0;
-    g_current_tick_ms = INITIAL_TICK_MS;
+    g_game.snake.clear();
+    g_game.prev_snake.clear();
+    g_game.direction = Direction::RIGHT;
+    g_game.prev_direction = Direction::RIGHT;
+    g_game.game_over = false;
+    g_game.game_started = true;
+    g_game.score = 0;
+    g_game.tick_ms = INITIAL_TICK_MS;
+    g_game.speed_tier = 0;
 
     // Random snake color
-    g_snake_color = random_filament_color();
+    g_game.snake_color = random_filament_color();
 
     // Start snake in center, 3 segments long
-    int start_x = g_grid_cols / 2;
-    int start_y = g_grid_rows / 2;
+    int start_x = g_grid.cols / 2;
+    int start_y = g_grid.rows / 2;
     for (int i = 2; i >= 0; i--) {
-        g_snake.push_back({start_x - i, start_y});
+        g_game.snake.push_back({start_x - i, start_y});
+    }
+    g_game.prev_snake = g_game.snake;
+
+    // Build free cell list
+    g_grid.rebuild_free_cells(g_game.snake);
+
+    // Reset input queue
+    g_input.queue_count = 0;
+    g_input.swipe_handled = false;
+
+    // Reset render state
+    g_render.interp = 0.0f;
+    g_render.tick_accumulator = 0.0f;
+    g_render.last_render_ms = lv_tick_get();
+    g_render.food_pulse_phase = 0.0f;
+    g_render.squash_active = false;
+    g_render.death_start_ms = 0;
+    g_render.death_input_ready = false;
+    for (auto& p : g_render.particles) {
+        p.active = false;
     }
 
     place_food();
@@ -253,62 +477,61 @@ void init_game() {
     if (g_gameover_label) {
         lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
     }
-
-    // Reset timer speed
-    if (g_game_timer) {
-        lv_timer_set_period(g_game_timer, g_current_tick_ms);
-    }
 }
 
 void place_food() {
-    // Check if snake fills the entire grid (you win!)
-    if (static_cast<int>(g_snake.size()) >= g_grid_cols * g_grid_rows) {
-        g_game_over = true;
-        spdlog::info("[SnakeGame] Snake filled the grid — you win!");
+    // Win detection
+    if (g_grid.free_cells.empty()) {
+        g_game.game_over = true;
+        spdlog::info("[SnakeGame] Snake filled the grid - you win!");
 
-        // Update high score for the win
-        if (g_score > g_high_score) {
-            g_high_score = g_score;
+        if (g_game.score > g_game.high_score) {
+            g_game.high_score = g_game.score;
             save_high_score();
         }
 
         if (g_gameover_label) {
             char buf[96];
-            snprintf(buf, sizeof(buf), "YOU WIN!\nScore: %d\nTap to play again", g_score);
+            snprintf(buf, sizeof(buf), "YOU WIN!\nScore: %d\nTap to play again", g_game.score);
             lv_label_set_text(g_gameover_label, buf);
             lv_obj_remove_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (g_game_timer) {
-            lv_timer_pause(g_game_timer);
         }
         update_score_label();
         return;
     }
 
-    // Find a position not occupied by the snake
-    int attempts = 0;
-    do {
-        g_food.x = rand() % g_grid_cols;
-        g_food.y = rand() % g_grid_rows;
-        attempts++;
-    } while (std::find(g_snake.begin(), g_snake.end(), g_food) != g_snake.end() && attempts < 1000);
-
-    g_food_color = random_food_color();
+    // O(1) food placement from free_cells
+    int idx = rand() % static_cast<int>(g_grid.free_cells.size());
+    g_game.food = g_grid.free_cells[idx];
+    g_game.food_color = random_food_color();
 }
 
-void game_tick(lv_timer_t* /*timer*/) {
-    if (g_game_over || !g_game_started) {
+void game_logic_tick() {
+    if (g_game.game_over || !g_game.game_started) {
         return;
     }
 
-    // Apply buffered direction
-    g_direction = g_next_direction;
+    // Snapshot current state for interpolation
+    g_game.prev_snake = g_game.snake;
+    g_game.prev_direction = g_game.direction;
+
+    // Pop direction from input queue
+    Direction new_dir;
+    if (g_input.pop_direction(new_dir)) {
+        g_game.direction = new_dir;
+
+        // Trigger head squash on direction change
+        if (new_dir != g_game.prev_direction) {
+            g_render.squash_active = true;
+            g_render.squash_start_ms = lv_tick_get();
+        }
+    }
 
     // Calculate new head position
-    GridPos head = g_snake.back();
+    GridPos head = g_game.snake.back();
     GridPos new_head = head;
 
-    switch (g_direction) {
+    switch (g_game.direction) {
     case Direction::UP:
         new_head.y--;
         break;
@@ -324,39 +547,92 @@ void game_tick(lv_timer_t* /*timer*/) {
     }
 
     // Wall collision
-    if (new_head.x < 0 || new_head.x >= g_grid_cols || new_head.y < 0 ||
-        new_head.y >= g_grid_rows) {
-        g_game_over = true;
+    if (new_head.x < 0 || new_head.x >= g_grid.cols || new_head.y < 0 ||
+        new_head.y >= g_grid.rows) {
+        g_game.game_over = true;
         show_game_over();
         return;
     }
 
     // Self collision
-    if (std::find(g_snake.begin(), g_snake.end(), new_head) != g_snake.end()) {
-        g_game_over = true;
+    if (std::find(g_game.snake.begin(), g_game.snake.end(), new_head) != g_game.snake.end()) {
+        g_game.game_over = true;
         show_game_over();
         return;
     }
 
     // Move snake
-    g_snake.push_back(new_head);
+    g_game.snake.push_back(new_head);
+    g_grid.remove_cell(new_head);
 
     // Check food collision
-    if (new_head == g_food) {
-        g_score++;
+    if (new_head == g_game.food) {
+        g_game.score++;
         update_score_label();
+
+        // Spawn eat particles at food pixel position
+        int32_t fpx, fpy;
+        grid_to_pixel(g_game.food, fpx, fpy);
+        spawn_eat_particles(fpx, fpy, g_game.food_color);
+
         place_food();
 
         // Speed up periodically
-        if (g_score % SPEED_UP_INTERVAL == 0 && g_current_tick_ms > MIN_TICK_MS) {
-            g_current_tick_ms -= 10;
-            if (g_game_timer) {
-                lv_timer_set_period(g_game_timer, g_current_tick_ms);
-            }
+        if (g_game.score % SPEED_UP_INTERVAL == 0 && g_game.tick_ms > MIN_TICK_MS) {
+            g_game.tick_ms -= 10;
+            g_game.speed_tier = g_game.score / SPEED_UP_INTERVAL;
         }
     } else {
-        // Remove tail (no growth)
-        g_snake.pop_front();
+        // Remove tail (no growth) - add freed cell back
+        GridPos tail = g_game.snake.front();
+        g_game.snake.pop_front();
+        g_grid.add_cell(tail);
+    }
+}
+
+void render_tick(lv_timer_t* /*timer*/) {
+    uint32_t now = lv_tick_get();
+    uint32_t raw_dt = now - g_render.last_render_ms;
+    g_render.last_render_ms = now;
+
+    // Clamp dt to avoid spiral of death after pause/debug
+    float dt = static_cast<float>(LV_MIN(raw_dt, DT_CLAMP_MS)) / 1000.0f;
+
+    // Update food pulse animation
+    g_render.food_pulse_phase += dt * 2.0f * 3.14159265f * 2.0f; // 2Hz
+    if (g_render.food_pulse_phase > 6.28318f) {
+        g_render.food_pulse_phase -= 6.28318f;
+    }
+
+    // Update particles
+    update_particles(dt);
+
+    // Update death animation state
+    if (g_game.game_over && g_render.death_start_ms > 0) {
+        uint32_t death_elapsed = now - g_render.death_start_ms;
+        if (death_elapsed >= DEATH_INPUT_READY_TIME && !g_render.death_input_ready) {
+            g_render.death_input_ready = true;
+        }
+    }
+
+    // Accumulate time and run game logic ticks
+    if (!g_game.game_over && g_game.game_started) {
+        g_render.tick_accumulator += static_cast<float>(LV_MIN(raw_dt, DT_CLAMP_MS));
+
+        while (g_render.tick_accumulator >= static_cast<float>(g_game.tick_ms)) {
+            g_render.tick_accumulator -= static_cast<float>(g_game.tick_ms);
+            game_logic_tick();
+            if (g_game.game_over) {
+                g_render.tick_accumulator = 0.0f;
+                break;
+            }
+        }
+
+        // Calculate interpolation factor
+        if (g_game.tick_ms > 0) {
+            g_render.interp = g_render.tick_accumulator / static_cast<float>(g_game.tick_ms);
+            g_render.interp = LV_CLAMP(0.0f, g_render.interp, 1.0f);
+        }
     }
 
     // Trigger redraw
@@ -368,48 +644,31 @@ void game_tick(lv_timer_t* /*timer*/) {
 void update_score_label() {
     if (g_score_label) {
         char buf[48];
-        if (g_high_score > 0) {
-            snprintf(buf, sizeof(buf), "Score: %d  |  Best: %d", g_score, g_high_score);
+        if (g_game.high_score > 0) {
+            snprintf(buf, sizeof(buf), "Score: %d  |  Best: %d", g_game.score, g_game.high_score);
         } else {
-            snprintf(buf, sizeof(buf), "Score: %d", g_score);
+            snprintf(buf, sizeof(buf), "Score: %d", g_game.score);
         }
         lv_label_set_text(g_score_label, buf);
     }
 }
 
 void show_game_over() {
-    bool new_high = g_score > g_high_score && g_score > 0;
+    bool new_high = g_game.score > g_game.high_score && g_game.score > 0;
     if (new_high) {
-        g_high_score = g_score;
+        g_game.high_score = g_game.score;
         save_high_score();
     }
 
-    spdlog::info("[SnakeGame] Game over! Score: {} | Best: {}{}", g_score, g_high_score,
+    spdlog::info("[SnakeGame] Game over! Score: {} | Best: {}{}", g_game.score, g_game.high_score,
                  new_high ? " (NEW!)" : "");
 
-    if (g_gameover_label) {
-        char buf[96];
-        if (new_high) {
-            snprintf(buf, sizeof(buf), "NEW HIGH SCORE!\n%d\nTap to play again", g_score);
-        } else {
-            snprintf(buf, sizeof(buf), "Game Over!\nScore: %d\nTap to restart", g_score);
-        }
-        lv_label_set_text(g_gameover_label, buf);
-        lv_obj_remove_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Start death animation
+    g_render.death_start_ms = lv_tick_get();
+    g_render.death_input_ready = false;
 
     // Update score label to reflect new high score
     update_score_label();
-
-    // Stop the timer
-    if (g_game_timer) {
-        lv_timer_pause(g_game_timer);
-    }
-
-    // Invalidate for final red-flash render
-    if (g_game_area) {
-        lv_obj_invalidate(g_game_area);
-    }
 }
 
 // ============================================================================
@@ -420,93 +679,216 @@ void draw_cb(lv_event_t* e) {
     lv_layer_t* layer = lv_event_get_layer(e);
     lv_obj_t* obj = lv_event_get_current_target_obj(e);
 
-    // Get object coordinates for clipping context
     lv_area_t obj_area;
     lv_obj_get_coords(obj, &obj_area);
 
-    // Draw border around game area
+    // Dark background fill
     {
+        lv_draw_rect_dsc_t bg_dsc;
+        lv_draw_rect_dsc_init(&bg_dsc);
+        bg_dsc.bg_color = lv_color_hex(0x0a0a0a);
+        bg_dsc.bg_opa = LV_OPA_COVER;
+        bg_dsc.radius = 4;
+
+        lv_area_t bg_area = {
+            obj_area.x1 + g_grid.offset_x - 2,
+            obj_area.y1 + g_grid.offset_y - 2,
+            obj_area.x1 + g_grid.offset_x + g_grid.cols * CELL_SIZE + 1,
+            obj_area.y1 + g_grid.offset_y + g_grid.rows * CELL_SIZE + 1,
+        };
+        lv_draw_rect(layer, &bg_dsc, &bg_area);
+    }
+
+    // Subtle grid lines
+    {
+        lv_color_t grid_color = lv_color_hex(0x1a1a1a);
+        // Vertical lines
+        for (int x = 0; x <= g_grid.cols; x++) {
+            int32_t px = obj_area.x1 + g_grid.offset_x + x * CELL_SIZE;
+            int32_t y1 = obj_area.y1 + g_grid.offset_y;
+            int32_t y2 = y1 + g_grid.rows * CELL_SIZE;
+            lv_draw_line_dsc_t line_dsc;
+            lv_draw_line_dsc_init(&line_dsc);
+            line_dsc.color = grid_color;
+            line_dsc.width = 1;
+            line_dsc.p1.x = px;
+            line_dsc.p1.y = y1;
+            line_dsc.p2.x = px;
+            line_dsc.p2.y = y2;
+            lv_draw_line(layer, &line_dsc);
+        }
+        // Horizontal lines
+        for (int y = 0; y <= g_grid.rows; y++) {
+            int32_t py = obj_area.y1 + g_grid.offset_y + y * CELL_SIZE;
+            int32_t x1 = obj_area.x1 + g_grid.offset_x;
+            int32_t x2 = x1 + g_grid.cols * CELL_SIZE;
+            lv_draw_line_dsc_t line_dsc;
+            lv_draw_line_dsc_init(&line_dsc);
+            line_dsc.color = grid_color;
+            line_dsc.width = 1;
+            line_dsc.p1.x = x1;
+            line_dsc.p1.y = py;
+            line_dsc.p2.x = x2;
+            line_dsc.p2.y = py;
+            lv_draw_line(layer, &line_dsc);
+        }
+    }
+
+    // Speed tier border
+    {
+        int tier_idx = LV_MIN(g_game.speed_tier, NUM_TIER_COLORS - 1);
         lv_draw_rect_dsc_t border_dsc;
         lv_draw_rect_dsc_init(&border_dsc);
         border_dsc.bg_opa = LV_OPA_TRANSP;
-        border_dsc.border_color = lv_color_hex(0x444444);
+        border_dsc.border_color = lv_color_hex(TIER_COLORS[tier_idx]);
         border_dsc.border_opa = LV_OPA_COVER;
         border_dsc.border_width = 2;
         border_dsc.radius = 4;
 
         lv_area_t border_area = {
-            obj_area.x1 + g_grid_offset_x - 2,
-            obj_area.y1 + g_grid_offset_y - 2,
-            obj_area.x1 + g_grid_offset_x + g_grid_cols * CELL_SIZE + 1,
-            obj_area.y1 + g_grid_offset_y + g_grid_rows * CELL_SIZE + 1,
+            obj_area.x1 + g_grid.offset_x - 2,
+            obj_area.y1 + g_grid.offset_y - 2,
+            obj_area.x1 + g_grid.offset_x + g_grid.cols * CELL_SIZE + 1,
+            obj_area.y1 + g_grid.offset_y + g_grid.rows * CELL_SIZE + 1,
         };
         lv_draw_rect(layer, &border_dsc, &border_area);
     }
 
-    if (!g_game_started) {
+    if (!g_game.game_started) {
         return;
     }
 
-    // Draw food as spool box
+    // Determine if we can interpolate
+    bool can_interp = (g_game.prev_snake.size() == g_game.snake.size()) && !g_game.game_over;
+    float t = can_interp ? g_render.interp : 1.0f;
+
+    // Draw food as spool box with pulse
     {
         int32_t fx, fy;
-        grid_to_pixel(g_food, fx, fy);
+        grid_to_pixel(g_game.food, fx, fy);
         fx += obj_area.x1;
         fy += obj_area.y1;
-        ui_draw_spool_box(layer, fx, fy, g_food_color, true, CELL_SIZE / 4);
+
+        float pulse = sinf(g_render.food_pulse_phase) * 2.0f;
+        int32_t food_r = CELL_SIZE / 4 + static_cast<int32_t>(pulse);
+        if (food_r < 2)
+            food_r = 2;
+
+        ui_draw_spool_box(layer, fx, fy, g_game.food_color, true, food_r);
+    }
+
+    // Death animation state
+    uint32_t death_elapsed = 0;
+    bool death_shrinking = false;
+    float death_shrink_progress = 0.0f;
+    if (g_game.game_over && g_render.death_start_ms > 0) {
+        death_elapsed = lv_tick_get() - g_render.death_start_ms;
+        if (death_elapsed > DEATH_FLASH_DURATION &&
+            death_elapsed <= DEATH_FLASH_DURATION + DEATH_SHRINK_DURATION) {
+            death_shrinking = true;
+            death_shrink_progress = static_cast<float>(death_elapsed - DEATH_FLASH_DURATION) /
+                                   static_cast<float>(DEATH_SHRINK_DURATION);
+        }
     }
 
     // Draw snake body as tube segments
-    lv_color_t body_color = g_game_over ? lv_color_hex(0xCC2222) : g_snake_color;
+    lv_color_t body_color = g_game.game_over ? lv_color_hex(0xCC2222) : g_game.snake_color;
     int32_t tube_width = CELL_SIZE * 2 / 3;
+    int snake_len = static_cast<int>(g_game.snake.size());
 
-    for (size_t i = 1; i < g_snake.size(); i++) {
+    for (int i = 1; i < snake_len; i++) {
         int32_t x1, y1, x2, y2;
-        grid_to_pixel(g_snake[i - 1], x1, y1);
-        grid_to_pixel(g_snake[i], x2, y2);
 
-        // Offset to absolute coordinates
+        if (can_interp && i < static_cast<int>(g_game.prev_snake.size())) {
+            lerp_grid_to_pixel(g_game.prev_snake[i - 1], g_game.snake[i - 1], t, x1, y1);
+            lerp_grid_to_pixel(g_game.prev_snake[i], g_game.snake[i], t, x2, y2);
+        } else {
+            grid_to_pixel(g_game.snake[i - 1], x1, y1);
+            grid_to_pixel(g_game.snake[i], x2, y2);
+        }
+
         x1 += obj_area.x1;
         y1 += obj_area.y1;
         x2 += obj_area.x1;
         y2 += obj_area.y1;
 
-        // Head segment is slightly wider and brighter
-        bool is_head = (i == g_snake.size() - 1);
-        int32_t w = is_head ? tube_width + 2 : tube_width;
-        lv_color_t c = is_head ? ui_color_lighten(body_color, 20) : body_color;
+        bool is_head = (i == snake_len - 1);
 
-        draw_tube_segment(layer, x1, y1, x2, y2, c, w);
+        // Tail taper: last 3 segments taper in width
+        int from_tail = i; // segment index from tail (0 = tail end)
+        int32_t seg_width = tube_width;
+        if (from_tail < 3) {
+            // Taper from 40% to 100% over 3 segments
+            float taper = 0.4f + 0.6f * (static_cast<float>(from_tail) / 3.0f);
+            seg_width = static_cast<int32_t>(static_cast<float>(tube_width) * taper);
+            if (seg_width < 4)
+                seg_width = 4;
+        }
+
+        if (is_head) {
+            // Head squash effect
+            int32_t head_width = tube_width + 2;
+            if (g_render.squash_active) {
+                uint32_t squash_elapsed = lv_tick_get() - g_render.squash_start_ms;
+                if (squash_elapsed < 100) {
+                    // 15% wider during squash
+                    head_width = static_cast<int32_t>(static_cast<float>(head_width) * 1.15f);
+                } else {
+                    g_render.squash_active = false;
+                }
+            }
+            seg_width = head_width;
+        }
+
+        // Death shrink: segments shrink from tail to head
+        if (death_shrinking) {
+            float seg_progress =
+                static_cast<float>(i) / static_cast<float>(LV_MAX(snake_len - 1, 1));
+            // Tail shrinks first (invert progress relative to segment)
+            float shrink = 1.0f - death_shrink_progress * (1.0f - seg_progress);
+            if (shrink < 0.0f)
+                shrink = 0.0f;
+            seg_width = static_cast<int32_t>(static_cast<float>(seg_width) * shrink);
+            if (seg_width < 1)
+                seg_width = 1;
+        }
+
+        lv_color_t c = is_head ? ui_color_lighten(body_color, 20) : body_color;
+        draw_tube_segment(layer, x1, y1, x2, y2, c, seg_width);
     }
 
     // Draw eyes on snake head
-    if (g_snake.size() >= 2) {
-        const GridPos& head = g_snake.back();
+    if (g_game.snake.size() >= 2) {
         int32_t hx, hy;
-        grid_to_pixel(head, hx, hy);
+        if (can_interp && g_game.prev_snake.size() >= 2) {
+            lerp_grid_to_pixel(g_game.prev_snake.back(), g_game.snake.back(), t, hx, hy);
+        } else {
+            grid_to_pixel(g_game.snake.back(), hx, hy);
+        }
         hx += obj_area.x1;
         hy += obj_area.y1;
 
-        // Eye positions depend on direction
         int32_t eye_offset = CELL_SIZE / 4;
         int32_t ex1 = hx, ey1 = hy, ex2 = hx, ey2 = hy;
 
-        switch (g_direction) {
+        switch (g_game.direction) {
         case Direction::UP:
         case Direction::DOWN:
             ex1 = hx - eye_offset;
             ex2 = hx + eye_offset;
-            ey1 = ey2 = hy + (g_direction == Direction::UP ? -eye_offset / 2 : eye_offset / 2);
+            ey1 = ey2 =
+                hy + (g_game.direction == Direction::UP ? -eye_offset / 2 : eye_offset / 2);
             break;
         case Direction::LEFT:
         case Direction::RIGHT:
             ey1 = hy - eye_offset;
             ey2 = hy + eye_offset;
-            ex1 = ex2 = hx + (g_direction == Direction::LEFT ? -eye_offset / 2 : eye_offset / 2);
+            ex1 = ex2 =
+                hx + (g_game.direction == Direction::LEFT ? -eye_offset / 2 : eye_offset / 2);
             break;
         }
 
-        // Draw eyes as small white circles with dark pupils
+        // White circles
         lv_draw_arc_dsc_t eye_dsc;
         lv_draw_arc_dsc_init(&eye_dsc);
         eye_dsc.width = 3;
@@ -523,7 +905,7 @@ void draw_cb(lv_event_t* e) {
         eye_dsc.center.y = ey2;
         lv_draw_arc(layer, &eye_dsc);
 
-        // Pupils
+        // Black pupils
         eye_dsc.color = lv_color_black();
         eye_dsc.radius = 2;
         eye_dsc.width = 2;
@@ -536,27 +918,87 @@ void draw_cb(lv_event_t* e) {
         eye_dsc.center.y = ey2;
         lv_draw_arc(layer, &eye_dsc);
     }
+
+    // Draw eat particles
+    for (const auto& p : g_render.particles) {
+        if (!p.active)
+            continue;
+        float opacity = p.life / p.max_life;
+        lv_draw_arc_dsc_t pdsc;
+        lv_draw_arc_dsc_init(&pdsc);
+        pdsc.color = p.color;
+        pdsc.radius = 3;
+        pdsc.width = 3;
+        pdsc.start_angle = 0;
+        pdsc.end_angle = 360;
+        pdsc.opa = static_cast<lv_opa_t>(opacity * 255.0f);
+        pdsc.center.x = obj_area.x1 + static_cast<int32_t>(p.x);
+        pdsc.center.y = obj_area.y1 + static_cast<int32_t>(p.y);
+        lv_draw_arc(layer, &pdsc);
+    }
+
+    // Death white flash overlay
+    if (g_game.game_over && g_render.death_start_ms > 0 && death_elapsed < DEATH_FLASH_DURATION) {
+        lv_draw_rect_dsc_t flash_dsc;
+        lv_draw_rect_dsc_init(&flash_dsc);
+        flash_dsc.bg_color = lv_color_white();
+        flash_dsc.bg_opa = LV_OPA_20;
+        flash_dsc.radius = 4;
+
+        lv_area_t flash_area = {
+            obj_area.x1 + g_grid.offset_x - 2,
+            obj_area.y1 + g_grid.offset_y - 2,
+            obj_area.x1 + g_grid.offset_x + g_grid.cols * CELL_SIZE + 1,
+            obj_area.y1 + g_grid.offset_y + g_grid.rows * CELL_SIZE + 1,
+        };
+        lv_draw_rect(layer, &flash_dsc, &flash_area);
+    }
+
+    // Show game over label after DEATH_CARD_TIME (fade in over ~200ms)
+    if (g_game.game_over && g_render.death_start_ms > 0 && death_elapsed >= DEATH_CARD_TIME) {
+        if (g_gameover_label && lv_obj_has_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN)) {
+            bool new_high =
+                g_game.score > 0 && g_game.score >= g_game.high_score; // already saved in show_game_over
+            char buf[96];
+            if (new_high) {
+                snprintf(buf, sizeof(buf), "NEW HIGH SCORE!\n%d\nTap to play again", g_game.score);
+            } else {
+                snprintf(buf, sizeof(buf), "Game Over!\nScore: %d\nTap to restart", g_game.score);
+            }
+            lv_label_set_text(g_gameover_label, buf);
+            lv_obj_set_style_opa(g_gameover_label, LV_OPA_TRANSP, LV_PART_MAIN);
+            lv_obj_remove_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        if (g_gameover_label) {
+            uint32_t fade_elapsed = death_elapsed - DEATH_CARD_TIME;
+            uint32_t fade_duration = DEATH_INPUT_READY_TIME - DEATH_CARD_TIME; // ~300ms
+            float fade = LV_MIN(1.0f, static_cast<float>(fade_elapsed) / static_cast<float>(fade_duration));
+            lv_obj_set_style_opa(g_gameover_label, static_cast<lv_opa_t>(LV_OPA_COVER * fade), LV_PART_MAIN);
+        }
+    }
 }
 
 // ============================================================================
 // INPUT HANDLING
 // ============================================================================
 
-/// Set direction with 180-degree reversal prevention
-void set_direction(Direction dir) {
-    // Prevent reversing into yourself
-    if ((dir == Direction::UP && g_direction == Direction::DOWN) ||
-        (dir == Direction::DOWN && g_direction == Direction::UP) ||
-        (dir == Direction::LEFT && g_direction == Direction::RIGHT) ||
-        (dir == Direction::RIGHT && g_direction == Direction::LEFT)) {
+void dpad_cb(lv_event_t* e) {
+    if (g_game.game_over) {
+        if (g_render.death_input_ready) {
+            init_game();
+        }
         return;
     }
-    g_next_direction = dir;
+    auto* btn = lv_event_get_target_obj(e);
+    if (btn == g_dpad_up)
+        g_input.push_direction(Direction::UP, g_game.direction);
+    else if (btn == g_dpad_down)
+        g_input.push_direction(Direction::DOWN, g_game.direction);
+    else if (btn == g_dpad_left)
+        g_input.push_direction(Direction::LEFT, g_game.direction);
+    else if (btn == g_dpad_right)
+        g_input.push_direction(Direction::RIGHT, g_game.direction);
 }
-
-// Touch state for swipe detection
-lv_point_t g_touch_start = {0, 0};
-bool g_swipe_handled = false;
 
 void touch_cb(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
@@ -566,65 +1008,64 @@ void touch_cb(lv_event_t* e) {
     }
 
     if (code == LV_EVENT_PRESSED) {
-        lv_indev_get_point(indev, &g_touch_start);
-        g_swipe_handled = false;
+        lv_indev_get_point(indev, &g_input.touch_start);
+        g_input.swipe_handled = false;
     } else if (code == LV_EVENT_PRESSING) {
-        // React as soon as finger moves enough — don't wait for release
-        if (g_swipe_handled || g_game_over) {
+        if (g_input.swipe_handled || g_game.game_over) {
             return;
         }
 
         lv_point_t current;
         lv_indev_get_point(indev, &current);
 
-        int32_t dx = current.x - g_touch_start.x;
-        int32_t dy = current.y - g_touch_start.y;
+        int32_t dx = current.x - g_input.touch_start.x;
+        int32_t dy = current.y - g_input.touch_start.y;
         int32_t abs_dx = LV_ABS(dx);
         int32_t abs_dy = LV_ABS(dy);
 
-        constexpr int32_t SWIPE_THRESHOLD = 20;
+        constexpr int32_t SWIPE_THRESHOLD = 12;
         if (abs_dx < SWIPE_THRESHOLD && abs_dy < SWIPE_THRESHOLD) {
             return;
         }
 
         if (abs_dx > abs_dy) {
-            set_direction(dx > 0 ? Direction::RIGHT : Direction::LEFT);
+            g_input.push_direction(dx > 0 ? Direction::RIGHT : Direction::LEFT, g_game.direction);
         } else {
-            set_direction(dy > 0 ? Direction::DOWN : Direction::UP);
+            g_input.push_direction(dy > 0 ? Direction::DOWN : Direction::UP, g_game.direction);
         }
-        g_swipe_handled = true;
+        g_input.swipe_handled = true;
+        // Reset touch origin for chained swipes
+        lv_indev_get_point(indev, &g_input.touch_start);
     } else if (code == LV_EVENT_RELEASED) {
-        if (!g_swipe_handled) {
-            // PRESSING might not have fired — check swipe on release as fallback
+        if (!g_input.swipe_handled) {
             lv_point_t end;
             lv_indev_get_point(indev, &end);
 
-            int32_t dx = end.x - g_touch_start.x;
-            int32_t dy = end.y - g_touch_start.y;
+            int32_t dx = end.x - g_input.touch_start.x;
+            int32_t dy = end.y - g_input.touch_start.y;
             int32_t abs_dx = LV_ABS(dx);
             int32_t abs_dy = LV_ABS(dy);
 
-            constexpr int32_t SWIPE_THRESHOLD = 20;
+            constexpr int32_t SWIPE_THRESHOLD = 12;
             if (abs_dx >= SWIPE_THRESHOLD || abs_dy >= SWIPE_THRESHOLD) {
-                if (!g_game_over) {
+                if (!g_game.game_over) {
                     if (abs_dx > abs_dy) {
-                        set_direction(dx > 0 ? Direction::RIGHT : Direction::LEFT);
+                        g_input.push_direction(dx > 0 ? Direction::RIGHT : Direction::LEFT,
+                                               g_game.direction);
                     } else {
-                        set_direction(dy > 0 ? Direction::DOWN : Direction::UP);
+                        g_input.push_direction(dy > 0 ? Direction::DOWN : Direction::UP,
+                                               g_game.direction);
                     }
                 }
-            } else if (g_game_over) {
-                // Tap — restart
+            } else if (g_game.game_over && g_render.death_input_ready) {
+                // Tap to restart after death animation completes
                 init_game();
-                if (g_game_timer) {
-                    lv_timer_resume(g_game_timer);
-                }
                 if (g_game_area) {
                     lv_obj_invalidate(g_game_area);
                 }
             }
         }
-        g_swipe_handled = false;
+        g_input.swipe_handled = false;
     }
 }
 
@@ -632,38 +1073,36 @@ void input_cb(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
 
     if (code == LV_EVENT_KEY) {
-        // Arrow key support for dev/testing
         uint32_t key = lv_event_get_key(e);
 
         if (key == LV_KEY_ESC) {
-            SnakeGame::hide();
+            // Defer destruction — never safe_delete() during input event processing
+            lv_async_call([](void*) { SnakeGame::hide(); }, nullptr);
             return;
         }
 
-        if (g_game_over) {
-            // Any key restarts
-            init_game();
-            if (g_game_timer) {
-                lv_timer_resume(g_game_timer);
-            }
-            if (g_game_area) {
-                lv_obj_invalidate(g_game_area);
+        if (g_game.game_over) {
+            if (g_render.death_input_ready) {
+                init_game();
+                if (g_game_area) {
+                    lv_obj_invalidate(g_game_area);
+                }
             }
             return;
         }
 
         switch (key) {
         case LV_KEY_UP:
-            set_direction(Direction::UP);
+            g_input.push_direction(Direction::UP, g_game.direction);
             break;
         case LV_KEY_DOWN:
-            set_direction(Direction::DOWN);
+            g_input.push_direction(Direction::DOWN, g_game.direction);
             break;
         case LV_KEY_LEFT:
-            set_direction(Direction::LEFT);
+            g_input.push_direction(Direction::LEFT, g_game.direction);
             break;
         case LV_KEY_RIGHT:
-            set_direction(Direction::RIGHT);
+            g_input.push_direction(Direction::RIGHT, g_game.direction);
             break;
         default:
             break;
@@ -672,7 +1111,46 @@ void input_cb(lv_event_t* e) {
 }
 
 void close_cb(lv_event_t* /*e*/) {
-    SnakeGame::hide();
+    // Defer destruction — never safe_delete() during input event processing
+    lv_async_call([](void*) { SnakeGame::hide(); }, nullptr);
+}
+
+// ============================================================================
+// D-PAD CREATION
+// ============================================================================
+
+lv_obj_t* create_dpad_button(lv_obj_t* parent, const char* symbol, lv_align_t align, int32_t x_ofs,
+                             int32_t y_ofs) {
+    lv_obj_t* btn = lv_button_create(parent);
+    lv_obj_set_size(btn, 48, 48);
+    lv_obj_align(btn, align, x_ofs, y_ofs);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_30, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_50, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_radius(btn, 24, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn, 0, LV_PART_MAIN);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_FLOATING);
+    lv_obj_add_event_cb(btn, dpad_cb, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t* label = lv_label_create(btn);
+    lv_label_set_text(label, symbol);
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_center(label);
+
+    return btn;
+}
+
+void create_dpad(lv_obj_t* parent) {
+    // D-pad at bottom center of game area
+    int32_t cx = 0;
+    int32_t base_y = -20;
+
+    g_dpad_up = create_dpad_button(parent, LV_SYMBOL_UP, LV_ALIGN_BOTTOM_MID, cx, base_y - 100);
+    g_dpad_down = create_dpad_button(parent, LV_SYMBOL_DOWN, LV_ALIGN_BOTTOM_MID, cx, base_y);
+    g_dpad_left =
+        create_dpad_button(parent, LV_SYMBOL_LEFT, LV_ALIGN_BOTTOM_MID, cx - 52, base_y - 50);
+    g_dpad_right =
+        create_dpad_button(parent, LV_SYMBOL_RIGHT, LV_ALIGN_BOTTOM_MID, cx + 52, base_y - 50);
 }
 
 // ============================================================================
@@ -687,14 +1165,11 @@ void create_overlay() {
 
     spdlog::info("[SnakeGame] Launching snake game!");
 
-    // Load persisted high score
     load_high_score();
-
-    // Seed RNG
     srand(static_cast<unsigned>(time(nullptr)));
+    detect_input_mode();
 
-    // Opaque backdrop on top layer (no blur — keeps it simple and avoids
-    // lv_image flex/input issues with blurred backdrops)
+    // Opaque backdrop on top layer
     lv_obj_t* parent = lv_layer_top();
     g_overlay = lv_obj_create(parent);
     lv_obj_set_size(g_overlay, LV_PCT(100), LV_PCT(100));
@@ -756,28 +1231,21 @@ void create_overlay() {
     lv_coord_t screen_w = lv_display_get_horizontal_resolution(nullptr);
     lv_coord_t screen_h = lv_display_get_vertical_resolution(nullptr);
 
-    // Reserve space for header (~48px) and padding
-    lv_coord_t avail_w = screen_w - 24; // 12px padding each side
-    lv_coord_t avail_h = screen_h - 64; // Header + padding
+    lv_coord_t avail_w = screen_w - 24;
+    lv_coord_t avail_h = screen_h - 64;
 
-    g_grid_cols = avail_w / CELL_SIZE;
-    g_grid_rows = avail_h / CELL_SIZE;
+    g_grid.cols = avail_w / CELL_SIZE;
+    g_grid.rows = avail_h / CELL_SIZE;
+    g_grid.offset_x = (avail_w - g_grid.cols * CELL_SIZE) / 2;
+    g_grid.offset_y = (avail_h - g_grid.rows * CELL_SIZE) / 2;
 
-    // Center the grid within available space
-    g_grid_offset_x = (avail_w - g_grid_cols * CELL_SIZE) / 2;
-    g_grid_offset_y = (avail_h - g_grid_rows * CELL_SIZE) / 2;
-
-    spdlog::debug("[SnakeGame] Grid: {}x{} cells, offset: ({}, {})", g_grid_cols, g_grid_rows,
-                  g_grid_offset_x, g_grid_offset_y);
+    spdlog::debug("[SnakeGame] Grid: {}x{} cells, offset: ({}, {})", g_grid.cols, g_grid.rows,
+                  g_grid.offset_x, g_grid.offset_y);
 
     // Register custom draw callback
     lv_obj_add_event_cb(g_game_area, draw_cb, LV_EVENT_DRAW_MAIN, nullptr);
 
-    // Register touch input on the game area. PRESSING fires on each indev
-    // read while touched — detect swipe direction as early as possible.
-    // RELEASED is the guaranteed fallback for devices where PRESSING is flaky.
-    // Remove SCROLL_CHAIN so LVGL's scroll handler doesn't walk up to
-    // lv_layer_top() and absorb touch movement into scroll processing.
+    // Register touch input
     lv_obj_add_flag(g_game_area, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_remove_flag(g_game_area, LV_OBJ_FLAG_SCROLL_CHAIN);
     lv_obj_add_event_cb(g_game_area, touch_cb, LV_EVENT_PRESSED, nullptr);
@@ -800,8 +1268,12 @@ void create_overlay() {
     lv_obj_set_style_text_align(g_gameover_label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_align(g_gameover_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
-    // Float on top of game area
     lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_FLOATING);
+
+    // Create D-pad if in DPAD mode
+    if (g_input.mode == InputMode::DPAD) {
+        create_dpad(g_game_area);
+    }
 
     // Bring overlay to front
     lv_obj_move_foreground(g_overlay);
@@ -809,17 +1281,18 @@ void create_overlay() {
     // Initialize game state
     init_game();
 
-    // Start game timer
-    g_game_timer = lv_timer_create(game_tick, g_current_tick_ms, nullptr);
+    // Start render timer
+    g_render.last_render_ms = lv_tick_get();
+    g_render_timer = lv_timer_create(render_tick, RENDER_TICK_MS, nullptr);
 
-    spdlog::info("[SnakeGame] Game started! Grid: {}x{}", g_grid_cols, g_grid_rows);
+    spdlog::info("[SnakeGame] Game started! Grid: {}x{}, input: {}", g_grid.cols, g_grid.rows,
+                 g_input.mode == InputMode::DPAD ? "DPAD" : "SWIPE");
 }
 
 void destroy_overlay() {
-    // Stop timers
-    if (g_game_timer) {
-        lv_timer_delete(g_game_timer);
-        g_game_timer = nullptr;
+    if (g_render_timer) {
+        lv_timer_delete(g_render_timer);
+        g_render_timer = nullptr;
     }
 
     // Remove from focus group before deletion
@@ -831,18 +1304,24 @@ void destroy_overlay() {
     }
 
     // Clean up overlay
-    if (helix::ui::safe_delete(g_overlay)) {
-        g_game_area = nullptr;
-        g_score_label = nullptr;
-        g_gameover_label = nullptr;
-        g_close_btn = nullptr;
-    }
+    helix::ui::safe_delete(g_overlay);
+    g_game_area = nullptr;
+    g_score_label = nullptr;
+    g_gameover_label = nullptr;
+    g_close_btn = nullptr;
+    g_dpad_up = nullptr;
+    g_dpad_down = nullptr;
+    g_dpad_left = nullptr;
+    g_dpad_right = nullptr;
 
     // Reset state
-    g_snake.clear();
-    g_game_started = false;
-    g_game_over = false;
-    g_swipe_handled = false;
+    g_game.snake.clear();
+    g_game.prev_snake.clear();
+    g_game.game_started = false;
+    g_game.game_over = false;
+    g_grid.free_cells.clear();
+    g_input.swipe_handled = false;
+    g_input.queue_count = 0;
 
     spdlog::info("[SnakeGame] Game closed");
 }
