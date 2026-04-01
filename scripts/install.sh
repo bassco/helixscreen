@@ -331,6 +331,24 @@ detect_platform() {
         fi
     fi
 
+    # Snapmaker U1 (aarch64 + extended firmware markers)
+    # Must check BEFORE generic Pi/ARM SBC since U1 is also aarch64 Debian
+    if [ "$arch" = "aarch64" ]; then
+        local u1_markers=0
+        [ -d "/home/lava" ] && u1_markers=$((u1_markers + 1))
+        [ -d "/home/lava/printer_data" ] && u1_markers=$((u1_markers + 1))
+        [ -x "/usr/bin/unisrv" ] && u1_markers=$((u1_markers + 1))
+        [ -d "/oem" ] && u1_markers=$((u1_markers + 1))
+        # Check for RK3562 SoC in device-tree
+        if [ -f /proc/device-tree/compatible ] && grep -q "rockchip,rk3562" /proc/device-tree/compatible 2>/dev/null; then
+            u1_markers=$((u1_markers + 1))
+        fi
+        if [ "$u1_markers" -ge 2 ]; then
+            echo "snapmaker-u1"
+            return 0
+        fi
+    fi
+
     # Check for Debian-family SBC (Raspberry Pi, MKS, BTT, Armbian, etc.)
     # Returns "pi" for 64-bit, "pi32" for 32-bit
     if [ "$arch" = "aarch64" ] || [ "$arch" = "armv7l" ]; then
@@ -691,6 +709,13 @@ set_install_paths() {
         KLIPPER_USER="root"
         KLIPPER_HOME="/root"
         log_info "Platform: Creality K2 series"
+        log_info "Install directory: ${INSTALL_DIR}"
+    elif [ "$platform" = "snapmaker-u1" ]; then
+        INSTALL_DIR="/userdata/helixscreen"
+        KLIPPER_USER="root"
+        INIT_SYSTEM="sysv"
+        INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+        log_info "Platform: Snapmaker U1"
         log_info "Install directory: ${INSTALL_DIR}"
     else
         # Pi and other platforms — detect klipper user, then auto-detect install dir
@@ -2038,6 +2063,13 @@ stop_competing_uis() {
         stock_klipper|guilouz) stop_k1_stock_competing_uis ;;
     esac
 
+    # Snapmaker U1 stock UI
+    if pgrep -x "unisrv" >/dev/null 2>&1; then
+        log_info "Stopping Snapmaker stock UI (unisrv)..."
+        killall unisrv 2>/dev/null || true
+        found_any=true
+    fi
+
     # Handle the specific previous UI if we know it (for clean reversibility)
     if [ -n "$PREVIOUS_UI_SCRIPT" ] && [ -x "$PREVIOUS_UI_SCRIPT" ] 2>/dev/null; then
         log_info "Stopping previous UI: $PREVIOUS_UI_SCRIPT"
@@ -2378,10 +2410,24 @@ get_latest_version() {
     show_manual_install_instructions "$platform" "latest"
 }
 
+# Map a detected platform identifier to the release artifact platform name.
+# Most platforms use their own artifact name, but some share artifacts.
+# Prints the release platform name to stdout.
+get_release_platform() {
+    local platform=$1
+    local RELEASE_PLATFORM
+    case "$platform" in
+        snapmaker-u1) RELEASE_PLATFORM="snapmaker-u1" ;;
+        *) RELEASE_PLATFORM="$platform" ;;
+    esac
+    echo "$RELEASE_PLATFORM"
+}
+
 # Download release tarball (tries R2 CDN first, falls back to GitHub)
 download_release() {
     local version=$1
     local platform=$2
+    platform=$(get_release_platform "$platform")
 
     local filename="helixscreen-${platform}-${version}.tar.gz"
     local dest="${TMP_DIR}/helixscreen.tar.gz"
@@ -2578,7 +2624,7 @@ validate_binary_architecture() {
             expected_machine_lo="08"
             expected_desc="MIPS 32-bit (mipsel)"
             ;;
-        pi)
+        pi|snapmaker-u1)
             expected_class="02"
             expected_machine_lo="b7"
             expected_desc="AARCH64 64-bit"
@@ -3036,10 +3082,27 @@ _has_no_new_privs() {
 install_service() {
     local platform=$1
 
+    if [ "$platform" = "snapmaker-u1" ]; then
+        install_service_snapmaker_u1
+        return
+    fi
+
     if [ "$INIT_SYSTEM" = "systemd" ]; then
         install_service_systemd
     else
         install_service_sysv
+    fi
+}
+
+install_service_snapmaker_u1() {
+    log_info "Configuring Snapmaker U1 autostart..."
+
+    # Run the dedicated U1 autostart setup script
+    if [ -f "${INSTALL_DIR}/scripts/snapmaker-u1-setup-autostart.sh" ]; then
+        bash "${INSTALL_DIR}/scripts/snapmaker-u1-setup-autostart.sh" "${INSTALL_DIR}"
+    else
+        log_warn "Snapmaker U1 autostart script not found at ${INSTALL_DIR}/scripts/snapmaker-u1-setup-autostart.sh"
+        log_warn "You may need to configure autostart manually"
     fi
 }
 
