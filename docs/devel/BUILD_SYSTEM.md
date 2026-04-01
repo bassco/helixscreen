@@ -536,6 +536,9 @@ Each module is self-contained with GPL-3 copyright headers and clear separation 
 # Parallel build (auto-detects CPU cores)
 make -j
 
+# Fast development build (-O0, ~2x faster compilation)
+make dev
+
 # Clean parallel build with progress/timing
 make build
 
@@ -647,6 +650,7 @@ Tests 9 scenarios with 22 assertions covering dependency detection, platform-spe
 ### Build Options
 
 - **`V=1`** - Verbose mode: shows full compiler commands instead of short `[CC]`/`[CXX]` tags
+- **`OPT=0|1|2`** - Optimization level (default: 2). Use `OPT=0` for fastest compilation, `OPT=2` for release. `make dev` is shorthand for `OPT=0 -j`.
 - **`JOBS=N`** - Set parallel job count (default: auto-detects CPU cores)
 - **`NO_COLOR=1`** - Disable colored output (useful for CI/CD)
 - **`-j<N>`** - Enable parallel builds with N jobs (NOT auto-enabled by default)
@@ -1301,11 +1305,52 @@ git -C lvgl apply ../patches/lvgl_sdl_window_position.patch
 
 **Symptom**: Slow compilation
 
-**Solutions**:
-- Use parallel builds: `make -j` (auto-detects all cores)
-- Use incremental builds: `make -j` instead of `make clean && make`
-- Check CPU usage during build (should be near 100% with parallel builds)
-- Use `make build` for optimized clean builds with timing
+The build compiles ~566 app source files. The dominant cost is **template instantiation and optimization passes** (not header parsing — preprocessing takes <1s even for the worst files). At `-O2`, individual files take 8–15s to compile.
+
+**Speed tiers** (full app rebuild, 32-core machine):
+
+| Method | Wall time | Notes |
+|--------|-----------|-------|
+| `make -j` (cold, no ccache) | ~4.5 min | Baseline |
+| `make dev` (cold, no ccache) | ~2.5 min | `-O0` skips optimizer passes |
+| `make -j` (ccache populated) | ~38 sec | 98% cache hit rate |
+| `make dev` (ccache populated) | ~20 sec | `-O0` + ccache |
+| Touch one `.cpp`, rebuild | ~7 sec | Recompile + relink |
+| Touch widely-included `.h` | ~8 sec | ccache direct hit (content unchanged) |
+
+**Solutions (most impactful first)**:
+
+1. **Install ccache** — by far the biggest win. The Makefile auto-detects and wraps the compiler. Gives ~7x speedup for rebuilds where source content hasn't actually changed (e.g., switching branches back and forth, touching headers without real edits).
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install ccache
+   # macOS
+   brew install ccache
+   ```
+
+2. **Use `make dev` for daily development** — builds at `-O0`, cutting per-file compile time roughly in half. Library code still builds at `-O2` since it rarely changes. The binary is larger and slower at runtime, but compilation is ~2x faster.
+   ```bash
+   make dev          # -O0, auto-parallel
+   make OPT=1 -j    # -O1 (middle ground: some optimization, faster than -O2)
+   make -j           # -O2 (default, for release/CI)
+   ```
+
+3. **Use parallel builds**: `make -j` (auto-detects all cores)
+4. **Use incremental builds**: `make -j` instead of `make clean && make`
+
+**Header fan-out** — changing these headers triggers the most recompilation:
+
+| Header | Files affected |
+|--------|---------------|
+| `theme_manager.h` | ~144 |
+| `ui_update_queue.h` | ~144 |
+| `moonraker_api.h` | ~122 |
+| `app_globals.h` | ~121 |
+| `printer_state.h` | ~104 |
+
+With ccache installed, touching these headers without content changes costs ~8s (direct cache hit). Actual content changes recompile all dependents (~2 min at `-O2`, ~1 min at `-O0`).
+
+**Precompiled header** (`include/lvgl_pch.h`): Covers LVGL, helix-xml, spdlog, nlohmann JSON, and common STL headers. These are precompiled once and reused across all translation units. Don't add project headers to the PCH — only stable external libraries.
 
 ### Clang Standard Library Issues (Arch Linux)
 
@@ -1346,7 +1391,7 @@ sdl2-config --version
 ### Development Workflow
 
 1. **Edit code** in `src/` or `include/`
-2. **Run `make -j`** - parallel incremental build with auto-patching
+2. **Run `make dev`** - fast build at `-O0` with auto-patching (or `make -j` for optimized build)
 3. **Test** with `./build/bin/helix-screen`
 4. **Screenshot** with `./scripts/screenshot.sh` (auto-opens on display 1)
 5. **Commit** with working incremental changes

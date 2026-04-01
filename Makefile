@@ -148,12 +148,21 @@ endif
 # Note: -MF path is computed in the pattern rules to get the correct output path
 DEPFLAGS = -MMD -MP
 
+# Optimization level: -O2 by default, override with OPT=0 or OPT=1 for faster builds
+# 'make dev' sets OPT=0 automatically (~2x faster compilation)
+OPT ?= 2
+
 # Project source flags - warnings enabled, strict mode optional
 # Use WERROR=1 to treat warnings as errors (for CI or `make strict`)
 # -D_FORTIFY_SOURCE=2: compile-time + runtime bounds checking for memcpy/sprintf/etc
 # -fstack-protector-strong: stack canaries on functions with local arrays/alloca
-CFLAGS := -std=c11 -Wall -Wextra -O2 -g -D_GNU_SOURCE -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong
-CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -g -fno-omit-frame-pointer -D_FORTIFY_SOURCE=2 -fstack-protector-strong
+# Note: _FORTIFY_SOURCE requires optimization (-O1+), so disable it at -O0
+CFLAGS := -std=c11 -Wall -Wextra -O$(OPT) -g -D_GNU_SOURCE -fno-omit-frame-pointer -fstack-protector-strong
+CXXFLAGS := -std=c++17 -Wall -Wextra -O$(OPT) -g -fno-omit-frame-pointer -fstack-protector-strong
+ifneq ($(OPT),0)
+    CFLAGS += -D_FORTIFY_SOURCE=2
+    CXXFLAGS += -D_FORTIFY_SOURCE=2
+endif
 
 # Version information (read from VERSION.txt file)
 # Format: MAJOR.MINOR.PATCH following Semantic Versioning 2.0.0
@@ -758,7 +767,12 @@ MOCK_OBJS := $(patsubst $(TEST_MOCK_DIR)/%.cpp,$(OBJ_DIR)/tests/mocks/%.o,$(MOCK
 # Default target
 .DEFAULT_GOAL := all
 
-.PHONY: all build clean run test tests test-integration test-cards test-print-select test-size-content demo compile_commands compile_commands_full libhv-build apply-patches generate-fonts validate-fonts regen-fonts update-mdi-cache verify-mdi-codepoints help check-deps install-deps venv-setup icon format format-staged screenshots tools moonraker-inspector strict quality setup translations symbols strip
+.PHONY: all build clean run test tests test-integration test-cards test-print-select test-size-content demo compile_commands compile_commands_full libhv-build apply-patches generate-fonts validate-fonts regen-fonts update-mdi-cache verify-mdi-codepoints help check-deps install-deps venv-setup icon format format-staged screenshots tools moonraker-inspector strict quality setup translations symbols strip dev
+
+# Fast development build: -O0 skips optimization passes (~2x faster compilation)
+# Library code still builds at -O2 (via SUBMODULE_CFLAGS) since it rarely changes
+dev:
+	$(Q)$(MAKE) OPT=0 -j
 
 # Developer setup - configure git hooks and commit template
 setup:
@@ -780,6 +794,7 @@ help:
 	echo "$${C}Quick Start:$${X}"; \
 	echo "  $${G}make setup$${X}        - Configure git hooks and commit template"; \
 	echo "  $${G}make -j$${X}           - Build (parallel, auto-detects cores)"; \
+	echo "  $${G}make dev$${X}          - Fast build (-O0, ~2x faster compilation)"; \
 	echo "  $${G}make run$${X}          - Build and run the UI"; \
 	echo "  $${G}make test$${X}         - Run unit tests"; \
 	echo "  $${G}make clean$${X}        - Remove build artifacts"; \

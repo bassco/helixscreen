@@ -19,14 +19,25 @@
 
 // Common STL headers used throughout the project
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 // spdlog (used in nearly every file)
 #include "spdlog/fmt/fmt.h"
 #include "spdlog/spdlog.h"
+
+// nlohmann JSON (via libhv) — included transitively by 100+ files through
+// printer_state.h, tool_state.h, sensor_state.h, etc. Heavy template library
+// that benefits significantly from precompilation.
+#include "hv/json.hpp"
