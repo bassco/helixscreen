@@ -260,17 +260,28 @@ These are resolution-specific issues, not Snapmaker-specific. Any 480x320 device
 - **Not in CI/release pipeline** -- Must be built manually. No automated release artifacts yet.
 - **480x320 UI needs work** -- Multiple panels have layout issues at this resolution (see above).
 - **Extended firmware required** -- SSH access (needed for deployment) requires the community [Extended Firmware](https://github.com/paxx12/SnapmakerU1-Extended-Firmware). Stock firmware does not provide SSH.
-- **No auto-start on boot** -- HelixScreen must be started manually after each reboot. An init script (`helixscreen.init`) is deployed but must be installed to `/etc/init.d/` (on the overlay, or via Extended Firmware overlay mechanism) for boot persistence.
+- **Auto-start requires `/oem/.debug`** -- The overlay filesystem is wiped on boot unless `/oem/.debug` exists. This flag must be created once during installation to persist the S99screen patch.
 - **WiFi management** -- Stopping `unisrv` (stock UI) does not affect WiFi — the U1 uses standard `wpa_supplicant` managed by the OS. HelixScreen has its own WiFi manager with `wpa_supplicant` support.
 
 ## Future Work
 
 ### Auto-Start on Boot
 
-The init script (`helixscreen.init`) exists and works, but the overlay filesystem is reset on reboot. Options for persistence:
-1. Install to `/oem/overlay/upper/etc/init.d/S90helixscreen` (persists in the overlay upper layer)
-2. Package as an Extended Firmware overlay for automatic deployment
-3. Add a post-boot hook in the Extended Firmware configuration
+The overlay filesystem is wiped on every reboot by `S01aoverlayfs` (`rm -rf /oem/overlay/*`) **unless** the debug flag `/oem/.debug` exists. With this flag, overlay modifications persist across reboots.
+
+To enable auto-start:
+
+```bash
+# 1. Create debug flag to prevent overlay wipe
+ssh root@<ip> "touch /oem/.debug"
+
+# 2. Patch S99screen to delegate to HelixScreen when installed
+# (The deploy target handles this automatically)
+```
+
+The patched `S99screen` checks for `/userdata/helixscreen/helixscreen.init` on boot. If present, it starts HelixScreen instead of the stock GUI. If HelixScreen is removed, S99screen falls back to the stock GUI automatically.
+
+**Important**: The platform hooks must NOT call `/etc/init.d/S99screen stop` — since S99screen delegates to HelixScreen, this causes infinite recursion. The hooks kill `gui` directly instead.
 
 ### Extended Firmware Overlay
 
