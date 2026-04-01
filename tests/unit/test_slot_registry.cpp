@@ -127,7 +127,7 @@ TEST_CASE("SlotRegistry multi-unit initialization", "[slot_registry][init]") {
     }
 }
 
-TEST_CASE("SlotRegistry reorganize sorts units alphabetically", "[slot_registry][reorganize]") {
+TEST_CASE("SlotRegistry reorganize preserves given order", "[slot_registry][reorganize]") {
     SlotRegistry reg;
 
     // Initialize in non-alphabetical order
@@ -141,29 +141,29 @@ TEST_CASE("SlotRegistry reorganize sorts units alphabetically", "[slot_registry]
     REQUIRE(reg.unit(0).name == "Zebra");
     REQUIRE(reg.get(0)->backend_name == "z0");
 
-    // Reorganize with same data — should sort alphabetically
-    std::map<std::string, std::vector<std::string>> unit_map = {
+    // Reorganize — order is preserved as given (Zebra first, then Alpha)
+    std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
         {"Zebra", {"z0", "z1"}},
         {"Alpha", {"a0", "a1"}},
     };
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
-    SECTION("units sorted alphabetically") {
-        REQUIRE(reg.unit(0).name == "Alpha");
-        REQUIRE(reg.unit(1).name == "Zebra");
+    SECTION("units in given order") {
+        REQUIRE(reg.unit(0).name == "Zebra");
+        REQUIRE(reg.unit(1).name == "Alpha");
     }
 
     SECTION("slots reindexed to match") {
-        REQUIRE(reg.get(0)->backend_name == "a0");
-        REQUIRE(reg.get(1)->backend_name == "a1");
-        REQUIRE(reg.get(2)->backend_name == "z0");
-        REQUIRE(reg.get(3)->backend_name == "z1");
+        REQUIRE(reg.get(0)->backend_name == "z0");
+        REQUIRE(reg.get(1)->backend_name == "z1");
+        REQUIRE(reg.get(2)->backend_name == "a0");
+        REQUIRE(reg.get(3)->backend_name == "a1");
     }
 
     SECTION("reverse maps rebuilt") {
-        REQUIRE(reg.index_of("a0") == 0);
-        REQUIRE(reg.index_of("z0") == 2);
-        REQUIRE(reg.name_of(0) == "a0");
+        REQUIRE(reg.index_of("z0") == 0);
+        REQUIRE(reg.index_of("a0") == 2);
+        REQUIRE(reg.name_of(0) == "z0");
     }
 }
 
@@ -180,11 +180,12 @@ TEST_CASE("SlotRegistry reorganize preserves slot data", "[slot_registry][reorga
     reg.get_mut(1)->endless_spool_backup = 2;
 
     // Reorganize into 2 units — s1 moves from index 1 to a new position
-    std::map<std::string, std::vector<std::string>> unit_map = {
-        {"Unit_B", {"s1"}},       // s1 now at global 0 (Unit_B sorts before Unit_Z)
-        {"Unit_Z", {"s0", "s2"}}, // s0 at global 1, s2 at global 2
+    // Unit_B first (s1 at global 0), then Unit_Z (s0 at global 1, s2 at global 2)
+    std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
+        {"Unit_B", {"s1"}},
+        {"Unit_Z", {"s0", "s2"}},
     };
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
     SECTION("s1 data preserved at new position") {
         const auto* entry = reg.find_by_name("s1");
@@ -217,10 +218,10 @@ TEST_CASE("SlotRegistry reorganize with new and removed slots", "[slot_registry]
     reg.get_mut(0)->info.color_rgb = 0xAAAAAA;
 
     // Reorganize: s1 removed, s3 added
-    std::map<std::string, std::vector<std::string>> unit_map = {
+    std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
         {"Unit", {"s0", "s2", "s3"}},
     };
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
     SECTION("s0 preserved") {
         REQUIRE(reg.find_by_name("s0")->info.color_rgb == 0xAAAAAA);
@@ -245,51 +246,24 @@ TEST_CASE("SlotRegistry reorganize with new and removed slots", "[slot_registry]
 TEST_CASE("SlotRegistry idempotent reorganize", "[slot_registry][reorganize]") {
     SlotRegistry reg;
 
-    std::map<std::string, std::vector<std::string>> unit_map = {
+    std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
         {"Alpha", {"a0", "a1"}},
         {"Beta", {"b0", "b1"}},
     };
 
     reg.initialize("temp", {"a0", "a1", "b0", "b1"});
     reg.get_mut(0)->info.color_rgb = 0x112233;
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
     // Capture state
     auto color_before = reg.get(0)->info.color_rgb;
     auto name_before = reg.get(0)->backend_name;
 
     // Reorganize again with same layout
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
     REQUIRE(reg.get(0)->info.color_rgb == color_before);
     REQUIRE(reg.get(0)->backend_name == name_before);
-}
-
-TEST_CASE("SlotRegistry matches_layout", "[slot_registry][reorganize]") {
-    SlotRegistry reg;
-
-    std::map<std::string, std::vector<std::string>> layout = {
-        {"A", {"s0", "s1"}},
-        {"B", {"s2", "s3"}},
-    };
-
-    reg.initialize("temp", {"s0", "s1", "s2", "s3"});
-    reg.reorganize(layout);
-
-    REQUIRE(reg.matches_layout(layout));
-
-    // Different slot in a unit
-    std::map<std::string, std::vector<std::string>> different = {
-        {"A", {"s0", "s1"}},
-        {"B", {"s2", "s99"}},
-    };
-    REQUIRE_FALSE(reg.matches_layout(different));
-
-    // Different unit count
-    std::map<std::string, std::vector<std::string>> fewer_units = {
-        {"A", {"s0", "s1", "s2", "s3"}},
-    };
-    REQUIRE_FALSE(reg.matches_layout(fewer_units));
 }
 
 TEST_CASE("SlotRegistry tool mapping", "[slot_registry][tool_mapping]") {
@@ -330,11 +304,12 @@ TEST_CASE("SlotRegistry tool mapping", "[slot_registry][tool_mapping]") {
     SECTION("tool mapping survives reorganize") {
         reg.set_tool_mapping(1, 7);
 
-        std::map<std::string, std::vector<std::string>> unit_map = {
-            {"B", {"s2", "s3"}},
+        // Pass A first so s0,s1 are at global 0-1, then B with s2,s3 at 2-3
+        std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
             {"A", {"s0", "s1"}},
+            {"B", {"s2", "s3"}},
         };
-        reg.reorganize(unit_map);
+        reg.reorganize(unit_vec);
 
         // s1 moved — verify via name lookup
         const auto* s1 = reg.find_by_name("s1");
@@ -430,15 +405,15 @@ TEST_CASE("SlotRegistry mixed topology slot index correctness", "[slot_registry]
     };
     reg.initialize_units(discovery_order);
 
-    // Now reorganize (sorts alphabetically)
-    std::map<std::string, std::vector<std::string>> unit_map = {
+    // Now reorganize — pass in desired order (Box_Turtle first, then OpenAMS units)
+    std::vector<std::pair<std::string, std::vector<std::string>>> unit_vec = {
         {"Box_Turtle Turtle_1", {"lane0", "lane1", "lane2", "lane3"}},
         {"OpenAMS AMS_1", {"lane4", "lane5", "lane6", "lane7"}},
         {"OpenAMS AMS_2", {"lane8", "lane9", "lane10", "lane11"}},
     };
-    reg.reorganize(unit_map);
+    reg.reorganize(unit_vec);
 
-    SECTION("Box Turtle sorts first") {
+    SECTION("Box Turtle is first (given order)") {
         REQUIRE(reg.unit(0).name == "Box_Turtle Turtle_1");
         REQUIRE(reg.unit(0).first_slot == 0);
     }
@@ -466,6 +441,38 @@ TEST_CASE("SlotRegistry mixed topology slot index correctness", "[slot_registry]
         for (int i = 0; i < 12; ++i) {
             std::string name = "lane" + std::to_string(i);
             REQUIRE(reg.index_of(name) == i);
+        }
+    }
+}
+
+TEST_CASE("SlotRegistry reorganize respects given unit order", "[slot_registry][reorganize]") {
+    SlotRegistry reg;
+
+    // 4 units, passed in lane-number order (as the AFC backend now sorts them)
+    std::vector<std::pair<std::string, std::vector<std::string>>> units = {
+        {"Box_Turtle Turtle_1", {"lane0", "lane1", "lane2", "lane3"}},
+        {"OpenAMS AMS_1", {"lane4", "lane5", "lane6", "lane7"}},
+        {"ACE ace_1", {"lane8", "lane9", "lane10", "lane11"}},
+        {"Box_Turtle Turtle_2", {"lane12", "lane13", "lane14", "lane15"}},
+    };
+    // Flat initialization with all 16 lanes before reorganizing into units
+    std::vector<std::string> all_lanes;
+    for (int i = 0; i < 16; ++i)
+        all_lanes.push_back("lane" + std::to_string(i));
+    reg.initialize("temp", all_lanes);
+    reg.reorganize(units);
+
+    SECTION("units in given order, not alphabetical") {
+        // With std::map, ACE would sort first. With vector, order is preserved.
+        REQUIRE(reg.unit(0).name == "Box_Turtle Turtle_1");
+        REQUIRE(reg.unit(1).name == "OpenAMS AMS_1");
+        REQUIRE(reg.unit(2).name == "ACE ace_1");
+        REQUIRE(reg.unit(3).name == "Box_Turtle Turtle_2");
+    }
+
+    SECTION("lane indices match physical order") {
+        for (int i = 0; i < 16; ++i) {
+            REQUIRE(reg.name_of(i) == "lane" + std::to_string(i));
         }
     }
 }

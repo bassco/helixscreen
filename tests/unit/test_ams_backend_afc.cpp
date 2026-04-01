@@ -3535,7 +3535,7 @@ TEST_CASE("AFC 3-unit incremental arrival preserves all unit lanes",
     REQUIRE(total_slots == 12);
 
     // Specifically verify that Turtle_1's lanes (8-11) have color/material from stepper data
-    // Find Turtle unit - after reorganize, units are sorted alphabetically
+    // Find Turtle unit - after reorganize, units are sorted by min lane number
     bool found_turtle = false;
     for (const auto& unit : info.units) {
         if (unit.name.find("Turtle") != std::string::npos) {
@@ -3547,6 +3547,78 @@ TEST_CASE("AFC 3-unit incremental arrival preserves all unit lanes",
         }
     }
     CHECK(found_turtle);
+}
+
+// ============================================================================
+// 4-unit ordering: units sorted by min lane number, not name (#554)
+// ============================================================================
+
+TEST_CASE("AFC 4-unit ordering by lane number not unit name",
+          "[ams][afc][mixed][toolchanger]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_zero_based(16);
+    helper.initialize_slots_from_discovery();
+
+    // Feed AFC state: 4 units in Moonraker JSON order (last unit first)
+    // This reproduces #554 where unit discovery order caused wrong display
+    nlohmann::json afc_state;
+    afc_state["units"] = nlohmann::json::array(
+        {"Box_Turtle Turtle_2", "Box_Turtle Turtle_1", "ACE ace_1", "OpenAMS AMS_1"});
+    afc_state["lanes"] = nlohmann::json::array({});
+    for (int i = 0; i < 16; ++i)
+        afc_state["lanes"].push_back("lane" + std::to_string(i));
+    afc_state["extruders"] = nlohmann::json::array({"extruder"});
+    helper.feed_afc_state(afc_state);
+
+    // Feed stepper data for all 16 lanes
+    for (int i = 0; i < 16; ++i) {
+        std::string lane = "lane" + std::to_string(i);
+        helper.feed_afc_stepper(lane, {{"color", "FF0000"}, {"material", "PLA"},
+                                       {"spool_id", std::to_string(i)}, {"weight", 800}});
+    }
+
+    // Feed unit objects mapping lanes to units (deliberately out of physical order).
+    // Key format uses Klipper convention: "AFC_" + type (underscores stripped) + " " + name
+    auto feed_unit = [&](const std::string& klipper_key, int first_lane, int count) {
+        nlohmann::json data;
+        data["lanes"] = nlohmann::json::array();
+        for (int i = first_lane; i < first_lane + count; ++i)
+            data["lanes"].push_back("lane" + std::to_string(i));
+        data["extruders"] = nlohmann::json::array({"extruder"});
+        data["hubs"] = nlohmann::json::array();
+        data["buffers"] = nlohmann::json::array();
+        nlohmann::json params;
+        params[klipper_key] = data;
+        helper.feed_status_update(params);
+    };
+
+    // Unit with lanes 12-15 arrives FIRST (the bug scenario from #554)
+    feed_unit("AFC_BoxTurtle Turtle_2", 12, 4);
+    feed_unit("AFC_BoxTurtle Turtle_1", 0, 4);
+    feed_unit("AFC_ACE ace_1", 8, 4);
+    feed_unit("AFC_OpenAMS AMS_1", 4, 4);
+
+    auto info = helper.get_system_info();
+    REQUIRE(info.units.size() == 4);
+
+    // Units must be ordered by min lane number, NOT alphabetically:
+    // - Turtle_1 (lanes 0-3) first
+    // - AMS_1 (lanes 4-7) second
+    // - ace_1 (lanes 8-11) third
+    // - Turtle_2 (lanes 12-15) fourth
+    // With alphabetical sort, "ACE ace_1" would wrongly be first
+    CHECK(info.units[0].name.find("Turtle_1") != std::string::npos);
+    CHECK(info.units[1].name.find("AMS_1") != std::string::npos);
+    CHECK(info.units[2].name.find("ace_1") != std::string::npos);
+    CHECK(info.units[3].name.find("Turtle_2") != std::string::npos);
+
+    // All 16 lanes should map correctly by global index
+    REQUIRE(info.total_slots == 16);
+    int total = 0;
+    for (const auto& unit : info.units) {
+        total += static_cast<int>(unit.slots.size());
+    }
+    CHECK(total == 16);
 }
 
 // ============================================================================

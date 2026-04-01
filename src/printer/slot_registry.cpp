@@ -64,7 +64,7 @@ void SlotRegistry::initialize_units(
 }
 
 void SlotRegistry::reorganize(
-    const std::map<std::string, std::vector<std::string>>& unit_slot_map) {
+    const std::vector<std::pair<std::string, std::vector<std::string>>>& unit_slot_map) {
     // Stash existing slot data by backend_name
     std::unordered_map<std::string, SlotEntry> stash;
     for (auto& slot : slots_) {
@@ -74,7 +74,6 @@ void SlotRegistry::reorganize(
     slots_.clear();
     units_.clear();
 
-    // std::map iterates in sorted key order (alphabetical unit names)
     int global_offset = 0;
     int unit_idx = 0;
     for (const auto& [unit_name, slot_names] : unit_slot_map) {
@@ -113,29 +112,6 @@ void SlotRegistry::reorganize(
 
     rebuild_reverse_maps();
     initialized_ = true;
-}
-
-bool SlotRegistry::matches_layout(
-    const std::map<std::string, std::vector<std::string>>& unit_slot_map) const {
-    if (static_cast<int>(unit_slot_map.size()) != static_cast<int>(units_.size()))
-        return false;
-
-    // Look up each unit by name rather than assuming positional alignment,
-    // since units_ may not be sorted if initialized via initialize()/initialize_units()
-    for (int u = 0; u < static_cast<int>(units_.size()); ++u) {
-        const auto& reg_unit = units_[u];
-        auto it = unit_slot_map.find(reg_unit.name);
-        if (it == unit_slot_map.end())
-            return false;
-        if (reg_unit.slot_count != static_cast<int>(it->second.size()))
-            return false;
-
-        for (int s = 0; s < reg_unit.slot_count; ++s) {
-            if (slots_[reg_unit.first_slot + s].backend_name != it->second[s])
-                return false;
-        }
-    }
-    return true;
 }
 
 int SlotRegistry::slot_count() const {

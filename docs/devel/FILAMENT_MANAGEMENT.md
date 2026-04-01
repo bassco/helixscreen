@@ -111,7 +111,7 @@ slots_.reorganize(unit_lane_map);           // Preserves slot data across layout
 **Key design decisions:**
 - SlotRegistry does NOT hold a mutex -- the owning backend's mutex protects all access
 - `build_slot_info()` constructs a `SlotInfo` snapshot, avoiding shared mutable state
-- `reorganize()` uses `matches_layout()` to skip no-op rebuilds on repeated status updates
+- `reorganize()` takes an ordered vector of unit/lane pairs — caller controls unit ordering
 - Slot names remain backend-specific ("lane1" for AFC, "Gate 0" for Happy Hare) -- SlotRegistry is agnostic
 
 ### Threading Model

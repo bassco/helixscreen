@@ -17,9 +17,33 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <climits>
 #include <sstream>
 
 using namespace helix;
+
+namespace {
+
+// Extract trailing numeric suffix from a string (e.g., "lane12" → 12, "Turtle_1" → 1).
+// Returns INT_MAX if no digits found, so non-numeric names sort last.
+int trailing_number(const std::string& s) {
+    auto pos = s.find_last_not_of("0123456789");
+    if (pos == std::string::npos || pos == s.size() - 1)
+        return INT_MAX;
+    return std::stoi(s.substr(pos + 1));
+}
+
+// Natural sort by trailing number, then lexicographic tiebreak.
+// "lane2" < "lane10", "Turtle_1" < "Turtle_2" < "Turtle_10"
+bool natural_less(const std::string& a, const std::string& b) {
+    int na = trailing_number(a);
+    int nb = trailing_number(b);
+    if (na != nb)
+        return na < nb;
+    return a < b;
+}
+
+} // namespace
 
 // ============================================================================
 // Construction / Destruction
@@ -1725,12 +1749,12 @@ void AmsBackendAfc::parse_lane_data(const nlohmann::json& lane_data) {
     //   "lane2": {"color": "00FF00", "material": "PETG", "loaded": true, ...}
     // }
 
-    // Extract lane names and sort them for consistent ordering
+    // Extract lane names and sort numerically (lane2 < lane10, not alphabetically)
     std::vector<std::string> new_lane_names;
     for (auto it = lane_data.begin(); it != lane_data.end(); ++it) {
         new_lane_names.push_back(it.key());
     }
-    std::sort(new_lane_names.begin(), new_lane_names.end());
+    std::sort(new_lane_names.begin(), new_lane_names.end(), natural_less);
 
     // Initialize lanes if this is the first time or count changed
     if (!slots_.is_initialized() ||
@@ -1907,10 +1931,21 @@ void AmsBackendAfc::reorganize_slots() {
         return;
     }
 
-    // Reorganize registry (preserves slot data, handles name→index mapping)
-    std::map<std::string, std::vector<std::string>> sorted_map(unit_lane_map_.begin(),
-                                                               unit_lane_map_.end());
-    slots_.reorganize(sorted_map);
+    // Sort units by their lowest lane number so physical order is preserved
+    // (e.g., unit with lane0-3 before unit with lane12-15, regardless of unit name)
+    std::vector<std::pair<std::string, std::vector<std::string>>> sorted_units(
+        unit_lane_map_.begin(), unit_lane_map_.end());
+    for (auto& [name, lanes] : sorted_units) {
+        std::sort(lanes.begin(), lanes.end(), natural_less);
+    }
+    std::sort(sorted_units.begin(), sorted_units.end(),
+              [](const auto& a, const auto& b) {
+                  int min_a = a.second.empty() ? INT_MAX : trailing_number(a.second.front());
+                  int min_b = b.second.empty() ? INT_MAX : trailing_number(b.second.front());
+                  if (min_a != min_b) return min_a < min_b;
+                  return a.first < b.first;
+              });
+    slots_.reorganize(sorted_units);
 
     // Rebuild system_info_.units for unit-level metadata (connected, topology,
     // hub_sensor, buffer_health, hub_tool_label) that the registry doesn't track.
@@ -1918,7 +1953,7 @@ void AmsBackendAfc::reorganize_slots() {
     int global_slot_offset = 0;
     int unit_idx = 0;
 
-    for (const auto& [unit_name, lanes] : sorted_map) {
+    for (const auto& [unit_name, lanes] : sorted_units) {
         AmsUnit unit;
         unit.unit_index = unit_idx;
         unit.name = unit_name;

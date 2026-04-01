@@ -3,7 +3,6 @@
 
 #include "ams_types.h"
 
-#include <map>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -59,8 +58,8 @@ class SlotRegistry {
     initialize_units(const std::vector<std::pair<std::string, std::vector<std::string>>>& units);
 
     // === Reorganization (atomic) ===
-    void reorganize(const std::map<std::string, std::vector<std::string>>& unit_slot_map);
-    bool matches_layout(const std::map<std::string, std::vector<std::string>>& unit_slot_map) const;
+    void reorganize(
+        const std::vector<std::pair<std::string, std::vector<std::string>>>& unit_slot_map);
 
     // === Slot access ===
     int slot_count() const;
