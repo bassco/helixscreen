@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "input_device_scanner.h"
+#include "config.h"
 #include "touch_calibration.h"
 
 #include <algorithm>
@@ -267,7 +268,20 @@ std::optional<ScannedDevice> find_keyboard_device(const std::string& dev_base,
 }
 
 std::optional<ScannedDevice> find_keyboard_device() {
-    return find_keyboard_device("/dev/input", "/sys/class/input");
+    // Read scanner device ID directly from Config to exclude it from keyboard
+    // detection. We use Config instead of SettingsManager because this runs
+    // during display backend init, before SettingsManager::init_subjects().
+    std::string exclude_id;
+    try {
+        Config* config = Config::get_instance();
+        if (config) {
+            exclude_id = config->get<std::string>(
+                config->df() + "scanner/usb_vendor_product", "");
+        }
+    } catch (...) {
+        // Config may not be initialized yet during very early startup
+    }
+    return find_keyboard_device("/dev/input", "/sys/class/input", exclude_id);
 }
 
 std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base,
