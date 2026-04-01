@@ -32,7 +32,7 @@
     <!-- Pre-rendered gradient background (LVGL native .bin for instant blitting)
          Source updated at runtime by C++ based on theme mode (dark/light) and card size -->
     <lv_image name="gradient_bg"
-              width="100%" height="100%"/>
+              width="100%" height="100%" inner_align="stretch"/>
     <!-- Thumbnail image - pre-scaled to display size via ThumbnailProcessor
          Source images are now ~160x160 (matching card size) instead of 300x300,
          so contain scaling is nearly 1:1 with minimal CPU overhead -->

@@ -159,15 +159,7 @@
     <percentage name="card_width" value="45%"/>
     <percentage name="card_height" value="80%"/>
 
-    <!-- ===================================================================== -->
-    <!-- Pre-rendered Gradient Background Paths (dark/light theme variants)  -->
-    <!-- ===================================================================== -->
-    <!-- Card gradients (print file cards in grid view) -->
-    <string name="gradient_card_medium_dark" value="A:assets/images/gradient-card-medium-dark.bin"/>
-    <string name="gradient_card_medium_light" value="A:assets/images/gradient-card-medium-light.bin"/>
-    <!-- Panel gradients (detail overlays: print status, file detail, history) -->
-    <string name="gradient_panel_medium_dark" value="A:assets/images/gradient-panel-medium-dark.bin"/>
-    <string name="gradient_panel_medium_light" value="A:assets/images/gradient-panel-medium-light.bin"/>
+    <!-- Panel gradient paths are hardcoded in XML files that use them -->
 
     <!-- Preview/thumbnail vertical offset to account for metadata overlays -->
     <!-- Shifts content up to prevent overlap with bottom metadata areas -->

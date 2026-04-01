@@ -27,7 +27,7 @@
         clickable="true">
     <!-- Pre-rendered gradient background -->
     <lv_image name="gradient_bg"
-              width="100%" height="100%"/>
+              width="100%" height="100%" inner_align="stretch"/>
     <!-- Thumbnail image -->
     <lv_image name="thumbnail"
               width="100%" height="100%" src="$thumbnail_src" align="center" inner_align="contain"/>

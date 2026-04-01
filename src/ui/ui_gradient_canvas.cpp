@@ -29,7 +29,7 @@ namespace {
 constexpr uint8_t DEFAULT_START_GRAY = 123; // Top-right - brighter
 constexpr uint8_t DEFAULT_END_GRAY = 43;    // Bottom-left - darker
 
-// Light theme gradient colors (from pre-rendered gradient-card-*-light.bin)
+// Light theme gradient colors
 constexpr uint8_t LIGHT_START_GRAY = 235; // Top-right - brighter
 constexpr uint8_t LIGHT_END_GRAY = 188;   // Bottom-left - darker
 
