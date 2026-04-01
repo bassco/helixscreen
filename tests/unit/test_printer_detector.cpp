@@ -67,6 +67,21 @@ class PrinterDetectorFixture {
                                    .hostname = "k1-max"};
     }
 
+    // Create Snapmaker U1 fingerprint (multi-extruder, RFID reader)
+    PrinterHardwareData snapmaker_u1_hardware() {
+        return PrinterHardwareData{
+            .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+            .fans = {"fan", "fan_generic e1_fan", "fan_generic e2_fan", "fan_generic e3_fan"},
+            .hostname = "snapmaker-u1",
+            .printer_objects = {"fm175xx_reader", "gcode_macro FILAMENT_DT_UPDATE",
+                                "gcode_macro FILAMENT_DT_QUERY", "tool", "camera",
+                                "tmc2240 stepper_x", "purifier",
+                                "gcode_macro EXTRUDER_OFFSET_ACTION_PROBE_CALIBRATE_ALL"},
+            .kinematics = "cartesian",
+            .build_volume = {.x_min = 0, .x_max = 270, .y_min = 0, .y_max = 270, .z_max = 400},
+            .cpu_arch = "aarch64"};
+    }
+
     // Create Creality Ender 3 fingerprint
     PrinterHardwareData creality_ender3_hardware() {
         return PrinterHardwareData{.heaters = {"extruder", "heater_bed"},
@@ -3069,4 +3084,45 @@ TEST_CASE("Creality K1 printer detection", "[printer_detector]") {
 
     // Clean up
     config->set<std::string>(type_path, "");
+}
+
+// ============================================================================
+// Preset Field Tests
+// ============================================================================
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: Detect Snapmaker U1 with preset field",
+                 "[printer][snapmaker][preset]") {
+    auto hardware = snapmaker_u1_hardware();
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "Snapmaker U1");
+    REQUIRE(result.confidence >= 95);
+    REQUIRE(result.preset == "snapmaker_u1");
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: Detect Creality K1 with preset field",
+                 "[printer][preset]") {
+    auto hardware = creality_k1_hardware();
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    // K1 Max matches due to hostname "k1-max"
+    REQUIRE(result.type_name == "Creality K1 Max");
+    REQUIRE(result.confidence >= 85);
+    REQUIRE(result.preset == "k1");
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: Generic printer has empty preset field",
+                 "[printer][preset]") {
+    auto hardware = voron_v2_hardware();
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "Voron 2.4");
+    // Voron has no preset in the database
+    REQUIRE(result.preset.empty());
 }

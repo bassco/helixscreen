@@ -710,6 +710,11 @@ PrinterDetectionResult PrinterDetector::detect(const PrinterHardwareData& hardwa
                  result.best_single_confidence == best_match.best_single_confidence &&
                  result.match_count > best_match.match_count)) {
                 best_match = result;
+                if (printer.contains("preset") && printer["preset"].is_string()) {
+                    best_match.preset = printer["preset"].get<std::string>();
+                } else {
+                    best_match.preset.clear();
+                }
             }
         }
 

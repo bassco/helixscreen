@@ -24,6 +24,7 @@ struct PrinterDetectionResult {
     std::string reason;    ///< Human-readable detection reasoning
     int match_count = 1;   ///< Number of matching heuristics (for combined scoring)
     int best_single_confidence = 0; ///< Highest individual heuristic confidence (tiebreaker)
+    std::string preset;    ///< Platform preset name from DB (e.g., "k1", "snapmaker_u1"), empty if none
 
     /**
      * @brief Check if detection succeeded
