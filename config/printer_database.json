@@ -4090,6 +4090,10 @@
       "name": "Snapmaker U1",
       "manufacturer": "Snapmaker",
       "image": "snapmaker-u1.png",
+      "toolhead_style": "snapmaker_u1",
+      "probe_type": "eddy_current",
+      "preset": "snapmaker_u1",
+      "z_offset_calibration_strategy": "probe_calibrate",
       "print_start_profile": "snapmaker_u1",
       "heuristics": [
         {
@@ -4154,6 +4158,65 @@
           "pattern": "u1",
           "confidence": 90,
           "reason": "Hostname contains 'u1' (Snapmaker U1)"
+        },
+        {
+          "type": "tool_count",
+          "field": "heaters",
+          "pattern": "tool_count_4",
+          "confidence": 75,
+          "reason": "Exactly 4 extruders (U1 toolchanger)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 255,
+          "max_x": 285,
+          "min_y": 255,
+          "max_y": 285,
+          "confidence": 50,
+          "reason": "Build volume ~270mm (Snapmaker U1 bed plate)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "e1_fan",
+          "confidence": 70,
+          "reason": "Per-tool fan e1_fan (Snapmaker U1 naming)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "e2_fan",
+          "confidence": 70,
+          "reason": "Per-tool fan e2_fan (Snapmaker U1 naming)"
+        },
+        {
+          "type": "fan_match",
+          "field": "fans",
+          "pattern": "e3_fan",
+          "confidence": 70,
+          "reason": "Per-tool fan e3_fan (Snapmaker U1 naming)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "purifier",
+          "confidence": 75,
+          "reason": "Built-in air purifier (Snapmaker U1 feature)"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "EXTRUDER_OFFSET_ACTION_PROBE_CALIBRATE_ALL",
+          "confidence": 85,
+          "reason": "U1-specific multi-tool probe calibration macro"
+        },
+        {
+          "type": "cpu_arch_match",
+          "field": "cpu_arch",
+          "pattern": "aarch64",
+          "confidence": 10,
+          "reason": "ARM64 architecture (low confidence, stacks with other signals)"
         }
       ]
     },
