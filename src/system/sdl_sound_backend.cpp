@@ -122,7 +122,13 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
     auto* out = reinterpret_cast<float*>(stream);
     int num_samples = len / static_cast<int>(sizeof(float));
 
-    // Check for external render source (tracker PCM playback)
+    // Start with silence in mix buffer
+    auto* mix = self->mix_buf_.data();
+    auto* vbuf = self->voice_buf_.data();
+    std::memset(mix, 0, num_samples * sizeof(float));
+    bool has_audio = false;
+
+    // Render tracker PCM if active
     {
         std::function<void(float*, size_t, int)> source;
         {
@@ -130,36 +136,14 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
             source = self->render_source_;
         }
         if (source) {
-            source(out, static_cast<size_t>(num_samples), self->sample_rate_);
-            // Apply filter if active
-            if (self->filter_type_.load(std::memory_order_acquire) !=
-                helix::audio::FilterType::NONE) {
-                helix::audio::apply_filter(self->filter_, out, num_samples);
-            }
-            return;
+            source(mix, static_cast<size_t>(num_samples), self->sample_rate_);
+            has_audio = true;
         }
     }
 
     std::atomic_thread_fence(std::memory_order_acquire);
 
-    // Check if any voice is active
-    bool any_active = false;
-    for (int v = 0; v < MAX_VOICES; ++v) {
-        if (self->voices_[v].amplitude.load(std::memory_order_relaxed) > 0.001f) {
-            any_active = true;
-            break;
-        }
-    }
-    if (!any_active) {
-        std::memset(stream, 0, static_cast<size_t>(len));
-        return;
-    }
-
-    // Mix all active voices
-    auto* mix = self->mix_buf_.data();
-    auto* vbuf = self->voice_buf_.data();
-    std::memset(mix, 0, num_samples * sizeof(float));
-
+    // Mix synth voices on top (SFX layered over tracker)
     for (int v = 0; v < MAX_VOICES; ++v) {
         float amp = self->voices_[v].amplitude.load(std::memory_order_relaxed);
         if (amp <= 0.001f) {
@@ -178,6 +162,12 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
 
         for (int i = 0; i < num_samples; ++i)
             mix[i] += vbuf[i];
+        has_audio = true;
+    }
+
+    if (!has_audio) {
+        std::memset(stream, 0, static_cast<size_t>(len));
+        return;
     }
 
     // Clamp

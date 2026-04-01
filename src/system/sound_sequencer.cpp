@@ -117,14 +117,16 @@ void SoundSequencer::sequencer_loop() {
             }
         }
 
-        // External tick routing (for TrackerPlayer)
+        // External tick routing (for TrackerPlayer) and SFX playback.
+        // Both can run concurrently on PCM-capable backends (SDL, ALSA).
         std::function<void(float)> ext_tick;
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             ext_tick = external_tick_;
         }
 
-        if (ext_tick) {
+        bool has_work = ext_tick || playing_.load();
+        if (has_work) {
             if (!was_playing) {
                 last_tick = std::chrono::steady_clock::now();
                 was_playing = true;
@@ -133,23 +135,13 @@ void SoundSequencer::sequencer_loop() {
             float dt_ms = std::chrono::duration<float, std::milli>(now - last_tick).count();
             last_tick = now;
             dt_ms = std::min(dt_ms, 5.0f);
-            ext_tick(dt_ms);
-        } else if (playing_.load()) {
-            // Reset last_tick when transitioning to playing to avoid
-            // counting queue processing time as elapsed playback time
-            if (!was_playing) {
-                last_tick = std::chrono::steady_clock::now();
-                was_playing = true;
+
+            if (ext_tick) {
+                ext_tick(dt_ms);
             }
-
-            auto now = std::chrono::steady_clock::now();
-            float dt_ms = std::chrono::duration<float, std::milli>(now - last_tick).count();
-            last_tick = now;
-
-            // Cap dt to avoid huge jumps from scheduling delays
-            dt_ms = std::min(dt_ms, 5.0f);
-
-            tick(dt_ms);
+            if (playing_.load()) {
+                tick(dt_ms);
+            }
         } else {
             was_playing = false;
             last_tick = std::chrono::steady_clock::now();

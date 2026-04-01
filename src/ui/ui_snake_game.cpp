@@ -19,6 +19,8 @@
 #include "config.h"
 #include "display_backend.h"
 #include "display_manager.h"
+#include "sound_manager.h"
+#include "sound_theme.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -52,6 +54,10 @@ static constexpr uint32_t DEATH_FLASH_DURATION = 50;
 static constexpr uint32_t DEATH_SHRINK_DURATION = 200;
 static constexpr uint32_t DEATH_CARD_TIME = 300;
 static constexpr uint32_t DEATH_INPUT_READY_TIME = 600;
+static constexpr uint32_t TRACKER_FADE_MS = 500;
+
+// Tracker music asset
+static constexpr const char* SNAKE_MUSIC_PATH = "assets/sounds/elysium.mod";
 
 // Filament colors for snake body (random at game start)
 static constexpr uint32_t FILAMENT_COLORS[] = {
@@ -412,6 +418,113 @@ void update_particles(float dt) {
 // GAME LOGIC
 // ============================================================================
 
+// ============================================================================
+// SOUND
+// ============================================================================
+
+#ifdef HELIX_HAS_SOUND
+SoundDefinition make_sfx(std::vector<SoundStep> steps) {
+    SoundDefinition def;
+    def.name = "snake_sfx";
+    def.steps = std::move(steps);
+    return def;
+}
+
+void play_sfx_eat() {
+    auto& sm = SoundManager::instance();
+    if (!sm.has_backend()) return;
+    SoundStep s;
+    s.freq_hz = 440;
+    s.duration_ms = 80;
+    s.wave = Waveform::SQUARE;
+    s.velocity = 0.6f;
+    s.sweep = {"freq", 880};
+    s.envelope = {2, 10, 0.5f, 30};
+    sm.play(make_sfx({s}), SoundPriority::UI);
+}
+
+void play_sfx_die() {
+    auto& sm = SoundManager::instance();
+    if (!sm.has_backend()) return;
+    SoundStep s;
+    s.freq_hz = 220;
+    s.duration_ms = 200;
+    s.wave = Waveform::SAW;
+    s.velocity = 0.8f;
+    s.sweep = {"freq", 55};
+    s.envelope = {5, 30, 0.4f, 80};
+    sm.play(make_sfx({s}), SoundPriority::UI);
+}
+
+void play_sfx_speedup() {
+    auto& sm = SoundManager::instance();
+    if (!sm.has_backend()) return;
+    // C5→E5→G5 arpeggio
+    SoundStep s1, s2, s3;
+    s1.freq_hz = 523;
+    s1.duration_ms = 50;
+    s1.wave = Waveform::SQUARE;
+    s1.velocity = 0.5f;
+    s1.envelope = {2, 10, 0.6f, 15};
+    s2 = s1;
+    s2.freq_hz = 659;
+    s3 = s1;
+    s3.freq_hz = 784;
+    sm.play(make_sfx({s1, s2, s3}), SoundPriority::UI);
+}
+
+void play_sfx_start() {
+    auto& sm = SoundManager::instance();
+    if (!sm.has_backend()) return;
+    // C4→G4 rising interval
+    SoundStep s1, s2;
+    s1.freq_hz = 262;
+    s1.duration_ms = 60;
+    s1.wave = Waveform::SQUARE;
+    s1.velocity = 0.5f;
+    s1.envelope = {2, 10, 0.6f, 20};
+    s2 = s1;
+    s2.freq_hz = 392;
+    sm.play(make_sfx({s1, s2}), SoundPriority::UI);
+}
+#else
+void play_sfx_eat() {}
+void play_sfx_die() {}
+void play_sfx_speedup() {}
+void play_sfx_start() {}
+#endif
+
+void start_music() {
+#ifdef HELIX_HAS_TRACKER
+    auto& sm = SoundManager::instance();
+    if (sm.has_backend()) {
+        sm.play_file(SNAKE_MUSIC_PATH, SoundPriority::UI);
+    }
+#endif
+}
+
+void stop_music() {
+#ifdef HELIX_HAS_TRACKER
+    auto& sm = SoundManager::instance();
+    if (sm.is_tracker_playing()) {
+        sm.stop_tracker();
+    }
+#endif
+}
+
+void fade_music() {
+#ifdef HELIX_HAS_TRACKER
+    auto& sm = SoundManager::instance();
+    if (sm.is_tracker_playing()) {
+        sm.fade_out_tracker(TRACKER_FADE_MS);
+    }
+#endif
+}
+
+// ============================================================================
+// HIGH SCORE
+// ============================================================================
+
 void load_high_score() {
     auto* cfg = Config::get_instance();
     if (cfg) {
@@ -477,6 +590,9 @@ void init_game() {
     if (g_gameover_label) {
         lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
     }
+
+    play_sfx_start();
+    start_music();
 }
 
 void place_food() {
@@ -569,6 +685,7 @@ void game_logic_tick() {
     if (new_head == g_game.food) {
         g_game.score++;
         update_score_label();
+        play_sfx_eat();
 
         // Spawn eat particles at food pixel position
         int32_t fpx, fpy;
@@ -581,6 +698,7 @@ void game_logic_tick() {
         if (g_game.score % SPEED_UP_INTERVAL == 0 && g_game.tick_ms > MIN_TICK_MS) {
             g_game.tick_ms -= 10;
             g_game.speed_tier = g_game.score / SPEED_UP_INTERVAL;
+            play_sfx_speedup();
         }
     } else {
         // Remove tail (no growth) - add freed cell back
@@ -666,6 +784,9 @@ void show_game_over() {
     // Start death animation
     g_render.death_start_ms = lv_tick_get();
     g_render.death_input_ready = false;
+
+    play_sfx_die();
+    fade_music();
 
     // Update score label to reflect new high score
     update_score_label();
@@ -1223,9 +1344,9 @@ void create_overlay() {
     lv_obj_add_event_cb(g_close_btn, close_cb, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t* close_label = lv_label_create(g_close_btn);
-    lv_label_set_text(close_label, "X");
+    lv_label_set_text(close_label, "\xF3\xB0\x85\x96"); // MDI close/xmark (F0156)
     lv_obj_set_style_text_color(close_label, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_text_font(close_label, theme_manager_get_font("font_heading"), LV_PART_MAIN);
+    lv_obj_set_style_text_font(close_label, theme_manager_get_font("icon_font_sm"), LV_PART_MAIN);
     lv_obj_center(close_label);
 
     // === Game area ===
@@ -1279,6 +1400,7 @@ void create_overlay() {
     lv_obj_align(g_gameover_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(g_gameover_label, LV_OBJ_FLAG_FLOATING);
+    lv_obj_remove_flag(g_gameover_label, LV_OBJ_FLAG_CLICKABLE);
 
     // Create D-pad if in DPAD mode
     if (g_input.mode == InputMode::DPAD) {
@@ -1333,6 +1455,7 @@ void destroy_overlay() {
     g_input.swipe_handled = false;
     g_input.queue_count = 0;
 
+    stop_music();
     spdlog::info("[SnakeGame] Game closed");
 }
 

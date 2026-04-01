@@ -132,10 +132,15 @@ void SoundManager::play(const std::string& sound_name, SoundPriority priority) {
 
 #ifdef HELIX_HAS_TRACKER
     if (tracker_ && tracker_->is_playing()) {
-        if (static_cast<int>(priority) >= static_cast<int>(tracker_priority_)) {
+        if (static_cast<int>(priority) >= static_cast<int>(SoundPriority::ALARM)) {
+            // ALARM always kills tracker
             stop_tracker();
+        } else if (backend_ && backend_->supports_render_source()) {
+            // PCM-capable backend — SFX layers on top of tracker, no preemption
+            spdlog::trace("[SoundManager] play('{}') layered with tracker", sound_name);
         } else {
-            spdlog::debug("[SoundManager] play('{}') skipped - tracker at higher priority",
+            // Frequency-only backend — can't mix, skip SFX
+            spdlog::debug("[SoundManager] play('{}') skipped - tracker active, no mixing",
                           sound_name);
             return;
         }
@@ -144,6 +149,23 @@ void SoundManager::play(const std::string& sound_name, SoundPriority priority) {
 
     sequencer_->play(it->second, priority);
     spdlog::debug("[SoundManager] play('{}', priority={})", sound_name, static_cast<int>(priority));
+}
+
+void SoundManager::play(const SoundDefinition& sound, SoundPriority priority) {
+    if (!AudioSettingsManager::instance().get_sounds_enabled()) return;
+    if (!sequencer_ || !backend_) return;
+
+#ifdef HELIX_HAS_TRACKER
+    if (tracker_ && tracker_->is_playing()) {
+        if (static_cast<int>(priority) >= static_cast<int>(SoundPriority::ALARM)) {
+            stop_tracker();
+        } else if (!backend_->supports_render_source()) {
+            return; // Can't mix on frequency-only backends
+        }
+    }
+#endif
+
+    sequencer_->play(sound, priority);
 }
 
 void SoundManager::play_test_beep() {
@@ -274,6 +296,10 @@ bool SoundManager::is_ui_sound(const std::string& name) {
            name == "nav_forward" || name == "nav_back" || name == "dropdown_open";
 }
 
+bool SoundManager::can_mix() const {
+    return backend_ && backend_->supports_render_source();
+}
+
 // ============================================================================
 // Tracker playback (MOD/MED files)
 // ============================================================================
@@ -340,5 +366,42 @@ void SoundManager::stop_tracker() {
 
 bool SoundManager::is_tracker_playing() const {
     return tracker_ && tracker_->is_playing();
+}
+
+void SoundManager::fade_out_tracker(uint32_t duration_ms) {
+    if (!tracker_ || !tracker_->is_playing()) return;
+
+    spdlog::debug("[SoundManager] fade_out_tracker over {}ms", duration_ms);
+
+    // Fade volume from current to 0 in steps on a background thread.
+    // TrackerPlayer::set_volume_override() is thread-safe.
+    auto* tp = tracker_.get();
+    auto fade_start = std::chrono::steady_clock::now();
+    auto fade_dur = std::chrono::milliseconds(duration_ms);
+
+    // Use sequencer thread indirectly: set up a tick-based fade via external_tick wrapper
+    auto original_tick = [tp](float dt_ms) { tp->tick(dt_ms); };
+
+    auto fade_end = fade_start + fade_dur;
+    sequencer_->set_external_tick([this, tp, original_tick, fade_start, fade_end](float dt_ms) {
+        original_tick(dt_ms);
+
+        auto now = std::chrono::steady_clock::now();
+        if (now >= fade_end) {
+            // Fade complete — stop tracker on next iteration
+            tp->set_volume_override(0);
+            // Schedule stop (can't call stop_tracker from within the tick)
+            tp->stop();
+            return;
+        }
+
+        float elapsed_ms =
+            std::chrono::duration<float, std::milli>(now - fade_start).count();
+        float total_ms =
+            std::chrono::duration<float, std::milli>(fade_end - fade_start).count();
+        float progress = elapsed_ms / total_ms;
+        int vol = static_cast<int>(100.0f * (1.0f - progress));
+        tp->set_volume_override(std::max(0, vol));
+    });
 }
 #endif

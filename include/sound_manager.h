@@ -63,6 +63,9 @@ class SoundManager {
     /// Play a named sound with explicit priority
     void play(const std::string& sound_name, SoundPriority priority);
 
+    /// Play a raw SoundDefinition directly (for hardcoded SFX)
+    void play(const SoundDefinition& sound, SoundPriority priority);
+
     /// Backward compatibility: calls play("test_beep")
     void play_test_beep();
 
@@ -94,9 +97,15 @@ class SoundManager {
     /// Stop tracker playback
     void stop_tracker();
 
+    /// Fade tracker volume to zero over duration_ms, then stop
+    void fade_out_tracker(uint32_t duration_ms);
+
     /// Check if tracker is currently playing
     bool is_tracker_playing() const;
 #endif
+
+    /// Check if backend supports concurrent tracker + SFX mixing
+    [[nodiscard]] bool can_mix() const;
 
   private:
     SoundManager() = default;
