@@ -36,6 +36,17 @@ class GridLayout {
     /// Number of defined breakpoints
     static constexpr int NUM_BREAKPOINTS = 5;
 
+    /// Target cell size in pixels for dynamic grid computation.
+    /// ULTRAWIDE/PORTRAIT layouts divide screen resolution by this to determine
+    /// cols/rows. Exposed for future features (half-width widgets, etc.).
+    static constexpr int TARGET_CELL_PX = 160;
+
+    /// Clamp range for dynamically computed grid dimensions
+    static constexpr int MIN_DYNAMIC_COLS = 4;
+    static constexpr int MAX_DYNAMIC_COLS = 16;
+    static constexpr int MIN_DYNAMIC_ROWS = 3;
+    static constexpr int MAX_DYNAMIC_ROWS = 12;
+
     /// Get grid dimensions for a given breakpoint index (0-4)
     static GridDimensions get_dimensions(int breakpoint);
 

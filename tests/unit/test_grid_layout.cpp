@@ -437,3 +437,110 @@ TEST_CASE("PanelWidgetDef: registry entries have valid scalability constraints",
         CHECK(def.rowspan <= def.effective_max_rowspan());
     }
 }
+
+// =============================================================================
+// Dynamic grid dimensions for non-standard layouts
+// =============================================================================
+
+#include "layout_manager.h"
+
+// Access LayoutManager internals for test setup.
+// Note: LayoutManagerTestAccess is also defined in test_layout_manager.cpp but
+// Catch2 amalgamated builds compile each test file separately, so no ODR conflict.
+class LayoutManagerTestAccess {
+  public:
+    static void reset(helix::LayoutManager& lm) {
+        lm.type_ = helix::LayoutType::STANDARD;
+        lm.name_ = "standard";
+        lm.override_name_.clear();
+        lm.initialized_ = false;
+        lm.width_ = 0;
+        lm.height_ = 0;
+    }
+};
+
+struct GridLayoutFixture {
+    GridLayoutFixture() {
+        LayoutManagerTestAccess::reset(helix::LayoutManager::instance());
+    }
+    ~GridLayoutFixture() {
+        LayoutManagerTestAccess::reset(helix::LayoutManager::instance());
+    }
+};
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout dimensions: ULTRAWIDE scales cols from width",
+                 "[grid_layout][dimensions][ultrawide]") {
+    auto& lm = helix::LayoutManager::instance();
+
+    SECTION("1920x440 -> 12 cols, rows from SMALL breakpoint (4)") {
+        lm.init(1920, 440);  // ULTRAWIDE, SMALL breakpoint
+        auto dims = GridLayout::get_dimensions(1); // SMALL
+        CHECK(dims.cols == 12);  // 1920 / 160 = 12
+        CHECK(dims.rows == 4);   // SMALL base rows
+    }
+    SECTION("2560x600 -> 16 cols (clamped), rows from LARGE breakpoint (5)") {
+        lm.init(2560, 600);  // ULTRAWIDE, LARGE breakpoint
+        auto dims = GridLayout::get_dimensions(3); // LARGE
+        CHECK(dims.cols == 16);  // 2560 / 160 = 16 (at max clamp)
+        CHECK(dims.rows == 5);   // LARGE base rows
+    }
+    SECTION("640x200 -> 4 cols (min clamp)") {
+        lm.init(640, 200);  // ratio 3.2 -> ULTRAWIDE
+        auto dims = GridLayout::get_dimensions(0); // TINY
+        CHECK(dims.cols == 4);   // 640 / 160 = 4 (at min clamp)
+        CHECK(dims.rows == 4);   // TINY base rows
+    }
+}
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout dimensions: PORTRAIT scales rows from height",
+                 "[grid_layout][dimensions][portrait]") {
+    auto& lm = helix::LayoutManager::instance();
+
+    SECTION("480x1600 -> base cols, 10 rows") {
+        lm.init(480, 1600);  // PORTRAIT, XLARGE breakpoint
+        auto dims = GridLayout::get_dimensions(4); // XLARGE
+        CHECK(dims.cols == 8);   // XLARGE base cols (unchanged)
+        CHECK(dims.rows == 10);  // 1600 / 160 = 10
+    }
+    SECTION("480x800 -> base cols, 5 rows (same as table)") {
+        lm.init(480, 800);  // PORTRAIT
+        auto dims = GridLayout::get_dimensions(4); // XLARGE
+        CHECK(dims.cols == 8);   // XLARGE base cols
+        CHECK(dims.rows == 5);   // 800 / 160 = 5
+    }
+    SECTION("480x1920 -> 12 rows (max clamp)") {
+        lm.init(480, 1920);  // PORTRAIT
+        auto dims = GridLayout::get_dimensions(4); // XLARGE
+        CHECK(dims.cols == 8);
+        CHECK(dims.rows == 12);  // 1920 / 160 = 12, at max clamp
+    }
+    SECTION("320x480 -> 3 rows (min clamp)") {
+        lm.init(320, 480);  // TINY_PORTRAIT (max_dim <=480), not PORTRAIT
+        // TINY_PORTRAIT uses table, not dynamic
+        auto dims = GridLayout::get_dimensions(0); // TINY
+        CHECK(dims.cols == 6);   // TINY base
+        CHECK(dims.rows == 4);   // TINY base (table, not dynamic)
+    }
+}
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout dimensions: STANDARD layout uses table (unchanged)",
+                 "[grid_layout][dimensions][standard]") {
+    auto& lm = helix::LayoutManager::instance();
+    lm.init(800, 480);  // STANDARD
+
+    auto dims = GridLayout::get_dimensions(2); // MEDIUM
+    CHECK(dims.cols == 6);
+    CHECK(dims.rows == 4);
+}
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout dimensions: uninitialized LayoutManager uses table",
+                 "[grid_layout][dimensions]") {
+    // LayoutManager not initialized (reset by fixture) — should fall back to table
+    auto dims = GridLayout::get_dimensions(2); // MEDIUM
+    CHECK(dims.cols == 6);
+    CHECK(dims.rows == 4);
+}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "grid_layout.h"
+#include "layout_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -37,7 +38,29 @@ static int clamp_breakpoint(int bp) {
 // ---------------------------------------------------------------------------
 
 GridDimensions GridLayout::get_dimensions(int breakpoint) {
-    return GRID_DIMS[static_cast<size_t>(clamp_breakpoint(breakpoint))];
+    auto base = GRID_DIMS[static_cast<size_t>(clamp_breakpoint(breakpoint))];
+
+    auto& lm = LayoutManager::instance();
+    switch (lm.type()) {
+    case LayoutType::ULTRAWIDE: {
+        int w = lm.width();
+        if (w > 0) {
+            base.cols = std::clamp(w / TARGET_CELL_PX, MIN_DYNAMIC_COLS, MAX_DYNAMIC_COLS);
+        }
+        break;
+    }
+    case LayoutType::PORTRAIT: {
+        int h = lm.height();
+        if (h > 0) {
+            base.rows = std::clamp(h / TARGET_CELL_PX, MIN_DYNAMIC_ROWS, MAX_DYNAMIC_ROWS);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    return base;
 }
 
 int GridLayout::get_cols(int breakpoint) {
