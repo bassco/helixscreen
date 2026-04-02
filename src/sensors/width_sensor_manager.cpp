@@ -5,6 +5,7 @@
 
 #include "ui_update_queue.h"
 
+#include "config.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 
@@ -92,6 +93,23 @@ void WidthSensorManager::discover(const std::vector<std::string>& klipper_object
             it = states_.erase(it);
         } else {
             ++it;
+        }
+    }
+
+    // Auto-assign first discovered sensor to FLOW_COMPENSATION role
+    // This ensures the diameter subject gets populated for the width sensor widget
+    if (!sensors_.empty()) {
+        bool has_flow_compensation = false;
+        for (const auto& sensor : sensors_) {
+            if (sensor.role == WidthSensorRole::FLOW_COMPENSATION) {
+                has_flow_compensation = true;
+                break;
+            }
+        }
+        if (!has_flow_compensation) {
+            sensors_.front().role = WidthSensorRole::FLOW_COMPENSATION;
+            spdlog::info("[WidthSensorManager] Auto-assigned {} to FLOW_COMPENSATION role",
+                         sensors_.front().sensor_name);
         }
     }
 
@@ -223,6 +241,40 @@ nlohmann::json WidthSensorManager::save_config() const {
 
     spdlog::info("[WidthSensorManager] Config saved");
     return config;
+}
+
+void WidthSensorManager::save_config_to_file() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    spdlog::debug("[WidthSensorManager] Saving config to file");
+
+    Config* config = Config::get_instance();
+    if (!config) {
+        spdlog::warn("[WidthSensorManager] Config not initialized");
+        return;
+    }
+
+    // Build path using default printer prefix
+    std::string base_path = config->df() + "width_sensors";
+
+    // Build width_sensors config
+    nlohmann::json ws_config;
+    nlohmann::json sensors_array = nlohmann::json::array();
+    for (const auto& sensor : sensors_) {
+        nlohmann::json sensor_json;
+        sensor_json["klipper_name"] = sensor.klipper_name;
+        sensor_json["role"] = width_role_to_string(sensor.role);
+        sensor_json["enabled"] = sensor.enabled;
+        sensor_json["type"] = width_type_to_string(sensor.type);
+        sensors_array.push_back(sensor_json);
+    }
+    ws_config["sensors"] = sensors_array;
+
+    // Set the config using JSON pointer path
+    config->get_json(base_path) = ws_config;
+    config->save();
+
+    spdlog::info("[WidthSensorManager] Config saved to file");
 }
 
 // ============================================================================
@@ -483,8 +535,7 @@ void WidthSensorManager::update_subjects() {
 
     // Text formatting (diameter_text_) handled by UI-layer observer in WidthSensorWidget
 
-    spdlog::trace("[WidthSensorManager] Subjects updated: diameter={}",
-                  lv_subject_get_int(&diameter_));
+    spdlog::trace("[WidthSensorManager] Subjects updated: diameter={}", diameter);
 }
 
 } // namespace helix::sensors

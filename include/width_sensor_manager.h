@@ -85,6 +85,9 @@ class WidthSensorManager : public ISensorManager {
     /// @brief Save configuration to JSON
     [[nodiscard]] nlohmann::json save_config() const override;
 
+    /// @brief Save configuration to file (convenience wrapper for UI callbacks)
+    void save_config_to_file();
+
     // ========================================================================
     // Initialization
     // ========================================================================
