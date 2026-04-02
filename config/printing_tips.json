@@ -1,9 +1,9 @@
 {
   "_comment": "3D Printing Tips Database for GuppyScreen/HelixScreen - Licensed under GPL v3",
-  "version": "2.0.0",
-  "description": "Comprehensive 3D printing tips and tricks for Klipper-based FDM printers with OrcaSlicer",
-  "last_updated": "2026-01-14",
-  "total_tips": 90,
+  "version": "2.1.0",
+  "description": "Comprehensive 3D printing tips and tricks for Klipper-based FDM printers with OrcaSlicer, plus HelixScreen feature tips",
+  "last_updated": "2026-04-02",
+  "total_tips": 122,
 
   "categories": {
     "klipper_features": {
@@ -847,6 +847,301 @@
           "difficulty": "intermediate",
           "priority": "low",
           "related_settings": ["RESPOND", "[respond]", "M118"]
+        }
+      ]
+    },
+
+    "helixscreen_features": {
+      "name": "HelixScreen Features",
+      "description": "Tips for getting the most out of HelixScreen's touchscreen interface",
+      "tips": [
+        {
+          "id": "tip-101",
+          "title": "Customize Your Dashboard",
+          "content": "Long-press anywhere on the home panel to enter Edit Mode. From there you can drag widgets to reposition them, resize them by dragging their edges, remove widgets with the X button, or add new ones with the + button.\n\nYour layout is saved automatically when you exit Edit Mode by tapping the checkmark.",
+          "tags": ["home", "widgets", "customization", "gestures"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-102",
+          "title": "Multiple Home Pages",
+          "content": "Your home panel can have multiple pages of widgets, just like a phone home screen. Swipe left and right on the widget area to navigate between pages.\n\nDot indicators at the bottom show which page you're on and how many pages you have. You can create up to 8 pages to organize your widgets however you like.",
+          "tags": ["home", "widgets", "navigation", "gestures"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-103",
+          "title": "Add a New Home Page",
+          "content": "Want more room for widgets? Enter Edit Mode by long-pressing the home panel, then swipe to the very last page. You'll see a + tile — tap it to create a new empty page.\n\nYou can have up to 8 pages total. Delete empty pages from the page options in Edit Mode.",
+          "tags": ["home", "widgets", "customization"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-104",
+          "title": "Resize Your Widgets",
+          "content": "In Edit Mode, widgets aren't limited to one size. Drag the edges of any widget to make it larger or smaller on the grid.\n\nSome widgets like Temperature Graph or Camera look best at 2x2 or larger. Experiment with different sizes to find what works for your workflow.",
+          "tags": ["home", "widgets", "customization"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-105",
+          "title": "38 Widgets to Choose From",
+          "content": "HelixScreen has 38 different widgets you can place on your home panel. Tap the + button in Edit Mode to browse the full catalog.\n\nOptions include temperature displays, fan controls, camera feeds, macro buttons, print status, network info, LED controls, sensor readouts, and more.",
+          "tags": ["home", "widgets", "customization"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-106",
+          "title": "Favorite Macro Buttons",
+          "content": "Add Favorite Macro widgets to your home panel for one-tap access to your most-used Klipper macros — things like Load Filament, Clean Nozzle, or Bed Level.\n\nIn Edit Mode, add a Favorite Macro widget, then tap its gear icon to choose which macro it runs. You can also pick a custom icon for each one. All your macros are also available in the Macros widget or the Controls panel.",
+          "tags": ["home", "widgets", "macros"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-107",
+          "title": "Widget Display Modes",
+          "content": "Some widgets have multiple display modes. The Temperature, Fan, and Thermistor widgets can switch between stack view (all items in rows), carousel view (swipeable full-page cards), and single-item view.\n\nIn Edit Mode, tap the gear icon on a widget to change its display mode. The carousel mode includes an arc slider for direct fan speed control.",
+          "tags": ["home", "widgets", "customization"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-108",
+          "title": "Tap Temperature Readings",
+          "content": "Temperature displays on the home panel aren't just for show — tap any temperature reading to jump straight to the full temperature control panel where you can set exact targets, use presets, or view the temperature graph.",
+          "tags": ["temperature", "navigation", "gestures"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-109",
+          "title": "Quick Preheat Presets",
+          "content": "Use the preheat widget or the preset buttons in the temperature controls to quickly set nozzle and bed temperatures for common materials like PLA, PETG, ABS, and TPU.\n\nEach preset sets both nozzle and bed to the recommended temperatures for that material in one tap.",
+          "tags": ["temperature", "materials", "workflow"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-110",
+          "title": "Custom Material Presets",
+          "content": "The default temperature presets cover common materials, but you can create your own for specialty filaments. Go to Settings > Material Temps to add custom presets with your preferred nozzle and bed temperatures.\n\nGreat for dialing in exotic materials like PC, PA-CF, or your favorite brand's specific recommendations.",
+          "tags": ["temperature", "materials", "settings"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-111",
+          "title": "Live Speed and Flow Adjustment",
+          "content": "During a print, you can adjust speed and flow multipliers in real-time from the Controls panel. No need to pause — changes take effect immediately on the next move.\n\nThis is great for fine-tuning on the fly: slow down for tricky overhangs, speed up for infill, or bump flow slightly if you see gaps.",
+          "tags": ["printing", "controls", "speed"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-112",
+          "title": "Live Z-Offset Tuning",
+          "content": "You can adjust your Z-offset in real-time during the first layer from the Controls panel. Watch the nozzle height change as you tap the adjustment buttons — the change takes effect immediately.\n\nThis is the fastest way to dial in first layer squish without re-running a calibration print.",
+          "tags": ["printing", "controls", "calibration"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-113",
+          "title": "Exclude Failed Objects Mid-Print",
+          "content": "If one object on your build plate fails while others are printing fine, you don't have to cancel the whole print. Tap the Exclude Objects button during printing to skip the failed object.\n\nThis requires your slicer to label individual objects (enabled by default in OrcaSlicer and SuperSlicer). The button only appears when object labels are detected in the G-code.",
+          "tags": ["printing", "workflow"],
+          "difficulty": "intermediate",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-114",
+          "title": "Card and List View for Print Files",
+          "content": "The Print Select panel offers two ways to browse your files: card view with large thumbnails, or a compact list view with sortable columns.\n\nToggle between them using the view icon in the top-right corner. List view is great when you have many files; card view is better for visual browsing.",
+          "tags": ["printing", "files", "navigation"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-115",
+          "title": "Sort Your Print Files",
+          "content": "In list view on the Print Select panel, tap any column header to sort your files by name, size, modification date, or estimated print time.\n\nTap the same header again to reverse the sort order. This makes it easy to find your most recent uploads or longest prints.",
+          "tags": ["printing", "files", "navigation"],
+          "difficulty": "beginner",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-116",
+          "title": "Automatic LED State Changes",
+          "content": "HelixScreen can automatically change your LED strip colors based on printer state — one color when idle, another while heating, a different one during printing, and a warning color on errors.\n\nSet it up in Settings > LEDs > Auto-State. Pick a color for each state and HelixScreen handles the transitions. You can also set LEDs to turn on automatically at startup with a configurable brightness level.",
+          "tags": ["leds", "automation", "settings"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-132",
+          "title": "Control Your LEDs",
+          "content": "Tap the LED widget on your home panel or the LED button on the Controls panel to open the LED control overlay. From there you can adjust brightness with a slider, pick colors with the color wheel, and toggle individual LED strips on or off.\n\nConfigure which LED strips to use and set up startup brightness in Settings. HelixScreen supports Klipper native LEDs, LED Effect plugin, WLED network devices, and macro-based LED control.",
+          "tags": ["leds", "controls", "widgets"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-117",
+          "title": "Fan Speed Arc Slider",
+          "content": "The Fan Carousel widget includes an arc slider that lets you drag to adjust fan speed directly from the home panel — no need to open the full controls.\n\nSwitch to carousel mode by tapping the gear icon on a fan widget in Edit Mode. The arc gives you precise control from 0-100%.",
+          "tags": ["fans", "widgets", "controls"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-118",
+          "title": "Rename Your Fans",
+          "content": "Klipper fan names like 'heater_fan hotend_fan' or 'fan_generic bed_fans' aren't the friendliest. Long-press any fan in the Fan Control overlay to give it a custom name like 'Hotend' or 'Bed Fans'.\n\nYour custom names appear everywhere in HelixScreen — widgets, controls, and overlays.",
+          "tags": ["fans", "customization", "gestures"],
+          "difficulty": "beginner",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-119",
+          "title": "Dynamic Spool Temperature Presets",
+          "content": "When a spool is loaded via your filament management system (AMS, AFC, Happy Hare, etc.), HelixScreen automatically creates a temperature preset button showing the material name and recommended temperature.\n\nNo more guessing what temp to set — just tap the dynamic preset and it's done.",
+          "tags": ["filament", "temperature", "workflow"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-120",
+          "title": "Spoolman Filament Tracking",
+          "content": "Connect Spoolman to track your entire filament inventory from HelixScreen. See spool details, remaining weight, material info, and vendor data right on the filament panel.\n\nSpoolman runs as a separate service alongside Moonraker. Once connected, HelixScreen automatically associates loaded spools with your inventory.",
+          "tags": ["filament", "spoolman", "integration"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-121",
+          "title": "Print QR Labels for Your Spools",
+          "content": "If you have a label printer (Brother, Phomemo, Niimbot, or MakeID), you can print QR code labels for your spools directly from HelixScreen.\n\nOpen the Spool Info modal in the Filament panel and tap Print Label. Each label includes a QR code that HelixScreen can scan to instantly identify the spool — no more guessing what's on the roll.",
+          "tags": ["filament", "spoolman", "labels", "qr"],
+          "difficulty": "advanced",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-130",
+          "title": "Scan QR Codes to Identify Spools",
+          "content": "If your printer has a camera, you can scan QR codes on your filament spools to instantly identify them in HelixScreen. This works with QR labels you've printed from Spoolman or vendor QR codes.\n\nOpen the QR scanner from the Filament panel to scan. The spool's material, color, and temperature settings are loaded automatically.",
+          "tags": ["filament", "spoolman", "qr", "camera"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-131",
+          "title": "Track Your Filament with Spoolman",
+          "content": "Tired of guessing how much filament is left on a roll? Spoolman tracks your entire inventory — weight remaining, material type, vendor, color, and print history per spool.\n\nSpoolman is a free service that runs alongside Moonraker. Once connected, HelixScreen shows spool details everywhere: filament panel, AMS slots, and temperature presets. Set it up at spoolman.io.",
+          "tags": ["filament", "spoolman", "integration"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-122",
+          "title": "Notification History",
+          "content": "Missed a notification? Tap the bell icon in the status bar to see a history of past notifications including connection events, print completions, warnings, and errors.\n\nNotifications are color-coded: blue for info, yellow for warnings, and red for errors.",
+          "tags": ["notifications", "navigation"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-123",
+          "title": "Interactive Temperature Graph",
+          "content": "Tap the temperature graph widget to open a detailed overlay showing all your temperature sensors over time.\n\nTap the sensor chips above the graph to show or hide individual traces. This is great for diagnosing heating issues or verifying PID tuning.",
+          "tags": ["temperature", "widgets", "diagnostics"],
+          "difficulty": "beginner",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-124",
+          "title": "17 Color Themes",
+          "content": "HelixScreen comes with 17 built-in color themes. Go to Settings > Appearance to browse them, or use the live theme editor to create your own custom color scheme.\n\nChanges preview in real-time so you can see exactly how your printer's display will look.",
+          "tags": ["appearance", "customization", "settings"],
+          "difficulty": "beginner",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-125",
+          "title": "Emergency Stop Is Always Accessible",
+          "content": "During a print, the red Emergency Stop button appears in the top-right corner of the screen. It stays accessible even when the screen is PIN-locked.\n\nSafety first — you can always stop your printer in an emergency, no matter what screen you're on.",
+          "tags": ["safety", "printing"],
+          "difficulty": "beginner",
+          "priority": "high",
+          "related_settings": []
+        },
+        {
+          "id": "tip-126",
+          "title": "Quick Screen Lock",
+          "content": "Add a Lock widget to your home panel for one-tap screen locking — great for preventing accidental touches during a print or when cleaning around the printer.\n\nFor added security, set up a PIN code in Settings > Security.",
+          "tags": ["security", "widgets", "home"],
+          "difficulty": "beginner",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-127",
+          "title": "G-Code Console on Your Dashboard",
+          "content": "Need quick access to the Klipper console? Add the G-Code Console widget to your home panel for instant command entry without leaving the dashboard.\n\nYou can also find the full console in the Advanced panel with command history and scrollback.",
+          "tags": ["home", "widgets", "console"],
+          "difficulty": "intermediate",
+          "priority": "low",
+          "related_settings": []
+        },
+        {
+          "id": "tip-128",
+          "title": "Multiple Filament System Support",
+          "content": "HelixScreen supports six different filament management backends: Happy Hare, AFC, ACE, CFS, AD5X IFS, and generic tool changers.\n\nIf your printer has more than one system connected, use the backend dropdown selector to switch between them.",
+          "tags": ["filament", "ams", "integration"],
+          "difficulty": "intermediate",
+          "priority": "medium",
+          "related_settings": []
+        },
+        {
+          "id": "tip-129",
+          "title": "One-Tap Firmware Restart",
+          "content": "Add the Firmware Restart widget to your home panel for instant Klipper restarts when you need to reload printer.cfg changes.\n\nYou can also restart firmware from the Advanced panel or by typing FIRMWARE_RESTART in the console.",
+          "tags": ["home", "widgets", "workflow"],
+          "difficulty": "beginner",
+          "priority": "low",
+          "related_settings": []
         }
       ]
     }
