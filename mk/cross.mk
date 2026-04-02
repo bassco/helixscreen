@@ -1807,6 +1807,13 @@ deploy-k1:
 	@if [ -d build/assets/images/printers/prerendered ] && ls build/assets/images/printers/prerendered/*.bin >/dev/null 2>&1; then \
 		COPYFILE_DISABLE=1 tar -cf - -C build/assets/images/printers prerendered | ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR)/assets/images/printers && tar -xf -"; \
 	fi
+	@# Install/update init script for boot persistence
+	@echo "$(DIM)Installing init script...$(RESET)"
+	@cat config/helixscreen.init | ssh $(K1_SSH_TARGET) '\
+		DEST=/etc/init.d/S99helixscreen; \
+		cat > $$DEST && chmod +x $$DEST && \
+		sed -i "s|DAEMON_DIR=.*|DAEMON_DIR=\"$(K1_DEPLOY_DIR)\"|" $$DEST && \
+		echo "Init script installed at $$DEST"'
 	@echo "$(GREEN)✓ Deployed to $(K1_HOST):$(K1_DEPLOY_DIR)$(RESET)"
 	@echo "$(CYAN)Starting helix-screen on $(K1_HOST)...$(RESET)"
 	ssh $(K1_SSH_TARGET) "cd $(K1_DEPLOY_DIR) && ./bin/helix-launcher.sh >/dev/null 2>&1 &"
@@ -1992,6 +1999,20 @@ deploy-k2:
 	@if [ -d build/assets/images/printers/prerendered ] && ls build/assets/images/printers/prerendered/*.bin >/dev/null 2>&1; then \
 		COPYFILE_DISABLE=1 tar -cf - -C build/assets/images/printers prerendered | ssh $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR)/assets/images/printers && tar -xf -"; \
 	fi
+	@# Install/update init script for boot persistence
+	@echo "$(DIM)Installing init script...$(RESET)"
+	@cat config/helixscreen.init | ssh $(K2_SSH_TARGET) '\
+		cat > /etc/init.d/S99helixscreen && \
+		chmod +x /etc/init.d/S99helixscreen && \
+		sed -i "s|DAEMON_DIR=.*|DAEMON_DIR=\"/opt/helixscreen\"|" /etc/init.d/S99helixscreen && \
+		ln -sf ../init.d/S99helixscreen /etc/rc.d/S99helixscreen 2>/dev/null; \
+		echo "Init script installed"'
+	@# Ensure /opt/helixscreen symlink exists (points to UDISK for storage)
+	@ssh $(K2_SSH_TARGET) '\
+		if [ ! -e /opt/helixscreen ]; then \
+			ln -s $(K2_DEPLOY_DIR) /opt/helixscreen; \
+			echo "Created /opt/helixscreen symlink"; \
+		fi'
 	@echo "$(GREEN)✓ Deployed to $(K2_HOST):$(K2_DEPLOY_DIR)$(RESET)"
 	@echo "$(CYAN)Starting helix-screen on $(K2_HOST)...$(RESET)"
 	ssh $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR) && ./bin/helix-launcher.sh >/dev/null 2>&1 &"
@@ -1999,11 +2020,10 @@ deploy-k2:
 	@echo "$(DIM)Logs: ssh $(K2_SSH_TARGET) 'logread -f | grep helix'$(RESET)"
 
 # Deploy and run in foreground with verbose logging (for interactive debugging)
-deploy-k2-fg:
-	@test -f build/k2/bin/helix-screen || { echo "$(RED)Error: build/k2/bin/helix-screen not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
-	@test -f build/k2/bin/helix-splash || { echo "$(RED)Error: build/k2/bin/helix-splash not found. Run 'make k2-docker' first.$(RESET)"; exit 1; }
-	$(call deploy-common,$(K2_SSH_TARGET),$(K2_DEPLOY_DIR),build/k2/bin)
-	@echo "$(CYAN)Starting helix-screen on $(K2_HOST) (foreground, verbose)...$(RESET)"
+# Note: K2 has no rsync (BusyBox) — uses same tar/ssh transfer as deploy-k2
+deploy-k2-fg: deploy-k2
+	@echo "$(CYAN)Restarting helix-screen on $(K2_HOST) (foreground, verbose)...$(RESET)"
+	ssh $(K2_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null || true"
 	ssh -t $(K2_SSH_TARGET) "cd $(K2_DEPLOY_DIR) && ./bin/helix-launcher.sh --debug"
 
 # Deploy binaries only (fast, for quick iteration)

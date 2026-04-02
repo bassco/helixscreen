@@ -141,8 +141,11 @@ Deploy directory: `/opt/helixscreen` (override with `K2_DEPLOY_DIR`). SSH creden
 1. Stops any running HelixScreen processes
 2. Deploys platform hooks (`config/platform/hooks-k2.sh` → `/opt/helixscreen/platform/hooks.sh`)
 3. Transfers binaries, assets, XML layouts, and config
-4. Platform hooks stop the stock Creality UI (`display-server`, `Monitor`, etc.) via procd
-5. Starts HelixScreen on the framebuffer
+4. Installs SysV init script at `/etc/init.d/S99helixscreen` for boot persistence
+5. Ensures `/opt/helixscreen` symlink points to `/mnt/UDISK/helixscreen`
+6. Platform hooks stop the stock Creality UI (`display-server`, `Monitor`, etc.) via procd
+7. Platform hooks start `wpa_supplicant` to replace the stock `wifi-server`
+8. Starts HelixScreen on the framebuffer
 
 ### Reverting to Stock UI
 
@@ -509,9 +512,9 @@ HelixScreen auto-detects K2 printers using heuristics from `config/printer_datab
 - **Material database is cloud-fetched** — The material database at `/mnt/UDISK/creality/userdata/box/material_database.json` is downloaded from Creality's cloud. HelixScreen should include a fallback mapping for common material type codes.
 
 ### Platform
-- **procd init system** — No HelixScreen init script for procd yet.
 - **Low CPU** — Dual Cortex-A7 at ~57 BogoMIPS. Performance-sensitive features (bed mesh 3D, animations) may need throttling.
 - **No curl** — BusyBox wget only, no HTTPS support.
+- **WiFi managed by platform hooks** — The stock `wifi-server` is killed when HelixScreen takes over the display. Platform hooks (`hooks-k2.sh`) start `wpa_supplicant` directly using credentials at `/etc/wifi/wpa_supplicant/wpa_supplicant.conf`. WiFi configuration changes made via the stock UI are preserved.
 
 ## Related Resources
 

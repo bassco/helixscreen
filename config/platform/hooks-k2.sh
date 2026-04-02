@@ -60,6 +60,22 @@ platform_pre_start() {
     # K2 has no curl — ensure HelixScreen knows to skip HTTPS features
     # SSL is disabled in the K2 build, but set this for safety
     export HELIX_DISABLE_SSL=1
+
+    # The stock wifi-server manages wpa_supplicant, but we killed it in
+    # platform_stop_competing_uis(). Start wpa_supplicant directly so
+    # WiFi stays up. Only needed if wlan0 exists and isn't already associated.
+    if [ -e /sys/class/net/wlan0 ] && ! ip addr show wlan0 2>/dev/null | grep -q 'inet '; then
+        local wpa_conf="/etc/wifi/wpa_supplicant/wpa_supplicant.conf"
+        if [ -f "$wpa_conf" ]; then
+            # Kill any stale wpa_supplicant (wifi-server may have left one)
+            killall wpa_supplicant 2>/dev/null || true
+            sleep 1
+            wpa_supplicant -B -i wlan0 -c "$wpa_conf" -D nl80211 2>/dev/null || true
+            # Wait briefly for association, then request DHCP
+            sleep 3
+            udhcpc -i wlan0 -n -q 2>/dev/null || true
+        fi
+    fi
 }
 
 platform_post_stop() {
