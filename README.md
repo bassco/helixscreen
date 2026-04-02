@@ -241,6 +241,19 @@ See [docs/user/TROUBLESHOOTING.md](docs/user/TROUBLESHOOTING.md) for more soluti
 - [FuriousForging Discord](https://discord.gg/Cg4yas4V) — #mods-and-projects ([jump to HelixScreen topic](https://discord.com/channels/1323351124069191691/1444485365376352276))
 - [VORONDesign Discord](https://discord.gg/voron) — #voc_works ([jump to HelixScreen topic](https://discord.com/channels/460117602945990666/1468467369407156346))
 
+### Co-Maintainers Wanted
+
+We're looking for co-maintainers to help grow HelixScreen! You can contribute broadly across the project or own a specific area that interests you:
+
+- **Printer support** — Maintain builds and testing for specific platforms (Creality, QIDI, Flashforge, etc.)
+- **Multi-material backends** — Own a filament system integration (AFC, Happy Hare, ACE, CFS, etc.)
+- **UI/UX** — Help design and implement panels, overlays, and responsive layouts
+- **Localization** — Maintain translations for your language
+- **Documentation** — Keep guides accurate and help new users get started
+- **Testing & CI** — Expand the test suite and maintain build infrastructure
+
+If you're interested, join the [Discord](https://discord.gg/RZCT2StKhr) and introduce yourself, or open a [GitHub Discussion](https://github.com/prestonbrown/helixscreen/discussions).
+
 **Bug Reports & Feature Requests:** [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues) — please include your printer model and logs (`helix-screen -vv`) when reporting bugs.
 
 ## License
