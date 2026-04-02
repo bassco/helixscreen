@@ -544,3 +544,48 @@ TEST_CASE_METHOD(GridLayoutFixture,
     CHECK(dims.cols == 6);
     CHECK(dims.rows == 4);
 }
+
+// =============================================================================
+// Descriptor generation and instance methods with dynamic sizing
+// =============================================================================
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout make_col_dsc: ultrawide produces correct descriptor length",
+                 "[grid_layout][descriptor][ultrawide]") {
+    auto& lm = helix::LayoutManager::instance();
+    lm.init(1920, 440);  // ULTRAWIDE -> 12 cols
+
+    auto dsc = GridLayout::make_col_dsc(1); // SMALL breakpoint
+    REQUIRE(dsc.size() == 13); // 12 FR values + terminator
+    for (int i = 0; i < 12; ++i) {
+        CHECK(dsc[static_cast<size_t>(i)] == LV_GRID_FR(1));
+    }
+    CHECK(dsc[12] == LV_GRID_TEMPLATE_LAST);
+}
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout make_row_dsc: portrait produces correct descriptor length",
+                 "[grid_layout][descriptor][portrait]") {
+    auto& lm = helix::LayoutManager::instance();
+    lm.init(480, 1600);  // PORTRAIT -> 10 rows
+
+    auto dsc = GridLayout::make_row_dsc(4); // XLARGE breakpoint
+    REQUIRE(dsc.size() == 11); // 10 FR values + terminator
+    for (int i = 0; i < 10; ++i) {
+        CHECK(dsc[static_cast<size_t>(i)] == LV_GRID_FR(1));
+    }
+    CHECK(dsc[10] == LV_GRID_TEMPLATE_LAST);
+}
+
+TEST_CASE_METHOD(GridLayoutFixture,
+                 "GridLayout instance: ultrawide dimensions match static accessors",
+                 "[grid_layout][instance][ultrawide]") {
+    auto& lm = helix::LayoutManager::instance();
+    lm.init(1920, 440);  // ULTRAWIDE
+
+    GridLayout grid(1); // SMALL breakpoint
+    CHECK(grid.cols() == 12);
+    CHECK(grid.rows() == 4);
+    CHECK(grid.cols() == GridLayout::get_cols(1));
+    CHECK(grid.rows() == GridLayout::get_rows(1));
+}
