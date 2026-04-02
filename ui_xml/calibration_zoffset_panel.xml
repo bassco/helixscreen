@@ -219,7 +219,7 @@
               style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_lg"
               scrollable="false">
         <bind_flag_if_not_eq subject="zoffset_cal_state" flag="hidden" ref_value="5"/>
-        <lv_label text="#icon_xmark_circle" style_text_font="mdi_icons_48" style_text_color="#danger"/>
+        <lv_label text="#icon_close_circle" style_text_font="mdi_icons_48" style_text_color="#danger"/>
         <text_heading text="Calibration Failed" translation_tag="Calibration Failed" style_text_align="center"/>
         <text_muted name="error_message"
                     width="80%" text="An error occurred during calibration." translation_tag="An error occurred during calibration." style_text_align="center" long_mode="wrap"/>
