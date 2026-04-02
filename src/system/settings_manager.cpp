@@ -11,6 +11,8 @@
 #include "led/led_controller.h"
 #include "material_settings_manager.h"
 #include "moonraker_client.h"
+#include "ams_backend.h"
+#include "ams_state.h"
 #include "printer_detector.h"
 #include "printer_state.h"
 #include "runtime_config.h"
@@ -271,13 +273,15 @@ ToolheadStyle SettingsManager::get_effective_toolhead_style() const {
     if (PrinterDetector::is_pfa_printer()) {
         return ToolheadStyle::ANTHEAD;
     }
-    if (PrinterDetector::is_voron_printer()) {
-        return ToolheadStyle::STEALTHBURNER;
-    }
     if (PrinterDetector::is_creality_k1()) {
         return ToolheadStyle::CREALITY_K1;
     }
     if (PrinterDetector::is_creality_k2()) {
+        return ToolheadStyle::CREALITY_K2;
+    }
+    // CFS (Creality Filament System) is only on K2 series printers
+    auto* backend = AmsState::instance().get_backend();
+    if (backend && backend->get_type() == AmsType::CFS) {
         return ToolheadStyle::CREALITY_K2;
     }
     return ToolheadStyle::DEFAULT;

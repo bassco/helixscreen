@@ -243,8 +243,9 @@ AmsSystemInfo AmsBackendCfs::parse_box_status(const nlohmann::json& box_json) {
     info.supports_endless_spool = box_json.value("auto_refill", 0) != 0;
     info.supports_tool_mapping = true;
 
-    // Parse filament loaded state
-    info.filament_loaded = box_json.value("filament", 0) != 0;
+    // Parse filament loaded state (only meaningful when field present)
+    info.filament_loaded = box_json.contains("filament") &&
+                           box_json["filament"].get<int>() != 0;
 
     // Parse tool mapping from "map" object
     if (box_json.contains("map") && box_json["map"].is_object()) {
@@ -400,6 +401,9 @@ AmsSystemInfo AmsBackendCfs::parse_box_status(const nlohmann::json& box_json) {
                 slot.status = SlotStatus::AVAILABLE;
             }
 
+            // CFS slots map 1:1 to tools (slot 0 = tool 0, etc.)
+            slot.mapped_tool = slot.global_index;
+
             unit.slots.push_back(std::move(slot));
         }
 
@@ -438,39 +442,41 @@ void AmsBackendCfs::handle_status_update(const nlohmann::json& notification) {
     bool changed = false;
 
     if (params.contains("box") && params["box"].is_object()) {
-        spdlog::debug("[AMS CFS] Received box data with {} keys", params["box"].size());
-        auto new_info = parse_box_status(params["box"]);
-        {
+        const auto& box = params["box"];
+        spdlog::debug("[AMS CFS] Received box data with {} keys", box.size());
+
+        // Distinguish meaningful updates from noise (e.g., just measuring_wheel).
+        // Full updates have "filament"/"map". Unit updates have "T1"/"T2"/etc.
+        bool has_top_level = box.contains("filament") || box.contains("map");
+        bool has_unit_data = box.contains("T1") || box.contains("T2") ||
+                             box.contains("T3") || box.contains("T4");
+        bool is_full_update = has_top_level || has_unit_data;
+
+        if (is_full_update) {
+            auto new_info = parse_box_status(box);
             std::lock_guard<std::mutex> lock(mutex_);
-            // Only overwrite unit/slot data from full box updates (with unit data).
-            // Partial subscription updates may only contain measuring_wheel or
-            // other single fields — don't clear the full state.
+
             if (!new_info.units.empty()) {
                 system_info_.units = std::move(new_info.units);
                 system_info_.total_slots = new_info.total_slots;
                 system_info_.supports_endless_spool = new_info.supports_endless_spool;
                 system_info_.tool_to_slot_map = std::move(new_info.tool_to_slot_map);
+            }
+
+            // Only update filament_loaded when the field was actually present
+            if (box.contains("filament")) {
                 system_info_.filament_loaded = new_info.filament_loaded;
             }
-            // Partial updates: filament_loaded only if explicitly present
-            // (box_json.value("filament", 0) defaults to 0 when absent)
 
-            // Use the active slot parsed from T{n}.filament field ("A"/"B"/"C"/"D").
-            // Only update if the box data actually contained unit info (full update).
-            // Partial updates (e.g., just measuring_wheel) won't have unit data.
+            // Active slot from T{n}.filament field ("A"/"B"/"C"/"D")
             if (new_info.current_slot >= 0) {
                 system_info_.current_slot = new_info.current_slot;
                 system_info_.current_tool = new_info.current_tool;
-            } else if (!new_info.units.empty()) {
-                // Full update but no active filament — clear slot if not loading
-                if (!system_info_.filament_loaded &&
-                    system_info_.action != AmsAction::LOADING) {
-                    system_info_.current_slot = -1;
-                    system_info_.current_tool = -1;
-                }
+            } else if (box.contains("filament") && !new_info.filament_loaded &&
+                       system_info_.action != AmsAction::LOADING) {
+                system_info_.current_slot = -1;
+                system_info_.current_tool = -1;
             }
-            // Partial updates: don't touch current_slot
-
             // Apply user overrides over parsed RFID data (uses global slot indices)
             for (auto& unit : system_info_.units) {
                 for (size_t j = 0; j < unit.slots.size(); ++j) {
@@ -504,6 +510,7 @@ void AmsBackendCfs::handle_status_update(const nlohmann::json& notification) {
                 }
             }
         }
+        // Partial updates (measuring_wheel, etc.): skip — don't touch state
         changed = true;
     }
 
