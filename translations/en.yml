@@ -278,6 +278,10 @@ translations:
   Chamber Sensor: Chamber Sensor
   Chamber Temperature: Chamber Temperature
   Chamber and dryer humidity monitoring: Chamber and dryer humidity monitoring
+  'Chamber at %d°C': 'Chamber at %d°C'
+  Chamber heater not found in printer configuration: Chamber heater not found in printer configuration
+  'Chamber heating to %d°C...': 'Chamber heating to %d°C...'
+  'Chamber target set to {}°C': 'Chamber target set to {}°C'
   'Chamber:': 'Chamber:'
   Change: Change
   Change LED color based on printer state: Change LED color based on printer state

@@ -278,6 +278,10 @@ translations:
   'Chamber Sensor': 'チャンバーセンサー'
   'Chamber Temperature': 'チャンバー温度'
   'Chamber and dryer humidity monitoring': 'チャンバーとドライヤーの湿度監視'
+  'Chamber at %d°C': 'チャンバー温度：%d°C'
+  Chamber heater not found in printer configuration: プリンター設定にチャンバーヒーターが見つかりません
+  'Chamber heating to %d°C...': 'チャンバーを%d°Cに加熱中...'
+  'Chamber target set to {}°C': 'チャンバー目標温度を{}°C に設定'
   'Chamber:': 'チャンバー:'
   'Change': '変更'
   'Change LED color based on printer state': 'プリンターの状態に応じて LED の色を変更'

@@ -473,9 +473,20 @@ void FilamentPanel::update_status_icon(const char* icon_name, const char* varian
 void FilamentPanel::update_status() {
     const char* status_msg;
 
-    // Check if chamber is heating (higher priority when chamber target is set)
-    if (chamber_target_ > 0 && chamber_current_ < chamber_target_ - 5) {
-        // Chamber is heating
+    // First check if nozzle is ready for extrusion (highest priority for filament operations)
+    if (helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_)) {
+        // Hot enough - ready to load
+        status_msg = "Ready to load";
+        update_status_icon("check", "success");
+    } else if (nozzle_target_ >= min_extrude_temp_) {
+        // Nozzle heating in progress
+        std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Heating to %d°C..."),
+                      nozzle_target_);
+        lv_subject_copy_string(&status_subject_, status_buf_);
+        update_status_icon("flash", "warning");
+        return; // Already updated, exit early
+    } else if (chamber_target_ > 0 && chamber_current_ < chamber_target_ - 5) {
+        // Chamber is heating (show only if nozzle is cold)
         std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Chamber heating to %d°C..."),
                       chamber_target_);
         lv_subject_copy_string(&status_subject_, status_buf_);
@@ -483,24 +494,11 @@ void FilamentPanel::update_status() {
         return;
     } else if (chamber_target_ > 0 && chamber_current_ >= chamber_target_ - 5 &&
                chamber_current_ <= chamber_target_ + 2) {
-        // Chamber at target
+        // Chamber at target (show only if nozzle is cold)
         std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Chamber at %d°C"), chamber_target_);
         lv_subject_copy_string(&status_subject_, status_buf_);
         update_status_icon("check", "success");
         return;
-    }
-
-    if (helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_)) {
-        // Hot enough - ready to load
-        status_msg = "Ready to load";
-        update_status_icon("check", "success");
-    } else if (nozzle_target_ >= min_extrude_temp_) {
-        // Heating in progress
-        std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Heating to %d°C..."),
-                      nozzle_target_);
-        lv_subject_copy_string(&status_subject_, status_buf_);
-        update_status_icon("flash", "warning");
-        return; // Already updated, exit early
     } else {
         // Cold - needs material selection
         status_msg = "Select material to begin";
@@ -707,22 +705,35 @@ void FilamentPanel::handle_custom_chamber_confirmed(float value) {
     chamber_target_ = static_cast<int>(value);
     update_chamber_temp_display();
 
-    // Send temperature command to printer - chamber is typically a temperature_fan
+    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
     if (api_) {
         // Get the chamber heater object name from printer discovery
-        // (e.g., "chamber" from "heater_generic chamber" or "temperature_fan chamber")
-        const std::string& heater_object =
-            printer_state_.get_discovery().chamber_heater_object_name();
+        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
+        // "temperature_fan chamber")
+        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
 
-        if (heater_object.empty()) {
+        if (heater_full_name.empty()) {
             NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
             return;
         }
 
-        // Use SET_HEATER_TEMPERATURE which works for temperature_fan, heater_generic, etc.
-        char gcode[96];
-        std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                      heater_object.c_str(), chamber_target_);
+        char gcode[128];
+
+        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
+        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
+        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
+            // Extract the fan name after "temperature_fan " prefix
+            std::string fan_name = heater_full_name.substr(16);
+            std::snprintf(gcode, sizeof(gcode),
+                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
+                          fan_name.c_str(), chamber_target_);
+        } else {
+            // heater_generic or other heater type
+            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
+            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
+                          object_name.c_str(), chamber_target_);
+        }
+
         api_->execute_gcode(
             gcode,
             [target = chamber_target_]() {
@@ -1593,7 +1604,7 @@ void FilamentPanel::on_bed_target_tap_clicked(lv_event_t* e) {
 void FilamentPanel::on_filament_chamber_target_tap(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_filament_chamber_target_tap");
     LV_UNUSED(e);
-    spdlog::info("[FilamentPanel] on_filament_chamber_target_tap TRIGGERED");
+    spdlog::debug("[FilamentPanel] on_filament_chamber_target_tap TRIGGERED");
     get_global_filament_panel().handle_chamber_temp_tap();
     LVGL_SAFE_EVENT_CB_END();
 }

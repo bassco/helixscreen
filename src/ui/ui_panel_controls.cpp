@@ -54,6 +54,7 @@
 using namespace helix;
 using helix::ui::observe_int_sync;
 using helix::ui::observe_string;
+using helix::ui::temperature::centi_to_degrees;
 
 // Forward declarations for class-based API
 class MotionPanel;
@@ -534,18 +535,18 @@ void ControlsPanel::register_observers() {
     // Subscribe to chamber temperature (current and target)
     // Note: We check are_subjects_initialized() because observers may fire immediately
     // upon registration, but subjects aren't initialized until init_subjects() is called.
-    observe_int_sync<ControlsPanel>(printer_state_.get_chamber_temp_subject(), this,
-                                    [](ControlsPanel* self, int value) {
-                                        self->cached_chamber_temp_ = value;
-                                        if (self->are_subjects_initialized() && self->active_)
-                                            self->update_chamber_temp_display();
-                                    });
-    observe_int_sync<ControlsPanel>(printer_state_.get_chamber_target_subject(), this,
-                                    [](ControlsPanel* self, int value) {
-                                        self->cached_chamber_target_ = value;
-                                        if (self->are_subjects_initialized() && self->active_)
-                                            self->update_chamber_temp_display();
-                                    });
+    chamber_temp_observer_ = observe_int_sync<ControlsPanel>(
+        printer_state_.get_chamber_temp_subject(), this, [](ControlsPanel* self, int value) {
+            self->cached_chamber_temp_ = value;
+            if (self->are_subjects_initialized() && self->active_)
+                self->update_chamber_temp_display();
+        });
+    chamber_target_observer_ = observe_int_sync<ControlsPanel>(
+        printer_state_.get_chamber_target_subject(), this, [](ControlsPanel* self, int value) {
+            self->cached_chamber_target_ = value;
+            if (self->are_subjects_initialized() && self->active_)
+                self->update_chamber_temp_display();
+        });
 
     // Subscribe to fan updates (skip formatting when hidden)
     fan_observer_ = observe_int_sync<ControlsPanel>(printer_state_.get_fan_speed_subject(), this,
@@ -1048,22 +1049,23 @@ void ControlsPanel::handle_bed_temp_clicked() {
 void ControlsPanel::handle_nozzle_target_edit() {
     spdlog::debug("[{}] Opening nozzle temperature keypad", get_name());
 
-    ui_keypad_config_t config = {.initial_value = static_cast<float>(
-                                     cached_extruder_target_ > 0 ? cached_extruder_target_ : 200),
-                                 .min_value = 0.0f,
-                                 .max_value = static_cast<float>(nozzle_max_temp_),
-                                 .title_label = "Nozzle Temperature",
-                                 .unit_label = "°C",
-                                 .allow_decimal = false,
-                                 .allow_negative = false,
-                                 .callback =
-                                     [](float value, void* user_data) {
-                                         auto* self = static_cast<ControlsPanel*>(user_data);
-                                         if (self) {
-                                             self->handle_custom_nozzle_confirmed(value);
-                                         }
-                                     },
-                                 .user_data = this};
+    ui_keypad_config_t config = {
+        .initial_value = static_cast<float>(
+            cached_extruder_target_ > 0 ? centi_to_degrees(cached_extruder_target_) : 200),
+        .min_value = 0.0f,
+        .max_value = static_cast<float>(nozzle_max_temp_),
+        .title_label = lv_tr("Nozzle Temperature"),
+        .unit_label = "°C",
+        .allow_decimal = false,
+        .allow_negative = false,
+        .callback =
+            [](float value, void* user_data) {
+                auto* self = static_cast<ControlsPanel*>(user_data);
+                if (self) {
+                    self->handle_custom_nozzle_confirmed(value);
+                }
+            },
+        .user_data = this};
 
     ui_keypad_show(&config);
 }
@@ -1072,10 +1074,11 @@ void ControlsPanel::handle_bed_target_edit() {
     spdlog::debug("[{}] Opening bed temperature keypad", get_name());
 
     ui_keypad_config_t config = {
-        .initial_value = static_cast<float>(cached_bed_target_ > 0 ? cached_bed_target_ : 60),
+        .initial_value =
+            static_cast<float>(cached_bed_target_ > 0 ? centi_to_degrees(cached_bed_target_) : 60),
         .min_value = 0.0f,
         .max_value = static_cast<float>(bed_max_temp_),
-        .title_label = "Bed Temperature",
+        .title_label = lv_tr("Bed Temperature"),
         .unit_label = "°C",
         .allow_decimal = false,
         .allow_negative = false,
@@ -1095,13 +1098,14 @@ void ControlsPanel::handle_custom_nozzle_confirmed(float value) {
     spdlog::info("[{}] Custom nozzle temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
 
-    cached_extruder_target_ = static_cast<int>(value);
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_extruder_target_ = static_cast<int>(value * 10);
 
-    // Send temperature command to printer
+    // Send temperature command to printer (api_->set_temperature expects degrees)
     if (api_) {
         api_->set_temperature(
-            printer_state_.active_extruder_name(), static_cast<double>(cached_extruder_target_),
-            [target = cached_extruder_target_]() {
+            printer_state_.active_extruder_name(), value,
+            [target = static_cast<int>(value)]() {
                 NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target);
             },
             [](const MoonrakerError& error) {
@@ -1114,13 +1118,14 @@ void ControlsPanel::handle_custom_bed_confirmed(float value) {
     spdlog::info("[{}] Custom bed temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
 
-    cached_bed_target_ = static_cast<int>(value);
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_bed_target_ = static_cast<int>(value * 10);
 
-    // Send temperature command to printer
+    // Send temperature command to printer (api_->set_temperature expects degrees)
     if (api_) {
         api_->set_temperature(
-            "heater_bed", static_cast<double>(cached_bed_target_),
-            [target = cached_bed_target_]() {
+            "heater_bed", value,
+            [target = static_cast<int>(value)]() {
                 NOTIFY_SUCCESS(lv_tr("Bed target set to {}°C"), target);
             },
             [](const MoonrakerError& error) {
@@ -1132,22 +1137,23 @@ void ControlsPanel::handle_custom_bed_confirmed(float value) {
 void ControlsPanel::handle_chamber_target_edit() {
     spdlog::debug("[{}] Opening chamber temperature keypad", get_name());
 
-    ui_keypad_config_t config = {.initial_value = static_cast<float>(
-                                     cached_chamber_target_ > 0 ? cached_chamber_target_ : 50),
-                                 .min_value = 0.0f,
-                                 .max_value = static_cast<float>(chamber_max_temp_),
-                                 .title_label = "Chamber Temperature",
-                                 .unit_label = "°C",
-                                 .allow_decimal = false,
-                                 .allow_negative = false,
-                                 .callback =
-                                     [](float value, void* user_data) {
-                                         auto* self = static_cast<ControlsPanel*>(user_data);
-                                         if (self) {
-                                             self->handle_custom_chamber_confirmed(value);
-                                         }
-                                     },
-                                 .user_data = this};
+    ui_keypad_config_t config = {
+        .initial_value = static_cast<float>(
+            cached_chamber_target_ > 0 ? centi_to_degrees(cached_chamber_target_) : 50),
+        .min_value = 0.0f,
+        .max_value = static_cast<float>(chamber_max_temp_),
+        .title_label = lv_tr("Chamber Temperature"),
+        .unit_label = "°C",
+        .allow_decimal = false,
+        .allow_negative = false,
+        .callback =
+            [](float value, void* user_data) {
+                auto* self = static_cast<ControlsPanel*>(user_data);
+                if (self) {
+                    self->handle_custom_chamber_confirmed(value);
+                }
+            },
+        .user_data = this};
 
     ui_keypad_show(&config);
 }
@@ -1156,29 +1162,41 @@ void ControlsPanel::handle_custom_chamber_confirmed(float value) {
     spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
 
-    cached_chamber_target_ = static_cast<int>(value);
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_chamber_target_ = static_cast<int>(value * 10);
 
-    // Send temperature command to printer - chamber is typically a temperature_fan
+    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
     if (api_) {
         // Get the chamber heater object name from printer discovery
-        // (e.g., "chamber" from "heater_generic chamber" or "temperature_fan chamber")
-        const std::string& heater_object =
-            printer_state_.get_discovery().chamber_heater_object_name();
+        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
+        // "temperature_fan chamber")
+        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
 
-        if (heater_object.empty()) {
+        if (heater_full_name.empty()) {
             NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
             return;
         }
 
-        // Use SET_HEATER_TEMPERATURE which works for temperature_fan, heater_generic, etc.
-        char gcode[96];
-        std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                      heater_object.c_str(), cached_chamber_target_);
+        char gcode[128];
+        int target = static_cast<int>(value);
+
+        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
+        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
+        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
+            // Extract the fan name after "temperature_fan " prefix
+            std::string fan_name = heater_full_name.substr(16);
+            std::snprintf(gcode, sizeof(gcode),
+                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
+                          fan_name.c_str(), target);
+        } else {
+            // heater_generic or other heater type
+            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
+            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
+                          object_name.c_str(), target);
+        }
+
         api_->execute_gcode(
-            gcode,
-            [target = cached_chamber_target_]() {
-                NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target);
-            },
+            gcode, [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
             });

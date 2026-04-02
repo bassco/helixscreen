@@ -278,6 +278,10 @@ translations:
   Chamber Sensor: Sensor de Cámara
   Chamber Temperature: Temperatura de la cámara
   Chamber and dryer humidity monitoring: Monitoreo de humedad de cámara y secador
+  'Chamber at %d°C': 'Cámara a %d°C'
+  Chamber heater not found in printer configuration: Calentador de cámara no encontrado en la configuración de la impresora
+  'Chamber heating to %d°C...': 'Calentando cámara a %d°C...'
+  'Chamber target set to {}°C': 'Objetivo de cámara establecido en {}°C'
   'Chamber:': 'Cámara:'
   Change: Cambiar
   Change LED color based on printer state: Cambiar color de LED según el estado de la impresora

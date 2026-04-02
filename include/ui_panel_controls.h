@@ -221,6 +221,8 @@ class ControlsPanel : public PanelBase {
     ObserverGuard fan_observer_;
     ObserverGuard fans_version_observer_;      // Multi-fan list changes
     ObserverGuard temp_sensor_count_observer_; // Temp sensor list changes
+    ObserverGuard chamber_temp_observer_;      // Chamber temperature observer
+    ObserverGuard chamber_target_observer_;    // Chamber target temperature observer
 
     bool fans_rebuild_pending_ = false; ///< Coalesces rapid fans_version observer notifications
     bool temps_rebuild_pending_ =
