@@ -27,6 +27,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "memory_utils.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -34,6 +36,17 @@
 #include <unordered_map>
 
 using namespace helix;
+
+// Detect low-performance platforms at compile time or runtime.
+// Returns true on K1/K2/MIPS (weak CPUs) or constrained-memory devices.
+static bool reduced_effects() {
+#if defined(HELIX_PLATFORM_K2) || defined(HELIX_PLATFORM_MIPS)
+    return true;
+#else
+    static const bool cached = helix::get_system_memory_info().is_constrained_device();
+    return cached;
+#endif
+}
 
 // ============================================================================
 // Constants
@@ -675,9 +688,16 @@ static lv_color_t ph_blend(lv_color_t c1, lv_color_t c2, float factor) {
 // lighter tint of the filament color. For very dark filaments (black), uses a
 // contrasting blue tint so the glow is still visible.
 
-static constexpr int CURVE_SEGMENTS = 10;      // Segments per bezier curve (fwd-decl for glow)
+static constexpr int CURVE_SEGMENTS_FULL = 10;  // Segments per bezier curve (high quality)
+static constexpr int CURVE_SEGMENTS_REDUCED = 5; // Segments per bezier curve (low-perf devices)
 static constexpr lv_opa_t GLOW_OPA = 60;       // Base glow opacity
 static constexpr int32_t GLOW_WIDTH_EXTRA = 6; // Extra width beyond tube on each side
+
+// Runtime curve segment count — fewer segments = fewer draw calls per curve
+static int curve_segments() {
+    static const int cached = reduced_effects() ? CURVE_SEGMENTS_REDUCED : CURVE_SEGMENTS_FULL;
+    return cached;
+}
 
 // Get a suitable glow color from a filament color
 static lv_color_t get_glow_color(lv_color_t color) {
@@ -692,6 +712,7 @@ static lv_color_t get_glow_color(lv_color_t color) {
 // Draw a glow line (wide, low-opacity backdrop)
 static void draw_glow_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, int32_t y2,
                            lv_color_t filament_color, int32_t tube_width) {
+    if (reduced_effects()) return;
     lv_draw_line_dsc_t line_dsc;
     lv_draw_line_dsc_init(&line_dsc);
     line_dsc.color = get_glow_color(filament_color);
@@ -713,13 +734,14 @@ static void draw_glow_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2
 static void draw_glow_curve(lv_layer_t* layer, int32_t x0, int32_t y0, int32_t cx1, int32_t cy1,
                             int32_t cx2, int32_t cy2, int32_t x1, int32_t y1,
                             lv_color_t filament_color, int32_t tube_width) {
+    if (reduced_effects()) return;
     lv_color_t glow_color = get_glow_color(filament_color);
     int32_t glow_width = tube_width + GLOW_WIDTH_EXTRA;
 
     int32_t prev_x = x0;
     int32_t prev_y = y0;
-    for (int i = 1; i <= CURVE_SEGMENTS; i++) {
-        float t = (float)i / CURVE_SEGMENTS;
+    for (int i = 1; i <= curve_segments(); i++) {
+        float t = (float)i / curve_segments();
         float inv = 1.0f - t;
         float b0 = inv * inv * inv;
         float b1 = 3.0f * inv * inv * t;
@@ -740,7 +762,7 @@ static void draw_glow_curve(lv_layer_t* layer, int32_t x0, int32_t y0, int32_t c
         // Butt caps on interior joints to prevent opacity overlap;
         // round caps only on the curve endpoints
         line_dsc.round_start = (i == 1);
-        line_dsc.round_end = (i == CURVE_SEGMENTS);
+        line_dsc.round_end = (i == curve_segments());
         lv_draw_line(layer, &line_dsc);
 
         prev_x = bx;
@@ -931,6 +953,7 @@ static void draw_flow_dots_path(lv_layer_t* layer, const ActiveFilamentPath& pat
 // Same overall size as before — no bigger than the original radius.
 static void draw_sensor_dot(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_t color,
                             bool filled, int32_t radius) {
+    const bool simple = reduced_effects();
     lv_draw_arc_dsc_t arc_dsc;
     lv_draw_arc_dsc_init(&arc_dsc);
     arc_dsc.center.x = cx;
@@ -939,28 +962,34 @@ static void draw_sensor_dot(lv_layer_t* layer, int32_t cx, int32_t cy, lv_color_
     arc_dsc.end_angle = 360;
 
     // Shadow: same darkening as tube shadow (ph_darken 35), drawn at full radius
-    arc_dsc.radius = static_cast<uint16_t>(radius);
-    arc_dsc.width = static_cast<uint16_t>(radius * 2);
-    arc_dsc.color = ph_darken(color, 35);
-    lv_draw_arc(layer, &arc_dsc);
+    if (!simple) {
+        arc_dsc.radius = static_cast<uint16_t>(radius);
+        arc_dsc.width = static_cast<uint16_t>(radius * 2);
+        arc_dsc.color = ph_darken(color, 35);
+        lv_draw_arc(layer, &arc_dsc);
+    }
 
     if (filled) {
-        // Body: slightly inset from shadow edge
-        int32_t body_r = LV_MAX(1, radius - 1);
+        // Body: full radius in simple mode, slightly inset on full quality
+        int32_t body_r = simple ? radius : LV_MAX(1, radius - 1);
+        arc_dsc.center.x = cx;
+        arc_dsc.center.y = cy;
         arc_dsc.radius = static_cast<uint16_t>(body_r);
         arc_dsc.width = static_cast<uint16_t>(body_r * 2);
         arc_dsc.color = color;
         lv_draw_arc(layer, &arc_dsc);
 
-        // Highlight: small bright dot offset toward top-right (matching tube light direction)
-        int32_t hl_r = LV_MAX(1, radius / 3);
-        int32_t hl_off = LV_MAX(1, radius / 3);
-        arc_dsc.center.x = cx + hl_off;
-        arc_dsc.center.y = cy - hl_off;
-        arc_dsc.radius = static_cast<uint16_t>(hl_r);
-        arc_dsc.width = static_cast<uint16_t>(hl_r * 2);
-        arc_dsc.color = ph_lighten(color, 44);
-        lv_draw_arc(layer, &arc_dsc);
+        // Highlight: small bright dot offset toward top-right
+        if (!simple) {
+            int32_t hl_r = LV_MAX(1, radius / 3);
+            int32_t hl_off = LV_MAX(1, radius / 3);
+            arc_dsc.center.x = cx + hl_off;
+            arc_dsc.center.y = cy - hl_off;
+            arc_dsc.radius = static_cast<uint16_t>(hl_r);
+            arc_dsc.width = static_cast<uint16_t>(hl_r * 2);
+            arc_dsc.color = ph_lighten(color, 44);
+            lv_draw_arc(layer, &arc_dsc);
+        }
     } else {
         // Empty fitting: outline ring only (no fill)
         arc_dsc.radius = static_cast<uint16_t>(radius - 1);
@@ -999,94 +1028,98 @@ static void draw_flat_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2
 static void draw_tube_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, int32_t y2,
                            lv_color_t color, int32_t width, bool cap_start = true,
                            bool cap_end = true) {
-    // Shadow: wider, darker — provides depth beneath the tube
-    int32_t shadow_extra = LV_MAX(2, width / 2);
-    lv_color_t shadow_color = ph_darken(color, 35);
-    draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra, cap_start, cap_end);
+    const bool simple = reduced_effects();
 
-    // Body: main tube surface
+    // Shadow: wider, darker — provides depth beneath the tube
+    if (!simple) {
+        int32_t shadow_extra = LV_MAX(2, width / 2);
+        lv_color_t shadow_color = ph_darken(color, 35);
+        draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra, cap_start, cap_end);
+    }
+
+    // Body: main tube surface (always drawn)
     draw_flat_line(layer, x1, y1, x2, y2, color, width, cap_start, cap_end);
 
     // Highlight: narrower, lighter — specular reflection along tube surface
-    // Offset 1px toward top-left to simulate light source direction
-    int32_t hl_width = LV_MAX(1, width * 2 / 5);
-    lv_color_t hl_color = ph_lighten(color, 44);
+    if (!simple) {
+        int32_t hl_width = LV_MAX(1, width * 2 / 5);
+        lv_color_t hl_color = ph_lighten(color, 44);
 
-    // Calculate perpendicular offset for highlight (toward top-left light source)
-    // For vertical lines: offset left; for angled lines: offset perpendicular
-    int32_t dx = x2 - x1;
-    int32_t dy = y2 - y1;
-    int32_t offset_x = 0;
-    int32_t offset_y = 0;
-    if (dx == 0) {
-        // Vertical line — highlight offset to the right
-        offset_x = (width / 4 + 1);
-    } else if (dy == 0) {
-        // Horizontal line — highlight offset upward
-        offset_y = -(width / 4 + 1);
-    } else {
-        // Angled line — offset perpendicular toward top-left
-        // Perpendicular direction: (-dy, dx) normalized, scaled by offset amount
-        float len = sqrtf((float)(dx * dx + dy * dy));
-        float px = -(float)dy / len;
-        float py = (float)dx / len;
-        // Choose direction that goes toward top-left (negative x or y)
-        if (px + py > 0) {
-            px = -px;
-            py = -py;
+        int32_t dx = x2 - x1;
+        int32_t dy = y2 - y1;
+        int32_t offset_x = 0;
+        int32_t offset_y = 0;
+        if (dx == 0) {
+            offset_x = (width / 4 + 1);
+        } else if (dy == 0) {
+            offset_y = -(width / 4 + 1);
+        } else {
+            float len = sqrtf((float)(dx * dx + dy * dy));
+            float px = -(float)dy / len;
+            float py = (float)dx / len;
+            if (px + py > 0) {
+                px = -px;
+                py = -py;
+            }
+            int32_t off_amount = width / 4 + 1;
+            offset_x = (int32_t)(px * off_amount);
+            offset_y = (int32_t)(py * off_amount);
         }
-        int32_t off_amount = width / 4 + 1;
-        offset_x = (int32_t)(px * off_amount);
-        offset_y = (int32_t)(py * off_amount);
-    }
 
-    draw_flat_line(layer, x1 + offset_x, y1 + offset_y, x2 + offset_x, y2 + offset_y, hl_color,
-                   hl_width, cap_start, cap_end);
+        draw_flat_line(layer, x1 + offset_x, y1 + offset_y, x2 + offset_x, y2 + offset_y, hl_color,
+                       hl_width, cap_start, cap_end);
+    }
 }
 
 // Draw a hollow tube (clear PTFE tubing look): walls + see-through bore
 // Same outer diameter as a solid tube, but the center shows the background
 static void draw_hollow_tube_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, int32_t y2,
                                   lv_color_t wall_color, lv_color_t bg_color, int32_t width) {
-    // Shadow: same outer diameter as solid tube
-    int32_t shadow_extra = LV_MAX(2, width / 2);
-    lv_color_t shadow_color = ph_darken(wall_color, 25); // Lighter shadow for clear tube
-    draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra);
+    const bool simple = reduced_effects();
 
-    // Tube wall: the PTFE material
+    // Shadow: same outer diameter as solid tube
+    if (!simple) {
+        int32_t shadow_extra = LV_MAX(2, width / 2);
+        lv_color_t shadow_color = ph_darken(wall_color, 25);
+        draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra);
+    }
+
+    // Tube wall: the PTFE material (always drawn)
     draw_flat_line(layer, x1, y1, x2, y2, wall_color, width);
 
-    // Bore: background color fill to simulate clear center
+    // Bore: background color fill to simulate clear center (always drawn)
     int32_t bore_width = LV_MAX(1, width - 2);
     draw_flat_line(layer, x1, y1, x2, y2, bg_color, bore_width);
 
-    // Highlight on outer wall surface (same offset logic as solid tube)
-    int32_t hl_width = LV_MAX(1, width * 2 / 5);
-    lv_color_t hl_color = ph_lighten(wall_color, 44);
+    // Highlight on outer wall surface
+    if (!simple) {
+        int32_t hl_width = LV_MAX(1, width * 2 / 5);
+        lv_color_t hl_color = ph_lighten(wall_color, 44);
 
-    int32_t dx = x2 - x1;
-    int32_t dy = y2 - y1;
-    int32_t offset_x = 0;
-    int32_t offset_y = 0;
-    if (dx == 0) {
-        offset_x = (width / 4 + 1);
-    } else if (dy == 0) {
-        offset_y = -(width / 4 + 1);
-    } else {
-        float len = sqrtf((float)(dx * dx + dy * dy));
-        float px = -(float)dy / len;
-        float py = (float)dx / len;
-        if (px + py > 0) {
-            px = -px;
-            py = -py;
+        int32_t dx = x2 - x1;
+        int32_t dy = y2 - y1;
+        int32_t offset_x = 0;
+        int32_t offset_y = 0;
+        if (dx == 0) {
+            offset_x = (width / 4 + 1);
+        } else if (dy == 0) {
+            offset_y = -(width / 4 + 1);
+        } else {
+            float len = sqrtf((float)(dx * dx + dy * dy));
+            float px = -(float)dy / len;
+            float py = (float)dx / len;
+            if (px + py > 0) {
+                px = -px;
+                py = -py;
+            }
+            int32_t off_amount = width / 4 + 1;
+            offset_x = (int32_t)(px * off_amount);
+            offset_y = (int32_t)(py * off_amount);
         }
-        int32_t off_amount = width / 4 + 1;
-        offset_x = (int32_t)(px * off_amount);
-        offset_y = (int32_t)(py * off_amount);
-    }
 
-    draw_flat_line(layer, x1 + offset_x, y1 + offset_y, x2 + offset_x, y2 + offset_y, hl_color,
-                   hl_width);
+        draw_flat_line(layer, x1 + offset_x, y1 + offset_y, x2 + offset_x, y2 + offset_y, hl_color,
+                       hl_width);
+    }
 }
 
 // Convenience: draw a solid vertical tube segment
@@ -1133,59 +1166,65 @@ static void draw_curved_tube(lv_layer_t* layer, int32_t x0, int32_t y0, int32_t 
                              int32_t width, bool cap_start = true, bool cap_end = true,
                              ActiveFilamentPath* path = nullptr) {
     // Pre-compute all bezier points
-    BezierPt pts[CURVE_SEGMENTS + 1];
+    BezierPt pts[CURVE_SEGMENTS_FULL + 1];
     pts[0] = {x0, y0};
-    for (int i = 1; i <= CURVE_SEGMENTS; i++) {
-        pts[i] = bezier_eval(x0, y0, cx1, cy1, cx2, cy2, x1, y1, (float)i / CURVE_SEGMENTS);
+    for (int i = 1; i <= curve_segments(); i++) {
+        pts[i] = bezier_eval(x0, y0, cx1, cy1, cx2, cy2, x1, y1, (float)i / curve_segments());
     }
 
     // Round caps between interior segments (overdraw is invisible since same color).
     // Optionally suppress start/end caps at junction with adjacent straight segments.
-    // Pass 1: Shadow
-    int32_t shadow_extra = LV_MAX(2, width / 2);
-    lv_color_t shadow_color = ph_darken(color, 35);
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
-        bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
-        draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, shadow_color,
-                       width + shadow_extra, cs, ce);
+    const bool simple = reduced_effects();
+
+    // Pass 1: Shadow (skip on low-perf devices)
+    if (!simple) {
+        int32_t shadow_extra = LV_MAX(2, width / 2);
+        lv_color_t shadow_color = ph_darken(color, 35);
+        for (int i = 0; i < curve_segments(); i++) {
+            bool cs = (i == 0) ? cap_start : true;
+            bool ce = (i == curve_segments() - 1) ? cap_end : true;
+            draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, shadow_color,
+                           width + shadow_extra, cs, ce);
+        }
     }
 
-    // Pass 2: Body
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
+    // Pass 2: Body (always drawn)
+    for (int i = 0; i < curve_segments(); i++) {
         bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
+        bool ce = (i == curve_segments() - 1) ? cap_end : true;
         draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, color, width, cs, ce);
     }
 
-    // Pass 3: Highlight (use average curve direction for consistent offset)
-    int32_t hl_width = LV_MAX(1, width * 2 / 5);
-    lv_color_t hl_color = ph_lighten(color, 44);
-    int32_t dx = x1 - x0;
-    int32_t dy = y1 - y0;
-    int32_t offset_x = 0;
-    int32_t offset_y = 0;
-    if (dx == 0) {
-        offset_x = (width / 4 + 1);
-    } else if (dy == 0) {
-        offset_y = -(width / 4 + 1);
-    } else {
-        float len = sqrtf((float)(dx * dx + dy * dy));
-        float px = -(float)dy / len;
-        float py = (float)dx / len;
-        if (px + py > 0) {
-            px = -px;
-            py = -py;
+    // Pass 3: Highlight (skip on low-perf devices)
+    if (!simple) {
+        int32_t hl_width = LV_MAX(1, width * 2 / 5);
+        lv_color_t hl_color = ph_lighten(color, 44);
+        int32_t dx = x1 - x0;
+        int32_t dy = y1 - y0;
+        int32_t offset_x = 0;
+        int32_t offset_y = 0;
+        if (dx == 0) {
+            offset_x = (width / 4 + 1);
+        } else if (dy == 0) {
+            offset_y = -(width / 4 + 1);
+        } else {
+            float len = sqrtf((float)(dx * dx + dy * dy));
+            float px = -(float)dy / len;
+            float py = (float)dx / len;
+            if (px + py > 0) {
+                px = -px;
+                py = -py;
+            }
+            int32_t off_amount = width / 4 + 1;
+            offset_x = (int32_t)(px * off_amount);
+            offset_y = (int32_t)(py * off_amount);
         }
-        int32_t off_amount = width / 4 + 1;
-        offset_x = (int32_t)(px * off_amount);
-        offset_y = (int32_t)(py * off_amount);
-    }
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
-        bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
-        draw_flat_line(layer, pts[i].x + offset_x, pts[i].y + offset_y, pts[i + 1].x + offset_x,
-                       pts[i + 1].y + offset_y, hl_color, hl_width, cs, ce);
+        for (int i = 0; i < curve_segments(); i++) {
+            bool cs = (i == 0) ? cap_start : true;
+            bool ce = (i == curve_segments() - 1) ? cap_end : true;
+            draw_flat_line(layer, pts[i].x + offset_x, pts[i].y + offset_y, pts[i + 1].x + offset_x,
+                           pts[i + 1].y + offset_y, hl_color, hl_width, cs, ce);
+        }
     }
     if (path)
         path->add_curve(x0, y0, cx1, cy1, cx2, cy2, x1, y1);
@@ -1197,69 +1236,75 @@ static void draw_curved_hollow_tube(lv_layer_t* layer, int32_t x0, int32_t y0, i
                                     int32_t cy1, int32_t cx2, int32_t cy2, int32_t x1, int32_t y1,
                                     lv_color_t wall_color, lv_color_t bg_color, int32_t width,
                                     bool cap_start = true, bool cap_end = true) {
-    BezierPt pts[CURVE_SEGMENTS + 1];
+    BezierPt pts[CURVE_SEGMENTS_FULL + 1];
     pts[0] = {x0, y0};
-    for (int i = 1; i <= CURVE_SEGMENTS; i++) {
-        pts[i] = bezier_eval(x0, y0, cx1, cy1, cx2, cy2, x1, y1, (float)i / CURVE_SEGMENTS);
+    for (int i = 1; i <= curve_segments(); i++) {
+        pts[i] = bezier_eval(x0, y0, cx1, cy1, cx2, cy2, x1, y1, (float)i / curve_segments());
     }
 
     // Round caps between interior segments (overdraw is invisible since same color).
     // Optionally suppress start/end caps at junction with adjacent straight segments.
-    // Pass 1: Shadow
-    int32_t shadow_extra = LV_MAX(2, width / 2);
-    lv_color_t shadow_color = ph_darken(wall_color, 25);
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
-        bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
-        draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, shadow_color,
-                       width + shadow_extra, cs, ce);
+    const bool simple = reduced_effects();
+
+    // Pass 1: Shadow (skip on low-perf devices)
+    if (!simple) {
+        int32_t shadow_extra = LV_MAX(2, width / 2);
+        lv_color_t shadow_color = ph_darken(wall_color, 25);
+        for (int i = 0; i < curve_segments(); i++) {
+            bool cs = (i == 0) ? cap_start : true;
+            bool ce = (i == curve_segments() - 1) ? cap_end : true;
+            draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, shadow_color,
+                           width + shadow_extra, cs, ce);
+        }
     }
 
-    // Pass 2: Tube wall
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
+    // Pass 2: Tube wall (always drawn)
+    for (int i = 0; i < curve_segments(); i++) {
         bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
+        bool ce = (i == curve_segments() - 1) ? cap_end : true;
         draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, wall_color, width, cs,
                        ce);
     }
 
-    // Pass 3: Bore (background fill)
+    // Pass 3: Bore (always drawn — needed for hollow appearance)
     int32_t bore_width = LV_MAX(1, width - 2);
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
+    for (int i = 0; i < curve_segments(); i++) {
         bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
+        bool ce = (i == curve_segments() - 1) ? cap_end : true;
         draw_flat_line(layer, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, bg_color, bore_width,
                        cs, ce);
     }
 
-    // Pass 4: Highlight
-    int32_t hl_width = LV_MAX(1, width * 2 / 5);
-    lv_color_t hl_color = ph_lighten(wall_color, 44);
-    int32_t dx = x1 - x0;
-    int32_t dy = y1 - y0;
-    int32_t offset_x = 0;
-    int32_t offset_y = 0;
-    if (dx == 0) {
-        offset_x = (width / 4 + 1);
-    } else if (dy == 0) {
-        offset_y = -(width / 4 + 1);
-    } else {
-        float len = sqrtf((float)(dx * dx + dy * dy));
-        float px = -(float)dy / len;
-        float py = (float)dx / len;
-        if (px + py > 0) {
-            px = -px;
-            py = -py;
+    // Pass 4: Highlight (skip on low-perf devices)
+    if (!simple) {
+        int32_t hl_width = LV_MAX(1, width * 2 / 5);
+        lv_color_t hl_color = ph_lighten(wall_color, 44);
+        int32_t dx = x1 - x0;
+        int32_t dy = y1 - y0;
+        int32_t offset_x = 0;
+        int32_t offset_y = 0;
+        if (dx == 0) {
+            offset_x = (width / 4 + 1);
+        } else if (dy == 0) {
+            offset_y = -(width / 4 + 1);
+        } else {
+            float len = sqrtf((float)(dx * dx + dy * dy));
+            float px = -(float)dy / len;
+            float py = (float)dx / len;
+            if (px + py > 0) {
+                px = -px;
+                py = -py;
+            }
+            int32_t off_amount = width / 4 + 1;
+            offset_x = (int32_t)(px * off_amount);
+            offset_y = (int32_t)(py * off_amount);
         }
-        int32_t off_amount = width / 4 + 1;
-        offset_x = (int32_t)(px * off_amount);
-        offset_y = (int32_t)(py * off_amount);
-    }
-    for (int i = 0; i < CURVE_SEGMENTS; i++) {
-        bool cs = (i == 0) ? cap_start : true;
-        bool ce = (i == CURVE_SEGMENTS - 1) ? cap_end : true;
-        draw_flat_line(layer, pts[i].x + offset_x, pts[i].y + offset_y, pts[i + 1].x + offset_x,
-                       pts[i + 1].y + offset_y, hl_color, hl_width, cs, ce);
+        for (int i = 0; i < curve_segments(); i++) {
+            bool cs = (i == 0) ? cap_start : true;
+            bool ce = (i == curve_segments() - 1) ? cap_end : true;
+            draw_flat_line(layer, pts[i].x + offset_x, pts[i].y + offset_y, pts[i + 1].x + offset_x,
+                           pts[i + 1].y + offset_y, hl_color, hl_width, cs, ce);
+        }
     }
 }
 
@@ -1543,6 +1588,12 @@ static void draw_parallel_topology(lv_event_t* e, FilamentPathData* data) {
             draw_nozzle_stealthburner(layer, slot_x, toolhead_y, noz_color, tool_scale,
                                       toolhead_opa);
             break;
+        case helix::ToolheadStyle::CREALITY_K1:
+            draw_nozzle_creality_k1(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
+        case helix::ToolheadStyle::CREALITY_K2:
+            draw_nozzle_creality_k2(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
+            break;
         default:
             draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);
             break;
@@ -1822,6 +1873,14 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
                     draw_nozzle_stealthburner(layer, hub_cx, toolhead_y, noz_color, tool_scale,
                                               hub_noz_opa);
                     break;
+                case helix::ToolheadStyle::CREALITY_K1:
+                    draw_nozzle_creality_k1(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                                            hub_noz_opa);
+                    break;
+                case helix::ToolheadStyle::CREALITY_K2:
+                    draw_nozzle_creality_k2(layer, hub_cx, toolhead_y, noz_color, tool_scale,
+                                            hub_noz_opa);
+                    break;
                 default:
                     draw_nozzle_bambu(layer, hub_cx, toolhead_y, noz_color, tool_scale,
                                       hub_noz_opa);
@@ -1899,6 +1958,14 @@ static void draw_mixed_topology(lv_event_t* e, FilamentPathData* data) {
             case helix::ToolheadStyle::STEALTHBURNER:
                 draw_nozzle_stealthburner(layer, slot_x, toolhead_y, noz_color, tool_scale,
                                           toolhead_opa);
+                break;
+            case helix::ToolheadStyle::CREALITY_K1:
+                draw_nozzle_creality_k1(layer, slot_x, toolhead_y, noz_color, tool_scale,
+                                        toolhead_opa);
+                break;
+            case helix::ToolheadStyle::CREALITY_K2:
+                draw_nozzle_creality_k2(layer, slot_x, toolhead_y, noz_color, tool_scale,
+                                        toolhead_opa);
                 break;
             default:
                 draw_nozzle_bambu(layer, slot_x, toolhead_y, noz_color, tool_scale, toolhead_opa);

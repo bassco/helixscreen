@@ -601,15 +601,15 @@ TEST_CASE("AD5X IFS path segments", "[ams][ad5x_ifs]") {
         REQUIRE(backend.get_slot_filament_segment(0) == PathSegment::NOZZLE);
     }
 
-    SECTION("get_slot_filament_segment: non-active slot with filament → SPOOL") {
+    SECTION("get_slot_filament_segment: non-active slot with filament → HUB") {
         json notification;
         notification["save_variables"] = json{{"variables", standard_variables()}};
         notification["filament_switch_sensor _ifs_port_sensor_2"] =
             json{{"filament_detected", true}};
         Ad5xIfsTestAccess::handle_status(backend, notification);
 
-        // Slot 1 (port 2) has filament but is not active (T0→port1 is active)
-        REQUIRE(backend.get_slot_filament_segment(1) == PathSegment::SPOOL);
+        // Slot 1 (port 2) has filament but is not active — shows at hub
+        REQUIRE(backend.get_slot_filament_segment(1) == PathSegment::HUB);
     }
 
     SECTION("get_slot_filament_segment: empty slot → NONE") {

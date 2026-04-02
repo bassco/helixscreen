@@ -394,11 +394,12 @@ PathSegment AmsBackendAd5xIfs::get_slot_filament_segment(int slot_index) const {
         return PathSegment::NOZZLE;
     }
 
-    // Filament is in the slot but not at head — it's at the spool/lane
+    // Active slot in transit — filament is in the lane between gate and head
     if (is_active) {
         return PathSegment::LANE;
     }
-    return PathSegment::SPOOL;
+    // Non-active slots with filament detected at gate — show at hub
+    return PathSegment::HUB;
 }
 
 PathSegment AmsBackendAd5xIfs::infer_error_segment() const {

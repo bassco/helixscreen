@@ -91,7 +91,11 @@ PathSegment AmsBackendSnapmaker::get_slot_filament_segment(int slot_index) const
         return PathSegment::NOZZLE;
     }
     if (slot->status == SlotStatus::AVAILABLE) {
-        return PathSegment::SPOOL;
+        bool is_active = (system_info_.current_slot == slot_index);
+        if (is_active && system_info_.filament_loaded) {
+            return PathSegment::NOZZLE;
+        }
+        return PathSegment::HUB;
     }
     return PathSegment::NONE;
 }

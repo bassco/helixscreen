@@ -477,7 +477,17 @@ void AmsBackendCfs::handle_status_update(const nlohmann::json& notification) {
         const auto& sensor = params["filament_switch_sensor filament_sensor"];
         if (sensor.contains("filament_detected")) {
             std::lock_guard<std::mutex> lock(mutex_);
-            system_info_.filament_loaded = sensor["filament_detected"].get<bool>();
+            bool detected = sensor["filament_detected"].get<bool>();
+            system_info_.filament_loaded = detected;
+
+            // Detect load/unload completion from filament sensor state change
+            if (system_info_.action == AmsAction::LOADING && detected) {
+                spdlog::info("[AMS CFS] Load complete (filament sensor triggered)");
+                system_info_.action = AmsAction::IDLE;
+            } else if (system_info_.action == AmsAction::UNLOADING && !detected) {
+                spdlog::info("[AMS CFS] Unload complete (filament sensor cleared)");
+                system_info_.action = AmsAction::IDLE;
+            }
         }
         changed = true;
     }
@@ -525,10 +535,21 @@ PathSegment AmsBackendCfs::get_slot_filament_segment(int slot_index) const {
     if (!slot) {
         return PathSegment::NONE;
     }
+
+    bool is_active = (system_info_.current_slot == slot_index);
+
     switch (slot->status) {
     case SlotStatus::AVAILABLE:
     case SlotStatus::FROM_BUFFER:
-        return PathSegment::SPOOL;
+        // Active slot with filament loaded at nozzle = full path
+        if (is_active && system_info_.filament_loaded) {
+            return PathSegment::NOZZLE;
+        }
+        // Active slot during loading = show at hub (in transit)
+        if (is_active && system_info_.action == AmsAction::LOADING) {
+            return PathSegment::HUB;
+        }
+        return PathSegment::HUB;
     case SlotStatus::LOADED:
         return PathSegment::NOZZLE;
     default:
@@ -558,12 +579,21 @@ AmsError AmsBackendCfs::load_filament(int slot_index) {
     if (gcode.empty()) {
         return AmsErrorHelper::invalid_slot(slot_index, 15);
     }
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::LOADING;
+        system_info_.current_slot = slot_index;
+    }
     return ensure_homed_then(std::move(gcode));
 }
 
 AmsError AmsBackendCfs::unload_filament(int) {
     auto err = check_preconditions();
     if (err.result != AmsResult::SUCCESS) return err;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::UNLOADING;
+    }
     return ensure_homed_then(unload_gcode());
 }
 
@@ -574,6 +604,11 @@ AmsError AmsBackendCfs::select_slot(int) {
 AmsError AmsBackendCfs::change_tool(int tool) {
     auto err = check_preconditions();
     if (err.result != AmsResult::SUCCESS) return err;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        system_info_.action = AmsAction::LOADING;
+        system_info_.current_slot = tool;
+    }
     return ensure_homed_then(load_gcode(tool));
 }
 

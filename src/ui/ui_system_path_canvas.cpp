@@ -14,6 +14,8 @@
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_anthead.h"
 #include "nozzle_renderer_bambu.h"
+#include "nozzle_renderer_creality_k1.h"
+#include "nozzle_renderer_creality_k2.h"
 #include "nozzle_renderer_jabberwocky.h"
 #include "nozzle_renderer_stealthburner.h"
 #include "settings_manager.h"
@@ -931,6 +933,12 @@ static void system_path_draw_cb(lv_event_t* e) {
             case helix::ToolheadStyle::STEALTHBURNER:
                 draw_nozzle_stealthburner(layer, tool_x, tools_y, noz_color, small_scale);
                 break;
+            case helix::ToolheadStyle::CREALITY_K1:
+                draw_nozzle_creality_k1(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
+            case helix::ToolheadStyle::CREALITY_K2:
+                draw_nozzle_creality_k2(layer, tool_x, tools_y, noz_color, small_scale);
+                break;
             default:
                 draw_nozzle_bambu(layer, tool_x, tools_y, noz_color, small_scale);
                 break;
@@ -1118,6 +1126,14 @@ static void system_path_draw_cb(lv_event_t* e) {
             case helix::ToolheadStyle::STEALTHBURNER:
                 draw_nozzle_stealthburner(layer, center_x, nozzle_y, noz_color,
                                           data->extruder_scale);
+                break;
+            case helix::ToolheadStyle::CREALITY_K1:
+                draw_nozzle_creality_k1(layer, center_x, nozzle_y, noz_color,
+                                        data->extruder_scale);
+                break;
+            case helix::ToolheadStyle::CREALITY_K2:
+                draw_nozzle_creality_k2(layer, center_x, nozzle_y, noz_color,
+                                        data->extruder_scale);
                 break;
             default:
                 draw_nozzle_bambu(layer, center_x, nozzle_y, noz_color, data->extruder_scale);
