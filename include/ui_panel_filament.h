@@ -243,6 +243,12 @@ class FilamentPanel : public PanelBase {
     int bed_max_temp_ = 150;
     int min_extrude_temp_ = 170; ///< Klipper's min_extrude_temp (default 170°C)
 
+    // Auto-preheat state for load/unload
+    enum class PreheatOp { NONE, LOAD, UNLOAD };
+    PreheatOp pending_preheat_op_ = PreheatOp::NONE;
+    int pending_preheat_target_ = 0;   ///< Target temp in °C for pending preheat
+    int prior_nozzle_target_ = 0;      ///< Nozzle target before preheat (0 = was off → cool down after)
+
     // Filament macros now resolved via StandardMacros singleton (load, unload, purge)
 
     // Child widgets (for imperative state management)
@@ -320,6 +326,15 @@ class FilamentPanel : public PanelBase {
     void update_preset_button_temps();   ///< Update preset button labels from filament DB
     void check_and_auto_select_preset(); ///< Auto-select preset if targets match
     void update_all_temps();             ///< Unified handler for temp observer bundle
+    void check_pending_preheat();                        ///< Called from update_all_temps()
+    void cancel_pending_preheat();                       ///< Reset preheat state + notify
+    struct PreheatTempResult {
+        int temp = 0;
+        std::string material_name;
+    };
+    PreheatTempResult resolve_preheat_temp() const;      ///< Priority: ext spool > AMS slot > preset > fallback
+    void start_preheat_for_op(PreheatOp op);             ///< Resolve temp, heat, set pending state
+    void restore_heater_after_preheat();                 ///< Cool down if heater was off before preheat
 
     //
     // === Instance Handlers ===

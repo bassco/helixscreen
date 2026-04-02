@@ -1553,6 +1553,115 @@ bool FilamentPanel::is_extrusion_allowed() const {
     return helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_);
 }
 
+FilamentPanel::PreheatTempResult FilamentPanel::resolve_preheat_temp() const {
+    // Priority 1: External spool
+    auto ext = AmsState::instance().get_external_spool_info();
+    if (ext.has_value()) {
+        auto active = helix::build_active_material(*ext);
+        if (active.material_info.nozzle_min > 0) {
+            return {active.material_info.nozzle_min, active.display_name};
+        }
+    }
+
+    // Priority 2: AMS active slot (loaded filament)
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (backend) {
+        AmsSystemInfo sys_info = backend->get_system_info();
+        const SlotInfo* active_slot = sys_info.get_active_slot();
+        if (active_slot) {
+            auto active = helix::build_active_material(*active_slot);
+            if (active.material_info.nozzle_min > 0) {
+                return {active.material_info.nozzle_min, active.display_name};
+            }
+        }
+    }
+
+    // Priority 3: Selected material preset
+    if (selected_material_ >= 0 && selected_material_ < PRESET_COUNT) {
+        auto mat = filament::find_material(PRESET_MATERIAL_NAMES[selected_material_]);
+        if (mat) {
+            return {mat->nozzle_min, PRESET_MATERIAL_NAMES[selected_material_]};
+        }
+    }
+
+    // Priority 4: Fallback to min_extrude_temp_
+    return {min_extrude_temp_, ""};
+}
+
+void FilamentPanel::start_preheat_for_op(PreheatOp op) {
+    auto [target, material_name] = resolve_preheat_temp();
+
+    // Snapshot heater state before we change it
+    prior_nozzle_target_ = nozzle_target_;
+    pending_preheat_op_ = op;
+    pending_preheat_target_ = target;
+
+    if (api_) {
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), static_cast<double>(target), []() {},
+            [](const MoonrakerError& /*err*/) {});
+    }
+
+    if (material_name.empty()) {
+        NOTIFY_INFO(lv_tr("Heating to {}°C..."), target);
+    } else {
+        NOTIFY_INFO(lv_tr("Heating to {}°C for {}..."), target, material_name);
+    }
+
+    const char* op_name = (op == PreheatOp::LOAD) ? "load" : "unload";
+    spdlog::info("[{}] Starting preheat to {}°C ({}) for {}", get_name(), target,
+                 material_name.empty() ? "fallback" : material_name, op_name);
+}
+
+void FilamentPanel::check_pending_preheat() {
+    if (pending_preheat_op_ == PreheatOp::NONE) {
+        return;
+    }
+
+    constexpr int TEMP_THRESHOLD = 5;
+    if (nozzle_current_ < (pending_preheat_target_ - TEMP_THRESHOLD)) {
+        return;
+    }
+
+    PreheatOp op = pending_preheat_op_;
+    pending_preheat_op_ = PreheatOp::NONE;
+    pending_preheat_target_ = 0;
+
+    spdlog::info("[{}] Preheat complete, executing {}", get_name(),
+                 op == PreheatOp::LOAD ? "load" : "unload");
+
+    if (op == PreheatOp::LOAD) {
+        execute_load();
+    } else {
+        execute_unload();
+    }
+}
+
+void FilamentPanel::cancel_pending_preheat() {
+    if (pending_preheat_op_ == PreheatOp::NONE) {
+        return;
+    }
+
+    spdlog::info("[{}] Preheat cancelled", get_name());
+    pending_preheat_op_ = PreheatOp::NONE;
+    pending_preheat_target_ = 0;
+
+    // Restore heater to prior state
+    restore_heater_after_preheat();
+
+    NOTIFY_INFO(lv_tr("Preheat cancelled"));
+}
+
+void FilamentPanel::restore_heater_after_preheat() {
+    if (prior_nozzle_target_ == 0 && api_) {
+        spdlog::info("[{}] Heater was off before preheat, cooling down", get_name());
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), 0, []() {},
+            [](const MoonrakerError& /*err*/) {});
+    }
+    prior_nozzle_target_ = 0;
+}
+
 void FilamentPanel::set_limits(int min_temp, int max_temp, int min_extrude_temp) {
     nozzle_min_temp_ = min_temp;
     nozzle_max_temp_ = max_temp;
