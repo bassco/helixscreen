@@ -116,17 +116,13 @@ TEST_CASE("change_tool sets SELECTING immediately in mock toolchanger mode",
         auto result = backend.change_tool(1);
         REQUIRE(result);
 
-        // Wait for async state transition
-        AmsAction action = AmsAction::IDLE;
-        for (int i = 0; i < 20; ++i) {
-            action = backend.get_current_action();
-            if (action != AmsAction::IDLE) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        CHECK(action != AmsAction::IDLE);
-
-        // Wait for completion
+        // change_tool sets action synchronously before returning, so the
+        // observed_actions callback should have captured the transition even
+        // if the background thread completes before we can poll.
+        // Wait briefly for completion then verify the transition was recorded.
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        REQUIRE_FALSE(observed_actions.empty());
+        CHECK(observed_actions.front() != AmsAction::IDLE);
     }
 
     SECTION("first observed action includes UNLOADING or SELECTING") {
