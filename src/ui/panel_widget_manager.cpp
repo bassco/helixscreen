@@ -462,19 +462,27 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
     // cards for hardware-gated widgets appear from the first frame, preventing
     // the grid from visually jumping when hardware gates fire.
     {
-        // Collect all enabled 1x1 cells into a set for O(1) lookup
+        // Collect all enabled 1x1 cells and cells occupied by larger widgets
         struct CellHash {
             size_t operator()(const std::pair<int, int>& p) const {
                 return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 16);
             }
         };
         std::unordered_set<std::pair<int, int>, CellHash> single_cells;
+        std::unordered_set<std::pair<int, int>, CellHash> occupied_by_large;
         for (const auto& entry : widget_config.page_entries(page_index)) {
             if (!entry.enabled || !entry.has_grid_position()) {
                 continue;
             }
             if (entry.colspan == 1 && entry.rowspan == 1) {
                 single_cells.insert({entry.col, entry.row});
+            } else {
+                // Mark all cells covered by this multi-cell widget
+                for (int r = entry.row; r < entry.row + entry.rowspan; r++) {
+                    for (int c = entry.col; c < entry.col + entry.colspan; c++) {
+                        occupied_by_large.insert({c, r});
+                    }
+                }
             }
         }
 
@@ -485,21 +493,16 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
                 continue;
             }
 
-            // BFS from this cell
+            // BFS from this cell to collect the connected component
             std::queue<std::pair<int, int>> q;
             q.push(cell);
             visited.insert(cell);
 
-            int min_col = cell.first, max_col = cell.first;
-            int min_row = cell.second, max_row_card = cell.second;
-
+            std::vector<std::pair<int, int>> component_cells;
             while (!q.empty()) {
                 auto [c, r] = q.front();
                 q.pop();
-                min_col = std::min(min_col, c);
-                max_col = std::max(max_col, c);
-                min_row = std::min(min_row, r);
-                max_row_card = std::max(max_row_card, r);
+                component_cells.push_back({c, r});
 
                 const std::pair<int, int> neighbors[] = {
                     {c - 1, r}, {c + 1, r}, {c, r - 1}, {c, r + 1}};
@@ -511,28 +514,94 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
                 }
             }
 
-            int card_colspan = max_col - min_col + 1;
-            int card_rowspan = max_row_card - min_row + 1;
-
-            // Create a plain lv_obj with Card styling as the background
-            lv_obj_t* card_bg = lv_obj_create(container);
-            lv_obj_remove_style(card_bg, nullptr, LV_PART_MAIN);
-            lv_obj_add_style(card_bg, ThemeManager::instance().get_style(StyleRole::Card),
-                             LV_PART_MAIN);
-            lv_obj_set_style_pad_all(card_bg, 0, 0);
-            lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_SCROLLABLE);
-            // Set initial size from cached cell dimensions so the card renders
-            // at approximately the right shape on the first frame, before the
-            // grid layout resolves. Grid STRETCH overrides once layout runs.
-            if (cell_w > 0 && cell_h > 0) {
-                lv_obj_set_size(card_bg, cell_w * card_colspan, cell_h * card_rowspan);
+            // Build the card coverage: bounding box of the component, filling
+            // gaps between 1x1 widgets, but excluding cells occupied by larger
+            // widgets that intrude into the region.
+            int min_col = component_cells[0].first;
+            int max_col = min_col;
+            int min_row = component_cells[0].second;
+            int max_row_card = min_row;
+            for (const auto& [c, r] : component_cells) {
+                min_col = std::min(min_col, c);
+                max_col = std::max(max_col, c);
+                min_row = std::min(min_row, r);
+                max_row_card = std::max(max_row_card, r);
             }
-            lv_obj_set_grid_cell(card_bg, LV_GRID_ALIGN_STRETCH, min_col, card_colspan,
-                                 LV_GRID_ALIGN_STRETCH, min_row, card_rowspan);
 
-            spdlog::debug("[PanelWidgetManager] Card background at ({},{} {}x{})", min_col, min_row,
-                          card_colspan, card_rowspan);
+            // All cells in bounding box except those occupied by larger widgets
+            std::unordered_set<std::pair<int, int>, CellHash> remaining;
+            for (int r = min_row; r <= max_row_card; r++) {
+                for (int c = min_col; c <= max_col; c++) {
+                    if (!occupied_by_large.count({c, r})) {
+                        remaining.insert({c, r});
+                    }
+                }
+            }
+
+            // Decompose into maximal rectangles (greedy). Picks the top-left
+            // remaining cell, extends right then down, and removes covered cells.
+            while (!remaining.empty()) {
+                // Find top-left cell (min row, then min col)
+                auto top_left = *std::min_element(
+                    remaining.begin(), remaining.end(),
+                    [](const auto& a, const auto& b) {
+                        return a.second < b.second ||
+                               (a.second == b.second && a.first < b.first);
+                    });
+
+                int start_col = top_left.first;
+                int start_row = top_left.second;
+
+                // Extend right as far as possible
+                int end_col = start_col;
+                while (remaining.count({end_col + 1, start_row})) {
+                    end_col++;
+                }
+
+                // Extend down as far as all columns in the run are present
+                int end_row = start_row;
+                for (;;) {
+                    bool can_extend = true;
+                    for (int c = start_col; c <= end_col; c++) {
+                        if (!remaining.count({c, end_row + 1})) {
+                            can_extend = false;
+                            break;
+                        }
+                    }
+                    if (!can_extend) break;
+                    end_row++;
+                }
+
+                // Remove covered cells
+                for (int r = start_row; r <= end_row; r++) {
+                    for (int c = start_col; c <= end_col; c++) {
+                        remaining.erase({c, r});
+                    }
+                }
+
+                int card_colspan = end_col - start_col + 1;
+                int card_rowspan = end_row - start_row + 1;
+
+                // Create a plain lv_obj with Card styling as the background
+                lv_obj_t* card_bg = lv_obj_create(container);
+                lv_obj_remove_style(card_bg, nullptr, LV_PART_MAIN);
+                lv_obj_add_style(card_bg, ThemeManager::instance().get_style(StyleRole::Card),
+                                 LV_PART_MAIN);
+                lv_obj_set_style_pad_all(card_bg, 0, 0);
+                lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_CLICKABLE);
+                lv_obj_remove_flag(card_bg, LV_OBJ_FLAG_SCROLLABLE);
+                // Set initial size from cached cell dimensions so the card renders
+                // at approximately the right shape on the first frame, before the
+                // grid layout resolves. Grid STRETCH overrides once layout runs.
+                if (cell_w > 0 && cell_h > 0) {
+                    lv_obj_set_size(card_bg, cell_w * card_colspan, cell_h * card_rowspan);
+                }
+                lv_obj_set_grid_cell(card_bg, LV_GRID_ALIGN_STRETCH, start_col, card_colspan,
+                                     LV_GRID_ALIGN_STRETCH, start_row, card_rowspan);
+
+                spdlog::debug("[PanelWidgetManager] Card background at ({},{} {}x{})", start_col,
+                              start_row, card_colspan, card_rowspan);
+            }
         }
     }
 
