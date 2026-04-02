@@ -79,7 +79,7 @@
                   width="100%" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
                   style_margin_top="#space_sm" clickable="true" scrollable="false">
             <event_cb trigger="clicked" callback="on_zoffset_tune"/>
-            <text_muted width="content" text="Z-Offset:" translation_tag="Z-Offset:"/>
+            <text_muted width="content" text="Z-Off:" translation_tag="Z-Off:"/>
             <text_body bind_text="controls_z_offset" flex_grow="1" style_text_align="right"/>
             <icon src="chevron_right" size="xs" variant="secondary"/>
           </lv_obj>
