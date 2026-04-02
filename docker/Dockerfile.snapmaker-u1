@@ -34,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     ca-certificates \
     make \
+    ccache \
     cmake \
     python3 \
     file \
