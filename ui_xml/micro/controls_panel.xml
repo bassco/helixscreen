@@ -194,12 +194,19 @@
             <lv_obj name="chamber_section"
                     width="100%" flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
                     clickable="true" hidden="true">
-              <event_cb trigger="clicked" callback="on_chamber_temp_clicked"/>
               <bind_flag_if_eq subject="printer_has_chamber" flag="hidden" ref_value="0"/>
+              <icon src="fridge_industrial" size="xs" variant="secondary" clickable="false" event_bubble="true"/>
               <text_small text="Chamber:" translation_tag="Chamber:" clickable="false" event_bubble="true"/>
-              <temp_display name="chamber_temp_display"
-                            size="md" show_target="false" bind_current="chamber_temp" clickable="false"
-                            event_bubble="true"/>
+              <!-- Chamber temp display + edit icon -->
+              <lv_obj name="chamber_temp_edit_container"
+                      width="content" height="content" flex_flow="row" style_pad_all="0" scrollable="false"
+                      style_flex_cross_place="center" style_pad_gap="#space_xs" clickable="true">
+                <event_cb trigger="clicked" callback="on_chamber_target_edit"/>
+                <temp_display name="chamber_temp_display"
+                              size="md" show_target="true" bind_current="chamber_temp" bind_target="chamber_target"
+                              clickable="false" event_bubble="true"/>
+                <icon src="pencil" size="xs" variant="tertiary" clickable="false" event_bubble="true"/>
+              </lv_obj>
             </lv_obj>
             <!-- Secondary temperature sensors list (populated dynamically) -->
             <lv_obj name="secondary_temps_list"

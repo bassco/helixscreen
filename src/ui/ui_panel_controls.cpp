@@ -271,6 +271,7 @@ void ControlsPanel::init_subjects() {
         // Pencil icon edit handlers (open temperature keypad)
         {"on_nozzle_target_edit", on_nozzle_target_edit},
         {"on_bed_target_edit", on_bed_target_edit},
+        {"on_chamber_target_edit", on_chamber_target_edit},
     });
 
     subjects_initialized_ = true;
@@ -1093,6 +1094,62 @@ void ControlsPanel::handle_custom_bed_confirmed(float value) {
     }
 }
 
+void ControlsPanel::handle_chamber_target_edit() {
+    spdlog::debug("[{}] Opening chamber temperature keypad", get_name());
+
+    ui_keypad_config_t config = {.initial_value = static_cast<float>(
+                                     cached_chamber_target_ > 0 ? cached_chamber_target_ : 50),
+                                 .min_value = 0.0f,
+                                 .max_value = static_cast<float>(chamber_max_temp_),
+                                 .title_label = "Chamber Temperature",
+                                 .unit_label = "°C",
+                                 .allow_decimal = false,
+                                 .allow_negative = false,
+                                 .callback =
+                                     [](float value, void* user_data) {
+                                         auto* self = static_cast<ControlsPanel*>(user_data);
+                                         if (self) {
+                                             self->handle_custom_chamber_confirmed(value);
+                                         }
+                                     },
+                                 .user_data = this};
+
+    ui_keypad_show(&config);
+}
+
+void ControlsPanel::handle_custom_chamber_confirmed(float value) {
+    spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
+                 static_cast<int>(value));
+
+    cached_chamber_target_ = static_cast<int>(value);
+
+    // Send temperature command to printer - chamber is typically a temperature_fan
+    if (api_) {
+        // Get the chamber heater object name from printer discovery
+        // (e.g., "chamber" from "heater_generic chamber" or "temperature_fan chamber")
+        const std::string& heater_object =
+            printer_state_.get_discovery().chamber_heater_object_name();
+
+        if (heater_object.empty()) {
+            NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
+            return;
+        }
+
+        // Use SET_HEATER_TEMPERATURE which works for temperature_fan, heater_generic, etc.
+        char gcode[96];
+        std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
+                      heater_object.c_str(), cached_chamber_target_);
+        api_->execute_gcode(
+            gcode,
+            [target = cached_chamber_target_]() {
+                NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target);
+            },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
+            });
+    }
+}
+
 void ControlsPanel::handle_chamber_temp_clicked() {
     spdlog::debug("[{}] Chamber temp clicked - opening temperature graph", get_name());
     get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Chamber, parent_screen_);
@@ -1617,6 +1674,7 @@ PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_fans_clicke
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_temps_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, nozzle_target_edit)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, bed_target_edit)
+PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, chamber_target_edit)
 
 PANEL_TRAMPOLINE_USERDATA(ControlsPanel, motors_confirm)
 PANEL_TRAMPOLINE_USERDATA(ControlsPanel, motors_cancel)

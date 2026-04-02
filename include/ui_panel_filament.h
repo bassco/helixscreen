@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include "active_material_provider.h"
-#include "macro_param_modal.h"
 #include "ui_ams_edit_modal.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 
+#include "active_material_provider.h"
 #include "config.h"
+#include "macro_param_modal.h"
 #include "operation_timeout_guard.h"
 #include "subject_managed_panel.h"
 #include "ui/temperature_observer_bundle.h"
@@ -195,6 +195,8 @@ class FilamentPanel : public PanelBase {
     lv_subject_t nozzle_target_subject_;
     lv_subject_t bed_current_subject_;
     lv_subject_t bed_target_subject_;
+    lv_subject_t chamber_current_subject_;
+    lv_subject_t chamber_target_subject_;
 
     // Operation state
     OperationTimeoutGuard operation_guard_;
@@ -226,6 +228,8 @@ class FilamentPanel : public PanelBase {
     char nozzle_target_buf_[16];
     char bed_current_buf_[16];
     char bed_target_buf_[16];
+    char chamber_current_buf_[16];
+    char chamber_target_buf_[16];
 
     //
     // === Instance State ===
@@ -235,12 +239,15 @@ class FilamentPanel : public PanelBase {
     int nozzle_target_ = 0;
     int bed_current_ = 25;
     int bed_target_ = 0;
+    int chamber_current_ = 25;
+    int chamber_target_ = 0;
     int prev_nozzle_target_ = -1; ///< Previous target for change detection in update_all_temps
     int prev_bed_target_ = -1;    ///< Previous target for change detection in update_all_temps
     int selected_material_ = -1;  // -1=none, 0=PLA, 1=PETG, 2=ABS, 3=TPU
     int nozzle_min_temp_ = 0;
     int nozzle_max_temp_ = 500;
     int bed_max_temp_ = 150;
+    int chamber_max_temp_ = 150;
     int min_extrude_temp_ = 170; ///< Klipper's min_extrude_temp (default 170°C)
 
     // Auto-preheat state for load/unload
@@ -310,7 +317,9 @@ class FilamentPanel : public PanelBase {
 
     // Temperature observer bundle (nozzle + bed current/target)
     helix::ui::TemperatureObserverBundle<FilamentPanel> temp_observers_;
-    ObserverGuard ams_type_observer_;   ///< Adjusts temp card size when AMS hidden
+    ObserverGuard ams_type_observer_;       ///< Adjusts temp card size when AMS hidden
+    ObserverGuard chamber_temp_observer_;   ///< Chamber temperature observer
+    ObserverGuard chamber_target_observer_; ///< Chamber target temperature observer
     ObserverGuard ams_action_observer_; ///< Ends operation guard when AMS action returns to idle
 
     //
@@ -345,6 +354,8 @@ class FilamentPanel : public PanelBase {
     void update_spool_preset();
     void handle_nozzle_temp_tap();
     void handle_bed_temp_tap();
+    void handle_chamber_temp_tap();
+    void handle_custom_chamber_confirmed(float value);
     void handle_custom_nozzle_confirmed(float value);
     void handle_custom_bed_confirmed(float value);
     void handle_load_button();
@@ -355,6 +366,7 @@ class FilamentPanel : public PanelBase {
     void handle_purge_amount_select(int amount);
     void handle_cooldown();
     void update_material_temp_display();
+    void update_chamber_temp_display();
     void update_left_card_temps();
     void update_status_icon_for_state();
     static constexpr uint32_t OPERATION_TIMEOUT_MS =
@@ -392,6 +404,7 @@ class FilamentPanel : public PanelBase {
     static void on_bed_temp_tap_clicked(lv_event_t* e);
     static void on_nozzle_target_tap_clicked(lv_event_t* e);
     static void on_bed_target_tap_clicked(lv_event_t* e);
+    static void on_filament_chamber_target_tap(lv_event_t* e);
 
     // Purge amount callbacks (XML event_cb)
     static void on_purge_5mm_clicked(lv_event_t* e);

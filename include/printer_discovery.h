@@ -100,6 +100,7 @@ class PrinterDiscovery {
                 if (to_upper(heater_name).find("CHAMBER") != std::string::npos) {
                     has_chamber_heater_ = true;
                     chamber_heater_name_ = name;
+                    chamber_heater_object_name_ = heater_name;
                 }
             }
             // ================================================================
@@ -118,6 +119,13 @@ class PrinterDiscovery {
             else if (name.rfind("temperature_fan ", 0) == 0) {
                 sensors_.push_back(name);
                 fans_.push_back(name); // Also add to fans for control
+                // Check for chamber temperature_fan
+                std::string fan_name = name.substr(16); // Remove "temperature_fan " prefix
+                if (to_upper(fan_name).find("CHAMBER") != std::string::npos) {
+                    has_chamber_heater_ = true;
+                    chamber_heater_name_ = name;
+                    chamber_heater_object_name_ = fan_name;
+                }
             }
             // TMC stepper drivers with built-in temperature (tmc2240, tmc5160)
             else if (name.rfind("tmc2240 ", 0) == 0 || name.rfind("tmc5160 ", 0) == 0) {
@@ -577,6 +585,7 @@ class PrinterDiscovery {
         has_chamber_sensor_ = false;
         chamber_sensor_name_.clear();
         chamber_heater_name_.clear();
+        chamber_heater_object_name_.clear();
         has_led_ = false;
         led_effects_.clear();
         has_led_effects_ = false;
@@ -681,6 +690,10 @@ class PrinterDiscovery {
 
     [[nodiscard]] const std::string& chamber_heater_name() const {
         return chamber_heater_name_;
+    }
+
+    [[nodiscard]] const std::string& chamber_heater_object_name() const {
+        return chamber_heater_object_name_;
     }
 
     [[nodiscard]] bool has_led() const {
@@ -1146,7 +1159,8 @@ class PrinterDiscovery {
     bool has_chamber_heater_ = false;
     bool has_chamber_sensor_ = false;
     std::string chamber_sensor_name_;
-    std::string chamber_heater_name_;
+    std::string chamber_heater_name_;        ///< Full object name (e.g., "heater_generic chamber")
+    std::string chamber_heater_object_name_; ///< Object name only (e.g., "chamber")
     bool has_led_ = false;
     std::vector<std::string> led_effects_;
     bool has_led_effects_ = false;

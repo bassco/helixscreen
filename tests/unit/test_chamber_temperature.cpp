@@ -138,11 +138,8 @@ TEST_CASE("Manual chamber sensor override", "[chamber][override]") {
     temp_state.init_subjects(false);
 
     PrinterDiscovery discovery;
-    nlohmann::json objects = {
-        "temperature_sensor chamber",
-        "temperature_sensor enclosure_bme",
-        "extruder",
-        "heater_bed"};
+    nlohmann::json objects = {"temperature_sensor chamber", "temperature_sensor enclosure_bme",
+                              "extruder", "heater_bed"};
     discovery.parse_objects(objects);
 
     settings.set_chamber_sensor_assignment("temperature_sensor enclosure_bme");
@@ -202,28 +199,30 @@ TEST_CASE("Manual chamber assignment updates sensor role", "[chamber][role]") {
     auto& mgr = helix::sensors::TemperatureSensorManager::instance();
     mgr.init_subjects();
 
-    std::vector<std::string> objects = {
-        "temperature_sensor chamber_temp",
-        "temperature_sensor enclosure_bme",
-        "temperature_sensor mcu_temp"};
+    std::vector<std::string> objects = {"temperature_sensor chamber_temp",
+                                        "temperature_sensor enclosure_bme",
+                                        "temperature_sensor mcu_temp"};
     mgr.discover(objects);
 
     auto sensors = mgr.get_sensors_sorted();
-    auto it = std::find_if(sensors.begin(), sensors.end(),
-        [](const auto& s) { return s.klipper_name == "temperature_sensor enclosure_bme"; });
+    auto it = std::find_if(sensors.begin(), sensors.end(), [](const auto& s) {
+        return s.klipper_name == "temperature_sensor enclosure_bme";
+    });
     REQUIRE(it != sensors.end());
     REQUIRE(it->role == helix::sensors::TemperatureSensorRole::AUXILIARY);
 
     mgr.apply_chamber_sensor_override("temperature_sensor enclosure_bme");
 
     sensors = mgr.get_sensors_sorted();
-    it = std::find_if(sensors.begin(), sensors.end(),
-        [](const auto& s) { return s.klipper_name == "temperature_sensor enclosure_bme"; });
+    it = std::find_if(sensors.begin(), sensors.end(), [](const auto& s) {
+        return s.klipper_name == "temperature_sensor enclosure_bme";
+    });
     REQUIRE(it != sensors.end());
     REQUIRE(it->role == helix::sensors::TemperatureSensorRole::CHAMBER);
 
-    auto old_chamber = std::find_if(sensors.begin(), sensors.end(),
-        [](const auto& s) { return s.klipper_name == "temperature_sensor chamber_temp"; });
+    auto old_chamber = std::find_if(sensors.begin(), sensors.end(), [](const auto& s) {
+        return s.klipper_name == "temperature_sensor chamber_temp";
+    });
     REQUIRE(old_chamber != sensors.end());
     REQUIRE(old_chamber->role != helix::sensors::TemperatureSensorRole::CHAMBER);
 }
@@ -239,12 +238,8 @@ TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
     temp_state.init_subjects(false);
 
     PrinterDiscovery discovery;
-    nlohmann::json objects = {
-        "temperature_sensor mcu_temp",
-        "temperature_sensor enclosure_bme",
-        "heater_generic heated_enclosure",
-        "extruder",
-        "heater_bed"};
+    nlohmann::json objects = {"temperature_sensor mcu_temp", "temperature_sensor enclosure_bme",
+                              "heater_generic heated_enclosure", "extruder", "heater_bed"};
     discovery.parse_objects(objects);
 
     // No "chamber" in any name — auto-detect finds nothing
@@ -257,12 +252,16 @@ TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
 
     // Resolve (same logic as PrinterState::set_hardware)
     std::string sensor = settings.get_chamber_sensor_assignment();
-    if (sensor == "auto") sensor = discovery.chamber_sensor_name();
-    else if (sensor == "none") sensor = "";
+    if (sensor == "auto")
+        sensor = discovery.chamber_sensor_name();
+    else if (sensor == "none")
+        sensor = "";
 
     std::string heater = settings.get_chamber_heater_assignment();
-    if (heater == "auto") heater = discovery.chamber_heater_name();
-    else if (heater == "none") heater = "";
+    if (heater == "auto")
+        heater = discovery.chamber_heater_name();
+    else if (heater == "none")
+        heater = "";
 
     temp_state.set_chamber_sensor_name(sensor);
     temp_state.set_chamber_heater_name(heater);
@@ -291,11 +290,8 @@ TEST_CASE("Manual chamber assignment enables capability flags", "[chamber][capab
 
     // No "chamber" in any name — auto-detect finds nothing
     PrinterDiscovery hardware;
-    nlohmann::json objects = {
-        "temperature_sensor enclosure_bme",
-        "heater_generic heated_enclosure",
-        "extruder",
-        "heater_bed"};
+    nlohmann::json objects = {"temperature_sensor enclosure_bme", "heater_generic heated_enclosure",
+                              "extruder", "heater_bed"};
     hardware.parse_objects(objects);
 
     REQUIRE_FALSE(hardware.has_chamber_sensor());
@@ -321,4 +317,108 @@ TEST_CASE("Manual chamber assignment enables capability flags", "[chamber][capab
 
     REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_sensor_subject()) == 0);
     REQUIRE(lv_subject_get_int(caps.get_printer_has_chamber_heater_subject()) == 0);
+}
+
+// 13. PrinterDiscovery extracts chamber heater object name from heater_generic
+TEST_CASE("PrinterDiscovery extracts chamber heater object name from heater_generic",
+          "[discovery][chamber]") {
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {"heater_generic chamber", "extruder", "heater_bed"};
+    discovery.parse_objects(objects);
+
+    REQUIRE(discovery.has_chamber_heater());
+    REQUIRE(discovery.chamber_heater_name() == "heater_generic chamber");
+    REQUIRE(discovery.chamber_heater_object_name() == "chamber");
+}
+
+// 14. PrinterDiscovery extracts chamber heater object name from temperature_fan
+TEST_CASE("PrinterDiscovery extracts chamber heater object name from temperature_fan",
+          "[discovery][chamber]") {
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {"temperature_fan chamber", "extruder", "heater_bed"};
+    discovery.parse_objects(objects);
+
+    REQUIRE(discovery.has_chamber_heater());
+    REQUIRE(discovery.chamber_heater_name() == "temperature_fan chamber");
+    REQUIRE(discovery.chamber_heater_object_name() == "chamber");
+}
+
+// 15. PrinterDiscovery handles chamber with different naming conventions
+TEST_CASE("PrinterDiscovery handles chamber with different naming conventions",
+          "[discovery][chamber]") {
+    SECTION("heater_generic chamber_heater") {
+        PrinterDiscovery discovery;
+        nlohmann::json objects = {"heater_generic chamber_heater", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+
+        REQUIRE(discovery.has_chamber_heater());
+        REQUIRE(discovery.chamber_heater_name() == "heater_generic chamber_heater");
+        REQUIRE(discovery.chamber_heater_object_name() == "chamber_heater");
+    }
+
+    SECTION("temperature_fan chamber_fan") {
+        PrinterDiscovery discovery;
+        nlohmann::json objects = {"temperature_fan chamber_fan", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+
+        REQUIRE(discovery.has_chamber_heater());
+        REQUIRE(discovery.chamber_heater_name() == "temperature_fan chamber_fan");
+        REQUIRE(discovery.chamber_heater_object_name() == "chamber_fan");
+    }
+
+    SECTION("heater_generic CHAMBER (uppercase)") {
+        PrinterDiscovery discovery;
+        nlohmann::json objects = {"heater_generic CHAMBER", "extruder", "heater_bed"};
+        discovery.parse_objects(objects);
+
+        REQUIRE(discovery.has_chamber_heater());
+        REQUIRE(discovery.chamber_heater_name() == "heater_generic CHAMBER");
+        REQUIRE(discovery.chamber_heater_object_name() == "CHAMBER");
+    }
+}
+
+// 16. PrinterDiscovery chamber_heater_object_name is empty when no chamber heater
+TEST_CASE("PrinterDiscovery chamber_heater_object_name is empty when no chamber heater",
+          "[discovery][chamber]") {
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {"extruder", "heater_bed", "temperature_sensor mcu_temp"};
+    discovery.parse_objects(objects);
+
+    REQUIRE_FALSE(discovery.has_chamber_heater());
+    REQUIRE(discovery.chamber_heater_name().empty());
+    REQUIRE(discovery.chamber_heater_object_name().empty());
+}
+
+// 17. PrinterDiscovery clears chamber_heater_object_name on reset
+TEST_CASE("PrinterDiscovery clears chamber_heater_object_name on reset", "[discovery][chamber]") {
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {"heater_generic chamber", "extruder", "heater_bed"};
+    discovery.parse_objects(objects);
+
+    REQUIRE(discovery.has_chamber_heater());
+    REQUIRE(discovery.chamber_heater_object_name() == "chamber");
+
+    // Clear and re-parse with no chamber
+    discovery.clear();
+    nlohmann::json objects2 = {"extruder", "heater_bed"};
+    discovery.parse_objects(objects2);
+
+    REQUIRE_FALSE(discovery.has_chamber_heater());
+    REQUIRE(discovery.chamber_heater_name().empty());
+    REQUIRE(discovery.chamber_heater_object_name().empty());
+}
+
+// 18. PrinterDiscovery prefers heater over sensor for chamber
+TEST_CASE("PrinterDiscovery tracks both chamber heater and sensor independently",
+          "[discovery][chamber]") {
+    PrinterDiscovery discovery;
+    nlohmann::json objects = {"heater_generic chamber", "temperature_sensor chamber_temp",
+                              "extruder", "heater_bed"};
+    discovery.parse_objects(objects);
+
+    REQUIRE(discovery.has_chamber_heater());
+    REQUIRE(discovery.has_chamber_sensor());
+    REQUIRE(discovery.chamber_heater_name() == "heater_generic chamber");
+    REQUIRE(discovery.chamber_heater_object_name() == "chamber");
+    REQUIRE(discovery.chamber_sensor_name() == "temperature_sensor chamber_temp");
 }

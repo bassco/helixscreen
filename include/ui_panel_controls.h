@@ -200,10 +200,12 @@ class ControlsPanel : public PanelBase {
     int cached_extruder_target_ = 0;
     int cached_bed_temp_ = 0;
     int cached_bed_target_ = 0;
+    int cached_chamber_target_ = 0; ///< Chamber target temperature (°C)
 
     // Temperature limits for keypad
-    int nozzle_max_temp_ = 500; ///< Nozzle max temperature (°C) from heater_generic config
-    int bed_max_temp_ = 150;    ///< Bed max temperature (°C) from heater_bed config
+    int nozzle_max_temp_ = 500;  ///< Nozzle max temperature (°C) from heater_generic config
+    int bed_max_temp_ = 150;     ///< Bed max temperature (°C) from heater_bed config
+    int chamber_max_temp_ = 150; ///< Chamber max temperature (°C)
 
     //
     // === Observer Guards (RAII cleanup) ===
@@ -369,8 +371,10 @@ class ControlsPanel : public PanelBase {
     void handle_secondary_temps_clicked();
     void handle_nozzle_target_edit();
     void handle_bed_target_edit();
+    void handle_chamber_target_edit();
     void handle_custom_nozzle_confirmed(float value);
     void handle_custom_bed_confirmed(float value);
+    void handle_custom_chamber_confirmed(float value);
 
     //
     // === Quick Action Button Handlers ===
@@ -454,6 +458,7 @@ class ControlsPanel : public PanelBase {
     static void on_secondary_temps_clicked(lv_event_t* e);
     static void on_nozzle_target_edit(lv_event_t* e);
     static void on_bed_target_edit(lv_event_t* e);
+    static void on_chamber_target_edit(lv_event_t* e);
     static void on_motors_confirm(lv_event_t* e);
     static void on_motors_cancel(lv_event_t* e);
     static void on_save_z_offset_confirm(lv_event_t* e);
