@@ -506,6 +506,9 @@ void SensorSettingsOverlay::populate_width_sensors() {
                         return;
                     auto* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
 
+                    // NOTE: Dropdown option order must match WidthSensorRole enum:
+                    //   0 = NONE, 1 = FLOW_COMPENSATION
+                    // See also: ui_xml/width_sensor_row.xml dropdown options
                     int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
                     auto role = static_cast<helix::sensors::WidthSensorRole>(index);
 

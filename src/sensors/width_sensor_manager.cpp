@@ -96,8 +96,10 @@ void WidthSensorManager::discover(const std::vector<std::string>& klipper_object
         }
     }
 
-    // Auto-assign first discovered sensor to FLOW_COMPENSATION role
-    // This ensures the diameter subject gets populated for the width sensor widget
+    // Auto-assign first discovered sensor to FLOW_COMPENSATION role as a default.
+    // This ensures the diameter subject gets populated for first-time users.
+    // User-saved config from load_config_from_file() is applied AFTER discover()
+    // and will override this default if the user explicitly set a different role.
     if (!sensors_.empty()) {
         bool has_flow_compensation = false;
         for (const auto& sensor : sensors_) {
@@ -108,8 +110,9 @@ void WidthSensorManager::discover(const std::vector<std::string>& klipper_object
         }
         if (!has_flow_compensation) {
             sensors_.front().role = WidthSensorRole::FLOW_COMPENSATION;
-            spdlog::info("[WidthSensorManager] Auto-assigned {} to FLOW_COMPENSATION role",
-                         sensors_.front().sensor_name);
+            spdlog::debug(
+                "[WidthSensorManager] Auto-assigned {} to FLOW_COMPENSATION role (default)",
+                sensors_.front().sensor_name);
         }
     }
 
@@ -243,6 +246,55 @@ nlohmann::json WidthSensorManager::save_config() const {
     return config;
 }
 
+void WidthSensorManager::load_config_from_file() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    spdlog::debug("[WidthSensorManager] Loading config from file");
+
+    Config* config = Config::get_instance();
+    if (!config) {
+        spdlog::warn("[WidthSensorManager] Config not initialized");
+        return;
+    }
+
+    // Build path using default printer prefix
+    std::string base_path = config->df() + "width_sensors";
+
+    // Load per-sensor config
+    try {
+        nlohmann::json& sensors_json = config->get_json(base_path + "/sensors");
+        if (sensors_json.is_array()) {
+            for (const auto& sensor_json : sensors_json) {
+                if (!sensor_json.contains("klipper_name")) {
+                    continue;
+                }
+
+                std::string klipper_name = sensor_json["klipper_name"].get<std::string>();
+                auto* sensor = find_config(klipper_name);
+
+                if (sensor) {
+                    // Update existing sensor config
+                    if (sensor_json.contains("role")) {
+                        sensor->role =
+                            width_role_from_string(sensor_json["role"].get<std::string>());
+                    }
+                    if (sensor_json.contains("enabled")) {
+                        sensor->enabled = sensor_json["enabled"].get<bool>();
+                    }
+                    spdlog::debug("[WidthSensorManager] Loaded config for {}: role={}, enabled={}",
+                                  klipper_name, width_role_to_string(sensor->role),
+                                  sensor->enabled);
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        spdlog::debug("[WidthSensorManager] No saved config found: {}", e.what());
+    }
+
+    update_subjects();
+    spdlog::info("[WidthSensorManager] Config loaded from file");
+}
+
 void WidthSensorManager::save_config_to_file() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
 
@@ -257,21 +309,8 @@ void WidthSensorManager::save_config_to_file() {
     // Build path using default printer prefix
     std::string base_path = config->df() + "width_sensors";
 
-    // Build width_sensors config
-    nlohmann::json ws_config;
-    nlohmann::json sensors_array = nlohmann::json::array();
-    for (const auto& sensor : sensors_) {
-        nlohmann::json sensor_json;
-        sensor_json["klipper_name"] = sensor.klipper_name;
-        sensor_json["role"] = width_role_to_string(sensor.role);
-        sensor_json["enabled"] = sensor.enabled;
-        sensor_json["type"] = width_type_to_string(sensor.type);
-        sensors_array.push_back(sensor_json);
-    }
-    ws_config["sensors"] = sensors_array;
-
-    // Set the config using JSON pointer path
-    config->get_json(base_path) = ws_config;
+    // Reuse save_config() to avoid serialization drift
+    config->get_json(base_path) = save_config();
     config->save();
 
     spdlog::info("[WidthSensorManager] Config saved to file");

@@ -5,6 +5,10 @@
 <!-- A single row for filament width sensors (TSL1401CL, Hall) -->
 <!-- Shows sensor name, type badge, role dropdown, and enable toggle -->
 <!-- Usage: Created dynamically by C++ in sensor settings overlays -->
+<!-- NOTE: Dropdown options order MUST match WidthSensorRole enum: -->
+<!--   0 = NONE, 1 = FLOW_COMPENSATION -->
+<!-- See also: src/ui/ui_settings_sensors.cpp (static_cast<WidthSensorRole>(index)) -->
+<!-- Note: Options are NOT translatable (LVGL dropdown limitation) -->
 <component>
   <api>
     <prop name="sensor_name" type="string" default="Width Sensor"/>
