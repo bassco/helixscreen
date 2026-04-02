@@ -99,6 +99,8 @@ If touch input requires calibration (resistive panel with non-linear mapping), t
 
 The AD5X's 4-channel IFS is its distinguishing feature. HelixScreen has a dedicated AMS backend (`AmsBackendAd5xIfs`) that fully integrates with the IFS.
 
+> **Minimum firmware**: ZMOD open-source firmware **v3.0** or later is required. Older versions have compatibility issues with HelixScreen's IFS integration.
+
 ### Supported Features
 
 - 4 filament slots with load/unload/select operations

@@ -771,6 +771,8 @@ Tool names must be provided via `set_discovered_tools()` before calling `start()
 
 The AD5X has a 4-lane Intelligent Filament Switching (IFS) system controlled by a separate STM32 MCU. HelixScreen supports it through ZMOD firmware (ghzserg's Klipper mod for FlashForge printers).
 
+> **Minimum firmware**: ZMOD open-source firmware **v3.0** or later. Older versions have compatibility issues and are not supported.
+
 ### Detection
 
 IFS is detected via `filament_switch_sensor _ifs_port_sensor_{1-4}` or `filament_motion_sensor _ifs_motion_sensor_{1-4}` in `printer.objects.list`. The leading space in sensor names is intentional — it's a Klipper object naming convention.
@@ -1185,7 +1187,7 @@ See `docs/devel/plans/2026-02-15-spool-wizard-status.md` for visual test plan.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| IFS not detected | Missing ZMOD firmware | Verify `zmod_ifs.py` is installed and `_ifs_port_sensor_*` sensors appear in `printer.objects.list` |
+| IFS not detected | Missing or outdated ZMOD firmware | Requires ZMOD **v3.0+**. Verify `zmod_ifs.py` is installed and `_ifs_port_sensor_*` sensors appear in `printer.objects.list` |
 | Colors/materials empty | `save_variables` not populated | Run IFS calibration wizard in ZMOD to initialize `less_waste_*` variables |
 | Slots all EMPTY | Port sensors not subscribed | Check that `filament_switch_sensor _ifs_port_sensor_{1-4}` are present |
 | Tool mapping wrong | Stale `less_waste_tools` | Check `save_variables.variables.less_waste_tools` — ports are 1-based, 5=unmapped |
