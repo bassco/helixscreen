@@ -23,9 +23,10 @@ MemoryThresholds MemoryThresholds::for_device(const MemoryInfo& info) {
     MemoryThresholds t;
 
     if (info.is_constrained_device()) {
-        // <256MB (AD5M ~110MB): very tight budgets
-        t.warn_rss_kb = 20 * 1024;
-        t.critical_rss_kb = 28 * 1024;
+        // <256MB (AD5M ~110MB, K1C ~214MB): tight budgets
+        // App baseline RSS is ~20MB — warn well above baseline to avoid false positives
+        t.warn_rss_kb = 30 * 1024;
+        t.critical_rss_kb = 40 * 1024;
         t.warn_available_kb = 15 * 1024;
         t.critical_available_kb = 8 * 1024;
         t.growth_5min_kb = 1 * 1024;

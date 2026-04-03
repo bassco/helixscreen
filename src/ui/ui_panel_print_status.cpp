@@ -697,7 +697,7 @@ void PrintStatusPanel::on_deactivate() {
         if (state != PrintState::Printing && state != PrintState::Paused &&
             state != PrintState::Preparing) {
             auto mem = helix::get_system_memory_info();
-            if (!mem.is_good_device() || mem.is_low_memory()) {
+            if (mem.is_low_memory()) {
                 ui_gcode_viewer_clear(gcode_viewer_);
                 gcode_loaded_ = false;
                 spdlog::debug("[{}] Cleared gcode viewer ({}MB available, {}MB total)",
@@ -809,7 +809,7 @@ bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
         // keep the widget tree alive so re-opening is instant — no thumbnail→3D
         // rebuild jump (issue #618).
         auto mem = helix::get_system_memory_info();
-        bool should_destroy = !mem.is_good_device() || mem.is_low_memory();
+        bool should_destroy = mem.is_low_memory();
         if (should_destroy) {
             NavigationManager::instance().register_overlay_close_callback(
                 s_cached_panel, []() {
