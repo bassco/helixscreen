@@ -54,6 +54,7 @@
 using namespace helix;
 using helix::ui::observe_int_sync;
 using helix::ui::observe_string;
+using helix::ui::temperature::centi_to_degrees;
 
 // Forward declarations for class-based API
 class MotionPanel;
@@ -125,6 +126,10 @@ void ControlsPanel::init_subjects() {
     UI_MANAGED_SUBJECT_INT(bed_pct_subject_, 0, "controls_bed_pct", subjects_);
     UI_MANAGED_SUBJECT_STRING(bed_status_subject_, bed_status_buf_, "Off", "controls_bed_status",
                               subjects_);
+
+    // Chamber temperature display
+    UI_MANAGED_SUBJECT_STRING(chamber_status_subject_, chamber_status_buf_, "Off",
+                              "controls_chamber_status", subjects_);
 
     // Fan speed display
     UI_MANAGED_SUBJECT_STRING(fan_speed_subject_, fan_speed_buf_, "Off", "controls_fan_speed",
@@ -268,6 +273,10 @@ void ControlsPanel::init_subjects() {
         {"on_bed_temp_clicked", on_bed_temp_clicked},
         {"on_chamber_temp_clicked", on_chamber_temp_clicked},
         {"on_controls_cooling", on_cooling_clicked},
+        // Pencil icon edit handlers (open temperature keypad)
+        {"on_nozzle_target_edit", on_nozzle_target_edit},
+        {"on_bed_target_edit", on_bed_target_edit},
+        {"on_chamber_target_edit", on_chamber_target_edit},
     });
 
     subjects_initialized_ = true;
@@ -429,8 +438,15 @@ void ControlsPanel::refresh_all_displays() {
     if (auto* subj = printer_state_.get_bed_target_subject()) {
         cached_bed_target_ = lv_subject_get_int(subj);
     }
+    if (auto* subj = printer_state_.get_chamber_temp_subject()) {
+        cached_chamber_temp_ = lv_subject_get_int(subj);
+    }
+    if (auto* subj = printer_state_.get_chamber_target_subject()) {
+        cached_chamber_target_ = lv_subject_get_int(subj);
+    }
     update_nozzle_temp_display();
     update_bed_temp_display();
+    update_chamber_temp_display();
     update_fan_display();
     update_nozzle_label();
     update_speed_display();
@@ -514,6 +530,22 @@ void ControlsPanel::register_observers() {
             self->cached_bed_target_ = value;
             if (self->active_)
                 self->update_bed_temp_display();
+        });
+
+    // Subscribe to chamber temperature (current and target)
+    // Note: We check are_subjects_initialized() because observers may fire immediately
+    // upon registration, but subjects aren't initialized until init_subjects() is called.
+    chamber_temp_observer_ = observe_int_sync<ControlsPanel>(
+        printer_state_.get_chamber_temp_subject(), this, [](ControlsPanel* self, int value) {
+            self->cached_chamber_temp_ = value;
+            if (self->are_subjects_initialized() && self->active_)
+                self->update_chamber_temp_display();
+        });
+    chamber_target_observer_ = observe_int_sync<ControlsPanel>(
+        printer_state_.get_chamber_target_subject(), this, [](ControlsPanel* self, int value) {
+            self->cached_chamber_target_ = value;
+            if (self->are_subjects_initialized() && self->active_)
+                self->update_chamber_temp_display();
         });
 
     // Subscribe to fan updates (skip formatting when hidden)
@@ -658,6 +690,14 @@ void ControlsPanel::update_bed_temp_display() {
     lv_subject_copy_string(&bed_status_subject_, bed_status_buf_);
 
     bed_heater_animator_.update(cached_bed_temp_, cached_bed_target_);
+}
+
+void ControlsPanel::update_chamber_temp_display() {
+    auto result =
+        helix::ui::temperature::heater_display(cached_chamber_temp_, cached_chamber_target_);
+
+    std::snprintf(chamber_status_buf_, sizeof(chamber_status_buf_), "%s", result.status.c_str());
+    lv_subject_copy_string(&chamber_status_subject_, chamber_status_buf_);
 }
 
 void ControlsPanel::update_fan_display() {
@@ -1006,6 +1046,106 @@ void ControlsPanel::handle_bed_temp_clicked() {
     get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Bed, parent_screen_);
 }
 
+void ControlsPanel::handle_nozzle_target_edit() {
+    show_temperature_keypad<&ControlsPanel::handle_custom_nozzle_confirmed>(
+        "Nozzle Temperature", cached_extruder_target_, 200, nozzle_max_temp_);
+}
+
+void ControlsPanel::handle_bed_target_edit() {
+    show_temperature_keypad<&ControlsPanel::handle_custom_bed_confirmed>(
+        "Bed Temperature", cached_bed_target_, 60, bed_max_temp_);
+}
+
+void ControlsPanel::handle_chamber_target_edit() {
+    show_temperature_keypad<&ControlsPanel::handle_custom_chamber_confirmed>(
+        "Chamber Temperature", cached_chamber_target_, 50, chamber_max_temp_);
+}
+
+void ControlsPanel::handle_custom_nozzle_confirmed(float value) {
+    spdlog::info("[{}] Custom nozzle temperature confirmed: {}°C", get_name(),
+                 static_cast<int>(value));
+
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_extruder_target_ = static_cast<int>(value * 10);
+
+    // Send temperature command to printer (api_->set_temperature expects degrees)
+    if (api_) {
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), value,
+            [target = static_cast<int>(value)]() {
+                NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target);
+            },
+            [](const MoonrakerError& error) {
+                NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), error.user_message());
+            });
+    }
+}
+
+void ControlsPanel::handle_custom_bed_confirmed(float value) {
+    spdlog::info("[{}] Custom bed temperature confirmed: {}°C", get_name(),
+                 static_cast<int>(value));
+
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_bed_target_ = static_cast<int>(value * 10);
+
+    // Send temperature command to printer (api_->set_temperature expects degrees)
+    if (api_) {
+        api_->set_temperature(
+            "heater_bed", value,
+            [target = static_cast<int>(value)]() {
+                NOTIFY_SUCCESS(lv_tr("Bed target set to {}°C"), target);
+            },
+            [](const MoonrakerError& error) {
+                NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), error.user_message());
+            });
+    }
+}
+
+void ControlsPanel::handle_custom_chamber_confirmed(float value) {
+    spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
+                 static_cast<int>(value));
+
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    cached_chamber_target_ = static_cast<int>(value * 10);
+
+    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
+    if (api_) {
+        // Get the chamber heater object name from printer discovery
+        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
+        // "temperature_fan chamber")
+        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
+
+        if (heater_full_name.empty()) {
+            NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
+            return;
+        }
+
+        char gcode[128];
+        int target = static_cast<int>(value);
+
+        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
+        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
+        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
+            // Extract the fan name after "temperature_fan " prefix
+            std::string fan_name = heater_full_name.substr(16);
+            std::snprintf(gcode, sizeof(gcode),
+                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
+                          fan_name.c_str(), target);
+        } else {
+            // heater_generic or other heater type
+            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
+            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
+                          object_name.c_str(), target);
+        }
+
+        api_->execute_gcode(
+            gcode, [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
+            });
+    }
+}
+
 void ControlsPanel::handle_chamber_temp_clicked() {
     spdlog::debug("[{}] Chamber temp clicked - opening temperature graph", get_name());
     get_global_temp_graph_overlay().open(TempGraphOverlay::Mode::Chamber, parent_screen_);
@@ -1067,10 +1207,12 @@ void ControlsPanel::handle_home_all() {
         api_->motion().home_axes(
             "",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1092,10 +1234,12 @@ void ControlsPanel::handle_home_x() {
         api_->motion().home_axes(
             "X",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1117,10 +1261,12 @@ void ControlsPanel::handle_home_y() {
         api_->motion().home_axes(
             "Y",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1142,10 +1288,12 @@ void ControlsPanel::handle_home_xy() {
         api_->motion().home_axes(
             "XY",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1167,10 +1315,12 @@ void ControlsPanel::handle_home_z() {
         api_->motion().home_axes(
             "Z",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1192,11 +1342,13 @@ void ControlsPanel::handle_qgl() {
         api_->execute_gcode(
             "QUAD_GANTRY_LEVEL",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS(lv_tr("Quad Gantry Level complete"));
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("QGL may still be running — response timed out"));
                 } else {
@@ -1219,11 +1371,13 @@ void ControlsPanel::handle_z_tilt() {
         api_->execute_gcode(
             "Z_TILT_ADJUST",
             [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS(lv_tr("Z-Tilt Adjust complete"));
             },
             [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end", [this]() { operation_guard_.end(); });
+                lifetime_.defer("ControlsPanel::operation_guard_end",
+                                [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Z-Tilt may still be running — response timed out"));
                 } else {
@@ -1258,7 +1412,9 @@ void ControlsPanel::execute_macro(size_t index) {
     NOTIFY_INFO(lv_tr("Running {}..."), info.translated_name());
     if (!StandardMacros::instance().execute(
             *slot, api_,
-            [name = std::string(info.translated_name())]() { NOTIFY_SUCCESS(lv_tr("{} complete"), name); },
+            [name = std::string(info.translated_name())]() {
+                NOTIFY_SUCCESS(lv_tr("{} complete"), name);
+            },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR(lv_tr("Macro failed: {}"), err.user_message());
             })) {
@@ -1512,6 +1668,9 @@ PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, chamber_temp_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, cooling_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_fans_clicked)
 PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, secondary_temps_clicked)
+PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, nozzle_target_edit)
+PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, bed_target_edit)
+PANEL_TRAMPOLINE(ControlsPanel, get_global_controls_panel, chamber_target_edit)
 
 PANEL_TRAMPOLINE_USERDATA(ControlsPanel, motors_confirm)
 PANEL_TRAMPOLINE_USERDATA(ControlsPanel, motors_cancel)

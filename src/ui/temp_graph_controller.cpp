@@ -2,14 +2,15 @@
 
 #include "temp_graph_controller.h"
 
+#include "ui_temperature_utils.h"
+#include "ui_update_queue.h"
+
 #include "app_globals.h"
 #include "observer_factory.h"
 #include "printer_state.h"
 #include "temperature_history_manager.h"
 #include "temperature_sensor_manager.h"
 #include "theme_manager.h"
-#include "ui_temperature_utils.h"
-#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -178,7 +179,8 @@ void TempGraphController::create_graph() {
     }
 
     graph_ = ui_temp_graph_create(container_);
-    if (!graph_) return;
+    if (!graph_)
+        return;
 
     // Size chart to fill container
     lv_obj_t* chart = ui_temp_graph_get_chart(graph_);
@@ -201,13 +203,13 @@ void TempGraphController::create_graph() {
 // ============================================================================
 
 void TempGraphController::setup_series() {
-    if (!graph_) return;
+    if (!graph_)
+        return;
 
     auto& ps = get_printer_state();
 
     for (const auto& spec : config_.series) {
-        int series_id =
-            ui_temp_graph_add_series(graph_, spec.klipper_name.c_str(), spec.color);
+        int series_id = ui_temp_graph_add_series(graph_, spec.klipper_name.c_str(), spec.color);
         if (series_id < 0) {
             spdlog::warn("[TempGraphController] Failed to add series '{}'", spec.klipper_name);
             continue;
@@ -250,7 +252,9 @@ void TempGraphController::setup_observers() {
         if (s.klipper_name == "heater_bed") {
             temp_subj = ps.get_bed_temp_subject();
             target_subj = ps.get_bed_target_subject();
-        } else if (s.klipper_name == "chamber") {
+        } else if (s.klipper_name.find("heater_generic") == 0 ||
+                   s.klipper_name.find("temperature_fan") == 0) {
+            // Chamber (or other heater/fan-based heaters)
             temp_subj = ps.get_chamber_temp_subject();
             target_subj = ps.get_chamber_target_subject();
         } else if (s.klipper_name.find("extruder") == 0) {
@@ -274,23 +278,27 @@ void TempGraphController::setup_observers() {
             s.temp_obs = observe_int_sync<TempGraphController>(
                 temp_subj, this,
                 [token, gen, idx](TempGraphController* self, int temp_centi) {
-                    if (token.expired() || gen != self->generation_) return;
-                    if (self->paused_ || !self->graph_) return;
+                    if (token.expired() || gen != self->generation_)
+                        return;
+                    if (self->paused_ || !self->graph_)
+                        return;
 
                     auto& si = self->series_[idx];
-                    if (si.series_id < 0) return;
+                    if (si.series_id < 0)
+                        return;
 
                     // Throttle chart updates to 1Hz per series — Klipper pushes
                     // status at ~4Hz which causes excessive LVGL chart invalidations
                     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                       std::chrono::system_clock::now().time_since_epoch())
                                       .count();
-                    if (now_ms - si.last_update_ms < 1000) return;
+                    if (now_ms - si.last_update_ms < 1000)
+                        return;
                     si.last_update_ms = now_ms;
 
                     float temp_deg = centi_to_degrees_f(temp_centi);
                     ui_temp_graph_update_series_with_time(self->graph_, si.series_id, temp_deg,
-                                                         now_ms);
+                                                          now_ms);
                     self->apply_auto_range();
                 },
                 s.lifetime);
@@ -301,11 +309,14 @@ void TempGraphController::setup_observers() {
             s.target_obs = observe_int_sync<TempGraphController>(
                 target_subj, this,
                 [token, gen, idx](TempGraphController* self, int target_centi) {
-                    if (token.expired() || gen != self->generation_) return;
-                    if (!self->graph_) return;
+                    if (token.expired() || gen != self->generation_)
+                        return;
+                    if (!self->graph_)
+                        return;
 
                     auto& si = self->series_[idx];
-                    if (si.series_id < 0) return;
+                    if (si.series_id < 0)
+                        return;
 
                     float target_deg = centi_to_degrees_f(target_centi);
                     bool show = target_deg > 0.0f;
@@ -327,10 +338,12 @@ void TempGraphController::setup_observers() {
         auto was_disconnected = std::make_shared<bool>(false);
         connection_observer_ = observe_int_sync<TempGraphController>(
             conn_subj, this,
-            [conn_token, conn_gen, prev_state, was_disconnected](
-                TempGraphController* self, int state) {
-                if (conn_token.expired() || conn_gen != self->generation_) return;
-                if (state == *prev_state) return;
+            [conn_token, conn_gen, prev_state, was_disconnected](TempGraphController* self,
+                                                                 int state) {
+                if (conn_token.expired() || conn_gen != self->generation_)
+                    return;
+                if (state == *prev_state)
+                    return;
                 *prev_state = state;
                 if (state == 0) { // Disconnected
                     *was_disconnected = true;
@@ -352,7 +365,8 @@ void TempGraphController::setup_observers() {
 
 void TempGraphController::backfill_history() {
     auto* history_mgr = get_temperature_history_manager();
-    if (!graph_ || !history_mgr) return;
+    if (!graph_ || !history_mgr)
+        return;
 
     // Only fetch samples that fit in the chart buffer to avoid pushing
     // thousands of points through the circular buffer (wastes CPU and
@@ -363,10 +377,12 @@ void TempGraphController::backfill_history() {
     int64_t cutoff_ms = now_ms - static_cast<int64_t>(config_.point_count) * 1000;
 
     for (auto& s : series_) {
-        if (s.series_id < 0) continue;
+        if (s.series_id < 0)
+            continue;
 
         auto samples = history_mgr->get_samples_since(s.klipper_name, cutoff_ms);
-        if (samples.empty()) continue;
+        if (samples.empty())
+            continue;
 
         for (const auto& sample : samples) {
             float temp_deg = centi_to_degrees_f(sample.temp_centi);
@@ -389,7 +405,8 @@ void TempGraphController::backfill_history() {
 // ============================================================================
 
 void TempGraphController::apply_auto_range() {
-    if (!graph_) return;
+    if (!graph_)
+        return;
 
     // Find max relevant temperature (from data and targets)
     float max_temp = graph_->max_visible_temp;
@@ -404,8 +421,8 @@ void TempGraphController::apply_auto_range() {
         }
     }
 
-    float new_max = calculate_temp_graph_y_max(y_axis_max_, max_temp,
-                                               graph_->max_visible_temp, config_.scale_params);
+    float new_max = calculate_temp_graph_y_max(y_axis_max_, max_temp, graph_->max_visible_temp,
+                                               config_.scale_params);
 
     bool changed = (new_max != y_axis_max_);
     y_axis_max_ = new_max;

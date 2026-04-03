@@ -272,12 +272,17 @@ translations:
   'Cannot start print: not connected to printer': 'Cannot start print: not connected to printer'
   'Cannot start print: printer is {}': 'Cannot start print: printer is {}'
   Center QR code in frame: Center QR code in frame
+  'Chamb:': 'Chamb:'
   Chamber: Chamber
   Chamber Fan: Chamber Fan
   Chamber Heater: Chamber Heater
   Chamber Sensor: Chamber Sensor
   Chamber Temperature: Chamber Temperature
   Chamber and dryer humidity monitoring: Chamber and dryer humidity monitoring
+  'Chamber at %d°C': 'Chamber at %d°C'
+  Chamber heater not found in printer configuration: Chamber heater not found in printer configuration
+  'Chamber heating to %d°C...': 'Chamber heating to %d°C...'
+  'Chamber target set to {}°C': 'Chamber target set to {}°C'
   'Chamber:': 'Chamber:'
   Change: Change
   Change LED color based on printer state: Change LED color based on printer state
@@ -1800,6 +1805,7 @@ translations:
   Z-Offset: Z-Offset
   Z-Offset Calibration: Z-Offset Calibration
   'Z-Offset:': 'Z-Offset:'
+  'Z-Off:': 'Z-Off:'
   Z-Tilt: Z-Tilt
   Z-Tilt Adjust: Z-Tilt Adjust
   Z-Tilt Adjust complete: Z-Tilt Adjust complete

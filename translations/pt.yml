@@ -272,12 +272,17 @@ translations:
   'Cannot start print: not connected to printer': 'Não é possível iniciar impressão: não conectado à impressora'
   'Cannot start print: printer is {}': 'Não é possível iniciar impressão: impressora está {}'
   Center QR code in frame: Centralize o código QR no quadro
+  'Chamb:': 'Câmara:'
   Chamber: Câmara
   Chamber Fan: Ventoinha da Câmara
   Chamber Heater: Aquecedor da Câmara
   Chamber Sensor: Sensor da Câmara
   Chamber Temperature: Temperatura da câmara
   Chamber and dryer humidity monitoring: Monitoramento de umidade da câmara e secador
+  'Chamber at %d°C': 'Câmara a %d°C'
+  Chamber heater not found in printer configuration: Aquecedor da câmara não encontrado na configuração da impressora
+  'Chamber heating to %d°C...': 'Aquecendo câmara a %d°C...'
+  'Chamber target set to {}°C': 'Alvo da câmara definido para {}°C'
   'Chamber:': 'Câmara:'
   Change: Alterar
   Change LED color based on printer state: Alterar cor do LED baseado no estado da impressora
@@ -1800,6 +1805,7 @@ translations:
   Z-Offset: Z-Offset
   Z-Offset Calibration: Calibração de Z-Offset
   'Z-Offset:': 'Z-Offset:'
+  'Z-Off:': 'Z-Offset:'
   Z-Tilt: Z-Tilt
   Z-Tilt Adjust: Ajuste Z-Tilt
   Z-Tilt Adjust complete: Ajuste Z-Tilt concluído

@@ -13,7 +13,6 @@
 #include "ui_overlay_temp_graph.h"
 #include "ui_panel_ams.h"
 #include "ui_panel_ams_overview.h"
-#include "temperature_service.h"
 #include "ui_spool_canvas.h"
 #include "ui_subject_registry.h"
 #include "ui_temperature_utils.h"
@@ -27,15 +26,16 @@
 #include "filament_database.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
-#include "moonraker_api.h"
-#include "post_op_cooldown_manager.h"
-#include "observer_factory.h"
-#include "printer_state.h"
-#include "settings_manager.h"
 #include "macro_executor.h"
 #include "macro_param_cache.h"
+#include "moonraker_api.h"
+#include "observer_factory.h"
+#include "post_op_cooldown_manager.h"
+#include "printer_state.h"
+#include "settings_manager.h"
 #include "standard_macros.h"
 #include "static_panel_registry.h"
+#include "temperature_service.h"
 #include "theme_manager.h"
 #include "tool_state.h"
 
@@ -108,6 +108,7 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
         {"on_filament_bed_temp_tap", on_bed_temp_tap_clicked},
         {"on_filament_nozzle_target_tap", on_nozzle_target_tap_clicked},
         {"on_filament_bed_target_tap", on_bed_target_tap_clicked},
+        {"on_filament_chamber_target_tap", on_filament_chamber_target_tap},
         // Purge amount buttons
         {"on_filament_purge_5mm", on_purge_5mm_clicked},
         {"on_filament_purge_10mm", on_purge_10mm_clicked},
@@ -131,6 +132,25 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
         [](FilamentPanel* self, int raw) { self->bed_target_ = centi_to_degrees(raw); },
         [](FilamentPanel* self) { self->update_all_temps(); });
 
+    // Subscribe to chamber temperature (optional - only if printer has chamber)
+    // Note: We check are_subjects_initialized() because observers may fire immediately
+    // upon registration, but subjects aren't initialized until init_subjects() is called.
+    chamber_temp_observer_ = observe_int_sync<FilamentPanel>(
+        printer_state_.get_chamber_temp_subject(), this, [](FilamentPanel* self, int raw) {
+            self->chamber_current_ = centi_to_degrees(raw);
+            if (self->are_subjects_initialized()) {
+                self->update_chamber_temp_display();
+                self->update_status();
+            }
+        });
+    chamber_target_observer_ = observe_int_sync<FilamentPanel>(
+        printer_state_.get_chamber_target_subject(), this, [](FilamentPanel* self, int raw) {
+            self->chamber_target_ = raw; // Store centidegrees (matches PrinterState format)
+            if (self->are_subjects_initialized()) {
+                self->update_chamber_temp_display();
+            }
+        });
+
     // Subscribe to active tool changes for dynamic nozzle label + dropdown sync
     active_tool_observer_ = observe_int_sync<FilamentPanel>(
         helix::ToolState::instance().get_active_tool_subject(), this,
@@ -141,6 +161,11 @@ FilamentPanel::FilamentPanel(PrinterState& printer_state, MoonrakerAPI* api)
             }
         });
     update_nozzle_label();
+
+    // Note: Chamber temperature display is initialized by observer callbacks
+    // and refresh_all_displays() on panel activation.
+    // We don't call update_chamber_temp_display() here because subjects
+    // aren't initialized yet (init_subjects() is called after construction).
 }
 
 FilamentPanel::~FilamentPanel() {
@@ -204,6 +229,10 @@ void FilamentPanel::init_subjects() {
                                   "filament_bed_current", subjects_);
         UI_MANAGED_SUBJECT_STRING(bed_target_subject_, bed_target_buf_, bed_target_buf_,
                                   "filament_bed_target", subjects_);
+        UI_MANAGED_SUBJECT_STRING(chamber_current_subject_, chamber_current_buf_,
+                                  chamber_current_buf_, "filament_chamber_current", subjects_);
+        UI_MANAGED_SUBJECT_STRING(chamber_target_subject_, chamber_target_buf_, chamber_target_buf_,
+                                  "filament_chamber_target", subjects_);
 
         // Operation in progress subject (for disabling buttons during filament ops)
         operation_guard_.init_subject("filament_operation_in_progress", subjects_);
@@ -222,8 +251,8 @@ void FilamentPanel::init_subjects() {
 
         // Preset button temperature label subjects (populated from filament DB in setup)
         static constexpr const char* preset_subject_names[] = {
-            "filament_preset_pla_temps", "filament_preset_petg_temps",
-            "filament_preset_abs_temps", "filament_preset_tpu_temps"};
+            "filament_preset_pla_temps", "filament_preset_petg_temps", "filament_preset_abs_temps",
+            "filament_preset_tpu_temps"};
         for (int i = 0; i < PRESET_COUNT; i++) {
             preset_temps_bufs_[i][0] = '\0';
             UI_MANAGED_SUBJECT_STRING(preset_temps_subjects_[i], preset_temps_bufs_[i],
@@ -444,17 +473,33 @@ void FilamentPanel::update_status_icon(const char* icon_name, const char* varian
 void FilamentPanel::update_status() {
     const char* status_msg;
 
+    // First check if nozzle is ready for extrusion (highest priority for filament operations)
     if (helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_)) {
         // Hot enough - ready to load
         status_msg = "Ready to load";
         update_status_icon("check", "success");
     } else if (nozzle_target_ >= min_extrude_temp_) {
-        // Heating in progress
+        // Nozzle heating in progress
         std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Heating to %d°C..."),
                       nozzle_target_);
         lv_subject_copy_string(&status_subject_, status_buf_);
         update_status_icon("flash", "warning");
         return; // Already updated, exit early
+    } else if (chamber_target_ > 0 && chamber_current_ < centi_to_degrees(chamber_target_) - 5) {
+        // Chamber is heating (show only if nozzle is cold)
+        std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Chamber heating to %d°C..."),
+                      centi_to_degrees(chamber_target_));
+        lv_subject_copy_string(&status_subject_, status_buf_);
+        update_status_icon("fire", "warning");
+        return;
+    } else if (chamber_target_ > 0 && chamber_current_ >= centi_to_degrees(chamber_target_) - 5 &&
+               chamber_current_ <= centi_to_degrees(chamber_target_) + 2) {
+        // Chamber at target (show only if nozzle is cold)
+        std::snprintf(status_buf_, sizeof(status_buf_), lv_tr("Chamber at %d°C"),
+                      centi_to_degrees(chamber_target_));
+        lv_subject_copy_string(&status_subject_, status_buf_);
+        update_status_icon("check", "success");
+        return;
     } else {
         // Cold - needs material selection
         status_msg = "Select material to begin";
@@ -582,7 +627,9 @@ void FilamentPanel::handle_preset_button(int material_id) {
     if (api_ && selected_material_ == material_id) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
-            [target = nozzle_target_]() { NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target); },
+            [target = nozzle_target_]() {
+                NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target);
+            },
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), error.user_message());
             });
@@ -629,6 +676,79 @@ void FilamentPanel::handle_bed_temp_tap() {
     ui_keypad_show(&config);
 }
 
+void FilamentPanel::handle_chamber_temp_tap() {
+    spdlog::debug("[{}] Opening custom chamber temperature keypad", get_name());
+
+    ui_keypad_config_t config = {.initial_value = static_cast<float>(
+                                     chamber_target_ > 0 ? centi_to_degrees(chamber_target_) : 50),
+                                 .min_value = 0.0f,
+                                 .max_value = static_cast<float>(chamber_max_temp_),
+                                 .title_label = "Chamber Temperature",
+                                 .unit_label = "°C",
+                                 .allow_decimal = false,
+                                 .allow_negative = false,
+                                 .callback =
+                                     [](float value, void* user_data) {
+                                         auto* self = static_cast<FilamentPanel*>(user_data);
+                                         if (self) {
+                                             self->handle_custom_chamber_confirmed(value);
+                                         }
+                                     },
+                                 .user_data = this};
+
+    ui_keypad_show(&config);
+}
+
+void FilamentPanel::handle_custom_chamber_confirmed(float value) {
+    spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
+                 static_cast<int>(value));
+
+    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
+    chamber_target_ = static_cast<int>(value * 10);
+    update_chamber_temp_display();
+
+    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
+    if (api_) {
+        // Get the chamber heater object name from printer discovery
+        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
+        // "temperature_fan chamber")
+        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
+
+        if (heater_full_name.empty()) {
+            NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
+            return;
+        }
+
+        // Convert centidegrees back to degrees for the GCODE command
+        int target_degrees = centi_to_degrees(chamber_target_);
+        char gcode[128];
+
+        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
+        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
+        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
+            // Extract the fan name after "temperature_fan " prefix
+            std::string fan_name = heater_full_name.substr(16);
+            std::snprintf(gcode, sizeof(gcode),
+                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
+                          fan_name.c_str(), target_degrees);
+        } else {
+            // heater_generic or other heater type
+            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
+            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
+                          object_name.c_str(), target_degrees);
+        }
+
+        api_->execute_gcode(
+            gcode,
+            [target = target_degrees]() {
+                NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target);
+            },
+            [](const MoonrakerError& err) {
+                NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
+            });
+    }
+}
+
 void FilamentPanel::handle_custom_nozzle_confirmed(float value) {
     spdlog::info("[{}] Custom nozzle temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
@@ -646,7 +766,9 @@ void FilamentPanel::handle_custom_nozzle_confirmed(float value) {
     if (api_) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
-            [target = nozzle_target_]() { NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target); },
+            [target = nozzle_target_]() {
+                NOTIFY_SUCCESS(lv_tr("Nozzle target set to {}°C"), target);
+            },
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR(lv_tr("Failed to set nozzle temp: {}"), error.user_message());
             });
@@ -681,6 +803,16 @@ void FilamentPanel::update_material_temp_display() {
     format_target_or_off(bed_target_, material_bed_buf_, sizeof(material_bed_buf_));
     lv_subject_copy_string(&material_nozzle_temp_subject_, material_nozzle_buf_);
     lv_subject_copy_string(&material_bed_temp_subject_, material_bed_buf_);
+}
+
+void FilamentPanel::update_chamber_temp_display() {
+    // Update chamber current and target temperatures
+    // chamber_current_ is already in degrees (observer converts), chamber_target_ is centidegrees
+    std::snprintf(chamber_current_buf_, sizeof(chamber_current_buf_), "%d°C", chamber_current_);
+    format_target_or_off(centi_to_degrees(chamber_target_), chamber_target_buf_,
+                         sizeof(chamber_target_buf_));
+    lv_subject_copy_string(&chamber_current_subject_, chamber_current_buf_);
+    lv_subject_copy_string(&chamber_target_subject_, chamber_target_buf_);
 }
 
 void FilamentPanel::update_left_card_temps() {
@@ -750,6 +882,8 @@ void FilamentPanel::handle_load_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::LOAD);
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament load ({}°C, min: {}°C)"),
+                       nozzle_current_, min_extrude_temp_);
         return;
     }
 
@@ -783,6 +917,8 @@ void FilamentPanel::handle_unload_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::UNLOAD);
+        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament unload ({}°C, min: {}°C)"),
+                       nozzle_current_, min_extrude_temp_);
         return;
     }
 
@@ -877,8 +1013,8 @@ void FilamentPanel::handle_purge_button() {
             int recommended = active->material_info.nozzle_recommended();
             if (recommended > 0) {
                 purge_temp_default = std::to_string(recommended);
-                spdlog::info("[{}] Active material '{}' recommends PURGE_TEMP={}",
-                             get_name(), active->display_name, recommended);
+                spdlog::info("[{}] Active material '{}' recommends PURGE_TEMP={}", get_name(),
+                             active->display_name, recommended);
             }
         }
 
@@ -893,8 +1029,7 @@ void FilamentPanel::handle_purge_button() {
                     }
                 }
             }
-            spdlog::info("[{}] Purge macro '{}' has params, showing modal", get_name(),
-                         macro_name);
+            spdlog::info("[{}] Purge macro '{}' has params, showing modal", get_name(), macro_name);
             get_filament_param_modal().show_for_macro(
                 lv_screen_active(), macro_name, params,
                 [this, macro_name](const MacroParamResult& result) {
@@ -907,8 +1042,7 @@ void FilamentPanel::handle_purge_button() {
             spdlog::info("[{}] Purge macro '{}' params unknown, showing raw input", get_name(),
                          macro_name);
             get_filament_param_modal().show_for_unknown_params(
-                lv_screen_active(), macro_name,
-                [this, macro_name](const MacroParamResult& result) {
+                lv_screen_active(), macro_name, [this, macro_name](const MacroParamResult& result) {
                     run_filament_macro(macro_name, "Purg", result);
                 });
             return;
@@ -1069,12 +1203,12 @@ void FilamentPanel::setup_external_spool_display() {
     update_external_spool_from_state();
 
     // Observe external spool color changes to reactively update display
-    external_spool_observer_ = observe_int_sync<FilamentPanel>(
-        AmsState::instance().get_external_spool_color_subject(), this,
-        [](FilamentPanel* self, int /*color_int*/) {
-            self->update_external_spool_from_state();
-            self->update_spool_preset();
-        });
+    external_spool_observer_ =
+        observe_int_sync<FilamentPanel>(AmsState::instance().get_external_spool_color_subject(),
+                                        this, [](FilamentPanel* self, int /*color_int*/) {
+                                            self->update_external_spool_from_state();
+                                            self->update_spool_preset();
+                                        });
 
     spdlog::debug("[{}] External spool display initialized", get_name());
 }
@@ -1473,6 +1607,14 @@ void FilamentPanel::on_bed_target_tap_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void FilamentPanel::on_filament_chamber_target_tap(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_filament_chamber_target_tap");
+    LV_UNUSED(e);
+    spdlog::debug("[FilamentPanel] on_filament_chamber_target_tap TRIGGERED");
+    get_global_filament_panel().handle_chamber_temp_tap();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 // Purge amount callbacks (XML event_cb - use global singleton)
 void FilamentPanel::on_purge_5mm_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_purge_5mm_clicked");
@@ -1508,10 +1650,9 @@ void FilamentPanel::handle_cooldown() {
     if (api_) {
         // Use configured cooldown macro (user-overridable in settings.json)
         auto* cfg = helix::Config::get_instance();
-        helix::MacroConfig default_cooldown{
-            "Cool Down",
-            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
-            "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
+        helix::MacroConfig default_cooldown{"Cool Down",
+                                            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
+                                            "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
         auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
 
         api_->execute_gcode(
@@ -1752,8 +1893,7 @@ void FilamentPanel::execute_load() {
             spdlog::info("[{}] Load macro '{}' params unknown, showing raw input", get_name(),
                          macro_name);
             get_filament_param_modal().show_for_unknown_params(
-                lv_screen_active(), macro_name,
-                [this, macro_name](const MacroParamResult& result) {
+                lv_screen_active(), macro_name, [this, macro_name](const MacroParamResult& result) {
                     run_filament_macro(macro_name, "Load", result);
                 });
             return;
@@ -1767,9 +1907,9 @@ void FilamentPanel::execute_load() {
     // Fallback: fast move through bowden (56mm at 20mm/s) then slow push into
     // melt zone (24mm at 5mm/s). M83 = relative extrusion mode.
     constexpr int LOAD_FAST_MM = 56;
-    constexpr int LOAD_FAST_SPEED = 20 * 60;  // 20 mm/s → 1200 mm/min
+    constexpr int LOAD_FAST_SPEED = 20 * 60; // 20 mm/s → 1200 mm/min
     constexpr int LOAD_SLOW_MM = 24;
-    constexpr int LOAD_SLOW_SPEED = 5 * 60;   // 5 mm/s → 300 mm/min
+    constexpr int LOAD_SLOW_SPEED = 5 * 60; // 5 mm/s → 300 mm/min
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
                            [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     spdlog::info("[{}] Load fallback: {}mm fast + {}mm slow", get_name(), LOAD_FAST_MM,
@@ -1847,8 +1987,7 @@ void FilamentPanel::execute_unload() {
             spdlog::info("[{}] Unload macro '{}' params unknown, showing raw input", get_name(),
                          macro_name);
             get_filament_param_modal().show_for_unknown_params(
-                lv_screen_active(), macro_name,
-                [this, macro_name](const MacroParamResult& result) {
+                lv_screen_active(), macro_name, [this, macro_name](const MacroParamResult& result) {
                     run_filament_macro(macro_name, "Unload", result);
                 });
             return;
@@ -1862,9 +2001,9 @@ void FilamentPanel::execute_unload() {
     // Fallback: tip-shape (push 3mm, quick pull 5mm, dwell) then retract 80mm.
     // M83 = relative extrusion mode.
     constexpr int UNLOAD_MM = 80;
-    constexpr int UNLOAD_SPEED = 20 * 60;       // 20 mm/s → 1200 mm/min
-    constexpr int TIP_PUSH_SPEED = 5 * 60;      // 5 mm/s → 300 mm/min
-    constexpr int TIP_PULL_SPEED = 60 * 60;     // 60 mm/s → 3600 mm/min
+    constexpr int UNLOAD_SPEED = 20 * 60;   // 20 mm/s → 1200 mm/min
+    constexpr int TIP_PUSH_SPEED = 5 * 60;  // 5 mm/s → 300 mm/min
+    constexpr int TIP_PULL_SPEED = 60 * 60; // 60 mm/s → 3600 mm/min
     operation_guard_.begin(OPERATION_TIMEOUT_MS,
                            [] { NOTIFY_WARNING(lv_tr("Filament operation timed out")); });
     spdlog::info("[{}] Unload fallback: tip-shape + {}mm retract", get_name(), UNLOAD_MM);
@@ -1896,8 +2035,7 @@ void FilamentPanel::execute_unload() {
         MoonrakerAPI::EXTRUSION_TIMEOUT_MS);
 }
 
-void FilamentPanel::run_filament_macro(const std::string& macro_name,
-                                       const std::string& op_label,
+void FilamentPanel::run_filament_macro(const std::string& macro_name, const std::string& op_label,
                                        const MacroParamResult& params) {
     if (!api_) {
         return;

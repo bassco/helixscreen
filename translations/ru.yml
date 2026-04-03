@@ -272,12 +272,17 @@ translations:
   'Cannot start print: not connected to printer': 'Невозможно начать печать: не подключено к принтеру'
   'Cannot start print: printer is {}': 'Невозможно начать печать: принтер {}'
   Center QR code in frame: Расположите QR-код в центре кадра
+  'Chamb:': 'Камера:'
   Chamber: Камера
   Chamber Fan: Вентилятор камеры
   Chamber Heater: Нагреватель камеры
   Chamber Sensor: Датчик камеры
   Chamber Temperature: Температура камеры
   Chamber and dryer humidity monitoring: Мониторинг влажности камеры и сушилки
+  'Chamber at %d°C': 'Камера при %d°C'
+  Chamber heater not found in printer configuration: Нагреватель камеры не найден в конфигурации принтера
+  'Chamber heating to %d°C...': 'Нагрев камеры до %d°C...'
+  'Chamber target set to {}°C': 'Целевая температура камеры установлена на {}°C'
   'Chamber:': 'Камера:'
   Change: Изменить
   Change LED color based on printer state: Менять цвет LED в зависимости от состояния принтера
@@ -1800,6 +1805,7 @@ translations:
   Z-Offset: Z-Offset
   Z-Offset Calibration: Калибровка Z-смещения
   'Z-Offset:': 'Z-Offset:'
+  'Z-Off:': 'Z-Off:'
   Z-Tilt: Z-наклон
   Z-Tilt Adjust: Регулировка Z-наклона
   Z-Tilt Adjust complete: Z-Tilt завершён

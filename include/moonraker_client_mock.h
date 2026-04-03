@@ -400,6 +400,15 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
      */
     void set_bed_target(double target);
 
+    /**
+     * @brief Set simulated chamber target temperature
+     *
+     * Starts heating/cooling simulation toward target.
+     *
+     * @param target Target temperature in Celsius
+     */
+    void set_chamber_target(double target);
+
     // ========== Test Helpers ==========
 
     /**
@@ -867,6 +876,7 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
     std::atomic<double> bed_temp_{25.0};       // Current temperature
     std::atomic<double> bed_target_{0.0};      // Target temperature (0 = off)
     std::atomic<double> chamber_temp_{25.0};   // Chamber temp (25-45°C, passive sensor)
+    std::atomic<double> chamber_target_{0.0};  // Chamber target temperature (0 = off)
     std::atomic<double> mcu_temp_{42.0};       // MCU temp (40-55°C, stable with small variation)
     std::atomic<double> host_temp_{52.0};      // Host/RPi temp (45-65°C, correlates with load)
 
@@ -981,11 +991,13 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
 
     // Simulation parameters (realistic heating rates)
     static constexpr double ROOM_TEMP = 25.0;
-    static constexpr double EXTRUDER_HEAT_RATE = 3.0;  // °C/sec when heating
-    static constexpr double EXTRUDER_COOL_RATE = 1.5;  // °C/sec when cooling
-    static constexpr double BED_HEAT_RATE = 1.0;       // °C/sec when heating
-    static constexpr double BED_COOL_RATE = 0.3;       // °C/sec when cooling
-    static constexpr int SIMULATION_INTERVAL_MS = 250;  // Physics tick interval
+    static constexpr double EXTRUDER_HEAT_RATE = 3.0;     // °C/sec when heating
+    static constexpr double EXTRUDER_COOL_RATE = 1.5;     // °C/sec when cooling
+    static constexpr double BED_HEAT_RATE = 1.0;          // °C/sec when heating
+    static constexpr double BED_COOL_RATE = 0.3;          // °C/sec when cooling
+    static constexpr double CHAMBER_HEAT_RATE = 0.3;      // °C/sec when heating (slower than bed)
+    static constexpr double CHAMBER_COOL_RATE = 0.1;      // °C/sec when cooling
+    static constexpr int SIMULATION_INTERVAL_MS = 250;    // Physics tick interval
     static constexpr int NOTIFICATION_INTERVAL_TICKS = 8; // Dispatch every 8 ticks (~2s)
 
     // Mock service availability flags (initialized from env vars in constructor)

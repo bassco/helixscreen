@@ -278,6 +278,10 @@ translations:
   Chamber Sensor: 仓室传感器
   Chamber Temperature: 腔体温度
   Chamber and dryer humidity monitoring: 腔体和干燥器湿度监控
+  'Chamber at %d°C': '腔体温度：%d°C'
+  Chamber heater not found in printer configuration: 打印机配置中未找到腔体加热器
+  'Chamber heating to %d°C...': '腔体加热至 %d°C...'
+  'Chamber target set to {}°C': '腔体目标温度设置为 {}°C'
   'Chamber:': 腔体：
   Change: 更改
   Change LED color based on printer state: 根据打印机状态更改 LED 颜色
@@ -1800,6 +1804,7 @@ translations:
   Z-Offset: Z 偏移
   Z-Offset Calibration: Z 偏移校准
   'Z-Offset:': Z 偏移：
+  'Z-Off:': Z 偏移：
   Z-Tilt: Z-Tilt
   Z-Tilt Adjust: Z 倾斜调整
   Z-Tilt Adjust complete: Z-Tilt 调整完成
