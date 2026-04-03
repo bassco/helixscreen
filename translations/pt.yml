@@ -272,6 +272,7 @@ translations:
   'Cannot start print: not connected to printer': 'Não é possível iniciar impressão: não conectado à impressora'
   'Cannot start print: printer is {}': 'Não é possível iniciar impressão: impressora está {}'
   Center QR code in frame: Centralize o código QR no quadro
+  'Chamb:': 'Câmara:'
   Chamber: Câmara
   Chamber Fan: Ventoinha da Câmara
   Chamber Heater: Aquecedor da Câmara

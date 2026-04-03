@@ -272,6 +272,7 @@ translations:
   'Cannot start print: not connected to printer': 'Невозможно начать печать: не подключено к принтеру'
   'Cannot start print: printer is {}': 'Невозможно начать печать: принтер {}'
   Center QR code in frame: Расположите QR-код в центре кадра
+  'Chamb:': 'Камера:'
   Chamber: Камера
   Chamber Fan: Вентилятор камеры
   Chamber Heater: Нагреватель камеры

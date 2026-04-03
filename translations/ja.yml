@@ -272,6 +272,7 @@ translations:
   'Cannot start print: not connected to printer': '印刷を開始できません: プリンター未接続'
   'Cannot start print: printer is {}': '印刷を開始できません: プリンターは {} 状態です'
   'Center QR code in frame': 'QR コードをフレームの中央に合わせてください'
+  'Chamb:': 'チャンバ:'
   'Chamber': 'チャンバー'
   'Chamber Fan': 'チャンバーファン'
   'Chamber Heater': 'チャンバーヒーター'
