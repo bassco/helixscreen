@@ -76,6 +76,7 @@ class Config {
     friend class PanelWidgetConfigFixture;
     friend class ThermistorConfigFixture;
     friend class MultiInstanceMigrationFixture;
+    friend class PresetConfigFixture;
 
   public:
     /**
@@ -226,6 +227,19 @@ class Config {
 
     /// Set the preset name (written during auto-detection from printer database)
     void set_preset(const std::string& preset_name);
+
+    /**
+     * @brief Load a preset file and merge hardware config into active printer
+     *
+     * Loads config/presets/{preset_name}.json relative to the config file path.
+     * Merges the preset's "printer" section (fans, heaters, temp_sensors, leds,
+     * hardware, filament_sensors, default_macros) into the active printer config.
+     * Only applies when wizard_completed is false for the active printer.
+     *
+     * @param preset_name Name of the preset (without .json extension)
+     * @return true if preset was loaded and merged, false if skipped or error
+     */
+    bool apply_preset_file(const std::string& preset_name);
 
     /**
      * @brief Check if first-run wizard is required

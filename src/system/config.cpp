@@ -79,7 +79,7 @@ json get_default_printer_config(const std::string& moonraker_host) {
 /// Used for both new configs and ensuring display section exists with defaults
 json get_default_display_config() {
     return {{"sleep_sec", 1200}, {"dim_sec", 600},         {"dim_brightness", 30},
-            {"drm_device", ""}, {"gcode_render_mode", 0}, {"bed_mesh_render_mode", 0}};
+            {"drm_device", ""},  {"gcode_render_mode", 0}, {"bed_mesh_render_mode", 0}};
 }
 
 /// Migrate legacy display settings from root level to /display/ section
@@ -694,9 +694,9 @@ void Config::init(const std::string& config_path) {
             spdlog::info("[Config] Corrupt config saved to {}", corrupt_path);
 
             // Try restoring from backup before falling back to defaults
-            std::string backup_src = find_backup(
-                {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
-                 LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+            std::string backup_src =
+                find_backup({CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
+                             LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
 
             bool restored = false;
             if (!backup_src.empty()) {
@@ -714,7 +714,8 @@ void Config::init(const std::string& config_path) {
             if (!restored) {
                 spdlog::warn("[Config] No valid backup — resetting to defaults");
                 data = get_default_config("127.0.0.1", false);
-                NOTIFY_ERROR("Settings were corrupted and could not be recovered — reset to defaults");
+                NOTIFY_ERROR(
+                    "Settings were corrupted and could not be recovered — reset to defaults");
             }
             config_modified = true;
         }
@@ -1232,6 +1233,62 @@ void Config::set_preset(const std::string& preset_name) {
     }
     data["preset"] = preset_name;
     spdlog::info("[Config] Preset set to '{}'", preset_name);
+}
+
+bool Config::apply_preset_file(const std::string& preset_name) {
+    // Guard: only apply if wizard hasn't been completed for this printer
+    if (get<bool>(df() + "wizard_completed", false)) {
+        spdlog::info("[Config] Wizard completed, skipping preset '{}' merge", preset_name);
+        return false;
+    }
+
+    // Locate preset file relative to config directory
+    namespace fs = std::filesystem;
+    fs::path preset_path = fs::path(path).parent_path() / "presets" / (preset_name + ".json");
+    if (!fs::exists(preset_path)) {
+        spdlog::warn("[Config] Preset file not found: {}", preset_path.string());
+        return false;
+    }
+
+    // Load and parse preset JSON
+    json preset_json;
+    try {
+        preset_json = json::parse(std::fstream(preset_path.string()));
+    } catch (const json::exception& e) {
+        spdlog::error("[Config] Failed to parse preset '{}': {}", preset_path.string(), e.what());
+        return false;
+    }
+
+    // Merge hardware keys from preset's "printer" section into active printer config
+    static const std::vector<std::string> hardware_keys = {
+        "fans",     "heaters",          "temp_sensors",  "leds",
+        "hardware", "filament_sensors", "default_macros"};
+
+    if (preset_json.contains("printer") && preset_json["printer"].is_object()) {
+        const auto& printer = preset_json["printer"];
+        for (const auto& key : hardware_keys) {
+            json::json_pointer ptr(df() + key);
+            if (printer.contains(key)) {
+                data[ptr] = printer[key];
+            } else if (data.contains(ptr)) {
+                erase_at_pointer(data, ptr);
+            }
+        }
+    }
+
+    // Merge display settings key-by-key (preserves existing keys not in preset)
+    if (preset_json.contains("display") && preset_json["display"].is_object()) {
+        if (!data.contains("display")) {
+            data["display"] = json::object();
+        }
+        for (auto& [key, value] : preset_json["display"].items()) {
+            data["display"][key] = value;
+        }
+    }
+
+    spdlog::info("[Config] Applied preset '{}' to active printer", preset_name);
+    save();
+    return true;
 }
 
 bool Config::is_wizard_required() {
