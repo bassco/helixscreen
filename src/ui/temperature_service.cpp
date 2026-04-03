@@ -1285,6 +1285,21 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
         {"heater_bed", heaters_[idx(HeaterType::Bed)].config.color, true},
     };
 
+    // Add chamber series if printer has a chamber heater or sensor
+    {
+        const auto& chamber = heaters_[idx(HeaterType::Chamber)];
+        auto* heater_subj = printer_state_.get_printer_has_chamber_heater_subject();
+        bool has_heater = heater_subj && lv_subject_get_int(heater_subj) != 0;
+
+        if (has_heater && !chamber.klipper_name.empty()) {
+            config.series.push_back({chamber.klipper_name, chamber.config.color, true});
+        } else if (printer_state_.get_discovery().has_chamber_sensor()) {
+            // Sensor-only: show temp without target line
+            config.series.push_back({printer_state_.get_discovery().chamber_sensor_name(),
+                                     chamber.config.color, false});
+        }
+    }
+
     mini_graph_controller_ =
         std::make_unique<helix::TempGraphController>(container, std::move(config));
 
