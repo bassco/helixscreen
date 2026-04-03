@@ -316,6 +316,7 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     // Find temperature labels for color updates
     nozzle_current_label_ = lv_obj_find_by_name(panel_, "nozzle_current_temp");
     bed_current_label_ = lv_obj_find_by_name(panel_, "bed_current_temp");
+    chamber_current_label_ = lv_obj_find_by_name(panel_, "chamber_current_temp");
 
     // Find temp graph for dynamic sizing when bottom card changes
     temp_graph_card_ = lv_obj_find_by_name(panel_, "temp_graph_card");
@@ -623,7 +624,7 @@ void FilamentPanel::handle_preset_button(int material_id) {
     // Delegate state update and display refresh to the public API
     set_material(material_id);
 
-    // Send temperature commands to printer (both nozzle and bed)
+    // Send temperature commands to printer (nozzle, bed, and chamber if applicable)
     if (api_ && selected_material_ == material_id) {
         api_->set_temperature(
             printer_state_.active_extruder_name(), static_cast<double>(nozzle_target_),
@@ -639,6 +640,20 @@ void FilamentPanel::handle_preset_button(int material_id) {
             [](const MoonrakerError& error) {
                 NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), error.user_message());
             });
+
+        // Set chamber temperature if preset specifies one and printer has a chamber heater
+        if (chamber_target_ > 0) {
+            const auto& heater_name = printer_state_.get_discovery().chamber_heater_name();
+            if (!heater_name.empty()) {
+                int target = centi_to_degrees(chamber_target_);
+                api_->set_temperature(
+                    heater_name, static_cast<double>(target),
+                    [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
+                    [](const MoonrakerError& err) {
+                        NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
+                    });
+            }
+        }
     }
 }
 
@@ -649,7 +664,7 @@ void FilamentPanel::handle_nozzle_temp_tap() {
                                      static_cast<float>(nozzle_target_ > 0 ? nozzle_target_ : 200),
                                  .min_value = 0.0f,
                                  .max_value = static_cast<float>(nozzle_max_temp_),
-                                 .title_label = "Nozzle Temperature",
+                                 .title_label = lv_tr("Nozzle Temperature"),
                                  .unit_label = "°C",
                                  .allow_decimal = false,
                                  .allow_negative = false,
@@ -666,7 +681,7 @@ void FilamentPanel::handle_bed_temp_tap() {
                                      static_cast<float>(bed_target_ > 0 ? bed_target_ : 60),
                                  .min_value = 0.0f,
                                  .max_value = static_cast<float>(bed_max_temp_),
-                                 .title_label = "Bed Temperature",
+                                 .title_label = lv_tr("Bed Temperature"),
                                  .unit_label = "°C",
                                  .allow_decimal = false,
                                  .allow_negative = false,
@@ -683,7 +698,7 @@ void FilamentPanel::handle_chamber_temp_tap() {
                                      chamber_target_ > 0 ? centi_to_degrees(chamber_target_) : 50),
                                  .min_value = 0.0f,
                                  .max_value = static_cast<float>(chamber_max_temp_),
-                                 .title_label = "Chamber Temperature",
+                                 .title_label = lv_tr("Chamber Temperature"),
                                  .unit_label = "°C",
                                  .allow_decimal = false,
                                  .allow_negative = false,
@@ -703,46 +718,20 @@ void FilamentPanel::handle_custom_chamber_confirmed(float value) {
     spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
 
-    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
     chamber_target_ = static_cast<int>(value * 10);
     update_chamber_temp_display();
 
-    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
     if (api_) {
-        // Get the chamber heater object name from printer discovery
-        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
-        // "temperature_fan chamber")
-        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
-
-        if (heater_full_name.empty()) {
+        const auto& heater_name = printer_state_.get_discovery().chamber_heater_name();
+        if (heater_name.empty()) {
             NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
             return;
         }
 
-        // Convert centidegrees back to degrees for the GCODE command
-        int target_degrees = centi_to_degrees(chamber_target_);
-        char gcode[128];
-
-        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
-        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
-        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
-            // Extract the fan name after "temperature_fan " prefix
-            std::string fan_name = heater_full_name.substr(16);
-            std::snprintf(gcode, sizeof(gcode),
-                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
-                          fan_name.c_str(), target_degrees);
-        } else {
-            // heater_generic or other heater type
-            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
-            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                          object_name.c_str(), target_degrees);
-        }
-
-        api_->execute_gcode(
-            gcode,
-            [target = target_degrees]() {
-                NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target);
-            },
+        int target = static_cast<int>(value);
+        api_->set_temperature(
+            heater_name, static_cast<double>(target),
+            [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
             });
@@ -806,13 +795,19 @@ void FilamentPanel::update_material_temp_display() {
 }
 
 void FilamentPanel::update_chamber_temp_display() {
-    // Update chamber current and target temperatures
     // chamber_current_ is already in degrees (observer converts), chamber_target_ is centidegrees
     std::snprintf(chamber_current_buf_, sizeof(chamber_current_buf_), "%d°C", chamber_current_);
     format_target_or_off(centi_to_degrees(chamber_target_), chamber_target_buf_,
                          sizeof(chamber_target_buf_));
     lv_subject_copy_string(&chamber_current_subject_, chamber_current_buf_);
     lv_subject_copy_string(&chamber_target_subject_, chamber_target_buf_);
+
+    // Apply 4-state heating color (matches nozzle/bed)
+    if (chamber_current_label_) {
+        int target_deg = centi_to_degrees(chamber_target_);
+        lv_color_t color = get_heating_state_color(chamber_current_, target_deg);
+        lv_obj_set_style_text_color(chamber_current_label_, color, LV_PART_MAIN);
+    }
 }
 
 void FilamentPanel::update_left_card_temps() {
@@ -1594,7 +1589,7 @@ void FilamentPanel::custom_bed_keypad_cb(float value, void* user_data) {
 void FilamentPanel::on_nozzle_target_tap_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_nozzle_target_tap_clicked");
     LV_UNUSED(e);
-    spdlog::info("[FilamentPanel] on_nozzle_target_tap_clicked TRIGGERED");
+    spdlog::debug("[FilamentPanel] on_nozzle_target_tap_clicked TRIGGERED");
     get_global_filament_panel().handle_nozzle_temp_tap();
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -1602,7 +1597,7 @@ void FilamentPanel::on_nozzle_target_tap_clicked(lv_event_t* e) {
 void FilamentPanel::on_bed_target_tap_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[FilamentPanel] on_bed_target_tap_clicked");
     LV_UNUSED(e);
-    spdlog::info("[FilamentPanel] on_bed_target_tap_clicked TRIGGERED");
+    spdlog::debug("[FilamentPanel] on_bed_target_tap_clicked TRIGGERED");
     get_global_filament_panel().handle_bed_temp_tap();
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -1648,11 +1643,24 @@ void FilamentPanel::handle_cooldown() {
     spdlog::info("[{}] Cooldown requested - turning off heaters", get_name());
 
     if (api_) {
+        // Build default cooldown gcode, including chamber if printer has one
+        std::string default_gcode = "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
+                                    "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0";
+
+        const auto& discovery = printer_state_.get_discovery();
+        if (discovery.has_chamber_heater()) {
+            char chamber_gcode[128];
+            if (helix::ui::temperature::build_chamber_off_gcode(
+                    discovery.chamber_heater_name(), discovery.chamber_heater_object_name(),
+                    chamber_gcode, sizeof(chamber_gcode))) {
+                default_gcode += "\n";
+                default_gcode += chamber_gcode;
+            }
+        }
+
         // Use configured cooldown macro (user-overridable in settings.json)
         auto* cfg = helix::Config::get_instance();
-        helix::MacroConfig default_cooldown{"Cool Down",
-                                            "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
-                                            "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
+        helix::MacroConfig default_cooldown{"Cool Down", default_gcode};
         auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
 
         api_->execute_gcode(
@@ -1711,14 +1719,23 @@ void FilamentPanel::set_material(int material_id) {
     nozzle_target_ = mat->nozzle_recommended();
     bed_target_ = mat->bed_temp;
 
+    // Set chamber target from material preset (clear if material has no chamber requirement)
+    if (printer_state_.get_discovery().has_chamber_heater()) {
+        chamber_target_ = mat->chamber_temp_c > 0
+                              ? helix::ui::temperature::degrees_to_centi(mat->chamber_temp_c)
+                              : 0;
+        update_chamber_temp_display();
+    }
+
     lv_subject_set_int(&material_selected_subject_, selected_material_);
     update_preset_buttons_visual();
     update_temp_display();
     update_material_temp_display();
     update_status();
 
-    spdlog::info("[{}] Material set: {} (nozzle={}°C, bed={}°C)", get_name(),
-                 PRESET_MATERIAL_NAMES[material_id], nozzle_target_, bed_target_);
+    spdlog::info("[{}] Material set: {} (nozzle={}°C, bed={}°C, chamber={}°C)", get_name(),
+                 PRESET_MATERIAL_NAMES[material_id], nozzle_target_, bed_target_,
+                 mat->chamber_temp_c);
 }
 
 bool FilamentPanel::is_extrusion_allowed() const {

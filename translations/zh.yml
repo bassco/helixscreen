@@ -174,6 +174,7 @@ translations:
   Bed Leveling: 热床调平
   Bed Mesh: 热床网格
   Bed Mesh Render: 热床网格渲染
+  Bed Temperature: 热床温度
   Bed Moves: 热床移动
   Bed Screw Adjustment: 热床螺丝调整
   Bed Screws: 热床螺丝
@@ -946,6 +947,7 @@ translations:
   Minimum: 最小值
   Mode: 模式
   Modified: 已修改
+  Monitoring: 监控中
   Month: 月
   Moonraker: Moonraker
   Moonraker restarted but Spoolman not connected. Check server.: Moonraker 已重启但 Spoolman 未连接。请检查服务器。

@@ -174,6 +174,7 @@ translations:
   Bed Leveling: Livellamento piano
   Bed Mesh: Mesh piano
   Bed Mesh Render: Rendering mesh piano
+  Bed Temperature: Temperatura del piano
   Bed Moves: Piatto si muove
   Bed Screw Adjustment: Regolazione viti piano
   Bed Screws: Viti piano
@@ -947,6 +948,7 @@ translations:
   Minimum: Minimo
   Mode: Modalità
   Modified: Modificato
+  Monitoring: Monitoraggio
   Month: Mese
   Moonraker: Moonraker
   Moonraker restarted but Spoolman not connected. Check server.: Moonraker riavviato ma Spoolman non connesso. Controllare il server.

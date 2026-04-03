@@ -174,6 +174,7 @@ translations:
   Bed Leveling: Bettnivellierung
   Bed Mesh: Bettnetz
   Bed Mesh Render: Bettnetz-Darstellung
+  Bed Temperature: Betttemperatur
   Bed Moves: Bett bewegt sich
   Bed Screw Adjustment: Bettschrauben-Einstellung
   Bed Screws: Bettschrauben
@@ -947,6 +948,7 @@ translations:
   Minimum: Minimum
   Mode: Modus
   Modified: Geändert
+  Monitoring: Überwachung
   Month: Monat
   Moonraker: Moonraker
   Moonraker restarted but Spoolman not connected. Check server.: Moonraker neu gestartet, aber Spoolman nicht verbunden. Server prüfen.

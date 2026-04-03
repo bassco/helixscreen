@@ -63,7 +63,15 @@ void MoonrakerAPI::set_temperature(const std::string& heater, double temperature
     }
 
     std::ostringstream gcode;
-    gcode << "SET_HEATER_TEMPERATURE HEATER=" << heater << " TARGET=" << temperature;
+
+    // temperature_fan heaters use a different gcode command than standard heaters
+    if (heater.rfind("temperature_fan ", 0) == 0) {
+        std::string fan_name = heater.substr(16);
+        gcode << "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=" << fan_name
+              << " TARGET=" << temperature;
+    } else {
+        gcode << "SET_HEATER_TEMPERATURE HEATER=" << heater << " TARGET=" << temperature;
+    }
 
     spdlog::info("[Moonraker API] Setting {} temperature to {}°C", heater, temperature);
 

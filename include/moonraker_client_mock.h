@@ -768,6 +768,23 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
     bool has_chamber_sensor() const;
 
     /**
+     * @brief Get the Klipper object name used for chamber heater status updates
+     * @return e.g., "heater_generic chamber" or "temperature_fan chamber", empty if none
+     */
+    std::string chamber_heater_status_key() const;
+
+    /**
+     * @brief Replace existing chamber heaters in discovery lists with the given object
+     *
+     * Removes any heater containing "chamber" from discovery_.heaters() and adds
+     * the replacement. For temperature_fan types, also adds to sensors list.
+     */
+    void override_chamber_heater(const std::string& heater_obj);
+
+    /// Refresh cached_chamber_status_key_ from current heaters list
+    void update_cached_chamber_key();
+
+    /**
      * @brief Advance print progress based on simulated time elapsed
      * @param dt_simulated Simulated time step in seconds (affected by speedup)
      */
@@ -1008,6 +1025,9 @@ class MoonrakerClientMock : public helix::MoonrakerClient {
 
     // Additional objects for testing (e.g., "mmu", "AFC", "toolchanger")
     std::vector<std::string> additional_objects_;
+
+    // Cached chamber heater status key (updated by override_chamber_heater / populate)
+    std::string cached_chamber_status_key_;
 
     // Calibration simulation timers (PID, MPC, shaper) — must be cleaned up
     // in destructor to prevent use-after-free when mock is destroyed before

@@ -134,6 +134,36 @@ bool MoonrakerClientMock::has_chamber_sensor() const {
     return false;
 }
 
+std::string MoonrakerClientMock::chamber_heater_status_key() const {
+    return cached_chamber_status_key_;
+}
+
+void MoonrakerClientMock::update_cached_chamber_key() {
+    cached_chamber_status_key_.clear();
+    for (const auto& h : discovery_.heaters()) {
+        if (h.find("chamber") != std::string::npos && h != "heater_bed" && h != "extruder") {
+            cached_chamber_status_key_ = h;
+            return;
+        }
+    }
+}
+
+void MoonrakerClientMock::override_chamber_heater(const std::string& heater_obj) {
+    auto& heaters = discovery_.heaters();
+    heaters.erase(
+        std::remove_if(heaters.begin(), heaters.end(),
+                       [](const std::string& h) { return h.find("chamber") != std::string::npos; }),
+        heaters.end());
+    heaters.push_back(heater_obj);
+
+    // temperature_fan needs to be in sensors list for periodic status updates
+    if (heater_obj.rfind("temperature_fan ", 0) == 0) {
+        discovery_.sensors().push_back(heater_obj);
+    }
+
+    update_cached_chamber_key();
+}
+
 std::set<std::string> MoonrakerClientMock::get_excluded_objects() const {
     // If shared state is set, use that for consistency with MoonrakerAPIMock
     if (mock_state_) {
@@ -288,6 +318,45 @@ void MoonrakerClientMock::populate_capabilities() {
     // Additional objects set via set_additional_objects() for capability testing
     for (const auto& obj : additional_objects_) {
         mock_objects.push_back(obj);
+    }
+
+    // HELIX_MOCK_OBJECTS: space-separated list of additional Klipper objects to add
+    // e.g., HELIX_MOCK_OBJECTS="temperature_fan chamber" to test temperature_fan chamber heaters
+    const char* mock_obj_env = std::getenv("HELIX_MOCK_OBJECTS");
+    if (mock_obj_env && mock_obj_env[0]) {
+        std::istringstream iss(mock_obj_env);
+        std::string token;
+        std::string current_obj;
+        while (iss >> token) {
+            // Accumulate tokens: "temperature_fan" + "chamber" → "temperature_fan chamber"
+            if (!current_obj.empty()) {
+                // Check if this token starts a new object type prefix
+                bool is_prefix = (token.rfind("heater_generic", 0) == 0 ||
+                                  token.rfind("temperature_fan", 0) == 0 ||
+                                  token.rfind("temperature_sensor", 0) == 0);
+                if (is_prefix) {
+                    // Flush previous object
+                    mock_objects.push_back(current_obj);
+                    spdlog::info("[MoonrakerClientMock] Added mock object: {}", current_obj);
+                    current_obj = token;
+                } else {
+                    current_obj += " " + token;
+                }
+            } else {
+                current_obj = token;
+            }
+        }
+        if (!current_obj.empty()) {
+            mock_objects.push_back(current_obj);
+            spdlog::info("[MoonrakerClientMock] Added mock object: {}", current_obj);
+
+            // If a chamber heater override, update the discovery lists
+            if (current_obj.find("chamber") != std::string::npos &&
+                (current_obj.rfind("heater_generic ", 0) == 0 ||
+                 current_obj.rfind("temperature_fan ", 0) == 0)) {
+                override_chamber_heater(current_obj);
+            }
+        }
     }
 
     // Add printer-specific objects
@@ -456,6 +525,7 @@ void MoonrakerClientMock::populate_capabilities() {
         all_objects.push_back(name);
     }
     discovery_.hardware().set_printer_objects(all_objects);
+    update_cached_chamber_key();
 
     // Set mock MCU version data (after parse_objects which clears everything)
     discovery_.hardware().set_mcu("stm32f446xx");
@@ -481,6 +551,17 @@ void MoonrakerClientMock::rebuild_hardware_from_lists() {
     // Lightweight re-parse: build objects array from current discovery lists only.
     // Used by test helpers (set_heaters, set_fans, etc.) that need to update hardware()
     // without adding hardcoded common objects from populate_capabilities().
+
+    // Apply additional_objects overrides to discovery lists
+    // (e.g., temperature_fan chamber replacing heater_generic chamber)
+    for (const auto& obj : additional_objects_) {
+        if (obj.find("chamber") != std::string::npos &&
+            (obj.rfind("heater_generic ", 0) == 0 || obj.rfind("temperature_fan ", 0) == 0)) {
+            override_chamber_heater(obj);
+        }
+    }
+
+    // Build objects array from the corrected lists
     json objects = json::array();
 
     for (const auto& h : discovery_.heaters()) {
@@ -490,7 +571,6 @@ void MoonrakerClientMock::rebuild_hardware_from_lists() {
         objects.push_back(f);
     }
     for (const auto& s : discovery_.sensors()) {
-        // Skip bare heater names — already in heaters list
         if (s.rfind("temperature_sensor ", 0) == 0 || s.rfind("temperature_fan ", 0) == 0 ||
             s.rfind("tmc2240 ", 0) == 0 || s.rfind("tmc2209 ", 0) == 0 ||
             s.rfind("tmc5160 ", 0) == 0) {
@@ -508,6 +588,7 @@ void MoonrakerClientMock::rebuild_hardware_from_lists() {
     }
 
     discovery_.hardware().parse_objects(objects);
+    update_cached_chamber_key();
 }
 
 void MoonrakerClientMock::discover_printer(
@@ -1118,12 +1199,29 @@ int MoonrakerClientMock::gcode_script(const std::string& gcode) {
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Bed target set to {}°C", target);
             dispatch_status_update({{"heater_bed", {{"target", target}}}});
-        } else if (gcode.find("HEATER=chamber") != std::string::npos) {
+        } else if (gcode.find("HEATER=heater_generic chamber") != std::string::npos ||
+                   gcode.find("HEATER=chamber") != std::string::npos) {
             set_chamber_target(target);
             reset_idle_timeout();
             spdlog::info("[MoonrakerClientMock] Chamber target set to {}°C", target);
-            dispatch_status_update({{"heater_generic chamber", {{"target", target}}}});
+            auto key = chamber_heater_status_key();
+            if (!key.empty())
+                dispatch_status_update({{key, {{"target", target}}}});
         }
+    }
+    // Check for SET_TEMPERATURE_FAN_TARGET (temperature_fan chamber heaters)
+    else if (gcode.find("SET_TEMPERATURE_FAN_TARGET") != std::string::npos) {
+        double target = 0.0;
+        size_t target_pos = gcode.find("TARGET=");
+        if (target_pos != std::string::npos) {
+            target = std::stod(gcode.substr(target_pos + 7));
+        }
+        set_chamber_target(target);
+        reset_idle_timeout();
+        spdlog::info("[MoonrakerClientMock] Chamber (temperature_fan) target set to {}°C", target);
+        auto key = chamber_heater_status_key();
+        if (!key.empty())
+            dispatch_status_update({{key, {{"target", target}}}});
     }
     // Check for M-code style temperature commands
     else if (gcode.find("M104") != std::string::npos || gcode.find("M109") != std::string::npos) {
@@ -2877,7 +2975,11 @@ void MoonrakerClientMock::dispatch_initial_state() {
     json initial_status = {
         {"extruder", {{"temperature", ext_temp}, {"target", ext_target}}},
         {"heater_bed", {{"temperature", bed_temp_val}, {"target", bed_target_val}}},
-        {"heater_generic chamber", {{"temperature", 42.3}, {"target", chamber_target_.load()}}},
+        {[this]() {
+             auto key = chamber_heater_status_key();
+             return key.empty() ? "heater_generic chamber" : key;
+         }(),
+         {{"temperature", 42.3}, {"target", chamber_target_.load()}}},
         {"temperature_sensor chamber", {{"temperature", 42.3}}},
         {"toolhead",
          {{"position", {x, y, z, 0.0}},
@@ -3684,8 +3786,17 @@ void MoonrakerClientMock::temperature_simulation_loop() {
                 status_obj[s] = {{"temperature", temp}};
             } else if (s.rfind("temperature_fan ", 0) == 0) {
                 // Temperature fans have temp, target, and speed
-                double temp = 35.0 + 3.0 * std::sin(2.0 * M_PI * sim_time / 80.0);
-                status_obj[s] = {{"temperature", temp}, {"target", 40.0}, {"speed", 0.5}};
+                double temp;
+                double target;
+                if (s.find("chamber") != std::string::npos) {
+                    temp = chamber_temp_.load();
+                    target = chamber_target_.load();
+                } else {
+                    temp = 35.0 + 3.0 * std::sin(2.0 * M_PI * sim_time / 80.0);
+                    target = 40.0;
+                }
+                double speed = target > 0 ? 0.5 : 0.0;
+                status_obj[s] = {{"temperature", temp}, {"target", target}, {"speed", speed}};
             } else if (s.rfind("tmc2240 ", 0) == 0 || s.rfind("tmc5160 ", 0) == 0) {
                 // TMC stepper drivers: drift around a base temp per-driver
                 double base = 55.0 + (std::hash<std::string>{}(s) % 20);

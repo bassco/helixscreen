@@ -1111,41 +1111,19 @@ void ControlsPanel::handle_custom_chamber_confirmed(float value) {
     spdlog::info("[{}] Custom chamber temperature confirmed: {}°C", get_name(),
                  static_cast<int>(value));
 
-    // Convert degrees to centidegrees for storage (matches PrinterState internal format)
     cached_chamber_target_ = static_cast<int>(value * 10);
 
-    // Send temperature command to printer - chamber can be heater_generic or temperature_fan
     if (api_) {
-        // Get the chamber heater object name from printer discovery
-        // chamber_heater_name() returns full object name (e.g., "heater_generic chamber" or
-        // "temperature_fan chamber")
-        const std::string& heater_full_name = printer_state_.get_discovery().chamber_heater_name();
-
-        if (heater_full_name.empty()) {
+        const auto& heater_name = printer_state_.get_discovery().chamber_heater_name();
+        if (heater_name.empty()) {
             NOTIFY_ERROR(lv_tr("Chamber heater not found in printer configuration"));
             return;
         }
 
-        char gcode[128];
         int target = static_cast<int>(value);
-
-        // Check if this is a temperature_fan (needs SET_TEMPERATURE_FAN_TARGET)
-        // vs heater_generic (needs SET_HEATER_TEMPERATURE)
-        if (heater_full_name.rfind("temperature_fan ", 0) == 0) {
-            // Extract the fan name after "temperature_fan " prefix
-            std::string fan_name = heater_full_name.substr(16);
-            std::snprintf(gcode, sizeof(gcode),
-                          "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d",
-                          fan_name.c_str(), target);
-        } else {
-            // heater_generic or other heater type
-            std::string object_name = printer_state_.get_discovery().chamber_heater_object_name();
-            std::snprintf(gcode, sizeof(gcode), "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                          object_name.c_str(), target);
-        }
-
-        api_->execute_gcode(
-            gcode, [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
+        api_->set_temperature(
+            heater_name, static_cast<double>(target),
+            [target]() { NOTIFY_SUCCESS(lv_tr("Chamber target set to {}°C"), target); },
             [](const MoonrakerError& err) {
                 NOTIFY_ERROR(lv_tr("Failed to set chamber temp: {}"), err.user_message());
             });

@@ -115,7 +115,7 @@ TemperatureService::TemperatureService(PrinterState& printer_state, MoonrakerAPI
                       .color = lv_color_hex(0xA3BE8C), // nord14 Aurora green
                       .temp_range_max = 80.0f,
                       .y_axis_increment = 20,
-                      .presets = {0, 0, 45, 55}, // Off, PLA=off, PETG=45, ABS=55
+                      .presets = {0, 40, 50, 60}, // Off, 40°C, 50°C, 60°C
                       .keypad_range = {0.0f, 80.0f}};
     chamber.cooling_threshold_centi = 300;           // 30°C
     chamber.klipper_name = "heater_generic chamber"; // Updated from discovery
@@ -132,14 +132,16 @@ TemperatureService::TemperatureService(PrinterState& printer_state, MoonrakerAPI
     // Subscribe to temperature subjects with individual ObserverGuards.
     // Nozzle observers are separate so they can be rebound when switching
     // extruders in multi-extruder setups (bed/chamber observers stay constant).
-    nozzle.temp_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_active_extruder_temp_subject(), this,
-        [](TemperatureService* self, int temp) { self->on_temp_changed(HeaterType::Nozzle, temp); });
-    nozzle.target_observer =
-        observe_int_sync<TemperatureService>(printer_state_.get_active_extruder_target_subject(),
-                                           this, [](TemperatureService* self, int target) {
-                                               self->on_target_changed(HeaterType::Nozzle, target);
-                                           });
+    nozzle.temp_observer =
+        observe_int_sync<TemperatureService>(printer_state_.get_active_extruder_temp_subject(),
+                                             this, [](TemperatureService* self, int temp) {
+                                                 self->on_temp_changed(HeaterType::Nozzle, temp);
+                                             });
+    nozzle.target_observer = observe_int_sync<TemperatureService>(
+        printer_state_.get_active_extruder_target_subject(), this,
+        [](TemperatureService* self, int target) {
+            self->on_target_changed(HeaterType::Nozzle, target);
+        });
     bed.temp_observer = observe_int_sync<TemperatureService>(
         printer_state_.get_bed_temp_subject(), this,
         [](TemperatureService* self, int temp) { self->on_temp_changed(HeaterType::Bed, temp); });
@@ -148,10 +150,12 @@ TemperatureService::TemperatureService(PrinterState& printer_state, MoonrakerAPI
             self->on_target_changed(HeaterType::Bed, target);
         });
     chamber.temp_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_chamber_temp_subject(), this,
-        [](TemperatureService* self, int temp) { self->on_temp_changed(HeaterType::Chamber, temp); });
+        printer_state_.get_chamber_temp_subject(), this, [](TemperatureService* self, int temp) {
+            self->on_temp_changed(HeaterType::Chamber, temp);
+        });
     chamber.target_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_chamber_target_subject(), this, [](TemperatureService* self, int target) {
+        printer_state_.get_chamber_target_subject(), this,
+        [](TemperatureService* self, int target) {
             self->on_target_changed(HeaterType::Chamber, target);
         });
 
@@ -277,21 +281,20 @@ void TemperatureService::update_status(HeaterType type) {
     }
 
     auto& h = heaters_[idx(type)];
-    constexpr int TEMP_TOLERANCE_CENTI = 20; // 2°C
 
-    int target_deg = h.target / 10;
+    // Re-check read_only for chamber from live capability subject
+    if (type == HeaterType::Chamber) {
+        auto* cap_subj = printer_state_.get_printer_has_chamber_heater_subject();
+        h.read_only = (lv_subject_get_int(cap_subj) == 0);
+    }
+
+    // Use heater_display() for consistent status strings and color across all panels
+    auto result = helix::ui::temperature::heater_display(h.current, h.target);
 
     if (h.read_only) {
-        // Sensor-only heaters (e.g., chamber without active heater) just show "Monitoring"
-        snprintf(h.status_buf.data(), h.status_buf.size(), "Monitoring");
-    } else if (h.target > 0 && h.current < h.target - TEMP_TOLERANCE_CENTI) {
-        snprintf(h.status_buf.data(), h.status_buf.size(), lv_tr("Heating to %d°C..."), target_deg);
-    } else if (h.target > 0 && h.current >= h.target - TEMP_TOLERANCE_CENTI) {
-        snprintf(h.status_buf.data(), h.status_buf.size(), "At target temperature");
-    } else if (h.target == 0 && h.current > h.cooling_threshold_centi) {
-        snprintf(h.status_buf.data(), h.status_buf.size(), "Cooling down");
+        snprintf(h.status_buf.data(), h.status_buf.size(), "%s", lv_tr("Monitoring"));
     } else {
-        snprintf(h.status_buf.data(), h.status_buf.size(), "%s", lv_tr("Idle"));
+        snprintf(h.status_buf.data(), h.status_buf.size(), "%s", result.status.c_str());
     }
 
     lv_subject_copy_string(&h.status_subject, h.status_buf.data());
@@ -474,8 +477,8 @@ const char* TemperatureService::xml_component_name(HeaterType type) const {
 // ============================================================================
 
 ui_temp_graph_t* TemperatureService::create_temp_graph(lv_obj_t* chart_area,
-                                                     const heater_config_t* config, int target_temp,
-                                                     int* series_id_out) {
+                                                       const heater_config_t* config,
+                                                       int target_temp, int* series_id_out) {
     if (!chart_area)
         return nullptr;
 
@@ -1124,7 +1127,8 @@ void TemperatureService::select_extruder(const std::string& name) {
 
 void TemperatureService::rebuild_extruder_segments() {
     helix::ui::queue_update([this]() {
-        if (!subjects_initialized_) return;
+        if (!subjects_initialized_)
+            return;
         rebuild_extruder_segments_impl();
     });
 }
@@ -1173,7 +1177,8 @@ void TemperatureService::rebuild_extruder_segments_impl() {
 
     for (const auto& ext_name : names) {
         auto ext_it = extruders.find(ext_name);
-        if (ext_it == extruders.end()) continue;
+        if (ext_it == extruders.end())
+            continue;
         const auto& info = ext_it->second;
         lv_obj_t* btn = lv_button_create(selector);
         lv_obj_set_flex_grow(btn, 1);
@@ -1235,7 +1240,7 @@ void TemperatureService::rebuild_extruder_segments_impl() {
 // ============================================================================
 
 void TemperatureService::replay_history_from_manager(ui_temp_graph_t* graph, int series_id,
-                                                   const std::string& heater_name) {
+                                                     const std::string& heater_name) {
     auto* mgr = get_temperature_history_manager();
     if (mgr == nullptr || graph == nullptr || series_id < 0) {
         return;
@@ -1272,21 +1277,23 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
     helix::TempGraphControllerConfig config;
     config.point_count = MINI_GRAPH_POINTS;
     config.axis_size = "xs";
-    config.initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES
-                            | TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS
-                            | TEMP_GRAPH_FEATURE_GRADIENTS;
+    config.initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES |
+                              TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS |
+                              TEMP_GRAPH_FEATURE_GRADIENTS;
     config.series = {
         {active_extruder_name_, heaters_[idx(HeaterType::Nozzle)].config.color, true},
         {"heater_bed", heaters_[idx(HeaterType::Bed)].config.color, true},
     };
 
-    mini_graph_controller_ = std::make_unique<helix::TempGraphController>(container, std::move(config));
+    mini_graph_controller_ =
+        std::make_unique<helix::TempGraphController>(container, std::move(config));
 
-    spdlog::debug("[TempPanel] Mini combined graph created with {} point capacity", MINI_GRAPH_POINTS);
+    spdlog::debug("[TempPanel] Mini combined graph created with {} point capacity",
+                  MINI_GRAPH_POINTS);
 }
 
 void TemperatureService::register_heater_graph(ui_temp_graph_t* graph, int series_id,
-                                             const std::string& heater) {
+                                               const std::string& heater) {
     if (heater.rfind("extruder", 0) == 0) {
         heaters_[idx(HeaterType::Nozzle)].temp_graphs.push_back({graph, series_id});
     } else if (heater == "heater_bed") {
@@ -1310,4 +1317,3 @@ void TemperatureService::unregister_heater_graph(ui_temp_graph_t* graph) {
     }
     spdlog::debug("[TempPanel] Unregistered external graph");
 }
-

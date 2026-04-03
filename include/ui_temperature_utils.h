@@ -287,6 +287,45 @@ struct HeaterDisplayResult {
  */
 HeaterDisplayResult heater_display(int current_centi, int target_centi);
 
+// ============================================================================
+// Chamber Heater GCode
+// ============================================================================
+
+/**
+ * @brief Build the gcode command to set a chamber heater target temperature
+ *
+ * Chamber heaters can be either `heater_generic` or `temperature_fan` in Klipper,
+ * each requiring a different gcode command. This function selects the correct one
+ * based on the full heater name from PrinterDiscovery.
+ *
+ * @param heater_full_name Full Klipper object name (e.g., "heater_generic chamber"
+ *                         or "temperature_fan chamber")
+ * @param object_name      Short object name (e.g., "chamber")
+ * @param target_degrees   Target temperature in degrees
+ * @param buffer           Output buffer for gcode string
+ * @param buffer_size      Size of output buffer (recommended: 128)
+ * @return Pointer to buffer, or nullptr if heater_full_name is empty
+ */
+const char* build_chamber_gcode(const std::string& heater_full_name, const std::string& object_name,
+                                int target_degrees, char* buffer, size_t buffer_size);
+
+/**
+ * @brief Build gcode to turn off a chamber heater (target=0)
+ *
+ * Convenience wrapper for build_chamber_gcode with target_degrees=0.
+ *
+ * @param heater_full_name Full Klipper object name
+ * @param object_name      Short object name
+ * @param buffer           Output buffer for gcode string
+ * @param buffer_size      Size of output buffer
+ * @return Pointer to buffer, or nullptr if heater_full_name is empty
+ */
+inline const char* build_chamber_off_gcode(const std::string& heater_full_name,
+                                           const std::string& object_name, char* buffer,
+                                           size_t buffer_size) {
+    return build_chamber_gcode(heater_full_name, object_name, 0, buffer, buffer_size);
+}
+
 } // namespace temperature
 } // namespace ui
 } // namespace helix

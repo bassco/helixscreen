@@ -187,13 +187,13 @@
                      style_border_color="#border" style_border_opa="255">
             <event_cb trigger="clicked" callback="on_temp_graph_preset_clicked"/>
           </ui_button>
-          <ui_button name="chamber_preset_1" width="48%" text="PLA">
+          <ui_button name="chamber_preset_1" width="48%" text="40°C">
             <event_cb trigger="clicked" callback="on_temp_graph_preset_clicked"/>
           </ui_button>
-          <ui_button name="chamber_preset_2" width="48%" text="PETG">
+          <ui_button name="chamber_preset_2" width="48%" text="50°C">
             <event_cb trigger="clicked" callback="on_temp_graph_preset_clicked"/>
           </ui_button>
-          <ui_button name="chamber_preset_3" width="48%" text="ABS">
+          <ui_button name="chamber_preset_3" width="48%" text="60°C">
             <event_cb trigger="clicked" callback="on_temp_graph_preset_clicked"/>
           </ui_button>
         </lv_obj>

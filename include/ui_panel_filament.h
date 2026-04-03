@@ -274,6 +274,7 @@ class FilamentPanel : public PanelBase {
     // Temperature labels for color updates (4-state heating color)
     lv_obj_t* nozzle_current_label_ = nullptr;
     lv_obj_t* bed_current_label_ = nullptr;
+    lv_obj_t* chamber_current_label_ = nullptr;
 
     // Warning dialogs for filament sensor integration
     lv_obj_t* load_warning_dialog_ = nullptr;
