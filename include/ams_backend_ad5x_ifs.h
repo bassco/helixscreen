@@ -41,8 +41,12 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     static constexpr int UNMAPPED_PORT = 5;
 
     // --- AmsBackend interface ---
-    [[nodiscard]] AmsType get_type() const override { return AmsType::AD5X_IFS; }
-    [[nodiscard]] PathTopology get_topology() const override { return PathTopology::LINEAR; }
+    [[nodiscard]] AmsType get_type() const override {
+        return AmsType::AD5X_IFS;
+    }
+    [[nodiscard]] PathTopology get_topology() const override {
+        return PathTopology::LINEAR;
+    }
     [[nodiscard]] PathSegment get_filament_segment() const override;
     [[nodiscard]] PathSegment get_slot_filament_segment(int slot_index) const override;
     [[nodiscard]] PathSegment infer_error_segment() const override;
@@ -66,12 +70,18 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     AmsError enable_bypass() override;
     AmsError disable_bypass() override;
 
-    [[nodiscard]] bool has_firmware_spool_persistence() const override { return true; }
+    // IFS firmware persists color + material type but NOT spoolman_id,
+    // so ToolState must handle spool assignment persistence via Moonraker DB.
+    [[nodiscard]] bool has_firmware_spool_persistence() const override {
+        return false;
+    }
 
   protected:
     void on_started() override;
     void handle_status_update(const nlohmann::json& notification) override;
-    const char* backend_log_tag() const override { return "[AMS AD5X-IFS]"; }
+    const char* backend_log_tag() const override {
+        return "[AMS AD5X-IFS]";
+    }
 
   private:
     friend class Ad5xIfsTestAccess;

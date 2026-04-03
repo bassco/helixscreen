@@ -6,6 +6,7 @@
  * @brief Tests for has_firmware_spool_persistence() across AMS backends
  */
 
+#include "ams_backend_ad5x_ifs.h"
 #include "ams_backend_afc.h"
 #include "ams_backend_happy_hare.h"
 #include "ams_backend_mock.h"
@@ -40,5 +41,12 @@ TEST_CASE("AmsBackendAfc: has firmware spool persistence", "[ams][backend][spool
 TEST_CASE("AmsBackendToolChanger: no firmware spool persistence",
           "[ams][backend][spool-persistence]") {
     auto backend = std::make_unique<AmsBackendToolChanger>(nullptr, nullptr);
+    REQUIRE_FALSE(backend->has_firmware_spool_persistence());
+}
+
+TEST_CASE("AmsBackendAd5xIfs: no firmware spool persistence", "[ams][backend][spool-persistence]") {
+    // IFS firmware persists color + material type but NOT spoolman_id,
+    // so ToolState handles spool assignment persistence via Moonraker DB.
+    auto backend = std::make_unique<AmsBackendAd5xIfs>(nullptr, nullptr);
     REQUIRE_FALSE(backend->has_firmware_spool_persistence());
 }
