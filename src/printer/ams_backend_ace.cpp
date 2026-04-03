@@ -14,6 +14,7 @@
 
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "post_op_cooldown_manager.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 #include "spdlog/spdlog.h"
@@ -269,6 +270,7 @@ AmsError AmsBackendAce::load_filament(int slot_index) {
                     }
                 }
             }
+            PostOpCooldownManager::instance().schedule();
             emit_event(EVENT_STATE_CHANGED);
         },
         [this, token, gcode](const MoonrakerError& err) {
@@ -330,6 +332,7 @@ AmsError AmsBackendAce::unload_filament(int /*slot_index*/) {
                 system_info_.current_tool = -1;
                 system_info_.filament_loaded = false;
             }
+            PostOpCooldownManager::instance().schedule();
             emit_event(EVENT_STATE_CHANGED);
         },
         [this, token, gcode](const MoonrakerError& err) {

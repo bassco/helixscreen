@@ -32,6 +32,7 @@
 #include "led/led_controller.h"
 #include "moonraker_manager.h"
 #include "panel_factory.h"
+#include "post_op_cooldown_manager.h"
 #include "power_device_state.h"
 #include "print_history_manager.h"
 #include "sensor_state.h"
@@ -481,6 +482,9 @@ int Application::run(int argc, char** argv) {
     // to show sound settings even without a Klipper beeper output_pin.
     SoundManager::instance().initialize();
     SoundManager::instance().play("startup", SoundPriority::EVENT);
+
+    // Initialize PostOpCooldownManager (unified filament operation cooldown)
+    PostOpCooldownManager::instance().init(get_moonraker_api());
 
     // Update DisplaySettingsManager with theme mode support (must be after both theme and settings
     // init)
@@ -3271,6 +3275,9 @@ void Application::shutdown() {
 
     // Shutdown CrashHistory
     helix::CrashHistory::instance().shutdown();
+
+    // Shutdown PostOpCooldownManager (cancel pending cooldown timers)
+    PostOpCooldownManager::instance().shutdown();
 
     // Shutdown SoundManager (stops sequencer, closes audio backends)
     SoundManager::instance().shutdown();

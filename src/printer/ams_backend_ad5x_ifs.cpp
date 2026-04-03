@@ -6,6 +6,7 @@
 
 #include "moonraker_api.h"
 #include "moonraker_client.h"
+#include "post_op_cooldown_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -821,9 +822,11 @@ void AmsBackendAd5xIfs::detect_load_unload_completion(bool head_detected) {
     if (system_info_.action == AmsAction::LOADING && head_detected) {
         system_info_.action = AmsAction::IDLE;
         spdlog::info("{} Load complete (head sensor triggered)", backend_log_tag());
+        PostOpCooldownManager::instance().schedule();
     } else if (system_info_.action == AmsAction::UNLOADING && !head_detected) {
         system_info_.action = AmsAction::IDLE;
         spdlog::info("{} Unload complete (head sensor cleared)", backend_log_tag());
+        PostOpCooldownManager::instance().schedule();
     }
 }
 

@@ -4,6 +4,7 @@
 #include "ams_backend_cfs.h"
 
 #include "moonraker_error.h"
+#include "post_op_cooldown_manager.h"
 #include "ui_update_queue.h"
 
 #include "hv/json.hpp"
@@ -525,9 +526,11 @@ void AmsBackendCfs::handle_status_update(const nlohmann::json& notification) {
             if (system_info_.action == AmsAction::LOADING && detected) {
                 spdlog::info("[AMS CFS] Load complete (filament sensor triggered)");
                 system_info_.action = AmsAction::IDLE;
+                PostOpCooldownManager::instance().schedule();
             } else if (system_info_.action == AmsAction::UNLOADING && !detected) {
                 spdlog::info("[AMS CFS] Unload complete (filament sensor cleared)");
                 system_info_.action = AmsAction::IDLE;
+                PostOpCooldownManager::instance().schedule();
             }
         }
         changed = true;

@@ -19,6 +19,7 @@
 #include "app_constants.h"
 #include "filament_database.h"
 #include "moonraker_api.h"
+#include "post_op_cooldown_manager.h"
 #include "observer_factory.h"
 #include "printer_state.h"
 #include "ui/ui_cleanup_helpers.h"
@@ -822,12 +823,8 @@ void AmsOperationSidebar::check_pending_load() {
 
 void AmsOperationSidebar::handle_load_complete() {
     if (ui_initiated_heat_) {
-        if (api_) {
-            api_->set_temperature(
-                printer_state_.active_extruder_name(), 0, []() {},
-                [](const MoonrakerError& /*err*/) {});
-        }
-        spdlog::info("[AmsSidebar] Load complete, turning off heater (UI-initiated heat)");
+        PostOpCooldownManager::instance().schedule();
+        spdlog::info("[AmsSidebar] Load complete, scheduling cooldown (UI-initiated heat)");
         ui_initiated_heat_ = false;
     }
 }

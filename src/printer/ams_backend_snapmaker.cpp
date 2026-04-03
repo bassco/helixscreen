@@ -4,6 +4,7 @@
 
 #include "ams_error.h"
 #include "moonraker_api.h"
+#include "post_op_cooldown_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -453,6 +454,7 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
                             system_info_.action == AmsAction::UNLOADING) {
                             system_info_.action = AmsAction::IDLE;
                             system_info_.operation_detail.clear();
+                            PostOpCooldownManager::instance().schedule();
                             changed = true;
                         }
                     }

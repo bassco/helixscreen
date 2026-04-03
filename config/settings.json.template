@@ -196,6 +196,10 @@
     "estop_require_confirmation": true,
     "_estop_require_confirmation_comment": "Require confirmation dialog before emergency stop. When false, E-Stop triggers immediately. Default: true (confirmation required)."
   },
+  "filament": {
+    "cooldown_delay_seconds": 120,
+    "_cooldown_delay_seconds_comment": "Seconds to wait after a filament operation before turning off the extruder heater. Default: 120 (2 minutes). Set to 0 to disable auto-cooldown."
+  },
   "filament_sensors": {
     "master_enabled": true,
     "_master_enabled_comment": "Global toggle to enable/disable all filament sensor monitoring. When false, sensor states are ignored.",

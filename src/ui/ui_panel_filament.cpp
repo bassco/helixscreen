@@ -28,6 +28,7 @@
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
+#include "post_op_cooldown_manager.h"
 #include "observer_factory.h"
 #include "printer_state.h"
 #include "settings_manager.h"
@@ -251,10 +252,6 @@ void FilamentPanel::deinit_subjects() {
                 [](const MoonrakerError& /*err*/) {});
         }
         prior_nozzle_target_ = 0;
-    }
-    if (preheat_cooldown_timer_) {
-        lv_timer_delete(preheat_cooldown_timer_);
-        preheat_cooldown_timer_ = nullptr;
     }
     external_spool_observer_.reset();
     temp_observers_.clear();
@@ -564,10 +561,8 @@ void FilamentPanel::update_all_temps() {
                            (nozzle_target_ > 0 || bed_target_ > 0) ? 1 : 0);
 
         // Cancel pending cooldown if user manually changed heater target
-        if (preheat_cooldown_timer_ && nozzle_target_ != 0) {
-            spdlog::debug("[{}] Cancelling preheat cooldown — user set new target", get_name());
-            lv_timer_delete(preheat_cooldown_timer_);
-            preheat_cooldown_timer_ = nullptr;
+        if (nozzle_target_ != 0) {
+            PostOpCooldownManager::instance().cancel();
         }
     }
 
@@ -1683,10 +1678,7 @@ void FilamentPanel::cancel_pending_preheat() {
     pending_preheat_target_ = 0;
 
     // Cancel any pending cooldown timer
-    if (preheat_cooldown_timer_) {
-        lv_timer_delete(preheat_cooldown_timer_);
-        preheat_cooldown_timer_ = nullptr;
-    }
+    PostOpCooldownManager::instance().cancel();
 
     // Restore heater to prior state immediately (no delay for cancel)
     if (prior_nozzle_target_ == 0 && api_) {
@@ -1700,26 +1692,8 @@ void FilamentPanel::cancel_pending_preheat() {
 }
 
 void FilamentPanel::restore_heater_after_preheat() {
-    if (prior_nozzle_target_ == 0 && api_) {
-        spdlog::info("[{}] Heater was off before preheat, scheduling cooldown in {}s",
-                     get_name(), PREHEAT_COOLDOWN_DELAY_MS / 1000);
-        // Delay cooldown so user can purge/verify after load/unload
-        if (preheat_cooldown_timer_) {
-            lv_timer_delete(preheat_cooldown_timer_);
-        }
-        preheat_cooldown_timer_ = lv_timer_create(
-            [](lv_timer_t* t) {
-                auto* self = static_cast<FilamentPanel*>(lv_timer_get_user_data(t));
-                self->preheat_cooldown_timer_ = nullptr;
-                if (self->api_ && self->nozzle_target_ > 0) {
-                    spdlog::info("[{}] Preheat cooldown: turning off heater", self->get_name());
-                    self->api_->set_temperature(
-                        self->printer_state_.active_extruder_name(), 0, []() {},
-                        [](const MoonrakerError& /*err*/) {});
-                }
-            },
-            PREHEAT_COOLDOWN_DELAY_MS, this);
-        lv_timer_set_repeat_count(preheat_cooldown_timer_, 1);
+    if (prior_nozzle_target_ == 0) {
+        PostOpCooldownManager::instance().schedule();
     }
     prior_nozzle_target_ = 0;
 }

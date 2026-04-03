@@ -1624,6 +1624,18 @@ Handles async file operations during print selection:
 - **StreamingPolicy** - Prevents conflicting async operations
 - **BusyOverlay** - Visual feedback during long-running operations
 
+### Post-Operation Cooldown
+
+`PostOpCooldownManager` is a singleton that schedules heater cooldown after filament operations
+complete. All filament operation paths (FilamentPanel, AMS sidebar, AMS backends) funnel through
+this single manager instead of implementing their own cooldown timers.
+
+- `schedule()` — starts a configurable delay timer (default 120s, setting: `/filament/cooldown_delay_seconds`)
+- `cancel()` — cancels pending cooldown (called when user manually heats or new op starts)
+- At fire time, checks: extruder target > 0 AND print state != PRINTING/PAUSED
+- Calling `schedule()` resets any existing pending timer
+- Thread-safe: defers to LVGL main thread via `queue_update()`
+
 ### Watchdog (Embedded)
 
 Crash recovery for embedded deployments:
