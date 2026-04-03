@@ -1047,51 +1047,18 @@ void ControlsPanel::handle_bed_temp_clicked() {
 }
 
 void ControlsPanel::handle_nozzle_target_edit() {
-    spdlog::debug("[{}] Opening nozzle temperature keypad", get_name());
-
-    ui_keypad_config_t config = {
-        .initial_value = static_cast<float>(
-            cached_extruder_target_ > 0 ? centi_to_degrees(cached_extruder_target_) : 200),
-        .min_value = 0.0f,
-        .max_value = static_cast<float>(nozzle_max_temp_),
-        .title_label = lv_tr("Nozzle Temperature"),
-        .unit_label = "°C",
-        .allow_decimal = false,
-        .allow_negative = false,
-        .callback =
-            [](float value, void* user_data) {
-                auto* self = static_cast<ControlsPanel*>(user_data);
-                if (self) {
-                    self->handle_custom_nozzle_confirmed(value);
-                }
-            },
-        .user_data = this};
-
-    ui_keypad_show(&config);
+    show_temperature_keypad<&ControlsPanel::handle_custom_nozzle_confirmed>(
+        "Nozzle Temperature", cached_extruder_target_, 200, nozzle_max_temp_);
 }
 
 void ControlsPanel::handle_bed_target_edit() {
-    spdlog::debug("[{}] Opening bed temperature keypad", get_name());
+    show_temperature_keypad<&ControlsPanel::handle_custom_bed_confirmed>(
+        "Bed Temperature", cached_bed_target_, 60, bed_max_temp_);
+}
 
-    ui_keypad_config_t config = {
-        .initial_value =
-            static_cast<float>(cached_bed_target_ > 0 ? centi_to_degrees(cached_bed_target_) : 60),
-        .min_value = 0.0f,
-        .max_value = static_cast<float>(bed_max_temp_),
-        .title_label = lv_tr("Bed Temperature"),
-        .unit_label = "°C",
-        .allow_decimal = false,
-        .allow_negative = false,
-        .callback =
-            [](float value, void* user_data) {
-                auto* self = static_cast<ControlsPanel*>(user_data);
-                if (self) {
-                    self->handle_custom_bed_confirmed(value);
-                }
-            },
-        .user_data = this};
-
-    ui_keypad_show(&config);
+void ControlsPanel::handle_chamber_target_edit() {
+    show_temperature_keypad<&ControlsPanel::handle_custom_chamber_confirmed>(
+        "Chamber Temperature", cached_chamber_target_, 50, chamber_max_temp_);
 }
 
 void ControlsPanel::handle_custom_nozzle_confirmed(float value) {
@@ -1132,30 +1099,6 @@ void ControlsPanel::handle_custom_bed_confirmed(float value) {
                 NOTIFY_ERROR(lv_tr("Failed to set bed temp: {}"), error.user_message());
             });
     }
-}
-
-void ControlsPanel::handle_chamber_target_edit() {
-    spdlog::debug("[{}] Opening chamber temperature keypad", get_name());
-
-    ui_keypad_config_t config = {
-        .initial_value = static_cast<float>(
-            cached_chamber_target_ > 0 ? centi_to_degrees(cached_chamber_target_) : 50),
-        .min_value = 0.0f,
-        .max_value = static_cast<float>(chamber_max_temp_),
-        .title_label = lv_tr("Chamber Temperature"),
-        .unit_label = "°C",
-        .allow_decimal = false,
-        .allow_negative = false,
-        .callback =
-            [](float value, void* user_data) {
-                auto* self = static_cast<ControlsPanel*>(user_data);
-                if (self) {
-                    self->handle_custom_chamber_confirmed(value);
-                }
-            },
-        .user_data = this};
-
-    ui_keypad_show(&config);
 }
 
 void ControlsPanel::handle_custom_chamber_confirmed(float value) {

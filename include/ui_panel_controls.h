@@ -8,6 +8,7 @@
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 #include "ui_print_tune_overlay.h"
+#include "ui_temperature_utils.h"
 
 #include "async_lifetime_guard.h"
 #include "config.h"
@@ -385,6 +386,19 @@ class ControlsPanel : public PanelBase {
     void handle_custom_bed_confirmed(float value);
     void handle_custom_chamber_confirmed(float value);
 
+    /**
+     * @brief Show a temperature keypad dialog for a heater zone.
+     *
+     * @tparam Handler  Pointer-to-member for confirmed callback
+     * @param title     Title shown in the keypad
+     * @param cached_target   Current target in centidegrees
+     * @param default_initial Default initial °C when target is 0
+     * @param max_temp        Maximum allowed temperature in °C
+     */
+    template <void (ControlsPanel::*Handler)(float)>
+    void show_temperature_keypad(const char* title, int cached_target, int default_initial,
+                                 int max_temp);
+
     //
     // === Quick Action Button Handlers ===
     //
@@ -513,6 +527,36 @@ class ControlsPanel : public PanelBase {
     void subscribe_to_secondary_temp_subjects();
     void update_secondary_temp(const std::string& klipper_name, int centidegrees);
 };
+
+// ============================================================================
+// TEMPLATE DEFINITIONS (must be in header)
+// ============================================================================
+
+template <void (ControlsPanel::*Handler)(float)>
+void ControlsPanel::show_temperature_keypad(const char* title, int cached_target,
+                                            int default_initial, int max_temp) {
+    spdlog::debug("[{}] Opening {} keypad", get_name(), title);
+
+    int initial_centi = cached_target > 0 ? cached_target : default_initial * 10;
+    ui_keypad_config_t config = {.initial_value = static_cast<float>(
+                                     helix::ui::temperature::centi_to_degrees(initial_centi)),
+                                 .min_value = 0.0f,
+                                 .max_value = static_cast<float>(max_temp),
+                                 .title_label = lv_tr(title),
+                                 .unit_label = "°C",
+                                 .allow_decimal = false,
+                                 .allow_negative = false,
+                                 .callback =
+                                     [](float value, void* user_data) {
+                                         auto* self = static_cast<ControlsPanel*>(user_data);
+                                         if (self) {
+                                             (self->*Handler)(value);
+                                         }
+                                     },
+                                 .user_data = this};
+
+    ui_keypad_show(&config);
+}
 
 // Global instance accessor (needed by main.cpp and XML event_cb trampolines)
 ControlsPanel& get_global_controls_panel();
