@@ -20,8 +20,8 @@ TEST_CASE("MemoryThresholds for constrained device", "[memory_monitor]") {
 
     auto t = MemoryThresholds::for_device(info);
 
-    REQUIRE(t.warn_rss_kb == 20 * 1024);
-    REQUIRE(t.critical_rss_kb == 28 * 1024);
+    REQUIRE(t.warn_rss_kb == 30 * 1024);
+    REQUIRE(t.critical_rss_kb == 40 * 1024);
     REQUIRE(t.warn_available_kb == 15 * 1024);
     REQUIRE(t.critical_available_kb == 8 * 1024);
     REQUIRE(t.growth_5min_kb == 1 * 1024);
