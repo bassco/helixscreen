@@ -244,7 +244,17 @@ void FilamentPanel::deinit_subjects() {
     if (pending_preheat_op_ != PreheatOp::NONE) {
         pending_preheat_op_ = PreheatOp::NONE;
         pending_preheat_target_ = 0;
-        restore_heater_after_preheat();
+        // Don't schedule delayed cooldown during teardown — just cool down immediately
+        if (prior_nozzle_target_ == 0 && api_) {
+            api_->set_temperature(
+                printer_state_.active_extruder_name(), 0, []() {},
+                [](const MoonrakerError& /*err*/) {});
+        }
+        prior_nozzle_target_ = 0;
+    }
+    if (preheat_cooldown_timer_) {
+        lv_timer_delete(preheat_cooldown_timer_);
+        preheat_cooldown_timer_ = nullptr;
     }
     external_spool_observer_.reset();
     temp_observers_.clear();
@@ -552,6 +562,13 @@ void FilamentPanel::update_all_temps() {
         check_and_auto_select_preset();
         lv_subject_set_int(&nozzle_heating_subject_,
                            (nozzle_target_ > 0 || bed_target_ > 0) ? 1 : 0);
+
+        // Cancel pending cooldown if user manually changed heater target
+        if (preheat_cooldown_timer_ && nozzle_target_ != 0) {
+            spdlog::debug("[{}] Cancelling preheat cooldown — user set new target", get_name());
+            lv_timer_delete(preheat_cooldown_timer_);
+            preheat_cooldown_timer_ = nullptr;
+        }
     }
 
     // Check if pending preheat target has been reached
@@ -1665,18 +1682,44 @@ void FilamentPanel::cancel_pending_preheat() {
     pending_preheat_op_ = PreheatOp::NONE;
     pending_preheat_target_ = 0;
 
-    // Restore heater to prior state
-    restore_heater_after_preheat();
+    // Cancel any pending cooldown timer
+    if (preheat_cooldown_timer_) {
+        lv_timer_delete(preheat_cooldown_timer_);
+        preheat_cooldown_timer_ = nullptr;
+    }
+
+    // Restore heater to prior state immediately (no delay for cancel)
+    if (prior_nozzle_target_ == 0 && api_) {
+        api_->set_temperature(
+            printer_state_.active_extruder_name(), 0, []() {},
+            [](const MoonrakerError& /*err*/) {});
+    }
+    prior_nozzle_target_ = 0;
 
     NOTIFY_INFO(lv_tr("Preheat cancelled"));
 }
 
 void FilamentPanel::restore_heater_after_preheat() {
     if (prior_nozzle_target_ == 0 && api_) {
-        spdlog::info("[{}] Heater was off before preheat, cooling down", get_name());
-        api_->set_temperature(
-            printer_state_.active_extruder_name(), 0, []() {},
-            [](const MoonrakerError& /*err*/) {});
+        spdlog::info("[{}] Heater was off before preheat, scheduling cooldown in {}s",
+                     get_name(), PREHEAT_COOLDOWN_DELAY_MS / 1000);
+        // Delay cooldown so user can purge/verify after load/unload
+        if (preheat_cooldown_timer_) {
+            lv_timer_delete(preheat_cooldown_timer_);
+        }
+        preheat_cooldown_timer_ = lv_timer_create(
+            [](lv_timer_t* t) {
+                auto* self = static_cast<FilamentPanel*>(lv_timer_get_user_data(t));
+                self->preheat_cooldown_timer_ = nullptr;
+                if (self->api_ && self->nozzle_target_ > 0) {
+                    spdlog::info("[{}] Preheat cooldown: turning off heater", self->get_name());
+                    self->api_->set_temperature(
+                        self->printer_state_.active_extruder_name(), 0, []() {},
+                        [](const MoonrakerError& /*err*/) {});
+                }
+            },
+            PREHEAT_COOLDOWN_DELAY_MS, this);
+        lv_timer_set_repeat_count(preheat_cooldown_timer_, 1);
     }
     prior_nozzle_target_ = 0;
 }

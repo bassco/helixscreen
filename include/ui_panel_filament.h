@@ -248,6 +248,8 @@ class FilamentPanel : public PanelBase {
     PreheatOp pending_preheat_op_ = PreheatOp::NONE;
     int pending_preheat_target_ = 0;   ///< Target temp in °C for pending preheat
     int prior_nozzle_target_ = 0;      ///< Nozzle target before preheat (0 = was off → cool down after)
+    lv_timer_t* preheat_cooldown_timer_ = nullptr; ///< Delayed cooldown after preheat op
+    static constexpr uint32_t PREHEAT_COOLDOWN_DELAY_MS = 120000; // 2 minutes
 
     // Filament macros now resolved via StandardMacros singleton (load, unload, purge)
 
