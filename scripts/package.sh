@@ -174,6 +174,13 @@ package_platform() {
         cp -r "${PROJECT_DIR}/config/platform" "$pkg_dir/config/"
     fi
 
+    # Ship all presets for runtime detection-based loading
+    # (auto_detect_and_save applies the matching preset after identifying the printer)
+    if [ -d "${PROJECT_DIR}/config/presets" ]; then
+        cp -r "${PROJECT_DIR}/config/presets" "$pkg_dir/config/"
+        log_info "  Included $(ls -1 "${PROJECT_DIR}/config/presets"/*.json 2>/dev/null | wc -l | tr -d ' ') preset files"
+    fi
+
     # Platform-specific default config: convention-based preset lookup
     # If config/presets/<platform>.json exists, use it as the default settings.json.
     # Presets contain pre-configured hardware mappings, touch calibration, and wizard_completed=false
