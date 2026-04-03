@@ -404,7 +404,7 @@ int Application::run(int argc, char** argv) {
         return 1;
     }
 
-    // Phase 7b: Rotation probe + layout manager init
+    // Phase 8c: Rotation probe + layout manager init
     // Must run AFTER init_translations() so lv_tr() is available for probe strings.
     // Also must run before panel creation so layout-specific XML overrides are resolved.
     run_rotation_probe_and_layout();
