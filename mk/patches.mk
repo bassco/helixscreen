@@ -169,6 +169,17 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL fbdev BGR swap patch already applied$(RESET)"; \
 	fi
+	$(Q)if ! grep -q 'LV_DRAW_BUF_ALIGN' $(LVGL_DIR)/src/drivers/display/fb/lv_linux_fbdev.c 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL fbdev buffer alignment patch...$(RESET)"; \
+		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl-fbdev-buffer-align.patch 2>/dev/null; then \
+			git -C $(LVGL_DIR) apply ../../patches/lvgl-fbdev-buffer-align.patch && \
+			echo "$(GREEN)✓ Fbdev buffer alignment patch applied$(RESET)"; \
+		else \
+			echo "$(YELLOW)⚠ Cannot apply patch (already applied or conflicts)$(RESET)"; \
+		fi \
+	else \
+		echo "$(GREEN)✓ LVGL fbdev buffer alignment patch already applied$(RESET)"; \
+	fi
 	$(Q)if git -C $(LVGL_DIR) diff --quiet src/core/lv_observer.c 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL observer debug info patch...$(RESET)"; \
 		if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_observer_debug.patch 2>/dev/null; then \
