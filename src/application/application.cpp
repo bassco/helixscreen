@@ -392,22 +392,22 @@ int Application::run(int argc, char** argv) {
         return 1;
     }
 
-    // Phase 8: Register XML components
-    if (!register_xml_components()) {
-        shutdown();
-        return 1;
-    }
-
-    // Phase 8b: Load translations (must be before UI creation for hot-reload support)
+    // Phase 8a: Load translations (must be before UI creation for hot-reload support)
     if (!init_translations()) {
         shutdown();
         return 1;
     }
 
-    // Phase 8c: Rotation probe + layout manager init
+    // Phase 8b: Rotation probe + layout manager init
     // Must run AFTER init_translations() so lv_tr() is available for probe strings.
     // Also must run before panel creation so layout-specific XML overrides are resolved.
     run_rotation_probe_and_layout();
+
+    // Phase 8c: Register XML components
+    if (!register_xml_components()) {
+        shutdown();
+        return 1;
+    }
 
     // Phase 9a: Initialize core subjects and state (PrinterState, AmsState)
     // Must happen before Moonraker init because API creation needs PrinterState
