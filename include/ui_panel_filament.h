@@ -343,7 +343,9 @@ class FilamentPanel : public PanelBase {
         std::string material_name;
     };
     PreheatTempResult
-    resolve_preheat_temp() const;            ///< Priority: ext spool > AMS slot > preset > fallback
+    resolve_preheat_temp() const; ///< Priority: ext spool > AMS slot > preset > fallback
+    bool
+    has_active_spool_material() const; ///< True if external spool or AMS slot has known material
     void start_preheat_for_op(PreheatOp op); ///< Resolve temp, heat, set pending state
     void restore_heater_after_preheat();     ///< Cool down if heater was off before preheat
 

@@ -519,13 +519,16 @@ void FilamentPanel::update_warning_text() {
 void FilamentPanel::update_safety_state() {
     bool allowed = helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_);
 
-    // Update reactive subjects - XML bindings handle button disabled state and safety warning
-    // visibility
-    lv_subject_set_int(&extrusion_allowed_subject_, allowed ? 1 : 0);
-    lv_subject_set_int(&safety_warning_visible_subject_, allowed ? 0 : 1);
+    // Hide the safety warning (and enable buttons) if we have a known spool material,
+    // since the load/unload handlers will auto-preheat to the correct temperature.
+    bool has_known_spool = has_active_spool_material();
+    bool show_warning = !allowed && !has_known_spool;
 
-    spdlog::trace("[{}] Safety state updated: allowed={} (temp={}°C)", get_name(), allowed,
-                  nozzle_current_);
+    lv_subject_set_int(&extrusion_allowed_subject_, allowed ? 1 : 0);
+    lv_subject_set_int(&safety_warning_visible_subject_, show_warning ? 1 : 0);
+
+    spdlog::trace("[{}] Safety state updated: allowed={}, known_spool={} (temp={}°C)", get_name(),
+                  allowed, has_known_spool, nozzle_current_);
 }
 
 void FilamentPanel::update_preset_buttons_visual() {
@@ -1740,6 +1743,31 @@ void FilamentPanel::set_material(int material_id) {
 
 bool FilamentPanel::is_extrusion_allowed() const {
     return helix::ui::temperature::is_extrusion_safe(nozzle_current_, min_extrude_temp_);
+}
+
+bool FilamentPanel::has_active_spool_material() const {
+    // Check if there's a known spool with valid material info (external spool or AMS active slot)
+    auto ext = AmsState::instance().get_external_spool_info();
+    if (ext.has_value()) {
+        auto active = helix::build_active_material(*ext);
+        if (active.material_info.nozzle_min > 0) {
+            return true;
+        }
+    }
+
+    AmsBackend* backend = AmsState::instance().get_backend();
+    if (backend) {
+        AmsSystemInfo sys_info = backend->get_system_info();
+        const SlotInfo* active_slot = sys_info.get_active_slot();
+        if (active_slot) {
+            auto active = helix::build_active_material(*active_slot);
+            if (active.material_info.nozzle_min > 0) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 FilamentPanel::PreheatTempResult FilamentPanel::resolve_preheat_temp() const {
