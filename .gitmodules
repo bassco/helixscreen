@@ -32,6 +32,7 @@
 [submodule "lib/libnl"]
 	path = lib/libnl
 	url = https://github.com/thom311/libnl.git
+	ignore = dirty
 [submodule "lib/lv_i18n"]
 	path = lib/lv_i18n
 	url = https://github.com/lvgl/lv_i18n
