@@ -196,6 +196,71 @@ TEST_CASE("Layer tracking: set_print_layer_current setter", "[layer_tracking][se
 }
 
 // ============================================================================
+// virtual_sdcard.layer path (K1C and newer Klipper)
+// ============================================================================
+
+TEST_CASE("Layer tracking: virtual_sdcard.layer updates subject",
+          "[layer_tracking][virtual_sdcard]") {
+    lv_init_safe();
+
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    // Start printing
+    json printing = {{"print_stats", {{"state", "printing"}}}};
+    state.update_from_status(printing);
+
+    SECTION("layer and layer_count update from virtual_sdcard") {
+        json status = {{"virtual_sdcard", {{"progress", 0.50}, {"layer", 158}, {"layer_count", 296}}}};
+        state.update_from_status(status);
+
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 158);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_total_subject()) == 296);
+        REQUIRE(state.has_real_layer_data());
+    }
+
+    SECTION("virtual_sdcard.layer takes precedence over estimation") {
+        // Set total for estimation to have something to work with
+        state.set_print_layer_total(296);
+        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+
+        // Send progress with layer data — should use layer, not estimation
+        json status = {{"virtual_sdcard", {{"progress", 0.66}, {"layer", 158}, {"layer_count", 296}}}};
+        state.update_from_status(status);
+
+        // 0.66 * 296 = 195 (estimation), but real layer is 158
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 158);
+    }
+
+    SECTION("virtual_sdcard.layer prevents future estimation") {
+        json with_layer = {{"virtual_sdcard", {{"progress", 0.50}, {"layer", 100}}}};
+        state.update_from_status(with_layer);
+        REQUIRE(state.has_real_layer_data());
+
+        // Further progress without layer data should NOT overwrite via estimation
+        state.set_print_layer_total(296);
+        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+
+        json without_layer = {{"virtual_sdcard", {{"progress", 0.80}}}};
+        state.update_from_status(without_layer);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 100);
+    }
+
+    SECTION("missing layer field falls back to estimation") {
+        state.set_print_layer_total(200);
+        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+
+        json no_layer = {{"virtual_sdcard", {{"progress", 0.50}}}};
+        state.update_from_status(no_layer);
+
+        // Should estimate: 50% of 200 = 100
+        REQUIRE_FALSE(state.has_real_layer_data());
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 100);
+    }
+}
+
+// ============================================================================
 // Progress-based layer estimation fallback
 // ============================================================================
 
