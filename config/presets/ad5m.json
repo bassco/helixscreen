@@ -4,17 +4,6 @@
   "display": {
     "animations_enabled": false
   },
-  "input": {
-    "calibration": {
-      "a": 1.1666666269302368,
-      "b": 0.0,
-      "c": -63.16666030883789,
-      "d": -0.004761904943734407,
-      "e": -1.447619080543518,
-      "f": 577.5857543945313,
-      "valid": true
-    }
-  },
   "printer": {
     "moonraker_host": "127.0.0.1",
     "moonraker_port": 7125,
