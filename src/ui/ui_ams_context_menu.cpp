@@ -270,11 +270,12 @@ void AmsContextMenu::on_created(lv_obj_t* menu_obj) {
 
     lv_subject_set_int(&slot_is_loaded_subject_, unload_eject_enabled ? 1 : 0);
 
-    // Swap button label to "Eject" when in eject mode
+    // Swap button label and icon to "Eject" when in eject mode
     if (eject_mode_) {
         lv_obj_t* btn_unload = lv_obj_find_by_name(menu_obj, "btn_unload");
         if (btn_unload) {
             ui_button_set_text(btn_unload, lv_tr("Eject"));
+            ui_button_set_icon(btn_unload, "eject");
         }
     }
 

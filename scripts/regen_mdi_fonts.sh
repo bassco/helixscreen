@@ -87,6 +87,7 @@ MDI_ICONS+=",0xF01B4"    # delete (trash)
 MDI_ICONS+=",0xF01BC"    # database
 MDI_ICONS+=",0xF01D9"    # dots-vertical (advanced)
 MDI_ICONS+=",0xF01DA"    # download
+MDI_ICONS+=",0xF01EA"    # eject (lane eject)
 MDI_ICONS+=",0xF0E9F"    # electric-switch (switch sensors)
 MDI_ICONS+=",0xF01FA"    # engine (motor)
 

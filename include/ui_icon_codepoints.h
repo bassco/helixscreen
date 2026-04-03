@@ -105,6 +105,7 @@ static const IconMapping ICON_MAP[] = {
     {"delete",             "\xF3\xB0\x86\xB4"},  // F01B4 delete/trash
     {"dots_vertical",      "\xF3\xB0\x87\x99"},  // F01D9 dots-vertical/advanced
     {"download",           "\xF3\xB0\x87\x9A"},  // F01DA download
+    {"eject",              "\xF3\xB0\x87\xAA"},  // F01EA eject (lane eject)
     {"electric_switch",    "\xF3\xB0\xBA\x9F"},  // F0E9F electric-switch
 
     // Engine/Motor

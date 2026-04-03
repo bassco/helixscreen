@@ -3,7 +3,6 @@
 
 #include "ui_ams_detail.h"
 
-#include "ui/ams_drawing_utils.h"
 #include "ui_ams_slot.h"
 #include "ui_effects.h"
 #include "ui_filament_path_canvas.h"
@@ -11,10 +10,12 @@
 
 #include "ams_state.h"
 #include "printer_detector.h"
+#include "ui/ams_drawing_utils.h"
+
+#include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <cmath>
-#include <spdlog/spdlog.h>
 
 // ============================================================================
 // 3D Tray Box Drawing
@@ -35,8 +36,8 @@ struct TrayBoxData {
 };
 
 /// Oblique projection constants matching spool ELLIPSE_RATIO (0.45)
-static constexpr int DEPTH_PCT = 40;      ///< Depth as % of tray height
-static constexpr int DY_PCT = 45;         ///< Vertical depth as % of horizontal depth
+static constexpr int DEPTH_PCT = 40; ///< Depth as % of tray height
+static constexpr int DY_PCT = 45;    ///< Vertical depth as % of horizontal depth
 static constexpr int MIN_DEPTH_PX = 4;
 static constexpr int MIN_DY_PX = 2;
 
@@ -155,8 +156,8 @@ static void tray_front_draw_cb(lv_event_t* e) {
     dim_edge.width = 1;
 
     // Left side wall (receding -- darker, dim edges)
-    draw_quad(layer, ams_draw::darken_color(bg, SHADE_LEFT_WALL), opa, f.fl, f.ft, f.bl, f.bt,
-              f.bl, f.bb, f.fl, f.fb);
+    draw_quad(layer, ams_draw::darken_color(bg, SHADE_LEFT_WALL), opa, f.fl, f.ft, f.bl, f.bt, f.bl,
+              f.bb, f.fl, f.fb);
     dim_edge.p1 = pt(f.fl, f.ft);
     dim_edge.p2 = pt(f.bl, f.bt);
     lv_draw_line(layer, &dim_edge);
@@ -513,6 +514,13 @@ void ams_detail_setup_path_canvas(lv_obj_t* canvas, lv_obj_t* slot_grid, int uni
         ui_filament_path_canvas_set_filament_color(canvas, slot_info.color_rgb);
     }
 
+    // Clear eject mode once the eject operation has completed (action returned
+    // to IDLE and filament is no longer in the lane).
+    AmsAction action = backend->get_current_action();
+    if (action == AmsAction::IDLE) {
+        ui_filament_path_canvas_set_eject_mode(canvas, false);
+    }
+
     // Set filament and error segments
     PathSegment segment = backend->get_filament_segment();
     ui_filament_path_canvas_set_filament_segment(canvas, static_cast<int>(segment));
@@ -568,8 +576,7 @@ void ams_detail_setup_path_canvas(lv_obj_t* canvas, lv_obj_t* slot_grid, int uni
     }
     // HH sync feedback → fault state based on bias magnitude
     // Use same thresholds as buffer meter: <0.3 green, 0.3-0.7 orange, >0.7 red
-    if (buffer_fault == 0 && info.type == AmsType::HAPPY_HARE &&
-        info.sync_feedback_bias > -1.5f) {
+    if (buffer_fault == 0 && info.type == AmsType::HAPPY_HARE && info.sync_feedback_bias > -1.5f) {
         float abs_bias = std::fabs(info.sync_feedback_bias);
         if (abs_bias >= 0.7f) {
             buffer_fault = 2;

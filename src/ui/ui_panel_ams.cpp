@@ -3,36 +3,34 @@
 
 #include "ui_panel_ams.h"
 
-#include "ui_overlay_qr_scanner.h"
-
 #include "ui_ams_detail.h"
-#include "buffer_status_modal.h"
 #include "ui_ams_device_operations_overlay.h"
 #include "ui_ams_environment_overlay.h"
 #include "ui_ams_sidebar.h"
-#include "ui_ams_tool_text.h"
 #include "ui_ams_slot.h"
 #include "ui_ams_slot_layout.h"
+#include "ui_ams_tool_text.h"
 #include "ui_endless_spool_arrows.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_filament_path_canvas.h"
 #include "ui_fonts.h"
 #include "ui_icon.h"
+#include "ui_modal.h"
 #include "ui_nav_manager.h"
+#include "ui_overlay_qr_scanner.h"
 #include "ui_panel_common.h"
 #include "ui_spool_canvas.h"
 #include "ui_utils.h"
-#include "ui_modal.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include "ams_backend.h"
 #include "ams_state.h"
 #include "ams_types.h"
 #include "app_globals.h"
+#include "buffer_status_modal.h"
 #include "color_utils.h"
 #include "config.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_detector.h"
@@ -275,8 +273,7 @@ void AmsPanel::init_subjects() {
 
     // Backend count observer for multi-backend selector
     backend_count_observer_ = observe_int_sync<AmsPanel>(
-        AmsState::instance().get_backend_count_subject(), this,
-        [](AmsPanel* self, int /*count*/) {
+        AmsState::instance().get_backend_count_subject(), this, [](AmsPanel* self, int /*count*/) {
             if (!self->backend_rebuild_pending_) {
                 self->backend_rebuild_pending_ = true;
                 self->lifetime_.defer("AmsPanel::rebuild_backend_selector", [self]() {
@@ -1113,41 +1110,39 @@ void AmsPanel::handle_bypass_spool_click() {
     }
 
     // Set callback to handle menu actions for external spool
-    context_menu_->set_action_callback(
-        [this](helix::ui::AmsContextMenu::MenuAction action, int /*slot*/) {
-            switch (action) {
-            case helix::ui::AmsContextMenu::MenuAction::EDIT:
-                show_edit_modal(-2);
-                break;
+    context_menu_->set_action_callback([this](helix::ui::AmsContextMenu::MenuAction action,
+                                              int /*slot*/) {
+        switch (action) {
+        case helix::ui::AmsContextMenu::MenuAction::EDIT:
+            show_edit_modal(-2);
+            break;
 
-            case helix::ui::AmsContextMenu::MenuAction::SPOOLMAN:
-                show_edit_modal(-2);
-                break;
+        case helix::ui::AmsContextMenu::MenuAction::SPOOLMAN:
+            show_edit_modal(-2);
+            break;
 
-            case helix::ui::AmsContextMenu::MenuAction::SCAN_QR: {
-                auto& scanner = helix::ui::get_qr_scanner_overlay();
-                scanner.show_for_active_spool(parent_screen_,
-                    [](const SpoolInfo& spool) {
-                        SlotInfo info;
-                        apply_spool_to_slot(info, spool);
-                        AmsState::instance().set_external_spool_info(info);
-                        spdlog::info("[AmsPanel] QR scan assigned spool #{} to external spool",
-                                     spool.id);
-                    });
-                break;
-            }
+        case helix::ui::AmsContextMenu::MenuAction::SCAN_QR: {
+            auto& scanner = helix::ui::get_qr_scanner_overlay();
+            scanner.show_for_active_spool(parent_screen_, [](const SpoolInfo& spool) {
+                SlotInfo info;
+                apply_spool_to_slot(info, spool);
+                AmsState::instance().set_external_spool_info(info);
+                spdlog::info("[AmsPanel] QR scan assigned spool #{} to external spool", spool.id);
+            });
+            break;
+        }
 
-            case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
-                AmsState::instance().clear_external_spool_info();
-                // bypass display update handled reactively by external_spool_observer_
-                NOTIFY_INFO(lv_tr("External spool cleared"));
-                break;
+        case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
+            AmsState::instance().clear_external_spool_info();
+            // bypass display update handled reactively by external_spool_observer_
+            NOTIFY_INFO(lv_tr("External spool cleared"));
+            break;
 
-            case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
-            default:
-                break;
-            }
-        });
+        case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
+        default:
+            break;
+        }
+    });
 
     // Position menu at click point, show for external spool
     context_menu_->set_click_point(click_pt);
@@ -1305,127 +1300,132 @@ void AmsPanel::show_context_menu(int slot_index, lv_obj_t* near_widget, lv_point
     }
 
     // Set callback to handle menu actions
-    context_menu_->set_action_callback(
-        [this](helix::ui::AmsContextMenu::MenuAction action, int slot) {
-            AmsBackend* backend = AmsState::instance().get_backend();
+    context_menu_->set_action_callback([this](helix::ui::AmsContextMenu::MenuAction action,
+                                              int slot) {
+        AmsBackend* backend = AmsState::instance().get_backend();
 
-            switch (action) {
-            case helix::ui::AmsContextMenu::MenuAction::LOAD:
-                if (!backend) {
-                    NOTIFY_WARNING(lv_tr("AMS not available"));
-                    return;
-                }
-                // Check if backend is busy
-                {
-                    AmsSystemInfo info = backend->get_system_info();
-                    if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
-                        NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
-                        return;
-                    }
-                }
-                // Use preheat-aware load via sidebar instead of direct load
-                if (this->sidebar_) {
-                    this->sidebar_->handle_load_with_preheat(slot);
-                }
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::UNLOAD:
-                if (!backend) {
-                    NOTIFY_WARNING(lv_tr("AMS not available"));
-                    return;
-                }
-                {
-                    AmsError error = backend->unload_filament(slot);
-                    if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
-                    }
-                }
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::EJECT:
-                if (!backend) {
-                    NOTIFY_WARNING(lv_tr("AMS not available"));
-                    return;
-                }
-                {
-                    AmsError error = backend->eject_lane(slot);
-                    if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR(lv_tr("Eject failed: {}"), error.user_msg);
-                    }
-                }
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::RESET_LANE:
-                if (!backend) {
-                    NOTIFY_WARNING(lv_tr("AMS not available"));
-                    return;
-                }
-                {
-                    AmsError error = backend->reset_lane(slot);
-                    if (error.result != AmsResult::SUCCESS) {
-                        NOTIFY_ERROR(lv_tr("Reset failed: {}"), error.user_msg);
-                    }
-                }
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::EDIT:
-            case helix::ui::AmsContextMenu::MenuAction::SPOOLMAN:
-                show_edit_modal(slot);
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::SCAN_QR: {
-                auto& scanner = helix::ui::get_qr_scanner_overlay();
-                scanner.show(parent_screen_, slot,
-                    [this, slot](const SpoolInfo& spool) {
-                        AmsBackend* be = AmsState::instance().get_backend();
-                        if (!be) return;
-
-                        SlotInfo info = be->get_slot_info(slot);
-                        apply_spool_to_slot(info, spool);
-                        AmsError err = be->set_slot_info(slot, info);
-                        if (!err.success()) {
-                            NOTIFY_ERROR("{}", err.user_msg);
-                            return;
-                        }
-                        AmsState::instance().sync_from_backend();
-                        spdlog::info("[AmsPanel] QR scan assigned spool #{} to slot {}",
-                                     spool.id, slot);
-                    });
-                break;
+        switch (action) {
+        case helix::ui::AmsContextMenu::MenuAction::LOAD:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
             }
-
-            case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
-                if (!backend) {
-                    NOTIFY_WARNING(lv_tr("AMS not available"));
+            // Check if backend is busy
+            {
+                AmsSystemInfo info = backend->get_system_info();
+                if (info.action != AmsAction::IDLE && info.action != AmsAction::ERROR) {
+                    NOTIFY_WARNING(lv_tr("AMS is busy: {}"), ams_action_to_string(info.action));
                     return;
                 }
-                {
-                    // Clear spool assignment: reset material/color/spool data, keep slot status
-                    SlotInfo cleared = backend->get_slot_info(slot);
-                    cleared.material.clear();
-                    cleared.color_rgb = AMS_DEFAULT_SLOT_COLOR;
-                    cleared.color_name.clear();
-                    cleared.multi_color_hexes.clear();
-                    cleared.brand.clear();
-                    cleared.spool_name.clear();
-                    cleared.spoolman_id = 0;
-                    cleared.remaining_weight_g = -1;
-                    cleared.total_weight_g = -1;
-                    auto error = backend->set_slot_info(slot, cleared);
-                    if (error.success()) {
-                        AmsState::instance().sync_from_backend();
-                        NOTIFY_INFO(lv_tr("Slot {} spool cleared"), slot + 1);
-                    } else {
-                        NOTIFY_ERROR(lv_tr("Clear failed: {}"), error.user_msg);
+            }
+            // Use preheat-aware load via sidebar instead of direct load
+            if (this->sidebar_) {
+                this->sidebar_->handle_load_with_preheat(slot);
+            }
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::UNLOAD:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                AmsError error = backend->unload_filament(slot);
+                if (error.result != AmsResult::SUCCESS) {
+                    NOTIFY_ERROR(lv_tr("Unload failed: {}"), error.user_msg);
+                }
+            }
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::EJECT:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                if (path_canvas_) {
+                    ui_filament_path_canvas_set_eject_mode(path_canvas_, true);
+                }
+                AmsError error = backend->eject_lane(slot);
+                if (error.result != AmsResult::SUCCESS) {
+                    NOTIFY_ERROR(lv_tr("Eject failed: {}"), error.user_msg);
+                    if (path_canvas_) {
+                        ui_filament_path_canvas_set_eject_mode(path_canvas_, false);
                     }
                 }
-                break;
-
-            case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
-            default:
-                break;
             }
-        });
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::RESET_LANE:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                AmsError error = backend->reset_lane(slot);
+                if (error.result != AmsResult::SUCCESS) {
+                    NOTIFY_ERROR(lv_tr("Reset failed: {}"), error.user_msg);
+                }
+            }
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::EDIT:
+        case helix::ui::AmsContextMenu::MenuAction::SPOOLMAN:
+            show_edit_modal(slot);
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::SCAN_QR: {
+            auto& scanner = helix::ui::get_qr_scanner_overlay();
+            scanner.show(parent_screen_, slot, [this, slot](const SpoolInfo& spool) {
+                AmsBackend* be = AmsState::instance().get_backend();
+                if (!be)
+                    return;
+
+                SlotInfo info = be->get_slot_info(slot);
+                apply_spool_to_slot(info, spool);
+                AmsError err = be->set_slot_info(slot, info);
+                if (!err.success()) {
+                    NOTIFY_ERROR("{}", err.user_msg);
+                    return;
+                }
+                AmsState::instance().sync_from_backend();
+                spdlog::info("[AmsPanel] QR scan assigned spool #{} to slot {}", spool.id, slot);
+            });
+            break;
+        }
+
+        case helix::ui::AmsContextMenu::MenuAction::CLEAR_SPOOL:
+            if (!backend) {
+                NOTIFY_WARNING(lv_tr("AMS not available"));
+                return;
+            }
+            {
+                // Clear spool assignment: reset material/color/spool data, keep slot status
+                SlotInfo cleared = backend->get_slot_info(slot);
+                cleared.material.clear();
+                cleared.color_rgb = AMS_DEFAULT_SLOT_COLOR;
+                cleared.color_name.clear();
+                cleared.multi_color_hexes.clear();
+                cleared.brand.clear();
+                cleared.spool_name.clear();
+                cleared.spoolman_id = 0;
+                cleared.remaining_weight_g = -1;
+                cleared.total_weight_g = -1;
+                auto error = backend->set_slot_info(slot, cleared);
+                if (error.success()) {
+                    AmsState::instance().sync_from_backend();
+                    NOTIFY_INFO(lv_tr("Slot {} spool cleared"), slot + 1);
+                } else {
+                    NOTIFY_ERROR(lv_tr("Clear failed: {}"), error.user_msg);
+                }
+            }
+            break;
+
+        case helix::ui::AmsContextMenu::MenuAction::CANCELLED:
+        default:
+            break;
+        }
+    });
 
     // Determine if the slot is loaded (filament in extruder)
     bool is_loaded = false;
@@ -1496,8 +1496,8 @@ void AmsPanel::show_edit_modal(int slot_index) {
 
                 // Sync Spoolman active spool if edited slot is currently loaded.
                 // Backends like AFC only sync on physical load/unload, not UI edits.
-                AmsState::instance().sync_active_spool_after_edit(
-                    result.slot_index, result.slot_info.spoolman_id);
+                AmsState::instance().sync_active_spool_after_edit(result.slot_index,
+                                                                  result.slot_info.spoolman_id);
 
                 AmsState::instance().sync_from_backend();
 
@@ -1559,7 +1559,7 @@ void AmsPanel::show_loading_error_modal() {
                 [](const MoonrakerError& err) {
                     spdlog::debug("[AmsPanel] AFC_CLEAR_MESSAGE failed (may not be "
                                   "supported): {}",
-                                 err.message);
+                                  err.message);
                 });
         }
     });

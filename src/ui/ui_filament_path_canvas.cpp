@@ -15,6 +15,7 @@
 #include "helix-xml/src/xml/lv_xml_widget.h"
 #include "helix-xml/src/xml/parsers/lv_xml_obj_parser.h"
 #include "lvgl/lvgl.h"
+#include "memory_utils.h"
 #include "nozzle_renderer_a4t.h"
 #include "nozzle_renderer_anthead.h"
 #include "nozzle_renderer_bambu.h"
@@ -26,8 +27,6 @@
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
-
-#include "memory_utils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -196,7 +195,8 @@ struct FilamentPathData {
     bool show_bypass = true; // false = hide bypass path/spool entirely (e.g. tool changers)
 
     // Rendering mode
-    bool hub_only = false; // true = stop rendering at hub (skip downstream)
+    bool hub_only = false;   // true = stop rendering at hub (skip downstream)
+    bool eject_mode = false; // true = allow segment to drop below LANE (past slot sensor)
 
     // Buffer fault state (0=healthy, 1=warning/approaching, 2=fault)
     int buffer_fault_state = 0;
@@ -688,10 +688,10 @@ static lv_color_t ph_blend(lv_color_t c1, lv_color_t c2, float factor) {
 // lighter tint of the filament color. For very dark filaments (black), uses a
 // contrasting blue tint so the glow is still visible.
 
-static constexpr int CURVE_SEGMENTS_FULL = 10;  // Segments per bezier curve (high quality)
+static constexpr int CURVE_SEGMENTS_FULL = 10;   // Segments per bezier curve (high quality)
 static constexpr int CURVE_SEGMENTS_REDUCED = 5; // Segments per bezier curve (low-perf devices)
-static constexpr lv_opa_t GLOW_OPA = 60;       // Base glow opacity
-static constexpr int32_t GLOW_WIDTH_EXTRA = 6; // Extra width beyond tube on each side
+static constexpr lv_opa_t GLOW_OPA = 60;         // Base glow opacity
+static constexpr int32_t GLOW_WIDTH_EXTRA = 6;   // Extra width beyond tube on each side
 
 // Runtime curve segment count — fewer segments = fewer draw calls per curve
 static int curve_segments() {
@@ -712,7 +712,8 @@ static lv_color_t get_glow_color(lv_color_t color) {
 // Draw a glow line (wide, low-opacity backdrop)
 static void draw_glow_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2, int32_t y2,
                            lv_color_t filament_color, int32_t tube_width) {
-    if (reduced_effects()) return;
+    if (reduced_effects())
+        return;
     lv_draw_line_dsc_t line_dsc;
     lv_draw_line_dsc_init(&line_dsc);
     line_dsc.color = get_glow_color(filament_color);
@@ -734,7 +735,8 @@ static void draw_glow_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2
 static void draw_glow_curve(lv_layer_t* layer, int32_t x0, int32_t y0, int32_t cx1, int32_t cy1,
                             int32_t cx2, int32_t cy2, int32_t x1, int32_t y1,
                             lv_color_t filament_color, int32_t tube_width) {
-    if (reduced_effects()) return;
+    if (reduced_effects())
+        return;
     lv_color_t glow_color = get_glow_color(filament_color);
     int32_t glow_width = tube_width + GLOW_WIDTH_EXTRA;
 
@@ -1034,7 +1036,8 @@ static void draw_tube_line(lv_layer_t* layer, int32_t x1, int32_t y1, int32_t x2
     if (!simple) {
         int32_t shadow_extra = LV_MAX(2, width / 2);
         lv_color_t shadow_color = ph_darken(color, 35);
-        draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra, cap_start, cap_end);
+        draw_flat_line(layer, x1, y1, x2, y2, shadow_color, width + shadow_extra, cap_start,
+                       cap_end);
     }
 
     // Body: main tube surface (always drawn)
@@ -2221,13 +2224,12 @@ static void filament_path_draw_cb(lv_event_t* e) {
         // When no prep sensor exists, draw continuously through the gap.
         int32_t line_end_y = data->slot_has_prep_sensor[i] ? (prep_y - sensor_r) : prep_y;
         if (has_filament) {
-            draw_glow_line(layer, slot_x, entry_y, slot_x, line_end_y, lane_color,
-                           lane_width);
-            draw_vertical_line(layer, slot_x, entry_y, line_end_y, lane_color, lane_width,
-                               true, true, is_active_slot ? &active_path : nullptr);
+            draw_glow_line(layer, slot_x, entry_y, slot_x, line_end_y, lane_color, lane_width);
+            draw_vertical_line(layer, slot_x, entry_y, line_end_y, lane_color, lane_width, true,
+                               true, is_active_slot ? &active_path : nullptr);
         } else {
-            draw_hollow_vertical_line(layer, slot_x, entry_y, line_end_y, idle_color,
-                                      bg_color, line_active);
+            draw_hollow_vertical_line(layer, slot_x, entry_y, line_end_y, idle_color, bg_color,
+                                      line_active);
         }
 
         // Draw prep sensor dot (per-slot capability flag)
@@ -2868,8 +2870,10 @@ static void filament_path_click_cb(lv_event_t* e) {
         int32_t hub_h = (int32_t)(height * HUB_HEIGHT_RATIO);
         int32_t box_w = data->hub_width * 4 / 5;
         int32_t box_h = hub_h;
-        if (box_w < 36) box_w = 36;
-        if (box_h < 16) box_h = 16;
+        if (box_w < 36)
+            box_w = 36;
+        if (box_h < 16)
+            box_h = 16;
         // Match center_x derivation used in draw callback (slot midpoint)
         int32_t center_x = x_off + width / 2;
         if (data->slot_count >= 2) {
@@ -2879,8 +2883,7 @@ static void filament_path_click_cb(lv_event_t* e) {
         } else if (data->slot_count == 1) {
             center_x = x_off + get_slot_x(data, 0, x_off);
         }
-        if (abs(point.x - center_x) < box_w / 2 + 4 &&
-            abs(point.y - buffer_y) < box_h / 2 + 4) {
+        if (abs(point.x - center_x) < box_w / 2 + 4 && abs(point.y - buffer_y) < box_h / 2 + 4) {
             spdlog::debug("[FilamentPath] Buffer coil clicked");
             data->buffer_callback(data->buffer_user_data);
             return;
@@ -3176,6 +3179,17 @@ void ui_filament_path_canvas_set_filament_segment(lv_obj_t* obj, int segment) {
         return;
 
     int new_segment = LV_CLAMP(segment, 0, PATH_SEGMENT_COUNT - 1);
+
+    // When not in eject mode and the active slot has a prep sensor, clamp the
+    // minimum displayed segment to LANE so the retract animation stops at the
+    // lane sensor instead of overshooting past the slot/prep sensor.
+    if (!data->eject_mode && data->active_slot >= 0 &&
+        data->active_slot < FilamentPathData::MAX_SLOTS &&
+        data->slot_has_prep_sensor[data->active_slot] && new_segment > 0 &&
+        new_segment < static_cast<int>(PathSegment::LANE)) {
+        new_segment = static_cast<int>(PathSegment::LANE);
+    }
+
     int old_segment = data->filament_segment;
 
     if (new_segment == old_segment)
@@ -3340,6 +3354,13 @@ void ui_filament_path_canvas_set_slot_hub_routed(lv_obj_t* obj, int slot, bool i
         data->slot_is_hub_routed[slot] = is_hub;
         lv_obj_invalidate(obj);
     }
+}
+
+void ui_filament_path_canvas_set_eject_mode(lv_obj_t* obj, bool eject) {
+    auto* data = get_data(obj);
+    if (!data)
+        return;
+    data->eject_mode = eject;
 }
 
 void ui_filament_path_canvas_clear_slot_filaments(lv_obj_t* obj) {

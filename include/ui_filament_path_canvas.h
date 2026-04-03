@@ -396,6 +396,20 @@ void ui_filament_path_canvas_set_slot_mapped_tool(lv_obj_t* obj, int slot, int t
  */
 void ui_filament_path_canvas_set_slot_hub_routed(lv_obj_t* obj, int slot, bool is_hub);
 
+/**
+ * Set eject mode on the filament path canvas.
+ *
+ * When eject mode is false (default) and the active slot has a prep sensor,
+ * the filament segment is clamped to a minimum of LANE so that retract
+ * animations stop at the lane sensor instead of overshooting past the
+ * slot/prep sensor. Set to true when an eject operation is in progress
+ * so the animation can show filament fully leaving the lane.
+ *
+ * @param obj The filament_path_canvas widget
+ * @param eject true to allow segment below LANE, false to clamp
+ */
+void ui_filament_path_canvas_set_eject_mode(lv_obj_t* obj, bool eject);
+
 #ifdef __cplusplus
 }
 #endif
