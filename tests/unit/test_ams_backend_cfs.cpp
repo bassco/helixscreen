@@ -303,13 +303,36 @@ TEST_CASE("CFS disconnected unit handling", "[ams][cfs]") {
 }
 
 TEST_CASE("CFS GCode helpers", "[ams][cfs]") {
-    SECTION("load gcode uses M8200 protocol") {
-        REQUIRE(AmsBackendCfs::load_gcode(0) == "M8200 P\nM8200 L I=0\nM8200 F\nM8200 O");
-        REQUIRE(AmsBackendCfs::load_gcode(4) == "M8200 P\nM8200 L I=4\nM8200 F\nM8200 O");
+    SECTION("load gcode uses CR_BOX commands with TNN") {
+        REQUIRE(AmsBackendCfs::load_gcode(0) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T1A\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1A\nCR_BOX_END_OPT");
+        REQUIRE(AmsBackendCfs::load_gcode(1) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T1B\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1B\nCR_BOX_END_OPT");
+        REQUIRE(AmsBackendCfs::load_gcode(4) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=T2A\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T2A\nCR_BOX_END_OPT");
     }
 
-    SECTION("unload gcode uses M8200 protocol") {
-        REQUIRE(AmsBackendCfs::unload_gcode() == "M8200 P\nM8200 C\nM8200 R\nM8200 O");
+    SECTION("unload gcode uses CR_BOX commands") {
+        REQUIRE(AmsBackendCfs::unload_gcode() ==
+                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT");
+    }
+
+    SECTION("swap gcode combines unload and load in single CR_BOX session") {
+        REQUIRE(AmsBackendCfs::swap_gcode(0) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1A\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1A\nCR_BOX_END_OPT");
+        REQUIRE(AmsBackendCfs::swap_gcode(1) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1B\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1B\nCR_BOX_END_OPT");
+        REQUIRE(AmsBackendCfs::swap_gcode(3) ==
+                "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=T1D\n"
+                "CR_BOX_WASTE\nCR_BOX_FLUSH TNN=T1D\nCR_BOX_END_OPT");
+        // Invalid index
+        REQUIRE(AmsBackendCfs::swap_gcode(-1).empty());
+        REQUIRE(AmsBackendCfs::swap_gcode(16).empty());
     }
 
     SECTION("reset gcode") {
@@ -401,10 +424,12 @@ TEST_CASE("CFS segment returns HUB for available slots", "[ams][cfs]") {
 // =============================================================================
 
 TEST_CASE("CFS GCode generation for all operations", "[ams][cfs]") {
-    SECTION("load gcode slot indices are correct") {
-        REQUIRE(AmsBackendCfs::load_gcode(0) == "M8200 P\nM8200 L I=0\nM8200 F\nM8200 O");
-        REQUIRE(AmsBackendCfs::load_gcode(3) == "M8200 P\nM8200 L I=3\nM8200 F\nM8200 O");
-        REQUIRE(AmsBackendCfs::load_gcode(15) == "M8200 P\nM8200 L I=15\nM8200 F\nM8200 O");
+    SECTION("load gcode uses TNN for multi-unit addressing") {
+        // Unit 1 slots
+        REQUIRE(AmsBackendCfs::load_gcode(0).find("TNN=T1A") != std::string::npos);
+        REQUIRE(AmsBackendCfs::load_gcode(3).find("TNN=T1D") != std::string::npos);
+        // Unit 4 last slot
+        REQUIRE(AmsBackendCfs::load_gcode(15).find("TNN=T4D") != std::string::npos);
     }
 
     SECTION("load gcode rejects out of range") {

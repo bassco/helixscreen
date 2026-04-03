@@ -905,14 +905,22 @@ void PrintSelectPanel::fetch_metadata_range(size_t start, size_t end) {
                             // Metascan succeeded - process the fresh metadata
                             self->process_metadata_result(i, filename, scanned);
                         },
-                        [self, filename, token](const MoonrakerError& error) {
+                        [self, i, filename, captured_gen,
+                         token](const MoonrakerError& error) {
                             if (token.expired()) {
                                 return;
                             }
-                            spdlog::debug("[{}] Metascan failed for {}: {}", self->get_name(),
-                                          filename, error.message);
+                            if (self->nav_generation_.load() != captured_gen) {
+                                return;
+                            }
+                            spdlog::debug("[{}] Metascan failed for {}: {}, trying gcode extraction",
+                                          self->get_name(), filename, error.message);
+                            // Fall through to process_metadata_result with empty metadata
+                            // so the gcode header extraction fallback can kick in
+                            FileMetadata empty_meta;
+                            self->process_metadata_result(i, filename, empty_meta);
                         });
-                    return; // Don't process empty metadata
+                    return; // Don't process empty metadata inline — metascan callbacks handle it
                 }
 
                 // Process metadata (either from cache or non-empty response)
@@ -949,12 +957,20 @@ void PrintSelectPanel::fetch_metadata_range(size_t start, size_t end) {
                             }
                             self->process_metadata_result(i, filename, scanned);
                         },
-                        [self, filename, token](const MoonrakerError& scan_error) {
+                        [self, i, filename, captured_gen,
+                         token](const MoonrakerError& scan_error) {
                             if (token.expired()) {
                                 return;
                             }
-                            spdlog::debug("[{}] Metascan also failed for {}: {}", self->get_name(),
-                                          filename, scan_error.message);
+                            if (self->nav_generation_.load() != captured_gen) {
+                                return;
+                            }
+                            spdlog::debug(
+                                "[{}] Metascan also failed for {}: {}, trying gcode extraction",
+                                self->get_name(), filename, scan_error.message);
+                            // Fall through to gcode header extraction fallback
+                            FileMetadata empty_meta;
+                            self->process_metadata_result(i, filename, empty_meta);
                         });
                 }
             },

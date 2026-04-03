@@ -645,12 +645,25 @@ AmsError AmsBackendCfs::select_slot(int) {
 AmsError AmsBackendCfs::change_tool(int tool) {
     auto err = check_preconditions();
     if (err.result != AmsResult::SUCCESS) return err;
+
+    bool needs_unload = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        needs_unload = system_info_.filament_loaded || system_info_.current_slot >= 0;
+    }
+
+    // Validate gcode before mutating state
+    std::string gcode = needs_unload ? swap_gcode(tool) : load_gcode(tool);
+    if (gcode.empty()) {
+        return AmsErrorHelper::invalid_slot(tool, 15);
+    }
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
         system_info_.action = AmsAction::LOADING;
         system_info_.current_slot = tool;
     }
-    return ensure_homed_then(load_gcode(tool));
+    return ensure_homed_then(std::move(gcode));
 }
 
 AmsError AmsBackendCfs::reset() {
@@ -745,15 +758,28 @@ std::string AmsBackendCfs::load_gcode(int idx) {
         spdlog::error("[AMS CFS] Invalid slot index for load: {}", idx);
         return "";
     }
-    // M8200 P (CR_BOX_PRE_OPT) is required before extrude — sets CFS to material-change mode.
-    // Creality's BOX_LOAD_MATERIAL macro omits this and fails with key60 "Internal error".
-    // M8200: P=prepare, L I=N=load slot N (CR_BOX_EXTRUDE), F=flush, O=end (CR_BOX_END_OPT)
-    return "M8200 P\nM8200 L I=" + std::to_string(idx) + "\nM8200 F\nM8200 O";
+    // Use CR_BOX_* commands directly — M8200 macro's Jinja2 `params.I|int` is broken
+    // on Creality's Klipper fork (always evaluates to 0, loading T1A regardless of I= value).
+    // CR_BOX_PRE_OPT is required before extrude — sets CFS to material-change mode.
+    // CR_BOX_WASTE must follow CR_BOX_EXTRUDE (purges transition material).
+    return "CR_BOX_PRE_OPT\nCR_BOX_EXTRUDE TNN=" + tnn +
+           "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT";
 }
 
 std::string AmsBackendCfs::unload_gcode() {
-    // M8200: P=prepare, C=cut (CR_BOX_CUT), R=retract (CR_BOX_RETRUDE), O=end
-    return "M8200 P\nM8200 C\nM8200 R\nM8200 O";
+    // Unload doesn't need TNN — operates on currently loaded filament
+    return "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_END_OPT";
+}
+
+std::string AmsBackendCfs::swap_gcode(int idx) {
+    std::string tnn = CfsMaterialDb::slot_to_tnn(idx);
+    if (tnn.empty()) {
+        spdlog::error("[AMS CFS] Invalid slot index for swap: {}", idx);
+        return "";
+    }
+    // Full swap: unload current (cut+retract) then load new slot, all in one session
+    return "CR_BOX_PRE_OPT\nCR_BOX_CUT\nCR_BOX_RETRUDE\nCR_BOX_EXTRUDE TNN=" + tnn +
+           "\nCR_BOX_WASTE\nCR_BOX_FLUSH TNN=" + tnn + "\nCR_BOX_END_OPT";
 }
 
 std::string AmsBackendCfs::reset_gcode() {

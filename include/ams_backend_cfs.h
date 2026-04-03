@@ -115,6 +115,7 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     // GCode helpers (public for testing)
     static std::string load_gcode(int global_slot_index);
     static std::string unload_gcode();
+    static std::string swap_gcode(int global_slot_index);
     static std::string reset_gcode();
     static std::string recover_gcode();
 
