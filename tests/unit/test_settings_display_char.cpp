@@ -41,9 +41,11 @@ static int index_to_sleep_seconds(int index) {
     case 3:
         return 600; // 10 minutes
     case 4:
+        return 1200; // 20 minutes
+    case 5:
         return 1800; // 30 minutes
     default:
-        return 300; // Default to 5 minutes
+        return 1200; // Default to 20 minutes
     }
 }
 
@@ -62,10 +64,12 @@ static int sleep_seconds_to_index(int seconds) {
         return 2; // 5 minutes
     case 600:
         return 3; // 10 minutes
+    case 1200:
+        return 4; // 20 minutes
     case 1800:
-        return 4; // 30 minutes
+        return 5; // 30 minutes
     default:
-        return 2; // Default to 5 minutes (index 2)
+        return 4; // Default to 20 minutes (index 4)
     }
 }
 
@@ -146,14 +150,14 @@ TEST_CASE("CHAR: DisplaySettings XML subject names",
 TEST_CASE("CHAR: Sleep timeout dropdown options",
           "[characterization][settings][display_settings]") {
     SECTION("Options string format") {
-        std::string options = "Never\n1 minute\n5 minutes\n10 minutes\n30 minutes";
-        REQUIRE(options == "Never\n1 minute\n5 minutes\n10 minutes\n30 minutes");
+        std::string options = "Never\n1 minute\n5 minutes\n10 minutes\n20 minutes\n30 minutes";
+        REQUIRE(options == "Never\n1 minute\n5 minutes\n10 minutes\n20 minutes\n30 minutes");
     }
 
-    SECTION("Options count is 5") {
-        std::vector<std::string> options = {"Never", "1 minute", "5 minutes", "10 minutes",
+    SECTION("Options count is 6") {
+        std::vector<std::string> options = {"Never", "1 minute", "5 minutes", "10 minutes", "20 minutes",
                                             "30 minutes"};
-        REQUIRE(options.size() == 5);
+        REQUIRE(options.size() == 6);
     }
 }
 
@@ -175,12 +179,16 @@ TEST_CASE("CHAR: Sleep timeout index to seconds conversion",
         REQUIRE(index_to_sleep_seconds(3) == 600);
     }
 
-    SECTION("Index 4 = 30 minutes (1800 seconds)") {
-        REQUIRE(index_to_sleep_seconds(4) == 1800);
+    SECTION("Index 4 = 20 minutes (1200 seconds)") {
+        REQUIRE(index_to_sleep_seconds(4) == 1200);
     }
 
-    SECTION("Invalid index defaults to 5 minutes") {
-        REQUIRE(index_to_sleep_seconds(99) == 300);
+    SECTION("Index 5 = 30 minutes (1800 seconds)") {
+        REQUIRE(index_to_sleep_seconds(5) == 1800);
+    }
+
+    SECTION("Invalid index defaults to 20 minutes") {
+        REQUIRE(index_to_sleep_seconds(99) == 1200);
     }
 }
 
@@ -202,12 +210,16 @@ TEST_CASE("CHAR: Sleep timeout seconds to index conversion",
         REQUIRE(sleep_seconds_to_index(600) == 3);
     }
 
-    SECTION("1800 seconds = Index 4 (30 minutes)") {
-        REQUIRE(sleep_seconds_to_index(1800) == 4);
+    SECTION("1200 seconds = Index 4 (20 minutes)") {
+        REQUIRE(sleep_seconds_to_index(1200) == 4);
     }
 
-    SECTION("Invalid seconds defaults to index 2") {
-        REQUIRE(sleep_seconds_to_index(123) == 2);
+    SECTION("1800 seconds = Index 5 (30 minutes)") {
+        REQUIRE(sleep_seconds_to_index(1800) == 5);
+    }
+
+    SECTION("Invalid seconds defaults to index 4") {
+        REQUIRE(sleep_seconds_to_index(123) == 4);
     }
 }
 

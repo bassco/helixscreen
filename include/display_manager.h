@@ -414,7 +414,7 @@ class DisplayManager {
     bool m_screensaver_active = false;
 #endif
     bool m_wake_requested = false; // Set by input wrapper when touch detected while sleeping
-    int m_dim_timeout_sec = 300;
+    int m_dim_timeout_sec = 600;
     int m_dim_brightness_percent = 30;
 
     // Hardware vs software blank strategy

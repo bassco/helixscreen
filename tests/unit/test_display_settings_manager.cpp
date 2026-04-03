@@ -17,8 +17,8 @@ using namespace helix;
 TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after init",
                  "[display_settings]") {
     // Reset config to defaults so prior tests' set_*() calls don't pollute
-    Config::get_instance()->set<int>("/display/sleep_sec", 1800);
-    Config::get_instance()->set<int>("/display/dim_sec", 300);
+    Config::get_instance()->set<int>("/display/sleep_sec", 1200);
+    Config::get_instance()->set<int>("/display/dim_sec", 600);
     Config::get_instance()->set<int>("/display/brightness", 80);
     Config::get_instance()->set<bool>("/display/animations_enabled", true);
     DisplaySettingsManager::instance().deinit_subjects();
@@ -32,12 +32,12 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager default values after i
         REQUIRE(DisplaySettingsManager::instance().is_dark_mode_available() == true);
     }
 
-    SECTION("display_dim defaults to 300 seconds") {
-        REQUIRE(DisplaySettingsManager::instance().get_display_dim_sec() == 300);
+    SECTION("display_dim defaults to 600 seconds") {
+        REQUIRE(DisplaySettingsManager::instance().get_display_dim_sec() == 600);
     }
 
-    SECTION("display_sleep defaults to 1800 seconds") {
-        REQUIRE(DisplaySettingsManager::instance().get_display_sleep_sec() == 1800);
+    SECTION("display_sleep defaults to 1200 seconds") {
+        REQUIRE(DisplaySettingsManager::instance().get_display_sleep_sec() == 1200);
     }
 
     SECTION("brightness defaults to 80") {
@@ -174,15 +174,16 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager set/get round trips",
 
 TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager dim seconds to index conversion",
                  "[display_settings]") {
-    // dim_seconds_to_index: 0=Never, 30=30sec, 60=1min, 120=2min, 300=5min
+    // dim_seconds_to_index: 0=Never, 30=30sec, 60=1min, 120=2min, 300=5min, 600=10min
     REQUIRE(DisplaySettingsManager::dim_seconds_to_index(0) == 0);
     REQUIRE(DisplaySettingsManager::dim_seconds_to_index(30) == 1);
     REQUIRE(DisplaySettingsManager::dim_seconds_to_index(60) == 2);
     REQUIRE(DisplaySettingsManager::dim_seconds_to_index(120) == 3);
     REQUIRE(DisplaySettingsManager::dim_seconds_to_index(300) == 4);
+    REQUIRE(DisplaySettingsManager::dim_seconds_to_index(600) == 5);
 
-    // Unknown value defaults to index 4 (5 minutes)
-    REQUIRE(DisplaySettingsManager::dim_seconds_to_index(999) == 4);
+    // Unknown value defaults to index 5 (10 minutes)
+    REQUIRE(DisplaySettingsManager::dim_seconds_to_index(999) == 5);
 
     // index_to_dim_seconds round-trip
     REQUIRE(DisplaySettingsManager::index_to_dim_seconds(0) == 0);
@@ -190,34 +191,37 @@ TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager dim seconds to index c
     REQUIRE(DisplaySettingsManager::index_to_dim_seconds(2) == 60);
     REQUIRE(DisplaySettingsManager::index_to_dim_seconds(3) == 120);
     REQUIRE(DisplaySettingsManager::index_to_dim_seconds(4) == 300);
+    REQUIRE(DisplaySettingsManager::index_to_dim_seconds(5) == 600);
 
-    // Out of range defaults to 300 (5 minutes)
-    REQUIRE(DisplaySettingsManager::index_to_dim_seconds(-1) == 300);
-    REQUIRE(DisplaySettingsManager::index_to_dim_seconds(99) == 300);
+    // Out of range defaults to 600 (10 minutes)
+    REQUIRE(DisplaySettingsManager::index_to_dim_seconds(-1) == 600);
+    REQUIRE(DisplaySettingsManager::index_to_dim_seconds(99) == 600);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager sleep seconds to index conversion",
                  "[display_settings]") {
-    // sleep_seconds_to_index: 0=Never, 60=1min, 300=5min, 600=10min, 1800=30min
+    // sleep_seconds_to_index: 0=Never, 60=1min, 300=5min, 600=10min, 1200=20min, 1800=30min
     REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(0) == 0);
     REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(60) == 1);
     REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(300) == 2);
     REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(600) == 3);
-    REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(1800) == 4);
+    REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(1200) == 4);
+    REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(1800) == 5);
 
-    // Unknown value defaults to index 3 (10 minutes)
-    REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(999) == 3);
+    // Unknown value defaults to index 4 (20 minutes)
+    REQUIRE(DisplaySettingsManager::sleep_seconds_to_index(999) == 4);
 
     // index_to_sleep_seconds round-trip
     REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(0) == 0);
     REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(1) == 60);
     REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(2) == 300);
     REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(3) == 600);
-    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(4) == 1800);
+    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(4) == 1200);
+    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(5) == 1800);
 
-    // Out of range defaults to 600 (10 minutes)
-    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(-1) == 600);
-    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(99) == 600);
+    // Out of range defaults to 1200 (20 minutes)
+    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(-1) == 1200);
+    REQUIRE(DisplaySettingsManager::index_to_sleep_seconds(99) == 1200);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture, "DisplaySettingsManager subject values match getters",

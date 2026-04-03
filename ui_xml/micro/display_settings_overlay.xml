@@ -77,8 +77,8 @@
                             label="Screen Dim" label_tag="Screen Dim" icon="lightbulb_on_50"
                             description="Screen dims to lower brightness after period of inactivity"
                             description_tag="Screen dims to lower brightness after period of inactivity"
-                            options="Never&#10;30 seconds&#10;1 minute&#10;2 minutes&#10;5 minutes"
-                            options_tag="Never&#10;30 seconds&#10;1 minute&#10;2 minutes&#10;5 minutes"
+                            options="Never&#10;30 seconds&#10;1 minute&#10;2 minutes&#10;5 minutes&#10;10 minutes"
+                            options_tag="Never&#10;30 seconds&#10;1 minute&#10;2 minutes&#10;5 minutes&#10;10 minutes"
                             callback="on_display_dim_changed">
         <bind_flag_if_eq subject="settings_has_dimming" flag="hidden" ref_value="0"/>
       </setting_dropdown_row>
@@ -89,8 +89,8 @@
                             label="Display Sleep" label_tag="Display Sleep" icon="clock"
                             description="Screen sleeps after the selected period of inactivity"
                             description_tag="Screen sleeps after the selected period of inactivity"
-                            options="Never&#10;1 minute&#10;5 minutes&#10;10 minutes&#10;30 minutes"
-                            options_tag="Never&#10;1 minute&#10;5 minutes&#10;10 minutes&#10;30 minutes"
+                            options="Never&#10;1 minute&#10;5 minutes&#10;10 minutes&#10;20 minutes&#10;30 minutes"
+                            options_tag="Never&#10;1 minute&#10;5 minutes&#10;10 minutes&#10;20 minutes&#10;30 minutes"
                             callback="on_display_sleep_changed"/>
       <!-- ================================================================== -->
       <!-- SLEEP WHILE PRINTING -->

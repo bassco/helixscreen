@@ -412,7 +412,7 @@ bool DisplayManager::init(const Config& config) {
 
     // Load dim settings from config
     helix::Config* cfg = helix::Config::get_instance();
-    m_dim_timeout_sec = cfg->get<int>("/display/dim_sec", 300);
+    m_dim_timeout_sec = cfg->get<int>("/display/dim_sec", 600);
     m_dim_brightness_percent = std::clamp(cfg->get<int>("/display/dim_brightness", 30), 1, 100);
     spdlog::debug("[DisplayManager] Display dim: {}s timeout, {}% brightness", m_dim_timeout_sec,
                   m_dim_brightness_percent);

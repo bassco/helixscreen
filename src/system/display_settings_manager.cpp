@@ -21,15 +21,15 @@ using namespace helix;
 
 // Display dim option values (seconds) - time before screen dims to lower brightness
 // Index: 0=Never, 1=30sec, 2=1min, 3=2min, 4=5min
-static const int DIM_OPTIONS[] = {0, 30, 60, 120, 300};
+static const int DIM_OPTIONS[] = {0, 30, 60, 120, 300, 600};
 static const int DIM_OPTIONS_COUNT = sizeof(DIM_OPTIONS) / sizeof(DIM_OPTIONS[0]);
-static const char* DIM_OPTIONS_TEXT = "Never\n30 seconds\n1 minute\n2 minutes\n5 minutes";
+static const char* DIM_OPTIONS_TEXT = "Never\n30 seconds\n1 minute\n2 minutes\n5 minutes\n10 minutes";
 
 // Display sleep option values (seconds) - time before screen fully sleeps
 // Index: 0=Never, 1=1min, 2=5min, 3=10min, 4=30min
-static const int SLEEP_OPTIONS[] = {0, 60, 300, 600, 1800};
+static const int SLEEP_OPTIONS[] = {0, 60, 300, 600, 1200, 1800};
 static const int SLEEP_OPTIONS_COUNT = sizeof(SLEEP_OPTIONS) / sizeof(SLEEP_OPTIONS[0]);
-static const char* SLEEP_OPTIONS_TEXT = "Never\n1 minute\n5 minutes\n10 minutes\n30 minutes";
+static const char* SLEEP_OPTIONS_TEXT = "Never\n1 minute\n5 minutes\n10 minutes\n20 minutes\n30 minutes";
 
 // Bed mesh render mode options (Auto=0, 3D=1, 2D=2)
 static const char* BED_MESH_RENDER_MODE_OPTIONS_TEXT = "Auto\n3D View\n2D Heatmap";
@@ -97,10 +97,10 @@ void DisplaySettingsManager::init_subjects() {
     int theme_index = get_theme_index();
     UI_MANAGED_SUBJECT_INT(theme_preset_subject_, theme_index, "settings_theme_preset", subjects_);
 
-    // Display dim (default: 300 seconds = 5 minutes)
+    // Display dim (default: 600 seconds = 10 minutes)
     // Validate against allowed options to catch corrupt config values
-    int dim_sec = config->get<int>("/display/dim_sec", 300);
-    dim_sec = validate_timeout_option(dim_sec, DIM_OPTIONS, 300, "dim_sec");
+    int dim_sec = config->get<int>("/display/dim_sec", 600);
+    dim_sec = validate_timeout_option(dim_sec, DIM_OPTIONS, 600, "dim_sec");
     UI_MANAGED_SUBJECT_INT(display_dim_subject_, dim_sec, "settings_display_dim", subjects_);
 
     // Sync validated dim timeout to DisplayManager (it reads config directly at init,
@@ -109,10 +109,10 @@ void DisplaySettingsManager::init_subjects() {
         dm->set_dim_timeout(dim_sec);
     }
 
-    // Display sleep (default: 1800 seconds = 30 minutes)
+    // Display sleep (default: 1200 seconds = 20 minutes)
     // Validate against allowed options to catch corrupt config values
-    int sleep_sec = config->get<int>("/display/sleep_sec", 1800);
-    sleep_sec = validate_timeout_option(sleep_sec, SLEEP_OPTIONS, 1800, "sleep_sec");
+    int sleep_sec = config->get<int>("/display/sleep_sec", 1200);
+    sleep_sec = validate_timeout_option(sleep_sec, SLEEP_OPTIONS, 1200, "sleep_sec");
 
     UI_MANAGED_SUBJECT_INT(display_sleep_subject_, sleep_sec, "settings_display_sleep", subjects_);
 
@@ -613,15 +613,15 @@ int DisplaySettingsManager::dim_seconds_to_index(int seconds) {
             return i;
         }
     }
-    // Default to "5 minutes" if not found
-    return 4;
+    // Default to "10 minutes" if not found
+    return 5;
 }
 
 int DisplaySettingsManager::index_to_dim_seconds(int index) {
     if (index >= 0 && index < DIM_OPTIONS_COUNT) {
         return DIM_OPTIONS[index];
     }
-    return 300; // Default 5 minutes
+    return 600; // Default 10 minutes
 }
 
 // =============================================================================
@@ -638,13 +638,13 @@ int DisplaySettingsManager::sleep_seconds_to_index(int seconds) {
             return i;
         }
     }
-    // Default to "10 minutes" if not found
-    return 3;
+    // Default to "20 minutes" if not found
+    return 4;
 }
 
 int DisplaySettingsManager::index_to_sleep_seconds(int index) {
     if (index >= 0 && index < SLEEP_OPTIONS_COUNT) {
         return SLEEP_OPTIONS[index];
     }
-    return 600; // Default 10 minutes
+    return 1200; // Default 20 minutes
 }
