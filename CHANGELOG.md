@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.17] - 2026-04-02
+
+### Added
+- Dynamic grid dimensions for ultrawide and portrait screen layouts
+- 32 new HelixScreen feature tips with modal overflow fix
+- Filament auto-preheat on load/unload with 2-minute delayed cooldown
+- Snapmaker U1 default widget layout preset
+
+### Fixed
+- CFS filament swap now works correctly (M8200 param bug bypassed with direct CR_BOX commands)
+- CFS active slot detection, partial update state preservation, and K1/K2 nozzle rendering
+- Thumbnails now extracted from gcode headers on printers with old Moonraker lacking metascan
+- Auto-home before filament load/unload/tool-change across all AMS backends
+- Accurate layer tracking using virtual_sdcard.layer instead of linear estimation
+- Temperature graph redraws throttled to 1Hz (was ~4Hz per series)
+- Memory thresholds use actual available RAM for overlay lifecycle decisions
+- Extruder selector rebuild deferred to prevent flex layout crash
+- Favorite macro placeholder visibility and catalog ordering improved
+- Filament path line gaps closed when backend has no prep sensors
+- Non-rectangular 1x1 card backgrounds decomposed into maximal rectangles
+- Hardware config synced with actual printer hardware
+- Width sensor config loading and display values
+- Boot persistence and WiFi for K1/K2 deploy targets
+- Error icon token corrected in calibration panels
+- AMS mini status widget now shows pressed visual feedback
+
+### Changed
+- Default display dim timeout bumped to 10 minutes, sleep to 20 minutes
+
 ## [0.99.16] - 2026-04-02
 
 ### Added
@@ -2510,6 +2539,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.17]: https://github.com/prestonbrown/helixscreen/compare/v0.99.16...v0.99.17
 [0.99.16]: https://github.com/prestonbrown/helixscreen/compare/v0.99.15...v0.99.16
 [0.99.15]: https://github.com/prestonbrown/helixscreen/compare/v0.99.14...v0.99.15
 [0.99.14]: https://github.com/prestonbrown/helixscreen/compare/v0.99.13...v0.99.14
