@@ -134,7 +134,11 @@ void SoundSequencer::sequencer_loop() {
             auto now = std::chrono::steady_clock::now();
             float dt_ms = std::chrono::duration<float, std::milli>(now - last_tick).count();
             last_tick = now;
-            dt_ms = std::min(dt_ms, 5.0f);
+            // Cap at 500ms to prevent runaway after long stalls (e.g. suspend/resume),
+            // but allow large deltas so sounds complete on time even when the sequencer
+            // thread is starved on slow CPUs (e.g. AD5M with 48 BogoMIPS).
+            // Previous 5ms cap caused multi-second sound playback on thread-starved systems.
+            dt_ms = std::min(dt_ms, 500.0f);
 
             if (ext_tick) {
                 ext_tick(dt_ms);
