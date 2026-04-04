@@ -66,6 +66,40 @@ class LifetimeToken {
         return !expired();
     }
 
+    /**
+     * @brief Queue a guarded callback without accessing the owning object
+     *
+     * Use this from background thread callbacks instead of lifetime_.defer()
+     * to avoid a TOCTOU race where `this` (and thus `lifetime_`) is destroyed
+     * between the tok.expired() check and the lifetime_.defer() call (#707).
+     *
+     * The token holds its own shared_ptr to the generation counter, so it
+     * remains safe to use even after the guard (and its owner) are destroyed.
+     */
+    template <typename F> void defer(F&& fn) const {
+        auto gen = gen_;
+        auto snapshot = snapshot_;
+        helix::ui::queue_update([gen, snapshot, f = std::forward<F>(fn)]() mutable {
+            if (gen->load(std::memory_order_acquire) != snapshot)
+                return;
+            f();
+        });
+    }
+
+    /// Tagged variant for crash diagnostics
+    template <typename F> void defer(const char* tag, F&& fn) const {
+        auto gen = gen_;
+        auto snapshot = snapshot_;
+        helix::ui::queue_update(tag, [gen, snapshot, tag, f = std::forward<F>(fn)]() mutable {
+            if (gen->load(std::memory_order_acquire) != snapshot) {
+                spdlog::trace("[LifetimeToken] Skipped expired callback: {}",
+                              tag ? tag : "unknown");
+                return;
+            }
+            f();
+        });
+    }
+
   private:
     friend class AsyncLifetimeGuard;
 
@@ -129,8 +163,7 @@ class AsyncLifetimeGuard {
      * @tparam F Callable with signature void()
      * @param fn The callback to defer
      */
-    template <typename F>
-    void defer(F&& fn) {
+    template <typename F> void defer(F&& fn) {
         auto gen = gen_;
         auto snapshot = gen_->load(std::memory_order_acquire);
         helix::ui::queue_update([gen, snapshot, f = std::forward<F>(fn)]() mutable {
@@ -151,8 +184,7 @@ class AsyncLifetimeGuard {
      * @param tag String literal identifying the caller (for crash diagnostics)
      * @param fn The callback to defer
      */
-    template <typename F>
-    void defer(const char* tag, F&& fn) {
+    template <typename F> void defer(const char* tag, F&& fn) {
         auto gen = gen_;
         auto snapshot = gen_->load(std::memory_order_acquire);
         helix::ui::queue_update(tag, [gen, snapshot, tag, f = std::forward<F>(fn)]() mutable {

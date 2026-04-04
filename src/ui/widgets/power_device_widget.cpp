@@ -2,13 +2,13 @@
 
 #include "power_device_widget.h"
 
-#include "sensor_state.h"
 #include "ui_carousel.h"
 #include "ui_emergency_stop.h"
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
 #include "ui_icon.h"
 #include "ui_icon_codepoints.h"
+#include "ui_panel_power.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
 
@@ -21,8 +21,8 @@
 #include "panel_widget_registry.h"
 #include "power_device_state.h"
 #include "printer_state.h"
+#include "sensor_state.h"
 #include "theme_manager.h"
-#include "ui_panel_power.h"
 
 #include <spdlog/spdlog.h>
 
@@ -357,8 +357,7 @@ void PowerDeviceWidget::handle_clicked() {
         lv_subject_t* status_subj =
             PowerDeviceState::instance().get_status_subject(device_name_, lt);
         if (status_subj && lv_subject_get_int(status_subj) == 1) {
-            EmergencyStopOverlay::instance().suppress_recovery_dialog(
-                RecoverySuppression::NORMAL);
+            EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::NORMAL);
         }
     }
 
@@ -487,7 +486,6 @@ void PowerDeviceWidget::show_device_picker() {
     // Helper lambda to create a device row in the picker
     auto create_device_row = [&](const std::string& device_id, const std::string& display,
                                  bool is_selected) {
-
         lv_obj_t* row = lv_obj_create(list);
         lv_obj_set_width(row, LV_PCT(100));
         lv_obj_set_height(row, LV_SIZE_CONTENT);
@@ -941,9 +939,8 @@ void PowerDeviceWidget::refresh_all_devices_state() {
                 }
             }
 
-            lifetime_.defer("PowerDeviceWidget::refresh_all", [this, any_on]() {
-                update_all_devices_display(any_on);
-            });
+            lifetime_.defer("PowerDeviceWidget::refresh_all",
+                            [this, any_on]() { update_all_devices_display(any_on); });
         },
         [](const MoonrakerError& err) {
             spdlog::warn("[PowerDeviceWidget] Failed to refresh all-devices state: {}",
@@ -1017,9 +1014,8 @@ void PowerDeviceWidget::update_all_devices_display(bool any_on) {
 
     if (status_label_) {
         lv_label_set_text(status_label_, any_on ? lv_tr("ON") : lv_tr("OFF"));
-        lv_obj_set_style_text_color(
-            status_label_,
-            theme_manager_get_color(any_on ? "danger" : "text_muted"), 0);
+        lv_obj_set_style_text_color(status_label_,
+                                    theme_manager_get_color(any_on ? "danger" : "text_muted"), 0);
     }
 
     if (name_label_) {
@@ -1142,8 +1138,7 @@ void PowerDeviceWidget::teardown_carousel() {
         auto* state = ui_carousel_get_state(carousel_);
         if (state && state->scroll_container) {
             // Page 0 is the control page — reparent its children back to widget_
-            lv_obj_t* first_tile =
-                lv_obj_get_child(state->scroll_container, 0);
+            lv_obj_t* first_tile = lv_obj_get_child(state->scroll_container, 0);
             if (first_tile) {
                 // The tile wraps a control_page container; get the control_page
                 lv_obj_t* control_page = lv_obj_get_child(first_tile, 0);
@@ -1152,8 +1147,7 @@ void PowerDeviceWidget::teardown_carousel() {
                     std::vector<lv_obj_t*> children;
                     uint32_t count = lv_obj_get_child_count(control_page);
                     for (uint32_t i = 0; i < count; ++i) {
-                        children.push_back(
-                            lv_obj_get_child(control_page, static_cast<int32_t>(i)));
+                        children.push_back(lv_obj_get_child(control_page, static_cast<int32_t>(i)));
                     }
                     for (auto* child : children) {
                         lv_obj_set_parent(child, widget_obj_);
@@ -1203,14 +1197,16 @@ void PowerDeviceWidget::attach_sensor_observers() {
 }
 
 void PowerDeviceWidget::detach_sensor_observers() {
-    power_observer_.reset();
-    voltage_observer_.reset();
-    current_observer_.reset();
-    energy_observer_.reset();
+    // Reset lifetimes BEFORE observers so the guard's weak_ptr expires and
+    // skips lv_observer_remove() on potentially-freed subjects (#705).
     power_lifetime_ = {};
     voltage_lifetime_ = {};
     current_lifetime_ = {};
     energy_lifetime_ = {};
+    power_observer_.reset();
+    voltage_observer_.reset();
+    current_observer_.reset();
+    energy_observer_.reset();
 }
 
 void PowerDeviceWidget::update_energy_label(const std::string& key, lv_obj_t* label,

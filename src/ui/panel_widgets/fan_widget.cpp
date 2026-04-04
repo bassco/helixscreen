@@ -21,15 +21,12 @@
 
 namespace helix {
 void register_fan_widget() {
-    register_widget_factory("fan", [](const std::string& id) {
-        return std::make_unique<FanWidget>(id);
-    });
+    register_widget_factory("fan",
+                            [](const std::string& id) { return std::make_unique<FanWidget>(id); });
 
     // Register XML event callbacks at startup (before any XML is parsed)
-    lv_xml_register_event_cb(nullptr, "fan_widget_clicked_cb",
-                             FanWidget::fan_widget_clicked_cb);
-    lv_xml_register_event_cb(nullptr, "fan_picker_backdrop_cb",
-                             FanWidget::fan_picker_backdrop_cb);
+    lv_xml_register_event_cb(nullptr, "fan_widget_clicked_cb", FanWidget::fan_widget_clicked_cb);
+    lv_xml_register_event_cb(nullptr, "fan_picker_backdrop_cb", FanWidget::fan_picker_backdrop_cb);
 }
 } // namespace helix
 
@@ -95,8 +92,7 @@ void position_picker_card(lv_obj_t* backdrop, lv_obj_t* widget_obj, lv_obj_t* pa
 
 } // anonymous namespace
 
-FanWidget::FanWidget(const std::string& instance_id)
-    : instance_id_(instance_id) {
+FanWidget::FanWidget(const std::string& instance_id) : instance_id_(instance_id) {
     std::strcpy(speed_buffer_, "--");
 }
 
@@ -141,22 +137,22 @@ void FanWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     // Observe fan version to detect fan discovery/reconnection
     auto token = lifetime_.token();
-    version_observer_ = helix::ui::observe_int_sync<FanWidget>(
-        get_printer_state().get_fans_version_subject(), this,
-        [token](FanWidget* self, int /*version*/) {
-            if (token.expired())
-                return;
-            if (self->selected_fan_.empty()) {
-                self->auto_select_first_fan();
-            } else {
-                // Rebind in case subjects were recreated after reconnection
-                self->bind_speed_observer();
-                self->update_display();
-            }
-        });
+    version_observer_ =
+        helix::ui::observe_int_sync<FanWidget>(get_printer_state().get_fans_version_subject(), this,
+                                               [token](FanWidget* self, int /*version*/) {
+                                                   if (token.expired())
+                                                       return;
+                                                   if (self->selected_fan_.empty()) {
+                                                       self->auto_select_first_fan();
+                                                   } else {
+                                                       // Rebind in case subjects were recreated
+                                                       // after reconnection
+                                                       self->bind_speed_observer();
+                                                       self->update_display();
+                                                   }
+                                               });
 
-    spdlog::debug("[FanWidget] Attached (fan: {})",
-                  selected_fan_.empty() ? "none" : selected_fan_);
+    spdlog::debug("[FanWidget] Attached (fan: {})", selected_fan_.empty() ? "none" : selected_fan_);
 }
 
 void FanWidget::detach() {
@@ -166,7 +162,7 @@ void FanWidget::detach() {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
         version_observer_.reset();
-        speed_lifetime_.reset();   // Before observer: expire weak_ptr if subject already freed
+        speed_lifetime_.reset(); // Before observer: expire weak_ptr if subject already freed
         speed_observer_.reset();
     }
 
@@ -206,13 +202,15 @@ void FanWidget::auto_select_first_fan() {
 }
 
 void FanWidget::bind_speed_observer() {
+    // Reset lifetime BEFORE observer so the guard's weak_ptr expires and
+    // skips lv_observer_remove() on a potentially-freed subject (#705).
+    speed_lifetime_.reset();
     speed_observer_.reset();
 
     if (selected_fan_.empty())
         return;
 
     auto& ps = get_printer_state();
-    speed_lifetime_.reset();
     lv_subject_t* subj = ps.get_fan_speed_subject(selected_fan_, speed_lifetime_);
     if (subj) {
         auto token = lifetime_.token();
@@ -311,8 +309,7 @@ void FanWidget::show_fan_picker() {
     }
 
     // Create picker from XML
-    picker_backdrop_ =
-        static_cast<lv_obj_t*>(lv_xml_create(parent_screen_, "fan_picker", nullptr));
+    picker_backdrop_ = static_cast<lv_obj_t*>(lv_xml_create(parent_screen_, "fan_picker", nullptr));
     if (!picker_backdrop_) {
         spdlog::error("[FanWidget] Failed to create fan picker from XML");
         return;
@@ -340,8 +337,7 @@ void FanWidget::show_fan_picker() {
         lv_obj_set_style_pad_all(row, space_sm, 0);
         lv_obj_set_style_pad_gap(row, space_xs, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
-                              LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
 
