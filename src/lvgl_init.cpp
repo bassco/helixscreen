@@ -45,6 +45,7 @@ void jitter_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
         return;
     }
     s_jitter_ctx.jitter.apply(data->state, data->point.x, data->point.y);
+    s_jitter_ctx.jitter.guard_post_scroll(data->state);
 }
 
 } // namespace
@@ -125,9 +126,22 @@ bool init_lvgl(int width, int height, LvglContext& ctx) {
             jitter_threshold = std::atoi(env_jitter);
         }
         jitter_threshold = std::clamp(jitter_threshold, 0, 200);
+        // Post-scroll click guard — suppresses ghost taps from capacitive touch
+        // controllers that briefly report release→repress when lifting after a scroll.
+        bool scroll_guard = cfg->get<bool>("/input/scroll_guard", false);
+        const char* env_guard = std::getenv("HELIX_SCROLL_GUARD");
+        if (env_guard) {
+            scroll_guard = (std::string(env_guard) == "1" || std::string(env_guard) == "true");
+        }
+
         if (jitter_threshold > 0) {
             spdlog::info("[LVGL] Touch jitter filter: {}px dead zone", jitter_threshold);
             s_jitter_ctx.jitter.threshold_sq = jitter_threshold * jitter_threshold;
+            s_jitter_ctx.jitter.scroll_guard_enabled = scroll_guard;
+            if (scroll_guard) {
+                spdlog::info("[LVGL] Post-scroll click guard: {}ms cooldown",
+                             TouchJitterFilter::SCROLL_GUARD_COOLDOWN_MS);
+            }
             s_jitter_ctx.original_read_cb = lv_indev_get_read_cb(ctx.pointer);
             lv_indev_set_read_cb(ctx.pointer, jitter_read_cb);
         } else {

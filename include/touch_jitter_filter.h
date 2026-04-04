@@ -17,6 +17,15 @@ struct TouchJitterFilter {
     bool tracking = false;
     bool broken_out = false; ///< True once intentional movement detected; disables filtering
 
+    /// Post-scroll click guard — suppresses ghost presses that occur when
+    /// lifting a finger from a capacitive touchscreen after scrolling.
+    /// The contact area changes during lift, causing some controllers to
+    /// briefly report release→repress before the final release.
+    static constexpr uint32_t SCROLL_GUARD_COOLDOWN_MS = 80;
+    uint32_t scroll_release_tick = 0;  ///< lv_tick_get() when scroll touch ended
+    bool scroll_guard_enabled = false; ///< Enable post-scroll click guard
+    bool was_scrolling = false; ///< True if the touch that just ended had breakout (drag/scroll)
+
     /// Apply jitter filtering to touch coordinates.
     /// Suppresses movement within the dead zone until the first intentional movement
     /// exceeds the threshold. After breakout, all coordinates pass through unfiltered
@@ -50,9 +59,38 @@ struct TouchJitterFilter {
                     x = last_x;
                     y = last_y;
                 }
+                // Record whether this touch involved scrolling/dragging
+                was_scrolling = broken_out;
                 tracking = false;
                 broken_out = false;
             }
         }
+    }
+
+    /// Apply post-scroll click guard. Call AFTER apply().
+    /// Returns true if the event should be suppressed (converted to RELEASED).
+    bool guard_post_scroll(lv_indev_state_t& state) {
+        if (!scroll_guard_enabled)
+            return false;
+
+        if (state == LV_INDEV_STATE_RELEASED && was_scrolling) {
+            // Touch that involved scrolling just ended — start cooldown
+            scroll_release_tick = lv_tick_get();
+            was_scrolling = false;
+            return false;
+        }
+
+        if (state == LV_INDEV_STATE_PRESSED && scroll_release_tick > 0) {
+            uint32_t elapsed = lv_tick_elaps(scroll_release_tick);
+            if (elapsed < SCROLL_GUARD_COOLDOWN_MS) {
+                // Ghost press during cooldown — suppress
+                state = LV_INDEV_STATE_RELEASED;
+                return true;
+            }
+            // Cooldown expired — allow the press
+            scroll_release_tick = 0;
+        }
+
+        return false;
     }
 };
