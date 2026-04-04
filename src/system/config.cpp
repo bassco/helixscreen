@@ -559,6 +559,13 @@ using helix::config_backup::restore_from_backup;
 using helix::config_backup::write_backup_file;
 using helix::config_backup::write_rolling_backup;
 
+/// Backup search paths in priority order (primary, fallback, legacy primary, legacy fallback).
+/// Used by restore_from_backup() and find_backup() calls throughout init().
+static std::vector<std::string> config_backup_search_paths() {
+    return {CONFIG_BACKUP_PRIMARY, config_backup_fallback(), LEGACY_CONFIG_BACKUP_PRIMARY,
+            legacy_config_backup_fallback()};
+}
+
 } // namespace
 
 Config::Config() {}
@@ -663,10 +670,7 @@ void Config::init(const std::string& config_path) {
         // Recovery: restore config from rolling backups if missing.
         // Backups are maintained by Config::save() and survive Moonraker's
         // shutil.rmtree() wipe of the install directory.
-        restored_from_backup_ =
-            restore_from_backup(path, "Config",
-                                {CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
-                                 LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+        restore_from_backup(path, "Config", config_backup_search_paths());
     }
 
     // Restore helixscreen.env independently — it can be lost even if config survived
@@ -690,9 +694,7 @@ void Config::init(const std::string& config_path) {
             // settings.json with wizard_completed=false and no config_version.  If a
             // rolling backup with real user data exists, prefer it.
             if (data.value("config_version", 0) == 0) {
-                std::string backup_src =
-                    find_backup({CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
-                                 LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+                std::string backup_src = find_backup(config_backup_search_paths());
                 if (!backup_src.empty()) {
                     try {
                         auto backup_data = json::parse(std::fstream(backup_src));
@@ -701,7 +703,6 @@ void Config::init(const std::string& config_path) {
                                          "(no config_version) — restoring from backup: {}",
                                          backup_src);
                             data = std::move(backup_data);
-                            restored_from_backup_ = true;
                             config_modified = true;
                             NOTIFY_WARNING("Settings restored after update");
                         }
@@ -722,16 +723,13 @@ void Config::init(const std::string& config_path) {
             spdlog::info("[Config] Corrupt config saved to {}", corrupt_path);
 
             // Try restoring from backup before falling back to defaults
-            std::string backup_src =
-                find_backup({CONFIG_BACKUP_PRIMARY, config_backup_fallback(),
-                             LEGACY_CONFIG_BACKUP_PRIMARY, legacy_config_backup_fallback()});
+            std::string backup_src = find_backup(config_backup_search_paths());
 
             bool restored = false;
             if (!backup_src.empty()) {
                 try {
                     data = json::parse(std::fstream(backup_src));
                     restored = true;
-                    restored_from_backup_ = true;
                     spdlog::info("[Config] Restored from backup: {}", backup_src);
                     NOTIFY_WARNING("Settings were corrupted — restored from backup");
                 } catch (const json::exception& e2) {
@@ -770,15 +768,6 @@ void Config::init(const std::string& config_path) {
         spdlog::info("[Config] Creating default config at {}", path);
         data = get_default_config("127.0.0.1", false);
         config_modified = true;
-    }
-
-    // Config restored from backup — all settings (printer IP, display prefs,
-    // etc.) are intact.  Don't reset wizard_completed: forcing users through
-    // the wizard after an upgrade feels like config loss even though everything
-    // is preserved.  The backup is a rolling copy from the last save(), so it's
-    // always recent and trustworthy.
-    if (restored_from_backup_) {
-        spdlog::info("[Config] Config restored from backup — settings preserved");
     }
 
     // Load active printer ID from config (must happen before df() is used)
@@ -998,13 +987,13 @@ void Config::init(const std::string& config_path) {
         spdlog::debug("[Config] Saved updated config to {}", path);
     }
 
-    // Always maintain a rolling backup on startup — ensures backup freshness
-    // even if the user never explicitly saves settings. Without this, the only
-    // backup is from the last Config::save() call, which may be days/weeks old
-    // or nonexistent (user configured once, never changed settings again).
-    // Critical for upgrade recovery: if the installer's Phase 6 config restore
-    // fails, Config::init() falls back to these rolling backups.
-    write_rolling_backup(path, CONFIG_BACKUP_PRIMARY, config_backup_fallback());
+    // Maintain a rolling backup on startup — ensures backup freshness even if
+    // the user never explicitly saves settings.  Skip when the loaded config is
+    // a tarball default (wizard not yet completed, no real user data) to avoid
+    // poisoning the backup with preset defaults that would break future recovery.
+    if (!is_wizard_required()) {
+        write_rolling_backup(path, CONFIG_BACKUP_PRIMARY, config_backup_fallback());
+    }
 
     // Back up helixscreen.env outside install dir (env only changes at startup via launcher)
     {

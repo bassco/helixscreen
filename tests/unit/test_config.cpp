@@ -2334,197 +2334,145 @@ TEST_CASE("Config::init() falls back to defaults when both config and backup are
 
 // ============================================================================
 // Tarball Default Detection Tests (Moonraker web update config clobber)
+//
+// These tests require no system-level backup at /var/lib/helixscreen/ — they
+// will SKIP on devices with HelixScreen installed.  Designed for CI / clean
+// build machines.
 // ============================================================================
+
+namespace {
+
+/// RAII guard for HOME environment variable — ensures cleanup even if assertions throw.
+struct HomeGuard {
+    std::string original;
+    bool had_home;
+    explicit HomeGuard(const std::string& new_home)
+        : had_home(std::getenv("HOME") != nullptr) {
+        if (had_home) original = std::getenv("HOME");
+        setenv("HOME", new_home.c_str(), 1);
+    }
+    ~HomeGuard() {
+        if (had_home)
+            setenv("HOME", original.c_str(), 1);
+        else
+            unsetenv("HOME");
+    }
+};
+
+/// RAII temp directory + HOME redirect for tarball detection tests.
+struct TarballTestEnv {
+    std::filesystem::path dir;
+    std::string config_path;
+    std::string backup_dir;
+    HomeGuard home;
+
+    explicit TarballTestEnv(const std::string& name)
+        : dir("/tmp/helix_test_" + name + "_" + std::to_string(getpid())),
+          config_path((dir / "settings.json").string()),
+          backup_dir((dir / ".helixscreen").string()),
+          home(dir.string()) {
+        struct stat st{};
+        if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
+            SKIP("System backup exists at /var/lib/helixscreen/ — would override test");
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(dir);
+    }
+
+    ~TarballTestEnv() { std::filesystem::remove_all(dir); }
+
+    void write_config(const json& j) {
+        std::ofstream o(config_path);
+        o << j.dump(2);
+    }
+
+    void write_backup(const json& j) {
+        std::filesystem::create_directories(backup_dir);
+        std::ofstream o(backup_dir + "/settings.json.backup");
+        o << j.dump(2);
+    }
+
+    void write_backup_raw(const std::string& content) {
+        std::filesystem::create_directories(backup_dir);
+        std::ofstream o(backup_dir + "/settings.json.backup");
+        o << content;
+    }
+};
+
+} // namespace
 
 TEST_CASE("Config::init() restores backup when tarball default replaces user config",
           "[core][config][moonraker-update]") {
-    // System-level backup takes priority — skip if it exists
-    struct stat st{};
-    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
-        SKIP("System backup exists at /var/lib/helixscreen/ — would override test backup");
+    TarballTestEnv env("tarball_default");
 
-    std::string temp_dir = "/tmp/helix_test_tarball_default_" + std::to_string(getpid());
-    std::filesystem::remove_all(temp_dir);
-    std::filesystem::create_directories(temp_dir);
-    std::string temp_path = temp_dir + "/settings.json";
+    env.write_config({{"preset", "ad5x"},
+                      {"wizard_completed", false},
+                      {"display", {{"rotate", 0}}},
+                      {"printer", {{"moonraker_host", "127.0.0.1"}}}});
 
-    // Write a tarball default (preset-based config with no config_version)
-    json tarball_default = {{"preset", "ad5x"},
-                            {"wizard_completed", false},
-                            {"display", {{"rotate", 0}}},
-                            {"printer", {{"moonraker_host", "127.0.0.1"}}}};
-    {
-        std::ofstream o(temp_path);
-        o << tarball_default.dump(2);
-    }
-
-    // Set HOME so the fallback backup path points to our temp dir
-    const char* original_home = std::getenv("HOME");
-    setenv("HOME", temp_dir.c_str(), 1);
-
-    // Write a valid backup with real user data at the fallback location
-    std::string backup_dir = temp_dir + "/.helixscreen";
-    std::filesystem::create_directories(backup_dir);
-    std::string backup_path = backup_dir + "/settings.json.backup";
-    json backup_data = {{"config_version", CURRENT_CONFIG_VERSION},
-                        {"active_printer_id", "my-ad5x"},
-                        {"wizard_completed", true},
-                        {"brightness", 80},
-                        {"printers",
-                         {{"my-ad5x",
-                           {{"moonraker_host", "192.168.1.50"},
-                            {"wizard_completed", true},
-                            {"heaters", {{"bed", "heater_bed"}}}}}}}};
-    {
-        std::ofstream o(backup_path);
-        o << backup_data.dump(2);
-    }
+    env.write_backup({{"config_version", CURRENT_CONFIG_VERSION},
+                      {"active_printer_id", "my-ad5x"},
+                      {"wizard_completed", true},
+                      {"brightness", 80},
+                      {"printers",
+                       {{"my-ad5x",
+                         {{"moonraker_host", "192.168.1.50"},
+                          {"wizard_completed", true},
+                          {"heaters", {{"bed", "heater_bed"}}}}}}}});
 
     Config test_config;
-    test_config.init(temp_path);
+    test_config.init(env.config_path);
 
-    // Should have restored from backup — user's real config wins
     REQUIRE(test_config.get<std::string>("/printers/my-ad5x/moonraker_host") == "192.168.1.50");
     REQUIRE(test_config.get<int>("/brightness") == 80);
     REQUIRE_FALSE(test_config.is_wizard_required());
 
-    // Restored config should be persisted to disk (overwrites the tarball default)
-    auto on_disk = json::parse(std::ifstream(temp_path));
+    // Restored config should be persisted to disk
+    auto on_disk = json::parse(std::ifstream(env.config_path));
     REQUIRE(on_disk.value("config_version", 0) > 0);
     REQUIRE(on_disk.contains("printers"));
-
-    // Restore HOME
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-
-    std::filesystem::remove_all(temp_dir);
 }
 
 TEST_CASE("Config::init() keeps tarball default when no backup exists (fresh install)",
           "[core][config][moonraker-update]") {
-    struct stat st{};
-    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
-        SKIP("System backup exists at /var/lib/helixscreen/ — would override test");
+    TarballTestEnv env("tarball_fresh");
 
-    std::string temp_dir = "/tmp/helix_test_tarball_fresh_" + std::to_string(getpid());
-    std::filesystem::remove_all(temp_dir);
-    std::filesystem::create_directories(temp_dir);
-    std::string temp_path = temp_dir + "/settings.json";
-
-    // Write a tarball default (no config_version)
-    json tarball_default = {{"preset", "ad5m"},
-                            {"wizard_completed", false},
-                            {"printer", {{"moonraker_host", "127.0.0.1"}}}};
-    {
-        std::ofstream o(temp_path);
-        o << tarball_default.dump(2);
-    }
-
-    // Set HOME to empty dir — no backup exists
-    const char* original_home = std::getenv("HOME");
-    setenv("HOME", temp_dir.c_str(), 1);
+    env.write_config({{"preset", "ad5m"},
+                      {"wizard_completed", false},
+                      {"printer", {{"moonraker_host", "127.0.0.1"}}}});
 
     Config test_config;
-    test_config.init(temp_path);
+    test_config.init(env.config_path);
 
-    // No backup → tarball default should be used (wizard required)
     REQUIRE(test_config.is_wizard_required());
-
-    // Restore HOME
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-
-    std::filesystem::remove_all(temp_dir);
 }
 
 TEST_CASE("Config::init() keeps tarball default when backup is also a tarball default",
           "[core][config][moonraker-update]") {
-    struct stat st{};
-    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
-        SKIP("System backup exists at /var/lib/helixscreen/ — would override test");
+    TarballTestEnv env("tarball_both_default");
 
-    std::string temp_dir = "/tmp/helix_test_tarball_both_default_" + std::to_string(getpid());
-    std::filesystem::remove_all(temp_dir);
-    std::filesystem::create_directories(temp_dir);
-    std::string temp_path = temp_dir + "/settings.json";
-
-    // Tarball default on disk
     json tarball_default = {{"preset", "ad5x"},
                             {"wizard_completed", false},
                             {"printer", {{"moonraker_host", "127.0.0.1"}}}};
-    {
-        std::ofstream o(temp_path);
-        o << tarball_default.dump(2);
-    }
-
-    // Backup is also a tarball default (no config_version)
-    const char* original_home = std::getenv("HOME");
-    setenv("HOME", temp_dir.c_str(), 1);
-    std::string backup_dir = temp_dir + "/.helixscreen";
-    std::filesystem::create_directories(backup_dir);
-    {
-        std::ofstream o(backup_dir + "/settings.json.backup");
-        o << tarball_default.dump(2);
-    }
+    env.write_config(tarball_default);
+    env.write_backup(tarball_default);
 
     Config test_config;
-    test_config.init(temp_path);
+    test_config.init(env.config_path);
 
-    // Both are defaults — should keep loaded config, wizard required
     REQUIRE(test_config.is_wizard_required());
-
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-
-    std::filesystem::remove_all(temp_dir);
 }
 
 TEST_CASE("Config::init() keeps tarball default when backup is corrupt",
           "[core][config][moonraker-update]") {
-    struct stat st{};
-    if (stat("/var/lib/helixscreen/settings.json.backup", &st) == 0)
-        SKIP("System backup exists at /var/lib/helixscreen/ — would override test");
+    TarballTestEnv env("tarball_corrupt_backup");
 
-    std::string temp_dir = "/tmp/helix_test_tarball_corrupt_backup_" + std::to_string(getpid());
-    std::filesystem::remove_all(temp_dir);
-    std::filesystem::create_directories(temp_dir);
-    std::string temp_path = temp_dir + "/settings.json";
-
-    // Tarball default on disk
-    json tarball_default = {{"preset", "ad5m"},
-                            {"wizard_completed", false},
-                            {"printer", {{"moonraker_host", "127.0.0.1"}}}};
-    {
-        std::ofstream o(temp_path);
-        o << tarball_default.dump(2);
-    }
-
-    // Corrupt backup
-    const char* original_home = std::getenv("HOME");
-    setenv("HOME", temp_dir.c_str(), 1);
-    std::string backup_dir = temp_dir + "/.helixscreen";
-    std::filesystem::create_directories(backup_dir);
-    {
-        std::ofstream o(backup_dir + "/settings.json.backup");
-        o << "{{{{ not valid json";
-    }
+    env.write_config({{"preset", "ad5m"},
+                      {"wizard_completed", false},
+                      {"printer", {{"moonraker_host", "127.0.0.1"}}}});
+    env.write_backup_raw("{{{{ not valid json");
 
     Config test_config;
-    test_config.init(temp_path);
+    test_config.init(env.config_path);
 
-    // Corrupt backup — should keep tarball default, wizard required
     REQUIRE(test_config.is_wizard_required());
-
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-
-    std::filesystem::remove_all(temp_dir);
 }
