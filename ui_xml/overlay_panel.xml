@@ -30,6 +30,7 @@
     <prop name="action_button_2_bg_color" type="string" default="#secondary"/>
     <prop name="action_button_2_callback" type="string" default=""/>
     <prop name="hide_action_button_2" type="string" default="true"/>
+    <prop name="back_button_callback" type="string" default="on_header_back_clicked"/>
     <prop name="width" type="string" default="#overlay_panel_width"/>
     <prop name="bg_color" type="string" default="#card_bg"/>
   </api>
@@ -43,7 +44,8 @@
                 action_button_callback="$action_button_callback" action_button_height="$action_button_height"
                 action_button_pad="$action_button_pad" action_button_disabled_subject="$action_button_disabled_subject"
                 action_button_2_text="$action_button_2_text" action_button_2_text_tag="$action_button_2_text_tag" action_button_2_bg_color="$action_button_2_bg_color"
-                action_button_2_callback="$action_button_2_callback" hide_action_button_2="$hide_action_button_2"/>
+                action_button_2_callback="$action_button_2_callback" hide_action_button_2="$hide_action_button_2"
+                back_button_callback="$back_button_callback"/>
     <!-- Panel-specific overlay_content and children go here -->
   </view>
 </component>
