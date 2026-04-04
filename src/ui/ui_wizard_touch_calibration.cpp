@@ -487,7 +487,7 @@ void WizardTouchCalibrationStep::handle_screen_touched(lv_event_t* e) {
         (state == helix::TouchCalibrationPanel::State::POINT_1 ||
          state == helix::TouchCalibrationPanel::State::POINT_2 ||
          state == helix::TouchCalibrationPanel::State::POINT_3)) {
-        helix::ui::flash_object(crosshair_);
+        helix::ui::flash_object(crosshair_, 200, true);
     }
 
     // Auto-accept when VERIFY state is reached (wizard doesn't need user to click Accept)

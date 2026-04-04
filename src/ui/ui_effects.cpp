@@ -79,12 +79,12 @@ void create_ripple(lv_obj_t* parent, lv_coord_t x, lv_coord_t y, int start_size,
     lv_anim_start(&fade_anim);
 }
 
-void flash_object(lv_obj_t* obj, int32_t duration_ms) {
+void flash_object(lv_obj_t* obj, int32_t duration_ms, bool force) {
     if (!obj) {
         return;
     }
 
-    if (!helix::DisplaySettingsManager::instance().get_animations_enabled()) {
+    if (!force && !helix::DisplaySettingsManager::instance().get_animations_enabled()) {
         return;
     }
 

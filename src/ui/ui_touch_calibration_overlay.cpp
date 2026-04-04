@@ -523,7 +523,7 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
         (state_after == helix::TouchCalibrationPanel::State::POINT_1 ||
          state_after == helix::TouchCalibrationPanel::State::POINT_2 ||
          state_after == helix::TouchCalibrationPanel::State::POINT_3)) {
-        flash_object(crosshair_);
+        flash_object(crosshair_, 200, true);
     }
 
     // If we just entered VERIFY, temporarily apply new calibration so accept/retry buttons
