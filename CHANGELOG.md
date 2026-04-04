@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.20] - 2026-04-04
+
+### Fixed
+- Print file thumbnails showing placeholder icons instead of actual images
+- Use-after-free crashes in async callbacks and observer guards (#704–#708)
+- Background-thread lifetime callbacks using unsafe `this` pointer (#707)
+- Deferred UI callbacks crashing when container layout is pending (#711)
+- Sound settings not visible until hardware discovery completes
+- Ghost taps after scrolling on capacitive touchscreens
+- Snapmaker U1 installer referencing nonexistent init script
+- Junk directories created in working directory from corrupted HOME environment
+- CI release artifacts duplicated across platform prefixes
+
 ## [0.99.19] - 2026-04-03
 
 ### Added
@@ -2575,6 +2588,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.20]: https://github.com/prestonbrown/helixscreen/compare/v0.99.19...v0.99.20
 [0.99.19]: https://github.com/prestonbrown/helixscreen/compare/v0.99.18...v0.99.19
 [0.99.18]: https://github.com/prestonbrown/helixscreen/compare/v0.99.17...v0.99.18
 [0.99.17]: https://github.com/prestonbrown/helixscreen/compare/v0.99.16...v0.99.17
