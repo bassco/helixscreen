@@ -620,7 +620,8 @@ $(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp
 	$(call emit-compile-command,$(CXX),$(CXXFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) -I$(TEST_UNIT_DIR)/application $(INCLUDES) $(LV_CONF),$<,$@)
 
 # Compile libhv dns_resolv.c for test_dns_resolver
-$(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c $(PATCHES_STAMP)
+# dns_resolv.c dependency on PATCHES_STAMP is declared in rules.mk
+$(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST-C]$(RESET) $<"
 	$(Q)$(CC) $(CFLAGS) -I$(LIBHV_DIR)/base $(LIBHV_INC) -c $< -o $@
