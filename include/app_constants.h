@@ -140,15 +140,27 @@ constexpr const char* ENV_BACKUP_PRIMARY = "/var/lib/helixscreen/helixscreen.env
 /// Legacy backup paths (for migration)
 constexpr const char* LEGACY_CONFIG_BACKUP_PRIMARY = "/var/lib/helixscreen/helixconfig.json.backup";
 
+/// Validate that a HOME path looks sane (absolute, >1 char, no control chars).
+/// Returns "/tmp" if HOME is corrupted (heap damage to environ block).
+inline std::string sanitize_home(const char* home) {
+    if (!home || home[0] == '\0')
+        return "/tmp";
+    std::string h(home);
+    if (h.size() < 2 || h[0] != '/')
+        return "/tmp";
+    for (char c : h) {
+        if (static_cast<unsigned char>(c) < 0x20)
+            return "/tmp";
+    }
+    return h;
+}
+
 /// Fallback backup — $HOME/.helixscreen/ (writable without StateDirectory)
 /// HOME is cached at first call to guard against later heap corruption
 /// corrupting the environ block (observed as single-char junk directories).
 namespace detail {
 inline std::string& backup_fallback_dir_ref() {
-    static std::string dir = [] {
-        const char* home = std::getenv("HOME");
-        return std::string(home ? home : "/tmp") + "/.helixscreen";
-    }();
+    static std::string dir = [] { return sanitize_home(std::getenv("HOME")) + "/.helixscreen"; }();
     return dir;
 }
 } // namespace detail
@@ -161,8 +173,7 @@ inline std::string backup_fallback_dir() {
 /// Test-only: production code must not call this (the cache guards against
 /// heap-corrupted environ).
 inline void reset_backup_fallback_dir_for_testing() {
-    const char* home = std::getenv("HOME");
-    detail::backup_fallback_dir_ref() = std::string(home ? home : "/tmp") + "/.helixscreen";
+    detail::backup_fallback_dir_ref() = sanitize_home(std::getenv("HOME")) + "/.helixscreen";
 }
 inline std::string config_backup_fallback() {
     return backup_fallback_dir() + "/settings.json.backup";

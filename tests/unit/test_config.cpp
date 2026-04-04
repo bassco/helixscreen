@@ -2206,6 +2206,34 @@ TEST_CASE("Config::init migrates helixconfig.json to settings.json", "[config]")
 }
 
 // ============================================================================
+// RAII guard for HOME — moved here so corruption tests can also use it.
+// ============================================================================
+
+namespace {
+
+/// RAII guard for HOME environment variable — ensures cleanup even if assertions throw.
+/// Prevents environ poisoning that creates junk single-char directories in CWD.
+struct HomeGuard {
+    std::string original;
+    bool had_home;
+    explicit HomeGuard(const std::string& new_home) : had_home(std::getenv("HOME") != nullptr) {
+        if (had_home)
+            original = std::getenv("HOME");
+        setenv("HOME", new_home.c_str(), 1);
+        AppConstants::Update::reset_backup_fallback_dir_for_testing();
+    }
+    ~HomeGuard() {
+        if (had_home)
+            setenv("HOME", original.c_str(), 1);
+        else
+            unsetenv("HOME");
+        AppConstants::Update::reset_backup_fallback_dir_for_testing();
+    }
+};
+
+} // namespace
+
+// ============================================================================
 // Corrupt Config Recovery Tests
 // ============================================================================
 
@@ -2228,10 +2256,8 @@ TEST_CASE("Config::init() recovers from corrupt config by restoring backup",
         o << "{{{{ not valid json !!!!";
     }
 
-    // Set HOME so the fallback backup path points to our temp dir
-    const char* original_home = std::getenv("HOME");
-    setenv("HOME", temp_dir.c_str(), 1);
-    AppConstants::Update::reset_backup_fallback_dir_for_testing();
+    // RAII guard: restore HOME even if REQUIRE throws
+    HomeGuard home_guard(temp_dir);
 
     // Write a valid backup at the fallback backup location
     std::string backup_dir = temp_dir + "/.helixscreen";
@@ -2256,13 +2282,6 @@ TEST_CASE("Config::init() recovers from corrupt config by restoring backup",
     // Corrupt file should be preserved for diagnosis
     REQUIRE(std::filesystem::exists(temp_path + ".corrupt"));
 
-    // Restore HOME
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-    AppConstants::Update::reset_backup_fallback_dir_for_testing();
-
     std::filesystem::remove_all(temp_dir);
 }
 
@@ -2279,8 +2298,22 @@ TEST_CASE("Config::init() falls back to defaults when corrupt and no backup exis
         o << "not json at all";
     }
 
-    // Set HOME so fallback backup points to empty dir (no backup exists)
-    const char* original_home = std::getenv("HOME");
+    // RAII guard: restore HOME even if REQUIRE throws
+    struct HomeRestore {
+        std::string orig;
+        bool had;
+        HomeRestore() : had(std::getenv("HOME") != nullptr) {
+            if (had)
+                orig = std::getenv("HOME");
+        }
+        ~HomeRestore() {
+            if (had)
+                setenv("HOME", orig.c_str(), 1);
+            else
+                unsetenv("HOME");
+            AppConstants::Update::reset_backup_fallback_dir_for_testing();
+        }
+    } home_guard;
     setenv("HOME", temp_dir.c_str(), 1);
     AppConstants::Update::reset_backup_fallback_dir_for_testing();
 
@@ -2292,13 +2325,6 @@ TEST_CASE("Config::init() falls back to defaults when corrupt and no backup exis
 
     // Corrupt file should still be preserved
     REQUIRE(std::filesystem::exists(temp_path + ".corrupt"));
-
-    // Restore HOME
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-    AppConstants::Update::reset_backup_fallback_dir_for_testing();
 
     std::filesystem::remove_all(temp_dir);
 }
@@ -2316,8 +2342,22 @@ TEST_CASE("Config::init() falls back to defaults when both config and backup are
         o << "{truncated";
     }
 
-    // Set HOME and write a corrupt backup too
-    const char* original_home = std::getenv("HOME");
+    // RAII guard: restore HOME even if REQUIRE throws
+    struct HomeRestore {
+        std::string orig;
+        bool had;
+        HomeRestore() : had(std::getenv("HOME") != nullptr) {
+            if (had)
+                orig = std::getenv("HOME");
+        }
+        ~HomeRestore() {
+            if (had)
+                setenv("HOME", orig.c_str(), 1);
+            else
+                unsetenv("HOME");
+            AppConstants::Update::reset_backup_fallback_dir_for_testing();
+        }
+    } home_guard;
     setenv("HOME", temp_dir.c_str(), 1);
     AppConstants::Update::reset_backup_fallback_dir_for_testing();
 
@@ -2334,13 +2374,6 @@ TEST_CASE("Config::init() falls back to defaults when both config and backup are
     // Both corrupt — should fall back to defaults
     REQUIRE(test_config.get<std::string>("/printers/default/moonraker_host") == "127.0.0.1");
 
-    // Restore HOME
-    if (original_home)
-        setenv("HOME", original_home, 1);
-    else
-        unsetenv("HOME");
-    AppConstants::Update::reset_backup_fallback_dir_for_testing();
-
     std::filesystem::remove_all(temp_dir);
 }
 
@@ -2353,25 +2386,6 @@ TEST_CASE("Config::init() falls back to defaults when both config and backup are
 // ============================================================================
 
 namespace {
-
-/// RAII guard for HOME environment variable — ensures cleanup even if assertions throw.
-struct HomeGuard {
-    std::string original;
-    bool had_home;
-    explicit HomeGuard(const std::string& new_home) : had_home(std::getenv("HOME") != nullptr) {
-        if (had_home)
-            original = std::getenv("HOME");
-        setenv("HOME", new_home.c_str(), 1);
-        AppConstants::Update::reset_backup_fallback_dir_for_testing();
-    }
-    ~HomeGuard() {
-        if (had_home)
-            setenv("HOME", original.c_str(), 1);
-        else
-            unsetenv("HOME");
-        AppConstants::Update::reset_backup_fallback_dir_for_testing();
-    }
-};
 
 /// RAII temp directory + HOME redirect for tarball detection tests.
 struct TarballTestEnv {
