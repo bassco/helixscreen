@@ -10,9 +10,9 @@
 
 #include "printer_capabilities_state.h"
 
-#include "sound_manager.h"
 #include "ui_update_queue.h"
 
+#include "sound_manager.h"
 #include "state/subject_macros.h"
 
 #include <spdlog/spdlog.h>
@@ -117,6 +117,13 @@ void PrinterCapabilitiesState::set_hardware(const PrinterDiscovery& hardware,
                   overrides.summary());
 }
 
+void PrinterCapabilitiesState::set_sound_backend_available(bool available) {
+    if (available && lv_subject_get_int(&printer_has_speaker_) == 0) {
+        lv_subject_set_int(&printer_has_speaker_, 1);
+        spdlog::debug("[PrinterCapabilitiesState] Sound backend available, speaker enabled");
+    }
+}
+
 void PrinterCapabilitiesState::set_spoolman_available(bool available) {
     // Thread-safe: Use ui_queue_update to update LVGL subject from any thread
     helix::ui::queue_update([this, available]() {
@@ -126,8 +133,8 @@ void PrinterCapabilitiesState::set_spoolman_available(bool available) {
 }
 
 void PrinterCapabilitiesState::set_webcam_available(bool available, const std::string& stream_url,
-                                                    const std::string& snapshot_url,
-                                                    bool flip_h, bool flip_v) {
+                                                    const std::string& snapshot_url, bool flip_h,
+                                                    bool flip_v) {
     // Store URLs before queuing (captured by value for thread safety)
     helix::ui::queue_update([this, available, stream_url, snapshot_url, flip_h, flip_v]() {
         webcam_stream_url_ = available ? stream_url : "";

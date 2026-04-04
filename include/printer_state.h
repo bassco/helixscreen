@@ -144,13 +144,14 @@ enum class PrintStartPhase {
  * @brief Z-offset calibration strategy — determines gcode commands for calibration and save
  *
  * Different printers need different approaches to calibrate and persist Z-offset.
- * FIRMWARE_MANAGED: firmware or macros auto-persist (FlashForge, Snapmaker U1, Artillery M1, ForgeX-mod).
- * PROBE_CALIBRATE: standard Klipper PROBE_CALIBRATE -> ACCEPT -> SAVE_CONFIG.
- * ENDSTOP: Z_ENDSTOP_CALIBRATE -> ACCEPT -> Z_OFFSET_APPLY_ENDSTOP -> SAVE_CONFIG.
+ * FIRMWARE_MANAGED: firmware or macros auto-persist (FlashForge, Snapmaker U1, Artillery M1,
+ * ForgeX-mod). PROBE_CALIBRATE: standard Klipper PROBE_CALIBRATE -> ACCEPT -> SAVE_CONFIG. ENDSTOP:
+ * Z_ENDSTOP_CALIBRATE -> ACCEPT -> Z_OFFSET_APPLY_ENDSTOP -> SAVE_CONFIG.
  */
 enum class ZOffsetCalibrationStrategy {
-    PROBE_CALIBRATE, ///< Standard Klipper: PROBE_CALIBRATE -> ACCEPT -> SAVE_CONFIG
-    FIRMWARE_MANAGED, ///< Firmware/macros auto-persist (FlashForge, Snapmaker U1, Artillery M1, ForgeX-mod)
+    PROBE_CALIBRATE,  ///< Standard Klipper: PROBE_CALIBRATE -> ACCEPT -> SAVE_CONFIG
+    FIRMWARE_MANAGED, ///< Firmware/macros auto-persist (FlashForge, Snapmaker U1, Artillery M1,
+                      ///< ForgeX-mod)
     ENDSTOP ///< Endstop: Z_ENDSTOP_CALIBRATE -> ACCEPT -> Z_OFFSET_APPLY_ENDSTOP -> SAVE_CONFIG
 };
 
@@ -848,7 +849,9 @@ class PrinterState {
      * firmware/macros handle persistence automatically (FIRMWARE_MANAGED).
      * Used in XML to hide the "Save Z-Offset" button for auto-saved printers.
      */
-    lv_subject_t* get_z_offset_can_save_subject() { return &z_offset_can_save_; }
+    lv_subject_t* get_z_offset_can_save_subject() {
+        return &z_offset_can_save_;
+    }
 
     /**
      * @brief Add to pending Z-offset delta (called when user adjusts Z during print)
@@ -1242,6 +1245,16 @@ class PrinterState {
     void set_spoolman_available(bool available);
 
     /**
+     * @brief Set speaker availability from local sound backend.
+     *
+     * Called early at startup so sound settings are visible before
+     * hardware discovery completes (or when Klipper is not connected).
+     */
+    void set_sound_backend_available(bool available) {
+        capabilities_state_.set_sound_backend_available(available);
+    }
+
+    /**
      * @brief Check if Spoolman is available
      *
      * Reads the printer_has_spoolman subject value. Safe to call from any thread
@@ -1264,8 +1277,8 @@ class PrinterState {
      * @param snapshot_url Snapshot URL of first enabled webcam
      */
     void set_webcam_available(bool available, const std::string& stream_url = "",
-                              const std::string& snapshot_url = "",
-                              bool flip_h = false, bool flip_v = false);
+                              const std::string& snapshot_url = "", bool flip_h = false,
+                              bool flip_v = false);
 
     /// Get MJPEG stream URL of first enabled webcam
     const std::string& get_webcam_stream_url() const {
@@ -1694,7 +1707,9 @@ class PrinterState {
      * String subject holding the human-readable name of the active printer.
      * Use with bind_text in XML to display the current printer name.
      */
-    lv_subject_t* get_active_printer_name_subject() { return &active_printer_name_; }
+    lv_subject_t* get_active_printer_name_subject() {
+        return &active_printer_name_;
+    }
 
     /**
      * @brief Get the multi-printer enabled subject
@@ -1702,7 +1717,9 @@ class PrinterState {
      * Integer subject: 1 when multiple printers are configured, 0 otherwise.
      * Use with bind_flag_if_eq in XML to show/hide multi-printer UI elements.
      */
-    lv_subject_t* get_multi_printer_enabled_subject() { return &multi_printer_enabled_; }
+    lv_subject_t* get_multi_printer_enabled_subject() {
+        return &multi_printer_enabled_;
+    }
 
     /**
      * @brief Set the active printer display name

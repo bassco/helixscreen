@@ -483,6 +483,12 @@ int Application::run(int argc, char** argv) {
     SoundManager::instance().initialize();
     SoundManager::instance().play("startup", SoundPriority::EVENT);
 
+    // Show sound settings immediately if a local backend exists,
+    // without waiting for hardware discovery / Klipper connection.
+    if (SoundManager::instance().has_backend()) {
+        get_printer_state().set_sound_backend_available(true);
+    }
+
     // Initialize PostOpCooldownManager (unified filament operation cooldown)
     PostOpCooldownManager::instance().init(get_moonraker_api());
 

@@ -85,8 +85,8 @@ class PrinterCapabilitiesState {
      * @param snapshot_url Snapshot URL of first enabled webcam (empty if none)
      */
     void set_webcam_available(bool available, const std::string& stream_url = "",
-                              const std::string& snapshot_url = "",
-                              bool flip_h = false, bool flip_v = false);
+                              const std::string& snapshot_url = "", bool flip_h = false,
+                              bool flip_v = false);
 
     /**
      * @brief Set timelapse plugin availability (async update)
@@ -204,6 +204,15 @@ class PrinterCapabilitiesState {
         return const_cast<lv_subject_t*>(&printer_has_speaker_);
     }
 
+    /**
+     * @brief Set speaker availability from local sound backend detection.
+     *
+     * Called after SoundManager initializes to ensure sound settings are visible
+     * even before hardware discovery completes (or when Klipper is not connected).
+     * set_hardware() may later update this based on full capability evaluation.
+     */
+    void set_sound_backend_available(bool available);
+
     /// 1 if moonraker-timelapse plugin is installed
     lv_subject_t* get_printer_has_timelapse_subject() const {
         return const_cast<lv_subject_t*>(&printer_has_timelapse_);
@@ -250,14 +259,22 @@ class PrinterCapabilitiesState {
     }
 
     /// MJPEG stream URL of first enabled webcam (empty if none)
-    const std::string& get_webcam_stream_url() const { return webcam_stream_url_; }
+    const std::string& get_webcam_stream_url() const {
+        return webcam_stream_url_;
+    }
 
     /// Snapshot URL of first enabled webcam (empty if none)
-    const std::string& get_webcam_snapshot_url() const { return webcam_snapshot_url_; }
+    const std::string& get_webcam_snapshot_url() const {
+        return webcam_snapshot_url_;
+    }
 
     /// Webcam flip flags from Moonraker config
-    bool get_webcam_flip_horizontal() const { return webcam_flip_h_; }
-    bool get_webcam_flip_vertical() const { return webcam_flip_v_; }
+    bool get_webcam_flip_horizontal() const {
+        return webcam_flip_h_;
+    }
+    bool get_webcam_flip_vertical() const {
+        return webcam_flip_v_;
+    }
 
     /// 1 if printer has controllable fans beyond part cooling (generic fans, exhaust, etc.)
     lv_subject_t* get_printer_has_extra_fans_subject() const {
@@ -319,13 +336,13 @@ class PrinterCapabilitiesState {
     lv_subject_t printer_has_chamber_{};             // combined: sensor OR heater
     lv_subject_t printer_has_screws_tilt_{};         // screws_tilt_adjust
     lv_subject_t printer_has_webcam_{};              // enabled webcam configured
-    std::string webcam_stream_url_;                   // MJPEG stream URL
-    std::string webcam_snapshot_url_;                  // snapshot URL
-    bool webcam_flip_h_ = false;                      // flip horizontal
-    bool webcam_flip_v_ = false;                      // flip vertical
+    std::string webcam_stream_url_;                  // MJPEG stream URL
+    std::string webcam_snapshot_url_;                // snapshot URL
+    bool webcam_flip_h_ = false;                     // flip horizontal
+    bool webcam_flip_v_ = false;                     // flip vertical
     lv_subject_t printer_has_extra_fans_{};          // extra controllable fans beyond part cooling
     lv_subject_t power_device_count_{};              // number of power devices (0 = none)
-    lv_subject_t sensor_count_{};                   // number of Moonraker sensors (0 = none)
+    lv_subject_t sensor_count_{};                    // number of Moonraker sensors (0 = none)
 };
 
 } // namespace helix
