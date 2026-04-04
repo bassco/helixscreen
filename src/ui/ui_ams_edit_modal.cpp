@@ -18,12 +18,13 @@
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
 #endif
-#include "moonraker_api.h"
 #include "ui_overlay_qr_scanner.h"
+#include "ui_toast_manager.h"
+
+#include "moonraker_api.h"
 #include "spoolman_slot_saver.h"
 #include "spoolman_types.h"
 #include "tool_state.h"
-#include "ui_toast_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -157,10 +158,10 @@ bool AmsEditModal::show_for_slot(lv_obj_t* parent, int slot_index, const SlotInf
                 std::string fetched_vendor = spool->vendor;
                 std::string fetched_material = spool->material;
                 std::string fetched_color_hex = spool->color_hex;
-                lifetime_.defer([this, spool_id, fetched_filament_id,
-                                         fetched_vendor_id, fetched_vendor = std::move(fetched_vendor),
-                                         fetched_material = std::move(fetched_material),
-                                         fetched_color_hex = std::move(fetched_color_hex)]() {
+                token.defer([this, spool_id, fetched_filament_id, fetched_vendor_id,
+                             fetched_vendor = std::move(fetched_vendor),
+                             fetched_material = std::move(fetched_material),
+                             fetched_color_hex = std::move(fetched_color_hex)]() {
                     if (fetched_filament_id > 0) {
                         original_info_.spoolman_filament_id = fetched_filament_id;
                         working_info_.spoolman_filament_id = fetched_filament_id;
@@ -267,7 +268,6 @@ void AmsEditModal::on_show() {
 
     // Set initial Spoolman button state
     update_spoolman_button_state();
-
 }
 
 void AmsEditModal::on_hide() {
@@ -391,7 +391,8 @@ void AmsEditModal::fetch_vendors_from_spoolman() {
     // Use dedicated vendor endpoint instead of downloading all spools
     api_->spoolman().get_spoolman_vendors(
         [this, token](const std::vector<VendorInfo>& vendors_result) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             // Build vendor list on background thread, then marshal to main
             std::set<std::string> unique_vendors;
             unique_vendors.insert("Generic"); // Always have Generic as first option
@@ -425,15 +426,15 @@ void AmsEditModal::fetch_vendors_from_spoolman() {
             }
 
             // Marshal member writes to main thread
-            lifetime_.defer([this, vendors = std::move(vendors),
-                                     options = std::move(options)]() mutable {
-                vendor_list_ = std::move(vendors);
-                vendor_options_ = std::move(options);
-                vendors_loaded_ = true;
-                spdlog::debug("[AmsEditModal] Loaded {} vendors from Spoolman",
-                              vendor_list_.size());
-                update_vendor_dropdown();
-            });
+            token.defer(
+                [this, vendors = std::move(vendors), options = std::move(options)]() mutable {
+                    vendor_list_ = std::move(vendors);
+                    vendor_options_ = std::move(options);
+                    vendors_loaded_ = true;
+                    spdlog::debug("[AmsEditModal] Loaded {} vendors from Spoolman",
+                                  vendor_list_.size());
+                    update_vendor_dropdown();
+                });
         },
         [](const MoonrakerError& err) {
             spdlog::warn("[AmsEditModal] Failed to fetch Spoolman vendors: {}", err.message);
@@ -471,7 +472,8 @@ void AmsEditModal::update_vendor_dropdown() {
             break;
         }
     }
-    if (vendor_idx < 0) vendor_idx = generic_idx;
+    if (vendor_idx < 0)
+        vendor_idx = generic_idx;
     lv_dropdown_set_selected(vendor_dropdown, vendor_idx);
 }
 
@@ -525,16 +527,17 @@ void AmsEditModal::populate_picker() {
 
     api_->spoolman().get_spoolman_spools(
         [this, token](const std::vector<SpoolInfo>& spools) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::debug("[AmsEditModal] Spoolman returned {} spools", spools.size());
-            lifetime_.defer([this, spools]() {
+            token.defer([this, spools]() {
                 if (!dialog_) {
                     spdlog::warn("[AmsEditModal] populate_picker callback dropped: dialog_ null");
                     return;
                 }
                 if (!subjects_initialized_) {
-                    spdlog::warn(
-                        "[AmsEditModal] populate_picker callback dropped: subjects not initialized");
+                    spdlog::warn("[AmsEditModal] populate_picker callback dropped: subjects not "
+                                 "initialized");
                     return;
                 }
 
@@ -550,12 +553,11 @@ void AmsEditModal::populate_picker() {
         },
         [this, token](const MoonrakerError& err) {
             spdlog::warn("[AmsEditModal] Spoolman fetch error: {}", err.message);
-            lifetime_.defer([this, msg = err.message]() {
+            token.defer([this, msg = err.message]() {
                 if (!dialog_ || !subjects_initialized_) {
                     spdlog::warn("[AmsEditModal] Error callback dropped: dialog_={}, "
                                  "subjects={}",
-                                 static_cast<void*>(dialog_),
-                                 subjects_initialized_);
+                                 static_cast<void*>(dialog_), subjects_initialized_);
                     return;
                 }
                 spdlog::warn("[AmsEditModal] Failed to fetch spools: {}", msg);
@@ -751,7 +753,7 @@ void AmsEditModal::handle_spool_details() {
                 if (token.expired() || !spool.has_value()) {
                     return;
                 }
-                lifetime_.defer([this, spool = *spool]() {
+                token.defer([this, spool = *spool]() {
                     // Update working_info_ from refreshed spool data
                     working_info_.brand = spool.vendor;
                     working_info_.material = spool.material;
@@ -765,15 +767,14 @@ void AmsEditModal::handle_spool_details() {
                     if (spool.remaining_weight_g > 0 && spool.initial_weight_g > 0) {
                         working_info_.remaining_weight_g =
                             static_cast<float>(spool.remaining_weight_g);
-                        working_info_.total_weight_g =
-                            static_cast<float>(spool.initial_weight_g);
+                        working_info_.total_weight_g = static_cast<float>(spool.initial_weight_g);
                     }
                     update_ui();
                 });
             },
             [spool_id](const MoonrakerError& err) {
-                spdlog::warn("[AmsEditModal] Failed to refresh spool {} after edit: {}",
-                             spool_id, err.message);
+                spdlog::warn("[AmsEditModal] Failed to refresh spool {} after edit: {}", spool_id,
+                             err.message);
             });
     });
 
@@ -787,60 +788,58 @@ void AmsEditModal::handle_scan_qr() {
     int slot = slot_index_;
     auto* api = api_ ? api_ : get_moonraker_api();
     auto& scanner = helix::ui::get_qr_scanner_overlay();
-    scanner.show(lv_obj_get_screen(dialog()), slot,
-        [slot, api](const SpoolInfo& spool) {
-            // QR scan result: apply spool data directly.
-            // The modal and QR overlay are both closing, so we can't populate
-            // the form — instead save the data immediately.
-            SlotInfo info;
-            info.slot_index = slot;
-            info.global_index = slot;
-            info.spoolman_id = spool.id;
-            info.spoolman_filament_id = spool.filament_id;
-            info.spoolman_vendor_id = spool.vendor_id;
-            info.color_name = spool.color_name;
-            info.material = spool.material;
-            info.brand = spool.vendor;
-            info.spool_name = spool.vendor + " " + spool.material;
-            info.remaining_weight_g = static_cast<float>(spool.remaining_weight_g);
-            info.total_weight_g = static_cast<float>(spool.initial_weight_g);
-            info.nozzle_temp_min = spool.nozzle_temp_min;
-            info.nozzle_temp_max = spool.nozzle_temp_max;
-            info.bed_temp = spool.bed_temp_recommended;
-            if (!spool.color_hex.empty()) {
-                uint32_t rgb = 0;
-                if (helix::parse_hex_color(spool.color_hex.c_str(), rgb)) {
-                    info.color_rgb = rgb;
+    scanner.show(lv_obj_get_screen(dialog()), slot, [slot, api](const SpoolInfo& spool) {
+        // QR scan result: apply spool data directly.
+        // The modal and QR overlay are both closing, so we can't populate
+        // the form — instead save the data immediately.
+        SlotInfo info;
+        info.slot_index = slot;
+        info.global_index = slot;
+        info.spoolman_id = spool.id;
+        info.spoolman_filament_id = spool.filament_id;
+        info.spoolman_vendor_id = spool.vendor_id;
+        info.color_name = spool.color_name;
+        info.material = spool.material;
+        info.brand = spool.vendor;
+        info.spool_name = spool.vendor + " " + spool.material;
+        info.remaining_weight_g = static_cast<float>(spool.remaining_weight_g);
+        info.total_weight_g = static_cast<float>(spool.initial_weight_g);
+        info.nozzle_temp_min = spool.nozzle_temp_min;
+        info.nozzle_temp_max = spool.nozzle_temp_max;
+        info.bed_temp = spool.bed_temp_recommended;
+        if (!spool.color_hex.empty()) {
+            uint32_t rgb = 0;
+            if (helix::parse_hex_color(spool.color_hex.c_str(), rgb)) {
+                info.color_rgb = rgb;
+            }
+        }
+
+        if (slot == -2) {
+            // External spool
+            AmsState::instance().set_external_spool_info(info);
+            spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to external spool", spool.id);
+        } else {
+            // AMS slot
+            AmsBackend* be = AmsState::instance().get_backend();
+            if (be) {
+                AmsError err = be->set_slot_info(slot, info);
+                if (err.success()) {
+                    AmsState::instance().sync_from_backend();
+                    spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to slot {}", spool.id,
+                                 slot);
+                } else {
+                    spdlog::error("[AmsEditModal] QR scan save failed: {}", err.user_msg);
                 }
             }
+        }
 
-            if (slot == -2) {
-                // External spool
-                AmsState::instance().set_external_spool_info(info);
-                spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to external spool",
-                             spool.id);
-            } else {
-                // AMS slot
-                AmsBackend* be = AmsState::instance().get_backend();
-                if (be) {
-                    AmsError err = be->set_slot_info(slot, info);
-                    if (err.success()) {
-                        AmsState::instance().sync_from_backend();
-                        spdlog::info("[AmsEditModal] QR scan auto-saved spool #{} to slot {}",
-                                     spool.id, slot);
-                    } else {
-                        spdlog::error("[AmsEditModal] QR scan save failed: {}", err.user_msg);
-                    }
-                }
-            }
+        // Set active spool in Spoolman
+        if (api && spool.id > 0) {
+            api->spoolman().set_active_spool(spool.id, nullptr, nullptr);
+        }
 
-            // Set active spool in Spoolman
-            if (api && spool.id > 0) {
-                api->spoolman().set_active_spool(spool.id, nullptr, nullptr);
-            }
-
-            NOTIFY_INFO("{} {} assigned via QR scan", spool.vendor, spool.material);
-        });
+        NOTIFY_INFO("{} {} assigned via QR scan", spool.vendor, spool.material);
+    });
 
     // Close the modal — the QR scanner will handle everything
     hide();
@@ -879,12 +878,10 @@ void AmsEditModal::handle_print_label() {
     // Use the standard print flow (handles all printer types including IPP modal)
     auto print_cb = [](bool success, const std::string& error) {
         if (success) {
-            ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                          lv_tr("Label printed"), 2000);
+            ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
         } else {
             spdlog::error("[AmsEditModal] Print failed: {}", error);
-            ToastManager::instance().show(ToastSeverity::ERROR,
-                                          lv_tr("Print failed"), 3000);
+            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
         }
     };
 
@@ -953,8 +950,10 @@ void AmsEditModal::update_spoolman_button_state() {
     if (btn_print) {
         bool show = working_info_.spoolman_id > 0 &&
                     helix::LabelPrinterSettingsManager::instance().is_configured();
-        if (show) lv_obj_remove_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
-        else      lv_obj_add_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
+        if (show)
+            lv_obj_remove_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
     }
 #endif
 }
@@ -1317,8 +1316,8 @@ void AmsEditModal::handle_vendor_changed(int index) {
     if (index >= 0 && index < static_cast<int>(vendor_list_.size())) {
         working_info_.brand = vendor_list_[index].name;
         working_info_.spoolman_vendor_id = vendor_list_[index].id;
-        spdlog::debug("[AmsEditModal] Vendor changed to: {} (vendor_id={})",
-                      working_info_.brand, working_info_.spoolman_vendor_id);
+        spdlog::debug("[AmsEditModal] Vendor changed to: {} (vendor_id={})", working_info_.brand,
+                      working_info_.spoolman_vendor_id);
         update_sync_button_state();
     }
 }
@@ -1482,8 +1481,8 @@ void AmsEditModal::handle_tool_changed(int index) {
     // No "None" — index 0 = T0, index 1 = T1, etc.
     working_info_.mapped_tool = index;
     working_info_.tool_mapping_override = (index != original_info_.mapped_tool);
-    spdlog::debug("[AmsEditModal] Tool changed to: T{} (override={})",
-                  index, working_info_.tool_mapping_override);
+    spdlog::debug("[AmsEditModal] Tool changed to: T{} (override={})", index,
+                  working_info_.tool_mapping_override);
     update_sync_button_state();
 }
 
@@ -1510,14 +1509,14 @@ void AmsEditModal::handle_save() {
         api_->spoolman().set_active_spool(
             0,
             [this, token]() {
-                if (token.expired()) return;
-                lifetime_.defer([this]() {
-                    fire_completion(true);
-                });
+                if (token.expired())
+                    return;
+                token.defer([this]() { fire_completion(true); });
             },
             [this, token](const MoonrakerError& err) {
-                if (token.expired()) return;
-                lifetime_.defer([this, err]() {
+                if (token.expired())
+                    return;
+                token.defer([this, err]() {
                     spdlog::warn("[AmsEditModal] Failed to clear active spool: {}", err.message);
                     fire_completion(true); // Still save locally
                 });
@@ -1537,12 +1536,12 @@ void AmsEditModal::handle_save() {
                 }
                 // Spoolman callback arrives on a background thread — defer
                 // to the UI thread before touching LVGL subjects/widgets.
-                lifetime_.defer([this, success]() {
+                token.defer([this, success]() {
                     if (!success) {
                         spdlog::error("[AmsEditModal] Spoolman save failed, saving locally");
-                        ToastManager::instance().show(
-                            ToastSeverity::ERROR,
-                            lv_tr("Failed to save changes to Spoolman"), 3000);
+                        ToastManager::instance().show(ToastSeverity::ERROR,
+                                                      lv_tr("Failed to save changes to Spoolman"),
+                                                      3000);
                     }
                     fire_completion(true);
                 });

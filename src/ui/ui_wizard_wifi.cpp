@@ -493,7 +493,8 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
             auto token = lifetime_.token();
 
             spdlog::debug("[{}] Starting network scan", get_name());
-            wifi_manager_->start_scan([this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
+            wifi_manager_->start_scan([this, token,
+                                       weak_mgr](const std::vector<WiFiNetwork>& networks) {
                 if (token.expired()) {
                     spdlog::debug("[{}] Lifetime expired, ignoring stale scan callback",
                                   get_name());
@@ -502,18 +503,16 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
 
                 // Check if manager still exists
                 if (weak_mgr.expired()) {
-                    spdlog::trace("[{}] WiFiManager destroyed, ignoring callback",
-                                  get_name());
+                    spdlog::trace("[{}] WiFiManager destroyed, ignoring callback", get_name());
                     return;
                 }
 
-                spdlog::info("[{}] Scan callback with {} networks", get_name(),
-                             networks.size());
+                spdlog::info("[{}] Scan callback with {} networks", get_name(), networks.size());
 
                 cached_networks_ = networks;
-                // Marshal to UI thread via lifetime_.defer() — automatic lifetime
+                // Marshal to UI thread via token.defer() — TOCTOU-safe lifetime
                 // guard + UI thread safety
-                lifetime_.defer([this]() {
+                token.defer([this]() {
                     lv_subject_set_int(&wifi_scanning_, 0);
                     populate_network_list(cached_networks_);
                 });
@@ -573,7 +572,7 @@ void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
                                       get_name());
                         return;
                     }
-                    lifetime_.defer([this, success, error]() {
+                    token.defer([this, success, error]() {
                         if (success) {
                             char msg[128];
                             snprintf(msg, sizeof(msg), "%s%s", get_status_text("connected"),
@@ -587,10 +586,12 @@ void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
                             spdlog::info("[{}] Connected to {}", get_name(), current_ssid_);
                         } else {
                             char msg[128];
-                            snprintf(msg, sizeof(msg), lv_tr("Failed to connect: %s"), error.c_str());
+                            snprintf(msg, sizeof(msg), lv_tr("Failed to connect: %s"),
+                                     error.c_str());
                             update_wifi_status(msg);
                             update_wifi_ip(""); // Clear IP on failure
-                            NOTIFY_ERROR(lv_tr("Failed to connect to '{}': {}"), current_ssid_, error);
+                            NOTIFY_ERROR(lv_tr("Failed to connect to '{}': {}"), current_ssid_,
+                                         error);
                         }
                     });
                 });
@@ -656,12 +657,11 @@ void WizardWifiStep::handle_modal_connect_clicked() {
         wifi_manager_->connect(
             current_ssid_, password, [this, token](bool success, const std::string& error) {
                 if (token.expired()) {
-                    spdlog::debug("[{}] Lifetime expired, ignoring connect callback",
-                                  get_name());
+                    spdlog::debug("[{}] Lifetime expired, ignoring connect callback", get_name());
                     return;
                 }
 
-                lifetime_.defer([this, success, error]() {
+                token.defer([this, success, error]() {
                     lv_subject_set_int(&wifi_connecting_, 0);
 
                     lv_obj_t* connect_btn =
@@ -849,15 +849,14 @@ void WizardWifiStep::init_wifi_manager() {
             auto token = lifetime_.token();
             wifi_manager_->start_scan([this, token](const std::vector<WiFiNetwork>& networks) {
                 if (token.expired()) {
-                    spdlog::debug("[{}] Lifetime expired, ignoring init scan callback",
-                                  get_name());
+                    spdlog::debug("[{}] Lifetime expired, ignoring init scan callback", get_name());
                     return;
                 }
 
                 cached_networks_ = networks;
-                // Marshal to UI thread via lifetime_.defer() — automatic lifetime
+                // Marshal to UI thread via token.defer() — TOCTOU-safe lifetime
                 // guard + UI thread safety
-                lifetime_.defer([this]() {
+                token.defer([this]() {
                     lv_subject_set_int(&wifi_scanning_, 0);
                     if (!cached_networks_.empty()) {
                         populate_network_list(cached_networks_);

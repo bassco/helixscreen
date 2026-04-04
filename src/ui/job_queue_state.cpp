@@ -34,7 +34,8 @@ JobQueueState::~JobQueueState() {
 }
 
 void JobQueueState::init_subjects() {
-    if (subjects_initialized_) return;
+    if (subjects_initialized_)
+        return;
 
     lv_subject_init_int(&job_queue_count_subject_, 0);
     lv_xml_register_subject(nullptr, "job_queue_count", &job_queue_count_subject_);
@@ -67,7 +68,8 @@ void JobQueueState::init_subjects() {
 }
 
 void JobQueueState::deinit_subjects() {
-    if (!subjects_initialized_) return;
+    if (!subjects_initialized_)
+        return;
 
     lv_subject_deinit(&job_queue_summary_subject_);
     lv_subject_deinit(&job_queue_state_subject_);
@@ -78,18 +80,21 @@ void JobQueueState::deinit_subjects() {
 }
 
 void JobQueueState::fetch() {
-    if (is_fetching_ || !api_) return;
+    if (is_fetching_ || !api_)
+        return;
     is_fetching_ = true;
 
     auto token = lifetime_.token();
     api_->queue().get_queue_status(
         [this, token](const JobQueueStatus& status) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             on_queue_fetched(status);
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
-            lifetime_.defer("JobQueueState::fetch_error", [this, msg = err.message]() {
+            if (token.expired())
+                return;
+            token.defer("JobQueueState::fetch_error", [this, msg = err.message]() {
                 is_fetching_ = false;
                 spdlog::warn("[JobQueueState] Fetch failed: {}", msg);
             });
@@ -113,7 +118,8 @@ void JobQueueState::on_queue_fetched(const JobQueueStatus& status) {
 }
 
 void JobQueueState::update_subjects() {
-    if (!subjects_initialized_) return;
+    if (!subjects_initialized_)
+        return;
 
     int count = static_cast<int>(cached_jobs_.size());
     lv_subject_set_int(&job_queue_count_subject_, count);
@@ -121,7 +127,8 @@ void JobQueueState::update_subjects() {
     // State text: capitalize first letter for display
     std::string state_display = queue_state_;
     if (!state_display.empty()) {
-        state_display[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(state_display[0])));
+        state_display[0] =
+            static_cast<char>(std::toupper(static_cast<unsigned char>(state_display[0])));
     }
     std::snprintf(state_buffer_, sizeof(state_buffer_), "%s", state_display.c_str());
     lv_subject_copy_string(&job_queue_state_subject_, state_buffer_);
@@ -138,15 +145,17 @@ void JobQueueState::update_subjects() {
 }
 
 void JobQueueState::subscribe_to_notifications() {
-    if (!client_) return;
+    if (!client_)
+        return;
 
     auto token = lifetime_.token();
-    client_->register_method_callback(
-        "notify_job_queue_changed", "JobQueueState", [this, token](const nlohmann::json& /*data*/) {
-            if (token.expired()) return;
-            // Re-fetch full queue status on any change notification
-            fetch();
-        });
+    client_->register_method_callback("notify_job_queue_changed", "JobQueueState",
+                                      [this, token](const nlohmann::json& /*data*/) {
+                                          if (token.expired())
+                                              return;
+                                          // Re-fetch full queue status on any change notification
+                                          fetch();
+                                      });
 
     spdlog::debug("[JobQueueState] Subscribed to notify_job_queue_changed");
 }

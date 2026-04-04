@@ -3,19 +3,20 @@
 
 #include "ui_overlay_timelapse_videos.h"
 
+#include "ui_callback_helpers.h"
+#include "ui_format_utils.h"
+#include "ui_gradient_canvas.h"
+#include "ui_modal.h"
+#include "ui_nav_manager.h"
+#include "ui_update_queue.h"
+
 #include "helix-xml/src/xml/lv_xml.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
-#include "ui_gradient_canvas.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_processor.h"
 #include "timelapse_state.h"
 #include "timelapse_thumbnailer.h"
-#include "ui_callback_helpers.h"
-#include "ui_format_utils.h"
-#include "ui_modal.h"
-#include "ui_nav_manager.h"
-#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -43,7 +44,8 @@ static lv_obj_t* g_timelapse_videos_panel = nullptr;
 
 TimelapseVideosOverlay& get_global_timelapse_videos() {
     if (!g_timelapse_videos) {
-        spdlog::error("[Timelapse Videos] get_global_timelapse_videos() called before initialization!");
+        spdlog::error(
+            "[Timelapse Videos] get_global_timelapse_videos() called before initialization!");
         throw std::runtime_error("TimelapseVideosOverlay not initialized");
     }
     return *g_timelapse_videos;
@@ -97,8 +99,7 @@ void open_timelapse_videos() {
 // CONSTRUCTOR
 // ============================================================================
 
-TimelapseVideosOverlay::TimelapseVideosOverlay(MoonrakerAPI* api)
-    : api_(api) {
+TimelapseVideosOverlay::TimelapseVideosOverlay(MoonrakerAPI* api) : api_(api) {
     spdlog::debug("[{}] Constructor", get_name());
 }
 
@@ -146,11 +147,10 @@ void TimelapseVideosOverlay::on_activate() {
     auto tok = lifetime_.token();
     helix::TimelapseState::instance().set_on_render_complete(
         [this, tok](const std::string& filename) {
-            if (tok.expired()) return;
+            if (tok.expired())
+                return;
             spdlog::info("[Timelapse Videos] Render complete for '{}', refreshing list", filename);
-            lifetime_.defer([this]() {
-                fetch_video_list();
-            });
+            tok.defer([this]() { fetch_video_list(); });
         });
 }
 
@@ -177,8 +177,8 @@ void TimelapseVideosOverlay::cleanup() {
 
 void TimelapseVideosOverlay::ensure_gradient_cache(int32_t card_width, int32_t card_height) {
     bool dark = theme_manager_is_dark_mode();
-    if (cached_gradient_ && cached_gradient_w_ == card_width &&
-        cached_gradient_h_ == card_height && cached_gradient_dark_ == dark) {
+    if (cached_gradient_ && cached_gradient_w_ == card_width && cached_gradient_h_ == card_height &&
+        cached_gradient_dark_ == dark) {
         return;
     }
     if (cached_gradient_) {
@@ -195,12 +195,14 @@ void TimelapseVideosOverlay::ensure_gradient_cache(int32_t card_width, int32_t c
 // ============================================================================
 
 void TimelapseVideosOverlay::fetch_frame_info() {
-    if (!api_) return;
+    if (!api_)
+        return;
 
     auto tok = lifetime_.token();
     api_->timelapse().get_last_frame_info(
         [tok](const LastFrameInfo& info) {
-            if (tok.expired()) return;
+            if (tok.expired())
+                return;
             helix::ui::queue_update([info]() {
                 auto& tl = helix::TimelapseState::instance();
                 lv_subject_set_int(tl.get_frame_count_subject(), info.frame_count);
@@ -223,10 +225,9 @@ void TimelapseVideosOverlay::fetch_video_list() {
     api_->files().list_files(
         "timelapse", "", false,
         [this, tok](const std::vector<FileInfo>& files) {
-            if (tok.expired()) return;
-            lifetime_.defer([this, files]() {
-                populate_video_grid(files);
-            });
+            if (tok.expired())
+                return;
+            tok.defer([this, files]() { populate_video_grid(files); });
         },
         [](const MoonrakerError& error) {
             spdlog::error("[Timelapse Videos] Failed to fetch video list: {}", error.message);
@@ -274,16 +275,14 @@ TimelapseCardDimensions TimelapseVideosOverlay::calculate_card_dimensions() {
     }
 
     // Grid container top padding
-    lv_coord_t grid_pad_top =
-        lv_obj_get_style_pad_top(video_grid_container_, LV_PART_MAIN);
+    lv_coord_t grid_pad_top = lv_obj_get_style_pad_top(video_grid_container_, LV_PART_MAIN);
 
     // Content row gap (between render section and grid)
     lv_coord_t content_gap = content ? lv_obj_get_style_pad_row(content, LV_PART_MAIN) : 0;
 
     // Available height for video grid
     lv_coord_t available_height = overlay_height - header_height - content_pad_top -
-                                  content_pad_bottom - render_height -
-                                  grid_pad_top - content_gap;
+                                  content_pad_bottom - render_height - grid_pad_top - content_gap;
 
     // Card gap from grid container
     int card_gap = lv_obj_get_style_pad_row(video_grid_container_, LV_PART_MAIN);
@@ -300,8 +299,7 @@ TimelapseCardDimensions TimelapseVideosOverlay::calculate_card_dimensions() {
     spdlog::debug("[{}] Height calc: overlay={} - header={} - content_pad({}+{}) - "
                   "render={} - grid_pad={} - gap={} = available={}, card_height={}",
                   get_name(), overlay_height, header_height, content_pad_top, content_pad_bottom,
-                  render_height, grid_pad_top, content_gap, available_height,
-                  dims.card_height);
+                  render_height, grid_pad_top, content_gap, available_height, dims.card_height);
 
     // Calculate card width: try column counts from 10 down to 1
     lv_coord_t container_width = lv_obj_get_content_width(video_grid_container_);
@@ -370,7 +368,8 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
         lv_obj_add_flag(video_grid_empty_, LV_OBJ_FLAG_HIDDEN);
     }
 
-    if (!video_grid_container_) return;
+    if (!video_grid_container_)
+        return;
 
     // Calculate responsive card dimensions to fit 2 rows on screen
     lv_obj_update_layout(overlay_root_);
@@ -386,9 +385,8 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
     thumb_lifetime_.invalidate();
 
     for (const auto& video : videos_) {
-        const char* attrs[] = {"filename",  video.filename.c_str(),
-                               "file_info", video.file_info.c_str(),
-                               nullptr};
+        const char* attrs[] = {"filename", video.filename.c_str(), "file_info",
+                               video.file_info.c_str(), nullptr};
 
         lv_obj_t* card = static_cast<lv_obj_t*>(
             lv_xml_create(video_grid_container_, "timelapse_video_card", attrs));
@@ -411,8 +409,7 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
         }
 
         // Store filename in user_data for click handler (heap-allocated copy)
-        char* filename_copy =
-            static_cast<char*>(lv_malloc(video.filename.size() + 1));
+        char* filename_copy = static_cast<char*>(lv_malloc(video.filename.size() + 1));
         std::memcpy(filename_copy, video.filename.c_str(), video.filename.size() + 1);
         lv_obj_set_user_data(card, filename_copy);
 
@@ -437,10 +434,8 @@ void TimelapseVideosOverlay::populate_video_grid(const std::vector<FileInfo>& fi
     }
 }
 
-void TimelapseVideosOverlay::load_thumbnail_for_card(
-    lv_obj_t* card, const std::string& filename,
-    const std::set<std::string>& available_files) {
-
+void TimelapseVideosOverlay::load_thumbnail_for_card(lv_obj_t* card, const std::string& filename,
+                                                     const std::set<std::string>& available_files) {
     lv_obj_t* thumbnail = lv_obj_find_by_name(card, "thumbnail");
     lv_obj_t* no_thumb_icon = lv_obj_find_by_name(card, "no_thumbnail_icon");
 
@@ -451,8 +446,7 @@ void TimelapseVideosOverlay::load_thumbnail_for_card(
     // Check if companion thumbnail file exists in the timelapse directory listing
     if (available_files.find(companion) == available_files.end()) {
         // No companion thumbnail available -- show placeholder
-        spdlog::debug("[{}] No companion thumbnail '{}' for '{}'", get_name(), companion,
-                      filename);
+        spdlog::debug("[{}] No companion thumbnail '{}' for '{}'", get_name(), companion, filename);
         if (no_thumb_icon) {
             lv_obj_remove_flag(no_thumb_icon, LV_OBJ_FLAG_HIDDEN);
         }
@@ -516,9 +510,10 @@ void TimelapseVideosOverlay::load_thumbnail_for_card(
 
     api_->transfers().download_file_to_path(
         "timelapse", companion, dest_path,
-        [this, tok, thumb_tok, dest_path, cache_key, target, filename_copy](
-            const std::string& /*path*/) {
-            if (tok.expired() || thumb_tok.expired()) return;
+        [this, tok, thumb_tok, dest_path, cache_key, target,
+         filename_copy](const std::string& /*path*/) {
+            if (tok.expired() || thumb_tok.expired())
+                return;
 
             // Read the downloaded file into memory for ThumbnailProcessor
             FILE* f = fopen(dest_path.c_str(), "rb");
@@ -543,43 +538,43 @@ void TimelapseVideosOverlay::load_thumbnail_for_card(
             fclose(f);
             unlink(dest_path.c_str());
 
-            if (read != data.size()) return;
+            if (read != data.size())
+                return;
 
             // Pre-scale via ThumbnailProcessor (runs on worker thread)
             helix::ThumbnailProcessor::instance().process_async(
                 data, cache_key, target,
                 [this, tok, thumb_tok, filename_copy](const std::string& lvbin_path) {
-                    if (tok.expired() || thumb_tok.expired()) return;
+                    if (tok.expired() || thumb_tok.expired())
+                        return;
 
-                    thumb_lifetime_.defer(
-                        [this, filename_copy, lvbin_path]() {
-                            if (!video_grid_container_) return;
+                    thumb_tok.defer([this, filename_copy, lvbin_path]() {
+                        if (!video_grid_container_)
+                            return;
 
-                            // Find the card for this filename by scanning children
-                            uint32_t count = lv_obj_get_child_count(video_grid_container_);
-                            for (uint32_t i = 0; i < count; i++) {
-                                lv_obj_t* child = lv_obj_get_child(video_grid_container_,
-                                                                    static_cast<int32_t>(i));
-                                auto* stored_name =
-                                    static_cast<const char*>(lv_obj_get_user_data(child));
-                                if (stored_name && filename_copy == stored_name) {
-                                    lv_obj_t* thumb = lv_obj_find_by_name(child, "thumbnail");
-                                    lv_obj_t* icon =
-                                        lv_obj_find_by_name(child, "no_thumbnail_icon");
-                                    if (thumb) {
-                                        lv_image_set_src(thumb, lvbin_path.c_str());
-                                        lv_obj_remove_flag(thumb, LV_OBJ_FLAG_HIDDEN);
-                                    }
-                                    if (icon) {
-                                        lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
-                                    }
-                                    spdlog::debug(
-                                        "[Timelapse Videos] Thumbnail loaded for '{}'",
-                                        filename_copy);
-                                    break;
+                        // Find the card for this filename by scanning children
+                        uint32_t count = lv_obj_get_child_count(video_grid_container_);
+                        for (uint32_t i = 0; i < count; i++) {
+                            lv_obj_t* child =
+                                lv_obj_get_child(video_grid_container_, static_cast<int32_t>(i));
+                            auto* stored_name =
+                                static_cast<const char*>(lv_obj_get_user_data(child));
+                            if (stored_name && filename_copy == stored_name) {
+                                lv_obj_t* thumb = lv_obj_find_by_name(child, "thumbnail");
+                                lv_obj_t* icon = lv_obj_find_by_name(child, "no_thumbnail_icon");
+                                if (thumb) {
+                                    lv_image_set_src(thumb, lvbin_path.c_str());
+                                    lv_obj_remove_flag(thumb, LV_OBJ_FLAG_HIDDEN);
                                 }
+                                if (icon) {
+                                    lv_obj_add_flag(icon, LV_OBJ_FLAG_HIDDEN);
+                                }
+                                spdlog::debug("[Timelapse Videos] Thumbnail loaded for '{}'",
+                                              filename_copy);
+                                break;
                             }
-                        });
+                        }
+                    });
                 },
                 [filename_copy](const std::string& error) {
                     spdlog::warn("[Timelapse Videos] Failed to process thumbnail for '{}': {}",
@@ -673,7 +668,8 @@ void TimelapseVideosOverlay::detect_playback_capability() {
 /// Launch a child process via double-fork to prevent zombie processes.
 /// The grandchild is adopted by init so no waitpid is needed long-term.
 static void spawn_detached(const std::vector<std::string>& args) {
-    if (args.empty()) return;
+    if (args.empty())
+        return;
 
     pid_t pid = fork();
     if (pid < 0) {
@@ -683,13 +679,16 @@ static void spawn_detached(const std::vector<std::string>& args) {
     if (pid == 0) {
         // First child: fork again and exit immediately
         pid_t pid2 = fork();
-        if (pid2 < 0) _exit(127);
-        if (pid2 > 0) _exit(0);  // First child exits; grandchild continues
+        if (pid2 < 0)
+            _exit(127);
+        if (pid2 > 0)
+            _exit(0); // First child exits; grandchild continues
 
         // Grandchild: exec the player
         std::vector<const char*> argv;
         argv.reserve(args.size() + 1);
-        for (const auto& a : args) argv.push_back(a.c_str());
+        for (const auto& a : args)
+            argv.push_back(a.c_str());
         argv.push_back(nullptr);
         execvp(argv[0], const_cast<char* const*>(argv.data()));
         _exit(127);
@@ -714,7 +713,8 @@ void TimelapseVideosOverlay::play_video(const std::string& filename) {
         spawn_detached(args);
     } else {
         // Remote: download to /tmp then play
-        if (!api_) return;
+        if (!api_)
+            return;
 
         // Ensure temp directory exists
         mkdir("/tmp/helix_timelapse", 0755);
@@ -729,8 +729,9 @@ void TimelapseVideosOverlay::play_video(const std::string& filename) {
         api_->transfers().download_file_to_path(
             "timelapse", filename, dest_path,
             [this, tok, dest_path, player](const std::string& /*path*/) {
-                if (tok.expired()) return;
-                lifetime_.defer([this, dest_path, player]() {
+                if (tok.expired())
+                    return;
+                tok.defer([this, dest_path, player]() {
                     auto args = helix::timelapse::build_player_args(player, dest_path);
                     spdlog::info("[{}] Playing downloaded video: {} {}", get_name(), args[0],
                                  dest_path);
@@ -759,7 +760,8 @@ void TimelapseVideosOverlay::confirm_delete(const std::string& filename) {
 
 void TimelapseVideosOverlay::on_delete_confirmed(lv_event_t* e) {
     auto* self = static_cast<TimelapseVideosOverlay*>(lv_event_get_user_data(e));
-    if (!self || !g_timelapse_videos) return;
+    if (!self || !g_timelapse_videos)
+        return;
 
     // Hide the dialog
     if (self->delete_confirmation_dialog_) {
@@ -767,7 +769,8 @@ void TimelapseVideosOverlay::on_delete_confirmed(lv_event_t* e) {
         self->delete_confirmation_dialog_ = nullptr;
     }
 
-    if (!self->api_ || self->pending_delete_filename_.empty()) return;
+    if (!self->api_ || self->pending_delete_filename_.empty())
+        return;
 
     std::string full_path = "timelapse/" + self->pending_delete_filename_;
     auto tok = self->lifetime_.token();
@@ -777,8 +780,9 @@ void TimelapseVideosOverlay::on_delete_confirmed(lv_event_t* e) {
     self->api_->files().delete_file(
         full_path,
         [self, tok]() {
-            if (tok.expired()) return;
-            self->lifetime_.defer([self]() {
+            if (tok.expired())
+                return;
+            tok.defer([self]() {
                 spdlog::info("[Timelapse Videos] Video deleted, refreshing list");
                 self->fetch_video_list();
             });
@@ -792,7 +796,8 @@ void TimelapseVideosOverlay::on_delete_confirmed(lv_event_t* e) {
 
 void TimelapseVideosOverlay::on_delete_cancelled(lv_event_t* e) {
     auto* self = static_cast<TimelapseVideosOverlay*>(lv_event_get_user_data(e));
-    if (!self) return;
+    if (!self)
+        return;
 
     if (self->delete_confirmation_dialog_) {
         helix::ui::modal_hide(self->delete_confirmation_dialog_);
@@ -821,11 +826,13 @@ void TimelapseVideosOverlay::on_render_now(lv_event_t* /*e*/) {
 
 void TimelapseVideosOverlay::on_card_clicked(lv_event_t* e) {
     auto* self = static_cast<TimelapseVideosOverlay*>(lv_event_get_user_data(e));
-    if (!self) return;
+    if (!self)
+        return;
 
     lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* filename = static_cast<const char*>(lv_obj_get_user_data(target));
-    if (!filename) return;
+    if (!filename)
+        return;
 
     spdlog::debug("[Timelapse Videos] Card clicked: {}", filename);
 
@@ -836,11 +843,13 @@ void TimelapseVideosOverlay::on_card_clicked(lv_event_t* e) {
 
 void TimelapseVideosOverlay::on_card_long_pressed(lv_event_t* e) {
     auto* self = static_cast<TimelapseVideosOverlay*>(lv_event_get_user_data(e));
-    if (!self) return;
+    if (!self)
+        return;
 
     lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     auto* filename = static_cast<const char*>(lv_obj_get_user_data(target));
-    if (!filename) return;
+    if (!filename)
+        return;
 
     spdlog::debug("[Timelapse Videos] Card long-pressed: {}", filename);
     self->confirm_delete(filename);

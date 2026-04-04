@@ -122,18 +122,20 @@ void PowerPanel::fetch_devices() {
     auto token = lifetime_.token();
     api_->get_power_devices(
         [this, token](const std::vector<PowerDevice>& devices) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             // Marshal onto UI thread — API callbacks fire on a background thread.
             auto devices_copy = std::make_shared<std::vector<PowerDevice>>(devices);
-            lifetime_.defer("PowerPanel::list_power_devices", [this, devices_copy]() {
+            token.defer("PowerPanel::list_power_devices", [this, devices_copy]() {
                 spdlog::info("[{}] Received {} power devices", get_name(), devices_copy->size());
                 populate_device_list(*devices_copy);
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto msg = err.message;
-            lifetime_.defer("PowerPanel::fetch_error", [this, msg]() {
+            token.defer("PowerPanel::fetch_error", [this, msg]() {
                 spdlog::error("[{}] Failed to fetch power devices: {}", get_name(), msg);
                 std::snprintf(status_buf_, sizeof(status_buf_), "Failed to load devices");
                 lv_subject_copy_string(&status_subject_, status_buf_);
@@ -287,12 +289,13 @@ void PowerPanel::handle_device_toggle(const std::string& device, bool power_on) 
                           power_on ? "on" : "off");
         },
         [this, token, device](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto msg = err.message;
-            lifetime_.defer("PowerPanel::toggle_error", [this, device, msg]() {
+            token.defer("PowerPanel::toggle_error", [this, device, msg]() {
                 spdlog::error("[{}] Failed to toggle device '{}': {}", get_name(), device, msg);
-                std::snprintf(status_buf_, sizeof(status_buf_),
-                              "Failed to toggle %s", device.c_str());
+                std::snprintf(status_buf_, sizeof(status_buf_), "Failed to toggle %s",
+                              device.c_str());
                 lv_subject_copy_string(&status_subject_, status_buf_);
                 fetch_devices();
             });

@@ -223,55 +223,57 @@ void ExcludeObjectsListOverlay::start_thumbnail_render() {
             // Defer the widget tree rebuild to avoid lv_obj_clean() inside a
             // queue_update callback, which can corrupt LVGL's event linked list
             // during layout refresh (issue #555).
-            auto shared_result = std::shared_ptr<helix::gcode::ObjectThumbnailSet>(std::move(result));
-            lifetime_.defer(
-                "ExcludeObjectsListOverlay::thumbnails_ready",
-                [this, res = std::move(shared_result)]() {
-                    if (!is_visible())
-                        return;
+            // Use token.defer() (not lifetime_.defer()) — render_async callback
+            // runs on a worker thread, TOCTOU race (#707).
+            auto tok = lifetime_.token();
+            auto shared_result =
+                std::shared_ptr<helix::gcode::ObjectThumbnailSet>(std::move(result));
+            tok.defer("ExcludeObjectsListOverlay::thumbnails_ready", [this, res = std::move(
+                                                                                shared_result)]() {
+                if (!is_visible())
+                    return;
 
-                    spdlog::debug("[{}] Thumbnails ready: {} objects", get_name(),
-                                  res->thumbnails.size());
+                spdlog::debug("[{}] Thumbnails ready: {} objects", get_name(),
+                              res->thumbnails.size());
 
-                    // Clear list first to destroy lv_image widgets referencing old draw
-                    // buffers, then free the old buffers before creating new ones
-                    if (objects_list_) {
-                        lv_obj_clean(objects_list_);
+                // Clear list first to destroy lv_image widgets referencing old draw
+                // buffers, then free the old buffers before creating new ones
+                if (objects_list_) {
+                    lv_obj_clean(objects_list_);
+                }
+                for (auto& [name, buf] : object_thumbnails_) {
+                    if (buf) {
+                        lv_draw_buf_destroy(buf);
                     }
-                    for (auto& [name, buf] : object_thumbnails_) {
-                        if (buf) {
-                            lv_draw_buf_destroy(buf);
-                        }
+                }
+                object_thumbnails_.clear();
+
+                // Convert raw pixel buffers to LVGL draw buffers
+                for (auto& thumb : res->thumbnails) {
+                    if (!thumb.is_valid())
+                        continue;
+
+                    auto* buf = lv_draw_buf_create(thumb.width, thumb.height,
+                                                   LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
+                    if (!buf)
+                        continue;
+
+                    // Copy raw pixels into LVGL draw buffer
+                    const int lvgl_stride = buf->header.stride;
+                    for (int y = 0; y < thumb.height; ++y) {
+                        memcpy(buf->data + y * lvgl_stride, thumb.pixels.get() + y * thumb.stride,
+                               static_cast<size_t>(thumb.width) * 4);
                     }
-                    object_thumbnails_.clear();
+                    lv_draw_buf_invalidate_cache(buf, nullptr);
 
-                    // Convert raw pixel buffers to LVGL draw buffers
-                    for (auto& thumb : res->thumbnails) {
-                        if (!thumb.is_valid())
-                            continue;
+                    object_thumbnails_[thumb.object_name] = buf;
+                }
 
-                        auto* buf = lv_draw_buf_create(thumb.width, thumb.height,
-                                                       LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
-                        if (!buf)
-                            continue;
+                thumbnails_available_ = true;
 
-                        // Copy raw pixels into LVGL draw buffer
-                        const int lvgl_stride = buf->header.stride;
-                        for (int y = 0; y < thumb.height; ++y) {
-                            memcpy(buf->data + y * lvgl_stride,
-                                   thumb.pixels.get() + y * thumb.stride,
-                                   static_cast<size_t>(thumb.width) * 4);
-                        }
-                        lv_draw_buf_invalidate_cache(buf, nullptr);
-
-                        object_thumbnails_[thumb.object_name] = buf;
-                    }
-
-                    thumbnails_available_ = true;
-
-                    // Re-populate list to show thumbnails
-                    populate_list();
-                });
+                // Re-populate list to show thumbnails
+                populate_list();
+            });
         });
 }
 

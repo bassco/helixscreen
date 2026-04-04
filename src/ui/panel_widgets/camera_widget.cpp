@@ -6,18 +6,18 @@
 
 #if HELIX_HAS_CAMERA
 
-#include "camera_config_modal.h"
-#include "system/telemetry_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
 
 #include "app_globals.h"
+#include "camera_config_modal.h"
 #include "display_manager.h"
 #include "moonraker_api.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
+#include "system/telemetry_manager.h"
 #include "ui/ui_cleanup_helpers.h"
 
 #include <spdlog/spdlog.h>
@@ -73,8 +73,10 @@ void register_camera_widget() {
     lv_xml_register_event_cb(nullptr, "on_cam_rotate_90", CameraConfigModal::on_rotate_90);
     lv_xml_register_event_cb(nullptr, "on_cam_rotate_180", CameraConfigModal::on_rotate_180);
     lv_xml_register_event_cb(nullptr, "on_cam_rotate_270", CameraConfigModal::on_rotate_270);
-    lv_xml_register_event_cb(nullptr, "on_cam_flip_h_toggled", CameraConfigModal::on_flip_h_toggled);
-    lv_xml_register_event_cb(nullptr, "on_cam_flip_v_toggled", CameraConfigModal::on_flip_v_toggled);
+    lv_xml_register_event_cb(nullptr, "on_cam_flip_h_toggled",
+                             CameraConfigModal::on_flip_h_toggled);
+    lv_xml_register_event_cb(nullptr, "on_cam_flip_v_toggled",
+                             CameraConfigModal::on_flip_v_toggled);
 }
 
 void CameraWidget::on_camera_clicked(lv_event_t* e) {
@@ -295,7 +297,7 @@ void CameraWidget::start_stream() {
             if (token.expired())
                 return;
 
-            lifetime_.defer("CameraWidget::frame", [this, frame]() {
+            token.defer("CameraWidget::frame", [this, frame]() {
                 // Deliver frame to fullscreen image if open, otherwise widget image
                 lv_obj_t* target = fullscreen_image_ ? fullscreen_image_ : camera_image_;
                 if (target) {
@@ -313,9 +315,8 @@ void CameraWidget::start_stream() {
                 return;
 
             std::string status(msg);
-            lifetime_.defer("CameraWidget::status", [this, status]() {
-                set_status_text(status.c_str());
-            });
+            token.defer("CameraWidget::status",
+                        [this, status]() { set_status_text(status.c_str()); });
         });
 
     spdlog::info("[CameraWidget] Stream started (stream={}, snapshot={})", stream_url,
@@ -350,7 +351,8 @@ void CameraWidget::stop_stream() {
         // Thread still running with a captured `this` — destroying the object
         // would be use-after-free (#624).  Intentionally leak; the detached
         // thread will wind down on its own once the HTTP request completes.
-        spdlog::warn("[CameraWidget] Stream thread was detached, leaking CameraStream to avoid UAF");
+        spdlog::warn(
+            "[CameraWidget] Stream thread was detached, leaking CameraStream to avoid UAF");
         (void)stream_.release();
     } else {
         stream_.reset();
@@ -367,8 +369,8 @@ void CameraWidget::set_config(const nlohmann::json& config) {
 
 bool CameraWidget::on_edit_configure() {
     spdlog::info("[CameraWidget] Configure requested - showing config modal");
-    config_modal_ = std::make_unique<CameraConfigModal>(
-        id(), panel_id(), [this](const nlohmann::json& config) {
+    config_modal_ =
+        std::make_unique<CameraConfigModal>(id(), panel_id(), [this](const nlohmann::json& config) {
             config_ = config;
             apply_transform();
         });
@@ -393,10 +395,17 @@ void CameraWidget::apply_transform() {
 
     auto cam_rotation = CameraRotation::None;
     switch (rotation) {
-    case 90: cam_rotation = CameraRotation::Rotate90; break;
-    case 180: cam_rotation = CameraRotation::Rotate180; break;
-    case 270: cam_rotation = CameraRotation::Rotate270; break;
-    default: break;
+    case 90:
+        cam_rotation = CameraRotation::Rotate90;
+        break;
+    case 180:
+        cam_rotation = CameraRotation::Rotate180;
+        break;
+    case 270:
+        cam_rotation = CameraRotation::Rotate270;
+        break;
+    default:
+        break;
     }
     stream_->set_rotation(cam_rotation);
 

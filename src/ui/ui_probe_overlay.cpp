@@ -206,18 +206,18 @@ void ui_probe_overlay_register_callbacks() {
          }},
         {"on_probe_cfg_y_offset",
          [](lv_event_t* /*e*/) {
-             get_global_probe_overlay().handle_config_edit(
-                 "y_offset", "Y Offset", "Vertical offset from nozzle to probe");
+             get_global_probe_overlay().handle_config_edit("y_offset", "Y Offset",
+                                                           "Vertical offset from nozzle to probe");
          }},
         {"on_probe_cfg_samples",
          [](lv_event_t* /*e*/) {
-             get_global_probe_overlay().handle_config_edit(
-                 "samples", "Samples", "Number of probe samples per point");
+             get_global_probe_overlay().handle_config_edit("samples", "Samples",
+                                                           "Number of probe samples per point");
          }},
         {"on_probe_cfg_speed",
          [](lv_event_t* /*e*/) {
-             get_global_probe_overlay().handle_config_edit(
-                 "speed", "Probe Speed", "Speed (mm/s) during probing moves");
+             get_global_probe_overlay().handle_config_edit("speed", "Probe Speed",
+                                                           "Speed (mm/s) during probing moves");
          }},
         {"on_probe_cfg_retract",
          [](lv_event_t* /*e*/) {
@@ -565,8 +565,7 @@ void ProbeOverlay::handle_probe_accuracy() {
 
     std::string gcode;
     if (!all_homed) {
-        spdlog::info("[Probe] Axes not homed (homed_axes='{}'), homing first",
-                     homed ? homed : "");
+        spdlog::info("[Probe] Axes not homed (homed_axes='{}'), homing first", homed ? homed : "");
         gcode = "G28\n";
     }
     gcode += "PROBE_ACCURACY";
@@ -633,9 +632,8 @@ void ProbeOverlay::handle_probe_accuracy() {
 
                     // Update progress text: "Sample 3 of 10: z=1.2341"
                     snprintf(overlay.probe_acc_progress_text_buf_,
-                             sizeof(overlay.probe_acc_progress_text_buf_),
-                             "%s %d %s %d: z=%s", lv_tr("Sample"), current, lv_tr("of"), total,
-                             z_val.c_str());
+                             sizeof(overlay.probe_acc_progress_text_buf_), "%s %d %s %d: z=%s",
+                             lv_tr("Sample"), current, lv_tr("of"), total, z_val.c_str());
                     lv_subject_copy_string(&overlay.probe_acc_progress_text_,
                                            overlay.probe_acc_progress_text_buf_);
                 });
@@ -648,9 +646,8 @@ void ProbeOverlay::handle_probe_accuracy() {
                 api->unregister_method_callback("notify_gcode_response", handler_name);
 
                 std::string results = line;
-                helix::ui::queue_update([results]() {
-                    get_global_probe_overlay().show_accuracy_results(results);
-                });
+                helix::ui::queue_update(
+                    [results]() { get_global_probe_overlay().show_accuracy_results(results); });
                 return;
             }
 
@@ -661,9 +658,8 @@ void ProbeOverlay::handle_probe_accuracy() {
                 api->unregister_method_callback("notify_gcode_response", handler_name);
 
                 std::string error_msg = line;
-                helix::ui::queue_update([error_msg]() {
-                    get_global_probe_overlay().set_accuracy_error(error_msg);
-                });
+                helix::ui::queue_update(
+                    [error_msg]() { get_global_probe_overlay().set_accuracy_error(error_msg); });
             }
         });
 
@@ -698,8 +694,7 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
         return results_line.substr(pos, end - pos);
     };
 
-    auto set_subject = [](lv_subject_t* subj, char* buf, size_t buf_size,
-                          const std::string& val) {
+    auto set_subject = [](lv_subject_t* subj, char* buf, size_t buf_size, const std::string& val) {
         snprintf(buf, buf_size, "%s mm", val.c_str());
         lv_subject_copy_string(subj, buf);
     };
@@ -740,8 +735,7 @@ void ProbeOverlay::show_accuracy_results(const std::string& results_line) {
         quality_text = lv_tr("Poor Accuracy");
     }
     lv_subject_set_int(&probe_acc_quality_, good ? 1 : 0);
-    snprintf(probe_acc_quality_text_buf_, sizeof(probe_acc_quality_text_buf_), "%s",
-             quality_text);
+    snprintf(probe_acc_quality_text_buf_, sizeof(probe_acc_quality_text_buf_), "%s", quality_text);
     lv_subject_copy_string(&probe_acc_quality_text_, probe_acc_quality_text_buf_);
 
     // Transition to RESULTS state
@@ -983,8 +977,9 @@ void ProbeOverlay::handle_config_save() {
                 *api_, section, field, new_value,
                 [this, token]() {
                     spdlog::info("[Probe] Config edit saved successfully");
-                    if (token.expired()) return;
-                    lifetime_.defer([this]() {
+                    if (token.expired())
+                        return;
+                    token.defer([this]() {
                         // Reload config values to reflect the change
                         load_config_values();
                     });

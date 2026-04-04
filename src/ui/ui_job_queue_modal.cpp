@@ -3,14 +3,15 @@
 
 #include "ui_job_queue_modal.h"
 
+#include "ui_button.h"
+#include "ui_fonts.h"
+#include "ui_icon_codepoints.h"
+
 #include "app_globals.h"
 #include "job_queue_state.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "theme_manager.h"
-#include "ui_button.h"
-#include "ui_fonts.h"
-#include "ui_icon_codepoints.h"
 
 #include <lvgl/lvgl.h>
 #include <spdlog/spdlog.h>
@@ -35,7 +36,8 @@ RowData* make_row_data(const std::string& job_id, const std::string& filename) {
 }
 
 void free_row_data(RowData* rd) {
-    if (!rd) return;
+    if (!rd)
+        return;
     lv_free(rd->job_id);
     lv_free(rd->filename);
     lv_free(rd);
@@ -56,7 +58,8 @@ JobQueueModal::~JobQueueModal() {
 }
 
 void JobQueueModal::register_callbacks() {
-    if (callbacks_registered_) return;
+    if (callbacks_registered_)
+        return;
 
     lv_xml_register_event_cb(nullptr, "on_jq_modal_close", [](lv_event_t*) {
         if (s_active_instance_) {
@@ -127,10 +130,12 @@ void JobQueueModal::on_ok() {
 void JobQueueModal::update_queue_state_ui() {
     auto* state_label = find_widget("queue_state_label");
     auto* toggle_btn = find_widget("btn_toggle_queue");
-    if (!state_label) return;
+    if (!state_label)
+        return;
 
     auto* jqs = get_job_queue_state();
-    if (!jqs) return;
+    if (!jqs)
+        return;
 
     const auto& state = jqs->get_queue_state();
     bool is_paused = (state == "paused");
@@ -146,7 +151,8 @@ void JobQueueModal::update_queue_state_ui() {
 void JobQueueModal::populate_job_list() {
     auto* list = find_widget("modal_job_list");
     auto* empty_state = find_widget("modal_empty_state");
-    if (!list) return;
+    if (!list)
+        return;
 
     lv_obj_clean(list);
 
@@ -236,7 +242,8 @@ void JobQueueModal::populate_job_list() {
         // Filename
         lv_obj_t* name_label = lv_label_create(info_col);
         lv_label_set_text(name_label, display_name.c_str());
-        if (name_font) lv_obj_set_style_text_font(name_label, name_font, 0);
+        if (name_font)
+            lv_obj_set_style_text_font(name_label, name_font, 0);
         lv_obj_set_style_text_color(name_label, text_color, 0);
         lv_label_set_long_mode(name_label, LV_LABEL_LONG_DOT);
         lv_obj_set_width(name_label, lv_pct(100));
@@ -256,7 +263,8 @@ void JobQueueModal::populate_job_list() {
                 std::snprintf(time_buf, sizeof(time_buf), "Just queued");
             }
             lv_label_set_text(time_label, time_buf);
-            if (small_font) lv_obj_set_style_text_font(time_label, small_font, 0);
+            if (small_font)
+                lv_obj_set_style_text_font(time_label, small_font, 0);
             lv_obj_set_style_text_color(time_label, muted_color, 0);
         }
 
@@ -290,19 +298,23 @@ void JobQueueModal::populate_job_list() {
 
 void JobQueueModal::toggle_queue() {
     auto* api = get_moonraker_api();
-    if (!api) return;
+    if (!api)
+        return;
 
     auto* jqs = get_job_queue_state();
-    if (!jqs) return;
+    if (!jqs)
+        return;
 
     bool is_paused = (jqs->get_queue_state() == "paused");
     auto token = lifetime_.token();
 
     auto on_success = [token, this]() {
-        if (token.expired()) return;
-        lifetime_.defer("JobQueueModal::toggle_queue", [this]() {
+        if (token.expired())
+            return;
+        token.defer("JobQueueModal::toggle_queue", [this]() {
             auto* jqs2 = get_job_queue_state();
-            if (jqs2) jqs2->fetch();
+            if (jqs2)
+                jqs2->fetch();
             update_queue_state_ui();
         });
     };
@@ -320,7 +332,8 @@ void JobQueueModal::toggle_queue() {
 
 void JobQueueModal::remove_job(const std::string& job_id) {
     auto* api = get_moonraker_api();
-    if (!api) return;
+    if (!api)
+        return;
 
     spdlog::info("[JobQueueModal] Removing job: {}", job_id);
 
@@ -328,11 +341,13 @@ void JobQueueModal::remove_job(const std::string& job_id) {
     api->queue().remove_jobs(
         {job_id},
         [token, this]() {
-            if (token.expired()) return;
-            lifetime_.defer("JobQueueModal::remove_job", [this]() {
+            if (token.expired())
+                return;
+            token.defer("JobQueueModal::remove_job", [this]() {
                 // Fetch refreshed data — count observer will auto-rebuild the list
                 auto* jqs = get_job_queue_state();
-                if (jqs) jqs->fetch();
+                if (jqs)
+                    jqs->fetch();
             });
         },
         [](const MoonrakerError& err) {
@@ -342,7 +357,8 @@ void JobQueueModal::remove_job(const std::string& job_id) {
 
 void JobQueueModal::start_job(const std::string& job_id, const std::string& filename) {
     auto* api = get_moonraker_api();
-    if (!api) return;
+    if (!api)
+        return;
 
     auto& ps = get_printer_state();
     auto state = ps.get_print_job_state();
@@ -362,12 +378,14 @@ void JobQueueModal::start_job(const std::string& job_id, const std::string& file
     api->queue().remove_jobs(
         {job_id},
         [token, this, filename, api]() {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             api->job().start_print(
                 filename,
                 [token, this]() {
-                    if (token.expired()) return;
-                    lifetime_.defer("JobQueueModal::start_job", [this]() {
+                    if (token.expired())
+                        return;
+                    token.defer("JobQueueModal::start_job", [this]() {
                         spdlog::info("[JobQueueModal] Print started, closing modal");
                         hide();
                     });

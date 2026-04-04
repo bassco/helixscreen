@@ -6,13 +6,13 @@
 #include "ui_callback_helpers.h"
 #include "ui_fonts.h"
 #include "ui_nav_manager.h"
+#include "ui_update_queue.h"
 #include "ui_utils.h"
 
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
-#include "ui_update_queue.h"
 
 #include <spdlog/spdlog.h>
 
@@ -335,19 +335,25 @@ void ScrewsTiltPanel::start_probing() {
     auto token = lifetime_.token();
     api_->advanced().calculate_screws_tilt(
         [this, token](const std::vector<ScrewTiltResult>& results) {
-            if (token.expired()) return;
-            lifetime_.defer("ScrewsTilt::results", [this, results]() {
-                if (cleanup_called()) return;
-                if (state_ != State::PROBING) return;
+            if (token.expired())
+                return;
+            token.defer("ScrewsTilt::results", [this, results]() {
+                if (cleanup_called())
+                    return;
+                if (state_ != State::PROBING)
+                    return;
                 on_screws_tilt_results(results);
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto msg = err.message;
-            lifetime_.defer("ScrewsTilt::error", [this, msg]() {
-                if (cleanup_called()) return;
-                if (state_ != State::PROBING) return;
+            token.defer("ScrewsTilt::error", [this, msg]() {
+                if (cleanup_called())
+                    return;
+                if (state_ != State::PROBING)
+                    return;
                 on_screws_tilt_error(msg);
             });
         });

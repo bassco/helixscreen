@@ -143,7 +143,6 @@ lv_obj_t* SpoolmanPanel::create(lv_obj_t* parent) {
         if (title) {
             lv_label_bind_text(title, &header_title_subject_, nullptr);
         }
-
     }
 
     spdlog::info("[{}] Overlay created successfully", get_name());
@@ -157,7 +156,6 @@ lv_obj_t* SpoolmanPanel::create(lv_obj_t* parent) {
 void SpoolmanPanel::on_activate() {
     // Call base class first
     OverlayBase::on_activate();
-
 
     spdlog::debug("[{}] on_activate()", get_name());
 
@@ -177,7 +175,6 @@ void SpoolmanPanel::on_activate() {
 }
 
 void SpoolmanPanel::on_deactivate() {
-
     SpoolmanManager::instance().stop_spoolman_polling();
 
     // Clean up debounce timer
@@ -209,9 +206,13 @@ void SpoolmanPanel::refresh_spools() {
 
     show_loading_state();
 
+    auto tok = lifetime_.token();
+
     // Shared handler: update cached spools and active ID, then repopulate
-    auto apply_spools = [this](std::vector<SpoolInfo> spools, int active_id) {
-        lifetime_.defer([this, spools = std::move(spools), active_id]() {
+    auto apply_spools = [this, tok](std::vector<SpoolInfo> spools, int active_id) {
+        if (tok.expired())
+            return;
+        tok.defer([this, spools = std::move(spools), active_id]() {
             cached_spools_ = spools;
             active_spool_id_ = active_id;
             populate_spool_list();
@@ -221,7 +222,9 @@ void SpoolmanPanel::refresh_spools() {
     std::string name = get_name();
 
     api->spoolman().get_spoolman_spools(
-        [name, apply_spools](const std::vector<SpoolInfo>& spools) {
+        [name, apply_spools, tok](const std::vector<SpoolInfo>& spools) {
+            if (tok.expired())
+                return;
             spdlog::info("[{}] Received {} spools from Spoolman", name, spools.size());
 
             // Also get active spool ID before updating UI
@@ -242,9 +245,11 @@ void SpoolmanPanel::refresh_spools() {
                     apply_spools(spools, -1);
                 });
         },
-        [this, name](const MoonrakerError& err) {
+        [this, name, tok](const MoonrakerError& err) {
+            if (tok.expired())
+                return;
             spdlog::error("[{}] Failed to fetch spools: {}", name, err.message);
-            lifetime_.defer([this]() {
+            tok.defer([this]() {
                 cached_spools_.clear();
                 show_empty_state();
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to load spools"),
@@ -410,8 +415,8 @@ void SpoolmanPanel::update_location_filter_dropdown() {
     updating_location_dropdown_ = false;
 }
 
-std::vector<SpoolInfo> SpoolmanPanel::filter_by_location(
-    const std::vector<SpoolInfo>& spools) const {
+std::vector<SpoolInfo>
+SpoolmanPanel::filter_by_location(const std::vector<SpoolInfo>& spools) const {
     if (selected_location_.empty()) {
         return spools;
     }
@@ -498,13 +503,16 @@ void SpoolmanPanel::set_active_spool(int spool_id) {
     }
 
     std::string name = get_name();
+    auto tok = lifetime_.token();
 
     api->spoolman().set_active_spool(
         spool_id,
-        [this, spool_id, name]() {
+        [this, spool_id, name, tok]() {
+            if (tok.expired())
+                return;
             spdlog::info("[{}] Set active spool to {}", name, spool_id);
 
-            lifetime_.defer([this, spool_id]() {
+            tok.defer([this, spool_id]() {
                 const SpoolInfo* found = find_cached_spool(spool_id);
                 std::string spool_name =
                     found ? found->display_name() : "Spool " + std::to_string(spool_id);
@@ -528,10 +536,8 @@ void SpoolmanPanel::set_active_spool(int spool_id) {
                     slot.nozzle_temp_min = found->nozzle_temp_min;
                     slot.nozzle_temp_max = found->nozzle_temp_max;
                     slot.bed_temp = found->bed_temp_recommended;
-                    slot.remaining_weight_g =
-                        static_cast<float>(found->remaining_weight_g);
-                    slot.total_weight_g =
-                        static_cast<float>(found->initial_weight_g);
+                    slot.remaining_weight_g = static_cast<float>(found->remaining_weight_g);
+                    slot.total_weight_g = static_cast<float>(found->initial_weight_g);
                     if (!found->color_hex.empty()) {
                         const char* hex = found->color_hex.c_str();
                         if (hex[0] == '#')

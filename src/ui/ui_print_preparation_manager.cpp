@@ -6,12 +6,11 @@
 #include "ui_busy_overlay.h"
 #include "ui_error_reporting.h"
 #include "ui_panel_print_status.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_update_queue.h"
 
 #include "active_print_media_manager.h"
 #include "app_globals.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_modification_manager.h"
 #include "memory_monitor.h"
 #include "memory_utils.h"
@@ -212,75 +211,76 @@ void PrintPreparationManager::analyze_print_start_macro_internal() {
         api_,
         // Success callback - NOTE: runs on HTTP thread
         [this, token](const helix::PrintStartAnalysis& analysis) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::debug("[PrintPreparationManager] PRINT_START analysis complete: {}",
                           analysis.summary());
 
-            lifetime_.defer("PrintPreparationManager::macro_analysis_success",
-                            [this, analysis]() {
-                                macro_analysis_ = analysis;
-                                macro_analysis_in_progress_ = false;
-                                if (on_macro_analysis_complete_) {
-                                    on_macro_analysis_complete_(analysis);
-                                }
-                            });
+            token.defer("PrintPreparationManager::macro_analysis_success", [this, analysis]() {
+                macro_analysis_ = analysis;
+                macro_analysis_in_progress_ = false;
+                if (on_macro_analysis_complete_) {
+                    on_macro_analysis_complete_(analysis);
+                }
+            });
         },
         // Error callback - NOTE: runs on HTTP thread
         [this, token](const MoonrakerError& error) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::warn("[PrintPreparationManager] PRINT_START analysis failed (attempt {}): {}",
                          macro_analysis_retry_count_ + 1, error.message);
 
-            lifetime_.defer("PrintPreparationManager::macro_analysis_error", [this]() {
-                    // Check if we should retry
-                    if (macro_analysis_retry_count_ < MAX_MACRO_ANALYSIS_RETRIES) {
-                        macro_analysis_retry_count_++;
-                        // Exponential backoff: 1s, 2s
-                        int delay_ms = 1000 * (1 << (macro_analysis_retry_count_ - 1));
+            token.defer("PrintPreparationManager::macro_analysis_error", [this]() {
+                // Check if we should retry
+                if (macro_analysis_retry_count_ < MAX_MACRO_ANALYSIS_RETRIES) {
+                    macro_analysis_retry_count_++;
+                    // Exponential backoff: 1s, 2s
+                    int delay_ms = 1000 * (1 << (macro_analysis_retry_count_ - 1));
 
-                        spdlog::info("[PrintPreparationManager] Retrying PRINT_START analysis in "
-                                     "{}ms (attempt {} of {})",
-                                     delay_ms, macro_analysis_retry_count_ + 1,
-                                     MAX_MACRO_ANALYSIS_RETRIES + 1);
+                    spdlog::info("[PrintPreparationManager] Retrying PRINT_START analysis in "
+                                 "{}ms (attempt {} of {})",
+                                 delay_ms, macro_analysis_retry_count_ + 1,
+                                 MAX_MACRO_ANALYSIS_RETRIES + 1);
 
-                        // Schedule retry via LVGL timer
-                        struct RetryTimerData {
-                            PrintPreparationManager* mgr;
-                            helix::LifetimeToken token;
-                        };
-                        auto timer_data_ptr = std::make_unique<RetryTimerData>(
-                            RetryTimerData{this, lifetime_.token()});
+                    // Schedule retry via LVGL timer
+                    struct RetryTimerData {
+                        PrintPreparationManager* mgr;
+                        helix::LifetimeToken token;
+                    };
+                    auto timer_data_ptr =
+                        std::make_unique<RetryTimerData>(RetryTimerData{this, lifetime_.token()});
 
-                        lv_timer_t* retry_timer = lv_timer_create(
-                            [](lv_timer_t* timer) {
-                                std::unique_ptr<RetryTimerData> data(
-                                    static_cast<RetryTimerData*>(lv_timer_get_user_data(timer)));
-                                if (data && !data->token.expired()) {
-                                    data->mgr->analyze_print_start_macro_internal();
-                                }
-                                lv_timer_delete(timer);
-                            },
-                            delay_ms, timer_data_ptr.release());
-                        lv_timer_set_repeat_count(retry_timer, 1);
-                        return;
-                    }
+                    lv_timer_t* retry_timer = lv_timer_create(
+                        [](lv_timer_t* timer) {
+                            std::unique_ptr<RetryTimerData> data(
+                                static_cast<RetryTimerData*>(lv_timer_get_user_data(timer)));
+                            if (data && !data->token.expired()) {
+                                data->mgr->analyze_print_start_macro_internal();
+                            }
+                            lv_timer_delete(timer);
+                        },
+                        delay_ms, timer_data_ptr.release());
+                    lv_timer_set_repeat_count(retry_timer, 1);
+                    return;
+                }
 
-                    // Final failure - notify user
-                    spdlog::error(
-                        "[PrintPreparationManager] PRINT_START analysis failed after {} attempts",
-                        MAX_MACRO_ANALYSIS_RETRIES + 1);
-                    NOTIFY_ERROR(lv_tr("Could not analyze PRINT_START macro. Some print options may be "
-                                      "unavailable."));
+                // Final failure - notify user
+                spdlog::error(
+                    "[PrintPreparationManager] PRINT_START analysis failed after {} attempts",
+                    MAX_MACRO_ANALYSIS_RETRIES + 1);
+                NOTIFY_ERROR(lv_tr("Could not analyze PRINT_START macro. Some print options may be "
+                                   "unavailable."));
 
-                    // Set empty result
-                    macro_analysis_in_progress_ = false;
-                    helix::PrintStartAnalysis not_found;
-                    not_found.found = false;
-                    macro_analysis_ = not_found;
-                    if (on_macro_analysis_complete_) {
-                        on_macro_analysis_complete_(not_found);
-                    }
-                });
+                // Set empty result
+                macro_analysis_in_progress_ = false;
+                helix::PrintStartAnalysis not_found;
+                not_found.found = false;
+                macro_analysis_ = not_found;
+                if (on_macro_analysis_complete_) {
+                    on_macro_analysis_complete_(not_found);
+                }
+            });
         });
 }
 
@@ -436,7 +436,8 @@ void PrintPreparationManager::scan_file_for_operations(const std::string& filena
         // NOTE: This callback runs on a background HTTP thread, so we must defer
         // shared state updates and LVGL calls to the main thread via lv_async_call
         [this, token, filename](const std::string& content) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
 
             // Parse on background thread (safe - no shared state access)
             gcode::GCodeOpsDetector detector;
@@ -455,23 +456,23 @@ void PrintPreparationManager::scan_file_for_operations(const std::string& filena
                 }
             }
 
-            lifetime_.defer("PrintPreparationManager::scan_success",
-                            [this, filename, scan_result]() {
-                                cached_scan_result_ = scan_result;
-                                cached_scan_filename_ = filename;
-                                if (on_scan_complete_) {
-                                    on_scan_complete_(format_detected_operations());
-                                }
-                            });
+            token.defer("PrintPreparationManager::scan_success", [this, filename, scan_result]() {
+                cached_scan_result_ = scan_result;
+                cached_scan_filename_ = filename;
+                if (on_scan_complete_) {
+                    on_scan_complete_(format_detected_operations());
+                }
+            });
         },
         // Error: just log, don't block the UI
         // NOTE: Also runs on background thread
         [this, token, filename](const MoonrakerError& error) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::warn("[PrintPreparationManager] Failed to scan G-code {}: {}", filename,
                          error.message);
 
-            lifetime_.defer("PrintPreparationManager::scan_error", [this]() {
+            token.defer("PrintPreparationManager::scan_error", [this]() {
                 cached_scan_result_.reset();
                 cached_scan_filename_.clear();
                 if (on_scan_complete_) {
@@ -829,29 +830,32 @@ void PrintPreparationManager::start_print(const std::string& filename,
             caps.pre_start_gcode,
             [this, token, filename_to_print, ops_to_disable, on_navigate_to_status,
              wrapped_completion]() {
-                if (token.expired()) return;
-                lifetime_.defer("PrintPreparationManager::pre_start_gcode_success",
-                                [this, filename_to_print, ops_to_disable,
-                                 on_navigate_to_status, wrapped_completion]() {
-                    spdlog::info("[PrintPreparationManager] Pre-start gcode executed");
-                    if (!ops_to_disable.empty()) {
-                        modify_and_print(filename_to_print, ops_to_disable, {},
-                                         on_navigate_to_status);
-                    } else {
-                        start_print_directly(filename_to_print, on_navigate_to_status,
-                                             wrapped_completion);
-                    }
-                });
+                if (token.expired())
+                    return;
+                token.defer("PrintPreparationManager::pre_start_gcode_success",
+                            [this, filename_to_print, ops_to_disable, on_navigate_to_status,
+                             wrapped_completion]() {
+                                spdlog::info("[PrintPreparationManager] Pre-start gcode executed");
+                                if (!ops_to_disable.empty()) {
+                                    modify_and_print(filename_to_print, ops_to_disable, {},
+                                                     on_navigate_to_status);
+                                } else {
+                                    start_print_directly(filename_to_print, on_navigate_to_status,
+                                                         wrapped_completion);
+                                }
+                            });
             },
             [this, token, wrapped_completion](const MoonrakerError& err) {
-                if (token.expired()) return;
-                lifetime_.defer("PrintPreparationManager::pre_start_gcode_error",
-                                [wrapped_completion, msg = err.message]() {
-                    spdlog::error("[PrintPreparationManager] Pre-start gcode failed: {}", msg);
-                    NOTIFY_ERROR(lv_tr("Pre-print command failed: {}"), msg);
-                    if (wrapped_completion)
-                        wrapped_completion(false, msg);
-                });
+                if (token.expired())
+                    return;
+                token.defer("PrintPreparationManager::pre_start_gcode_error",
+                            [wrapped_completion, msg = err.message]() {
+                                spdlog::error(
+                                    "[PrintPreparationManager] Pre-start gcode failed: {}", msg);
+                                NOTIFY_ERROR(lv_tr("Pre-print command failed: {}"), msg);
+                                if (wrapped_completion)
+                                    wrapped_completion(false, msg);
+                            });
             });
         return;
     }
@@ -876,7 +880,8 @@ void PrintPreparationManager::start_print(const std::string& filename,
             ops_to_disable.clear();
             macro_skip_params.clear();
             // Show user notification about skipped modification
-            NOTIFY_WARNING(lv_tr("Cannot modify G-code: {}. Printing original file."), capability.reason);
+            NOTIFY_WARNING(lv_tr("Cannot modify G-code: {}. Printing original file."),
+                           capability.reason);
         } else {
             spdlog::info("[PrintPreparationManager] Modifying G-code: {} file ops, {} macro params "
                          "(method: {})",
@@ -1253,7 +1258,7 @@ void PrintPreparationManager::modify_and_print_streaming(
     const std::vector<std::pair<std::string, std::string>>& macro_skip_params,
     const std::vector<std::string>& mod_names, NavigateToStatusCallback on_navigate_to_status,
     bool use_plugin) {
-    auto token = lifetime_.token();          // Capture for lifetime checking in async callbacks
+    auto token = lifetime_.token();         // Capture for lifetime checking in async callbacks
     auto scan_result = cached_scan_result_; // Copy for lambda capture
 
     // Validate scan_result before proceeding (SERIOUS-3 fix)
@@ -1482,8 +1487,7 @@ void PrintPreparationManager::modify_and_print_streaming(
                             on_print_error);
                     } else {
                         // Standard path: Just start print with modified file
-                        api_->job().start_print(remote_temp_path, on_print_success,
-                                                      on_print_error);
+                        api_->job().start_print(remote_temp_path, on_print_success, on_print_error);
                     }
                 },
                 // Upload error - clean up local file

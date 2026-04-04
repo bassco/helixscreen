@@ -1186,17 +1186,22 @@ void ControlsPanel::handle_home_all() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
         NOTIFY_INFO(lv_tr("Homing all axes..."));
         api_->motion().home_axes(
             "",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1213,17 +1218,22 @@ void ControlsPanel::handle_home_x() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
         NOTIFY_INFO(lv_tr("Homing X..."));
         api_->motion().home_axes(
             "X",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1240,17 +1250,22 @@ void ControlsPanel::handle_home_y() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
         NOTIFY_INFO(lv_tr("Homing Y..."));
         api_->motion().home_axes(
             "Y",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1267,17 +1282,22 @@ void ControlsPanel::handle_home_xy() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
         NOTIFY_INFO(lv_tr("Homing XY..."));
         api_->motion().home_axes(
             "XY",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1294,17 +1314,22 @@ void ControlsPanel::handle_home_z() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(300000, [] { NOTIFY_WARNING(lv_tr("Homing timed out")); });
         NOTIFY_INFO(lv_tr("Homing Z..."));
         api_->motion().home_axes(
             "Z",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Homing may still be running — response timed out"));
                 } else {
@@ -1321,18 +1346,23 @@ void ControlsPanel::handle_qgl() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(600000, [] { NOTIFY_WARNING(lv_tr("QGL timed out")); });
         NOTIFY_INFO(lv_tr("Quad Gantry Level started..."));
         api_->execute_gcode(
             "QUAD_GANTRY_LEVEL",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS(lv_tr("Quad Gantry Level complete"));
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("QGL may still be running — response timed out"));
                 } else {
@@ -1350,18 +1380,23 @@ void ControlsPanel::handle_z_tilt() {
         return;
     }
     if (api_) {
+        auto tok = lifetime_.token();
         operation_guard_.begin(600000, [] { NOTIFY_WARNING(lv_tr("Z-Tilt timed out")); });
         NOTIFY_INFO(lv_tr("Z-Tilt Adjust started..."));
         api_->execute_gcode(
             "Z_TILT_ADJUST",
-            [this]() {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok]() {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 NOTIFY_SUCCESS(lv_tr("Z-Tilt Adjust complete"));
             },
-            [this](const MoonrakerError& err) {
-                lifetime_.defer("ControlsPanel::operation_guard_end",
-                                [this]() { operation_guard_.end(); });
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
+                tok.defer("ControlsPanel::operation_guard_end",
+                          [this]() { operation_guard_.end(); });
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     NOTIFY_WARNING(lv_tr("Z-Tilt may still be running — response timed out"));
                 } else {

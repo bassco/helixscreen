@@ -145,8 +145,7 @@ void SpoolEditModal::init_subjects() {
     // Ensure label printer subjects are initialized before we reference them
     helix::LabelPrinterSettingsManager::instance().init_subjects();
     lv_xml_register_subject(
-        lv_xml_component_get_scope("spoolman_edit_modal"),
-        "label_printer_configured",
+        lv_xml_component_get_scope("spoolman_edit_modal"), "label_printer_configured",
         helix::LabelPrinterSettingsManager::instance().subject_printer_configured());
 #endif
 
@@ -291,7 +290,7 @@ void SpoolEditModal::register_textareas() {
     // Field names in tab order — single-line fields first, then multiline Notes
     static constexpr const char* field_names[] = {
         "field_remaining", "field_spool_weight", "field_price",
-        "field_location", "field_lot_nr", "field_comment",
+        "field_location",  "field_lot_nr",       "field_comment",
     };
     static constexpr int num_fields = sizeof(field_names) / sizeof(field_names[0]);
 
@@ -512,7 +511,7 @@ void SpoolEditModal::handle_save() {
             return;
         }
         spdlog::info("[SpoolEditModal] All changes saved for spool {}", spool_id);
-        lifetime_.defer("SpoolEditModal::on_all_saved", [this]() {
+        token.defer("SpoolEditModal::on_all_saved", [this]() {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Spool saved"), 2000);
             if (completion_callback_) {
                 completion_callback_(true);

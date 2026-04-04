@@ -15,10 +15,9 @@
 #include "ui_utils.h"
 
 #include "app_globals.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "theme_manager.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include <spdlog/spdlog.h>
 
@@ -450,8 +449,7 @@ void ConsolePanel::fetch_history() {
     // and guard with lifetime_ token to prevent use-after-free if panel is destroyed
     api->get_gcode_store(
         FETCH_COUNT,
-        [this, token = lifetime_.token()](
-            const std::vector<GcodeStoreEntry>& entries) {
+        [this, token = lifetime_.token()](const std::vector<GcodeStoreEntry>& entries) {
             spdlog::info("[Console] Received {} gcode entries", entries.size());
 
             // Convert to our entry format on background thread (no LVGL calls)
@@ -469,9 +467,10 @@ void ConsolePanel::fetch_history() {
             }
 
             // Defer LVGL operations to main thread with lifetime guard
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto entries_ptr = std::make_shared<std::vector<GcodeEntry>>(std::move(converted));
-            lifetime_.defer("ConsolePanel::fetch_done", [this, entries_ptr]() {
+            token.defer("ConsolePanel::fetch_done", [this, entries_ptr]() {
                 fetch_in_flight_ = false;
                 populate_entries(*entries_ptr);
             });
@@ -480,8 +479,9 @@ void ConsolePanel::fetch_history() {
             spdlog::error("[Console] Failed to fetch gcode store: {}", err.message);
 
             // Defer LVGL operations to main thread with lifetime guard
-            if (token.expired()) return;
-            lifetime_.defer("ConsolePanel::fetch_error", [this]() {
+            if (token.expired())
+                return;
+            token.defer("ConsolePanel::fetch_error", [this]() {
                 fetch_in_flight_ = false;
                 std::snprintf(status_buf_, sizeof(status_buf_), "%s",
                               lv_tr("Failed to load history"));
@@ -700,12 +700,12 @@ void ConsolePanel::subscribe_to_gcode_responses() {
 
     // Register for notify_gcode_response notifications
     // Guard with lifetime token in case panel is destroyed before unsubscribe
-    api->register_method_callback(
-        "notify_gcode_response", gcode_handler_name_,
-        [this, token = lifetime_.token()](const nlohmann::json& msg) {
-            if (token.expired()) return;
-            on_gcode_response(msg);
-        });
+    api->register_method_callback("notify_gcode_response", gcode_handler_name_,
+                                  [this, token = lifetime_.token()](const nlohmann::json& msg) {
+                                      if (token.expired())
+                                          return;
+                                      on_gcode_response(msg);
+                                  });
 
     is_subscribed_ = true;
     spdlog::debug("[{}] Subscribed to notify_gcode_response (handler: {})", get_name(),
@@ -754,9 +754,11 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
     entry.type = GcodeEntry::Type::RESPONSE;
     entry.is_error = is_error_message(line);
 
-    // CRITICAL: Defer LVGL operations to main thread via lifetime_.defer
-    // WebSocket callbacks run on libhv thread - direct LVGL calls cause crashes
-    lifetime_.defer("ConsolePanel::gcode_entry", [this, entry = std::move(entry), is_temp]() {
+    // CRITICAL: Defer LVGL operations to main thread via token.defer
+    // WebSocket callbacks run on libhv thread - direct LVGL calls cause crashes.
+    // Use token.defer() (not lifetime_.defer()) to avoid TOCTOU race (#707).
+    auto tok = lifetime_.token();
+    tok.defer("ConsolePanel::gcode_entry", [this, entry = std::move(entry), is_temp]() {
         // C1: Read filter_temps_ on main thread only (avoids data race)
         if (filter_temps_ && is_temp)
             return;
@@ -829,12 +831,12 @@ void ConsolePanel::send_gcode_command() {
     // Send via MoonrakerAPI with error feedback
     MoonrakerAPI* api = get_moonraker_api();
     if (api) {
-        api->execute_gcode(
-            command, nullptr, // success: no-op, response comes via WS subscription
-            [token = lifetime_.token()](const MoonrakerError& err) {
-                if (token.expired()) return;
-                NOTIFY_ERROR(lv_tr("Failed to send command: {}"), err.message);
-            });
+        api->execute_gcode(command, nullptr, // success: no-op, response comes via WS subscription
+                           [token = lifetime_.token()](const MoonrakerError& err) {
+                               if (token.expired())
+                                   return;
+                               NOTIFY_ERROR(lv_tr("Failed to send command: {}"), err.message);
+                           });
     } else {
         spdlog::warn("[{}] No MoonrakerAPI available", get_name());
     }

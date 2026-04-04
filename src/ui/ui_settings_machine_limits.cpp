@@ -397,14 +397,16 @@ void MachineLimitsOverlay::apply_limits() {
     api_->advanced().set_machine_limits(
         current_limits_,
         [this, token]() {
-            if (token.expired()) return;
-            lifetime_.defer([this]() {
+            if (token.expired())
+                return;
+            token.defer([this]() {
                 spdlog::debug("[{}] Machine limits applied successfully", get_name());
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
-            lifetime_.defer([this, err]() {
+            if (token.expired())
+                return;
+            token.defer([this, err]() {
                 spdlog::error("[{}] Failed to apply machine limits: {}", get_name(), err.message);
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Failed to apply limits"),
                                               2000);

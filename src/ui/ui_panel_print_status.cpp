@@ -8,24 +8,22 @@
 #include "ui_component_header_bar.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 #include "ui_exclude_object_map_view.h"
 #include "ui_exclude_objects_list_overlay.h"
 #include "ui_filename_utils.h"
 #include "ui_gcode_viewer.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
-#include "ui_panel_common.h"
 #include "ui_overlay_temp_graph.h"
+#include "ui_panel_common.h"
 #include "ui_subject_registry.h"
 #include "ui_temperature_utils.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "abort_manager.h"
-#include "app_constants.h"
 #include "ams_state.h"
+#include "app_constants.h"
 #include "app_globals.h"
 #include "config.h"
 #include "display_manager.h"
@@ -34,6 +32,7 @@
 #include "format_utils.h"
 #include "injection_point_manager.h"
 #include "led/led_controller.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "memory_utils.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
@@ -154,10 +153,8 @@ PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* ap
 
     // Re-render layer text when Z position changes (Z updates more frequently than layer count)
     z_position_observer_ = observe_int_sync<PrintStatusPanel>(
-        printer_state_.get_gcode_position_z_subject(), this,
-        [](PrintStatusPanel* self, int) {
-            int layer = lv_subject_get_int(
-                self->printer_state_.get_print_layer_current_subject());
+        printer_state_.get_gcode_position_z_subject(), this, [](PrintStatusPanel* self, int) {
+            int layer = lv_subject_get_int(self->printer_state_.get_print_layer_current_subject());
             self->on_print_layer_changed(layer);
         });
 
@@ -633,11 +630,9 @@ void PrintStatusPanel::on_activate() {
     // print filename to trigger gcode + thumbnail reload.
     if (lifecycle_.want_viewer() && !gcode_loaded_ && gcode_viewer_ &&
         pending_gcode_filename_.empty()) {
-        const char* filename =
-            lv_subject_get_string(printer_state_.get_print_filename_subject());
+        const char* filename = lv_subject_get_string(printer_state_.get_print_filename_subject());
         if (filename && filename[0] != '\0') {
-            spdlog::info("[{}] Re-loading G-code after overlay recreate: {}", get_name(),
-                         filename);
+            spdlog::info("[{}] Re-loading G-code after overlay recreate: {}", get_name(), filename);
             on_print_filename_changed(filename);
         }
     }
@@ -656,10 +651,8 @@ void PrintStatusPanel::on_activate() {
 
     // Sync gcode viewer to current print layer (may have advanced while panel was hidden)
     if (gcode_viewer_ && gcode_loaded_ && !lv_obj_has_flag(gcode_viewer_, LV_OBJ_FLAG_HIDDEN)) {
-        int current_layer =
-            lv_subject_get_int(printer_state_.get_print_layer_current_subject());
-        int total_layers =
-            lv_subject_get_int(printer_state_.get_print_layer_total_subject());
+        int current_layer = lv_subject_get_int(printer_state_.get_print_layer_current_subject());
+        int total_layers = lv_subject_get_int(printer_state_.get_print_layer_total_subject());
         int viewer_max_layer = ui_gcode_viewer_get_max_layer(gcode_viewer_);
         int viewer_layer = current_layer;
         if (total_layers > 0 && viewer_max_layer > 0) {
@@ -700,11 +693,11 @@ void PrintStatusPanel::on_deactivate() {
             if (mem.is_low_memory()) {
                 ui_gcode_viewer_clear(gcode_viewer_);
                 gcode_loaded_ = false;
-                spdlog::debug("[{}] Cleared gcode viewer ({}MB available, {}MB total)",
-                              get_name(), mem.available_mb(), mem.total_mb());
+                spdlog::debug("[{}] Cleared gcode viewer ({}MB available, {}MB total)", get_name(),
+                              mem.available_mb(), mem.total_mb());
             } else {
-                spdlog::debug("[{}] Keeping gcode viewer cached ({}MB available)",
-                              get_name(), mem.available_mb());
+                spdlog::debug("[{}] Keeping gcode viewer cached ({}MB available)", get_name(),
+                              mem.available_mb());
             }
         }
     }
@@ -811,11 +804,10 @@ bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
         auto mem = helix::get_system_memory_info();
         bool should_destroy = mem.is_low_memory();
         if (should_destroy) {
-            NavigationManager::instance().register_overlay_close_callback(
-                s_cached_panel, []() {
-                    auto& p = get_global_print_status_panel();
-                    p.destroy_overlay_ui(s_cached_panel);
-                });
+            NavigationManager::instance().register_overlay_close_callback(s_cached_panel, []() {
+                auto& p = get_global_print_status_panel();
+                p.destroy_overlay_ui(s_cached_panel);
+            });
             spdlog::info("[PrintStatusPanel] Print status overlay created (destroy-on-close, "
                          "{}MB available, {}MB total)",
                          mem.available_mb(), mem.total_mb());
@@ -900,7 +892,8 @@ void PrintStatusPanel::show_gcode_viewer(bool show) {
 }
 
 void PrintStatusPanel::show_exclude_map_view() {
-    if (!exclude_manager_) return;
+    if (!exclude_manager_)
+        return;
 
     // Get bed dimensions from MoonrakerAPI hardware info
     float bed_w = 235.0f, bed_h = 235.0f; // sensible defaults
@@ -939,15 +932,13 @@ void PrintStatusPanel::show_exclude_map_view() {
         if (raw) {
             // Wrap in a no-op shared_ptr (we don't own it, viewer manages lifetime)
             parsed = std::shared_ptr<helix::gcode::ParsedGCodeFile>(
-                const_cast<helix::gcode::ParsedGCodeFile*>(raw), [](helix::gcode::ParsedGCodeFile*) {});
+                const_cast<helix::gcode::ParsedGCodeFile*>(raw),
+                [](helix::gcode::ParsedGCodeFile*) {});
         }
     }
 
-    map_view_->create(thumbnail_section,
-                      printer_state_.get_excluded_objects_state(),
-                      bed_w, bed_h,
-                      exclude_manager_.get(),
-                      parsed);
+    map_view_->create(thumbnail_section, printer_state_.get_excluded_objects_state(), bed_w, bed_h,
+                      exclude_manager_.get(), parsed);
 
     spdlog::debug("[{}] Showed exclude object map view (bed: {}x{}mm)", get_name(), bed_w, bed_h);
 }
@@ -1026,8 +1017,8 @@ void PrintStatusPanel::load_gcode_file(const char* file_path) {
             if (total_layers == 0 && viewer_max_layer > 0) {
                 int layer_count = viewer_max_layer + 1; // max_layer is 0-based
                 self->printer_state_.set_print_layer_total(layer_count);
-                spdlog::info("[{}] Set total layers from gcode viewer: {}",
-                             self->get_name(), layer_count);
+                spdlog::info("[{}] Set total layers from gcode viewer: {}", self->get_name(),
+                             layer_count);
             }
 
             // Update lifecycle state while we're at it
@@ -2295,7 +2286,7 @@ void PrintStatusPanel::load_thumbnail_for_file(const std::string& filename) {
 
                     // Defer LVGL calls to main thread — this callback runs on the
                     // WebSocket/libhv background thread (prestonbrown/helixscreen#192)
-                    lifetime_.defer([this, lvgl_path, current_gen]() {
+                    token.defer([this, lvgl_path, current_gen]() {
                         if (current_gen != thumbnail_load_generation_) {
                             return;
                         }
@@ -2520,14 +2511,15 @@ void PrintStatusPanel::schedule_deferred_gcode_load() {
         gcode_load_timer_ = nullptr;
     }
 
-    if (pending_gcode_filename_.empty()) return;
+    if (pending_gcode_filename_.empty())
+        return;
 
     // Short delay if already printing (user is actively viewing), longer during
     // homing/heating to avoid memory spike while printer is still preparing
-    uint32_t delay_ms = (lifecycle_.state() == PrintState::Printing ||
-                         lifecycle_.state() == PrintState::Paused)
-                            ? 500
-                            : 5000;
+    uint32_t delay_ms =
+        (lifecycle_.state() == PrintState::Printing || lifecycle_.state() == PrintState::Paused)
+            ? 500
+            : 5000;
 
     spdlog::debug("[{}] Scheduling deferred G-code load in {}ms: {}", get_name(), delay_ms,
                   pending_gcode_filename_);

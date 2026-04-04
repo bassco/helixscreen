@@ -8,16 +8,17 @@
 
 #include "ui_overlay_qr_scanner.h"
 
+#include "ui_event_safety.h"
+#include "ui_nav_manager.h"
+#include "ui_update_queue.h"
+
 #include "app_globals.h"
+#include "display_settings_manager.h"
 #include "moonraker_api.h"
 #include "printer_state.h"
 #include "sound_manager.h"
 #include "static_panel_registry.h"
 #include "ui/ui_lazy_panel_helper.h"
-#include "ui_event_safety.h"
-#include "ui_nav_manager.h"
-#include "ui_update_queue.h"
-#include "display_settings_manager.h"
 
 #if HELIX_HAS_CAMERA
 #include "camera_stream.h"
@@ -33,19 +34,17 @@ namespace {
 // Disable/enable all LVGL keyboard input devices. Barcode scanners appear as
 // USB HID keyboards — we suppress LVGL keyboard processing while the scanner
 // monitor is active to prevent keystrokes from triggering UI navigation.
-void disable_lvgl_keyboards(bool disable)
-{
+void disable_lvgl_keyboards(bool disable) {
     lv_indev_t* indev = nullptr;
     while ((indev = lv_indev_get_next(indev)) != nullptr) {
         if (lv_indev_get_type(indev) == LV_INDEV_TYPE_KEYPAD) {
             lv_indev_enable(indev, !disable);
-            spdlog::debug("[QR Scanner] {} keyboard indev",
-                          disable ? "Disabled" : "Re-enabled");
+            spdlog::debug("[QR Scanner] {} keyboard indev", disable ? "Disabled" : "Re-enabled");
         }
     }
 }
 
-}  // namespace
+} // namespace
 
 namespace helix::ui {
 
@@ -58,8 +57,8 @@ static std::unique_ptr<QrScannerOverlay> g_qr_scanner_overlay;
 QrScannerOverlay& get_qr_scanner_overlay() {
     if (!g_qr_scanner_overlay) {
         g_qr_scanner_overlay = std::make_unique<QrScannerOverlay>();
-        StaticPanelRegistry::instance().register_destroy(
-            "QrScannerOverlay", []() { g_qr_scanner_overlay.reset(); });
+        StaticPanelRegistry::instance().register_destroy("QrScannerOverlay",
+                                                         []() { g_qr_scanner_overlay.reset(); });
     }
     return *g_qr_scanner_overlay;
 }
@@ -87,11 +86,9 @@ QrScannerOverlay::~QrScannerOverlay() {
 
 void QrScannerOverlay::init_subjects() {
     init_subjects_guarded([this]() {
-        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_,
-                                  "Point camera at QR code on spool",
+        UI_MANAGED_SUBJECT_STRING(status_subject_, status_buf_, "Point camera at QR code on spool",
                                   "qr_scanner_status", subjects_);
-        UI_MANAGED_SUBJECT_INT(success_subject_, 0,
-                               "qr_scanner_success", subjects_);
+        UI_MANAGED_SUBJECT_INT(success_subject_, 0, "qr_scanner_success", subjects_);
     });
 }
 
@@ -117,8 +114,7 @@ lv_obj_t* QrScannerOverlay::create(lv_obj_t* parent) {
 
     // Create fullscreen overlay from XML (not using create_overlay_from_xml since
     // this is a fullscreen overlay, not the standard overlay_panel with header)
-    overlay_root_ = static_cast<lv_obj_t*>(
-        lv_xml_create(parent, "qr_scanner_overlay", nullptr));
+    overlay_root_ = static_cast<lv_obj_t*>(lv_xml_create(parent, "qr_scanner_overlay", nullptr));
     if (!overlay_root_) {
         spdlog::error("[{}] Failed to create overlay from XML", get_name());
         return nullptr;
@@ -152,21 +148,21 @@ void QrScannerOverlay::on_ui_destroyed() {
 // SHOW / LIFECYCLE
 // ============================================================================
 
-void QrScannerOverlay::show(lv_obj_t* parent, int slot_index,
-                             ResultCallback on_result, CancelCallback on_cancel) {
+void QrScannerOverlay::show(lv_obj_t* parent, int slot_index, ResultCallback on_result,
+                            CancelCallback on_cancel) {
     slot_index_ = slot_index;
     result_callback_ = std::move(on_result);
     cancel_callback_ = std::move(on_cancel);
 
-    spdlog::debug("[{}] show() called, parent={}, cached_overlay_={}",
-                  get_name(), fmt::ptr(parent), fmt::ptr(cached_overlay_));
+    spdlog::debug("[{}] show() called, parent={}, cached_overlay_={}", get_name(), fmt::ptr(parent),
+                  fmt::ptr(cached_overlay_));
 
     // Always use the active screen so the overlay renders above modals
     lv_obj_t* screen = lv_screen_active();
 
     bool ok = lazy_create_and_push_overlay<QrScannerOverlay>(
-        get_qr_scanner_overlay, cached_overlay_, screen ? screen : parent,
-        "QR Scanner", "QrScannerOverlay", true /* destroy_on_close */);
+        get_qr_scanner_overlay, cached_overlay_, screen ? screen : parent, "QR Scanner",
+        "QrScannerOverlay", true /* destroy_on_close */);
     if (!ok) {
         spdlog::error("[{}] Failed to show overlay", get_name());
     }
@@ -177,9 +173,8 @@ void QrScannerOverlay::show(lv_obj_t* parent, int slot_index,
     }
 }
 
-void QrScannerOverlay::show_for_active_spool(lv_obj_t* parent,
-                                              ResultCallback on_result,
-                                              CancelCallback on_cancel) {
+void QrScannerOverlay::show_for_active_spool(lv_obj_t* parent, ResultCallback on_result,
+                                             CancelCallback on_cancel) {
     show(parent, -1, std::move(on_result), std::move(on_cancel));
 }
 
@@ -298,7 +293,8 @@ void QrScannerOverlay::start_scanning() {
         }
 
         auto tok = lifetime_.token();
-        camera_->start(stream_url, snapshot_url,
+        camera_->start(
+            stream_url, snapshot_url,
             [this, tok](lv_draw_buf_t* frame) {
                 if (!tok.expired()) {
                     on_camera_frame(frame);
@@ -318,14 +314,14 @@ void QrScannerOverlay::start_scanning() {
             snapshot_scanner_->start(
                 snapshot_url,
                 [this, snap_tok](lv_draw_buf_t* frame) {
-                    if (snap_tok.expired()) return;
+                    if (snap_tok.expired())
+                        return;
                     on_snapshot_frame(frame);
                 },
                 [this, snap_tok](int spool_id) {
-                    if (snap_tok.expired()) return;
-                    lifetime_.defer([this, spool_id]() {
-                        on_spool_id_detected(spool_id);
-                    });
+                    if (snap_tok.expired())
+                        return;
+                    snap_tok.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
                 },
                 [snap_tok](const char* msg) {
                     if (!snap_tok.expired()) {
@@ -355,14 +351,14 @@ void QrScannerOverlay::start_scanning() {
             snapshot_scanner_->start(
                 snapshot_url,
                 [this, tok](lv_draw_buf_t* frame) {
-                    if (tok.expired()) return;
+                    if (tok.expired())
+                        return;
                     on_snapshot_frame(frame);
                 },
                 [this, tok](int spool_id) {
-                    if (tok.expired()) return;
-                    lifetime_.defer([this, spool_id]() {
-                        on_spool_id_detected(spool_id);
-                    });
+                    if (tok.expired())
+                        return;
+                    tok.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
                 },
                 [tok](const char* msg) {
                     if (!tok.expired()) {
@@ -385,10 +381,9 @@ void QrScannerOverlay::start_scanning() {
     // Start USB barcode scanner monitor
     auto tok_usb = lifetime_.token();
     usb_monitor_.start([this, tok_usb](int spool_id) {
-        if (tok_usb.expired()) return;
-        lifetime_.defer([this, spool_id]() {
-            on_spool_id_detected(spool_id);
-        });
+        if (tok_usb.expired())
+            return;
+        tok_usb.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
     });
     spdlog::debug("[{}] USB scanner monitor started", get_name());
 }
@@ -477,8 +472,7 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
     // Display the frame on the UI thread.
     auto tok = lifetime_.token();
     helix::ui::queue_update([this, tok, frame]() {
-        if (!tok.expired() && scan_active_.load() && viewfinder_
-            && lv_obj_is_valid(viewfinder_)) {
+        if (!tok.expired() && scan_active_.load() && viewfinder_ && lv_obj_is_valid(viewfinder_)) {
             lv_image_set_src(viewfinder_, frame);
         }
     });
@@ -496,13 +490,12 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
             auto result = qr_decoder_->decode(qr_buf->data(), qr_w, qr_h);
             decode_busy_ = false;
 
-            if (decode_tok.expired()) return;
+            if (decode_tok.expired())
+                return;
 
             if (result.success && result.spool_id >= 0) {
                 int spool_id = result.spool_id;
-                lifetime_.defer([this, spool_id]() {
-                    on_spool_id_detected(spool_id);
-                });
+                decode_tok.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
             }
         }).detach();
     }
@@ -511,7 +504,8 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
 
 void QrScannerOverlay::on_snapshot_frame(lv_draw_buf_t* frame) {
     if (!scan_active_.load() || !frame) {
-        if (snapshot_scanner_) snapshot_scanner_->frame_consumed();
+        if (snapshot_scanner_)
+            snapshot_scanner_->frame_consumed();
         return;
     }
 
@@ -557,10 +551,12 @@ void QrScannerOverlay::lookup_spool(int spool_id) {
     }
 
     auto tok = lifetime_.token();
-    api->spoolman().get_spoolman_spool(spool_id,
+    api->spoolman().get_spoolman_spool(
+        spool_id,
         [this, tok, spool_id](const std::optional<SpoolInfo>& spool) {
-            if (tok.expired()) return;
-            lifetime_.defer([this, spool_id, spool]() {
+            if (tok.expired())
+                return;
+            tok.defer([this, spool_id, spool]() {
                 if (spool.has_value()) {
                     on_spool_found(spool.value());
                 } else {
@@ -571,8 +567,9 @@ void QrScannerOverlay::lookup_spool(int spool_id) {
             });
         },
         [this, tok, spool_id](const MoonrakerError& err) {
-            if (tok.expired()) return;
-            lifetime_.defer([this, spool_id, err]() {
+            if (tok.expired())
+                return;
+            tok.defer([this, spool_id, err]() {
                 spdlog::error("[{}] Spool lookup failed: {}", get_name(), err.message);
                 update_status("Spool #" + std::to_string(spool_id) + " lookup failed");
                 last_decoded_id_ = -1; // Allow retry
@@ -581,8 +578,7 @@ void QrScannerOverlay::lookup_spool(int spool_id) {
 }
 
 void QrScannerOverlay::on_spool_found(const SpoolInfo& spool) {
-    spdlog::info("[{}] Spool found: #{} {} {}", get_name(),
-                 spool.id, spool.vendor, spool.material);
+    spdlog::info("[{}] Spool found: #{} {} {}", get_name(), spool.id, spool.vendor, spool.material);
 
     // Clear viewfinder image BEFORE stopping — stop frees the frame buffers
     if (viewfinder_ && lv_is_initialized()) {
@@ -634,7 +630,8 @@ void QrScannerOverlay::show_success_flash() {
     // Show the flash overlay
     lv_subject_set_int(&success_subject_, 1);
 
-    if (!success_flash_) return;
+    if (!success_flash_)
+        return;
 
     if (DisplaySettingsManager::instance().get_animations_enabled()) {
         // Animate opacity: full white → transparent (flash-bulb effect)

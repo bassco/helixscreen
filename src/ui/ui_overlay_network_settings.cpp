@@ -357,13 +357,15 @@ void NetworkSettingsOverlay::on_activate() {
         std::weak_ptr<WiFiManager> weak_mgr = wifi_manager_;
         auto token = lifetime_.token();
 
-        wifi_manager_->start_scan([this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
-            if (token.expired() || weak_mgr.expired()) return;
-            lifetime_.defer([this, networks]() {
-                lv_subject_set_int(&wifi_scanning_, 0);
-                populate_network_list(networks);
+        wifi_manager_->start_scan(
+            [this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
+                if (token.expired() || weak_mgr.expired())
+                    return;
+                token.defer([this, networks]() {
+                    lv_subject_set_int(&wifi_scanning_, 0);
+                    populate_network_list(networks);
+                });
             });
-        });
     }
 }
 
@@ -743,13 +745,15 @@ void NetworkSettingsOverlay::handle_wlan_toggle_changed(lv_event_t* e) {
         std::weak_ptr<WiFiManager> weak_mgr = wifi_manager_;
         auto token = lifetime_.token();
 
-        wifi_manager_->start_scan([this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
-            if (token.expired() || weak_mgr.expired()) return;
-            lifetime_.defer([this, networks]() {
-                lv_subject_set_int(&wifi_scanning_, 0);
-                populate_network_list(networks);
+        wifi_manager_->start_scan(
+            [this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
+                if (token.expired() || weak_mgr.expired())
+                    return;
+                token.defer([this, networks]() {
+                    lv_subject_set_int(&wifi_scanning_, 0);
+                    populate_network_list(networks);
+                });
             });
-        });
     } else {
         // Stop scanning, clear list
         wifi_manager_->stop_scan();
@@ -797,8 +801,9 @@ void NetworkSettingsOverlay::handle_refresh_clicked() {
     auto token = lifetime_.token();
 
     wifi_manager_->start_scan([this, token, weak_mgr](const std::vector<WiFiNetwork>& networks) {
-        if (token.expired() || weak_mgr.expired()) return;
-        lifetime_.defer([this, networks]() {
+        if (token.expired() || weak_mgr.expired())
+            return;
+        token.defer([this, networks]() {
             lv_subject_set_int(&wifi_scanning_, 0);
             populate_network_list(networks);
         });
@@ -868,8 +873,9 @@ void NetworkSettingsOverlay::handle_test_network_clicked() {
 
     network_tester_->start_test(
         [this, token](NetworkTester::TestState state, const NetworkTester::TestResult& result) {
-            if (token.expired()) return;
-            lifetime_.defer([this, state, result]() {
+            if (token.expired())
+                return;
+            token.defer([this, state, result]() {
                 update_test_state(state, result);
 
                 // Update step widget based on state (3 steps: Local, Gateway, Internet)
@@ -1045,42 +1051,49 @@ void NetworkSettingsOverlay::handle_hidden_connect_clicked() {
     std::string ssid_str(ssid);
     auto token = lifetime_.token();
 
-    wifi_manager_->connect(ssid_str, password, [this, token, ssid_str](bool success, const std::string& error) {
-        if (token.expired()) return;
-        lifetime_.defer([this, success, ssid_str, error]() {
-            lv_subject_t* subj = lv_xml_get_subject(nullptr, "hidden_connecting");
-            if (subj) {
-                lv_subject_set_int(subj, 0);
-            }
-
-            if (success) {
-                spdlog::info("[NetworkSettingsOverlay] Connected to hidden network: {}", ssid_str);
-                handle_hidden_cancel_clicked();
-                update_wifi_status();
-                update_any_network_connected();
-
-                if (wifi_manager_) {
-                    auto scan_token = lifetime_.token();
-                    wifi_manager_->start_scan([this, scan_token](const std::vector<WiFiNetwork>& networks) {
-                        if (scan_token.expired()) return;
-                        lifetime_.defer([this, networks]() {
-                            populate_network_list(networks);
-                        });
-                    });
+    wifi_manager_->connect(
+        ssid_str, password, [this, token, ssid_str](bool success, const std::string& error) {
+            if (token.expired())
+                return;
+            token.defer([this, success, ssid_str, error]() {
+                lv_subject_t* subj = lv_xml_get_subject(nullptr, "hidden_connecting");
+                if (subj) {
+                    lv_subject_set_int(subj, 0);
                 }
-            } else {
-                spdlog::error("[NetworkSettingsOverlay] Hidden network connection failed: {}", error);
 
-                if (hidden_network_modal_) {
-                    lv_obj_t* error_label = lv_obj_find_by_name(hidden_network_modal_, "error_label");
-                    if (error_label) {
-                        lv_label_set_text(error_label, lv_tr("Connection failed. Check credentials."));
-                        lv_obj_remove_flag(error_label, LV_OBJ_FLAG_HIDDEN);
+                if (success) {
+                    spdlog::info("[NetworkSettingsOverlay] Connected to hidden network: {}",
+                                 ssid_str);
+                    handle_hidden_cancel_clicked();
+                    update_wifi_status();
+                    update_any_network_connected();
+
+                    if (wifi_manager_) {
+                        auto scan_token = lifetime_.token();
+                        wifi_manager_->start_scan(
+                            [this, scan_token](const std::vector<WiFiNetwork>& networks) {
+                                if (scan_token.expired())
+                                    return;
+                                scan_token.defer(
+                                    [this, networks]() { populate_network_list(networks); });
+                            });
+                    }
+                } else {
+                    spdlog::error("[NetworkSettingsOverlay] Hidden network connection failed: {}",
+                                  error);
+
+                    if (hidden_network_modal_) {
+                        lv_obj_t* error_label =
+                            lv_obj_find_by_name(hidden_network_modal_, "error_label");
+                        if (error_label) {
+                            lv_label_set_text(error_label,
+                                              lv_tr("Connection failed. Check credentials."));
+                            lv_obj_remove_flag(error_label, LV_OBJ_FLAG_HIDDEN);
+                        }
                     }
                 }
-            }
+            });
         });
-    });
 }
 
 void NetworkSettingsOverlay::handle_security_changed(lv_event_t* e) {
@@ -1129,18 +1142,20 @@ void NetworkSettingsOverlay::handle_network_item_clicked(lv_event_t* e) {
         }
 
         auto token = lifetime_.token();
-        wifi_manager_->connect(item_data->ssid, "", [this, token](bool success, const std::string& error) {
-            if (token.expired()) return;
-            lifetime_.defer([this, success, error]() {
-                if (success) {
-                    spdlog::info("[NetworkSettingsOverlay] Connected to {}", current_ssid_);
-                    update_wifi_status();
-                    update_any_network_connected();
-                } else {
-                    spdlog::error("[NetworkSettingsOverlay] Failed to connect: {}", error);
-                }
+        wifi_manager_->connect(
+            item_data->ssid, "", [this, token](bool success, const std::string& error) {
+                if (token.expired())
+                    return;
+                token.defer([this, success, error]() {
+                    if (success) {
+                        spdlog::info("[NetworkSettingsOverlay] Connected to {}", current_ssid_);
+                        update_wifi_status();
+                        update_any_network_connected();
+                    } else {
+                        spdlog::error("[NetworkSettingsOverlay] Failed to connect: {}", error);
+                    }
+                });
             });
-        });
     }
 }
 
@@ -1298,8 +1313,9 @@ void NetworkSettingsOverlay::handle_password_connect_clicked() {
     auto token = lifetime_.token();
 
     wifi_manager_->connect(ssid, pwd, [this, token, ssid](bool success, const std::string& error) {
-        if (token.expired()) return;
-        lifetime_.defer([this, success, ssid, error]() {
+        if (token.expired())
+            return;
+        token.defer([this, success, ssid, error]() {
             // Reset connecting state
             lv_subject_set_int(&wifi_connecting_, 0);
 
@@ -1312,11 +1328,11 @@ void NetworkSettingsOverlay::handle_password_connect_clicked() {
                 // Refresh network list to show checkmark on connected network
                 if (wifi_manager_) {
                     auto scan_token = lifetime_.token();
-                    wifi_manager_->start_scan([this, scan_token](const std::vector<WiFiNetwork>& networks) {
-                        if (scan_token.expired()) return;
-                        lifetime_.defer([this, networks]() {
-                            populate_network_list(networks);
-                        });
+                    wifi_manager_->start_scan([this, scan_token](
+                                                  const std::vector<WiFiNetwork>& networks) {
+                        if (scan_token.expired())
+                            return;
+                        scan_token.defer([this, networks]() { populate_network_list(networks); });
                     });
                 }
             } else {
@@ -1330,7 +1346,8 @@ void NetworkSettingsOverlay::handle_password_connect_clicked() {
                         auto lower_err = error;
                         std::transform(lower_err.begin(), lower_err.end(), lower_err.begin(),
                                        [](unsigned char c) { return std::tolower(c); });
-                        bool is_permission = lower_err.find("permission denied") != std::string::npos;
+                        bool is_permission =
+                            lower_err.find("permission denied") != std::string::npos;
                         if (is_permission) {
                             lv_label_set_text(modal_status, error.c_str());
                         } else {

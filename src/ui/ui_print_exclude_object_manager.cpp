@@ -149,11 +149,13 @@ void PrintExcludeObjectManager::handle_object_long_press(const char* object_name
     exclude_modal_.set_object_name(object_name);
     auto token = lifetime_.token();
     exclude_modal_.set_on_confirm([this, token]() {
-        if (token.expired()) return;
+        if (token.expired())
+            return;
         handle_exclude_confirmed();
     });
     exclude_modal_.set_on_cancel([this, token]() {
-        if (token.expired()) return;
+        if (token.expired())
+            return;
         handle_exclude_cancelled();
     });
 
@@ -288,19 +290,21 @@ void PrintExcludeObjectManager::exclude_undo_timer_cb(lv_timer_t* timer) {
         self->api_->exclude_object(
             object_name,
             [self, token, object_name]() {
-                if (token.expired()) return;
+                if (token.expired())
+                    return;
                 spdlog::info("[PrintExcludeObjectManager] EXCLUDE_OBJECT '{}' sent successfully",
                              object_name);
                 // Move to confirmed excluded set
                 self->excluded_objects_.insert(object_name);
             },
             [self, token, object_name](const MoonrakerError& err) {
-                if (token.expired()) return;
+                if (token.expired())
+                    return;
                 spdlog::error("[PrintExcludeObjectManager] Failed to exclude '{}': {}", object_name,
                               err.message);
 
                 // UI operations must happen on the main thread
-                self->lifetime_.defer(
+                token.defer(
                     "PrintExcludeObjectManager::exclude_error",
                     [self, object_name, user_msg = err.user_message()]() {
                         NOTIFY_ERROR(lv_tr("Failed to exclude '{}': {}"), object_name, user_msg);

@@ -54,21 +54,21 @@ void PrintHistoryManager::fetch(int limit) {
     api_->history().get_history_list(
         limit, 0, 0.0, 0.0, // limit, start, since, before
         [this, token](const std::vector<PrintHistoryJob>& jobs, uint64_t /*total*/) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             // Copy jobs since callback param is const ref
             std::vector<PrintHistoryJob> jobs_copy = jobs;
 
-            lifetime_.defer("PrintHistoryManager::fetch_success",
-                            [this, jobs = std::move(jobs_copy)]() mutable {
-                                on_history_fetched(std::move(jobs));
-                            });
+            token.defer("PrintHistoryManager::fetch_success",
+                        [this, jobs = std::move(jobs_copy)]() mutable {
+                            on_history_fetched(std::move(jobs));
+                        });
         },
         [this, token](const MoonrakerError& error) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::warn("[HistoryManager] Failed to fetch history: {}", error.message);
-            lifetime_.defer("PrintHistoryManager::fetch_error", [this]() {
-                is_fetching_ = false;
-            });
+            token.defer("PrintHistoryManager::fetch_error", [this]() { is_fetching_ = false; });
         });
 }
 
@@ -181,17 +181,16 @@ void PrintHistoryManager::subscribe_to_notifications() {
 
     auto token = lifetime_.token();
 
-    client_->register_method_callback("notify_history_changed", "PrintHistoryManager",
-                                      [this, token](const nlohmann::json& /*data*/) {
-                                          if (token.expired()) return;
-                                          spdlog::debug(
-                                              "[HistoryManager] Received notify_history_changed");
+    client_->register_method_callback(
+        "notify_history_changed", "PrintHistoryManager",
+        [this, token](const nlohmann::json& /*data*/) {
+            if (token.expired())
+                return;
+            spdlog::debug("[HistoryManager] Received notify_history_changed");
 
-                                          lifetime_.defer(
-                                              "PrintHistoryManager::notify_history_changed",
-                                              [this]() {
-                                                  invalidate();
-                                                  fetch();
-                                              });
-                                      });
+            token.defer("PrintHistoryManager::notify_history_changed", [this]() {
+                invalidate();
+                fetch();
+            });
+        });
 }

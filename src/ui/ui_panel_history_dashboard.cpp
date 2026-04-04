@@ -398,19 +398,20 @@ void HistoryDashboardPanel::fetch_totals_for_all_time() {
 
     api->history().get_history_totals(
         [this, token](const PrintHistoryTotals& totals) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
 
-            lifetime_.defer("HistoryDashboard::totals_received", [this, totals]() {
-                update_all_time_statistics(totals);
-            });
+            token.defer("HistoryDashboard::totals_received",
+                        [this, totals]() { update_all_time_statistics(totals); });
         },
         [this, token](const MoonrakerError& error) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             spdlog::warn("[{}] Failed to fetch totals, falling back to cached: {}", get_name(),
                          error.message);
 
-            lifetime_.defer("HistoryDashboard::totals_fallback",
-                            [this]() { update_statistics(cached_jobs_); });
+            token.defer("HistoryDashboard::totals_fallback",
+                        [this]() { update_statistics(cached_jobs_); });
         });
 }
 
@@ -446,8 +447,8 @@ void HistoryDashboardPanel::update_all_time_statistics(const PrintHistoryTotals&
                 completed++;
             }
         }
-        success_rate = (static_cast<double>(completed) / static_cast<double>(cached_jobs_.size())) *
-                       100.0;
+        success_rate =
+            (static_cast<double>(completed) / static_cast<double>(cached_jobs_.size())) * 100.0;
     }
     snprintf(buf, sizeof(buf), "%.0f%%", success_rate);
     lv_subject_copy_string(&stat_success_rate_subject_, buf);
@@ -458,7 +459,8 @@ void HistoryDashboardPanel::update_all_time_statistics(const PrintHistoryTotals&
 
     spdlog::debug("[{}] ALL_TIME stats from totals: {} prints, {} time, {} filament, ~{:.0f}% "
                   "success (from {} cached)",
-                  get_name(), totals.total_jobs, format_duration(static_cast<double>(totals.total_time)),
+                  get_name(), totals.total_jobs,
+                  format_duration(static_cast<double>(totals.total_time)),
                   format_filament(totals.total_filament_used), success_rate, cached_jobs_.size());
 }
 

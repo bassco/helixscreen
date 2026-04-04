@@ -5,11 +5,10 @@
 
 #include "ui_update_queue.h"
 
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 
 #include <spdlog/spdlog.h>
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include <algorithm>
 #include <cstring>
@@ -328,7 +327,8 @@ void MacroEnhanceWizard::show_current_operation() {
         friendly_name = "Bed Mesh"; // i18n: do not translate, universal 3D printing term
         break;
     case helix::PrintStartOpCategory::QGL:
-        friendly_name = "Quad Gantry Leveling"; // i18n: do not translate, universal 3D printing term
+        friendly_name =
+            "Quad Gantry Leveling"; // i18n: do not translate, universal 3D printing term
         break;
     case helix::PrintStartOpCategory::Z_TILT:
         friendly_name = "Z-Tilt Adjustment"; // i18n: do not translate, universal 3D printing term
@@ -354,8 +354,8 @@ void MacroEnhanceWizard::show_current_operation() {
     // Update description with user-friendly text
     snprintf(description_buf_, sizeof(description_buf_),
              lv_tr("When starting a print, you'll be able to choose whether to run %s. "
-                    "This saves time when you've already done it recently or want more "
-                    "control over your print preparation."),
+                   "This saves time when you've already done it recently or want more "
+                   "control over your print preparation."),
              friendly_name.c_str());
     lv_subject_set_pointer(&description_subject_, description_buf_);
 
@@ -434,8 +434,8 @@ void MacroEnhanceWizard::show_success(const std::string& /* message */) {
     // Use friendly success message instead of technical details
     snprintf(description_buf_, sizeof(description_buf_), "%s",
              lv_tr("You can now skip these operations when starting prints.\n\n"
-                    "Look for the new options in the print details before starting each print.\n\n"
-                    "A backup of your config was saved automatically."));
+                   "Look for the new options in the print details before starting each print.\n\n"
+                   "A backup of your config was saved automatically."));
     lv_subject_set_pointer(&description_subject_, description_buf_);
 
     update_ui();
@@ -522,8 +522,9 @@ void MacroEnhanceWizard::apply_enhancements() {
         api_, analysis_.macro_name, analysis_.source_file, approved,
         // Progress callback
         [this, token](const std::string& step, int /*current*/, int /*total*/) {
-            if (token.expired()) return;
-            lifetime_.defer("MacroEnhanceWizard::progress", [this, step]() {
+            if (token.expired())
+                return;
+            token.defer("MacroEnhanceWizard::progress", [this, step]() {
                 if (is_visible()) {
                     show_applying(step);
                 }
@@ -531,9 +532,10 @@ void MacroEnhanceWizard::apply_enhancements() {
         },
         // Success callback
         [this, token, approved_count = approved.size()](const helix::EnhancementResult& result) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto backup = result.backup_filename;
-            lifetime_.defer("MacroEnhanceWizard::success", [this, approved_count, backup]() {
+            token.defer("MacroEnhanceWizard::success", [this, approved_count, backup]() {
                 if (is_visible()) {
                     std::string msg = "Successfully enhanced " + std::to_string(approved_count) +
                                       " operation(s).\n\nBackup: " + backup +
@@ -544,9 +546,10 @@ void MacroEnhanceWizard::apply_enhancements() {
         },
         // Error callback
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             auto msg = err.user_message();
-            lifetime_.defer("MacroEnhanceWizard::error", [this, msg]() {
+            token.defer("MacroEnhanceWizard::error", [this, msg]() {
                 if (is_visible()) {
                     show_error(msg);
                 }

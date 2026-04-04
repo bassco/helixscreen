@@ -11,14 +11,13 @@
 
 #include "app_globals.h"
 #include "config.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_state.h"
 #include "standard_macros.h"
 #include "static_panel_registry.h"
 #include "z_offset_utils.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include <spdlog/spdlog.h>
 
@@ -397,15 +396,16 @@ void ZOffsetCalibrationPanel::start_calibration() {
         spdlog::info("[ZOffsetCal] Warming bed to {}°C for calibration", temp);
         bed_was_warmed_ = true;
 
+        auto tok = lifetime_.token();
         api_->execute_gcode(
             cmd, []() { spdlog::debug("[ZOffsetCal] M140 sent, bed heating"); },
-            [this](const MoonrakerError& err) {
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
                 spdlog::error("[ZOffsetCal] Failed to start bed heating: {}", err.message);
-                lifetime_.defer("ZOffsetCalibrationPanel::on_calibration_result(bed_heat)",
-                                [this]() {
-                                    on_calibration_result(false,
-                                                         "Failed to start bed heating");
-                                });
+                tok.defer("ZOffsetCalibrationPanel::on_calibration_result(bed_heat)", [this]() {
+                    on_calibration_result(false, "Failed to start bed heating");
+                });
             });
 
         // Enter WARMING state and observe bed temperature
@@ -470,26 +470,30 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
         spdlog::info("[ZOffsetCal] Starting gcode_offset calibration (center={:.1f},{:.1f})",
                      center_x, center_y);
 
+        auto tok = lifetime_.token();
         api_->execute_gcode(
             gcode,
-            [this]() {
+            [this, tok]() {
+                if (tok.expired())
+                    return;
                 spdlog::info("[ZOffsetCal] Moved to center at Z0.1, ready for adjustment");
-                lifetime_.defer("ZOffsetCalibrationPanel::set_state(ADJUSTING)", [this]() {
+                tok.defer("ZOffsetCalibrationPanel::set_state(ADJUSTING)", [this]() {
                     set_state(State::ADJUSTING);
                     update_z_position(0.1f);
                 });
             },
-            [this](const MoonrakerError& err) {
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     spdlog::warn("[ZOffsetCal] Move to position timed out (may still be running)");
-                    NOTIFY_WARNING(lv_tr("Calibration move may still be running — response timed out"));
+                    NOTIFY_WARNING(
+                        lv_tr("Calibration move may still be running — response timed out"));
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to move to position: {}", err.message);
-                    lifetime_.defer(
-                        "ZOffsetCalibrationPanel::on_calibration_result(move_fail)",
-                        [this]() {
-                            on_calibration_result(false,
-                                                  "Failed to move to calibration position");
+                    tok.defer(
+                        "ZOffsetCalibrationPanel::on_calibration_result(move_fail)", [this]() {
+                            on_calibration_result(false, "Failed to move to calibration position");
                         });
                 }
             },
@@ -519,25 +523,25 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
                      strategy == ZOffsetCalibrationStrategy::ENDSTOP ? "endstop"
                                                                      : "probe_calibrate");
 
+        auto tok = lifetime_.token();
         api_->execute_gcode(
             gcode,
             [calibrate_cmd]() {
                 spdlog::info("[ZOffsetCal] {} sent, waiting for manual_probe", calibrate_cmd);
                 // State transition to ADJUSTING happens via manual_probe_active observer
             },
-            [this](const MoonrakerError& err) {
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
                 if (err.type == MoonrakerErrorType::TIMEOUT) {
                     spdlog::warn(
                         "[ZOffsetCal] Calibration response timed out (may still be running)");
                     NOTIFY_WARNING(lv_tr("Calibration may still be running — response timed out"));
                 } else {
                     spdlog::error("[ZOffsetCal] Failed to start calibration: {}", err.message);
-                    lifetime_.defer(
-                        "ZOffsetCalibrationPanel::on_calibration_result(cal_fail)",
-                        [this]() {
-                            on_calibration_result(false,
-                                                  "Failed to start Z offset calibration");
-                        });
+                    tok.defer("ZOffsetCalibrationPanel::on_calibration_result(cal_fail)", [this]() {
+                        on_calibration_result(false, "Failed to start Z offset calibration");
+                    });
                 }
             },
             MoonrakerAdvancedAPI::PROBING_TIMEOUT_MS);
@@ -560,7 +564,7 @@ void ZOffsetCalibrationPanel::adjust_z(float delta) {
             [this, delta, token = lifetime_.token()]() {
                 if (token.expired())
                     return;
-                lifetime_.defer("ZOffsetCalibrationPanel::adjust_z(update)", [this, delta]() {
+                token.defer("ZOffsetCalibrationPanel::adjust_z(update)", [this, delta]() {
                     cumulative_z_delta_ += delta;
                     update_z_position(0.1f + cumulative_z_delta_);
                     spdlog::debug("[ZOffsetCal] G1 Z adjust: delta={:.3f}, cumulative={:.3f}",
@@ -600,20 +604,22 @@ void ZOffsetCalibrationPanel::send_accept() {
         snprintf(cmd, sizeof(cmd), "SET_GCODE_OFFSET Z=%.3f", cumulative_z_delta_);
         spdlog::info("[ZOffsetCal] Applying gcode_offset: {}", cmd);
 
+        auto tok = lifetime_.token();
         api_->execute_gcode(
             cmd,
-            [this]() {
+            [this, tok]() {
+                if (tok.expired())
+                    return;
                 spdlog::info("[ZOffsetCal] SET_GCODE_OFFSET applied — firmware/macros handle save");
-                lifetime_.defer(
-                    "ZOffsetCalibrationPanel::on_calibration_result(gcode_offset_ok)",
-                    [this]() { on_calibration_result(true, ""); });
+                tok.defer("ZOffsetCalibrationPanel::on_calibration_result(gcode_offset_ok)",
+                          [this]() { on_calibration_result(true, ""); });
             },
-            [this](const MoonrakerError& err) {
+            [this, tok](const MoonrakerError& err) {
+                if (tok.expired())
+                    return;
                 spdlog::error("[ZOffsetCal] SET_GCODE_OFFSET failed: {}", err.message);
-                lifetime_.defer("ZOffsetCalibrationPanel::on_calibration_result(gcode_fail)",
-                                [this]() {
-                                    on_calibration_result(false, "Failed to set Z-offset");
-                                });
+                tok.defer("ZOffsetCalibrationPanel::on_calibration_result(gcode_fail)",
+                          [this]() { on_calibration_result(false, "Failed to set Z-offset"); });
             });
     } else {
         // Probe/endstop: ACCEPT then apply+save
@@ -632,30 +638,24 @@ void ZOffsetCalibrationPanel::send_accept() {
                     [this, token2]() {
                         if (token2.expired())
                             return;
-                        lifetime_.defer(
-                            "ZOffsetCalibrationPanel::on_calibration_result(accept_ok)",
-                            [this]() { on_calibration_result(true, ""); });
+                        token2.defer("ZOffsetCalibrationPanel::on_calibration_result(accept_ok)",
+                                     [this]() { on_calibration_result(true, ""); });
                     },
                     [this, token2](const std::string& error) {
                         if (token2.expired())
                             return;
                         std::string msg = error;
-                        lifetime_.defer(
+                        token2.defer(
                             "ZOffsetCalibrationPanel::on_calibration_result(accept_save_fail)",
-                            [this, msg = std::move(msg)]() {
-                                on_calibration_result(false, msg);
-                            });
+                            [this, msg = std::move(msg)]() { on_calibration_result(false, msg); });
                     });
             },
             [this, token = lifetime_.token()](const MoonrakerError& err) {
                 if (token.expired())
                     return;
                 std::string msg = "ACCEPT failed: " + err.user_message();
-                lifetime_.defer(
-                    "ZOffsetCalibrationPanel::on_calibration_result(accept_fail)",
-                    [this, msg = std::move(msg)]() {
-                        on_calibration_result(false, msg);
-                    });
+                token.defer("ZOffsetCalibrationPanel::on_calibration_result(accept_fail)",
+                            [this, msg = std::move(msg)]() { on_calibration_result(false, msg); });
             });
     }
 }

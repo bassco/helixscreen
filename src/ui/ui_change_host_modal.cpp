@@ -225,7 +225,9 @@ void ChangeHostModal::handle_test_connection() {
 void ChangeHostModal::on_test_success() {
     spdlog::info("[ChangeHostModal] Test connection successful");
 
-    lifetime_.defer([this]() {
+    // Called from BG thread — use token.defer() to avoid TOCTOU race (#707)
+    auto tok = lifetime_.token();
+    tok.defer([this]() {
         if (!is_visible())
             return;
 
@@ -240,7 +242,9 @@ void ChangeHostModal::on_test_success() {
 void ChangeHostModal::on_test_failure() {
     spdlog::warn("[ChangeHostModal] Test connection failed");
 
-    lifetime_.defer([this]() {
+    // Called from BG thread — use token.defer() to avoid TOCTOU race (#707)
+    auto tok = lifetime_.token();
+    tok.defer([this]() {
         if (!is_visible())
             return;
 

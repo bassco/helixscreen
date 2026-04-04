@@ -7,7 +7,6 @@
 #include "ui_emergency_stop.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
-#include "temperature_service.h"
 
 #include "app_globals.h"
 #include "filament_database.h"
@@ -16,6 +15,7 @@
 #include "moonraker_api.h"
 #include "static_panel_registry.h"
 #include "static_subject_registry.h"
+#include "temperature_service.h"
 
 #include <spdlog/spdlog.h>
 
@@ -604,9 +604,10 @@ void PIDCalibrationPanel::send_pid_calibrate() {
     api_->advanced().start_pid_calibrate(
         heater_name, target_temp_,
         [this, token](float kp, float ki, float kd) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             // Callback from background thread - marshal to UI thread
-            lifetime_.defer([this, kp, ki, kd]() {
+            token.defer([this, kp, ki, kd]() {
                 // Ignore results if user already aborted
                 if (state_ != State::CALIBRATING) {
                     spdlog::info("[PIDCal] Ignoring PID result (state={}, user likely aborted)",
@@ -618,9 +619,10 @@ void PIDCalibrationPanel::send_pid_calibrate() {
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             std::string msg = err.message;
-            lifetime_.defer([this, msg]() {
+            token.defer([this, msg]() {
                 if (state_ != State::CALIBRATING) {
                     spdlog::info("[PIDCal] Ignoring PID error (state={}, user likely aborted)",
                                  static_cast<int>(state_));
@@ -631,10 +633,9 @@ void PIDCalibrationPanel::send_pid_calibrate() {
             });
         },
         [this, token](int sample, float tolerance) {
-            if (token.expired()) return;
-            lifetime_.defer([this, sample, tolerance]() {
-                on_pid_progress(sample, tolerance);
-            });
+            if (token.expired())
+                return;
+            token.defer([this, sample, tolerance]() { on_pid_progress(sample, tolerance); });
         });
 }
 
@@ -649,17 +650,19 @@ void PIDCalibrationPanel::send_save_config() {
     auto token = lifetime_.token();
     api_->advanced().save_config(
         [this, token]() {
-            if (token.expired()) return;
-            lifetime_.defer([this]() {
+            if (token.expired())
+                return;
+            token.defer([this]() {
                 if (state_ == State::SAVING) {
                     set_state(State::COMPLETE);
                 }
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             std::string msg = err.message;
-            lifetime_.defer([this, msg]() {
+            token.defer([this, msg]() {
                 // Still show results even if save fails
                 spdlog::warn("[PIDCal] Save config failed: {}", msg);
                 if (state_ == State::SAVING) {
@@ -687,8 +690,9 @@ void PIDCalibrationPanel::fetch_old_pid_values() {
     api_->advanced().get_heater_pid_values(
         heater_name,
         [this, token](float kp, float ki, float kd) {
-            if (token.expired()) return;
-            lifetime_.defer([this, kp, ki, kd]() {
+            if (token.expired())
+                return;
+            token.defer([this, kp, ki, kd]() {
                 old_kp_ = kp;
                 old_ki_ = ki;
                 old_kd_ = kd;
@@ -1052,8 +1056,9 @@ void PIDCalibrationPanel::detect_heater_control_type() {
     api_->advanced().get_heater_control_type(
         heater,
         [this, token](const std::string& type) {
-            if (token.expired()) return;
-            lifetime_.defer([this, type]() {
+            if (token.expired())
+                return;
+            token.defer([this, type]() {
                 // Query succeeded, firmware supports control type query (Kalico)
                 is_kalico_ = true;
                 // Only expose MPC UI to beta users
@@ -1085,9 +1090,10 @@ void PIDCalibrationPanel::detect_heater_control_type() {
             });
         },
         [this, token](const MoonrakerError&) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             // Can't determine control type, not Kalico — default to PID
-            lifetime_.defer([this]() {
+            token.defer([this]() {
                 is_kalico_ = false;
                 lv_subject_set_int(&subj_is_kalico_, 0);
                 spdlog::debug("[PIDCal] Heater control type query failed, defaulting to PID");
@@ -1114,8 +1120,9 @@ void PIDCalibrationPanel::start_migration() {
     config_editor_.safe_multi_edit(
         *api_, section, edits,
         [this, token]() {
-            if (token.expired()) return;
-            lifetime_.defer([this]() {
+            if (token.expired())
+                return;
+            token.defer([this]() {
                 needs_migration_ = false;
                 lv_subject_set_int(&subj_needs_migration_, 0);
                 spdlog::info("[PIDCal] Migration complete, starting MPC calibration");
@@ -1124,8 +1131,9 @@ void PIDCalibrationPanel::start_migration() {
             });
         },
         [this, token](const std::string& err) {
-            if (token.expired()) return;
-            lifetime_.defer([this, err]() {
+            if (token.expired())
+                return;
+            token.defer([this, err]() {
                 spdlog::error("[PIDCal] Migration failed: {}", err);
                 lv_subject_copy_string(&subj_error_message_, err.c_str());
                 set_state(State::ERROR);
@@ -1155,17 +1163,19 @@ void PIDCalibrationPanel::send_mpc_calibrate() {
     api_->advanced().start_mpc_calibrate(
         heater, target_temp_, fan_breakpoints_,
         [this, token](const MoonrakerAdvancedAPI::MPCResult& result) {
-            if (token.expired()) return;
-            lifetime_.defer([this, result]() {
+            if (token.expired())
+                return;
+            token.defer([this, result]() {
                 if (state_ != State::CALIBRATING)
                     return;
                 on_mpc_result(result);
             });
         },
         [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             std::string msg = err.message;
-            lifetime_.defer([this, msg]() {
+            token.defer([this, msg]() {
                 if (state_ != State::CALIBRATING)
                     return;
                 spdlog::error("[PIDCal] MPC calibration failed: {}", msg);
@@ -1174,10 +1184,9 @@ void PIDCalibrationPanel::send_mpc_calibrate() {
             });
         },
         [this, token](int phase, int total, const std::string& desc) {
-            if (token.expired()) return;
-            lifetime_.defer([this, phase, total, desc]() {
-                on_mpc_progress(phase, total, desc);
-            });
+            if (token.expired())
+                return;
+            token.defer([this, phase, total, desc]() { on_mpc_progress(phase, total, desc); });
         });
 }
 

@@ -157,11 +157,10 @@ void PowerWidget::refresh_power_state() {
                 }
             }
 
-            lifetime_.defer("PowerWidget::refresh", [this, any_on]() {
+            token.defer("PowerWidget::refresh", [this, any_on]() {
                 power_on_ = any_on;
                 update_power_icon(power_on_);
-                spdlog::debug("[PowerWidget] Power state refreshed: {}",
-                              power_on_ ? "on" : "off");
+                spdlog::debug("[PowerWidget] Power state refreshed: {}", power_on_ ? "on" : "off");
             });
         },
         [](const MoonrakerError& err) {

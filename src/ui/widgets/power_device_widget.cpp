@@ -939,8 +939,8 @@ void PowerDeviceWidget::refresh_all_devices_state() {
                 }
             }
 
-            lifetime_.defer("PowerDeviceWidget::refresh_all",
-                            [this, any_on]() { update_all_devices_display(any_on); });
+            token.defer("PowerDeviceWidget::refresh_all",
+                        [this, any_on]() { update_all_devices_display(any_on); });
         },
         [](const MoonrakerError& err) {
             spdlog::warn("[PowerDeviceWidget] Failed to refresh all-devices state: {}",
