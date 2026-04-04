@@ -43,30 +43,23 @@
         {
           "type": "sensor_match",
           "field": "sensors",
-          "pattern": "tvocValue",
+          "pattern": "tvoc",
           "confidence": 95,
-          "reason": "TVOC air quality sensor (FlashForge Adventurer 5M signature)"
+          "reason": "TVOC sensor (matches stock 'tvocValue' and ForgeX 'TVOC_Level')"
         },
         {
           "type": "sensor_match",
           "field": "sensors",
-          "pattern": "tvoc",
-          "confidence": 95,
-          "reason": "TVOC sensor detected (FlashForge signature)"
+          "pattern": "load_cell",
+          "confidence": 80,
+          "reason": "Load cell sensor (ForgeX name for spool weight sensor)"
         },
         {
           "type": "sensor_match",
           "field": "sensors",
           "pattern": "weightValue",
           "confidence": 80,
-          "reason": "Spool weight sensor (FlashForge signature)"
-        },
-        {
-          "type": "sensor_match",
-          "field": "sensors",
-          "pattern": "weight",
-          "confidence": 70,
-          "reason": "Weight sensor detected (FlashForge-like)"
+          "reason": "Spool weight sensor (stock firmware name)"
         },
         {
           "type": "kinematics_match",
@@ -122,9 +115,9 @@
         {
           "type": "led_match",
           "field": "leds",
-          "pattern": "chamber_light",
+          "pattern": "chamber_l",
           "confidence": 100,
-          "reason": "LED chamber light (AD5M Pro exclusive - regular 5M doesn't have this)"
+          "reason": "LED chamber light/led (AD5M Pro exclusive - matches stock 'chamber_light' and ForgeX 'chamber_led')"
         },
         {
           "type": "macro_match",
@@ -143,30 +136,23 @@
         {
           "type": "sensor_match",
           "field": "sensors",
-          "pattern": "tvocValue",
+          "pattern": "tvoc",
           "confidence": 95,
-          "reason": "TVOC air quality sensor (FlashForge Adventurer 5M signature)"
+          "reason": "TVOC sensor (matches stock 'tvocValue' and ForgeX 'TVOC_Level')"
         },
         {
           "type": "sensor_match",
           "field": "sensors",
-          "pattern": "tvoc",
-          "confidence": 95,
-          "reason": "TVOC sensor detected (FlashForge signature)"
+          "pattern": "load_cell",
+          "confidence": 80,
+          "reason": "Load cell sensor (ForgeX name for spool weight sensor)"
         },
         {
           "type": "sensor_match",
           "field": "sensors",
           "pattern": "weightValue",
           "confidence": 80,
-          "reason": "Spool weight sensor (FlashForge signature)"
-        },
-        {
-          "type": "sensor_match",
-          "field": "sensors",
-          "pattern": "weight",
-          "confidence": 70,
-          "reason": "Weight sensor detected (FlashForge-like)"
+          "reason": "Spool weight sensor (stock firmware name)"
         },
         {
           "type": "kinematics_match",
