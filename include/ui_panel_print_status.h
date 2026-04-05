@@ -516,6 +516,7 @@ class PrintStatusPanel : public OverlayBase {
     ObserverGuard active_tool_observer_;  ///< Refreshes nozzle temp display with tool name prefix
     ObserverGuard chamber_temp_observer_; ///< Updates chamber status text
     ObserverGuard print_thumbnail_path_observer_; ///< Updates print_thumbnail_ from shared subject
+    ObserverGuard gcode_render_mode_observer_; ///< Watches settings changes to update viewer mode
 
     //
     // === Exclude Object Manager ===

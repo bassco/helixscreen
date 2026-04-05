@@ -224,6 +224,30 @@ PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* ap
         [](PrintStatusPanel* self, int state) { self->on_led_state_changed(state); });
     spdlog::debug("[{}] LED state observer registered (strips read lazily)", get_name());
 
+    // Subscribe to G-code render mode changes from settings panel
+    // This allows real-time updates to the viewer when the user changes the setting
+    gcode_render_mode_observer_ = observe_int_sync<PrintStatusPanel>(
+        DisplaySettingsManager::instance().subject_gcode_render_mode(), this,
+        [](PrintStatusPanel* self, int mode) {
+            spdlog::info("[{}] G-code render mode changed from settings: {}", self->get_name(),
+                         mode);
+            if (self->gcode_viewer_ && self->is_active_) {
+                // Apply the new render mode (skip "Thumbnail Only" mode = 3)
+                if (mode == 3) {
+                    // Thumbnail Only - hide the viewer
+                    self->show_gcode_viewer(false);
+                } else {
+                    auto render_mode = static_cast<GcodeViewerRenderMode>(mode);
+                    ui_gcode_viewer_set_render_mode(self->gcode_viewer_, render_mode);
+                    // Update viewer mode subject to trigger XML visibility bindings
+                    if (self->gcode_loaded_) {
+                        self->show_gcode_viewer(true);
+                    }
+                }
+            }
+        });
+    spdlog::debug("[{}] G-code render mode observer registered", get_name());
+
     // Create filament runout handler (extracted from PrintStatusPanel)
     runout_handler_ = std::make_unique<helix::ui::FilamentRunoutHandler>(api_);
     spdlog::debug("[{}] Created filament runout handler", get_name());
