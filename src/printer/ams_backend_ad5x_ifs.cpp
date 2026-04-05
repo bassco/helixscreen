@@ -757,8 +757,30 @@ AmsError AmsBackendAd5xIfs::write_zcolor(int slot_index) {
 }
 
 void AmsBackendAd5xIfs::read_adventurer_json() {
-    // Stub — Task 2 will implement reading via Moonraker HTTP file access.
-    // For now, parse_adventurer_json() is callable directly for testing.
+    if (!api_)
+        return;
+
+    auto token = lifetime_.token();
+    api_->transfers().download_file(
+        "config", "Adventurer5M.json",
+        [this, token](const std::string& content) {
+            if (token.expired())
+                return;
+            spdlog::debug("{} Downloaded Adventurer5M.json ({} bytes)", backend_log_tag(),
+                          content.size());
+            parse_adventurer_json(content);
+        },
+        [this, token](const MoonrakerError& err) {
+            if (token.expired())
+                return;
+            if (err.type == MoonrakerErrorType::FILE_NOT_FOUND || err.code == 404) {
+                spdlog::info("{} Adventurer5M.json not found — not a native ZMOD AD5X",
+                             backend_log_tag());
+            } else {
+                spdlog::warn("{} Failed to download Adventurer5M.json: {}", backend_log_tag(),
+                             err.message);
+            }
+        });
 }
 
 void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
