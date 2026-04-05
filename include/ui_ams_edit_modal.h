@@ -127,7 +127,7 @@ class AmsEditModal : public Modal {
     char color_name_buf_[32] = {0};
     char temp_nozzle_buf_[16] = {0};
     char temp_bed_buf_[16] = {0};
-    char remaining_pct_buf_[48] = {0};  // "1000g / 1000g (100%)" needs ~22 chars
+    char remaining_pct_buf_[48] = {0}; // "1000g / 1000g (100%)" needs ~22 chars
     char save_btn_text_buf_[16] = {0};
     bool subjects_initialized_ = false;
 
@@ -218,12 +218,9 @@ class AmsEditModal : public Modal {
     static void on_save_cb(lv_event_t* e);
     static void on_manual_entry_cb(lv_event_t* e);
     static void on_change_spool_cb(lv_event_t* e);
-    static void on_unlink_cb(lv_event_t* e);
-#if HELIX_HAS_LABEL_PRINTER
-    static void on_print_label_cb(lv_event_t* e);
-#endif
+    static void on_spool_actions_clicked_cb(lv_event_t* e);
+    static void on_spool_actions_changed_cb(lv_event_t* e);
     static void on_scan_qr_cb(lv_event_t* e);
-    static void on_spool_details_cb(lv_event_t* e);
     static void on_picker_search_cb(lv_event_t* e);
     static void on_picker_retry_cb(lv_event_t* e);
     static void on_spool_item_cb(lv_event_t* e);

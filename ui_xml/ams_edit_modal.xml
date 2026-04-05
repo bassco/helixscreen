@@ -195,21 +195,14 @@
                    icon="qrcode_scan">
           <event_cb trigger="clicked" callback="ams_edit_scan_qr_cb"/>
         </ui_button>
-        <ui_button name="btn_edit_spool_details"
-                   height="#button_height_sm" text="Spool Details" translation_tag="Spool Details"
-                   icon="pencil" variant="secondary" hidden="true">
-          <event_cb trigger="clicked" callback="ams_edit_spool_details_cb"/>
-        </ui_button>
-        <ui_button name="btn_unlink_spool"
-                   height="#button_height_sm" text="Unlink" translation_tag="Unlink" variant="secondary"
-                   hidden="true">
-          <event_cb trigger="clicked" callback="ams_edit_unlink_cb"/>
-        </ui_button>
-        <ui_button name="btn_print_label"
-                   height="#button_height_sm" text="Print Label" translation_tag="Print Label"
-                   icon="printer" variant="secondary" hidden="true">
-          <event_cb trigger="clicked" callback="ams_edit_print_label_cb"/>
-        </ui_button>
+        <ui_split_button name="btn_spool_actions"
+                         height="#button_height_sm" variant="secondary"
+                         icon="pencil" text="Spool Details"
+                         options="Spool Details&#10;Unlink" show_selection="false"
+                         hidden="true">
+          <event_cb trigger="clicked" callback="ams_edit_spool_actions_clicked_cb"/>
+          <event_cb trigger="value_changed" callback="ams_edit_spool_actions_changed_cb"/>
+        </ui_split_button>
       </lv_obj>
     </lv_obj>
 
@@ -257,7 +250,8 @@
     </lv_obj>
 
     <!-- Action buttons -->
-    <modal_button_row secondary_text="Cancel"
-                      secondary_callback="ams_edit_reset_cb" primary_text="Save" primary_callback="ams_edit_save_cb"/>
+    <modal_button_row secondary_text="Cancel" secondary_tag="Cancel"
+                      secondary_callback="ams_edit_reset_cb" primary_text="Save" primary_tag="Save"
+                      primary_callback="ams_edit_save_cb"/>
   </view>
 </component>

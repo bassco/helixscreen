@@ -6,6 +6,7 @@
 #include "ui_button.h"
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
+#include "ui_split_button.h"
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
@@ -917,45 +918,35 @@ void AmsEditModal::update_spoolman_button_state() {
     }
 
     lv_obj_t* btn_change = find_widget("btn_change_spool");
-    lv_obj_t* btn_unlink = find_widget("btn_unlink_spool");
-
-    lv_obj_t* btn_details = find_widget("btn_edit_spool_details");
+    lv_obj_t* btn_actions = find_widget("btn_spool_actions");
 
     if (working_info_.spoolman_id > 0) {
-        // Linked: show "Change Saved Spool", "Spool Details", and "Unlink"
+        // Linked: show "Change Saved Spool" and spool actions split button
         if (btn_change) {
             ui_button_set_text(btn_change, lv_tr("Change Saved Spool"));
         }
-        if (btn_unlink) {
-            lv_obj_remove_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (btn_details) {
-            lv_obj_remove_flag(btn_details, LV_OBJ_FLAG_HIDDEN);
+        if (btn_actions) {
+            lv_obj_remove_flag(btn_actions, LV_OBJ_FLAG_HIDDEN);
+            ui_split_button_set_text(btn_actions, lv_tr("Spool Details"));
+
+            // Build options list with translated strings
+            std::string options = std::string(lv_tr("Spool Details")) + "\n" + lv_tr("Unlink");
+#if HELIX_HAS_LABEL_PRINTER
+            if (helix::LabelPrinterSettingsManager::instance().is_configured()) {
+                options += std::string("\n") + lv_tr("Print Label");
+            }
+#endif
+            ui_split_button_set_options(btn_actions, options.c_str());
         }
     } else {
-        // Not linked: show "Choose Saved Spool", hide "Unlink" and "Spool Details"
+        // Not linked: show "Choose Saved Spool", hide spool actions
         if (btn_change) {
             ui_button_set_text(btn_change, lv_tr("Choose Saved Spool"));
         }
-        if (btn_unlink) {
-            lv_obj_add_flag(btn_unlink, LV_OBJ_FLAG_HIDDEN);
-        }
-        if (btn_details) {
-            lv_obj_add_flag(btn_details, LV_OBJ_FLAG_HIDDEN);
+        if (btn_actions) {
+            lv_obj_add_flag(btn_actions, LV_OBJ_FLAG_HIDDEN);
         }
     }
-
-#if HELIX_HAS_LABEL_PRINTER
-    lv_obj_t* btn_print = find_widget("btn_print_label");
-    if (btn_print) {
-        bool show = working_info_.spoolman_id > 0 &&
-                    helix::LabelPrinterSettingsManager::instance().is_configured();
-        if (show)
-            lv_obj_remove_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
-        else
-            lv_obj_add_flag(btn_print, LV_OBJ_FLAG_HIDDEN);
-    }
-#endif
 }
 
 // ============================================================================
@@ -1576,12 +1567,9 @@ void AmsEditModal::register_callbacks() {
         {"ams_edit_save_cb", on_save_cb},
         {"ams_edit_manual_entry_cb", on_manual_entry_cb},
         {"ams_edit_change_spool_cb", on_change_spool_cb},
-        {"ams_edit_unlink_cb", on_unlink_cb},
-#if HELIX_HAS_LABEL_PRINTER
-        {"ams_edit_print_label_cb", on_print_label_cb},
-#endif
+        {"ams_edit_spool_actions_clicked_cb", on_spool_actions_clicked_cb},
+        {"ams_edit_spool_actions_changed_cb", on_spool_actions_changed_cb},
         {"ams_edit_scan_qr_cb", on_scan_qr_cb},
-        {"ams_edit_spool_details_cb", on_spool_details_cb},
         {"ams_edit_picker_search_cb", on_picker_search_cb},
         {"ams_edit_picker_retry_cb", on_picker_retry_cb},
         // Register handler for spool_item clicks (shared component uses this callback name)
@@ -1700,33 +1688,43 @@ void AmsEditModal::on_change_spool_cb(lv_event_t* e) {
     }
 }
 
-void AmsEditModal::on_unlink_cb(lv_event_t* e) {
+void AmsEditModal::on_spool_actions_clicked_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
-        self->handle_unlink();
+        self->handle_spool_details();
     }
 }
 
-#if HELIX_HAS_LABEL_PRINTER
-void AmsEditModal::on_print_label_cb(lv_event_t* e) {
+void AmsEditModal::on_spool_actions_changed_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
-    if (self) {
+    if (!self)
+        return;
+
+    auto* split_btn = self->find_widget("btn_spool_actions");
+    if (!split_btn)
+        return;
+    uint32_t idx = ui_split_button_get_selected(split_btn);
+    switch (idx) {
+    case 0:
+        self->handle_spool_details();
+        break;
+    case 1:
+        self->handle_unlink();
+        break;
+#if HELIX_HAS_LABEL_PRINTER
+    case 2:
         self->handle_print_label();
+        break;
+#endif
+    default:
+        break;
     }
 }
-#endif
 
 void AmsEditModal::on_scan_qr_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_scan_qr();
-    }
-}
-
-void AmsEditModal::on_spool_details_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (self) {
-        self->handle_spool_details();
     }
 }
 
