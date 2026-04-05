@@ -187,6 +187,8 @@ ifs_motion_sensor = 0
 
 **Option A (Preferred)**: Subscribe to `save_variables` → watch `less_waste_colors`, `less_waste_types`, `less_waste_current_tool`, `less_waste_tools`
 
+**Option A2 (Native ZMOD)**: Download `Adventurer5M.json` via Moonraker file API (`config` root). Parse `FFMInfo.ffmColor1-4` and `FFMInfo.ffmType1-4`. Re-read on port sensor changes or when `RUN_ZCOLOR`/`CHANGE_ZCOLOR` appears in gcode response stream.
+
 **Option B**: Execute `IFS_STATUS` G-code command and parse JSON response for real-time hardware state (port presence, stall, active channel)
 
 **Option C**: Subscribe to individual `filament_switch_sensor _ifs_port_sensor_{1-4}` for per-port presence
@@ -298,7 +300,7 @@ Zmod has an option to rename slots from 0-indexed (0,1,2,3) to 1-indexed (1,2,3,
 
 1. ~~What does the Moonraker object state actually look like for `zmod_ifs_*` objects?~~ (User's Moonraker API was behind broken reverse proxy — couldn't get state dump)
 2. Does `zmod_ifs` expose any Klipper object status attributes (like `get_status()` in the Python module)? Need to check if it implements that method.
-3. What does `zmod_color` expose? (referenced in the code but Python source not captured)
+3. ~~What does `zmod_color` expose?~~ **Answered**: Source at `github.com/ghzserg/zmod_ff5x` branch `1.6`, file `.shell/zmod_color.py`. Re-reads `Adventurer5M.json` on every G-code command (no cache). When display is OFF (HelixScreen case), reads/writes file directly. Colors use `#` prefix in the file.
 4. How does the `file.json` tool mapping interact with multi-color prints? (Slicer outputs T0/T1/etc., mapping resolves to physical ports)
 
 ---
