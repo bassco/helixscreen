@@ -27,14 +27,14 @@ Same layout as nozzle control:
 
 Built-in presets:
 
-| Material | Nozzle | Bed |
-|----------|--------|-----|
-| Off | 0°C | 0°C |
-| PLA | 210°C | 60°C |
-| PETG | 240°C | 80°C |
-| ABS | 250°C | 100°C |
+| Material | Nozzle | Bed | Chamber |
+|----------|--------|-----|---------|
+| Off | 0°C | 0°C | 0°C |
+| PLA | 210°C | 60°C | — |
+| PETG | 240°C | 80°C | — |
+| ABS | 250°C | 100°C | 50°C |
 
-Tap a preset to set the target temperature immediately.
+Tap a preset to set the target temperature immediately. If your printer has a chamber heater, presets that include a chamber temperature will set it automatically — materials that don't need an enclosed chamber (PLA, PETG) leave the chamber heater off.
 
 ### Spool Preset
 
@@ -65,6 +65,8 @@ If your printer has a chamber heater or chamber temperature sensor configured in
 - **Sensor-only chambers** (`temperature_sensor chamber`): Monitoring mode — shows the current chamber temperature and graph, with a "Monitoring" status instead of heating controls. Presets and target input are hidden since there's no heater to control.
 
 The chamber panel works identically to the nozzle and bed panels, just with chamber-specific presets and colors.
+
+**Cooldown:** When you tap **Off** or cool down the printer, HelixScreen also turns off the chamber heater (if present) along with the nozzle and bed.
 
 ---
 

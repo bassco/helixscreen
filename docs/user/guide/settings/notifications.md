@@ -6,7 +6,7 @@ The Notifications section controls audio feedback and print completion alerts.
 
 ## Sound Settings
 
-> Only shown when HelixScreen detects a speaker or buzzer on your printer.
+> Sound Settings appears as soon as HelixScreen starts — you don't need to wait for the printer to connect. If no audio hardware is detected after connection, the row is hidden.
 
 Tap **Sound Settings** to open the overlay:
 

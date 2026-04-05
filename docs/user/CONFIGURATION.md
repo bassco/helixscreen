@@ -398,6 +398,7 @@ Located in the `input` section:
     "scroll_throw": 25,
     "scroll_limit": 10,
     "jitter_threshold": 15,
+    "scroll_guard": false,
     "touch_device": "",
     "force_calibration": false
   }
@@ -427,6 +428,11 @@ Located in the `input` section:
 **Default:** `15`
 **Range:** `0` - `200`
 **Description:** Touch jitter filter dead zone in pixels. Suppresses small coordinate jitter from noisy touch controllers (e.g., Goodix GT9xx) that would cause taps to be misread as swipes. Set to `0` to disable. Can also be overridden with the `HELIX_TOUCH_JITTER` environment variable.
+
+### `scroll_guard`
+**Type:** boolean
+**Default:** `false`
+**Description:** Suppress spurious tap events after scrolling. Some capacitive touch controllers (common on FlashForge AD5M/AD5X) generate a phantom "clicked" event when you lift your finger after a scroll gesture, causing accidental button presses. When enabled, HelixScreen ignores taps for 80ms after a scroll ends. Enabled by default in AD5M/AD5X presets. Can also be overridden with the `HELIX_SCROLL_GUARD` environment variable (`1` to enable).
 
 ### `force_calibration`
 **Type:** boolean
@@ -1447,6 +1453,7 @@ Environment="HELIX_TOUCH_DEVICE=/dev/input/event0"
   "input": {
     "scroll_throw": 25,
     "scroll_limit": 10,
+    "scroll_guard": false,
     "touch_device": "",
     "force_calibration": false
   },

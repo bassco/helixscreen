@@ -219,7 +219,8 @@ wget -O - http://dl.helixscreen.org/install.sh | sh
 - Dedicated build target: `ad5x` with its own toolchain and release binary
 - Prebuilt `ad5x` binaries are included in GitHub releases
 - ZMOD manages installation and updates via Moonraker update manager
-- IFS (4-channel filament system) support is not yet implemented
+- **Auto-detection:** HelixScreen automatically detects ZMOD firmware (by recognizing ZMOD-specific Klipper device names) and applies ZMOD-optimized presets for display, input, and fan configuration. No manual configuration needed.
+- IFS (4-channel filament system) support is in testing — see [Filament Management](guide/filament.md)
 
 **If you're testing on this printer**, please report your results via [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues) or [Discord](https://discord.gg/RZCT2StKhr).
 

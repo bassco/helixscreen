@@ -32,7 +32,7 @@ Manual filament control:
 **Amount selector**: 5mm, 10mm, 25mm, 50mm
 **Speed selector**: Slow, Normal, Fast
 
-> **Safety:** Extrusion requires the hotend to be at minimum temperature (usually 180°C for PLA, higher for other materials).
+> **Safety:** Extrusion requires the hotend to be at minimum temperature (usually 180°C for PLA, higher for other materials). If HelixScreen knows what filament is loaded — either from an [external spool](filament.md#external-spool-configuration) or an active AMS slot — it skips the cold-nozzle safety warning and auto-preheats to the correct temperature instead.
 
 ---
 
@@ -74,7 +74,9 @@ The left side shows all your filament slots in a visual tray layout:
 - **Status badge** — Slot number with color-coded background (green = loaded, gray = empty, red = error)
 - **Tool badge** — If a slot is assigned to a specific extruder tool (T0, T1, etc.), a badge appears in the corner
 
-Below the slot grid, a **filament path diagram** shows the routing from slots through the hub/selector to the toolhead. This updates in real time during load/unload operations.
+Below the slot grid, a **filament path diagram** shows the routing from slots through the hub/selector to the toolhead. This updates in real time during load/unload operations, including eject animations when retracting filament at the slot sensor.
+
+Above the slot view, a **mini temperature graph** shows live nozzle, bed, and chamber temperatures (when a chamber sensor or heater is present) so you can monitor heating during filament operations without switching panels.
 
 ### Sidebar (Right)
 
@@ -143,8 +145,10 @@ Tap **Spool Info** in the slot context menu to open the filament editor. This le
 
 - **Choose Saved Spool** — Browse your Spoolman database and assign a spool. This auto-fills the vendor, material, color, and temperatures.
 - **Scan QR Code** — Scan a filament spool's QR code to look it up in Spoolman
-- **Unlink** — Remove the Spoolman association (appears only when a spool is linked)
-- **Print Label** — Print a physical label for this spool (appears only when a label printer is set up)
+- **More actions button** (▾ dropdown) — Tap the dropdown arrow for additional actions:
+  - **Spool Details** — View the full Spoolman spool record
+  - **Unlink** — Remove the Spoolman association (appears only when a spool is linked)
+  - **Print Label** — Print a physical label for this spool (appears only when a label printer is set up)
 
 Tap **Save** to apply your changes, or **Cancel** to discard them.
 

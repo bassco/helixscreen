@@ -659,6 +659,27 @@ HELIX_TOUCH_JITTER=25 helix-screen
 
 Set to `0` to disable the filter if it interferes with intentional touch gestures.
 
+### Accidental Button Presses After Scrolling
+
+**Symptoms:**
+- After scrolling a list, a button press fires when you lift your finger
+- Unwanted actions triggered at the end of a scroll gesture
+
+**Cause:** Some capacitive touch controllers generate a phantom "clicked" event when the finger is released after scrolling. Common on FlashForge AD5M/AD5X displays.
+
+**Solution:** Enable the scroll guard, which ignores taps for 80ms after a scroll ends:
+
+```json
+// /opt/helixscreen/config/settings.json
+{
+  "input": {
+    "scroll_guard": true
+  }
+}
+```
+
+This is enabled by default on AD5M and AD5X via their hardware presets. If you see this on other hardware, enable it manually.
+
 ---
 
 ### Touch Input is Inaccurate
