@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.22] - 2026-04-05
+
+### Added
+- Artillery M1 Pro printer support with preset, print start profile, and platform hooks
+- `--no-sound` flag and `disable_sound` setting to skip audio backend initialization
+- Event-driven IFS re-read triggers using Adventurer5M.json instead of CHANGE_ZCOLOR macro
+- Reset button in Widget Catalog overlay header
+- 2 new translated strings across all languages
+
+### Fixed
+- SIGBUS crash in Moonraker health timer after long uptimes from destructor race (#717)
+- Re-entrant rebuild crash in nozzle temperature widget (#723)
+- IFS sensor re-read trigger narrowed to sensor changes only (was firing on unrelated events)
+- Cancel/Reprint button visibility not syncing on panel activation (#546)
+- File list not refreshing on reconnect and overlapping RPCs (#577)
+- Invalid `flex_align` value in filament panel XML
+- IFS dirty flag not cleared on color write failure
+- Snapmaker U1 daemon directory and platform hooks deployment (#710)
+- Concurrent `connect()` calls in test fixture causing flaky tests
+
+### Changed
+- IFS backend reads filament data from Adventurer5M.json via Moonraker HTTP instead of parsing GET_ZCOLOR output
+
 ## [0.99.21] - 2026-04-04
 
 ### Fixed
@@ -2600,6 +2623,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.22]: https://github.com/prestonbrown/helixscreen/compare/v0.99.21...v0.99.22
 [0.99.21]: https://github.com/prestonbrown/helixscreen/compare/v0.99.20...v0.99.21
 [0.99.20]: https://github.com/prestonbrown/helixscreen/compare/v0.99.19...v0.99.20
 [0.99.19]: https://github.com/prestonbrown/helixscreen/compare/v0.99.18...v0.99.19
