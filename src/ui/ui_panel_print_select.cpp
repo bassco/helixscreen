@@ -446,14 +446,17 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 
         helix::ui::queue_update<FilesReadyContext>(std::move(ctx), [](FilesReadyContext* c) {
             if (c->token.expired()) {
-                spdlog::warn("[{}] on_files_ready: lifetime token expired, dropping {} files",
-                             c->panel->get_name(), c->files.size());
+                spdlog::warn("[PrintSelectPanel] on_files_ready: lifetime token expired, "
+                             "dropping {} files",
+                             c->files.size());
                 return;
             }
             auto* panel = c->panel;
 
             spdlog::debug("[{}] on_files_ready: applying {} files on main thread",
                           panel->get_name(), c->files.size());
+
+            panel->refresh_in_flight_ = false;
 
             // Move data into panel (now safe - on main thread)
             panel->file_list_ = std::move(c->files);
@@ -575,9 +578,12 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                     }
                 });
         });
-    file_provider_->set_on_error([self](const std::string& error) {
-        NOTIFY_ERROR(lv_tr("Failed to refresh file list"));
+    file_provider_->set_on_error([self, token = self->lifetime_.token()](const std::string& error) {
         LOG_ERROR_INTERNAL("[{}] File list refresh error: {}", self->get_name(), error);
+        token.defer([self]() {
+            self->refresh_in_flight_ = false;
+            NOTIFY_ERROR(lv_tr("Failed to refresh file list"));
+        });
     });
 
     // Create detail view (confirmation dialog created on-demand)
@@ -626,13 +632,18 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
         connection_observer_ = observe_int_sync<PrintSelectPanel>(
             connection_subject, this, [](PrintSelectPanel* self, int state) {
                 if (state == static_cast<int>(ConnectionState::CONNECTED)) {
-                    // Refresh files if empty (and on Printer source, not USB)
+                    // Always refresh on (re)connect to pick up files uploaded while
+                    // disconnected. The previous guard (file_list_.empty()) silently
+                    // skipped refresh after reconnects on unreliable hardware like
+                    // CB1, leaving newly-uploaded files invisible (#577).
                     bool is_printer_source =
                         !self->usb_source_ || !self->usb_source_->is_usb_active();
-                    if (self->file_list_.empty() && is_printer_source) {
-                        spdlog::debug("[{}] Connection established, refreshing file list",
-                                      self->get_name());
-                        self->refresh_files();
+                    if (is_printer_source) {
+                        spdlog::info(
+                            "[{}] Connection (re)established, refreshing file list (existing={})",
+                            self->get_name(), self->file_list_.size());
+                        // Force: previous RPC was lost with the old socket
+                        self->refresh_files(/*force=*/true);
                     }
 
                     // Check USB symlink now that connection is established
@@ -829,7 +840,7 @@ void PrintSelectPanel::hide_context_banner() {
     }
 }
 
-void PrintSelectPanel::refresh_files() {
+void PrintSelectPanel::refresh_files(bool force) {
     hide_context_banner();
     if (!file_provider_) {
         spdlog::warn("[{}] Cannot refresh files: file provider not initialized", get_name());
@@ -842,8 +853,16 @@ void PrintSelectPanel::refresh_files() {
         return;
     }
 
-    spdlog::debug("[{}] refresh_files() called for path='{}', existing_count={}", get_name(),
-                  current_path_.empty() ? "/" : current_path_, file_list_.size());
+    if (refresh_in_flight_ && !force) {
+        spdlog::debug("[{}] refresh_files() skipped: previous request still in-flight", get_name());
+        return;
+    }
+
+    spdlog::debug("[{}] refresh_files() called for path='{}', existing_count={}{}", get_name(),
+                  current_path_.empty() ? "/" : current_path_, file_list_.size(),
+                  force ? " (forced)" : "");
+
+    refresh_in_flight_ = true;
 
     // Delegate to file provider - callbacks set in setup() will handle the results
     file_provider_->refresh_files(current_path_, file_list_);

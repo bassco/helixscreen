@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 #include "ui_plugin_install_modal.h"
@@ -16,6 +15,7 @@
 #include "ui_print_select_usb_source.h"
 #include "ui_print_start_controller.h"
 
+#include "async_lifetime_guard.h"
 #include "helix_plugin_installer.h"
 #include "print_file_data.h"
 #include "print_history_manager.h"
@@ -201,8 +201,10 @@ class PrintSelectPanel : public PanelBase {
      *
      * Fetches files from current directory, updates both views.
      * Metadata (print time, filament) is fetched asynchronously.
+     * @param force If true, ignore the in-flight guard (use after reconnect
+     *              when the previous RPC was likely lost with the old socket)
      */
-    void refresh_files();
+    void refresh_files(bool force = false);
 
     /**
      * @brief Fetch metadata for a range of files (lazy loading)
@@ -470,7 +472,8 @@ class PrintSelectPanel : public PanelBase {
     std::string last_populated_path_;    ///< Track path for scroll preservation on refresh
     std::string selected_filament_type_; ///< Filament type of selected file (for dropdown default)
     std::vector<std::string> selected_filament_colors_; ///< Tool colors of selected file
-    std::vector<std::string> selected_filament_materials_; ///< Per-tool material types of selected file
+    std::vector<std::string>
+        selected_filament_materials_;     ///< Per-tool material types of selected file
     size_t selected_file_size_bytes_ = 0; ///< File size of selected file (for safety checks)
     FileHistoryStatus selected_history_status_ =
         FileHistoryStatus::NEVER_PRINTED; ///< History status of selected file
@@ -486,7 +489,7 @@ class PrintSelectPanel : public PanelBase {
     bool first_activation_ = true;                 ///< Skip redundant refresh on first activation
     bool detail_view_open_ = false;                ///< True while detail view overlay is showing
     bool files_changed_while_detail_open_ = false; ///< True if filelist changed while detail open
-    bool was_deactivated_ = false;                 ///< True if panel was fully deactivated (navigated away)
+    bool was_deactivated_ = false; ///< True if panel was fully deactivated (navigated away)
 
     // Debounce timer for view refresh (prevents rebuilding views for each metadata callback)
     lv_timer_t* refresh_timer_ = nullptr;
@@ -495,6 +498,7 @@ class PrintSelectPanel : public PanelBase {
     // Periodic polling timer for file list (fallback when WebSocket notifications are missed)
     lv_timer_t* file_poll_timer_ = nullptr;
     static constexpr uint32_t FILE_POLL_INTERVAL_MS = 5000; ///< 5s polling fallback
+    bool refresh_in_flight_ = false; ///< Guards against overlapping get_directory RPCs
 
     // Virtualized view modules (extracted for maintainability)
     std::unique_ptr<helix::ui::PrintSelectCardView> card_view_;
