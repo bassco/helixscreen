@@ -91,7 +91,12 @@ void MoonrakerClient::start_health_timer() {
         return;
     }
     health_timer_id_ = l->setInterval(HEALTH_CHECK_INTERVAL_MS, [this](hv::TimerID) {
-        if (is_destroying_.load(std::memory_order_acquire)) {
+        // Acquire shared lock to prevent destructor from proceeding while we execute.
+        // try_to_lock ensures we never block if destructor holds the exclusive lock.
+        // Without this lock, the destructor can destroy members (logger, tracker_)
+        // while this callback is mid-execution — SIGBUS after long uptimes. (#717)
+        std::shared_lock<std::shared_mutex> lk(callback_lifecycle_mutex_, std::try_to_lock);
+        if (!lk.owns_lock() || is_destroying_.load(std::memory_order_acquire)) {
             return;
         }
 
