@@ -31,7 +31,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 5
         max_attempts: 3
@@ -64,7 +64,7 @@ jobs:
           ccache-ubuntu-22.04-
 
     - name: Install Node.js dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 2
         max_attempts: 3
@@ -229,7 +229,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 5
         max_attempts: 3
@@ -263,7 +263,7 @@ jobs:
           ccache-ubuntu-22.04-
 
     - name: Install Node.js dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 2
         max_attempts: 3
@@ -301,7 +301,7 @@ jobs:
   test-tsan:
     name: ThreadSanitizer
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 150
 
     steps:
     - name: Checkout repository
@@ -310,7 +310,7 @@ jobs:
         submodules: recursive
 
     - name: Install dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 5
         max_attempts: 3
@@ -344,7 +344,7 @@ jobs:
           ccache-ubuntu-22.04-
 
     - name: Install Node.js dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 2
         max_attempts: 3
@@ -363,7 +363,7 @@ jobs:
       run: make apply-patches
 
     - name: Build and run with TSAN
-      timeout-minutes: 80
+      timeout-minutes: 140
       run: |
         make test-tsan
         echo "TSAN tests complete"
@@ -440,7 +440,7 @@ jobs:
           ccache-macos-14-
 
     - name: Install Node.js dependencies
-      uses: nick-fields/retry@v3
+      uses: nick-fields/retry@v4
       with:
         timeout_minutes: 2
         max_attempts: 3
