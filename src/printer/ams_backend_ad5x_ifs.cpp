@@ -104,6 +104,7 @@ void AmsBackendAd5xIfs::handle_status_update(const json& notification) {
     std::unique_lock<std::mutex> lock(mutex_);
 
     bool state_changed = false;
+    bool sensor_changed = false;
 
     // Parse save_variables if present
     if (status->contains("save_variables")) {
@@ -123,13 +124,14 @@ void AmsBackendAd5xIfs::handle_status_update(const json& notification) {
             if (sensor.contains("filament_detected") && sensor["filament_detected"].is_boolean()) {
                 parse_port_sensor(port, sensor["filament_detected"].get<bool>());
                 state_changed = true;
+                sensor_changed = true;
             }
         }
     }
 
     // Native ZMOD: when a port sensor changes, the user may have swapped filament.
     // Schedule a re-read of Adventurer5M.json to pick up any color/type changes.
-    if (state_changed && !has_ifs_vars_) {
+    if (sensor_changed && !has_ifs_vars_) {
         lock.unlock();
         schedule_json_reread();
         lock.lock();

@@ -127,8 +127,8 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     bool has_per_port_sensors_ = false;
 
     // True if _IFS_VARS macro is available (lessWaste or bambufy plugin).
-    // False for native ZMOD, which stores color/type in FlashForge config
-    // and uses CHANGE_ZCOLOR / GET_ZCOLOR G-code commands instead.
+    // False for native ZMOD, which stores color/type in Adventurer5M.json
+    // (read/written via Moonraker HTTP file API).
     bool has_ifs_vars_ = false;
     std::atomic<bool> reread_pending_{false};
 
