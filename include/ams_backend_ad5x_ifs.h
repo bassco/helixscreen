@@ -8,6 +8,7 @@
 #include "slot_registry.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <string>
 
@@ -24,8 +25,8 @@ class Ad5xIfsTestAccess;
 /// - filament_switch_sensor head_switch_sensor: filament at toolhead
 ///
 /// Native ZMOD IFS (no per-port sensors, no _IFS_VARS macro):
-/// - Color/type stored in FlashForge config, read via GET_ZCOLOR G-code
-/// - Writes via CHANGE_ZCOLOR SLOT=N HEX=RRGGBB TYPE=MATERIAL
+/// - Color/type stored in Adventurer5M.json, read/written via Moonraker HTTP file API
+/// - Re-reads triggered by port sensor changes and gcode response snooping
 /// - filament_motion_sensor ifs_motion_sensor: toolhead filament presence
 /// - filament_switch_sensor head_switch_sensor: filament at toolhead
 ///
@@ -92,6 +93,8 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     void update_slot_from_state(int slot_index);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
+    void register_zcolor_listener();
+    void schedule_json_reread();
 
     std::string build_color_list_value() const;
     std::string build_type_list_value() const;
@@ -127,6 +130,7 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // False for native ZMOD, which stores color/type in FlashForge config
     // and uses CHANGE_ZCOLOR / GET_ZCOLOR G-code commands instead.
     bool has_ifs_vars_ = false;
+    std::atomic<bool> reread_pending_{false};
 
     // Action timeout tracking
     static constexpr int ACTION_TIMEOUT_SECONDS = 90;
