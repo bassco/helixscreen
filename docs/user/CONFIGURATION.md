@@ -164,6 +164,13 @@ Each printer entry contains all printer-specific settings (connection details, h
 
 Errors always show the full alert regardless of this setting. To change this in the UI, go to **Settings > Print Complete Alert** and select from the dropdown.
 
+### `disable_sound`
+**Type:** boolean
+**Default:** `false`
+**Description:** Disable all sound output entirely. Prevents the audio backend from initializing, which avoids CPU overhead on hardware where audio drivers are present but unusable (e.g., Artillery M1 Pro). Also available as the `--no-sound` CLI flag.
+
+This is different from `sounds_enabled` — that toggle mutes playback but still initializes the audio backend. `disable_sound` prevents initialization altogether.
+
 ### `wizard_completed`
 **Type:** boolean
 **Default:** `false`
@@ -1313,6 +1320,7 @@ HelixScreen accepts command-line options for overriding configuration and debugg
 | `--dark` | Use dark theme |
 | `--light` | Use light theme |
 | `--skip-splash` | Skip splash screen on startup |
+| `--no-sound` | Disable all sound output (prevents audio backend initialization) |
 
 ### Navigation Options
 

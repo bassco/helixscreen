@@ -8,6 +8,8 @@
   "_ui_sounds_enabled_comment": "Enable UI interaction sounds (button taps, navigation). Independent of event sounds. Default: true.",
   "sound_theme": "default",
   "_sound_theme_comment": "Active sound theme. Loads from config/sounds/<name>.json. Options: 'default', 'minimal'. Default: 'default'.",
+  "disable_sound": false,
+  "_disable_sound_comment": "Disable all sound output. Prevents audio backend initialization entirely. Use on hardware where audio causes excessive CPU load (e.g., Artillery M1 Pro). Also available as --no-sound CLI flag. Default: false.",
   "completion_alert": 1,
   "_completion_alert_comment": "Print completion alert mode: 0=Off, 1=Notification, 2=Alert. Default: 1.",
   "wizard_completed": false,
@@ -153,13 +155,17 @@
     "jitter_threshold": 5,
     "_jitter_threshold_comment": "Touch jitter filter dead zone in pixels (0 to disable). Suppresses coordinate noise from touch controllers like Goodix GT9xx that causes taps to register as swipes.",
     "touch_device": "",
-    "_touch_device_comment": "Override touch/pointer input device (e.g., '/dev/input/event1'). Empty string enables auto-detection. Auto-detection finds touch or pointer capable devices."
+    "_touch_device_comment": "Override touch/pointer input device (e.g., '/dev/input/event1'). Empty string enables auto-detection. Auto-detection finds touch or pointer capable devices.",
+    "force_calibration": false,
+    "_force_calibration_comment": "Force touch calibration on next startup. Automatically cleared after calibration completes. Default: false."
   },
   "display": {
     "animations_enabled": true,
     "_animations_enabled_comment": "Enable UI animations and transitions. Default: auto-detected from platform capabilities (off on embedded/basic hardware, on for standard).",
     "time_format": 0,
     "_time_format_comment": "Time display format. 0 = 12-hour (2:30 PM), 1 = 24-hour (14:30). Default is 12-hour.",
+    "theme": "nord",
+    "_theme_comment": "Color theme. Options: 'nord' (default). Requires restart.",
     "rotate": 0,
     "backlight_enable_ioctl": true,
     "_backlight_enable_ioctl_comment": "Use BACKLIGHT_ENABLE/DISABLE ioctls for Allwinner display control. Some platforms (e.g. Elegoo CC1, AD5X) invert PWM polarity when these are called; set false for brightness-only control. Default: true.",
@@ -167,10 +173,14 @@
     "_sleep_backlight_off_comment": "Power off backlight during display sleep. Set false on platforms where backlight power-off prevents wake-on-touch (e.g. AD5X). When false, software overlay + FBIOBLANK make screen appear off while backlight stays powered. Default: true.",
     "sleep_sec": 1200,
     "_sleep_sec_comment": "Seconds of inactivity before display turns OFF (0 = never). Default: 1200 (20 minutes).",
+    "sleep_while_printing": true,
+    "_sleep_while_printing_comment": "Allow display to dim and sleep during active prints. When false, display stays on while printing. Default: true.",
     "dim_sec": 600,
     "_dim_sec_comment": "Seconds of inactivity before display dims (0 = no dimming). Default: 600 (10 minutes). Must be less than sleep_sec.",
     "dim_brightness": 30,
     "_dim_brightness_comment": "Brightness percentage when dimmed (1-100). Default: 30%.",
+    "screensaver_type": 1,
+    "_screensaver_type_comment": "Screensaver during display sleep. 0=Off (blank screen), 1=Clock (default). Replaces legacy screensaver_enabled boolean.",
     "drm_device": "",
     "_drm_device_comment": "Override DRM device path (e.g., '/dev/dri/card1'). Empty string enables auto-detection. Pi 5 has multiple DRM cards: card0 (v3d, 3D only), card1 (DSI touchscreen), card2 (vc4/HDMI). Auto-detection finds the first with dumb buffer support and a connected display.",
     "gcode_render_mode": 2,
@@ -192,9 +202,19 @@
     "spool_style": "3d",
     "_spool_style_comment": "Filament spool visualization style. Options: '3d' (Bambu-style pseudo-3D canvas with gradients), 'flat' (concentric rings). Default is '3d'."
   },
+  "appearance": {
+    "toolhead_style": 0,
+    "_toolhead_style_comment": "Toolhead visualization style on temperature panel. 0=Default, 1=Creality K1, 2=Creality K2. Auto-detected from printer type.",
+    "show_widget_labels": false,
+    "_show_widget_labels_comment": "Show text labels below home panel widget icons. Default: false."
+  },
   "safety": {
     "estop_require_confirmation": true,
-    "_estop_require_confirmation_comment": "Require confirmation dialog before emergency stop. When false, E-Stop triggers immediately. Default: true (confirmation required)."
+    "_estop_require_confirmation_comment": "Require confirmation dialog before emergency stop. When false, E-Stop triggers immediately. Default: true (confirmation required).",
+    "cancel_escalation_enabled": false,
+    "_cancel_escalation_enabled_comment": "Enable cancel-to-E-Stop escalation. When enabled, rapidly pressing cancel multiple times triggers an emergency stop. Default: false.",
+    "cancel_escalation_timeout_seconds": 30,
+    "_cancel_escalation_timeout_seconds_comment": "Window in seconds for cancel escalation to trigger E-Stop. Default: 30."
   },
   "filament": {
     "cooldown_delay_seconds": 120,
@@ -223,6 +243,53 @@
   "plugins": {
     "enabled": [],
     "_enabled_comment": "List of plugin IDs to load. Plugins must be explicitly enabled. Example: [\"led-effects\"]"
+  },
+  "telemetry_enabled": false,
+  "_telemetry_enabled_comment": "Enable anonymous usage telemetry. Opt-in during setup wizard. Default: false.",
+  "standard_macros": {
+    "quick_button_1": "clean_nozzle",
+    "quick_button_2": "bed_level",
+    "quick_button_3": "",
+    "quick_button_4": "",
+    "_comment": "Controls panel quick-action button assignments. Built-in options: 'clean_nozzle', 'bed_level', 'heat_soak', 'purge', 'bed_mesh'. Empty string hides the button."
+  },
+  "printers": {
+    "show_printer_switcher": false,
+    "_show_printer_switcher_comment": "Show the printer switcher button on the home panel. Default: false."
+  },
+  "security": {
+    "pin_hash": "",
+    "_pin_hash_comment": "SHA-256 hash of lock screen PIN. Empty = no lock screen. Set via Settings > Security.",
+    "auto_lock": false,
+    "_auto_lock_comment": "Automatically lock screen on sleep/wake. Requires pin_hash to be set. Default: false."
+  },
+  "label_printer": {
+    "type": "network",
+    "_type_comment": "Label printer connection type. Options: 'network', 'usb', 'bluetooth'. Default: 'network'.",
+    "address": "",
+    "_address_comment": "Network address (IP or hostname) for network label printers.",
+    "port": 9100,
+    "_port_comment": "Network port for label printer. Default: 9100 (RAW/JetDirect).",
+    "protocol": "raw",
+    "_protocol_comment": "Network protocol. Options: 'raw' (JetDirect), 'ipp'. Default: 'raw'.",
+    "label_size": 0,
+    "_label_size_comment": "Label size preset index. 0 = default size for printer model.",
+    "preset": 0,
+    "_preset_comment": "Label content preset index.",
+    "label_count": 1,
+    "_label_count_comment": "Number of labels to print per job. Default: 1.",
+    "usb_vid": 0,
+    "usb_pid": 0,
+    "usb_serial": "",
+    "_usb_comment": "USB vendor ID, product ID, and serial for USB label printers. 0 = auto-detect.",
+    "bt_address": "",
+    "bt_name": "",
+    "bt_transport": "spp",
+    "_bt_comment": "Bluetooth address, name, and transport (spp or ble) for Bluetooth label printers."
+  },
+  "sounds": {
+    "volume": 80,
+    "_volume_comment": "Master volume level (0-100). Default: 80."
   },
   "update": {
     "channel": 0,

@@ -62,6 +62,8 @@ The first five (button press, toggles, navigation) are **UI sounds** and respect
 
 If no audio hardware is detected, the Sound Settings row is hidden entirely.
 
+**Disabling sound entirely:** On some hardware (e.g., Artillery M1 Pro), audio drivers are present but using them causes excessive CPU load. If you experience performance issues with sound enabled, add `"disable_sound": true` to your `settings.json` or start HelixScreen with `--no-sound`. This prevents the audio backend from initializing at all, unlike the Sounds toggle which just mutes playback.
+
 ### Sound Troubleshooting
 
 **I don't see Sound Settings in the Settings panel.**
