@@ -18,6 +18,7 @@ The preset sets `wizard_completed: false` so the abbreviated wizard runs on firs
 | `ad5m.json` | Flashforge Adventurer 5M / 5M Pro | Touch calibration, hardware mappings, ForgeX macros |
 | `ad5x.json` | Flashforge Adventurer 5X | Same hardware as AD5M, different display settings |
 | `cc1.json` | Centauri Carbon 1 | Minimal config, touch cal not yet calibrated |
+| `artillery-m1-pro.json` | Artillery M1 Pro | Touch calibration, hardware mappings, sound disabled (CPU overload) |
 | `voron-v2-afc.json` | Voron V2 with AFC | Reference config, not auto-baked |
 
 ## What's in a Preset
