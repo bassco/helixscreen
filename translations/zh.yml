@@ -44,7 +44,7 @@ translations:
   2 minutes: 2 分钟
   2. Place paper between nozzle and bed: 2. 将纸张放在喷嘴和热床之间
   2. Results show how much to turn each screw: 2. 结果显示每个螺丝需要旋转多少
-  20 minutes: '20分钟'
+  20 minutes: 20分钟
   24 Hour: 24 小时
   270°: 270°
   2D Heatmap: 2D 热图
@@ -402,7 +402,7 @@ translations:
     状态。Moonraker 可能仍在重启中。
   Cover open: 盖子未关闭
   Crash report sent — thank you!: 崩溃报告已发送 — 谢谢！
-  Creality CFS: 'Creality CFS'
+  Creality CFS: Creality CFS
   Create New Filament: 创建新耗材
   Create New Vendor: 创建新供应商
   Create Spool: 创建料盘
@@ -682,7 +682,7 @@ translations:
   Finish: 完成
   Firmware Restart: 固件重启
   Firmware restarting...: 固件重启中...
-  FlashForge IFS: 'FlashForge IFS'
+  FlashForge IFS: FlashForge IFS
   Flat Concentric Rings (existing ams_slot): 扁平同心环（现有 ams_slot）
   Flip: 翻转
   Flow: 流量
@@ -742,8 +742,8 @@ translations:
   Heating Nozzle...: 正在加热喷嘴...
   Heating to %d°C...: 正在加热至 %d°C...
   Heating to target...: 正在加热至目标温度...
-  Heating to {}°C for {}...: '正在加热至{}°C，持续{}...'
-  Heating to {}°C...: '正在加热至{}°C...'
+  Heating to {}°C for {}...: 正在加热至{}°C，持续{}...
+  Heating to {}°C...: 正在加热至{}°C...
   Heating...: 正在加热...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen 崩溃
@@ -1200,7 +1200,7 @@ translations:
   'Pre-print command failed: {}': '打印前命令失败: {}'
   Preheat Macro: 预热宏
   Preheat PLA: 预热 PLA
-  Preheat cancelled: '预热已取消'
+  Preheat cancelled: 预热已取消
   'Preheat: T{} + bed set': '预热: T{} + 热床已设置'
   'Preheat: all {} tools + bed set': '预热: 全部 {} 工具 + 热床已设置'
   Preparing: 准备中
@@ -1355,6 +1355,7 @@ translations:
   Require confirmation before emergency stop: 紧急停止前需要确认
   Requires Moonraker-Timelapse plugin: 需要 Moonraker-Timelapse 插件
   Reset: 重置
+  Reset Home Screen?: 重置主屏幕？
   Reset Speed & Flow to 100%: 重置速度和流量为 100%
   Reset all settings and restart wizard: 重置所有设置并重新启动向导
   'Reset failed: {}': '重置失败: {}'
@@ -1524,7 +1525,7 @@ translations:
   Slot {} spool cleared: 槽位 {} 料盘已清除
   Slot {} updated: 槽位 {} 已更新
   Small labels help keep controls calm and focused.: 小标签有助于保持控件简洁专注。
-  Snapmaker SnapSwap: 'Snapmaker SnapSwap'
+  Snapmaker SnapSwap: Snapmaker SnapSwap
   Some settings will take effect after restart.: 某些设置将在重启后生效。
   Sound Settings: 声音设置
   Sound Theme: 声音主题
@@ -1674,6 +1675,7 @@ translations:
     issues. No passwords or sensitive data will be included.
   : 将收集系统信息、日志、设置和打印机数据以帮助诊断问题。不会包含密码或敏感数据。
   This will immediately halt all printer operations. The printer will require a restart to resume.: 这将立即停止所有打印机操作。打印机需要重启才能恢复。
+  This will remove all custom pages and restore the default widget layout.: 所有自定义页面将被移除，并恢复默认的小组件布局。
   This will remove all entries from the display.: 这将从显示中移除所有条目。
   This will remove the Spoolman configuration from Moonraker and restart the service.: 这将从
     Moonraker 中移除 Spoolman 配置并重启服务。

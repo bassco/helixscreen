@@ -47,7 +47,7 @@ translations:
   2. Place paper between nozzle and bed: 2. Coloque papel entre o bico e a mesa
   2. Results show how much to turn each screw: 2. Os resultados mostram quanto girar
     cada parafuso
-  20 minutes: '20 minutos'
+  20 minutes: 20 minutos
   24 Hour: 24 horas
   270°: 270°
   2D Heatmap: Mapa de calor 2D
@@ -464,7 +464,7 @@ translations:
     verificar o status do Spoolman. O Moonraker pode ainda estar reiniciando.
   Cover open: Tampa aberta
   Crash report sent — thank you!: Relatório de erro enviado — obrigado!
-  Creality CFS: 'Creality CFS'
+  Creality CFS: Creality CFS
   Create New Filament: Criar Novo Filamento
   Create New Vendor: Criar Novo Fornecedor
   Create Spool: Criar Carretel
@@ -760,7 +760,7 @@ translations:
   Finish: Finalizar
   Firmware Restart: Reiniciar Firmware
   Firmware restarting...: Reiniciando firmware...
-  FlashForge IFS: 'FlashForge IFS'
+  FlashForge IFS: FlashForge IFS
   Flat Concentric Rings (existing ams_slot): Anéis Concêntricos Planos (ams_slot existente)
   Flip: Inverter
   Flow: Fluxo
@@ -824,8 +824,8 @@ translations:
   Heating Nozzle...: Aquecendo bocal...
   Heating to %d°C...: Aquecendo para %d°C...
   Heating to target...: Aquecendo para a temperatura alvo...
-  Heating to {}°C for {}...: 'Aquecendo a {}°C por {}...'
-  Heating to {}°C...: 'Aquecendo a {}°C...'
+  Heating to {}°C for {}...: Aquecendo a {}°C por {}...
+  Heating to {}°C...: Aquecendo a {}°C...
   Heating...: Aquecendo...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen Travou
@@ -1328,7 +1328,7 @@ translations:
   'Pre-print command failed: {}': 'Falha no comando pré-impressão: {}'
   Preheat Macro: Macro de Pré-aquecimento
   Preheat PLA: Pré-aquecer PLA
-  Preheat cancelled: 'Pré-aquecimento cancelado'
+  Preheat cancelled: Pré-aquecimento cancelado
   'Preheat: T{} + bed set': 'Pré-aquecer: T{} + mesa configurada'
   'Preheat: all {} tools + bed set': 'Pré-aquecer: todas as {} ferramentas + mesa
     configurada'
@@ -1491,6 +1491,7 @@ translations:
     emergência
   Requires Moonraker-Timelapse plugin: Requer plugin Moonraker-Timelapse
   Reset: Resetar
+  Reset Home Screen?: Redefinir tela inicial?
   Reset Speed & Flow to 100%: Resetar Velocidade & Fluxo para 100%
   Reset all settings and restart wizard: Resetar todas as configurações e reiniciar
     assistente
@@ -1687,7 +1688,7 @@ translations:
   Slot {} updated: Slot {} atualizado
   Small labels help keep controls calm and focused.: Rótulos pequenos ajudam a manter
     os controles calmos e focados.
-  Snapmaker SnapSwap: 'Snapmaker SnapSwap'
+  Snapmaker SnapSwap: Snapmaker SnapSwap
   Some settings will take effect after restart.: Algumas configurações terão efeito
     após reiniciar.
   Sound Settings: Configurações de Som
@@ -1860,6 +1861,8 @@ translations:
   This will immediately halt all printer operations. The printer will require a restart to resume.: Isso
     interromperá imediatamente todas as operações da impressora. A impressora precisará
     de um reinício para retomar.
+  This will remove all custom pages and restore the default widget layout.: Todas as páginas
+    personalizadas serão removidas e o layout padrão de widgets será restaurado.
   This will remove all entries from the display.: Isso removerá todas as entradas
     do display.
   This will remove the Spoolman configuration from Moonraker and restart the service.: Isso

@@ -47,7 +47,7 @@ translations:
   2. Place paper between nozzle and bed: 2. Posizionare carta tra ugello e piano
   2. Results show how much to turn each screw: 2. I risultati mostrano quanto girare
     ogni vite
-  20 minutes: '20 minuti'
+  20 minutes: 20 minuti
   24 Hour: 24 ore
   270°: 270°
   2D Heatmap: Mappa termica 2D
@@ -461,7 +461,7 @@ translations:
     verificare lo stato di Spoolman. Moonraker potrebbe essere ancora in riavvio.
   Cover open: Coperchio aperto
   Crash report sent — thank you!: Report crash inviato — grazie!
-  Creality CFS: 'Creality CFS'
+  Creality CFS: Creality CFS
   Create New Filament: Crea nuovo filamento
   Create New Vendor: Crea nuovo fornitore
   Create Spool: Crea bobina
@@ -702,7 +702,8 @@ translations:
   'Failed to send command: {}': 'Impossibile inviare comando: {}'
   Failed to set active spool: Impostazione bobina attiva fallita
   'Failed to set bed temp: {}': 'Impossibile impostare temp. piano: {}'
-  'Failed to set chamber temp: {}': 'Impossibile impostare la temp. della camera: {}'
+  'Failed to set chamber temp: {}': 'Impossibile impostare la temp. della camera:
+    {}'
   'Failed to set flow rate: {}': 'Impossibile impostare flusso: {}'
   'Failed to set nozzle temp: {}': 'Impossibile impostare temp. ugello: {}'
   'Failed to set print speed: {}': 'Impossibile impostare velocità stampa: {}'
@@ -760,7 +761,7 @@ translations:
   Finish: Fine
   Firmware Restart: Riavvio firmware
   Firmware restarting...: Riavvio firmware...
-  FlashForge IFS: 'FlashForge IFS'
+  FlashForge IFS: FlashForge IFS
   Flat Concentric Rings (existing ams_slot): Anelli concentrici piatti (ams_slot esistente)
   Flip: Capovolgi
   Flow: Flusso
@@ -824,8 +825,8 @@ translations:
   Heating Nozzle...: Riscaldamento ugello...
   Heating to %d°C...: Riscaldamento a %d°C...
   Heating to target...: Riscaldamento al target...
-  Heating to {}°C for {}...: 'Riscaldamento a {}°C per {}...'
-  Heating to {}°C...: 'Riscaldamento a {}°C...'
+  Heating to {}°C for {}...: Riscaldamento a {}°C per {}...
+  Heating to {}°C...: Riscaldamento a {}°C...
   Heating...: Riscaldamento...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen si è arrestato
@@ -1327,7 +1328,7 @@ translations:
   'Pre-print command failed: {}': 'Comando pre-stampa fallito: {}'
   Preheat Macro: Macro preriscaldamento
   Preheat PLA: Preriscalda PLA
-  Preheat cancelled: 'Preriscaldamento annullato'
+  Preheat cancelled: Preriscaldamento annullato
   'Preheat: T{} + bed set': 'Preriscaldamento: T{} + piano impostati'
   'Preheat: all {} tools + bed set': 'Preriscaldamento: tutti i {} utensili + piano
     impostati'
@@ -1490,6 +1491,7 @@ translations:
     di emergenza
   Requires Moonraker-Timelapse plugin: Richiede plugin Moonraker-Timelapse
   Reset: Ripristina
+  Reset Home Screen?: Ripristinare la schermata iniziale?
   Reset Speed & Flow to 100%: Ripristina velocità e flusso al 100%
   Reset all settings and restart wizard: Ripristina tutte le impostazioni e riavvia
     procedura guidata
@@ -1684,7 +1686,7 @@ translations:
   Slot {} updated: Slot {} aggiornato
   Small labels help keep controls calm and focused.: Le etichette piccole aiutano
     a mantenere i controlli ordinati e mirati.
-  Snapmaker SnapSwap: 'Snapmaker SnapSwap'
+  Snapmaker SnapSwap: Snapmaker SnapSwap
   Some settings will take effect after restart.: Alcune impostazioni avranno effetto
     dopo il riavvio.
   Sound Settings: Impostazioni audio
@@ -1857,6 +1859,8 @@ translations:
   This will immediately halt all printer operations. The printer will require a restart to resume.: Questo
     fermerà immediatamente tutte le operazioni della stampante. La stampante richiederà
     un riavvio per riprendere.
+  This will remove all custom pages and restore the default widget layout.: Tutte le pagine
+    personalizzate verranno rimosse e il layout predefinito dei widget verrà ripristinato.
   This will remove all entries from the display.: Questo rimuoverà tutte le voci dal
     display.
   This will remove the Spoolman configuration from Moonraker and restart the service.: Questo

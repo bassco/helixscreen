@@ -1459,6 +1459,7 @@ translations:
     stop
   Requires Moonraker-Timelapse plugin: Requires Moonraker-Timelapse plugin
   Reset: Reset
+  Reset Home Screen?: Reset Home Screen?
   Reset Speed & Flow to 100%: Reset Speed & Flow to 100%
   Reset all settings and restart wizard: Reset all settings and restart wizard
   'Reset failed: {}': 'Reset failed: {}'
@@ -1817,6 +1818,8 @@ translations:
   This will immediately halt all printer operations. The printer will require a restart to resume.: This
     will immediately halt all printer operations. The printer will require a restart
     to resume.
+  This will remove all custom pages and restore the default widget layout.: This will
+    remove all custom pages and restore the default widget layout.
   This will remove all entries from the display.: This will remove all entries from
     the display.
   This will remove the Spoolman configuration from Moonraker and restart the service.: This

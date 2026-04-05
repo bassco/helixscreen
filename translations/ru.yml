@@ -47,7 +47,7 @@ translations:
   2. Place paper between nozzle and bed: 2. Положите бумагу между соплом и столом
   2. Results show how much to turn each screw: 2. Результаты покажут, насколько повернуть
     каждый винт
-  20 minutes: '20 минут'
+  20 minutes: 20 минут
   24 Hour: 24 часа
   270°: 270°
   2D Heatmap: 2D тепловая карта
@@ -456,7 +456,7 @@ translations:
     проверить статус Spoolman. Moonraker может ещё перезапускаться.
   Cover open: Крышка открыта
   Crash report sent — thank you!: Отчёт об ошибке отправлен — спасибо!
-  Creality CFS: 'Creality CFS'
+  Creality CFS: Creality CFS
   Create New Filament: Создать новый филамент
   Create New Vendor: Создать нового производителя
   Create Spool: Создать катушку
@@ -751,7 +751,7 @@ translations:
   Finish: Завершить
   Firmware Restart: Перезапуск прошивки
   Firmware restarting...: Перезапуск прошивки...
-  FlashForge IFS: 'FlashForge IFS'
+  FlashForge IFS: FlashForge IFS
   Flat Concentric Rings (existing ams_slot): Плоские концентрические кольца (существующий
     ams_slot)
   Flip: Отразить
@@ -816,8 +816,8 @@ translations:
   Heating Nozzle...: Нагрев сопла...
   Heating to %d°C...: Нагрев до %d°C...
   Heating to target...: Нагрев до целевой температуры...
-  Heating to {}°C for {}...: 'Нагрев до {}°C в течение {}...'
-  Heating to {}°C...: 'Нагрев до {}°C...'
+  Heating to {}°C for {}...: Нагрев до {}°C в течение {}...
+  Heating to {}°C...: Нагрев до {}°C...
   Heating...: Нагрев...
   HelixScreen: HelixScreen
   HelixScreen Crashed: HelixScreen аварийно завершился
@@ -1313,7 +1313,7 @@ translations:
   'Pre-print command failed: {}': 'Ошибка команды перед печатью: {}'
   Preheat Macro: Макрос преднагрева
   Preheat PLA: Преднагрев PLA
-  Preheat cancelled: 'Предварительный нагрев отменён'
+  Preheat cancelled: Предварительный нагрев отменён
   'Preheat: T{} + bed set': 'Преднагрев: T{} + стол заданы'
   'Preheat: all {} tools + bed set': 'Преднагрев: все {} инструменты + стол заданы'
   Preparing: Подготовка
@@ -1475,6 +1475,7 @@ translations:
     остановкой
   Requires Moonraker-Timelapse plugin: Требуется плагин Moonraker-Timelapse
   Reset: Сброс
+  Reset Home Screen?: Сбросить главный экран?
   Reset Speed & Flow to 100%: Сбросить скорость и поток на 100%
   Reset all settings and restart wizard: Сбросить все настройки и перезапустить мастер
   'Reset failed: {}': 'Ошибка сброса: {}'
@@ -1666,7 +1667,7 @@ translations:
   Slot {} updated: Слот {} обновлён
   Small labels help keep controls calm and focused.: Мелкие надписи помогают сохранять
     элементы управления аккуратными.
-  Snapmaker SnapSwap: 'Snapmaker SnapSwap'
+  Snapmaker SnapSwap: Snapmaker SnapSwap
   Some settings will take effect after restart.: Некоторые настройки вступят в силу
     после перезапуска.
   Sound Settings: Настройки звука
@@ -1836,6 +1837,8 @@ translations:
     Пароли и конфиденциальные данные включены не будут.
   This will immediately halt all printer operations. The printer will require a restart to resume.: Это
     немедленно остановит все операции принтера. Для продолжения потребуется перезапуск.
+  This will remove all custom pages and restore the default widget layout.: Все пользовательские
+    страницы будут удалены, и будет восстановлен макет виджетов по умолчанию.
   This will remove all entries from the display.: Это удалит все записи с экрана.
   This will remove the Spoolman configuration from Moonraker and restart the service.: Конфигурация
     Spoolman будет удалена из Moonraker, и сервис будет перезапущен.

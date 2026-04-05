@@ -45,7 +45,7 @@ translations:
   2 minutes: 2分
   2. Place paper between nozzle and bed: 2. ノズルとベッドの間に紙を置いてください
   2. Results show how much to turn each screw: 2. 各ネジをどれだけ回すか結果が表示されます
-  20 minutes: '20分'
+  20 minutes: 20分
   24 Hour: 24時間
   270°: 270°
   2D Heatmap: 2Dヒートマップ
@@ -404,7 +404,7 @@ translations:
     がまだ再起動中の可能性があります。
   Cover open: カバーが開いています
   Crash report sent — thank you!: クラッシュレポートを送信しました — ありがとうございます！
-  Creality CFS: 'Creality CFS'
+  Creality CFS: Creality CFS
   Create New Filament: 新しいフィラメントを作成
   Create New Vendor: 新しいベンダーを作成
   Create Spool: スプールを作成
@@ -682,7 +682,7 @@ translations:
   Finish: 完了
   Firmware Restart: ファームウェア再起動
   Firmware restarting...: ファームウェア再起動中...
-  FlashForge IFS: 'FlashForge IFS'
+  FlashForge IFS: FlashForge IFS
   Flat Concentric Rings (existing ams_slot): 同心円リング（既存の ams_slot）
   Flip: 反転
   Flow: フロー
@@ -1199,7 +1199,7 @@ translations:
   'Pre-print command failed: {}': '印刷前コマンドに失敗しました: {}'
   Preheat Macro: 予熱マクロ
   Preheat PLA: PLA 予熱
-  Preheat cancelled: '予熱がキャンセルされました'
+  Preheat cancelled: 予熱がキャンセルされました
   'Preheat: T{} + bed set': '予熱: T{} + ベッド設定済み'
   'Preheat: all {} tools + bed set': '予熱: 全 {} ツール + ベッド設定済み'
   Preparing: 準備中
@@ -1354,6 +1354,7 @@ translations:
   Require confirmation before emergency stop: 緊急停止前に確認を求める
   Requires Moonraker-Timelapse plugin: Moonraker-Timelapse プラグインが必要です
   Reset: リセット
+  Reset Home Screen?: ホーム画面をリセットしますか？
   Reset Speed & Flow to 100%: 速度とフローを100%にリセット
   Reset all settings and restart wizard: すべての設定をリセットしてウィザードを再開
   'Reset failed: {}': 'リセットに失敗しました: {}'
@@ -1523,7 +1524,7 @@ translations:
   Slot {} spool cleared: スロット {} のスプールをクリアしました
   Slot {} updated: スロット {} を更新しました
   Small labels help keep controls calm and focused.: 小さなラベルはコントロールを落ち着いた集中した状態に保ちます。
-  Snapmaker SnapSwap: 'Snapmaker SnapSwap'
+  Snapmaker SnapSwap: Snapmaker SnapSwap
   Some settings will take effect after restart.: 一部の設定は再起動後に有効になります。
   Sound Settings: サウンド設定
   Sound Theme: サウンドテーマ
@@ -1674,6 +1675,7 @@ translations:
     issues. No passwords or sensitive data will be included.
   : システム情報、ログ、設定、プリンターデータを収集して問題の診断に役立てます。パスワードや個人情報は含まれません。
   This will immediately halt all printer operations. The printer will require a restart to resume.: これはすべてのプリンター操作を直ちに停止します。再開するにはプリンターの再起動が必要です。
+  This will remove all custom pages and restore the default widget layout.: すべてのカスタムページが削除され、デフォルトのウィジェットレイアウトに復元されます。
   This will remove all entries from the display.: 表示からすべてのエントリが削除されます。
   This will remove the Spoolman configuration from Moonraker and restart the service.: Moonraker
     から Spoolman の設定を削除し、サービスを再起動します。
