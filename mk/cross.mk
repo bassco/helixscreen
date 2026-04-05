@@ -1459,6 +1459,24 @@ deploy-ad5m:
 		ssh $(AD5M_SSH_TARGET) "mkdir -p $(AD5M_DEPLOY_DIR)/certs"; \
 		cat build/ad5m/certs/ca-certificates.crt | ssh $(AD5M_SSH_TARGET) "cat > $(AD5M_DEPLOY_DIR)/certs/ca-certificates.crt"; \
 	fi
+	@# AD5M-specific: Deploy platform hooks (auto-detect firmware variant)
+	@echo "$(DIM)Deploying platform hooks...$(RESET)"
+	@ssh $(AD5M_SSH_TARGET) '\
+		mkdir -p $(AD5M_DEPLOY_DIR)/platform; \
+		if [ -d /mnt/data/.klipper_mod ]; then \
+			HOOK="$(AD5M_DEPLOY_DIR)/config/platform/hooks-ad5m-kmod.sh"; \
+		elif [ -d /opt/config/mod/.root ]; then \
+			HOOK="$(AD5M_DEPLOY_DIR)/config/platform/hooks-ad5m-forgex.sh"; \
+		else \
+			HOOK=""; \
+		fi; \
+		if [ -n "$$HOOK" ] && [ -f "$$HOOK" ]; then \
+			cp "$$HOOK" "$(AD5M_DEPLOY_DIR)/platform/hooks.sh"; \
+			chmod +x "$(AD5M_DEPLOY_DIR)/platform/hooks.sh"; \
+			echo "Platform hooks deployed: $$HOOK"; \
+		else \
+			echo "No platform hooks to deploy"; \
+		fi'
 	@# AD5M-specific: Update init script in /etc/init.d/ if it differs
 	@echo "$(DIM)Checking init script...$(RESET)"
 	@ssh $(AD5M_SSH_TARGET) '\

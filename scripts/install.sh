@@ -504,7 +504,8 @@ detect_ad5m_firmware() {
 
     # Klipper Mod indicators - check for its specific directory structure
     # Klipper Mod runs in a chroot on /mnt/data/.klipper_mod/chroot
-    # and puts printer software in /root/printer_software/
+    # v00.05: printer software in /root/printer_software/
+    # v00.06+: printer software in /opt/ (no /root/printer_software)
     if [ -d "/root/printer_software" ] || [ -d "/mnt/data/.klipper_mod" ]; then
         echo "klipper_mod"
         return
@@ -653,7 +654,13 @@ set_install_paths() {
     if [ "$platform" = "ad5m" ]; then
         case "$firmware" in
             klipper_mod)
-                INSTALL_DIR="/root/printer_software/helixscreen"
+                # v00.05 and earlier: /root/printer_software/helixscreen
+                # v00.06+: /opt/helixscreen (no /root/printer_software dir)
+                if [ -d "/root/printer_software" ]; then
+                    INSTALL_DIR="/root/printer_software/helixscreen"
+                else
+                    INSTALL_DIR="/opt/helixscreen"
+                fi
                 INIT_SCRIPT_DEST="/etc/init.d/S80helixscreen"
                 PREVIOUS_UI_SCRIPT="/etc/init.d/S80klipperscreen"
                 log_info "AD5M firmware: Klipper Mod"

@@ -6,7 +6,8 @@
 #
 # Installation varies by firmware:
 #   Forge-X:      /etc/init.d/S90helixscreen -> /opt/helixscreen
-#   Klipper Mod:  /etc/init.d/S80helixscreen -> /root/printer_software/helixscreen
+#   Klipper Mod:  /etc/init.d/S80helixscreen -> /opt/helixscreen (v00.06+)
+#                                            or /root/printer_software/helixscreen (v00.05)
 #
 # The install.sh script automatically selects the correct paths.
 # DAEMON_DIR below is updated by the installer to match the install location.
