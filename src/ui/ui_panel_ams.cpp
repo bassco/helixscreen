@@ -1501,6 +1501,15 @@ void AmsPanel::show_edit_modal(int slot_index) {
 
                 AmsState::instance().sync_from_backend();
 
+                // Force color subject re-notification so the material label
+                // (piggybacked on the color observer) refreshes even when
+                // only the material changed and the color stayed the same.
+                lv_subject_t* color_sub =
+                    AmsState::instance().get_slot_color_subject(result.slot_index);
+                if (color_sub) {
+                    lv_subject_notify(color_sub);
+                }
+
                 NOTIFY_INFO(lv_tr("Slot {} updated"), result.slot_index + 1);
             }
         }

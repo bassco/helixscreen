@@ -115,6 +115,7 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     int active_tool_ = -1;                         // Current tool (-1 = none)
     bool external_mode_ = false;                   // Bypass/external spool mode
     bool head_filament_ = false;                   // Head sensor state
+    std::array<bool, NUM_PORTS> dirty_{}; // Per-slot dirty flag to prevent stale overwrites
 
     helix::printer::SlotRegistry slots_;
 

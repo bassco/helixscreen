@@ -12,15 +12,14 @@
 
 #include "ui_component_keypad.h"
 
-#include "keypad_input.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 
-#include "lvgl/src/others/translation/lv_translation.h"
-
 #include "helix-xml/src/xml/lv_xml.h"
+#include "keypad_input.h"
 #include "lvgl/lvgl.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
 
 #include <spdlog/spdlog.h>
@@ -180,14 +179,15 @@ static void handle_confirm() {
         return; // Don't close keypad, let user correct the value
     }
 
-    // Hide first (before callback, in case callback shows something else)
-    ui_keypad_hide();
-
-    // Invoke callback
+    // Invoke callback before hiding — hiding pops the overlay stack which
+    // invalidates lifetime tokens on the parent overlay, so the callback
+    // must run while the parent is still active.
     if (current_config.callback) {
         current_config.callback(value, current_config.user_data);
         spdlog::info("[Keypad] Confirmed value={:.1f}", value);
     }
+
+    ui_keypad_hide();
 }
 
 // ============================================================================
@@ -209,7 +209,8 @@ static void wire_button_events() {
                 [](lv_event_t* e) {
                     helix::ui::event_safe_call("keypad_digit", [e]() {
                         int digit = (int)(intptr_t)lv_event_get_user_data(e);
-                        if (input.append_digit(digit)) update_display();
+                        if (input.append_digit(digit))
+                            update_display();
                     });
                 },
                 LV_EVENT_CLICKED, (void*)(intptr_t)i);
@@ -223,7 +224,8 @@ static void wire_button_events() {
             btn_dot,
             [](lv_event_t*) {
                 helix::ui::event_safe_call("keypad_dot", []() {
-                    if (input.append_dot()) update_display();
+                    if (input.append_dot())
+                        update_display();
                 });
             },
             LV_EVENT_CLICKED, nullptr);
@@ -236,7 +238,8 @@ static void wire_button_events() {
             btn_back,
             [](lv_event_t*) {
                 helix::ui::event_safe_call("keypad_backspace", []() {
-                    if (input.backspace()) update_display();
+                    if (input.backspace())
+                        update_display();
                 });
             },
             LV_EVENT_CLICKED, nullptr);

@@ -45,25 +45,25 @@ AmsBackendAd5xIfs::~AmsBackendAd5xIfs() = default;
 
 void AmsBackendAd5xIfs::on_started() {
     // Query initial state from printer
-    if (!client_) return;
+    if (!client_)
+        return;
 
     auto token = lifetime_.token();
     client_->send_jsonrpc(
         "printer.objects.query",
-        json{{"objects", json{
-            {"save_variables", nullptr},
-            // lessWaste plugin: per-port filament switch sensors
-            {"filament_switch_sensor _ifs_port_sensor_1", nullptr},
-            {"filament_switch_sensor _ifs_port_sensor_2", nullptr},
-            {"filament_switch_sensor _ifs_port_sensor_3", nullptr},
-            {"filament_switch_sensor _ifs_port_sensor_4", nullptr},
-            // Shared: head switch sensor (both lessWaste and native ZMOD)
-            {"filament_switch_sensor head_switch_sensor", nullptr},
-            // Native ZMOD IFS: single motion sensor (replaces per-port sensors)
-            {"filament_motion_sensor ifs_motion_sensor", nullptr}
-        }}},
+        json{{"objects", json{{"save_variables", nullptr},
+                              // lessWaste plugin: per-port filament switch sensors
+                              {"filament_switch_sensor _ifs_port_sensor_1", nullptr},
+                              {"filament_switch_sensor _ifs_port_sensor_2", nullptr},
+                              {"filament_switch_sensor _ifs_port_sensor_3", nullptr},
+                              {"filament_switch_sensor _ifs_port_sensor_4", nullptr},
+                              // Shared: head switch sensor (both lessWaste and native ZMOD)
+                              {"filament_switch_sensor head_switch_sensor", nullptr},
+                              // Native ZMOD IFS: single motion sensor (replaces per-port sensors)
+                              {"filament_motion_sensor ifs_motion_sensor", nullptr}}}},
         [this, token](const json& response) {
-            if (token.expired()) return;
+            if (token.expired())
+                return;
             if (response.contains("result") && response["result"].contains("status")) {
                 handle_status_update(response["result"]["status"]);
             }
@@ -205,7 +205,7 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
     if (vars.contains(p + "_colors") && vars[p + "_colors"].is_array()) {
         const auto& colors = vars[p + "_colors"];
         for (size_t i = 0; i < std::min(colors.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
-            if (colors[i].is_string()) {
+            if (colors[i].is_string() && !dirty_[i]) {
                 colors_[i] = colors[i].get<std::string>();
             }
         }
@@ -215,7 +215,7 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
     if (vars.contains(p + "_types") && vars[p + "_types"].is_array()) {
         const auto& types = vars[p + "_types"];
         for (size_t i = 0; i < std::min(types.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
-            if (types[i].is_string()) {
+            if (types[i].is_string() && !dirty_[i]) {
                 materials_[i] = types[i].get<std::string>();
             }
         }
@@ -232,8 +232,7 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
     }
 
     // Current tool (-1 = none, 0-15 = tool number)
-    if (vars.contains(p + "_current_tool") &&
-        vars[p + "_current_tool"].is_number_integer()) {
+    if (vars.contains(p + "_current_tool") && vars[p + "_current_tool"].is_number_integer()) {
         active_tool_ = vars[p + "_current_tool"].get<int>();
     }
 
@@ -267,18 +266,19 @@ void AmsBackendAd5xIfs::parse_head_sensor(bool detected) {
 }
 
 void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
-    if (slot_index < 0 || slot_index >= NUM_PORTS) return;
+    if (slot_index < 0 || slot_index >= NUM_PORTS)
+        return;
 
     auto* entry = slots_.get_mut(slot_index);
-    if (!entry) return;
+    if (!entry)
+        return;
 
     auto idx = static_cast<size_t>(slot_index);
 
     // Color: parse hex string to uint32_t
     if (!colors_[idx].empty()) {
         try {
-            entry->info.color_rgb =
-                static_cast<uint32_t>(std::stoul(colors_[idx], nullptr, 16));
+            entry->info.color_rgb = static_cast<uint32_t>(std::stoul(colors_[idx], nullptr, 16));
         } catch (...) {
             // Invalid hex — leave color unchanged
         }
@@ -371,8 +371,7 @@ PathSegment AmsBackendAd5xIfs::get_filament_segment() const {
     // Check if active tool's port has filament
     if (active_tool_ >= 0 && active_tool_ < TOOL_MAP_SIZE) {
         int port = tool_map_[static_cast<size_t>(active_tool_)];
-        if (port >= 1 && port <= NUM_PORTS &&
-            port_presence_[static_cast<size_t>(port - 1)]) {
+        if (port >= 1 && port <= NUM_PORTS && port_presence_[static_cast<size_t>(port - 1)]) {
             return PathSegment::LANE;
         }
     }
@@ -415,7 +414,8 @@ AmsError AmsBackendAd5xIfs::load_filament(int slot_index) {
         return AmsErrorHelper::invalid_slot(slot_index, NUM_PORTS - 1);
     }
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     int port = slot_index + 1;
     {
@@ -429,7 +429,8 @@ AmsError AmsBackendAd5xIfs::load_filament(int slot_index) {
 
 AmsError AmsBackendAd5xIfs::unload_filament(int slot_index) {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -455,7 +456,8 @@ AmsError AmsBackendAd5xIfs::select_slot(int slot_index) {
         return AmsErrorHelper::invalid_slot(slot_index, NUM_PORTS - 1);
     }
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     int port = slot_index + 1;
     spdlog::info("{} Selecting port {}", backend_log_tag(), port);
@@ -467,7 +469,8 @@ AmsError AmsBackendAd5xIfs::change_tool(int tool_number) {
         return AmsErrorHelper::invalid_slot(tool_number, TOOL_MAP_SIZE - 1);
     }
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     int port;
     {
@@ -477,7 +480,7 @@ AmsError AmsBackendAd5xIfs::change_tool(int tool_number) {
 
     if (port < 1 || port > NUM_PORTS) {
         return AmsErrorHelper::invalid_parameter("Tool T" + std::to_string(tool_number) +
-                                          " is not mapped to any port");
+                                                 " is not mapped to any port");
     }
 
     {
@@ -493,7 +496,8 @@ AmsError AmsBackendAd5xIfs::change_tool(int tool_number) {
 
 AmsError AmsBackendAd5xIfs::recover() {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     // IFS_UNLOCK resets the IFS driver state machine — safest recovery command
     spdlog::info("{} Recovery: IFS_UNLOCK", backend_log_tag());
@@ -502,7 +506,8 @@ AmsError AmsBackendAd5xIfs::recover() {
 
 AmsError AmsBackendAd5xIfs::reset() {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     // IFS_UNLOCK resets the IFS driver — F15 (hard reset) is not exposed as a safe macro
     spdlog::info("{} Reset: IFS_UNLOCK", backend_log_tag());
@@ -511,7 +516,8 @@ AmsError AmsBackendAd5xIfs::reset() {
 
 AmsError AmsBackendAd5xIfs::cancel() {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     // IFS_UNLOCK to abort current operation
     spdlog::info("{} Cancel: IFS_UNLOCK", backend_log_tag());
@@ -539,6 +545,9 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
         if (!entry) {
             return AmsErrorHelper::invalid_slot(slot_index, NUM_PORTS - 1);
         }
+
+        // Mark slot dirty to prevent parse_save_variables from overwriting our edit
+        dirty_[idx] = true;
 
         // Convert color to hex string for our cached array
         char hex[7];
@@ -572,14 +581,22 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
             }
 
             auto err = write_ifs_var("colors", color_val);
-            if (!err.success()) return err;
+            if (!err.success())
+                return err;
 
             err = write_ifs_var("types", type_val);
-            if (!err.success()) return err;
+            if (!err.success())
+                return err;
+
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                dirty_[idx] = false;
+            }
         } else {
             // Native ZMOD: per-slot update via CHANGE_ZCOLOR
             auto err = write_zcolor(slot_index);
-            if (!err.success()) return err;
+            if (!err.success())
+                return err;
         }
     }
 
@@ -624,7 +641,8 @@ AmsError AmsBackendAd5xIfs::set_tool_mapping(int tool_number, int slot_index) {
 
 AmsError AmsBackendAd5xIfs::enable_bypass() {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     spdlog::info("{} Enabling bypass (external) mode", backend_log_tag());
     if (!has_ifs_vars_) {
@@ -638,7 +656,8 @@ AmsError AmsBackendAd5xIfs::enable_bypass() {
 
 AmsError AmsBackendAd5xIfs::disable_bypass() {
     auto err = check_preconditions();
-    if (!err.success()) return err;
+    if (!err.success())
+        return err;
 
     spdlog::info("{} Disabling bypass (external) mode", backend_log_tag());
     if (!has_ifs_vars_) {
@@ -660,7 +679,8 @@ std::string AmsBackendAd5xIfs::build_color_list_value() const {
     std::ostringstream ss;
     ss << "\"[";
     for (int i = 0; i < NUM_PORTS; ++i) {
-        if (i > 0) ss << ", ";
+        if (i > 0)
+            ss << ", ";
         ss << "'" << colors_[static_cast<size_t>(i)] << "'";
     }
     ss << "]\"";
@@ -671,7 +691,8 @@ std::string AmsBackendAd5xIfs::build_type_list_value() const {
     std::ostringstream ss;
     ss << "\"[";
     for (int i = 0; i < NUM_PORTS; ++i) {
-        if (i > 0) ss << ", ";
+        if (i > 0)
+            ss << ", ";
         ss << "'" << materials_[static_cast<size_t>(i)] << "'";
     }
     ss << "]\"";
@@ -684,15 +705,15 @@ std::string AmsBackendAd5xIfs::build_tool_map_value() const {
     std::ostringstream ss;
     ss << "\"[";
     for (int i = 0; i < TOOL_MAP_SIZE; ++i) {
-        if (i > 0) ss << ", ";
+        if (i > 0)
+            ss << ", ";
         ss << tool_map_[static_cast<size_t>(i)];
     }
     ss << "]\"";
     return ss.str();
 }
 
-AmsError AmsBackendAd5xIfs::write_ifs_var(const std::string& key,
-                                            const std::string& value) {
+AmsError AmsBackendAd5xIfs::write_ifs_var(const std::string& key, const std::string& value) {
     if (!api_) {
         return AmsErrorHelper::invalid_parameter("No API connection");
     }
@@ -720,19 +741,22 @@ AmsError AmsBackendAd5xIfs::write_zcolor(int slot_index) {
         material = materials_[idx];
     }
 
-    if (hex.empty()) hex = "808080";
-    if (material.empty()) material = "PLA";
+    if (hex.empty())
+        hex = "808080";
+    if (material.empty())
+        material = "PLA";
 
     // Native ZMOD: CHANGE_ZCOLOR SLOT=N HEX=RRGGBB TYPE=MATERIAL
-    std::string gcode = "CHANGE_ZCOLOR SLOT=" + std::to_string(slot_1based) +
-                        " HEX=" + hex + " TYPE=" + material;
+    std::string gcode =
+        "CHANGE_ZCOLOR SLOT=" + std::to_string(slot_1based) + " HEX=" + hex + " TYPE=" + material;
     spdlog::info("{} Writing slot {} via CHANGE_ZCOLOR (native ZMOD)", backend_log_tag(),
                  slot_1based);
     return execute_gcode(gcode);
 }
 
 void AmsBackendAd5xIfs::query_zcolor_fallback() {
-    if (!client_ || !api_) return;
+    if (!client_ || !api_)
+        return;
 
     // Accumulate gcode response lines, then parse when prompt_show arrives
     auto lines = std::make_shared<std::vector<std::string>>();
@@ -741,14 +765,14 @@ void AmsBackendAd5xIfs::query_zcolor_fallback() {
     static const std::string handler_name = "ifs_zcolor_query";
 
     client_->register_method_callback(
-        "notify_gcode_response", handler_name,
-        [this, lines, token](const json& msg) {
-            if (token.expired()) return;
+        "notify_gcode_response", handler_name, [this, lines, token](const json& msg) {
+            if (token.expired())
+                return;
 
             // notify_gcode_response: {"method": "notify_gcode_response", "params": ["line"]}
             std::string line;
-            if (msg.contains("params") && msg["params"].is_array() &&
-                !msg["params"].empty() && msg["params"][0].is_string()) {
+            if (msg.contains("params") && msg["params"].is_array() && !msg["params"].empty() &&
+                msg["params"][0].is_string()) {
                 line = msg["params"][0].get<std::string>();
             } else if (msg.is_array() && !msg.empty() && msg[0].is_string()) {
                 line = msg[0].get<std::string>();
@@ -796,7 +820,8 @@ void AmsBackendAd5xIfs::parse_zcolor_response(const std::string& response) {
                 std::string type = match[3].str();
 
                 // Convert to uppercase hex
-                for (auto& c : hex) c = static_cast<char>(toupper(c));
+                for (auto& c : hex)
+                    c = static_cast<char>(toupper(c));
 
                 int idx = slot_1based - 1; // ZMOD slots are 1-based
                 if (idx >= 0 && idx < NUM_PORTS) {
@@ -846,15 +871,13 @@ bool AmsBackendAd5xIfs::validate_slot_index(int slot_index) const {
 // ensure_homed_then() provided by AmsSubscriptionBackend
 
 void AmsBackendAd5xIfs::check_action_timeout() {
-    if (system_info_.action != AmsAction::LOADING &&
-        system_info_.action != AmsAction::UNLOADING) {
+    if (system_info_.action != AmsAction::LOADING && system_info_.action != AmsAction::UNLOADING) {
         return;
     }
 
     auto elapsed = std::chrono::steady_clock::now() - action_start_time_;
     if (elapsed >= std::chrono::seconds(ACTION_TIMEOUT_SECONDS)) {
-        spdlog::warn("{} {} timed out after {}s, resetting to IDLE",
-                     backend_log_tag(),
+        spdlog::warn("{} {} timed out after {}s, resetting to IDLE", backend_log_tag(),
                      ams_action_to_string(system_info_.action),
                      std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
         system_info_.action = AmsAction::IDLE;
