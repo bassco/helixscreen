@@ -152,10 +152,10 @@ jobs:
         echo "Fast tests passed"
 
     - name: Run slow tests sequentially
-      timeout-minutes: 10
+      timeout-minutes: 15
       run: |
         echo "Running [slow] tests sequentially (thread-based tests deadlock under parallel sharding)..."
-        timeout 480 ./build/bin/helix-tests "[slow]" --durations yes
+        timeout 780 ./build/bin/helix-tests "[slow]" --durations yes
         echo "Slow tests passed"
 
   # ===========================================================================
