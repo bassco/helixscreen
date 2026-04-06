@@ -84,7 +84,7 @@ class AmsDeviceOperationsOverlay : public OverlayBase {
      * @return "Device Operations"
      */
     const char* get_name() const override {
-        return "AMS Management";
+        return "Multi-Filament Management";
     }
 
     //

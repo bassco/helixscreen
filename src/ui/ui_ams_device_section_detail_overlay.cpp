@@ -10,7 +10,9 @@
 
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
+#include "ui_keyboard_manager.h"
 #include "ui_nav_manager.h"
+#include "ui_text_input.h"
 
 #include "ams_backend.h"
 #include "ams_state.h"
@@ -18,8 +20,6 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
 #include "theme_manager.h"
-#include "ui_keyboard_manager.h"
-#include "ui_text_input.h"
 
 #include <spdlog/spdlog.h>
 
@@ -137,7 +137,7 @@ void AmsDeviceSectionDetailOverlay::show(lv_obj_t* parent_screen, const std::str
     lv_obj_t* header_title = lv_obj_find_by_name(overlay_, "header_title");
     if (header_title) {
         std::string title =
-            std::string(lv_tr("AMS Management")) + ": " + lv_tr(section_label.c_str());
+            std::string(lv_tr("Multi-Filament Management")) + ": " + lv_tr(section_label.c_str());
         lv_label_set_text(header_title, title.c_str());
     }
 
@@ -353,9 +353,9 @@ void AmsDeviceSectionDetailOverlay::create_action_control(
 
         // Set numeric keyboard hint and register with KeyboardManager
         static constexpr uintptr_t TEXT_INPUT_MAGIC = 0xBADC0DE0;
-        lv_obj_set_user_data(
-            ta, reinterpret_cast<void*>(TEXT_INPUT_MAGIC |
-                                        static_cast<uintptr_t>(KeyboardHint::NUMERIC)));
+        lv_obj_set_user_data(ta,
+                             reinterpret_cast<void*>(
+                                 TEXT_INPUT_MAGIC | static_cast<uintptr_t>(KeyboardHint::NUMERIC)));
         KeyboardManager::instance().register_textarea(ta);
 
         // Slider callbacks: update text input live during drag, execute on release
@@ -699,8 +699,10 @@ void AmsDeviceSectionDetailOverlay::on_value_input_ready(lv_event_t* e) {
                 }
 
                 // Clamp to valid range
-                if (val < min_val) val = min_val;
-                if (val > max_val) val = max_val;
+                if (val < min_val)
+                    val = min_val;
+                if (val > max_val)
+                    val = max_val;
 
                 // Update the textarea with clamped value
                 std::string clamped_text = std::to_string(static_cast<int32_t>(val));
