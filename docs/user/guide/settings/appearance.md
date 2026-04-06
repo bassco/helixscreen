@@ -10,6 +10,14 @@ Choose the display language for all UI text. Currently English is the only suppo
 
 ---
 
+## Timezone
+
+Set your local timezone so that print completion times, ETAs, and the clock widget display the correct time. Most printers default to UTC. Select from a curated list of common timezones — each entry shows the UTC offset (e.g., "Eastern (-5:00)"). DST is handled automatically using your system's timezone database.
+
+**Path:** Settings > Timezone
+
+---
+
 ## Time Format
 
 Choose between 12-hour and 24-hour clock display. Affects all timestamps shown throughout the UI.

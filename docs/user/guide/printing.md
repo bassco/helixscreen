@@ -90,6 +90,17 @@ The Print Status panel shows:
 | **Cancel** | Stops print (confirmation required). By default, waits for the printer's cancel routine to finish. If **Cancel Escalation** is enabled in **Settings > Motion**, an emergency stop triggers automatically after the configured timeout. |
 | **Tune** | Opens Print Tune overlay for real-time adjustments |
 
+### View Toggle (Progress / Complete)
+
+When the G-code viewer is active during a print, a small floating button appears in the top-left corner. Tap it to switch between:
+
+- **Progress view** (default): Shows layers printed so far in solid color with a faded "ghost" preview of unprinted layers above.
+- **Complete view**: Shows the entire finished object with all layers solid — useful for seeing what the final print will look like.
+
+The icon shows a cube (tap to see the complete model) or stacked layers (tap to return to progress view). The toggle resets automatically when a new print starts.
+
+If the print contains multiple objects, an **objects list** button also appears in that corner; the view toggle shifts to the right to make room.
+
 ### Timelapse Toggle
 
 If the Moonraker-Timelapse plugin is installed, a **timelapse button** appears in the print controls. Tap it to enable or disable recording for the current print. The button shows a camera icon and toggles between "On" and "Off" states.
