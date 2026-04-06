@@ -16,6 +16,7 @@
 #include "moonraker_client.h"
 #include "power_device_state.h"
 #include "printer_state.h"
+#include "probe_sensor_manager.h"
 #include "sensor_state.h"
 
 #include <algorithm>
@@ -464,6 +465,11 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                 hardware_.parse_config_keys(cfg);
                                 MacroParamCache::instance().populate_from_configfile(
                                     cfg, hardware_.macros());
+
+                                // Seed probe sensor z_offset from configfile (some probe
+                                // modules like flashforge_loadcell return null in status)
+                                helix::sensors::ProbeSensorManager::instance().discover_from_config(
+                                    cfg);
 
                                 // Update LED controller with configfile data (effect targets +
                                 // output_pin PWM)
