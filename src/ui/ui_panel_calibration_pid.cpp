@@ -1038,7 +1038,7 @@ void PIDCalibrationPanel::start_progress_tracking() {
     }
 
     // Start ETA refresh timer (every 3 seconds)
-    eta_update_timer_ = lv_timer_create(on_eta_timer_tick, 3000, this);
+    eta_update_timer_ = lv_timer_create(on_eta_timer_tick, 1000, this);
 
     // Show initial ETA estimate immediately
     update_progress_display();

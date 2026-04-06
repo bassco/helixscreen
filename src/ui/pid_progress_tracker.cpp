@@ -37,12 +37,23 @@ void PidProgressTracker::on_temperature(float temp, uint32_t tick_ms) {
     bool is_above = temp >= static_cast<float>(target_temp_);
 
     if (phase_ == Phase::HEATING) {
-        // Measure heating rate after sufficient temperature change (>= 5 degrees)
-        float delta_temp = temp - start_temp_;
-        if (delta_temp >= 5.0f && tick_ms > start_tick_) {
-            float elapsed_s = static_cast<float>(tick_ms - start_tick_) / 1000.0f;
-            measured_heat_rate_ = elapsed_s / delta_temp;
-            has_measured_heat_rate_ = true;
+        // Measure heating rate using EMA for stability.
+        // Compute instantaneous rate from the last reading, then blend with
+        // the running estimate. Early readings (small delta) are noisy, so
+        // require >=2°C movement from last sample and >=5°C total before
+        // the estimate is considered usable.
+        float delta_from_last = temp - last_temp_;
+        if (delta_from_last >= 2.0f && tick_ms > last_tick_ && last_tick_ > 0) {
+            float inst_rate = static_cast<float>(tick_ms - last_tick_) / 1000.0f / delta_from_last;
+            if (has_measured_heat_rate_) {
+                // EMA: 30% new, 70% old — heavy damping for smooth ETA
+                measured_heat_rate_ = 0.3f * inst_rate + 0.7f * measured_heat_rate_;
+            } else if (temp - start_temp_ >= 5.0f) {
+                // First usable measurement — seed from cumulative rate
+                float elapsed_s = static_cast<float>(tick_ms - start_tick_) / 1000.0f;
+                measured_heat_rate_ = elapsed_s / (temp - start_temp_);
+                has_measured_heat_rate_ = true;
+            }
         }
 
         // Detect phase transition: must go above target first, then come back down
