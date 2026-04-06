@@ -8,7 +8,6 @@
 
 #include "klipper_config_editor.h"
 #include "moonraker_advanced_api.h"
-#include "observer_factory.h"
 #include "overlay_base.h"
 #include "pid_progress_tracker.h"
 #include "subject_managed_panel.h"
