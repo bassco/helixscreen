@@ -561,9 +561,10 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
                 }
             }
         }
-    } else if (type == "macro_match") {
+    } else if (type == "macro_match" || type == "macro_exclude") {
         // Match against G-code macro names in printer_objects
         // G-code macros appear as "gcode_macro <NAME>" in the objects list
+        // macro_exclude: if the macro IS present, exclude this printer entirely
         std::string pattern = heuristic.value("pattern", "");
         std::string pattern_lower = pattern;
         std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(),
@@ -579,6 +580,10 @@ int execute_heuristic(const json& heuristic, const PrinterHardwareData& hardware
                                [](unsigned char c) { return std::tolower(c); });
 
                 if (macro_lower.find(pattern_lower) != std::string::npos) {
+                    if (type == "macro_exclude") {
+                        spdlog::debug("[PrinterDetector] Excluded by macro '{}' ", macro_name);
+                        return HEURISTIC_EXCLUDE;
+                    }
                     spdlog::debug("[PrinterDetector] Matched macro '{}' (confidence: {})",
                                   macro_name, confidence);
                     return confidence;

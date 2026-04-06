@@ -13,6 +13,7 @@
     "mcu_match": "Match against MCU chip type or serial pattern",
     "build_volume_range": "Match against bed_mesh dimensions",
     "macro_match": "Match against G-code macro names (gcode_macro objects)",
+    "macro_exclude": "Exclude this printer if a G-code macro is present",
     "tool_count": "Count of extruder tools (tool_count_1, tool_count_2, tool_count_4)",
     "cpu_arch_match": "Match against host CPU architecture string"
   },
@@ -20,6 +21,78 @@
     {
       "id": "flashforge_adventurer_5m",
       "name": "FlashForge Adventurer 5M",
+      "manufacturer": "FlashForge",
+      "image": "flashforge-adventurer-5m.png",
+      "preset": "ad5m",
+      "print_start_profile": "ad5m",
+      "probe_type": "loadcell",
+      "heuristics": [
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SUPPORT_FORGE_X",
+          "confidence": 0,
+          "reason": "Exclude ForgeX firmware (separate entry)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "tvoc",
+          "confidence": 95,
+          "reason": "TVOC sensor (stock 'tvocValue')"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "weightValue",
+          "confidence": 80,
+          "reason": "Spool weight sensor (stock firmware name)"
+        },
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 30,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "flashforge",
+          "confidence": 80,
+          "reason": "Hostname contains 'flashforge'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "ad5m",
+          "confidence": 90,
+          "reason": "Hostname contains 'ad5m' (Adventurer 5M)"
+        },
+        {
+          "type": "hostname_exclude",
+          "field": "hostname",
+          "pattern": "ad5x",
+          "confidence": 0,
+          "reason": "Exclude AD5X from matching as AD5M"
+        }
+      ],
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "params": {
+          "bed_mesh": {
+            "param": "SKIP_LEVELING",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Skip bed mesh calibration"
+          }
+        }
+      }
+    },
+    {
+      "id": "flashforge_adventurer_5m_forgex",
+      "name": "FlashForge Adventurer 5M (ForgeX)",
       "manufacturer": "FlashForge",
       "image": "flashforge-adventurer-5m.png",
       "preset": "ad5m",
@@ -107,6 +180,99 @@
     {
       "id": "flashforge_ad5m_pro",
       "name": "FlashForge Adventurer 5M Pro",
+      "manufacturer": "FlashForge",
+      "image": "flashforge-adventurer-5m-pro.png",
+      "preset": "ad5m_pro",
+      "print_start_profile": "ad5m",
+      "probe_type": "loadcell",
+      "heuristics": [
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SUPPORT_FORGE_X",
+          "confidence": 0,
+          "reason": "Exclude ForgeX firmware (separate entry)"
+        },
+        {
+          "type": "led_match",
+          "field": "leds",
+          "pattern": "chamber_l",
+          "confidence": 100,
+          "reason": "LED chamber light/led (AD5M Pro exclusive)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "tvoc",
+          "confidence": 95,
+          "reason": "TVOC sensor (stock 'tvocValue')"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "weightValue",
+          "confidence": 80,
+          "reason": "Spool weight sensor (stock firmware name)"
+        },
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 30,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "flashforge",
+          "confidence": 80,
+          "reason": "Hostname contains 'flashforge'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "ad5m",
+          "confidence": 90,
+          "reason": "Hostname contains 'ad5m' (Adventurer 5M)"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "ad5m-pro",
+          "confidence": 96,
+          "reason": "Hostname contains 'ad5m-pro'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "ad5mpro",
+          "confidence": 96,
+          "reason": "Hostname contains 'ad5mpro'"
+        },
+        {
+          "type": "hostname_exclude",
+          "field": "hostname",
+          "pattern": "ad5x",
+          "confidence": 0,
+          "reason": "Exclude AD5X from matching as AD5M Pro"
+        }
+      ],
+      "print_start_capabilities": {
+        "macro_name": "START_PRINT",
+        "params": {
+          "bed_mesh": {
+            "param": "SKIP_LEVELING",
+            "skip_value": "1",
+            "enable_value": "0",
+            "default_value": "0",
+            "description": "Skip bed mesh calibration"
+          }
+        }
+      }
+    },
+    {
+      "id": "flashforge_ad5m_pro_forgex",
+      "name": "FlashForge Adventurer 5M Pro (ForgeX)",
       "manufacturer": "FlashForge",
       "image": "flashforge-adventurer-5m-pro.png",
       "preset": "ad5m_pro",

@@ -2931,10 +2931,9 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
 
     auto result = PrinterDetector::detect(hardware);
 
-    // Should NOT detect as AD5M or AD5M Pro (hostname_exclude blocks it)
+    // Should NOT detect as any AD5M variant (hostname_exclude blocks it)
     if (result.detected()) {
-        REQUIRE(result.type_name != "FlashForge Adventurer 5M");
-        REQUIRE(result.type_name != "FlashForge Adventurer 5M Pro");
+        REQUIRE(result.type_name.find("Adventurer 5M") == std::string::npos);
     }
 }
 
@@ -2961,20 +2960,89 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
 }
 
 // ============================================================================
+// ForgeX vs Stock Detection Tests
+// ============================================================================
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: AD5M with ForgeX macros detects as ForgeX variant",
+                 "[printer][heuristics][ad5m]") {
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {"tvocValue", "weightValue"},
+                                 .fans = {},
+                                 .leds = {},
+                                 .hostname = "flashforge-ad5m",
+                                 .printer_objects = {"mod_params", "gcode_macro SUPPORT_FORGE_X"},
+                                 .steppers = {},
+                                 .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5M (ForgeX)");
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: AD5M without ForgeX macros detects as stock variant",
+                 "[printer][heuristics][ad5m]") {
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {"tvocValue", "weightValue"},
+                                 .fans = {},
+                                 .leds = {},
+                                 .hostname = "flashforge-ad5m",
+                                 .printer_objects = {},
+                                 .steppers = {},
+                                 .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5M");
+}
+
+TEST_CASE_METHOD(PrinterDetectorFixture,
+                 "PrinterDetector: macro_exclude prevents stock match when ForgeX present",
+                 "[printer][heuristics][ad5m]") {
+    // Stock AD5M Pro entry has macro_exclude for SUPPORT_FORGE_X
+    // When ForgeX IS present, only the ForgeX entry should match
+    PrinterHardwareData hardware{.heaters = {"extruder", "heater_bed"},
+                                 .sensors = {"tvocValue", "weightValue"},
+                                 .fans = {},
+                                 .leds = {"led chamber_light"},
+                                 .hostname = "flashforge-ad5m-pro",
+                                 .printer_objects = {"mod_params", "gcode_macro SUPPORT_FORGE_X"},
+                                 .steppers = {},
+                                 .kinematics = "corexy"};
+
+    auto result = PrinterDetector::detect(hardware);
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5M Pro (ForgeX)");
+}
+
+// ============================================================================
 // Z-Offset Calibration Strategy Lookup
 // ============================================================================
 
 TEST_CASE("Z-offset calibration strategy lookup", "[printer_detector]") {
-    SECTION("FlashForge AD5M returns firmware_managed strategy") {
+    SECTION("FlashForge AD5M ForgeX returns firmware_managed strategy") {
         std::string strategy =
-            PrinterDetector::get_z_offset_calibration_strategy("FlashForge Adventurer 5M");
+            PrinterDetector::get_z_offset_calibration_strategy("FlashForge Adventurer 5M (ForgeX)");
         REQUIRE(strategy == "firmware_managed");
     }
 
-    SECTION("FlashForge AD5M Pro returns firmware_managed strategy") {
+    SECTION("FlashForge AD5M stock has no firmware_managed strategy") {
+        std::string strategy =
+            PrinterDetector::get_z_offset_calibration_strategy("FlashForge Adventurer 5M");
+        REQUIRE(strategy.empty());
+    }
+
+    SECTION("FlashForge AD5M Pro ForgeX returns firmware_managed strategy") {
+        std::string strategy = PrinterDetector::get_z_offset_calibration_strategy(
+            "FlashForge Adventurer 5M Pro (ForgeX)");
+        REQUIRE(strategy == "firmware_managed");
+    }
+
+    SECTION("FlashForge AD5M Pro stock has no firmware_managed strategy") {
         std::string strategy =
             PrinterDetector::get_z_offset_calibration_strategy("FlashForge Adventurer 5M Pro");
-        REQUIRE(strategy == "firmware_managed");
+        REQUIRE(strategy.empty());
     }
 
     SECTION("Unknown printer returns empty string") {
@@ -2985,7 +3053,7 @@ TEST_CASE("Z-offset calibration strategy lookup", "[printer_detector]") {
 
     SECTION("Case insensitive lookup") {
         std::string strategy =
-            PrinterDetector::get_z_offset_calibration_strategy("flashforge adventurer 5m");
+            PrinterDetector::get_z_offset_calibration_strategy("flashforge adventurer 5m (forgex)");
         REQUIRE(strategy == "firmware_managed");
     }
 }
@@ -3090,8 +3158,7 @@ TEST_CASE("Creality K1 printer detection", "[printer_detector]") {
 // Preset Field Tests
 // ============================================================================
 
-TEST_CASE_METHOD(PrinterDetectorFixture,
-                 "PrinterDetector: Detect Snapmaker U1 with preset field",
+TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: Detect Snapmaker U1 with preset field",
                  "[printer][snapmaker][preset]") {
     auto hardware = snapmaker_u1_hardware();
     auto result = PrinterDetector::detect(hardware);
@@ -3102,8 +3169,7 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
     REQUIRE(result.preset == "snapmaker_u1");
 }
 
-TEST_CASE_METHOD(PrinterDetectorFixture,
-                 "PrinterDetector: Detect Creality K1 with preset field",
+TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: Detect Creality K1 with preset field",
                  "[printer][preset]") {
     auto hardware = creality_k1_hardware();
     auto result = PrinterDetector::detect(hardware);
@@ -3115,8 +3181,7 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
     REQUIRE(result.preset == "k1");
 }
 
-TEST_CASE_METHOD(PrinterDetectorFixture,
-                 "PrinterDetector: Generic printer has empty preset field",
+TEST_CASE_METHOD(PrinterDetectorFixture, "PrinterDetector: Generic printer has empty preset field",
                  "[printer][preset]") {
     auto hardware = voron_v2_hardware();
     auto result = PrinterDetector::detect(hardware);
