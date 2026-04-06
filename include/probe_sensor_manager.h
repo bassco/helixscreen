@@ -97,6 +97,12 @@ class ProbeSensorManager : public ISensorManager {
     /// @brief Save configuration to JSON
     [[nodiscard]] nlohmann::json save_config() const override;
 
+    /// @brief Load sensor config (roles, enabled state) from settings.json
+    void load_config_from_file();
+
+    /// @brief Save sensor config (roles, enabled state) to settings.json
+    void save_config_to_file();
+
     // ========================================================================
     // Initialization
     // ========================================================================

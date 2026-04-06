@@ -5,6 +5,7 @@
 
 #include "ui_update_queue.h"
 
+#include "config.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 
@@ -171,6 +172,14 @@ void ProbeSensorManager::discover(const std::vector<std::string>& klipper_object
         } else {
             ++it;
         }
+    }
+
+    // Auto-assign Z_PROBE role when exactly one probe exists and no role is assigned.
+    // This is the common case — single probe is always the Z probe.
+    if (sensors_.size() == 1 && !find_config_by_role(ProbeSensorRole::Z_PROBE)) {
+        sensors_[0].role = ProbeSensorRole::Z_PROBE;
+        spdlog::info("[ProbeSensorManager] Auto-assigned Z_PROBE role to '{}'",
+                     sensors_[0].sensor_name);
     }
 
     // Update sensor count subject
@@ -389,6 +398,82 @@ nlohmann::json ProbeSensorManager::save_config() const {
 
     spdlog::info("[ProbeSensorManager] Config saved");
     return config;
+}
+
+void ProbeSensorManager::load_config_from_file() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    spdlog::debug("[ProbeSensorManager] Loading config from file");
+
+    Config* cfg = Config::get_instance();
+    if (!cfg) {
+        spdlog::warn("[ProbeSensorManager] Config not initialized");
+        return;
+    }
+
+    std::string base_path = cfg->df() + "probe_sensors";
+
+    try {
+        json& sensors_json = cfg->get_json(base_path + "/sensors");
+        if (sensors_json.is_array()) {
+            for (const auto& sensor_json : sensors_json) {
+                if (!sensor_json.contains("klipper_name")) {
+                    continue;
+                }
+
+                std::string klipper_name = sensor_json["klipper_name"].get<std::string>();
+                auto* sensor = find_config(klipper_name);
+
+                if (sensor) {
+                    if (sensor_json.contains("role")) {
+                        sensor->role =
+                            probe_role_from_string(sensor_json["role"].get<std::string>());
+                    }
+                    if (sensor_json.contains("enabled")) {
+                        sensor->enabled = sensor_json["enabled"].get<bool>();
+                    }
+                    spdlog::debug("[ProbeSensorManager] Loaded config for {}: role={}, enabled={}",
+                                  klipper_name, probe_role_to_string(sensor->role),
+                                  sensor->enabled);
+                }
+            }
+        }
+    } catch (const std::exception& e) {
+        spdlog::debug("[ProbeSensorManager] No sensor config found: {}", e.what());
+    }
+
+    update_subjects();
+    spdlog::debug("[ProbeSensorManager] Config loaded from file");
+}
+
+void ProbeSensorManager::save_config_to_file() {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    spdlog::debug("[ProbeSensorManager] Saving config to file");
+
+    Config* cfg = Config::get_instance();
+    if (!cfg) {
+        spdlog::warn("[ProbeSensorManager] Config not initialized");
+        return;
+    }
+
+    std::string base_path = cfg->df() + "probe_sensors";
+
+    json ps_config;
+    json sensors_array = json::array();
+    for (const auto& sensor : sensors_) {
+        json sensor_json;
+        sensor_json["klipper_name"] = sensor.klipper_name;
+        sensor_json["role"] = probe_role_to_string(sensor.role);
+        sensor_json["enabled"] = sensor.enabled;
+        sensor_json["type"] = probe_type_to_string(sensor.type);
+        sensors_array.push_back(sensor_json);
+    }
+    ps_config["sensors"] = sensors_array;
+
+    cfg->get_json(base_path) = ps_config;
+    cfg->save();
+    spdlog::info("[ProbeSensorManager] Config saved to file");
 }
 
 // ============================================================================

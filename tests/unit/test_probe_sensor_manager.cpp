@@ -211,7 +211,8 @@ TEST_CASE_METHOD(ProbeSensorTestFixture, "ProbeSensorManager - discovery", "[pro
         REQUIRE(configs[0].sensor_name == "probe");
         REQUIRE(configs[0].type == ProbeSensorType::STANDARD);
         REQUIRE(configs[0].enabled == true);
-        REQUIRE(configs[0].role == ProbeSensorRole::NONE);
+        // Single probe auto-assigns Z_PROBE role
+        REQUIRE(configs[0].role == ProbeSensorRole::Z_PROBE);
     }
 
     SECTION("Discovers BLTouch probe") {

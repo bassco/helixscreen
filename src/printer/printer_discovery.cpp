@@ -116,6 +116,7 @@ void init_subsystems_from_hardware(const PrinterDiscovery& hardware, MoonrakerAP
     // Probe sensors (bltouch, cartographer, beacon, etc.) are discovered from the full objects list
     auto& psm = helix::sensors::ProbeSensorManager::instance();
     psm.discover(hardware.printer_objects());
+    psm.load_config_from_file();
 
     // Initialize humidity sensor manager
     // Humidity sensors (bme280, htu21d) are discovered from the full objects list
