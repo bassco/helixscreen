@@ -563,24 +563,39 @@ void ProbeOverlay::handle_probe_accuracy() {
     const char* homed = lv_subject_get_string(ps.get_homed_axes_subject());
     bool all_homed = homed && std::string(homed).find("xyz") != std::string::npos;
 
+    // PROBE_ACCURACY defaults to 10 samples (not the [probe] config's samples= which is for
+    // regular probing). We pass SAMPLES= explicitly so progress tracking matches.
+    static constexpr int PROBE_ACCURACY_SAMPLES = 10;
+
     std::string gcode;
     if (!all_homed) {
         spdlog::info("[Probe] Axes not homed (homed_axes='{}'), homing first", homed ? homed : "");
         gcode = "G28\n";
     }
-    gcode += "PROBE_ACCURACY";
+
+    // After homing, the toolhead may be at Z max in a corner. Traveling the full Z range at
+    // probe speed (often 2mm/s) is painfully slow, and probing in the corner isn't ideal.
+    // Move to center at a reasonable height first at travel speed.
+    // Pre-position: move to bed center at a safe Z height before probing.
+    // Without this, after G28 the toolhead is at Z max in a corner and PROBE_ACCURACY
+    // descends the full range at probe speed (often 2mm/s) — painfully slow.
+    const auto& bv = api_->hardware().build_volume();
+    if (bv.z_max > 0.0f && bv.x_max > bv.x_min && bv.y_max > bv.y_min) {
+        float center_x = (bv.x_min + bv.x_max) / 2.0f;
+        float center_y = (bv.y_min + bv.y_max) / 2.0f;
+        float safe_z = 30.0f;
+        gcode += fmt::format("G1 Z{:.1f} F3000\n", safe_z);
+        gcode += fmt::format("G1 X{:.1f} Y{:.1f} F6000\n", center_x, center_y);
+        spdlog::info("[Probe] Pre-positioning to center ({:.0f},{:.0f}) Z{:.1f} before accuracy "
+                     "test (z_max={:.0f})",
+                     center_x, center_y, safe_z, bv.z_max);
+    }
+
+    gcode += fmt::format("PROBE_ACCURACY SAMPLES={}", PROBE_ACCURACY_SAMPLES);
 
     // Reset progress state
     probe_acc_sample_count_ = 0;
-
-    // Get expected sample count from config (default 10 if not loaded)
-    const char* samples_str = lv_subject_get_string(&probe_cfg_samples_);
-    probe_acc_total_samples_ = 10;
-    if (samples_str && samples_str[0] != '-') {
-        int parsed = std::atoi(samples_str);
-        if (parsed > 0)
-            probe_acc_total_samples_ = parsed;
-    }
+    probe_acc_total_samples_ = PROBE_ACCURACY_SAMPLES;
 
     // Set initial state and show modal
     lv_subject_set_int(&probe_acc_state_, 1); // PROBING
