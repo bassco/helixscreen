@@ -94,7 +94,7 @@
 #include "ui_printer_status_icon.h"
 #include "ui_probe_overlay.h"
 #include "ui_settings_about.h"
-#include "ui_settings_display.h"
+#include "ui_settings_display_sound.h"
 #include "ui_settings_hardware_health.h"
 #include "ui_settings_sensors.h"
 #include "ui_severity_card.h"
@@ -1740,14 +1740,14 @@ void Application::create_overlays() {
         // - callback registration
         // - dropdown population
         // - theme preview creation
-        auto& display_settings = helix::settings::get_display_settings_overlay();
+        auto& display_settings = helix::settings::get_display_sound_settings_overlay();
         display_settings.show_theme_preview(m_screen);
         spdlog::info("[Application] Opened theme preview overlay via CLI");
     }
 
     if (m_args.overlays.theme_edit) {
         // Push theme preview first, then theme editor on top
-        auto& display_settings = helix::settings::get_display_settings_overlay();
+        auto& display_settings = helix::settings::get_display_sound_settings_overlay();
         display_settings.show_theme_preview(m_screen);
 
         // Now push theme editor overlay on top
@@ -1767,7 +1767,7 @@ void Application::create_overlays() {
 
     // Settings overlays (for CLI screenshot automation)
     if (m_args.overlays.display_settings) {
-        auto& overlay = helix::settings::get_display_settings_overlay();
+        auto& overlay = helix::settings::get_display_sound_settings_overlay();
         overlay.show(m_screen);
         spdlog::info("[Application] Opened display settings overlay via CLI");
     }

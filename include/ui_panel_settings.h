@@ -140,7 +140,7 @@ class SettingsPanel : public PanelBase {
     char touch_cal_status_buf_[48]; // e.g., "Calibrated" or "Not calibrated"
 
     // Static buffers for string subjects
-    char printer_host_value_buf_[96];        // e.g., "192.168.1.100:7125"
+    char printer_host_value_buf_[96]; // e.g., "192.168.1.100:7125"
 
     // Note: Machine Limits overlay is now managed by MachineLimitsOverlay class
     // See ui_settings_machine_limits.h
@@ -261,6 +261,14 @@ class SettingsPanel : public PanelBase {
     static void on_telemetry_view_data(lv_event_t* e);
     static void on_restart_helix_settings_clicked(lv_event_t* e);
     static void on_about_clicked(lv_event_t* e);
+
+    // Category navigation callbacks (open sub-panel overlays)
+    static void on_display_sound_clicked(lv_event_t* e);
+    static void on_printing_clicked(lv_event_t* e);
+    static void on_hardware_clicked(lv_event_t* e);
+    static void on_safety_clicked(lv_event_t* e);
+    static void on_system_clicked(lv_event_t* e);
+    static void on_help_clicked(lv_event_t* e);
 
   private:
     //

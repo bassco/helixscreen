@@ -19,8 +19,13 @@
 #include "ui_panel_power.h"
 #include "ui_printer_list_overlay.h"
 #include "ui_settings_about.h"
-#include "ui_settings_display.h"
+#include "ui_settings_display_sound.h"
+#include "ui_settings_hardware.h"
 #include "ui_settings_hardware_health.h"
+#include "ui_settings_help.h"
+#include "ui_settings_printing.h"
+#include "ui_settings_safety.h"
+#include "ui_settings_system.h"
 #if HELIX_HAS_LABEL_PRINTER
 #include "ui_settings_label_printer.h"
 #endif
@@ -32,7 +37,6 @@
 #include "ui_settings_plugins.h"
 #include "ui_settings_security.h"
 #include "ui_settings_sensors.h"
-#include "ui_settings_sound.h"
 #include "ui_settings_telemetry_data.h"
 #include "ui_severity_card.h"
 #include "ui_snake_game.h"
@@ -263,8 +267,8 @@ void SettingsPanel::init_subjects() {
 
     // Note: LED config loading moved to MoonrakerManager::create_api() for centralized init
 
-    // Note: brightness_value subject is now managed by DisplaySettingsOverlay
-    // See ui_settings_display.cpp
+    // Note: brightness_value subject is now managed by DisplaySoundSettingsOverlay
+    // See ui_settings_display_sound.cpp
 
     // Initialize info row subjects that remain in SettingsPanel
     UI_MANAGED_SUBJECT_STRING(printer_host_value_subject_, printer_host_value_buf_, "\xe2\x80\x94",
@@ -303,8 +307,7 @@ void SettingsPanel::init_subjects() {
 
     // Touch calibration status - show "Calibrated" or "Not calibrated" in row description
     Config* config = Config::get_instance();
-    bool is_calibrated =
-        config && config->get<bool>(config->df() + "input/calibration/valid", false);
+    bool is_calibrated = config && config->get<bool>("/input/calibration/valid", false);
     const char* status_text = is_calibrated ? lv_tr("Calibrated") : lv_tr("Not calibrated");
     UI_MANAGED_SUBJECT_STRING(touch_cal_status_subject_, touch_cal_status_buf_, status_text,
                               "touch_cal_status", subjects_);
@@ -346,6 +349,24 @@ void SettingsPanel::init_subjects() {
         {"on_timelapse_settings_clicked", on_timelapse_settings_clicked},
     });
 
+    // Category navigation callbacks (open sub-panel overlays from top-level)
+    register_xml_callbacks({
+        {"on_display_sound_clicked", on_display_sound_clicked},
+        {"on_printing_clicked", on_printing_clicked},
+        {"on_hardware_clicked", on_hardware_clicked},
+        {"on_safety_clicked", on_safety_clicked},
+        {"on_system_clicked", on_system_clicked},
+        {"on_help_clicked", on_help_clicked},
+    });
+
+    // Register sub-panel overlay callbacks (must happen before XML parsing)
+    helix::settings::get_display_sound_settings_overlay().register_callbacks();
+    helix::settings::get_printing_settings_overlay().register_callbacks();
+    helix::settings::get_hardware_settings_overlay().register_callbacks();
+    helix::settings::get_safety_settings_overlay().register_callbacks();
+    helix::settings::get_system_settings_overlay().register_callbacks();
+    helix::settings::get_help_settings_overlay().register_callbacks();
+
     // Note: Sensors overlay callbacks are now handled by SensorSettingsOverlay
     // See ui_settings_sensors.h
     helix::settings::get_sensor_settings_overlay().register_callbacks();
@@ -353,8 +374,8 @@ void SettingsPanel::init_subjects() {
     // Note: Fan Settings overlay callbacks are now handled by FanSettingsOverlay
     helix::settings::get_fan_settings_overlay().register_callbacks();
 
-    // Note: Display Settings overlay callbacks are now handled by DisplaySettingsOverlay
-    // See ui_settings_display.h
+    // Note: Display Settings overlay callbacks are now handled by DisplaySoundSettingsOverlay
+    // See ui_settings_display_sound.h
 
     // Settings action rows and overlay navigation callbacks
     register_xml_callbacks({
@@ -811,9 +832,10 @@ void SettingsPanel::handle_docs_clicked() {
 }
 
 void SettingsPanel::handle_sound_settings_clicked() {
-    spdlog::debug("[{}] Sound Settings clicked - delegating to SoundSettingsOverlay", get_name());
+    spdlog::debug("[{}] Sound Settings clicked - delegating to DisplaySoundSettingsOverlay",
+                  get_name());
 
-    auto& overlay = helix::settings::get_sound_settings_overlay();
+    auto& overlay = helix::settings::get_display_sound_settings_overlay();
     overlay.show(parent_screen_);
 }
 
@@ -849,10 +871,10 @@ void SettingsPanel::handle_printers_clicked() {
 }
 
 void SettingsPanel::handle_display_settings_clicked() {
-    spdlog::debug("[{}] Display Settings clicked - delegating to DisplaySettingsOverlay",
+    spdlog::debug("[{}] Display Settings clicked - delegating to DisplaySoundSettingsOverlay",
                   get_name());
 
-    auto& overlay = helix::settings::get_display_settings_overlay();
+    auto& overlay = helix::settings::get_display_sound_settings_overlay();
     overlay.show(parent_screen_);
 }
 
@@ -1131,6 +1153,52 @@ void SettingsPanel::handle_hardware_health_clicked() {
 // See ui_settings_hardware_health.cpp
 
 // ============================================================================
+// CATEGORY NAVIGATION CALLBACKS (open sub-panel overlays)
+// ============================================================================
+
+void SettingsPanel::on_display_sound_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_display_sound_clicked");
+    auto& overlay = helix::settings::get_display_sound_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_printing_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_printing_clicked");
+    auto& overlay = helix::settings::get_printing_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_hardware_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_hardware_clicked");
+    auto& overlay = helix::settings::get_hardware_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_safety_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_safety_clicked");
+    auto& overlay = helix::settings::get_safety_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_system_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_system_clicked");
+    auto& overlay = helix::settings::get_system_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SettingsPanel::on_help_clicked(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SettingsPanel] on_help_clicked");
+    auto& overlay = helix::settings::get_help_settings_overlay();
+    overlay.show(get_global_settings_panel().parent_screen_);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
 // STATIC TRAMPOLINES (XML event_cb pattern - use global singleton)
 // ============================================================================
 
@@ -1390,8 +1458,8 @@ void SettingsPanel::on_header_back_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-// Note: on_brightness_changed is now handled by DisplaySettingsOverlay
-// See ui_settings_display.cpp
+// Note: on_brightness_changed is now handled by DisplaySoundSettingsOverlay
+// See ui_settings_display_sound.cpp
 
 // ============================================================================
 // GLOBAL INSTANCE
@@ -1448,5 +1516,12 @@ void register_settings_panel_callbacks() {
         {"on_debug_bundle_clicked", SettingsPanel::on_debug_bundle_clicked},
         {"on_discord_clicked", SettingsPanel::on_discord_clicked},
         {"on_docs_clicked", SettingsPanel::on_docs_clicked},
+        // Category navigation callbacks (open sub-panel overlays)
+        {"on_display_sound_clicked", SettingsPanel::on_display_sound_clicked},
+        {"on_printing_clicked", SettingsPanel::on_printing_clicked},
+        {"on_hardware_clicked", SettingsPanel::on_hardware_clicked},
+        {"on_safety_clicked", SettingsPanel::on_safety_clicked},
+        {"on_system_clicked", SettingsPanel::on_system_clicked},
+        {"on_help_clicked", SettingsPanel::on_help_clicked},
     });
 }

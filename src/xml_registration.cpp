@@ -483,8 +483,12 @@ void register_xml_components() {
     register_xml("bed_mesh_panel.xml");
 
     // Settings overlay panels
-    register_xml("display_settings_overlay.xml");
-    register_xml("sound_settings_overlay.xml");
+    register_xml("settings_display_sound_overlay.xml");
+    register_xml("settings_printing_overlay.xml");
+    register_xml("settings_hardware_overlay.xml");
+    register_xml("settings_safety_overlay.xml");
+    register_xml("settings_system_overlay.xml");
+    register_xml("settings_help_overlay.xml");
     register_xml("security_settings_overlay.xml");
 #if HELIX_HAS_LABEL_PRINTER
     register_xml("label_printer_settings.xml");
