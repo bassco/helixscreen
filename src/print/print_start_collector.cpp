@@ -3,13 +3,13 @@
 
 #include "print_start_collector.h"
 
-#include "printer_detector.h"
 #include "ui_update_queue.h"
 
 #include "config.h"
 #include "format_utils.h"
-#include "memory_monitor.h"
 #include "lvgl/src/others/translation/lv_translation.h"
+#include "memory_monitor.h"
+#include "printer_detector.h"
 
 #include <spdlog/spdlog.h>
 
@@ -77,7 +77,7 @@ void PrintStartCollector::start() {
         // Record start time for timeout fallback
         printing_state_start_ = std::chrono::steady_clock::now();
         detected_phases_.clear();
-        current_phase_ = PrintStartPhase::IDLE;
+        current_phase_ = PrintStartPhase::INITIALIZING;
         print_start_detected_ = false;
         max_sequential_progress_ = 0;
         phase_enter_times_.clear();
@@ -86,6 +86,8 @@ void PrintStartCollector::start() {
         baseline_progress_ = lv_subject_get_int(state_.get_print_progress_subject());
     }
     fallbacks_enabled_.store(false); // Will be enabled after initial window
+    spdlog::info("[PrintStartCollector] Baselines: layer={}, progress={}", baseline_layer_,
+                 baseline_progress_);
     helix::MemoryMonitor::log_now("print_start_collector_start", spdlog::level::debug);
 
     // Load prediction history from config
@@ -99,8 +101,8 @@ void PrintStartCollector::start() {
             std::string profile_name = PrinterDetector::get_print_start_profile(printer_type);
             if (!profile_name.empty()) {
                 profile_ = PrintStartProfile::load(profile_name);
-                spdlog::info("[PrintStartCollector] Loaded profile '{}' for '{}'",
-                             profile_name, printer_type);
+                spdlog::info("[PrintStartCollector] Loaded profile '{}' for '{}'", profile_name,
+                             printer_type);
             }
         }
         if (!profile_) {
@@ -242,7 +244,7 @@ void PrintStartCollector::reset() {
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         detected_phases_.clear();
-        current_phase_ = PrintStartPhase::IDLE;
+        current_phase_ = PrintStartPhase::INITIALIZING;
         print_start_detected_ = false;
         max_sequential_progress_ = 0;
         printing_state_start_ = std::chrono::steady_clock::now();
@@ -310,8 +312,8 @@ void PrintStartCollector::check_fallback_completion() {
     // Allow proactive temperature detection from any non-terminal phase.
     // On printers like the K1C where gcode responses are sparse, the proactive
     // detector is the primary way to advance through heating phases.
-    bool is_temp_detected_phase = (current != PrintStartPhase::COMPLETE &&
-                                   current != PrintStartPhase::PURGING);
+    bool is_temp_detected_phase =
+        (current != PrintStartPhase::COMPLETE && current != PrintStartPhase::PURGING);
     if (is_temp_detected_phase) {
         if (bed_heating && (current != PrintStartPhase::HEATING_BED)) {
             // Bed still heating — show bed phase
@@ -348,12 +350,9 @@ void PrintStartCollector::check_fallback_completion() {
     // =========================================================================
 
     // Fallback 1: Layer count (slicer-dependent but reliable when present)
-    // Only use this fallback when no profile is loaded — profiles provide their own
-    // completion detection via gcode response patterns. With a profile active, the
-    // layer count from Klipper's print_stats.info.current_layer can't be trusted
-    // during the first seconds (Klipper may report stale/non-zero values from the
-    // START_PRINT macro before actual layer 1 begins).
-    if (!profile_ || profile_->is_default()) {
+    // Triggers when current_layer advances past baseline — the baseline snapshot at
+    // collector start guards against stale values from a previous print.
+    {
         int layer = lv_subject_get_int(state_.get_print_layer_current_subject());
         if (layer >= 1 && layer != baseline_layer_) {
             spdlog::info("[PrintStartCollector] Fallback: layer {} detected (baseline={})", layer,
@@ -364,11 +363,13 @@ void PrintStartCollector::check_fallback_completion() {
     }
 
     // Fallback 2: Progress advancing with temps at target
-    // Any progress increase from baseline while temps are ready means actual printing
-    // has started. On K1C, progress stays at 0 during the entire pre-print macro then
+    // Require progress >= 3% to avoid false triggers during START_PRINT macro execution.
+    // Typical START_PRINT macros occupy < 1% of the file (gcode_start_byte / file_size),
+    // but virtual_sdcard.progress advances through them. 3% ensures actual layer printing
+    // has begun. On K1C, progress stays at 0 during the entire pre-print macro then
     // jumps once the first layer begins.
     int progress = lv_subject_get_int(state_.get_print_progress_subject());
-    if (progress > baseline_progress_ && progress >= 1 && temps_ready) {
+    if (progress > baseline_progress_ && progress >= 3 && temps_ready) {
         spdlog::info("[PrintStartCollector] Fallback: progress {}% with temps ready (baseline={})",
                      progress, baseline_progress_);
         update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
@@ -376,19 +377,11 @@ void PrintStartCollector::check_fallback_completion() {
     }
 
     // Fallback 3: Timeout with temps near target (90% of target)
-    // Only applies when no profile phases have been detected — if the profile is
-    // actively matching phases, let it run to completion via its own patterns.
     bool temps_near = (ext_target <= 0 || ext_temp >= static_cast<int>(ext_target * 0.9)) &&
                       (bed_target <= 0 || bed_temp >= static_cast<int>(bed_target * 0.9));
 
     auto elapsed = std::chrono::steady_clock::now() - start_time;
-    // Use extended timeout when a printer-specific profile is loaded, even if no
-    // gcode response patterns have matched yet. On printers like the K1C, the
-    // websocket delivers almost no gcode responses, so detected_phases_ stays
-    // empty — but we still know the pre-print takes 200+ seconds.
-    bool has_profile = profile_ && !profile_->is_default();
-    auto timeout = has_profile ? std::chrono::seconds(300) : FALLBACK_TIMEOUT;
-    if (elapsed > timeout && temps_near) {
+    if (elapsed > FALLBACK_TIMEOUT && temps_near) {
         auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         spdlog::info("[PrintStartCollector] Fallback: timeout ({} sec)", elapsed_sec);
         update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
@@ -792,10 +785,9 @@ void PrintStartCollector::update_eta_display() {
         int phase_elapsed = 0;
         auto it = phase_enter_times_.find(current);
         if (it != phase_enter_times_.end()) {
-            phase_elapsed = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::seconds>(
-                    std::chrono::steady_clock::now() - it->second)
-                    .count());
+            phase_elapsed = static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(
+                                                 std::chrono::steady_clock::now() - it->second)
+                                                 .count());
         }
 
         remaining = predictor_.remaining_seconds(completed, current, phase_elapsed);

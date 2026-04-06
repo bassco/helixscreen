@@ -208,6 +208,8 @@ class MoonrakerManager {
     ObserverGuard m_print_start_phase_observer;
     ObserverGuard m_print_layer_fallback_observer;
     ObserverGuard m_print_progress_fallback_observer;
+    ObserverGuard m_print_bed_target_fallback_observer;
+    ObserverGuard m_print_ext_target_fallback_observer;
 
     // Macro modification manager (PRINT_START wizard integration)
     std::unique_ptr<helix::MacroModificationManager> m_macro_analysis;

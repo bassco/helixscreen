@@ -616,11 +616,11 @@ class PrintStartCollectorHeaterFixture : public LVGLTestFixture {
     /**
      * @brief Reset collector's internal state back to IDLE for proactive detection tests
      *
-     * After start(), the collector's internal current_phase_ is set to INITIALIZING.
+     * After start(), the collector's internal current_phase_ is INITIALIZING.
      * state().reset_print_start_state() only resets the PrinterState subject, not
      * the collector's internal current_phase_. This helper calls collector().reset()
-     * which resets current_phase_ to IDLE, then overrides the INITIALIZING that
-     * reset() queues (when active), and re-enables fallbacks.
+     * which resets current_phase_ to INITIALIZING, then forces the PrinterState
+     * subject back to IDLE for test isolation, and re-enables fallbacks.
      */
     void reset_collector_to_idle() {
         // Ensure print is considered active so set_print_start_state() doesn't
@@ -628,9 +628,9 @@ class PrintStartCollectorHeaterFixture : public LVGLTestFixture {
         lv_subject_set_int(state_.get_print_active_subject(), 1);
 
         collector_->reset();
-        drain_async_updates(); // Process reset()'s queued INITIALIZING state
+        drain_async_updates();            // Process reset()'s queued INITIALIZING state
         state_.reset_print_start_state(); // Override back to IDLE
-        drain_async_updates(); // Process the IDLE update
+        drain_async_updates();            // Process the IDLE update
     }
 
   protected:
@@ -911,10 +911,9 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     }
 }
 
-TEST_CASE_METHOD(
-    PrintStartCollectorHeaterFixture,
-    "Proactive detection: bed heating stays HEATING_BED until bed reaches target",
-    "[print][collector][proactive][heating]") {
+TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
+                 "Proactive detection: bed heating stays HEATING_BED until bed reaches target",
+                 "[print][collector][proactive][heating]") {
     collector().start();
     drain_async_updates();
     collector().enable_fallbacks();
@@ -1369,8 +1368,8 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
-    SECTION("2% progress with temps at target triggers COMPLETE") {
-        set_progress_and_layer(2, 0); // 2% progress, layer 0
+    SECTION("3% progress with temps at target triggers COMPLETE") {
+        set_progress_and_layer(3, 0); // 3% progress, layer 0
         set_all_temps(600, 600, 2100, 2100);
 
         collector().check_fallback_completion();
@@ -1379,15 +1378,16 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
         REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
     }
 
-    SECTION("1% progress with temps at target triggers COMPLETE (threshold is >= 1%)") {
-        set_progress_and_layer(1, 0);
+    SECTION("2% progress with temps at target does NOT trigger (threshold is >= 3%)") {
+        set_progress_and_layer(2, 0);
         set_all_temps(600, 600, 2100, 2100);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        // 1% with temps ready triggers fallback completion (threshold is >= 1%)
-        REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
+        // 2% is below the 3% threshold — START_PRINT macros occupy ~1% of the file,
+        // so we need a higher threshold to avoid false completion during pre-print.
+        REQUIRE(get_current_phase() != PrintStartPhase::COMPLETE);
     }
 
     SECTION("2% progress but temps NOT ready - triggers heating detection") {

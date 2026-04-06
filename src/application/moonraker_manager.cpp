@@ -105,6 +105,8 @@ void MoonrakerManager::shutdown() {
     m_print_start_phase_observer.release();
     m_print_layer_fallback_observer.release();
     m_print_progress_fallback_observer.release();
+    m_print_bed_target_fallback_observer.release();
+    m_print_ext_target_fallback_observer.release();
 
     // Destroy client FIRST: its destructor waits for in-flight libhv callbacks
     // to finish. connect() lambdas hold raw pointers to m_api and m_macro_analysis,
@@ -301,7 +303,7 @@ void MoonrakerManager::configure_timeouts(Config* config) {
         config->get<int>(config->df() + "moonraker_connection_timeout_ms", 10000));
     uint32_t request_timeout = static_cast<uint32_t>(
         config->get<int>(config->df() + "moonraker_request_timeout_ms",
-                        MoonrakerRequestTracker::DEFAULT_REQUEST_TIMEOUT_MS));
+                         MoonrakerRequestTracker::DEFAULT_REQUEST_TIMEOUT_MS));
     uint32_t keepalive_interval = static_cast<uint32_t>(
         config->get<int>(config->df() + "moonraker_keepalive_interval_ms", 10000));
     uint32_t reconnect_min_delay = static_cast<uint32_t>(
@@ -512,8 +514,7 @@ void MoonrakerManager::init_print_start_collector() {
                     spdlog::info("[MoonrakerManager] PRINT_START collector started");
                 }
                 s_is_initial_transition = false;
-            } else if (s_is_initial_transition &&
-                       s_prev_print_state != PrintJobState::PRINTING &&
+            } else if (s_is_initial_transition && s_prev_print_state != PrintJobState::PRINTING &&
                        s_prev_print_state != PrintJobState::PAUSED &&
                        new_state == PrintJobState::PRINTING && current_progress > 0) {
                 // Log when we skip due to mid-print detection (app startup only)
@@ -551,26 +552,24 @@ void MoonrakerManager::init_print_start_collector() {
         },
         nullptr);
 
-    // Fallback observers
-    m_print_layer_fallback_observer = ObserverGuard(
-        get_printer_state().get_print_layer_current_subject(),
-        [](lv_observer_t*, lv_subject_t*) {
-            auto collector = s_collector.lock();
-            if (collector && collector->is_active()) {
-                collector->check_fallback_completion();
-            }
-        },
-        nullptr);
-
-    m_print_progress_fallback_observer = ObserverGuard(
-        get_printer_state().get_print_progress_subject(),
-        [](lv_observer_t*, lv_subject_t*) {
-            auto collector = s_collector.lock();
-            if (collector && collector->is_active()) {
-                collector->check_fallback_completion();
-            }
-        },
-        nullptr);
+    // Fallback observers: trigger check_fallback_completion() when key subjects change.
+    // Layer/progress detect when actual printing starts; temperature targets trigger
+    // proactive heating phase detection immediately when heater targets change (without
+    // these, proactive detection only runs from the 5-second ETA timer).
+    auto fallback_cb = [](lv_observer_t*, lv_subject_t*) {
+        auto collector = s_collector.lock();
+        if (collector && collector->is_active()) {
+            collector->check_fallback_completion();
+        }
+    };
+    m_print_layer_fallback_observer =
+        ObserverGuard(get_printer_state().get_print_layer_current_subject(), fallback_cb, nullptr);
+    m_print_progress_fallback_observer =
+        ObserverGuard(get_printer_state().get_print_progress_subject(), fallback_cb, nullptr);
+    m_print_bed_target_fallback_observer =
+        ObserverGuard(get_printer_state().get_bed_target_subject(), fallback_cb, nullptr);
+    m_print_ext_target_fallback_observer = ObserverGuard(
+        get_printer_state().get_active_extruder_target_subject(), fallback_cb, nullptr);
 
     spdlog::debug("[MoonrakerManager] Print start collector initialized");
 }
