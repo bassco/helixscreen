@@ -107,10 +107,11 @@ AutoFitResult compute_auto_fit(const AABB& bb, ViewMode view_mode, int canvas_wi
 /// Bottom of model = darker, top = brighter. Back = slightly darker than front.
 namespace depth_shading {
 
-constexpr float kMinBrightness = 0.4f;   ///< Brightness at bottom (Z min)
-constexpr float kBrightnessRange = 0.6f; ///< Added at top (total = 0.4 + 0.6 = 1.0)
-constexpr float kBackFadeMin = 0.85f;    ///< Brightness at back (Y max)
-constexpr float kBackFadeRange = 0.15f;  ///< Added at front (total = 0.85 + 0.15 = 1.0)
+constexpr float kMinBrightness = 0.4f;       ///< Brightness at bottom (Z min)
+constexpr float kBrightnessRange = 0.6f;     ///< Added at top (total = 0.4 + 0.6 = 1.0)
+constexpr float kBackFadeMin = 0.85f;        ///< Brightness at back (Y max)
+constexpr float kBackFadeRange = 0.15f;      ///< Added at front (total = 0.85 + 0.15 = 1.0)
+constexpr float kFullGradientHeight = 50.0f; ///< Objects shorter than this get compressed gradient
 
 } // namespace depth_shading
 
@@ -131,7 +132,8 @@ inline float compute_depth_brightness(float avg_z, float z_min, float z_max, flo
                                       float y_min, float y_max) {
     constexpr float kEpsilon = 0.001f;
 
-    // Z-height: bottom=40%, top=100%
+    // Z-height: bottom=darker, top=brighter.
+    // Short objects (<50mm) get a compressed gradient so they look more uniform.
     float brightness = depth_shading::kMinBrightness;
     float z_range = z_max - z_min;
     if (z_range > kEpsilon) {
@@ -140,7 +142,11 @@ inline float compute_depth_brightness(float avg_z, float z_min, float z_max, flo
             norm_z = 0.0f;
         if (norm_z > 1.0f)
             norm_z = 1.0f;
-        brightness = depth_shading::kMinBrightness + depth_shading::kBrightnessRange * norm_z;
+        float height_scale = (z_range < depth_shading::kFullGradientHeight)
+                                 ? z_range / depth_shading::kFullGradientHeight
+                                 : 1.0f;
+        brightness =
+            depth_shading::kMinBrightness + depth_shading::kBrightnessRange * height_scale * norm_z;
     }
 
     // Y-depth: front (low Y) = 100%, back (high Y) = 85%
