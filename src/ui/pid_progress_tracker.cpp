@@ -78,37 +78,49 @@ void PidProgressTracker::mark_complete() {
     phase_ = Phase::COMPLETE;
 }
 
+float PidProgressTracker::heating_fraction() const {
+    float heat_est = (static_cast<float>(target_temp_) - start_temp_) * best_heat_rate();
+    float osc_est = best_oscillation_duration();
+    float total = heat_est + osc_est;
+    if (total <= 0)
+        return 0.5f;
+    return std::clamp(heat_est / total, 0.05f, 0.80f);
+}
+
 int PidProgressTracker::progress_percent() const {
     if (phase_ == Phase::IDLE)
         return 0;
     if (phase_ == Phase::COMPLETE)
         return 100;
 
+    float heat_frac = heating_fraction();
+
     if (phase_ == Phase::HEATING) {
         if (target_temp_ <= static_cast<int>(start_temp_))
             return 0;
-        // 0-40% proportional to temperature progress
+        // Progress proportional to temperature, scaled to heating's share of total time
         float temp_progress =
             (last_temp_ - start_temp_) / (static_cast<float>(target_temp_) - start_temp_);
         temp_progress = std::clamp(temp_progress, 0.0f, 1.0f);
-        return static_cast<int>(temp_progress * 40.0f);
+        return static_cast<int>(temp_progress * heat_frac * 95.0f);
     }
 
-    // Oscillating: 40-95%
-    if (has_kalico_) {
-        // Kalico sample-based progress
-        if (kalico_total_ > 0) {
-            float sample_progress =
-                static_cast<float>(kalico_sample_) / static_cast<float>(kalico_total_);
-            return 40 + static_cast<int>(sample_progress * 55.0f);
-        }
+    // Oscillating: heat_frac*95% to 95%
+    float osc_bar = (1.0f - heat_frac) * 95.0f;
+    float base = heat_frac * 95.0f;
+
+    if (has_kalico_ && kalico_total_ > 0) {
+        float sample_progress =
+            static_cast<float>(kalico_sample_) / static_cast<float>(kalico_total_);
+        int pct = static_cast<int>(base + sample_progress * osc_bar);
+        return std::min(pct, 95);
     }
 
     // Cycle-based progress
     float cycle_progress =
         static_cast<float>(oscillation_count_) / static_cast<float>(EXPECTED_CYCLES);
     cycle_progress = std::clamp(cycle_progress, 0.0f, 1.0f);
-    int pct = 40 + static_cast<int>(cycle_progress * 55.0f);
+    int pct = static_cast<int>(base + cycle_progress * osc_bar);
     return std::min(pct, 95);
 }
 

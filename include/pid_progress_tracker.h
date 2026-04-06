@@ -115,4 +115,7 @@ class PidProgressTracker {
     // Best available estimates
     float best_heat_rate() const;
     float best_oscillation_duration() const;
+
+    // Fraction of total time spent heating (0.05-0.80, time-proportional)
+    float heating_fraction() const;
 };

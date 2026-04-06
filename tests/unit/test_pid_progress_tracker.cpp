@@ -15,7 +15,8 @@ TEST_CASE("PidProgressTracker heating phase detection", "[pid_progress]") {
     tracker.on_temperature(50.0f, 1000);
     REQUIRE(tracker.phase() == PidProgressTracker::Phase::HEATING);
     REQUIRE(tracker.progress_percent() > 0);
-    REQUIRE(tracker.progress_percent() < 40);
+    // Progress is time-proportional — heating fraction depends on estimates
+    REQUIRE(tracker.progress_percent() < 95);
 
     // Overshoot past target
     tracker.on_temperature(210.0f, 60000);
@@ -25,7 +26,8 @@ TEST_CASE("PidProgressTracker heating phase detection", "[pid_progress]") {
     // Cross back below target — oscillation begins
     tracker.on_temperature(195.0f, 75000);
     REQUIRE(tracker.phase() == PidProgressTracker::Phase::OSCILLATING);
-    REQUIRE(tracker.progress_percent() >= 40);
+    // Progress should be past the heating portion
+    REQUIRE(tracker.progress_percent() > 0);
 }
 
 TEST_CASE("PidProgressTracker oscillation counting", "[pid_progress]") {
@@ -48,9 +50,8 @@ TEST_CASE("PidProgressTracker oscillation counting", "[pid_progress]") {
     }
 
     REQUIRE(tracker.oscillation_count() == 5);
-    // After 5 cycles, progress should be at or near 95%
-    REQUIRE(tracker.progress_percent() >= 93);
-    REQUIRE(tracker.progress_percent() <= 95);
+    // After 5/5 cycles, progress should be at 95% (capped before completion)
+    REQUIRE(tracker.progress_percent() == 95);
 }
 
 TEST_CASE("PidProgressTracker heating ETA calculation", "[pid_progress]") {
@@ -86,6 +87,33 @@ TEST_CASE("PidProgressTracker oscillation ETA", "[pid_progress]") {
     REQUIRE(eta.has_value());
     REQUIRE(*eta >= 80);
     REQUIRE(*eta <= 100);
+}
+
+TEST_CASE("PidProgressTracker progress bar is time-proportional", "[pid_progress]") {
+    // Bed calibration: heating is slow relative to oscillation
+    // 2 s/°C * 75°C = 150s heating, 300s oscillation → heating is 33% of total
+    PidProgressTracker tracker;
+    tracker.set_history(2.0f, 300.0f);
+    tracker.start(PidProgressTracker::Heater::BED, 100, 25.0f);
+
+    // Halfway through heating (50°C of 75°C range)
+    tracker.on_temperature(75.0f, 100000);
+    int heat_mid = tracker.progress_percent();
+    // 33% heating fraction * 50/75 temp progress * 95 = ~21%
+    REQUIRE(heat_mid >= 15);
+    REQUIRE(heat_mid <= 25);
+
+    // Now test extruder with different proportions
+    // 0.5 s/°C * 175°C = 87.5s heating, 120s oscillation → heating is ~42% of total
+    PidProgressTracker ext_tracker;
+    ext_tracker.start(PidProgressTracker::Heater::EXTRUDER, 200, 25.0f);
+
+    // Halfway through heating
+    ext_tracker.on_temperature(112.5f, 50000);
+    int ext_mid = ext_tracker.progress_percent();
+    // 42% heating fraction * 50% temp progress * 95 = ~20%
+    REQUIRE(ext_mid >= 15);
+    REQUIRE(ext_mid <= 25);
 }
 
 TEST_CASE("PidProgressTracker with history provides immediate ETA", "[pid_progress]") {
