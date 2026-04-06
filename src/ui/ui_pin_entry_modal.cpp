@@ -8,13 +8,16 @@
 
 #include "ui_pin_entry_modal.h"
 
-#include "theme_manager.h"
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_pin_utils.h"
+#include "ui_utils.h"
+
+#include "theme_manager.h"
+
+#include <spdlog/spdlog.h>
 
 #include <lvgl.h>
-#include <spdlog/spdlog.h>
 
 namespace helix::ui {
 
@@ -50,7 +53,7 @@ void PinEntryModal::dismiss() {
     auto* modal = g_active_modal;
     g_active_modal = nullptr;
     if (modal->on_complete_) {
-        modal->on_complete_("");  // Return value ignored on dismiss
+        modal->on_complete_(""); // Return value ignored on dismiss
     }
     modal->destroy_async();
 }
@@ -126,8 +129,7 @@ void PinEntryModal::destroy_async() {
     // Use lv_obj_delete_async for LVGL objects — auto-cancelled if parent is
     // deleted first, preventing use-after-free in lv_event_mark_deleted (#543).
     if (backdrop_) {
-        lv_obj_delete_async(backdrop_);
-        backdrop_ = nullptr;
+        helix::ui::safe_delete_deferred(backdrop_);
         dialog_ = nullptr;
     }
     digit_buffer_.clear();
@@ -182,8 +184,8 @@ void PinEntryModal::on_confirm() {
         return;
     }
     if (static_cast<int>(digit_buffer_.size()) < kMinDigits) {
-        spdlog::debug("[PinEntryModal] PIN too short ({} of {} required)",
-                      digit_buffer_.size(), kMinDigits);
+        spdlog::debug("[PinEntryModal] PIN too short ({} of {} required)", digit_buffer_.size(),
+                      kMinDigits);
         clear_digits();
         show_error("PIN must be at least 4 digits");
         return;
@@ -211,7 +213,7 @@ void PinEntryModal::on_confirm() {
         }
         // If callback called show_pin_entry(), we've already been destroyed
         if (g_active_modal != this) {
-            return;  // We were replaced — don't double-delete
+            return; // We were replaced — don't double-delete
         }
     }
 
@@ -228,7 +230,7 @@ void PinEntryModal::on_cancel() {
     g_active_modal = nullptr;
 
     if (callback) {
-        callback("");  // Return value ignored on cancel
+        callback(""); // Return value ignored on cancel
     }
 
     destroy_async();
@@ -239,8 +241,7 @@ void PinEntryModal::on_cancel() {
 // ============================================================================
 
 void PinEntryModal::update_dots() {
-    update_pin_dots(dialog_, "pin_dot_", kMaxDigits,
-                    static_cast<int>(digit_buffer_.size()));
+    update_pin_dots(dialog_, "pin_dot_", kMaxDigits, static_cast<int>(digit_buffer_.size()));
 }
 
 void PinEntryModal::clear_digits() {
@@ -323,12 +324,12 @@ void PinEntryModal::on_cancel_clicked(lv_event_t* /*e*/) {
 
 void PinEntryModal::register_callbacks() {
     register_xml_callbacks({
-        {"pin_modal_digit_clicked",     PinEntryModal::on_digit_clicked},
+        {"pin_modal_digit_clicked", PinEntryModal::on_digit_clicked},
         {"pin_modal_backspace_clicked", PinEntryModal::on_backspace_clicked},
-        {"pin_modal_confirm_clicked",   PinEntryModal::on_confirm_clicked},
-        {"pin_modal_cancel_clicked",    PinEntryModal::on_cancel_clicked},
+        {"pin_modal_confirm_clicked", PinEntryModal::on_confirm_clicked},
+        {"pin_modal_cancel_clicked", PinEntryModal::on_cancel_clicked},
     });
     spdlog::debug("[PinEntryModal] Callbacks registered");
 }
 
-}  // namespace helix::ui
+} // namespace helix::ui

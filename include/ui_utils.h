@@ -159,8 +159,43 @@ inline void safe_delete_deferred(lv_obj_t*& obj) {
     // Hide immediately so the widget isn't visible while deletion is deferred
     lv_obj_add_flag(to_delete, LV_OBJ_FLAG_HIDDEN);
     defocus_tree(to_delete);
+    // Reparent to lv_layer_top() so the original parent's destruction won't
+    // recursively delete this child while it's queued for async delete.
+    // Without this, obj_delete_core can hit an already-freed child whose
+    // event list is corrupted — SIGSEGV in lv_event_mark_deleted (ad5x).
+    lv_obj_t* layer = lv_layer_top();
+    if (layer) {
+        lv_obj_set_parent(to_delete, layer);
+    }
     // Defer deletion to next lv_timer_handler tick — outside UpdateQueue batch
     lv_obj_delete_async(to_delete);
+}
+
+/**
+ * @brief Deferred-delete for raw pointers (no automatic nulling)
+ *
+ * Same safety as the reference overload (hide, defocus, reparent, async delete)
+ * but for local variables or cases where the caller manages the pointer.
+ *
+ * @param obj Raw pointer to the LVGL object (caller must null their copy)
+ */
+inline void safe_delete_deferred_raw(lv_obj_t* obj) {
+    if (!obj)
+        return;
+    if (!lv_is_initialized() || !lv_display_get_next(nullptr) ||
+        StaticPanelRegistry::is_destroying_all()) {
+        return;
+    }
+    if (!lv_obj_is_valid(obj)) {
+        return;
+    }
+    lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    defocus_tree(obj);
+    lv_obj_t* layer = lv_layer_top();
+    if (layer) {
+        lv_obj_set_parent(obj, layer);
+    }
+    lv_obj_delete_async(obj);
 }
 
 // ============================================================================

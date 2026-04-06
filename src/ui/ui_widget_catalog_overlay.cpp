@@ -6,6 +6,7 @@
 #include "ui_fonts.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
+#include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "panel_widget_config.h"
@@ -48,11 +49,7 @@ void close_catalog() {
         // Defer backdrop deletion — close_catalog() can be called from
         // LV_EVENT_CLICKED handlers, and synchronous deletion during event
         // processing corrupts LVGL's event linked list
-        if (g_catalog_state.backdrop) {
-            lv_obj_add_flag(g_catalog_state.backdrop, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_delete_async(g_catalog_state.backdrop);
-            g_catalog_state.backdrop = nullptr;
-        }
+        helix::ui::safe_delete_deferred(g_catalog_state.backdrop);
         g_catalog_state.overlay_root = nullptr;
         g_catalog_state.on_select = nullptr;
         g_catalog_state.on_close = nullptr;
@@ -355,11 +352,7 @@ void WidgetCatalogOverlay::show(lv_obj_t* parent_screen, const PanelWidgetConfig
         [](lv_event_t* /*e*/) {
             // Clean up backdrop if still present — defer deletion since
             // this runs inside LV_EVENT_DELETE processing
-            if (g_catalog_state.backdrop) {
-                lv_obj_add_flag(g_catalog_state.backdrop, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_delete_async(g_catalog_state.backdrop);
-                g_catalog_state.backdrop = nullptr;
-            }
+            helix::ui::safe_delete_deferred(g_catalog_state.backdrop);
             auto on_close_cb = std::move(g_catalog_state.on_close);
             g_catalog_state.overlay_root = nullptr;
             g_catalog_state.on_select = nullptr;
@@ -393,10 +386,7 @@ void WidgetCatalogOverlay::show(lv_obj_t* parent_screen, const PanelWidgetConfig
     // overlays rather than deleting them, so LV_EVENT_DELETE alone is insufficient.
     NavigationManager::instance().register_overlay_close_callback(overlay, [overlay]() {
         if (g_catalog_state.overlay_root == overlay) {
-            if (g_catalog_state.backdrop) {
-                lv_obj_delete_async(g_catalog_state.backdrop);
-                g_catalog_state.backdrop = nullptr;
-            }
+            helix::ui::safe_delete_deferred(g_catalog_state.backdrop);
             auto on_close_cb = std::move(g_catalog_state.on_close);
             g_catalog_state.overlay_root = nullptr;
             g_catalog_state.on_select = nullptr;

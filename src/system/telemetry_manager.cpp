@@ -1990,7 +1990,10 @@ void TelemetryManager::record_print_start_context(const std::string& source, boo
 
 void TelemetryManager::record_error(const std::string& category, const std::string& code,
                                     const std::string& context) {
-    if (!enabled_.load() || !initialized_.load()) {
+    // Check shutdown/initialized BEFORE touching the mutex — background threads
+    // (libhv health timer) can call this after shutdown() has run, and locking a
+    // destroyed mutex causes SIGBUS on ARM ([884f9172]).
+    if (shutting_down_.load() || !initialized_.load() || !enabled_.load()) {
         return;
     }
 

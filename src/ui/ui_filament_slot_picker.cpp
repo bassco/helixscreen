@@ -2,10 +2,11 @@
 
 #include "ui_filament_slot_picker.h"
 
-#include "theme_manager.h"
 #include "ui_fonts.h"
+#include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
+#include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
 
@@ -31,11 +32,10 @@ FilamentSlotPicker::~FilamentSlotPicker() {
 // Show / Hide
 // ============================================================================
 
-void FilamentSlotPicker::show(lv_obj_t* parent, lv_point_t click_point,
-                               int tool_index, const std::string& expected_material,
-                               const std::vector<helix::AvailableSlot>& slots,
-                               const Selection& current,
-                               SelectCallback on_select) {
+void FilamentSlotPicker::show(lv_obj_t* parent, lv_point_t click_point, int tool_index,
+                              const std::string& expected_material,
+                              const std::vector<helix::AvailableSlot>& slots,
+                              const Selection& current, SelectCallback on_select) {
     hide();
 
     if (!parent) {
@@ -102,10 +102,7 @@ void FilamentSlotPicker::hide() {
         return;
     }
 
-    if (lv_is_initialized()) {
-        lv_obj_delete_async(backdrop_);
-    }
-    backdrop_ = nullptr;
+    helix::ui::safe_delete_deferred(backdrop_);
     spdlog::debug("[FilamentSlotPicker] Hidden");
 }
 
@@ -114,7 +111,7 @@ void FilamentSlotPicker::hide() {
 // ============================================================================
 
 void FilamentSlotPicker::create_header(lv_obj_t* card, int tool_index,
-                                        const std::string& material) {
+                                       const std::string& material) {
     lv_obj_t* header = lv_label_create(card);
     char buf[64];
     if (material.empty()) {
@@ -146,7 +143,7 @@ void FilamentSlotPicker::create_header(lv_obj_t* card, int tool_index,
 // ============================================================================
 
 void FilamentSlotPicker::create_slot_row(lv_obj_t* list, int index,
-                                          const helix::AvailableSlot& slot) {
+                                         const helix::AvailableSlot& slot) {
     int32_t row_pad = theme_manager_get_spacing("space_sm");
     int32_t row_gap = theme_manager_get_spacing("space_sm");
     int32_t swatch_sz = theme_manager_get_spacing("space_xl");
@@ -230,8 +227,7 @@ void FilamentSlotPicker::create_slot_row(lv_obj_t* list, int index,
         [](lv_event_t* e) {
             auto* self = static_cast<FilamentSlotPicker*>(lv_event_get_user_data(e));
             lv_obj_t* target = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-            int idx =
-                static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
+            int idx = static_cast<int>(reinterpret_cast<intptr_t>(lv_obj_get_user_data(target)));
             if (idx >= 0 && idx < static_cast<int>(self->slots_.size())) {
                 const auto& s = self->slots_[static_cast<size_t>(idx)];
                 self->select({s.slot_index, s.backend_index, false});
@@ -293,8 +289,8 @@ void FilamentSlotPicker::position_card(lv_obj_t* card, lv_point_t click_point) {
 
     lv_obj_set_pos(card, card_x, card_y);
 
-    spdlog::debug("[FilamentSlotPicker] Click({},{}) -> Card({},{}) {}x{}",
-                  click_point.x, click_point.y, card_x, card_y, card_w, card_h);
+    spdlog::debug("[FilamentSlotPicker] Click({},{}) -> Card({},{}) {}x{}", click_point.x,
+                  click_point.y, card_x, card_y, card_w, card_h);
 }
 
 } // namespace helix::ui

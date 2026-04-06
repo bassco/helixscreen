@@ -8,6 +8,7 @@
 #include "ui_panel_print_select.h"
 #include "ui_panel_print_status.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "app_constants.h"
 #include "app_globals.h"
@@ -785,8 +786,7 @@ void PrintStatusWidget::show_configure_picker() {
     lv_obj_t* option_list = lv_obj_find_by_name(picker_backdrop_, "option_list");
     if (!option_list) {
         spdlog::error("[PrintStatusWidget] option_list not found in picker XML");
-        lv_obj_delete_async(picker_backdrop_);
-        picker_backdrop_ = nullptr;
+        helix::ui::safe_delete_deferred(picker_backdrop_);
         return;
     }
 
@@ -961,11 +961,8 @@ void PrintStatusWidget::dismiss_configure_picker() {
         return;
     }
 
-    lv_obj_t* backdrop = picker_backdrop_;
-    picker_backdrop_ = nullptr;
     s_active_picker_ = nullptr;
-
-    lv_obj_delete_async(backdrop);
+    helix::ui::safe_delete_deferred(picker_backdrop_);
 
     spdlog::debug("[PrintStatusWidget] Configure picker dismissed");
 }

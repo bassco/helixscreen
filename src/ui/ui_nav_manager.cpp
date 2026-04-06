@@ -734,9 +734,8 @@ void NavigationManager::nav_button_clicked_cb(lv_event_t* event) {
                 spdlog::debug("[NavigationManager] Already on Home - navigating to main page");
                 get_global_home_panel().go_to_main_page();
             } else {
-                spdlog::debug(
-                    "[NavigationManager] Skipping - already on panel {} with no overlays",
-                    panel_id);
+                spdlog::debug("[NavigationManager] Skipping - already on panel {} with no overlays",
+                              panel_id);
             }
             return;
         }
@@ -819,9 +818,8 @@ void NavigationManager::switch_to_panel_impl(int panel_id) {
             // Call on_deactivate() if this overlay has a registered instance
             auto inst_it = overlay_instances_.find(panel);
             if (inst_it != overlay_instances_.end() && inst_it->second) {
-                spdlog::trace(
-                    "[NavigationManager] Calling on_deactivate() for overlay {} (navbar)",
-                    (void*)panel);
+                spdlog::trace("[NavigationManager] Calling on_deactivate() for overlay {} (navbar)",
+                              (void*)panel);
                 inst_it->second->on_deactivate();
             }
         } else {
@@ -1199,8 +1197,7 @@ void NavigationManager::suspend_active() {
             it->second->on_deactivate();
         }
     } else if (panel_instances_[static_cast<int>(active_panel_)]) {
-        spdlog::debug("[NavigationManager] Suspending panel {}",
-                      static_cast<int>(active_panel_));
+        spdlog::debug("[NavigationManager] Suspending panel {}", static_cast<int>(active_panel_));
         panel_instances_[static_cast<int>(active_panel_)]->on_deactivate();
     }
 }
@@ -1220,14 +1217,13 @@ void NavigationManager::resume_active() {
             it->second->on_activate();
         }
     } else if (panel_instances_[static_cast<int>(active_panel_)]) {
-        spdlog::debug("[NavigationManager] Resuming panel {}",
-                      static_cast<int>(active_panel_));
+        spdlog::debug("[NavigationManager] Resuming panel {}", static_cast<int>(active_panel_));
         panel_instances_[static_cast<int>(active_panel_)]->on_activate();
     }
 }
 
 void NavigationManager::register_overlay_instance(lv_obj_t* widget, IPanelLifecycle* overlay,
-                                                   bool persistent) {
+                                                  bool persistent) {
     if (!widget) {
         spdlog::error("[NavigationManager] Cannot register overlay with NULL widget");
         return;
@@ -1563,13 +1559,8 @@ bool NavigationManager::go_back() {
             mgr.panel_stack_.pop_back();
             auto it = mgr.overlay_backdrops_.find(popped);
             if (it != mgr.overlay_backdrops_.end()) {
-                lv_obj_t* bd = it->second;
+                helix::ui::safe_delete_deferred(it->second);
                 mgr.overlay_backdrops_.erase(it);
-                // Defer backdrop deletion — synchronous lv_obj_del() here
-                // races with pending overlay slide/zoom animations that still
-                // reference this backdrop (crash #422)
-                lv_obj_add_flag(bd, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_delete_async(bd);
             }
         }
 
