@@ -146,7 +146,14 @@ std::optional<int> PidProgressTracker::eta_seconds() const {
         int remaining_cycles = EXPECTED_CYCLES - oscillation_count_;
         if (remaining_cycles <= 0)
             return 0;
-        return static_cast<int>(static_cast<float>(remaining_cycles) * measured_cycle_period_);
+        // Subtract time elapsed within the current cycle for smooth countdown
+        float remaining = static_cast<float>(remaining_cycles) * measured_cycle_period_;
+        if (last_tick_ > last_oscillation_tick_) {
+            float elapsed_in_cycle =
+                static_cast<float>(last_tick_ - last_oscillation_tick_) / 1000.0f;
+            remaining -= elapsed_in_cycle;
+        }
+        return static_cast<int>(std::max(remaining, 0.0f));
     }
 
     // No measured cycle yet — use best oscillation estimate minus elapsed
