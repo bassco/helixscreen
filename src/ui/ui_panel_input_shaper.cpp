@@ -913,6 +913,13 @@ void InputShaperPanel::save_configuration() {
     }
 
     spdlog::info("[InputShaper] Saving configuration (SAVE_CONFIG)");
+
+    // Suppress recovery dialog — SAVE_CONFIG triggers an expected Klipper restart
+    EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::LONG);
+    if (api_) {
+        api_->suppress_disconnect_modal(15000);
+    }
+
     ToastManager::instance().show(ToastSeverity::WARNING,
                                   lv_tr("Saving config... Klipper will restart."), 3000);
 

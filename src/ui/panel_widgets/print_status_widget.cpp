@@ -61,12 +61,13 @@ PrintStatusWidget::PrintStatusWidget() : printer_state_(get_printer_state()) {
         lv_subject_init_int(&column_mode_subject_, 0);
         lv_xml_register_subject(nullptr, "print_status_column_mode", &column_mode_subject_);
         column_mode_subject_initialized_ = true;
-        StaticSubjectRegistry::instance().register_deinit("PrintStatusWidgetSubjects", []() {
-            if (column_mode_subject_initialized_ && lv_is_initialized()) {
-                lv_subject_deinit(&column_mode_subject_);
-                column_mode_subject_initialized_ = false;
-            }
-        });
+        StaticSubjectRegistry::instance().register_deinit(
+            "PrintStatusWidgetSubjects", []() {
+                if (column_mode_subject_initialized_ && lv_is_initialized()) {
+                    lv_subject_deinit(&column_mode_subject_);
+                    column_mode_subject_initialized_ = false;
+                }
+            });
     }
 }
 
