@@ -10,7 +10,7 @@ Your printer's touchscreen should show you more than temperatures and a progress
 - **Exclude objects** — Tap the failing part on an overhead map to exclude it mid-print. No more scrapping an entire plate for one bad object.
 - **Runs on anything** — ~15MB of RAM, no X11, no browser, no desktop environment. Directly on the framebuffer. From a Creality K1 to a Pi Zero 2 W to a random mini-ITX box with an HDMI touchscreen.
 - **Looks good** — 17 theme presets with a live editor, responsive layouts from 480x320 to ultrawide, GPU-accelerated blur. Light and dark modes.
-- **Smart setup** — A first-run wizard auto-detects your printer from a database of 70+ models and configures everything. 9 languages at 100% coverage.
+- **Smart setup** — A first-run wizard auto-detects your printer from a database of 70+ models and configures everything. 9 languages.
 
 ![Home Panel](../images/screenshot-home-panel.png)
 

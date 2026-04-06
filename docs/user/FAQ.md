@@ -73,7 +73,7 @@ If you test on hardware not listed above, please let us know your results!
 | **Reactive Binding** | Built-in | Manual | Manual |
 | **3D G-code preview** | Yes | 2D layers | No |
 | **3D bed mesh** | Yes | 2D heatmap | 2D heatmap |
-| **Status** | 1.0 (active) | Mature (maintenance) | Unmaintained |
+| **Status** | Pre-1.0 (active) | Mature (maintenance) | Unmaintained |
 
 **HelixScreen advantages:**
 - Low memory footprint (~15MB vs ~50MB for KlipperScreen)
@@ -81,7 +81,7 @@ If you test on hardware not listed above, please let us know your results!
 - Modern reactive architecture with 6 multi-material backends
 - 3D visualizations (G-code preview, bed mesh)
 - 70+ printer auto-detection database
-- 9 languages at 100% string coverage
+- 9 languages (English, German, Spanish, French, Italian, Japanese, Portuguese, Russian, Chinese)
 
 ---
 
@@ -161,6 +161,27 @@ Yes! HelixScreen works with any Klipper distribution that includes Moonraker:
 
 The web frontend you use (Mainsail, Fluidd, etc.) doesn't matter - HelixScreen talks to Moonraker.
 
+### What gets preserved during upgrades?
+
+Your configuration is safe. The installer preserves:
+- `settings.json` — all your settings
+- `helixscreen.env` — environment variable overrides
+- Custom printer images in `config/custom_images/`
+- Custom theme files in `config/themes/`
+
+Your Klipper configuration is never touched. See the [Upgrade Guide](UPGRADING.md) for instructions.
+
+### My display is upside down or rotated wrong
+
+Set the rotation in your config file:
+
+```bash
+# Edit settings.json and add/change in the "display" section:
+"rotation": 180
+```
+
+Valid values: `0`, `90`, `180`, `270`. Restart HelixScreen after changing.
+
 ---
 
 ## Features
@@ -238,7 +259,7 @@ For layout customization, you can edit XML files in `ui_xml/` (no recompilation 
 
 ### Does it support multiple printers?
 
-**Not currently.** HelixScreen connects to one Moonraker instance. Multi-printer support is on the long-term roadmap.
+**Yes!** You can configure multiple Klipper printers and switch between them from the navigation bar or Settings. You view one printer at a time, but switching is instant. Enable this under **Settings** → **Beta Features**, then add printers via **Settings** → **Printers**.
 
 ### Can I view print history?
 
@@ -285,6 +306,14 @@ Your selection is saved to the `display.printer_image` config key and persists a
 ### Can I rename my printer?
 
 **Yes.** Tap the printer image on the Home Panel to open the Printer Manager. Then tap the printer name (shown with a pencil icon) to enable inline editing. Type the new name and press **Enter** to save, or **Escape** to cancel. The name is stored in the `printer.name` config key. See the [Printer Manager guide](guide/home-panel.md#changing-the-printer-name) for details.
+
+### What languages are supported?
+
+HelixScreen ships with 9 languages: English, German, Spanish, French, Italian, Japanese, Portuguese, Russian, and Chinese. Change the language in **Settings** → **Language**.
+
+### Does HelixScreen collect any data?
+
+**Only if you opt in.** Telemetry is off by default. When enabled, it collects anonymous usage data (display resolution, platform, print outcomes) to help improve the software. No filenames, G-code, IP addresses, or personal information is ever collected. You can view, disable, and delete your data at any time in **Settings** → **Telemetry**. See the [Telemetry page](TELEMETRY.md) for full details.
 
 ---
 
@@ -435,7 +464,8 @@ See the [Development Guide](../devel/DEVELOPMENT.md) for build instructions, dep
 
 ### Where can I get help?
 
-Join the [HelixScreen Discord](https://discord.gg/RZCT2StKhr) for community support, setup help, and feature discussions.
+- **[HelixScreen Discord](https://discord.gg/RZCT2StKhr)** — community support, setup help, feature discussions, and development updates
+- **[GitHub Issues](https://github.com/prestonbrown/helixscreen/issues)** — bug reports and feature requests
 
 ### Where can I report bugs?
 
@@ -447,14 +477,23 @@ Open an issue on [GitHub Issues](https://github.com/prestonbrown/helixscreen/iss
 
 ### Where can I request features?
 
-Open a GitHub issue with the "enhancement" label. Describe:
-- What you want
-- Why it's useful
-- How you imagine it working
+Open a GitHub issue with the "enhancement" label, or suggest it in the [Discord](https://discord.gg/RZCT2StKhr).
 
-### Is there a Discord or forum?
+### How do I enable debug logging?
 
-Currently, GitHub Issues and Discussions are the primary communication channels.
+Add `HELIX_LOG_LEVEL=debug` to your `helixscreen.env` file and restart:
+
+```bash
+# MainsailOS / Pi
+echo 'HELIX_LOG_LEVEL=debug' >> ~/helixscreen/config/helixscreen.env
+sudo systemctl restart helixscreen
+
+# AD5M (Forge-X)
+echo 'HELIX_LOG_LEVEL=debug' >> /opt/helixscreen/config/helixscreen.env
+/etc/init.d/S90helixscreen restart
+```
+
+Available levels: `warn` (default), `info`, `debug`, `trace`. **Remove the line after debugging** — verbose logging impacts performance.
 
 ### Where are the logs?
 
