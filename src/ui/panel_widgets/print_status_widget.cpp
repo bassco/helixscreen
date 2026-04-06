@@ -792,6 +792,37 @@ void PrintStatusWidget::apply_visibility_config() {
 
     // Job Queue row
     update_job_queue_row_visibility();
+
+    // If all action buttons are hidden, hide the actions container and expand thumbnail
+    lv_obj_t* library_actions = lv_obj_find_by_name(widget_obj_, "library_actions");
+    lv_obj_t* library_body = lv_obj_find_by_name(widget_obj_, "library_body");
+
+    if (library_actions && print_card_thumb_) {
+        // Job queue is visible only if config allows AND jobs exist
+        bool queue_visible = false;
+        if (library_row_queue_ && !lv_obj_has_flag(library_row_queue_, LV_OBJ_FLAG_HIDDEN)) {
+            queue_visible = true;
+        }
+
+        bool any_button_visible =
+            show_print_files_ || show_reprint_last_ || show_recent_prints_ || queue_visible;
+
+        if (!any_button_visible) {
+            lv_obj_add_flag(library_actions, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_width(print_card_thumb_, LV_PCT(100));
+            if (library_body) {
+                lv_obj_set_style_flex_main_place(library_body, LV_FLEX_ALIGN_CENTER, 0);
+                lv_obj_set_style_flex_cross_place(library_body, LV_FLEX_ALIGN_CENTER, 0);
+            }
+        } else {
+            lv_obj_remove_flag(library_actions, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_width(print_card_thumb_, LV_PCT(40));
+            if (library_body) {
+                lv_obj_set_style_flex_main_place(library_body, LV_FLEX_ALIGN_START, 0);
+                lv_obj_set_style_flex_cross_place(library_body, LV_FLEX_ALIGN_START, 0);
+            }
+        }
+    }
 }
 
 void PrintStatusWidget::show_configure_picker() {
