@@ -136,8 +136,8 @@ void AmsDeviceSectionDetailOverlay::show(lv_obj_t* parent_screen, const std::str
     // Update header title imperatively (overlay_panel title is static at XML creation)
     lv_obj_t* header_title = lv_obj_find_by_name(overlay_, "header_title");
     if (header_title) {
-        std::string title =
-            std::string(lv_tr("Multi-Filament Management")) + ": " + lv_tr(section_label.c_str());
+        std::string title = std::string(lv_tr("Multi-Filament System Management")) + ": " +
+                            lv_tr(section_label.c_str());
         lv_label_set_text(header_title, title.c_str());
     }
 
