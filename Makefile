@@ -691,7 +691,8 @@ LDFLAGS += $(ALSA_LIBS)
 # Tracker player — MOD/MED file playback with PCM samples (requires HELIX_HAS_SOUND)
 #
 # HELIX_HAS_SOUND:   Pi, x86, AD5M, native — any platform with audio output
-# HELIX_HAS_TRACKER: Pi, x86, AD5M, native — platforms with audio (ALSA/SDL/PWM PCM)
+# HELIX_HAS_TRACKER: Pi, x86, native — platforms with multi-core CPU + audio
+# AD5M/AD5X: sound only (no tracker — single-core busy-wait kills prints)
 # Disabled entirely: K1, K2, MIPS — no audio hardware at all
 SOUND_CXXFLAGS :=
 TRACKER_CXXFLAGS :=
@@ -699,9 +700,11 @@ ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86
     SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
     TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
 else ifneq (,$(filter ad5m ad5x,$(PLATFORM_TARGET)))
-    # AD5M/AD5X: PWM buzzer with PCM duty-cycle modulation for tracker playback
+    # AD5M/AD5X: PWM buzzer for tone-mode SFX only.
+    # Tracker (MOD/MED) DISABLED — the PCM render thread's busy-wait loop
+    # starves the single-core CPU, killing active prints and blocking
+    # Moonraker commands (including firmware_restart).
     SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
-    TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
 else ifeq ($(PLATFORM_TARGET),native)
     SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
     TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
