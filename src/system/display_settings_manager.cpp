@@ -218,11 +218,17 @@ void DisplaySettingsManager::init_subjects() {
     // Timezone (default: "UTC")
     std::string tz = config->get<std::string>("/display/timezone", "UTC");
     int tz_index = 0; // Default to UTC
+    bool tz_found = false;
     for (int i = 0; i < TIMEZONE_COUNT; ++i) {
         if (tz == TIMEZONE_ENTRIES[i].iana_id) {
             tz_index = i;
+            tz_found = true;
             break;
         }
+    }
+    if (!tz_found && tz != "UTC") {
+        spdlog::warn(
+            "[DisplaySettingsManager] Unknown timezone '{}' in config, falling back to UTC", tz);
     }
     UI_MANAGED_SUBJECT_INT(timezone_subject_, tz_index, "settings_timezone", subjects_);
 
@@ -614,11 +620,17 @@ std::string DisplaySettingsManager::get_timezone() const {
 
 void DisplaySettingsManager::set_timezone(const std::string& iana_id) {
     int index = 0;
+    bool found = false;
     for (int i = 0; i < TIMEZONE_COUNT; ++i) {
         if (iana_id == TIMEZONE_ENTRIES[i].iana_id) {
             index = i;
+            found = true;
             break;
         }
+    }
+    if (!found) {
+        spdlog::warn("[DisplaySettingsManager] Unknown timezone '{}', falling back to UTC",
+                     iana_id);
     }
     set_timezone_by_index(index);
 }
