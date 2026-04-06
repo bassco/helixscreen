@@ -231,6 +231,9 @@ main() {
     # Configure Moonraker update_manager (Pi only - enables web UI updates)
     configure_moonraker_updates "$platform"
 
+    # Fix known Klipper config issues (AD5M screw_thread, etc.)
+    fix_ad5m_klipper_config || true
+
     # Start service
     start_service "$platform"
 

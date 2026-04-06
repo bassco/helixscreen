@@ -68,8 +68,11 @@ struct ScrewTiltResult {
     /**
      * @brief Get user-friendly adjustment description
      *
-     * Converts "CW 00:18" to "Tighten ¼" or "Loosen ½" etc.
-     * Uses intuitive terms: tighten (CW) = raise that corner, loosen (CCW) = lower it
+     * Converts "CW 00:18" to "Tighten ¼ turn" or "Loosen ½ turn" etc.
+     * Relies on Klipper's screw_thread config being correct — CW=tighten
+     * for CW-M* configs, inverted for CCW-M* configs. If directions seem
+     * wrong, the printer's screw_thread setting needs fixing (e.g.
+     * Flashforge AD5M ships with CW-M4 but should be CCW-M4).
      * @return Human-friendly adjustment string
      */
     [[nodiscard]] std::string friendly_adjustment() const {
@@ -117,7 +120,7 @@ struct ScrewTiltResult {
             amount = std::to_string(approx_turns) + " turn" + (approx_turns > 1 ? "s" : "");
         }
 
-        // Use intuitive direction: tighten raises corner, loosen lowers it
+        // CW=Tighten, CCW=Loosen assumes correct Klipper screw_thread config
         if (is_clockwise) {
             return "Tighten " + amount;
         } else if (is_counter) {
