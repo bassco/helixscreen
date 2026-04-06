@@ -200,6 +200,14 @@ static void on_gcode_mode_changed(lv_event_t* e) {
     DisplaySettingsManager::instance().set_gcode_render_mode(mode);
 }
 
+// Static callback for timezone dropdown
+static void on_timezone_changed(lv_event_t* e) {
+    lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    spdlog::info("[SettingsPanel] Timezone changed to index {}", index);
+    DisplaySettingsManager::instance().set_timezone_by_index(index);
+}
+
 // Static callback for time format dropdown
 static void on_time_format_changed(lv_event_t* e) {
     lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
@@ -311,6 +319,7 @@ void SettingsPanel::init_subjects() {
         {"on_gcode_mode_changed", on_gcode_mode_changed},
         {"on_z_movement_style_changed", on_z_movement_style_changed},
         {"on_toolhead_style_changed", on_toolhead_style_changed},
+        {"on_timezone_changed", on_timezone_changed},
         {"on_time_format_changed", on_time_format_changed},
         {"on_language_changed", on_language_changed},
 
@@ -541,6 +550,21 @@ void SettingsPanel::setup_toggle_handlers() {
             int lang_index = system_settings.get_language_index();
             lv_dropdown_set_selected(language_dropdown_, static_cast<uint32_t>(lang_index));
             spdlog::trace("[{}]   ✓ Language dropdown (index={})", get_name(), lang_index);
+        }
+    }
+
+    // === Timezone Dropdown ===
+    // Options populated dynamically (not in XML) since the list is built in C++
+    lv_obj_t* tz_row = lv_obj_find_by_name(panel_, "row_timezone");
+    if (tz_row) {
+        lv_obj_t* tz_dropdown = lv_obj_find_by_name(tz_row, "dropdown");
+        if (tz_dropdown) {
+            std::string options = DisplaySettingsManager::get_timezone_options();
+            lv_dropdown_set_options(tz_dropdown, options.c_str());
+            int tz_index = display_settings.get_timezone_index();
+            lv_dropdown_set_selected(tz_dropdown, static_cast<uint32_t>(tz_index));
+            spdlog::trace("[{}]   \u2713 Timezone dropdown (index={}, tz={})", get_name(), tz_index,
+                          display_settings.get_timezone());
         }
     }
 

@@ -184,6 +184,7 @@ PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* ap
             int available = self->printer_state_.get_defined_objects().size() >= 2 ? 1 : 0;
             lv_subject_set_int(&self->exclude_objects_available_subject_, available);
             self->update_objects_text();
+            self->update_view_toggle_position(available != 0);
         });
 
     // Subscribe to excluded objects changes (for "X of Y obj" count updates)
@@ -2067,6 +2068,25 @@ void PrintStatusPanel::on_preprint_elapsed_changed(int seconds) {
 
     format_time(lifecycle_.preprint_elapsed_seconds(), elapsed_buf_, sizeof(elapsed_buf_));
     lv_subject_copy_string(&elapsed_subject_, elapsed_buf_);
+}
+
+void PrintStatusPanel::update_view_toggle_position(bool objects_visible) {
+    if (!gcode_viewer_)
+        return;
+    lv_obj_t* card = lv_obj_get_parent(gcode_viewer_);
+    if (!card)
+        return;
+    lv_obj_t* btn = lv_obj_find_by_name(card, "btn_view_toggle");
+    if (!btn)
+        return;
+
+    if (objects_visible) {
+        // Shift right: objects button width (36) + small gap
+        lv_obj_set_style_translate_x(btn, 36 + 6, LV_PART_MAIN);
+    } else {
+        // Remove inline override so XML default (#space_md) applies
+        lv_obj_remove_local_style_prop(btn, LV_STYLE_TRANSLATE_X, LV_PART_MAIN);
+    }
 }
 
 void PrintStatusPanel::update_objects_text() {

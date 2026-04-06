@@ -16,6 +16,12 @@
     <setting_dropdown_row name="row_language"
                           label="Language" label_tag="Language" icon="translate" description="Choose display language"
                           description_tag="Choose display language" callback="on_language_changed"/>
+    <!-- Timezone Dropdown (options populated dynamically in C++) -->
+    <setting_dropdown_row name="row_timezone"
+                          label="Timezone" label_tag="Timezone" icon="clock"
+                          description="Set local timezone for time display"
+                          description_tag="Set local timezone for time display"
+                          options="" callback="on_timezone_changed"/>
     <!-- Time Format Dropdown -->
     <setting_dropdown_row name="row_time_format"
                           label="Time Format" label_tag="Time Format" icon="clock"
