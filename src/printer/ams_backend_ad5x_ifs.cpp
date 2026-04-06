@@ -609,6 +609,10 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
         } else {
             // Native ZMOD: per-slot update via Adventurer5M.json
             auto err = write_adventurer_json(slot_index);
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                dirty_[idx] = false;
+            }
             if (!err.success())
                 return err;
         }
@@ -966,6 +970,8 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
             }
 
             int idx = port - 1;
+            if (dirty_[static_cast<size_t>(idx)])
+                continue;
             colors_[static_cast<size_t>(idx)] = hex;
             materials_[static_cast<size_t>(idx)] = type;
             update_slot_from_state(idx);

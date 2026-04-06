@@ -73,6 +73,14 @@ class Ad5xIfsTestAccess {
     static void parse_adventurer_json(AmsBackendAd5xIfs& b, const std::string& content) {
         b.parse_adventurer_json(content);
     }
+    static bool dirty(const AmsBackendAd5xIfs& b, size_t idx) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        return b.dirty_[idx];
+    }
+    static void set_dirty(AmsBackendAd5xIfs& b, size_t idx, bool val) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.dirty_[idx] = val;
+    }
 };
 
 // Helper to build a full save_variables JSON payload
@@ -1011,4 +1019,116 @@ TEST_CASE("AD5X IFS parse_adventurer_json", "[ams][ad5x_ifs]") {
         REQUIRE(info.color_rgb == 0xFF8800);
         REQUIRE(info.material == "PETG");
     }
+}
+
+// ==========================================================================
+// Regression: dirty flag prevents parse_adventurer_json from clobbering
+// user edits (#716)
+// ==========================================================================
+
+TEST_CASE("AD5X IFS parse_adventurer_json skips dirty slots", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed slot 0 with initial JSON data
+    std::string initial = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF0000",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, initial);
+    REQUIRE(backend.get_slot_info(0).color_rgb == 0xFF0000);
+    REQUIRE(backend.get_slot_info(0).material == "PLA");
+
+    // User edits slot 0 (persist=false to skip actual write)
+    SlotInfo edit;
+    edit.color_rgb = 0x00FF00;
+    edit.material = "PETG";
+    backend.set_slot_info(0, edit, false);
+    REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
+
+    // Simulate sensor-triggered JSON re-read with stale firmware data
+    std::string stale = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF0000",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, stale);
+
+    // Dirty slot must NOT be overwritten
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0x00FF00);
+    REQUIRE(info.material == "PETG");
+}
+
+TEST_CASE("AD5X IFS parse_adventurer_json updates clean slots normally", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Edit slot 0, then clear dirty to simulate completed persist
+    SlotInfo edit;
+    edit.color_rgb = 0x00FF00;
+    edit.material = "PETG";
+    backend.set_slot_info(0, edit, false);
+    Ad5xIfsTestAccess::set_dirty(backend, 0, false);
+    REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 0));
+
+    // JSON re-read should overwrite clean slot
+    std::string content = R"({
+        "FFMInfo": {
+            "ffmColor1": "#AABBCC",
+            "ffmType1": "ABS"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0xAABBCC);
+    REQUIRE(info.material == "ABS");
+}
+
+TEST_CASE("AD5X IFS set_slot_info persist=false sets dirty flag", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+
+    REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 1));
+
+    SlotInfo edit;
+    edit.color_rgb = 0x112233;
+    edit.material = "TPU";
+    backend.set_slot_info(1, edit, false);
+
+    REQUIRE(Ad5xIfsTestAccess::dirty(backend, 1));
+}
+
+TEST_CASE("AD5X IFS dirty flag protects against both parse paths", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed via save_variables (lessWaste path)
+    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+
+    // User edits slot 0
+    SlotInfo edit;
+    edit.color_rgb = 0xDEADBE;
+    edit.material = "SILK_PLA";
+    backend.set_slot_info(0, edit, false);
+    REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
+
+    // parse_save_variables must not overwrite dirty slot
+    Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0xDEADBE);
+    REQUIRE(info.material == "SILK_PLA");
+
+    // parse_adventurer_json must not overwrite dirty slot either
+    std::string stale_json = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF0000",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, stale_json);
+    info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0xDEADBE);
+    REQUIRE(info.material == "SILK_PLA");
 }
