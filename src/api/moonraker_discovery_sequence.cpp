@@ -467,9 +467,13 @@ void MoonrakerDiscoverySequence::continue_discovery_objects() {
                                     cfg, hardware_.macros());
 
                                 // Seed probe sensor z_offset from configfile (some probe
-                                // modules like flashforge_loadcell return null in status)
-                                helix::sensors::ProbeSensorManager::instance().discover_from_config(
-                                    cfg);
+                                // modules like flashforge_loadcell return null in status).
+                                // Must run on main thread — update_subjects() sets LVGL subjects.
+                                nlohmann::json cfg_for_probe = cfg;
+                                helix::ui::queue_update([cfg_for_probe]() {
+                                    helix::sensors::ProbeSensorManager::instance()
+                                        .discover_from_config(cfg_for_probe);
+                                });
 
                                 // Update LED controller with configfile data (effect targets +
                                 // output_pin PWM)

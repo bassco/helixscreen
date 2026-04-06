@@ -174,14 +174,6 @@ void ProbeSensorManager::discover(const std::vector<std::string>& klipper_object
         }
     }
 
-    // Auto-assign Z_PROBE role when exactly one probe exists and no role is assigned.
-    // This is the common case — single probe is always the Z probe.
-    if (sensors_.size() == 1 && !find_config_by_role(ProbeSensorRole::Z_PROBE)) {
-        sensors_[0].role = ProbeSensorRole::Z_PROBE;
-        spdlog::info("[ProbeSensorManager] Auto-assigned Z_PROBE role to '{}'",
-                     sensors_[0].sensor_name);
-    }
-
     // Update sensor count subject
     if (subjects_initialized_) {
         lv_subject_set_int(&sensor_count_, static_cast<int>(sensors_.size()));
@@ -214,7 +206,9 @@ void ProbeSensorManager::discover_from_config(const nlohmann::json& config_keys)
         if (val.is_string()) {
             try {
                 z_offset = std::stof(val.get<std::string>());
-            } catch (...) {
+            } catch (const std::exception& e) {
+                spdlog::debug("[ProbeSensorManager] Invalid z_offset value for {}: {}",
+                              sensor.klipper_name, e.what());
                 continue;
             }
         } else if (val.is_number()) {
@@ -440,6 +434,14 @@ void ProbeSensorManager::load_config_from_file() {
         }
     } catch (const std::exception& e) {
         spdlog::debug("[ProbeSensorManager] No sensor config found: {}", e.what());
+    }
+
+    // Auto-assign Z_PROBE role when exactly one probe exists and no role was
+    // loaded from config.  This is the common case — single probe is the Z probe.
+    if (sensors_.size() == 1 && !find_config_by_role(ProbeSensorRole::Z_PROBE)) {
+        sensors_[0].role = ProbeSensorRole::Z_PROBE;
+        spdlog::info("[ProbeSensorManager] Auto-assigned Z_PROBE role to '{}'",
+                     sensors_[0].sensor_name);
     }
 
     update_subjects();
