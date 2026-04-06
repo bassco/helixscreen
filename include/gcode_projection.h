@@ -145,8 +145,10 @@ inline float compute_depth_brightness(float avg_z, float z_min, float z_max, flo
         float height_scale = (z_range < depth_shading::kFullGradientHeight)
                                  ? z_range / depth_shading::kFullGradientHeight
                                  : 1.0f;
-        brightness =
-            depth_shading::kMinBrightness + depth_shading::kBrightnessRange * height_scale * norm_z;
+        float effective_range = depth_shading::kBrightnessRange * height_scale;
+        float floor =
+            depth_shading::kMinBrightness + depth_shading::kBrightnessRange - effective_range;
+        brightness = floor + effective_range * norm_z;
     }
 
     // Y-depth: front (low Y) = 100%, back (high Y) = 85%
