@@ -1,0 +1,118 @@
+// Copyright (C) 2025-2026 356C LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#pragma once
+
+#include <cstdint>
+#include <optional>
+
+/**
+ * @brief Phase-aware PID calibration progress tracker
+ *
+ * Monitors temperature during PID_CALIBRATE to detect heating vs oscillation
+ * phases, count oscillation cycles, and estimate time remaining. Pure C++
+ * logic — no LVGL dependency. Fed temperature updates from an observer.
+ *
+ * Klipper hardcodes TUNE_PID_CYCLES = 5 oscillation cycles.
+ */
+class PidProgressTracker {
+  public:
+    enum class Heater { EXTRUDER, BED };
+    enum class Phase { IDLE, HEATING, OSCILLATING, COMPLETE };
+
+    /// Start tracking a new calibration
+    void start(Heater heater, int target_temp, float current_temp);
+
+    /// Feed a temperature reading. tick_ms = lv_tick_get() or equivalent.
+    void on_temperature(float temp, uint32_t tick_ms);
+
+    /// Call when Klipper reports calibration complete
+    void mark_complete();
+
+    /// Current phase
+    Phase phase() const {
+        return phase_;
+    }
+
+    /// Progress percentage 0-100
+    int progress_percent() const;
+
+    /// Estimated seconds remaining, or nullopt if insufficient data
+    std::optional<int> eta_seconds() const;
+
+    /// Number of completed oscillation cycles (downward zero-crossings)
+    int oscillation_count() const {
+        return oscillation_count_;
+    }
+
+    /// Measured heating rate in seconds per degree (0 if not yet measured)
+    float measured_heat_rate() const {
+        return measured_heat_rate_;
+    }
+
+    /// Measured total oscillation duration in seconds (0 if not complete)
+    float measured_oscillation_duration() const;
+
+    /// Set historical estimates from previous calibrations
+    void set_history(float heat_rate_s_per_deg, float oscillation_duration_s);
+
+    /// Handle Kalico sample progress callback
+    void on_kalico_sample(int sample, int estimated_total);
+
+    /// Last temperature reading
+    float last_temp() const {
+        return last_temp_;
+    }
+
+    /// Current Kalico sample number
+    int kalico_sample() const {
+        return kalico_sample_;
+    }
+
+    static constexpr int EXPECTED_CYCLES = 5;
+
+    // Smart defaults (used when no history exists)
+    static constexpr float DEFAULT_EXTRUDER_HEAT_RATE = 0.5f;     // s/°C
+    static constexpr float DEFAULT_BED_HEAT_RATE = 1.5f;          // s/°C
+    static constexpr float DEFAULT_EXTRUDER_OSCILLATION = 120.0f; // seconds
+    static constexpr float DEFAULT_BED_OSCILLATION = 360.0f;      // seconds
+
+  private:
+    Phase phase_ = Phase::IDLE;
+    Heater heater_ = Heater::EXTRUDER;
+    int target_temp_ = 0;
+
+    // Heating measurement
+    float start_temp_ = 0;
+    uint32_t start_tick_ = 0;
+    float last_temp_ = 0;
+    uint32_t last_tick_ = 0;
+    float measured_heat_rate_ = 0; // seconds per degree (live-measured)
+    bool has_measured_heat_rate_ = false;
+    bool was_above_target_ = false; // for downward crossing detection
+
+    // Oscillation measurement
+    int oscillation_count_ = 0;
+    uint32_t first_oscillation_tick_ = 0;
+    uint32_t last_oscillation_tick_ = 0;
+    float measured_cycle_period_ = 0; // seconds per cycle
+    bool has_measured_cycle_ = false;
+
+    // Historical estimates (from previous calibrations)
+    float hist_heat_rate_ = 0;
+    float hist_oscillation_duration_ = 0;
+    bool has_history_ = false;
+
+    // Kalico sample tracking
+    bool has_kalico_ = false;
+    int kalico_sample_ = 0;
+    int kalico_total_ = 0;
+
+    // Default estimates for the selected heater
+    float default_heat_rate() const;
+    float default_oscillation_duration() const;
+
+    // Best available estimates
+    float best_heat_rate() const;
+    float best_oscillation_duration() const;
+};
