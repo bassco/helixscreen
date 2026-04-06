@@ -182,6 +182,15 @@ TEST_CASE("Probe type string conversions - new types", "[probe][types]") {
     SECTION("klicky from string") {
         REQUIRE(probe_type_from_string("klicky") == ProbeSensorType::KLICKY);
     }
+    SECTION("loadcell type to string") {
+        REQUIRE(probe_type_to_string(ProbeSensorType::LOADCELL) == "loadcell");
+    }
+    SECTION("loadcell from string") {
+        REQUIRE(probe_type_from_string("loadcell") == ProbeSensorType::LOADCELL);
+    }
+    SECTION("loadcell display string") {
+        REQUIRE(probe_type_to_display_string(ProbeSensorType::LOADCELL) == "Load Cell");
+    }
 }
 
 // ============================================================================
@@ -242,7 +251,8 @@ TEST_CASE_METHOD(ProbeSensorTestFixture, "ProbeSensorManager - discovery", "[pro
     }
 
     SECTION("Discovers multiple probe types") {
-        std::vector<std::string> sensors = {"bltouch", "smart_effector", "probe_eddy_current scanner"};
+        std::vector<std::string> sensors = {"bltouch", "smart_effector",
+                                            "probe_eddy_current scanner"};
         mgr().discover(sensors);
 
         REQUIRE(mgr().sensor_count() == 3);
@@ -328,11 +338,12 @@ TEST_CASE_METHOD(ProbeSensorTestFixture, "ProbeSensorManager - role assignment",
         auto configs = mgr().get_sensors();
 
         auto bltouch_it = std::find_if(configs.begin(), configs.end(),
-                                     [](const auto& c) { return c.klipper_name == "bltouch"; });
+                                       [](const auto& c) { return c.klipper_name == "bltouch"; });
         REQUIRE(bltouch_it->role == ProbeSensorRole::NONE);
 
-        auto smart_it = std::find_if(configs.begin(), configs.end(),
-                                       [](const auto& c) { return c.klipper_name == "smart_effector"; });
+        auto smart_it = std::find_if(configs.begin(), configs.end(), [](const auto& c) {
+            return c.klipper_name == "smart_effector";
+        });
         REQUIRE(smart_it->role == ProbeSensorRole::Z_PROBE);
     }
 
@@ -696,4 +707,106 @@ TEST_CASE("Probe type display strings", "[probe][types]") {
     REQUIRE(probe_type_to_display_string(ProbeSensorType::BEACON) == "Beacon");
     REQUIRE(probe_type_to_display_string(ProbeSensorType::TAP) == "Voron Tap");
     REQUIRE(probe_type_to_display_string(ProbeSensorType::KLICKY) == "Klicky");
+    REQUIRE(probe_type_to_display_string(ProbeSensorType::LOADCELL) == "Load Cell");
+}
+
+// ============================================================================
+// Null z_offset Handling Tests
+// ============================================================================
+
+TEST_CASE_METHOD(ProbeSensorTestFixture, "ProbeSensorManager - null z_offset in status",
+                 "[probe][state][loadcell]") {
+    std::vector<std::string> objects = {"probe"};
+    mgr().discover(objects);
+    mgr().set_sensor_role("probe", ProbeSensorRole::Z_PROBE);
+
+    SECTION("Null z_offset does not overwrite existing value") {
+        // Seed z_offset via normal status update first
+        json status;
+        status["probe"]["last_z_result"] = 0.0f;
+        status["probe"]["z_offset"] = -0.25f;
+        mgr().update_from_status(status);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(-0.25f));
+
+        // Now send status with null z_offset (like flashforge_loadcell does)
+        json null_status;
+        null_status["probe"]["last_z_result"] = 0.1f;
+        null_status["probe"]["z_offset"] = nullptr;
+        mgr().update_from_status(null_status);
+
+        state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(-0.25f));
+        REQUIRE(state->last_z_result == Catch::Approx(0.1f));
+    }
+
+    SECTION("Null last_z_result does not overwrite existing value") {
+        json status;
+        status["probe"]["last_z_result"] = 0.5f;
+        status["probe"]["z_offset"] = -0.25f;
+        mgr().update_from_status(status);
+
+        json null_status;
+        null_status["probe"]["last_z_result"] = nullptr;
+        null_status["probe"]["z_offset"] = -0.25f;
+        mgr().update_from_status(null_status);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->last_z_result == Catch::Approx(0.5f));
+    }
+}
+
+// ============================================================================
+// discover_from_config Tests
+// ============================================================================
+
+TEST_CASE_METHOD(ProbeSensorTestFixture, "ProbeSensorManager - discover_from_config seeds z_offset",
+                 "[probe][discovery][config]") {
+    std::vector<std::string> objects = {"probe"};
+    mgr().discover(objects);
+    mgr().set_sensor_role("probe", ProbeSensorRole::Z_PROBE);
+
+    SECTION("Seeds z_offset from config string value") {
+        json config;
+        config["probe"] = {{"z_offset", "-0.250"}};
+        mgr().discover_from_config(config);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(-0.25f));
+        REQUIRE(lv_subject_get_int(mgr().get_probe_z_offset_subject()) == -250);
+    }
+
+    SECTION("Seeds z_offset from config numeric value") {
+        json config;
+        config["probe"] = {{"z_offset", -1.5f}};
+        mgr().discover_from_config(config);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(-1.5f));
+    }
+
+    SECTION("Ignores config for unknown sensor") {
+        json config;
+        config["unknown_sensor"] = {{"z_offset", "-0.5"}};
+        mgr().discover_from_config(config);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(0.0f));
+    }
+
+    SECTION("Config-seeded z_offset survives null status update") {
+        json config;
+        config["probe"] = {{"z_offset", "-0.250"}};
+        mgr().discover_from_config(config);
+
+        // Null z_offset status should not overwrite config-seeded value
+        json status;
+        status["probe"]["last_z_result"] = 0.0f;
+        status["probe"]["z_offset"] = nullptr;
+        mgr().update_from_status(status);
+
+        auto state = mgr().get_sensor_state(ProbeSensorRole::Z_PROBE);
+        REQUIRE(state->z_offset == Catch::Approx(-0.25f));
+    }
 }

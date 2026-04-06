@@ -24,6 +24,7 @@
       "image": "flashforge-adventurer-5m.png",
       "preset": "ad5m",
       "print_start_profile": "ad5m",
+      "probe_type": "loadcell",
       "z_offset_calibration_strategy": "firmware_managed",
       "heuristics": [
         {
@@ -110,6 +111,7 @@
       "image": "flashforge-adventurer-5m-pro.png",
       "preset": "ad5m_pro",
       "print_start_profile": "ad5m",
+      "probe_type": "loadcell",
       "z_offset_calibration_strategy": "firmware_managed",
       "heuristics": [
         {
@@ -216,6 +218,7 @@
       "manufacturer": "FlashForge",
       "image": "flashforge-adventurer-5x.png",
       "preset": "ad5x",
+      "probe_type": "loadcell",
       "z_offset_calibration_strategy": "firmware_managed",
       "heuristics": [
         {

@@ -78,6 +78,9 @@ class ProbeSensorManager : public ISensorManager {
     /// @brief Update state from Moonraker status JSON
     void update_from_status(const nlohmann::json& status) override;
 
+    /// @brief Seed initial state from Klipper configfile (e.g., z_offset from [probe])
+    void discover_from_config(const nlohmann::json& config_keys) override;
+
     /// @brief Inject mock sensor objects for testing UI
     void inject_mock_sensors(std::vector<std::string>& objects, nlohmann::json& config_keys,
                              nlohmann::json& moonraker_info) override;

@@ -460,6 +460,9 @@ void ProbeOverlay::update_display_subjects() {
     case ProbeSensorType::PRTOUCH_V2:
         type_label = "Creality Pressure Probe";
         break;
+    case ProbeSensorType::LOADCELL:
+        type_label = "Bed Load Cell Probe";
+        break;
     case ProbeSensorType::STANDARD:
     default:
         break;

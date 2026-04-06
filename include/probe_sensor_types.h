@@ -24,6 +24,7 @@ enum class ProbeSensorType {
     TAP = 7,            ///< Voron Tap nozzle-contact probe
     KLICKY = 8,         ///< Klicky magnetic probe (macro-based)
     PRTOUCH_V2 = 9,     ///< Creality prtouch_v2 pressure-based probe (K1/K1C/K1 Max)
+    LOADCELL = 10,      ///< Load cell probe (e.g., FlashForge AD5M/AD5X)
 };
 
 /// @brief Configuration for a probe sensor
@@ -110,6 +111,8 @@ struct ProbeSensorState {
         return "klicky";
     case ProbeSensorType::PRTOUCH_V2:
         return "prtouch_v2";
+    case ProbeSensorType::LOADCELL:
+        return "loadcell";
     default:
         return "standard";
     }
@@ -138,6 +141,8 @@ struct ProbeSensorState {
         return "Klicky";
     case ProbeSensorType::PRTOUCH_V2:
         return "Creality ProTouch";
+    case ProbeSensorType::LOADCELL:
+        return "Load Cell";
     default:
         return "Unknown Probe";
     }
@@ -163,6 +168,8 @@ struct ProbeSensorState {
         return ProbeSensorType::KLICKY;
     if (str == "prtouch_v2")
         return ProbeSensorType::PRTOUCH_V2;
+    if (str == "loadcell")
+        return ProbeSensorType::LOADCELL;
     return ProbeSensorType::STANDARD;
 }
 

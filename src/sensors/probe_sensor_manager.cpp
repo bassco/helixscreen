@@ -108,9 +108,8 @@ void ProbeSensorManager::discover(const std::vector<std::string>& klipper_object
         return s.type != ProbeSensorType::STANDARD;
     });
     if (has_specific_probe) {
-        auto it = std::remove_if(sensors_.begin(), sensors_.end(), [](const auto& s) {
-            return s.type == ProbeSensorType::STANDARD;
-        });
+        auto it = std::remove_if(sensors_.begin(), sensors_.end(),
+                                 [](const auto& s) { return s.type == ProbeSensorType::STANDARD; });
         if (it != sensors_.end()) {
             spdlog::debug("[ProbeSensorManager] Removing virtual 'probe' entry "
                           "(specific probe type present)");
@@ -185,6 +184,45 @@ void ProbeSensorManager::discover(const std::vector<std::string>& klipper_object
     update_subjects();
 }
 
+void ProbeSensorManager::discover_from_config(const nlohmann::json& config_keys) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // Seed z_offset from configfile for probe sections whose runtime status
+    // may return null (e.g., flashforge_loadcell).  The configfile always has
+    // the persisted value.
+    for (const auto& sensor : sensors_) {
+        if (!config_keys.contains(sensor.klipper_name)) {
+            continue;
+        }
+        const auto& section = config_keys[sensor.klipper_name];
+        if (!section.contains("z_offset")) {
+            continue;
+        }
+
+        // Config values are strings in configfile.config
+        float z_offset = 0.0f;
+        const auto& val = section["z_offset"];
+        if (val.is_string()) {
+            try {
+                z_offset = std::stof(val.get<std::string>());
+            } catch (...) {
+                continue;
+            }
+        } else if (val.is_number()) {
+            z_offset = val.get<float>();
+        } else {
+            continue;
+        }
+
+        auto& state = states_[sensor.klipper_name];
+        state.z_offset = z_offset;
+        spdlog::debug("[ProbeSensorManager] Seeded z_offset={:.3f}mm from config for {}", z_offset,
+                      sensor.sensor_name);
+    }
+
+    update_subjects();
+}
+
 void ProbeSensorManager::update_from_status(const nlohmann::json& status) {
     bool any_changed = false;
 
@@ -203,12 +241,13 @@ void ProbeSensorManager::update_from_status(const nlohmann::json& status) {
             ProbeSensorState old_state = state;
 
             // Update last_z_result
-            if (sensor_data.contains("last_z_result")) {
+            if (sensor_data.contains("last_z_result") && sensor_data["last_z_result"].is_number()) {
                 state.last_z_result = sensor_data["last_z_result"].get<float>();
             }
 
-            // Update z_offset
-            if (sensor_data.contains("z_offset")) {
+            // Update z_offset — some probe modules (e.g., flashforge_loadcell)
+            // return null for this field; skip null to preserve the config-seeded value
+            if (sensor_data.contains("z_offset") && sensor_data["z_offset"].is_number()) {
                 state.z_offset = sensor_data["z_offset"].get<float>();
             }
 
@@ -236,7 +275,7 @@ void ProbeSensorManager::update_from_status(const nlohmann::json& status) {
 }
 
 /// Get the mock probe type from HELIX_MOCK_PROBE_TYPE env var.
-/// Valid values: cartographer, tap, bltouch, beacon, klicky, standard (default)
+/// Valid values: cartographer, tap, bltouch, beacon, klicky, loadcell, standard (default)
 static std::string get_mock_probe_type() {
     const char* env = std::getenv("HELIX_MOCK_PROBE_TYPE");
     if (env && env[0] != '\0') {
@@ -246,7 +285,7 @@ static std::string get_mock_probe_type() {
 }
 
 void ProbeSensorManager::inject_mock_sensors(std::vector<std::string>& objects,
-                                             nlohmann::json& /*config_keys*/,
+                                             nlohmann::json& config_keys,
                                              nlohmann::json& /*moonraker_info*/) {
     std::string type = get_mock_probe_type();
     spdlog::info("[ProbeSensorManager] Mock probe type: {} (set HELIX_MOCK_PROBE_TYPE to change)",
@@ -267,6 +306,11 @@ void ProbeSensorManager::inject_mock_sensors(std::vector<std::string>& objects,
         objects.emplace_back("probe");
         objects.emplace_back("gcode_macro ATTACH_PROBE");
         objects.emplace_back("gcode_macro DOCK_PROBE");
+    } else if (type == "loadcell") {
+        objects.emplace_back("probe");
+        objects.emplace_back("flashforge_loadcell");
+        // Loadcell z_offset comes from config, not status
+        config_keys["probe"] = {{"z_offset", "-0.250"}};
     } else {
         // "standard" or any other value
         objects.emplace_back("probe");
@@ -277,13 +321,16 @@ void ProbeSensorManager::inject_mock_status(nlohmann::json& status) {
     std::string type = get_mock_probe_type();
 
     if (type == "cartographer") {
-        status["cartographer"] = {{"last_z_result", -0.425f}};
+        status["cartographer"] = {{"last_z_result", -0.425f}, {"z_offset", 0.0f}};
     } else if (type == "beacon") {
-        status["beacon"] = {{"last_z_result", -0.312f}};
+        status["beacon"] = {{"last_z_result", -0.312f}, {"z_offset", 0.0f}};
     } else if (type == "bltouch") {
-        status["bltouch"] = {{"last_z_result", 0.130f}};
+        status["bltouch"] = {{"last_z_result", 0.130f}, {"z_offset", -1.850f}};
+    } else if (type == "loadcell") {
+        // Loadcell probes return null z_offset in status (seeded from config instead)
+        status["probe"] = {{"last_z_result", 0.0f}, {"z_offset", nullptr}};
     } else {
-        status["probe"] = {{"last_z_result", 0.0f}};
+        status["probe"] = {{"last_z_result", 0.0f}, {"z_offset", -0.250f}};
     }
 }
 
