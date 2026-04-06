@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <component>
   <view name="power_panel" extends="overlay_panel" width="#overlay_panel_width_full"
-        title="Power Control" title_tag="Power Control" bg_color="#screen_bg">
+        title="Power Devices" title_tag="Power Devices" bg_color="#screen_bg">
     <!-- Content Area -->
     <lv_obj name="overlay_content"
             width="100%" flex_grow="1" style_pad_left="#space_lg" style_pad_right="#space_lg"

@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 #include "ui_panel_base.h"
 
+#include "async_lifetime_guard.h"
 #include "moonraker_api.h" // Need full definition for PowerDevice
 #include "subject_managed_panel.h"
 
@@ -32,7 +32,7 @@ class PowerPanel : public PanelBase {
     void setup(lv_obj_t* panel, lv_obj_t* parent_screen) override;
 
     const char* get_name() const override {
-        return "Power Control";
+        return "Power Devices";
     }
     const char* get_xml_component_name() const override {
         return "power_panel";

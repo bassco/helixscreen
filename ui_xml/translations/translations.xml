@@ -1173,7 +1173,7 @@
   <translation tag="Port" de="Port" en="Port" es="Puerto" fr="Port" it="Porta" ja="ポート" pt="Porta" ru="Порт" zh="端口"/>
   <translation tag="Position" de="Position" en="Position" es="Posición" fr="Position" it="Posizione" ja="位置" pt="Posição" ru="Позиция" zh="位置"/>
   <translation tag="Power" de="Strom" en="Power" es="Energía" fr="Alimentation" it="Alimentazione" ja="電源" pt="Energia" ru="Питание" zh="电源"/>
-  <translation tag="Power Control" de="Stromsteuerung" en="Power Control" es="Control de Energía" fr="Contrôle d&apos;alimentation" it="Controllo alimentazione" ja="電源制御" pt="Controle de Energia" ru="Управление питанием" zh="电源控制"/>
+  <translation tag="Power Devices" de="Stromgeräte" en="Power Devices" es="Dispositivos de energía" fr="Appareils d&apos;alimentation" it="Dispositivi di alimentazione" ja="電源デバイス" pt="Dispositivos de energia" ru="Устройства питания" zh="电源设备"/>
   <translation tag="Power Devices" de="Stromgeräte" en="Power Devices" es="Dispositivos de energía" fr="Appareils électriques" it="Dispositivi di alimentazione" ja="電源デバイス" pt="Dispositivos de energia" ru="Устройства питания" zh="电源设备"/>
   <translation tag="Pre-print command failed: {}" de="Vor-Druck-Befehl fehlgeschlagen: {}" en="Pre-print command failed: {}" es="Error en comando pre-impresión: {}" fr="Échec de la commande pré-impression : {}" it="Comando pre-stampa fallito: {}" ja="印刷前コマンドに失敗しました: {}" pt="Falha no comando pré-impressão: {}" ru="Ошибка команды перед печатью: {}" zh="打印前命令失败: {}"/>
   <translation tag="Preheat Macro" de="Vorheiz-Makro" en="Preheat Macro" es="Macro de Precalentamiento" fr="Macro de préchauffage" it="Macro preriscaldamento" ja="予熱マクロ" pt="Macro de Pré-aquecimento" ru="Макрос преднагрева" zh="预热宏"/>
