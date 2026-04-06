@@ -11,6 +11,7 @@
 
 #include "ui_frequency_response_chart.h"
 
+#include "display_settings_manager.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -18,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -41,6 +43,7 @@ struct FrequencySeriesData {
     bool has_peak = false;
     float peak_freq = 0.0f;
     float peak_amplitude = 0.0f;
+    size_t peak_idx = 0; ///< Cached index into frequencies/amplitudes for draw alignment
 
     // Stored data (for table mode or re-rendering)
     std::vector<float> frequencies;
@@ -65,6 +68,11 @@ struct ui_frequency_response_chart_t {
 
     FrequencySeriesData series[MAX_SERIES];
     int next_series_id = 0;
+
+    // Peak dot pulse animation state (0-255 opacity cycle)
+    int32_t pulse_phase = 255; ///< Current glow opacity (animated)
+    lv_anim_t pulse_anim = {};
+    bool pulse_active = false;
 };
 
 // ============================================================================
@@ -244,6 +252,12 @@ void ui_frequency_response_chart_destroy(ui_frequency_response_chart_t* chart) {
         return;
     }
 
+    // Stop pulse animation before cleanup
+    if (chart->pulse_active) {
+        lv_anim_delete(chart, nullptr);
+        chart->pulse_active = false;
+    }
+
     // Transfer to RAII wrapper for automatic cleanup
     std::unique_ptr<ui_frequency_response_chart_t> chart_ptr(chart);
 
@@ -414,12 +428,19 @@ void ui_frequency_response_chart_clear(ui_frequency_response_chart_t* chart) {
         if (chart->series[i].id != -1) {
             chart->series[i].frequencies.clear();
             chart->series[i].amplitudes.clear();
+            chart->series[i].has_peak = false;
 
             if (chart->chart && chart->series[i].lv_series) {
                 lv_chart_set_all_values(chart->chart, chart->series[i].lv_series,
                                         LV_CHART_POINT_NONE);
             }
         }
+    }
+
+    // Stop pulse animation since all data is cleared
+    if (chart->pulse_active) {
+        lv_anim_delete(chart, nullptr);
+        chart->pulse_active = false;
     }
 
     if (chart->chart) {
@@ -448,6 +469,38 @@ void ui_frequency_response_chart_mark_peak(ui_frequency_response_chart_t* chart,
     series->peak_freq = peak_freq;
     series->peak_amplitude = peak_amplitude;
 
+    // Cache the data point index closest to peak frequency for draw alignment
+    series->peak_idx = 0;
+    float best_dist = std::numeric_limits<float>::max();
+    for (size_t j = 0; j < series->frequencies.size(); j++) {
+        float d = std::abs(series->frequencies[j] - peak_freq);
+        if (d < best_dist) {
+            best_dist = d;
+            series->peak_idx = j;
+        }
+    }
+
+    // Start pulse animation if animations are enabled
+    if (!chart->pulse_active &&
+        helix::DisplaySettingsManager::instance().get_animations_enabled()) {
+        lv_anim_init(&chart->pulse_anim);
+        lv_anim_set_var(&chart->pulse_anim, chart);
+        lv_anim_set_values(&chart->pulse_anim, 80, 255);
+        lv_anim_set_duration(&chart->pulse_anim, 1200);
+        lv_anim_set_playback_duration(&chart->pulse_anim, 1200);
+        lv_anim_set_repeat_count(&chart->pulse_anim, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_set_path_cb(&chart->pulse_anim, lv_anim_path_ease_in_out);
+        lv_anim_set_exec_cb(&chart->pulse_anim, [](void* var, int32_t val) {
+            auto* c = static_cast<ui_frequency_response_chart_t*>(var);
+            c->pulse_phase = val;
+            if (c->chart) {
+                lv_obj_invalidate(c->chart);
+            }
+        });
+        lv_anim_start(&chart->pulse_anim);
+        chart->pulse_active = true;
+    }
+
     // Invalidate chart to redraw with peak marker
     if (chart->chart) {
         lv_obj_invalidate(chart->chart);
@@ -468,6 +521,21 @@ void ui_frequency_response_chart_clear_peak(ui_frequency_response_chart_t* chart
     }
 
     series->has_peak = false;
+
+    // Stop pulse animation if no series have peaks remaining
+    if (chart->pulse_active) {
+        bool any_peak = false;
+        for (int j = 0; j < MAX_SERIES; j++) {
+            if (chart->series[j].id != -1 && chart->series[j].has_peak) {
+                any_peak = true;
+                break;
+            }
+        }
+        if (!any_peak) {
+            lv_anim_delete(chart, nullptr);
+            chart->pulse_active = false;
+        }
+    }
 
     if (chart->chart) {
         lv_obj_invalidate(chart->chart);
@@ -643,23 +711,33 @@ static void draw_peak_dots_cb(lv_event_t* e) {
             continue;
         }
 
-        // Calculate pixel position directly from peak frequency and amplitude
-        // X: linear interpolation across frequency range
-        float freq_frac = (series->peak_freq - chart->freq_min) / freq_range;
-        freq_frac = std::max(0.0f, std::min(1.0f, freq_frac));
-        int32_t abs_x = content_x1 + static_cast<int32_t>(freq_frac * content_width);
+        // Use cached peak index to align dot with LVGL's evenly-spaced points
+        size_t total_pts = series->frequencies.size();
+        if (total_pts == 0) {
+            continue;
+        }
 
-        // Y: linear interpolation across amplitude range (Y axis is inverted: top = max)
-        float amp_frac = (series->peak_amplitude - chart->amp_min) / amp_range;
+        // X: match LVGL's evenly-spaced point positioning
+        float x_frac = (total_pts > 1) ? static_cast<float>(series->peak_idx) /
+                                             static_cast<float>(total_pts - 1)
+                                       : 0.5f;
+        x_frac = std::max(0.0f, std::min(1.0f, x_frac));
+        int32_t abs_x = content_x1 + static_cast<int32_t>(x_frac * content_width);
+
+        // Y: use the actual amplitude at the peak point for correct vertical position
+        float peak_amp = (series->peak_idx < series->amplitudes.size())
+                             ? series->amplitudes[series->peak_idx]
+                             : series->peak_amplitude;
+        float amp_frac = (peak_amp - chart->amp_min) / amp_range;
         amp_frac = std::max(0.0f, std::min(1.0f, amp_frac));
         int32_t abs_y = content_y2 - static_cast<int32_t>(amp_frac * content_height);
 
-        // Glow circle: larger, semi-transparent, lighter tint
+        // Glow circle: larger, semi-transparent, lighter tint, pulsing opacity
         constexpr int32_t GLOW_RADIUS = 10;
         lv_draw_rect_dsc_t glow_dsc;
         lv_draw_rect_dsc_init(&glow_dsc);
         glow_dsc.bg_color = lv_color_mix(series->color, lv_color_white(), LV_OPA_40);
-        glow_dsc.bg_opa = LV_OPA_30;
+        glow_dsc.bg_opa = static_cast<lv_opa_t>(chart->pulse_phase * 30 / 255);
         glow_dsc.radius = LV_RADIUS_CIRCLE;
         glow_dsc.border_width = 0;
 
