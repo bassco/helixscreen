@@ -180,7 +180,12 @@ void update_button_text_contrast(lv_obj_t* btn) {
  */
 void button_style_changed_cb(lv_event_t* e) {
     lv_obj_t* btn = lv_event_get_target_obj(e);
-    update_button_text_contrast(btn);
+    // Defer contrast update to avoid setting styles mid-cascade.
+    // refresh_children_style sends STYLE_CHANGED recursively; modifying child
+    // styles in that handler triggers trans_delete on partially-initialized
+    // transitions, crashing in lv_obj_set_local_style_prop (#729).
+    helix::ui::async_call(
+        btn, [](void* data) { update_button_text_contrast(static_cast<lv_obj_t*>(data)); }, btn);
 }
 
 /**

@@ -17,10 +17,11 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 #include "ui_temp_graph.h"
 #include "ui_temp_graph_scaling.h"
+
+#include "async_lifetime_guard.h"
 
 #include <cstdint>
 #include <string>
@@ -61,12 +62,12 @@ struct TempGraphSeriesSpec {
  */
 struct TempGraphControllerConfig {
     int point_count = UI_TEMP_GRAPH_DEFAULT_POINTS; ///< Data points per series
-    const char* axis_size = "sm";                    ///< Axis font size ("xs", "sm", "md", "lg")
+    const char* axis_size = "sm";                   ///< Axis font size ("xs", "sm", "md", "lg")
     uint32_t initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES |
                                 TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS |
                                 TEMP_GRAPH_FEATURE_GRADIENTS;
-    TempGraphScaleParams scale_params{};             ///< Y-axis auto-scaling parameters
-    std::vector<TempGraphSeriesSpec> series;          ///< Series to display
+    TempGraphScaleParams scale_params{};     ///< Y-axis auto-scaling parameters
+    std::vector<TempGraphSeriesSpec> series; ///< Series to display
 };
 
 // ============================================================================
@@ -127,11 +128,24 @@ class TempGraphController {
      */
     void rebuild();
 
+    /**
+     * @brief Detach all observers and invalidate lifetime tokens
+     *
+     * Used before deferred destruction (prevents observer removal on freed
+     * objects) and during rebuild (tears down before recreating). Idempotent —
+     * safe to call multiple times; the destructor calls it again as a guard.
+     */
+    void detach();
+
     /// Access the underlying graph (for chip toggles, custom styling, etc.)
-    ui_temp_graph_t* graph() const { return graph_; }
+    ui_temp_graph_t* graph() const {
+        return graph_;
+    }
 
     /// Check if graph was created successfully
-    bool is_valid() const { return graph_ != nullptr; }
+    bool is_valid() const {
+        return graph_ != nullptr;
+    }
 
     /**
      * @brief Look up the graph series ID for a given Klipper name

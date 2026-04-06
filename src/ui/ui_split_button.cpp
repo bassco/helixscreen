@@ -5,6 +5,7 @@
 
 #include "ui_fonts.h"
 #include "ui_icon_codepoints.h"
+#include "ui_update_queue.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
@@ -39,11 +40,14 @@ struct SplitButtonData {
 // Store data on main_btn (first child), NOT on sb itself.
 // Callers (preheat_widget) may overwrite sb's user_data.
 SplitButtonData* get_data(lv_obj_t* sb) {
-    if (!sb) return nullptr;
+    if (!sb)
+        return nullptr;
     lv_obj_t* first_child = lv_obj_get_child(sb, 0);
-    if (!first_child) return nullptr;
+    if (!first_child)
+        return nullptr;
     auto* data = static_cast<SplitButtonData*>(lv_obj_get_user_data(first_child));
-    if (!data || data->magic != SplitButtonData::MAGIC) return nullptr;
+    if (!data || data->magic != SplitButtonData::MAGIC)
+        return nullptr;
     return data;
 }
 
@@ -53,7 +57,8 @@ SplitButtonData* get_data(lv_obj_t* sb) {
 const lv_font_t* get_button_icon_font() {
     static const lv_font_t* cached = nullptr;
     static bool resolved = false;
-    if (resolved) return cached;
+    if (resolved)
+        return cached;
 
     const char* font_name = lv_xml_get_const_silent(nullptr, "icon_font_sm");
     const lv_font_t* font = nullptr;
@@ -74,7 +79,8 @@ const lv_font_t* get_button_icon_font() {
  */
 void update_split_button_contrast(lv_obj_t* sb) {
     auto* data = get_data(sb);
-    if (!data) return;
+    if (!data)
+        return;
 
     lv_opa_t bg_opa = lv_obj_get_style_bg_opa(sb, LV_PART_MAIN);
     bool is_ghost = bg_opa < LV_OPA_50;
@@ -88,7 +94,8 @@ void update_split_button_contrast(lv_obj_t* sb) {
     }
 
     auto set_contrast = [&](lv_obj_t* obj) {
-        if (!obj) return;
+        if (!obj)
+            return;
         lv_obj_set_style_text_color(obj, text_color, LV_PART_MAIN);
     };
 
@@ -104,7 +111,10 @@ void update_split_button_contrast(lv_obj_t* sb) {
 
 void split_button_style_changed_cb(lv_event_t* e) {
     lv_obj_t* sb = lv_event_get_target_obj(e);
-    update_split_button_contrast(sb);
+    // Defer contrast update to avoid setting styles during refresh_children_style
+    // cascade — same fix as ui_button.cpp (#729).
+    helix::ui::async_call(
+        sb, [](void* data) { update_split_button_contrast(static_cast<lv_obj_t*>(data)); }, sb);
 }
 
 /**
@@ -112,7 +122,8 @@ void split_button_style_changed_cb(lv_event_t* e) {
  * Must be called after any lv_label_set_text() which resets label to content width.
  */
 void constrain_label_width(SplitButtonData* data) {
-    if (!data || !data->label || !data->main_btn) return;
+    if (!data || !data->label || !data->main_btn)
+        return;
 
     int32_t avail = lv_obj_get_content_width(data->main_btn);
     if (data->icon) {
@@ -128,7 +139,8 @@ void constrain_label_width(SplitButtonData* data) {
  * @brief Update the button label from current dropdown selection
  */
 void update_label_from_selection(SplitButtonData* data) {
-    if (!data || !data->label || !data->dropdown || !data->show_selection) return;
+    if (!data || !data->label || !data->dropdown || !data->show_selection)
+        return;
 
     char selected_text[128];
     lv_dropdown_get_selected_str(data->dropdown, selected_text, sizeof(selected_text));
@@ -157,7 +169,8 @@ void main_btn_clicked_cb(lv_event_t* e) {
  * @brief Style the dropdown list to match the button variant colors
  */
 void style_dropdown_list(lv_obj_t* sb, lv_obj_t* list) {
-    if (!sb || !list) return;
+    if (!sb || !list)
+        return;
 
     lv_color_t bg_color = lv_obj_get_style_bg_color(sb, LV_PART_MAIN);
     lv_color_t text_color = theme_manager_get_contrast_color(bg_color);
@@ -180,9 +193,10 @@ void arrow_btn_clicked_cb(lv_event_t* e) {
     lv_obj_t* arrow_btn = lv_event_get_target_obj(e);
     lv_obj_t* sb = lv_obj_get_parent(arrow_btn);
     auto* data = get_data(sb);
-    if (!data || !data->dropdown) return;
+    if (!data || !data->dropdown)
+        return;
 
-    lv_event_stop_bubbling(e);  // Don't trigger container's CLICKED (main action)
+    lv_event_stop_bubbling(e); // Don't trigger container's CLICKED (main action)
     SoundManager::instance().play("button_tap");
     lv_dropdown_open(data->dropdown);
 
@@ -203,7 +217,8 @@ void dropdown_value_changed_cb(lv_event_t* e) {
     lv_obj_t* dropdown = lv_event_get_target_obj(e);
     lv_obj_t* sb = lv_obj_get_parent(dropdown);
     auto* data = get_data(sb);
-    if (!data) return;
+    if (!data)
+        return;
 
     update_label_from_selection(data);
     lv_obj_send_event(sb, LV_EVENT_VALUE_CHANGED, nullptr);
@@ -215,7 +230,8 @@ void dropdown_value_changed_cb(lv_event_t* e) {
 void split_button_delete_cb(lv_event_t* e) {
     lv_obj_t* sb = lv_event_get_target_obj(e);
     auto* data = get_data(sb);
-    if (!data) return;
+    if (!data)
+        return;
 
     lv_free(data->text_format);
     if (data->main_btn) {
@@ -228,7 +244,8 @@ void split_button_delete_cb(lv_event_t* e) {
  * @brief Create an icon label inside a parent
  */
 lv_obj_t* create_icon(lv_obj_t* parent, const char* icon_name) {
-    if (!icon_name || strlen(icon_name) == 0) return nullptr;
+    if (!icon_name || strlen(icon_name) == 0)
+        return nullptr;
 
     const char* codepoint = ui_icon::lookup_codepoint(icon_name);
     if (!codepoint) {
@@ -253,13 +270,20 @@ lv_obj_t* create_icon(lv_obj_t* parent, const char* icon_name) {
  */
 lv_style_t* get_variant_style(const char* variant_str) {
     auto& tm = ThemeManager::instance();
-    if (strcmp(variant_str, "secondary") == 0) return tm.get_style(StyleRole::ButtonSecondary);
-    if (strcmp(variant_str, "danger") == 0) return tm.get_style(StyleRole::ButtonDanger);
-    if (strcmp(variant_str, "success") == 0) return tm.get_style(StyleRole::ButtonSuccess);
-    if (strcmp(variant_str, "tertiary") == 0) return tm.get_style(StyleRole::ButtonTertiary);
-    if (strcmp(variant_str, "warning") == 0) return tm.get_style(StyleRole::ButtonWarning);
-    if (strcmp(variant_str, "ghost") == 0) return tm.get_style(StyleRole::ButtonGhost);
-    if (strcmp(variant_str, "outline") == 0) return tm.get_style(StyleRole::ButtonOutline);
+    if (strcmp(variant_str, "secondary") == 0)
+        return tm.get_style(StyleRole::ButtonSecondary);
+    if (strcmp(variant_str, "danger") == 0)
+        return tm.get_style(StyleRole::ButtonDanger);
+    if (strcmp(variant_str, "success") == 0)
+        return tm.get_style(StyleRole::ButtonSuccess);
+    if (strcmp(variant_str, "tertiary") == 0)
+        return tm.get_style(StyleRole::ButtonTertiary);
+    if (strcmp(variant_str, "warning") == 0)
+        return tm.get_style(StyleRole::ButtonWarning);
+    if (strcmp(variant_str, "ghost") == 0)
+        return tm.get_style(StyleRole::ButtonGhost);
+    if (strcmp(variant_str, "outline") == 0)
+        return tm.get_style(StyleRole::ButtonOutline);
     return tm.get_style(StyleRole::ButtonPrimary);
 }
 
@@ -280,7 +304,8 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
 
     // Apply variant style to container
     const char* variant_str = lv_xml_get_value_of(attrs, "variant");
-    if (!variant_str) variant_str = "primary";
+    if (!variant_str)
+        variant_str = "primary";
 
     lv_style_t* style = get_variant_style(variant_str);
     if (style) {
@@ -289,7 +314,8 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
 
     // Parse attributes
     const char* text = lv_xml_get_value_of(attrs, "text");
-    if (!text) text = "";
+    if (!text)
+        text = "";
     const char* icon_name = lv_xml_get_value_of(attrs, "icon");
     const char* options = lv_xml_get_value_of(attrs, "options");
 
@@ -299,7 +325,7 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     // --- Main button area (clickable lv_obj, flex_grow=1) ---
     // Using lv_obj instead of lv_button to avoid button's content-based min sizing
     data->main_btn = lv_obj_create(sb);
-    lv_obj_set_user_data(data->main_btn, data);  // Store data here (sb's user_data is for callers)
+    lv_obj_set_user_data(data->main_btn, data); // Store data here (sb's user_data is for callers)
     lv_obj_add_flag(data->main_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_bg_opa(data->main_btn, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(data->main_btn, 0, LV_PART_MAIN);
@@ -312,7 +338,8 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     lv_obj_set_flex_flow(data->main_btn, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(data->main_btn, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(data->main_btn, theme_manager_get_spacing("space_xxs"), LV_PART_MAIN);
+    lv_obj_set_style_pad_column(data->main_btn, theme_manager_get_spacing("space_xxs"),
+                                LV_PART_MAIN);
     lv_obj_set_style_pad_left(data->main_btn, theme_manager_get_spacing("space_xs"), LV_PART_MAIN);
 
     // Icon (optional)
@@ -337,8 +364,9 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
     lv_obj_t* divider = lv_obj_create(sb);
     lv_obj_set_size(divider, 1, lv_pct(60));
     lv_obj_set_style_bg_opa(divider, LV_OPA_30, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(divider, theme_manager_get_contrast_color(
-        lv_obj_get_style_bg_color(sb, LV_PART_MAIN)), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(
+        divider, theme_manager_get_contrast_color(lv_obj_get_style_bg_color(sb, LV_PART_MAIN)),
+        LV_PART_MAIN);
     lv_obj_set_style_border_width(divider, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(divider, 0, LV_PART_MAIN);
     lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
@@ -391,7 +419,8 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
         [](void* user_data) {
             auto* sb = static_cast<lv_obj_t*>(user_data);
             auto* d = get_data(sb);
-            if (!d || !d->label || !d->main_btn) return;
+            if (!d || !d->label || !d->main_btn)
+                return;
 
             lv_obj_update_layout(sb);
 
@@ -400,10 +429,11 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
                 avail -= lv_obj_get_width(d->icon);
                 avail -= lv_obj_get_style_pad_column(d->main_btn, LV_PART_MAIN);
             }
-            if (avail < 0) avail = 0;
+            if (avail < 0)
+                avail = 0;
             lv_obj_set_width(d->label, avail);
-            spdlog::debug("[ui_split_button] Label width set to {} (main_btn content_w={})",
-                          avail, lv_obj_get_content_width(d->main_btn));
+            spdlog::debug("[ui_split_button] Label width set to {} (main_btn content_w={})", avail,
+                          lv_obj_get_content_width(d->main_btn));
         },
         sb);
 
@@ -413,14 +443,16 @@ void* ui_split_button_create(lv_xml_parser_state_t* state, const char** attrs) {
         [](lv_event_t* e) {
             lv_obj_t* obj = lv_event_get_target_obj(e);
             auto* d = get_data(obj);
-            if (!d || !d->label || !d->main_btn) return;
+            if (!d || !d->label || !d->main_btn)
+                return;
 
             int32_t avail = lv_obj_get_content_width(d->main_btn);
             if (d->icon) {
                 avail -= lv_obj_get_width(d->icon);
                 avail -= lv_obj_get_style_pad_column(d->main_btn, LV_PART_MAIN);
             }
-            if (avail < 0) avail = 0;
+            if (avail < 0)
+                avail = 0;
             lv_obj_set_width(d->label, avail);
         },
         LV_EVENT_SIZE_CHANGED, nullptr);
@@ -448,7 +480,8 @@ void ui_split_button_apply(lv_xml_parser_state_t* state, const char** attrs) {
     void* item = lv_xml_state_get_item(state);
     lv_obj_t* sb = static_cast<lv_obj_t*>(item);
     auto* data = get_data(sb);
-    if (!data) return;
+    if (!data)
+        return;
 
     // Handle text_format attribute
     const char* text_format = lv_xml_get_value_of(attrs, "text_format");
@@ -485,27 +518,31 @@ void ui_split_button_init() {
 
 void ui_split_button_set_options(lv_obj_t* sb, const char* options) {
     auto* data = get_data(sb);
-    if (!data || !data->dropdown || !options) return;
+    if (!data || !data->dropdown || !options)
+        return;
     lv_dropdown_set_options(data->dropdown, options);
     update_label_from_selection(data);
 }
 
 void ui_split_button_set_selected(lv_obj_t* sb, uint32_t index) {
     auto* data = get_data(sb);
-    if (!data || !data->dropdown) return;
+    if (!data || !data->dropdown)
+        return;
     lv_dropdown_set_selected(data->dropdown, index);
     update_label_from_selection(data);
 }
 
 uint32_t ui_split_button_get_selected(lv_obj_t* sb) {
     auto* data = get_data(sb);
-    if (!data || !data->dropdown) return 0;
+    if (!data || !data->dropdown)
+        return 0;
     return lv_dropdown_get_selected(data->dropdown);
 }
 
 void ui_split_button_set_text(lv_obj_t* sb, const char* text) {
     auto* data = get_data(sb);
-    if (!data || !data->label || !text) return;
+    if (!data || !data->label || !text)
+        return;
     lv_label_set_text(data->label, text);
     constrain_label_width(data);
     lv_obj_invalidate(sb);

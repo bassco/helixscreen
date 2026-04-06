@@ -1571,22 +1571,14 @@ void AmsBackendAfc::detect_afc_version() {
 
                     // Warn if AFC version is older than minimum supported
                     if (!version_at_least("1.0.35")) {
-                        auto* msg = new (std::nothrow)
-                            std::string(fmt::format("AFC version {} may have compatibility issues. "
-                                                    "Please upgrade to v1.0.35 or later.",
-                                                    afc_version_));
-                        if (msg) {
-                            spdlog::warn("[AMS AFC] {}", *msg);
-                            helix::ui::async_call(
-                                [](void* data) {
-                                    auto* m = static_cast<std::string*>(data);
-                                    helix::ui::modal_show_alert(lv_tr("AFC Version Warning"),
-                                                                m->c_str(), ModalSeverity::Warning,
-                                                                "OK");
-                                    delete m;
-                                },
-                                msg);
-                        }
+                        auto warning = fmt::format("AFC version {} may have compatibility issues. "
+                                                   "Please upgrade to v1.0.35 or later.",
+                                                   afc_version_);
+                        spdlog::warn("[AMS AFC] {}", warning);
+                        token.defer([msg = std::move(warning)]() {
+                            helix::ui::modal_show_alert(lv_tr("AFC Version Warning"), msg.c_str(),
+                                                        ModalSeverity::Warning, "OK");
+                        });
                     }
                 }
             }

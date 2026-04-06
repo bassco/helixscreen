@@ -124,10 +124,12 @@ void TempGraphOverlay::on_activate() {
 
     // Create controller (handles graph creation, observers, history, auto-range)
     if (graph_container_) {
-        // Defer destruction of old controller — destroying synchronously inside
-        // process_pending() causes re-entrant drain() and corrupts LVGL's
-        // observer linked list (SIGSEGV in lv_ll_remove, #696)
+        // Detach observers synchronously then defer memory deallocation.
+        // Synchronous detach prevents use-after-free when deferred delete
+        // runs after LVGL objects are freed (#726). Deferred delete avoids
+        // re-entrant drain() corruption (#696).
         if (controller_) {
+            controller_->detach();
             auto* old = controller_.release();
             lv_async_call([](void* p) { delete static_cast<helix::TempGraphController*>(p); }, old);
         }

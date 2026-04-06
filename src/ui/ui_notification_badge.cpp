@@ -1,6 +1,8 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "ui_update_queue.h"
+
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_parser.h"
 #include "helix-xml/src/xml/lv_xml_utils.h"
@@ -60,7 +62,9 @@ void update_badge_text_contrast(lv_obj_t* badge) {
  */
 void badge_style_changed_cb(lv_event_t* e) {
     lv_obj_t* badge = lv_event_get_target_obj(e);
-    update_badge_text_contrast(badge);
+    // Defer to avoid setting styles during refresh_children_style cascade (#729)
+    helix::ui::async_call(
+        badge, [](void* data) { update_badge_text_contrast(static_cast<lv_obj_t*>(data)); }, badge);
 }
 
 /**

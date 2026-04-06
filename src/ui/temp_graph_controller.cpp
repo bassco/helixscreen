@@ -57,12 +57,12 @@ TempGraphController::TempGraphController(lv_obj_t* container,
     spdlog::debug("[TempGraphController] Initialized with {} series", series_.size());
 }
 
-TempGraphController::~TempGraphController() {
+void TempGraphController::detach() {
     lifetime_.invalidate();
 
     {
         auto freeze =
-            helix::ui::UpdateQueue::instance().scoped_freeze("TempGraphController::~dtor");
+            helix::ui::UpdateQueue::instance().scoped_freeze("TempGraphController::detach");
         helix::ui::UpdateQueue::instance().drain();
 
         connection_observer_.reset();
@@ -71,6 +71,14 @@ TempGraphController::~TempGraphController() {
             s.target_obs.reset();
         }
     }
+
+    spdlog::debug("[TempGraphController] Detached observers");
+}
+
+TempGraphController::~TempGraphController() {
+    // Safe to call multiple times — idempotent (invalidate + reset are no-ops
+    // if detach() was already called before deferred deletion)
+    detach();
 
     series_.clear();
 
@@ -120,20 +128,7 @@ void TempGraphController::rebuild() {
     }
     last_rebuild_time_ = now;
 
-    lifetime_.invalidate();
-
-    {
-        auto freeze =
-            helix::ui::UpdateQueue::instance().scoped_freeze("TempGraphController::rebuild");
-        helix::ui::UpdateQueue::instance().drain();
-
-        connection_observer_.reset();
-        for (auto& s : series_) {
-            s.temp_obs.reset();
-            s.target_obs.reset();
-        }
-    }
-
+    detach();
     series_.clear();
 
     if (graph_) {
