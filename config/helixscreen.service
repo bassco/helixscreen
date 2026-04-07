@@ -125,6 +125,8 @@ ProtectSystem=strict
 ReadWritePaths=@@INSTALL_DIR@@ @@INSTALL_PARENT@@ /var/log
 StateDirectory=helixscreen
 StateDirectoryMode=0700
+RuntimeDirectory=helixscreen
+RuntimeDirectoryMode=0700
 PrivateTmp=true
 NoNewPrivileges=true
 

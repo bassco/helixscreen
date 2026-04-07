@@ -26,6 +26,22 @@
 
 namespace fs = std::filesystem;
 
+/// Resolve a client socket directory visible outside systemd's PrivateTmp.
+///
+/// wpa_ctrl_open() binds a UNIX datagram reply socket in /tmp by default.
+/// Under PrivateTmp=true the real /tmp is a private mount — wpa_supplicant
+/// (running outside the namespace) cannot sendto() the reply address, so
+/// wpa_ctrl_attach() blocks until timeout.
+///
+/// We prefer /run/helixscreen (created by RuntimeDirectory=helixscreen in the
+/// service unit).  Falls back to /tmp for manual/non-systemd launches.
+static const char* resolve_wpa_client_dir() {
+    // RuntimeDirectory is the ideal location — visible to all processes
+    if (fs::is_directory("/run/helixscreen"))
+        return "/run/helixscreen";
+    return nullptr; // nullptr → wpa_ctrl_open() uses its /tmp default
+}
+
 WifiBackendWpaSupplicant::WifiBackendWpaSupplicant()
     : hv::EventLoopThread(nullptr), conn(nullptr),
       mon_conn(nullptr) // Initialize monitor connection
@@ -243,8 +259,9 @@ WiFiError WifiBackendWpaSupplicant::check_system_prerequisites() {
 WiFiError WifiBackendWpaSupplicant::check_socket_permissions(const std::string& socket_path) {
     spdlog::trace("[WifiBackend] Checking permissions for socket: {}", socket_path);
 
-    // Try to open a test connection
-    struct wpa_ctrl* test_ctrl = wpa_ctrl_open(socket_path.c_str());
+    // Try to open a test connection (use wpa_ctrl_open2 to avoid PrivateTmp issues)
+    const char* cli_dir = resolve_wpa_client_dir();
+    struct wpa_ctrl* test_ctrl = wpa_ctrl_open2(socket_path.c_str(), cli_dir);
     if (!test_ctrl) {
         // Get more specific error information
         int err = errno;
@@ -400,9 +417,17 @@ void WifiBackendWpaSupplicant::init_wpa() {
         return;
     }
 
+    // Use wpa_ctrl_open2() so the client reply socket is created outside
+    // systemd's PrivateTmp namespace (wpa_supplicant must be able to sendto()
+    // the reply address).  Falls back to default /tmp for non-systemd runs.
+    const char* cli_dir = resolve_wpa_client_dir();
+    if (cli_dir) {
+        spdlog::debug("[WifiBackend] Using client socket dir: {}", cli_dir);
+    }
+
     // Open control connection (for sending commands)
     if (conn == nullptr) {
-        conn = wpa_ctrl_open(wpa_socket.c_str());
+        conn = wpa_ctrl_open2(wpa_socket.c_str(), cli_dir);
         if (conn == nullptr) {
             LOG_ERROR_INTERNAL("Failed to open control connection to {}", wpa_socket);
             dispatch_event("INIT_FAILED", "Failed to connect to wpa_supplicant");
@@ -420,7 +445,8 @@ void WifiBackendWpaSupplicant::init_wpa() {
     }
 
     // Open monitor connection (for receiving events)
-    mon_conn = wpa_ctrl_open(wpa_socket.c_str()); // SECURITY: Use member variable to prevent leak
+    mon_conn = wpa_ctrl_open2(wpa_socket.c_str(),
+                              cli_dir); // SECURITY: Use member variable to prevent leak
     if (mon_conn == nullptr) {
         LOG_ERROR_INTERNAL("Failed to open monitor connection to {}", wpa_socket);
         dispatch_event("INIT_FAILED", "Failed to connect to wpa_supplicant monitor");
