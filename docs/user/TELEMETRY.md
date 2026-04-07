@@ -114,7 +114,7 @@ Recorded once per session. Helps us understand user preferences so we can choose
 
 ### Panel Usage
 
-Recorded when HelixScreen closes. Shows which screens are used most so we can focus improvement efforts. No specific actions or content are tracked.
+Recorded every 4 hours and when HelixScreen closes. Shows which screens are used most so we can focus improvement efforts. No specific actions or content are tracked. Periodic snapshots ensure data isn't lost if the application crashes.
 
 | Field | Description | Example |
 |-------|-------------|---------|
@@ -122,9 +122,46 @@ Recorded when HelixScreen closes. Shows which screens are used most so we can fo
 | `panel_time_sec` | Time spent on each panel (seconds) | `{"home": 8000, "controls": 3200}` |
 | `panel_visits` | Visit count per panel | `{"home": 42, "controls": 18}` |
 
+### Performance Snapshots
+
+Recorded every 4 hours alongside panel usage. Measures UI responsiveness so we can identify and fix slow panels across different hardware.
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `frame_time_p50_ms` | Median frame render time (ms) | `8` |
+| `frame_time_p95_ms` | 95th percentile frame time (ms) | `16` |
+| `frame_time_p99_ms` | 99th percentile frame time (ms) | `28` |
+| `dropped_frame_count` | Frames slower than 33ms | `42` |
+| `total_frame_count` | Total frames rendered | `432000` |
+| `worst_panel` | Panel with highest frame times | `"temperature"` |
+
+No user content is included — just timing data about how smoothly the UI renders.
+
+### Feature Adoption
+
+Recorded once per session (5 minutes after startup). Tells us which built-in features are actually used, so we know where to invest development effort.
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `features` | Boolean flags for each feature | `{"macros": true, "camera": false, ...}` |
+
+Features tracked: macros, filament management, camera, console, bed mesh, input shaper, manual probe, spoolman, LED control, power devices, multi-printer, themes, timelapse, favorites, PID calibration, firmware retraction.
+
+### Settings Changes
+
+Recorded when you change a setting, batched over a 30-second window. Helps us understand which default settings people change most, so we can pick better defaults.
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `setting` | Setting name | `"theme"`, `"brightness"` |
+| `old_value` | Previous value | `"dark"` |
+| `new_value` | New value | `"light"` |
+
+Only enumerated category values are recorded (e.g., theme names, brightness percentages). No free-text or user-entered content.
+
 ### Connection Stability
 
-Recorded when HelixScreen closes. Helps us understand connection reliability across different setups.
+Recorded every 4 hours and when HelixScreen closes. Helps us understand connection reliability across different setups.
 
 | Field | Description | Example |
 |-------|-------------|---------|
@@ -272,6 +309,9 @@ Telemetry helps us make HelixScreen better in specific, measurable ways:
 - **Memory profiling**: Detect memory issues on resource-constrained devices like Pi Zero
 - **Hardware census**: Understand what printers and features are in use to prioritize development
 - **UI engagement**: Know which features are actually used to focus improvement efforts
+- **UI performance**: Identify janky panels and frame drops across different hardware
+- **Feature adoption**: Understand which features users have never discovered
+- **Settings insight**: Learn which defaults work and which get changed immediately
 - **Connection reliability**: Identify and fix connectivity issues across different setups
 - **Error patterns**: Find and fix silent errors that users may never report
 - **Development priorities**: Aggregate usage data helps us focus engineering effort where it matters most
