@@ -56,15 +56,14 @@ class MoonrakerConnectionRetryFixture {
     }
 
     ~MoonrakerConnectionRetryFixture() {
-        // IMPORTANT: Stop event loop FIRST to prevent callbacks firing
-        // on destroyed objects
-        loop_thread_->stop();
-        loop_thread_->join();
-
-        // Now safe to destroy client - no more callbacks can fire
+        // Disconnect while event loop is still running so libhv can
+        // process the close and cancel pending reconnect timers.
         if (client_) {
             client_->disconnect();
         }
+
+        loop_thread_->stop();
+        loop_thread_->join();
         client_.reset();
     }
 

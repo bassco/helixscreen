@@ -2102,7 +2102,8 @@ TEST_CASE("MoonrakerClientMock print progress increments during printing",
     }
 }
 
-TEST_CASE("MoonrakerClientMock print completion triggers complete state", "[print][complete][slow]") {
+TEST_CASE("MoonrakerClientMock print completion triggers complete state",
+          "[print][complete][slow]") {
     MockBehaviorTestFixture fixture;
 
     SECTION("print state transitions through phases correctly") {
@@ -2376,7 +2377,8 @@ TEST_CASE("MoonrakerClientMock BED_MESH_PROFILE LOAD changes active profile",
     }
 }
 
-TEST_CASE("MoonrakerClientMock BED_MESH_CLEAR clears active mesh", "[mock][calibration][gcode][slow]") {
+TEST_CASE("MoonrakerClientMock BED_MESH_CLEAR clears active mesh",
+          "[mock][calibration][gcode][slow]") {
     MockBehaviorTestFixture fixture;
 
     SECTION("BED_MESH_CLEAR clears active mesh and sends notification") {
@@ -2749,8 +2751,13 @@ TEST_CASE("MoonrakerClientMock restart simulation", "[slow][mock][restart]") {
     SECTION("RESTART sets klippy_state to startup temporarily") {
         mock.gcode_script("RESTART");
 
-        // Wait for at least 2 notifications (startup + ready)
-        fixture.wait_for_callbacks(2, 500);
+        // Wait for the "ready" state notification to arrive
+        REQUIRE(fixture.wait_for_matching(
+            [](const json& n) {
+                return n.contains("params") && n["params"][0].contains("webhooks") &&
+                       n["params"][0]["webhooks"]["state"] == "ready";
+            },
+            500));
 
         auto notifications = fixture.get_notifications();
 

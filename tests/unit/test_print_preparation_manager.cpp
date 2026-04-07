@@ -1171,11 +1171,15 @@ class MacroAnalysisRetryFixture {
     }
 
     ~MacroAnalysisRetryFixture() {
-        // Stop event loop FIRST to prevent callbacks during teardown
+        // Disconnect while event loop is still running so libhv can
+        // process the close and cancel pending reconnect timers.
+        if (client_) {
+            client_->disconnect();
+        }
+
         loop_thread_->stop();
         loop_thread_->join();
 
-        // Destroy resources in order
         api_.reset();
         client_.reset();
         server_->stop();

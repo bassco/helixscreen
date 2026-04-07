@@ -69,11 +69,14 @@ class MoonrakerRobustnessFixture {
     }
 
     ~MoonrakerRobustnessFixture() {
-        // Stop event loop FIRST to prevent callbacks from firing during teardown
+        // Disconnect client while event loop is still running so libhv can
+        // process the close and cancel any pending reconnect timers.
+        // Without this, loop_thread_->join() hangs when reconnect is active.
+        client_->disconnect();
+
         loop_thread_->stop();
         loop_thread_->join();
 
-        // Now safe to destroy client and server
         client_.reset();
         server_->stop();
         server_.reset();

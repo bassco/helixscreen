@@ -5,6 +5,7 @@
 #include "runtime_config.h"
 
 #include <chrono>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -74,11 +75,12 @@ TEST_CASE("AmsBackendMock realistic mode load operation phases",
     REQUIRE(backend.start());
 
     // Track action state changes
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
-            // Only record unique consecutive actions
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -92,7 +94,10 @@ TEST_CASE("AmsBackendMock realistic mode load operation phases",
 
         // Wait for unload to complete (with 1000x speedup: ~20ms total)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        observed_actions.clear();
+        {
+            std::lock_guard<std::mutex> lock(actions_mtx);
+            observed_actions.clear();
+        }
 
         // Now do load
         result = backend.load_filament(1);
@@ -103,6 +108,7 @@ TEST_CASE("AmsBackendMock realistic mode load operation phases",
 
         // Verify phase sequence: HEATING → LOADING → IDLE
         // (CHECKING is only used in recovery, not normal load)
+        std::lock_guard<std::mutex> lock(actions_mtx);
         REQUIRE(observed_actions.size() >= 2);
 
         bool found_heating = false;
@@ -139,10 +145,12 @@ TEST_CASE("AmsBackendMock realistic mode unload operation phases",
     REQUIRE(backend.start());
 
     // Track action state changes
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -158,6 +166,7 @@ TEST_CASE("AmsBackendMock realistic mode unload operation phases",
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Verify phase sequence
+        std::lock_guard<std::mutex> lock(actions_mtx);
         REQUIRE(observed_actions.size() >= 3);
 
         // Find the HEATING -> CUTTING -> UNLOADING sequence
@@ -195,10 +204,12 @@ TEST_CASE("AmsBackendMock simple mode skips extra phases", "[ams][mock][realisti
     REQUIRE(backend.start());
 
     // Track action state changes
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -212,6 +223,7 @@ TEST_CASE("AmsBackendMock simple mode skips extra phases", "[ams][mock][realisti
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Should NOT see HEATING or CUTTING in simple mode
+        std::lock_guard<std::mutex> lock(actions_mtx);
         bool found_heating = false;
         bool found_cutting = false;
         bool found_unloading = false;
@@ -314,10 +326,12 @@ TEST_CASE("AmsBackendMock tool change shows SELECTING phase",
     REQUIRE(backend.start());
 
     // Track action state changes
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -333,6 +347,7 @@ TEST_CASE("AmsBackendMock tool change shows SELECTING phase",
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
         // Verify SELECTING phase appears between UNLOADING and LOADING phases
+        std::lock_guard<std::mutex> lock(actions_mtx);
         bool found_unloading = false;
         bool found_selecting_after_unload = false;
         bool found_loading_after_selecting = false;
@@ -406,10 +421,12 @@ TEST_CASE("AmsBackendMock error recovery sequence", "[ams][mock][realistic][reco
     REQUIRE(backend.start());
 
     // Track action state changes
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -420,7 +437,10 @@ TEST_CASE("AmsBackendMock error recovery sequence", "[ams][mock][realistic][reco
         // Put system in error state
         backend.simulate_error(AmsResult::FILAMENT_JAM);
         REQUIRE(backend.get_current_action() == AmsAction::ERROR);
-        observed_actions.clear();
+        {
+            std::lock_guard<std::mutex> lock(actions_mtx);
+            observed_actions.clear();
+        }
 
         // Trigger recovery
         auto result = backend.recover();
@@ -430,6 +450,7 @@ TEST_CASE("AmsBackendMock error recovery sequence", "[ams][mock][realistic][reco
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Verify recovery sequence: ERROR → CHECKING → IDLE
+        std::lock_guard<std::mutex> lock(actions_mtx);
         bool found_checking = false;
         bool found_idle_after_checking = false;
 

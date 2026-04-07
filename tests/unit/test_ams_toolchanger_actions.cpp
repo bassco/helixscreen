@@ -18,6 +18,7 @@
 #include "runtime_config.h"
 
 #include <chrono>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -102,10 +103,12 @@ TEST_CASE("change_tool sets SELECTING immediately in mock toolchanger mode",
     REQUIRE(backend.start());
 
     // Track the first action observed after calling change_tool
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -121,6 +124,7 @@ TEST_CASE("change_tool sets SELECTING immediately in mock toolchanger mode",
         // if the background thread completes before we can poll.
         // Wait briefly for completion then verify the transition was recorded.
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::lock_guard<std::mutex> lock(actions_mtx);
         REQUIRE_FALSE(observed_actions.empty());
         CHECK(observed_actions.front() != AmsAction::IDLE);
     }
@@ -133,6 +137,7 @@ TEST_CASE("change_tool sets SELECTING immediately in mock toolchanger mode",
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
         // The mock change_tool starts with UNLOADING (unload current + load new)
+        std::lock_guard<std::mutex> lock(actions_mtx);
         REQUIRE_FALSE(observed_actions.empty());
         // First action should be UNLOADING (mock starts tool change with unload phase)
         CHECK((observed_actions[0] == AmsAction::UNLOADING ||
@@ -441,10 +446,12 @@ TEST_CASE("Realistic mode tool change shows SELECTING phase in toolchanger mode"
     backend.set_realistic_mode(true);
     REQUIRE(backend.start());
 
+    std::mutex actions_mtx;
     std::vector<AmsAction> observed_actions;
     backend.set_event_callback([&](const std::string& event, const std::string&) {
         if (event == AmsBackend::EVENT_STATE_CHANGED) {
             auto action = backend.get_current_action();
+            std::lock_guard<std::mutex> lock(actions_mtx);
             if (observed_actions.empty() || observed_actions.back() != action) {
                 observed_actions.push_back(action);
             }
@@ -458,6 +465,7 @@ TEST_CASE("Realistic mode tool change shows SELECTING phase in toolchanger mode"
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
         // Should see SELECTING somewhere in the action sequence
+        std::lock_guard<std::mutex> lock(actions_mtx);
         bool found_selecting = false;
         for (const auto& action : observed_actions) {
             if (action == AmsAction::SELECTING) {
