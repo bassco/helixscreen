@@ -312,9 +312,9 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
             // Grid is full only because the temporary firmware_restart widget
             // is occupying a slot. Don't disable the widget or warn — it will
             // get its space back once Klipper returns to READY.
-            spdlog::debug("[PanelWidgetManager] Skipping widget '{}' — grid full due to "
-                          "temporary firmware_restart injection",
-                          slot.widget_id);
+            spdlog::info("[PanelWidgetManager] Skipping widget '{}' — grid full due to "
+                         "temporary firmware_restart injection",
+                         slot.widget_id);
         } else {
             // Grid is full — disable the widget so it goes back to the catalog
             // as an available widget. User can re-add it after freeing space.
@@ -370,9 +370,9 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
             if (pos && grid.place({slot.widget_id, pos->first, pos->second, 1, 1})) {
                 placed.push_back({slot_idx, pos->first, pos->second, 1, 1});
             } else if (fw_restart_injected) {
-                spdlog::debug("[PanelWidgetManager] Skipping widget '{}' — grid full due to "
-                              "temporary firmware_restart injection",
-                              slot.widget_id);
+                spdlog::info("[PanelWidgetManager] Skipping widget '{}' — grid full due to "
+                             "temporary firmware_restart injection",
+                             slot.widget_id);
             } else {
                 auto& mut_entries = widget_config.page_entries_mut(page_index);
                 auto cfg_it =
