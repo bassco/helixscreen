@@ -139,6 +139,7 @@ class PrinterManagerOverlay : public OverlayBase {
     lv_obj_t* printer_image_obj_ = nullptr;
 
     // Name editing widgets
+    lv_obj_t* name_row_ = nullptr;
     lv_obj_t* name_heading_ = nullptr;
     lv_obj_t* name_input_ = nullptr;
     bool name_editing_ = false;

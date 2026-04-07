@@ -101,6 +101,7 @@ lv_obj_t* PrinterManagerOverlay::create(lv_obj_t* parent) {
     printer_image_obj_ = lv_obj_find_by_name(overlay_root_, "pm_printer_image");
 
     // Find name editing widgets
+    name_row_ = lv_obj_find_by_name(overlay_root_, "pm_printer_name_row");
     name_heading_ = lv_obj_find_by_name(overlay_root_, "pm_printer_name");
     name_input_ = lv_obj_find_by_name(overlay_root_, "pm_printer_name_input");
 
@@ -322,8 +323,10 @@ void PrinterManagerOverlay::start_name_edit() {
     // Pre-fill input with current name
     lv_textarea_set_text(name_input_, name_buf_);
 
+    // Hide the entire name row (heading + pencil icon), show the text input
     // TODO: Replace imperative visibility toggling with subject + bind_flag_if_eq
-    lv_obj_add_flag(name_heading_, LV_OBJ_FLAG_HIDDEN);
+    if (name_row_)
+        lv_obj_add_flag(name_row_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_remove_flag(name_input_, LV_OBJ_FLAG_HIDDEN);
 
     // Focus the input and show keyboard
@@ -357,8 +360,9 @@ void PrinterManagerOverlay::finish_name_edit() {
     name_buf_[sizeof(name_buf_) - 1] = '\0';
     lv_subject_copy_string(&printer_manager_name_, name_buf_);
 
-    // Swap back: show heading, hide input
-    lv_obj_remove_flag(name_heading_, LV_OBJ_FLAG_HIDDEN);
+    // Swap back: show name row (heading + pencil), hide input
+    if (name_row_)
+        lv_obj_remove_flag(name_row_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(name_input_, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -372,8 +376,8 @@ void PrinterManagerOverlay::cancel_name_edit() {
     KeyboardManager::instance().hide();
 
     // Swap back without saving
-    if (name_heading_)
-        lv_obj_remove_flag(name_heading_, LV_OBJ_FLAG_HIDDEN);
+    if (name_row_)
+        lv_obj_remove_flag(name_row_, LV_OBJ_FLAG_HIDDEN);
     if (name_input_)
         lv_obj_add_flag(name_input_, LV_OBJ_FLAG_HIDDEN);
 
