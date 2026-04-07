@@ -1813,3 +1813,75 @@ TEST_CASE_METHOD(TelemetryTestFixture, "Frame time: worst panel is identified by
     auto event = snapshot[0];
     REQUIRE(event["worst_panel"] == "temperature");
 }
+
+// ============================================================================
+// Periodic Snapshots [telemetry][snapshot]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Snapshot: panel_usage includes snapshot_seq and is_shutdown fields",
+                 "[telemetry][snapshot]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("status");
+    tm.record_panel_usage();
+
+    REQUIRE(tm.queue_size() == 1);
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+    REQUIRE(event["event"] == "panel_usage");
+    REQUIRE(event.contains("snapshot_seq"));
+    REQUIRE(event.contains("is_shutdown"));
+    REQUIRE(event["is_shutdown"] == false);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Snapshot: snapshot_seq increments on each periodic fire",
+                 "[telemetry][snapshot]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("status");
+
+    tm.fire_periodic_snapshot();
+    tm.fire_periodic_snapshot();
+
+    // Each fire produces panel_usage + connection_stability + performance_snapshot = 3 events
+    REQUIRE(tm.queue_size() >= 4);
+    auto queue = tm.get_queue_snapshot();
+
+    int first_seq = -1, second_seq = -1;
+    for (const auto& ev : queue) {
+        if (ev["event"] == "panel_usage") {
+            if (first_seq < 0)
+                first_seq = ev["snapshot_seq"].get<int>();
+            else
+                second_seq = ev["snapshot_seq"].get<int>();
+        }
+    }
+    REQUIRE(first_seq == 0);
+    REQUIRE(second_seq == 1);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Snapshot: state persisted to disk and recovered",
+                 "[telemetry][snapshot]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("status");
+    tm.notify_panel_changed("temperature");
+    tm.fire_periodic_snapshot();
+    tm.clear_queue();
+
+    // Verify snapshot file exists
+    auto snap_path = temp_dir() / "telemetry_snapshot.json";
+    REQUIRE(fs::exists(snap_path));
+
+    // Read the snapshot file
+    std::ifstream ifs(snap_path);
+    auto snap_json = nlohmann::json::parse(ifs);
+    REQUIRE(snap_json.contains("snapshot_seq"));
+    REQUIRE(snap_json["snapshot_seq"] == 1);
+    REQUIRE(snap_json.contains("panel_time_sec"));
+    REQUIRE(snap_json.contains("panel_visits"));
+}

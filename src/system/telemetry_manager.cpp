@@ -312,6 +312,13 @@ void TelemetryManager::init(const std::string& config_dir) {
     klippy_shutdown_count_ = 0;
     connection_tracking_connected_ = false;
     error_rate_limit_.clear();
+    snapshot_seq_ = 0;
+    frame_ring_count_ = 0;
+    frame_ring_idx_ = 0;
+    panel_names_.clear();
+    current_panel_id_ = 0;
+    pending_settings_changes_.clear();
+    is_shutdown_snapshot_ = false;
 
     // Ensure config directory exists
     try {
@@ -326,6 +333,9 @@ void TelemetryManager::init(const std::string& config_dir) {
 
     // Restore persisted event queue
     load_queue();
+
+    // Recover snapshot state from previous session (e.g., after crash)
+    load_snapshot_state();
 
     // Load enabled state from config (before crash check so opt-in is respected)
     try {
@@ -372,6 +382,9 @@ void TelemetryManager::shutdown() {
 
     spdlog::info("[TelemetryManager] Shutting down...");
 
+    // Mark events recorded during shutdown as shutdown snapshots
+    is_shutdown_snapshot_ = true;
+
     // Record session-summary events before shutting down
     record_panel_usage();
     record_connection_stability();
@@ -387,6 +400,11 @@ void TelemetryManager::shutdown() {
 
     // Persist queue to disk
     save_queue();
+
+    // Remove snapshot file — clean shutdown, no recovery needed
+    auto snap_path = fs::path(config_dir_) / "telemetry_snapshot.json";
+    std::error_code ec;
+    fs::remove(snap_path, ec);
 
     // Join background send thread if active
     if (send_thread_.joinable()) {
@@ -946,6 +964,8 @@ void TelemetryManager::start_auto_send() {
 
     spdlog::info("[TelemetryManager] Auto-send timer started (initial delay: {}s, interval: {}s)",
                  INITIAL_SEND_DELAY_MS / 1000, AUTO_SEND_INTERVAL_MS / 1000);
+
+    start_snapshot_timer();
 }
 
 void TelemetryManager::stop_auto_send() {
@@ -954,6 +974,7 @@ void TelemetryManager::stop_auto_send() {
         auto_send_timer_ = nullptr;
         spdlog::info("[TelemetryManager] Auto-send timer stopped");
     }
+    stop_snapshot_timer();
 }
 
 // =============================================================================
@@ -1949,6 +1970,8 @@ nlohmann::json TelemetryManager::build_panel_usage_event() const {
     event["widget_interactions"] = widget_map;
 
     event["overlay_open_count"] = overlay_open_count_;
+    event["snapshot_seq"] = snapshot_seq_;
+    event["is_shutdown"] = is_shutdown_snapshot_;
 
     return event;
 }
@@ -1972,6 +1995,8 @@ nlohmann::json TelemetryManager::build_connection_stability_event() const {
     event["longest_disconnect_sec"] = longest_disconnect_sec_;
     event["klippy_error_count"] = klippy_error_count_;
     event["klippy_shutdown_count"] = klippy_shutdown_count_;
+    event["snapshot_seq"] = snapshot_seq_;
+    event["is_shutdown"] = is_shutdown_snapshot_;
 
     return event;
 }
@@ -2294,17 +2319,141 @@ void TelemetryManager::notify_setting_changed(const std::string& /*setting_name*
                                               const std::string& /*old_value*/,
                                               const std::string& /*new_value*/) {}
 void TelemetryManager::flush_settings_changes() {}
-void TelemetryManager::fire_periodic_snapshot() {}
+void TelemetryManager::fire_periodic_snapshot() {
+    if (shutting_down_.load() || !initialized_.load() || !enabled_.load())
+        return;
+
+    spdlog::info("[TelemetryManager] Firing periodic snapshot (seq={})", snapshot_seq_);
+
+    record_panel_usage();
+    record_connection_stability();
+    record_performance_snapshot();
+
+    snapshot_seq_++;
+    save_snapshot_state();
+}
+
 nlohmann::json TelemetryManager::build_feature_adoption_event() const {
     return {};
 }
 nlohmann::json TelemetryManager::build_settings_changes_event() const {
     return {};
 }
-void TelemetryManager::start_snapshot_timer() {}
-void TelemetryManager::stop_snapshot_timer() {}
-void TelemetryManager::save_snapshot_state() const {}
-void TelemetryManager::load_snapshot_state() {}
+
+void TelemetryManager::start_snapshot_timer() {
+    if (snapshot_timer_)
+        return;
+
+    spdlog::debug("[TelemetryManager] Starting snapshot timer (interval={}ms)",
+                  SNAPSHOT_INTERVAL_MS);
+
+    snapshot_timer_ = lv_timer_create(
+        [](lv_timer_t* timer) {
+            auto* self = static_cast<TelemetryManager*>(lv_timer_get_user_data(timer));
+            if (self && !self->shutting_down_.load()) {
+                self->fire_periodic_snapshot();
+            }
+        },
+        SNAPSHOT_INTERVAL_MS, this);
+}
+
+void TelemetryManager::stop_snapshot_timer() {
+    if (snapshot_timer_) {
+        lv_timer_delete(snapshot_timer_);
+        snapshot_timer_ = nullptr;
+    }
+}
+
+void TelemetryManager::save_snapshot_state() const {
+    if (config_dir_.empty())
+        return;
+
+    json state;
+    state["snapshot_seq"] = snapshot_seq_;
+
+    json time_map = json::object();
+    for (const auto& [name, sec] : panel_time_sec_) {
+        time_map[name] = sec;
+    }
+    state["panel_time_sec"] = time_map;
+
+    json visit_map = json::object();
+    for (const auto& [name, count] : panel_visits_) {
+        visit_map[name] = count;
+    }
+    state["panel_visits"] = visit_map;
+
+    json widget_map = json::object();
+    for (const auto& [name, count] : widget_interactions_) {
+        widget_map[name] = count;
+    }
+    state["widget_interactions"] = widget_map;
+
+    state["overlay_open_count"] = overlay_open_count_;
+    state["connect_count"] = connect_count_;
+    state["disconnect_count"] = disconnect_count_;
+    state["total_connected_sec"] = total_connected_sec_;
+    state["total_disconnected_sec"] = total_disconnected_sec_;
+    state["longest_disconnect_sec"] = longest_disconnect_sec_;
+    state["klippy_error_count"] = klippy_error_count_;
+    state["klippy_shutdown_count"] = klippy_shutdown_count_;
+
+    auto path = fs::path(config_dir_) / "telemetry_snapshot.json";
+    auto tmp_path = fs::path(config_dir_) / "telemetry_snapshot.json.tmp";
+
+    try {
+        std::ofstream ofs(tmp_path);
+        ofs << state.dump(2);
+        ofs.close();
+        fs::rename(tmp_path, path);
+        spdlog::debug("[TelemetryManager] Snapshot state saved to {}", path.string());
+    } catch (const std::exception& e) {
+        spdlog::warn("[TelemetryManager] Failed to save snapshot state: {}", e.what());
+    }
+}
+
+void TelemetryManager::load_snapshot_state() {
+    auto path = fs::path(config_dir_) / "telemetry_snapshot.json";
+    if (!fs::exists(path))
+        return;
+
+    try {
+        std::ifstream ifs(path);
+        auto state = json::parse(ifs);
+
+        snapshot_seq_ = state.value("snapshot_seq", 0);
+
+        if (state.contains("panel_time_sec")) {
+            for (auto& [key, val] : state["panel_time_sec"].items()) {
+                panel_time_sec_[key] = val.get<int>();
+            }
+        }
+        if (state.contains("panel_visits")) {
+            for (auto& [key, val] : state["panel_visits"].items()) {
+                panel_visits_[key] = val.get<int>();
+            }
+        }
+        if (state.contains("widget_interactions")) {
+            for (auto& [key, val] : state["widget_interactions"].items()) {
+                widget_interactions_[key] = val.get<int>();
+            }
+        }
+
+        overlay_open_count_ = state.value("overlay_open_count", 0);
+        connect_count_ = state.value("connect_count", 0);
+        disconnect_count_ = state.value("disconnect_count", 0);
+        total_connected_sec_ = state.value("total_connected_sec", 0);
+        total_disconnected_sec_ = state.value("total_disconnected_sec", 0);
+        longest_disconnect_sec_ = state.value("longest_disconnect_sec", 0);
+        klippy_error_count_ = state.value("klippy_error_count", 0);
+        klippy_shutdown_count_ = state.value("klippy_shutdown_count", 0);
+
+        spdlog::info("[TelemetryManager] Recovered snapshot state (seq={})", snapshot_seq_);
+        fs::remove(path);
+    } catch (const std::exception& e) {
+        spdlog::warn("[TelemetryManager] Failed to load snapshot state: {}", e.what());
+    }
+}
 void TelemetryManager::start_feature_adoption_timer() {}
 void TelemetryManager::stop_feature_adoption_timer() {}
 void TelemetryManager::start_settings_debounce_timer() {}
