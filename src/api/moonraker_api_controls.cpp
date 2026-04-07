@@ -65,7 +65,7 @@ void MoonrakerAPI::set_temperature(const std::string& heater, double temperature
 
     char gcode_buf[128];
     const char* gcode = helix::ui::temperature::build_heater_gcode(
-        heater, static_cast<int>(temperature), gcode_buf, sizeof(gcode_buf));
+        heater, static_cast<int>(temperature * 10), gcode_buf, sizeof(gcode_buf));
     if (!gcode) {
         spdlog::error("[Moonraker API] Cannot build gcode for empty heater name");
         if (on_error) {

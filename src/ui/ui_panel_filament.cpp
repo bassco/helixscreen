@@ -1653,9 +1653,8 @@ void FilamentPanel::handle_cooldown() {
         const auto& discovery = printer_state_.get_discovery();
         if (discovery.has_chamber_heater()) {
             char chamber_gcode[128];
-            if (helix::ui::temperature::build_chamber_off_gcode(
-                    discovery.chamber_heater_name(), discovery.chamber_heater_object_name(),
-                    chamber_gcode, sizeof(chamber_gcode))) {
+            if (helix::ui::temperature::build_heater_off_gcode(
+                    discovery.chamber_heater_name(), chamber_gcode, sizeof(chamber_gcode))) {
                 default_gcode += "\n";
                 default_gcode += chamber_gcode;
             }

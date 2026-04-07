@@ -301,52 +301,22 @@ HeaterDisplayResult heater_display(int current_centi, int target_centi);
  * - "heater_bed"        → SET_HEATER_TEMPERATURE HEATER=heater_bed
  *
  * @param heater_full_name Full Klipper heater name
- * @param target_degrees   Target temperature in degrees
+ * @param target_centi     Target temperature in centidegrees (x10, e.g. 2100 = 210°C)
  * @param buffer           Output buffer
  * @param buffer_size      Size of buffer
  * @return Pointer to buffer, or nullptr if heater_full_name is empty
  */
-const char* build_heater_gcode(const std::string& heater_full_name, int target_degrees,
-                               char* buffer, size_t buffer_size);
+const char* build_heater_gcode(const std::string& heater_full_name, int target_centi, char* buffer,
+                               size_t buffer_size);
 
 /**
  * @brief Build gcode to turn off a heater (target=0)
  *
- * Convenience wrapper for build_heater_gcode with target_degrees=0.
+ * Convenience wrapper for build_heater_gcode with target=0.
  */
 inline const char* build_heater_off_gcode(const std::string& heater_full_name, char* buffer,
                                           size_t buffer_size) {
     return build_heater_gcode(heater_full_name, 0, buffer, buffer_size);
-}
-
-/**
- * @brief Build the gcode command to set a chamber heater target temperature
- *
- * @deprecated Use build_heater_gcode() directly — this is a thin wrapper for
- *             backward compatibility with existing cooldown gcode callers.
- */
-inline const char* build_chamber_gcode(const std::string& heater_full_name,
-                                       const std::string& object_name, int target_degrees,
-                                       char* buffer, size_t buffer_size) {
-    (void)object_name; // object_name is redundant — heater_full_name contains everything we need
-    return build_heater_gcode(heater_full_name, target_degrees, buffer, buffer_size);
-}
-
-/**
- * @brief Build gcode to turn off a chamber heater (target=0)
- *
- * Convenience wrapper for build_chamber_gcode with target_degrees=0.
- *
- * @param heater_full_name Full Klipper object name
- * @param object_name      Short object name
- * @param buffer           Output buffer for gcode string
- * @param buffer_size      Size of output buffer
- * @return Pointer to buffer, or nullptr if heater_full_name is empty
- */
-inline const char* build_chamber_off_gcode(const std::string& heater_full_name,
-                                           const std::string& object_name, char* buffer,
-                                           size_t buffer_size) {
-    return build_chamber_gcode(heater_full_name, object_name, 0, buffer, buffer_size);
 }
 
 } // namespace temperature

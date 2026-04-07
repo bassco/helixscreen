@@ -160,8 +160,8 @@ HeaterDisplayResult heater_display(int current_centi, int target_centi) {
 }
 
 // Used by cooldown's multi-line gcode batch and MoonrakerAPI::set_temperature().
-const char* build_heater_gcode(const std::string& heater_full_name, int target_degrees,
-                               char* buffer, size_t buffer_size) {
+const char* build_heater_gcode(const std::string& heater_full_name, int target_centi, char* buffer,
+                               size_t buffer_size) {
     if (heater_full_name.empty()) {
         return nullptr;
     }
@@ -170,15 +170,15 @@ const char* build_heater_gcode(const std::string& heater_full_name, int target_d
         std::string fan_name = heater_full_name.substr(16);
         std::snprintf(buffer, buffer_size,
                       "SET_TEMPERATURE_FAN_TARGET TEMPERATURE_FAN=%s TARGET=%d", fan_name.c_str(),
-                      target_degrees);
+                      target_centi / 10);
     } else if (heater_full_name.rfind("heater_generic ", 0) == 0) {
         std::string object_name = heater_full_name.substr(15);
         std::snprintf(buffer, buffer_size, "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                      object_name.c_str(), target_degrees);
+                      object_name.c_str(), target_centi / 10);
     } else {
         // Bare heater names (extruder, heater_bed, etc.)
         std::snprintf(buffer, buffer_size, "SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d",
-                      heater_full_name.c_str(), target_degrees);
+                      heater_full_name.c_str(), target_centi / 10);
     }
 
     return buffer;
