@@ -29,6 +29,7 @@
 #include "system/update_checker.h"
 #include "system_settings_manager.h"
 #include "temperature_sensor_manager.h"
+#include "theme_loader.h"
 #include "theme_manager.h"
 #include "tool_state.h"
 #include "version.h"
@@ -385,9 +386,13 @@ void TelemetryManager::shutdown() {
     // Mark events recorded during shutdown as shutdown snapshots
     is_shutdown_snapshot_ = true;
 
+    // Flush any pending settings changes before shutdown
+    flush_settings_changes();
+
     // Record session-summary events before shutting down
     record_panel_usage();
     record_connection_stability();
+    record_performance_snapshot();
 
     shutting_down_.store(true);
 
@@ -2241,6 +2246,7 @@ nlohmann::json TelemetryManager::build_performance_snapshot_event() const {
     event["app_version"] = HELIX_VERSION;
     event["app_platform"] = UpdateChecker::get_platform_key();
     event["snapshot_seq"] = snapshot_seq_;
+    event["is_shutdown"] = is_shutdown_snapshot_;
 
     size_t count = std::min(frame_ring_count_, FRAME_RING_SIZE);
     if (count == 0) {
@@ -2281,7 +2287,7 @@ nlohmann::json TelemetryManager::build_performance_snapshot_event() const {
     event["frame_time_p95_ms"] = percentile(0.95);
     event["frame_time_p99_ms"] = percentile(0.99);
     event["dropped_frame_count"] = dropped;
-    event["total_frame_count"] = static_cast<int>(frame_ring_count_);
+    event["total_frame_count"] = static_cast<int64_t>(frame_ring_count_);
 
     std::string worst_panel;
     int worst_p95 = 0;
@@ -2348,7 +2354,7 @@ nlohmann::json TelemetryManager::build_feature_adoption_event() const {
     features["led_control"] = has_widget("led_control");
     features["power_devices"] = has_widget("power_device");
     features["multi_printer"] = has_widget("printer_switcher");
-    features["theme_changed"] = false;
+    features["theme_changed"] = (theme_manager_get_active_theme().name != helix::DEFAULT_THEME);
     features["timelapse"] = has_widget("timelapse");
     features["favorites"] = has_widget("favorite_macro");
     features["pid_calibration"] = has_panel("pid_calibration");
@@ -2410,7 +2416,7 @@ void TelemetryManager::notify_setting_changed(const std::string& setting_name,
 }
 
 void TelemetryManager::flush_settings_changes() {
-    if (pending_settings_changes_.empty())
+    if (pending_settings_changes_.empty() || !enabled_.load())
         return;
 
     auto event = build_settings_changes_event();
@@ -2595,6 +2601,7 @@ void TelemetryManager::load_snapshot_state() {
         spdlog::warn("[TelemetryManager] Failed to load snapshot state: {}", e.what());
     }
 }
+
 // =============================================================================
 // Print Outcome Observer
 // =============================================================================

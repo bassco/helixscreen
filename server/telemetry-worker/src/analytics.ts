@@ -521,23 +521,23 @@ function mapEventToDataPointInternal(
 
   if (eventType === "feature_adoption") {
     const features = (event.features ?? {}) as Record<string, boolean>;
+    // First 7 features get individual double slots (indices 0-6).
+    // Index 7 holds a bitmask for remaining features.
     const featureOrder = [
       "macros", "camera", "bed_mesh", "console_gcode",
       "input_shaper", "filament_management", "manual_probe",
-      "spoolman",
     ];
     const doubles: number[] = featureOrder.map(f => features[f] ? 1 : 0);
-    const extraFeatures = [
-      "led_control", "power_devices", "multi_printer", "theme_changed",
-      "timelapse", "favorites", "pid_calibration", "firmware_retraction",
+    const bitmaskFeatures = [
+      "spoolman", "led_control", "power_devices", "multi_printer",
+      "theme_changed", "timelapse", "favorites", "pid_calibration",
+      "firmware_retraction",
     ];
-    let extraBitmask = 0;
-    for (let i = 0; i < extraFeatures.length; i++) {
-      if (features[extraFeatures[i]]) extraBitmask |= 1 << i;
+    let bitmask = 0;
+    for (let i = 0; i < bitmaskFeatures.length; i++) {
+      if (features[bitmaskFeatures[i]]) bitmask |= 1 << i;
     }
-    // Replace last double (spoolman) with bitmask — spoolman goes into bitmask bit 0 instead
-    // Actually keep spoolman separate, use 8th slot for bitmask
-    doubles[7] = extraBitmask;
+    doubles.push(bitmask);
 
     return {
       indexes: ["feature_adoption"],
