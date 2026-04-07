@@ -526,7 +526,7 @@ function mapEventToDataPointInternal(
       "input_shaper", "filament_management", "manual_probe",
       "spoolman",
     ];
-    const doubles = featureOrder.map(f => features[f] ? 1 : 0);
+    const doubles: number[] = featureOrder.map(f => features[f] ? 1 : 0);
     const extraFeatures = [
       "led_control", "power_devices", "multi_printer", "theme_changed",
       "timelapse", "favorites", "pid_calibration", "firmware_retraction",
