@@ -62,6 +62,7 @@
 #include "memory_monitor.h"
 #include "subject_managed_panel.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -363,6 +364,77 @@ class TelemetryManager {
     void notify_klippy_state_changed(int state);
 
     /**
+     * @brief Record a periodic performance snapshot event
+     *
+     * Captures frame time statistics from the ring buffer and uptime.
+     * Called automatically by the snapshot timer every SNAPSHOT_INTERVAL_MS.
+     * No-op if telemetry is disabled.
+     *
+     * Must be called from the LVGL/main thread only (accesses frame ring buffer).
+     */
+    void record_performance_snapshot();
+
+    /**
+     * @brief Record a feature adoption event
+     *
+     * Captures which optional features (AMS, camera, macros, etc.) are actively
+     * used, recorded once per session after FEATURE_ADOPTION_DELAY_MS. No-op if
+     * telemetry is disabled.
+     *
+     * Must be called from the LVGL/main thread only.
+     */
+    void record_feature_adoption();
+
+    /**
+     * @brief Notify that a user setting was changed
+     *
+     * Accumulates setting changes with debouncing. After SETTINGS_DEBOUNCE_MS of
+     * inactivity, calls flush_settings_changes() to enqueue a single aggregated
+     * settings_changes event. Always tracks regardless of enabled state (data is
+     * only recorded if enabled when the debounce fires).
+     *
+     * Must be called from the LVGL/main thread only.
+     *
+     * @param setting_name  Setting key (e.g., "theme", "brightness")
+     * @param old_value     Previous value as string
+     * @param new_value     New value as string
+     */
+    void notify_setting_changed(const std::string& setting_name, const std::string& old_value,
+                                const std::string& new_value);
+
+    /**
+     * @brief Record a frame render time sample into the ring buffer
+     *
+     * Stores the frame time alongside the current panel ID for per-panel
+     * breakdown in performance snapshots. Wraps around when the ring is full.
+     * Must be called from the LVGL/main thread only.
+     *
+     * @param frame_time_us Frame render duration in microseconds
+     */
+    void record_frame_time(uint32_t frame_time_us);
+
+    /**
+     * @brief Trigger an immediate performance snapshot (e.g., at shutdown)
+     *
+     * Fires the snapshot logic outside the normal timer cadence. Resets
+     * the snapshot timer if it is running. No-op if telemetry is disabled.
+     *
+     * Must be called from the LVGL/main thread only.
+     */
+    void fire_periodic_snapshot();
+
+    /**
+     * @brief Flush accumulated settings changes to the event queue immediately
+     *
+     * Stops the debounce timer and enqueues a settings_changes event for all
+     * pending changes. No-op if there are no pending changes or telemetry is
+     * disabled.
+     *
+     * Must be called from the LVGL/main thread only.
+     */
+    void flush_settings_changes();
+
+    /**
      * @brief Write update success flag file before restart
      *
      * Static method callable from UpdateChecker before _exit(0).
@@ -604,6 +676,21 @@ class TelemetryManager {
     /** @brief Maximum events per HTTPS POST batch */
     static constexpr size_t MAX_BATCH_SIZE = 20;
 
+    /** @brief Interval between periodic performance snapshots */
+    static constexpr uint32_t SNAPSHOT_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+    /** @brief Number of frame time samples held in the ring buffer */
+    static constexpr size_t FRAME_RING_SIZE = 1024;
+
+    /** @brief Frame time threshold above which a frame is considered dropped (33ms = ~30fps) */
+    static constexpr uint32_t DROPPED_FRAME_THRESHOLD_US = 33000;
+
+    /** @brief Delay after session start before recording feature adoption */
+    static constexpr uint32_t FEATURE_ADOPTION_DELAY_MS = 5 * 60 * 1000;
+
+    /** @brief Debounce window for aggregating settings changes before recording */
+    static constexpr uint32_t SETTINGS_DEBOUNCE_MS = 30 * 1000;
+
   private:
     TelemetryManager() = default;
     ~TelemetryManager();
@@ -712,6 +799,48 @@ class TelemetryManager {
      * @return JSON event with connect/disconnect counts and durations
      */
     nlohmann::json build_connection_stability_event() const;
+
+    /**
+     * @brief Build a performance snapshot event JSON object
+     * @return JSON event with frame time stats, dropped frame count, and uptime
+     */
+    nlohmann::json build_performance_snapshot_event() const;
+
+    /**
+     * @brief Build a feature adoption event JSON object
+     * @return JSON event listing which optional features are actively used
+     */
+    nlohmann::json build_feature_adoption_event() const;
+
+    /**
+     * @brief Build a settings changes event JSON object
+     * @return JSON event with list of setting name/old/new value triples
+     */
+    nlohmann::json build_settings_changes_event() const;
+
+    /// Create and arm the periodic snapshot LVGL timer
+    void start_snapshot_timer();
+
+    /// Delete the periodic snapshot LVGL timer (safe if nullptr)
+    void stop_snapshot_timer();
+
+    /// Persist snapshot sequence counter to disk so it survives restarts
+    void save_snapshot_state() const;
+
+    /// Load snapshot sequence counter from disk (called from init())
+    void load_snapshot_state();
+
+    /// Create and arm the feature adoption delay LVGL timer
+    void start_feature_adoption_timer();
+
+    /// Delete the feature adoption delay LVGL timer (safe if nullptr)
+    void stop_feature_adoption_timer();
+
+    /// Create and arm the settings debounce LVGL timer
+    void start_settings_debounce_timer();
+
+    /// Delete the settings debounce LVGL timer (safe if nullptr)
+    void stop_settings_debounce_timer();
 
     /**
      * @brief Build a print start context event JSON object
@@ -890,4 +1019,66 @@ class TelemetryManager {
     int klippy_shutdown_count_{0};
     bool connection_tracking_connected_{false};
     std::chrono::steady_clock::time_point connection_state_start_time_;
+
+    // =========================================================================
+    // PERIODIC SNAPSHOT STATE (LVGL/main thread only)
+    // =========================================================================
+
+    /// LVGL timer that fires every SNAPSHOT_INTERVAL_MS
+    lv_timer_t* snapshot_timer_{nullptr};
+
+    /// Monotonically increasing sequence number for snapshot events (persisted)
+    int snapshot_seq_{0};
+
+    /// True when fire_periodic_snapshot() is called from shutdown path
+    bool is_shutdown_snapshot_{false};
+
+    // =========================================================================
+    // FRAME TIME RING BUFFER (LVGL/main thread only)
+    // =========================================================================
+
+    /// Single frame sample: render duration and which panel was active
+    struct FrameSample {
+        uint32_t frame_time_us;
+        uint16_t panel_id;
+    };
+
+    /// Ring buffer of recent frame samples (wraps; FRAME_RING_SIZE entries)
+    std::array<FrameSample, FRAME_RING_SIZE> frame_ring_{};
+
+    /// Write index for the next sample (mod FRAME_RING_SIZE)
+    size_t frame_ring_idx_{0};
+
+    /// Number of valid samples currently in the ring (capped at FRAME_RING_SIZE)
+    size_t frame_ring_count_{0};
+
+    /// Ordered list of panel names for panel_id → name lookup
+    std::vector<std::string> panel_names_;
+
+    /// ID of the panel active at the time of the most recent frame sample
+    uint16_t current_panel_id_{0};
+
+    // =========================================================================
+    // FEATURE ADOPTION STATE (LVGL/main thread only)
+    // =========================================================================
+
+    /// One-shot LVGL timer that fires after FEATURE_ADOPTION_DELAY_MS
+    lv_timer_t* feature_adoption_timer_{nullptr};
+
+    // =========================================================================
+    // SETTINGS CHANGE DEBOUNCE STATE (LVGL/main thread only)
+    // =========================================================================
+
+    /// Pending per-setting change record for aggregated reporting
+    struct SettingChange {
+        std::string setting;
+        std::string old_value;
+        std::string new_value;
+    };
+
+    /// Accumulates changes while the debounce timer is running
+    std::vector<SettingChange> pending_settings_changes_;
+
+    /// LVGL timer reset on each notify_setting_changed() call; fires after SETTINGS_DEBOUNCE_MS
+    lv_timer_t* settings_debounce_timer_{nullptr};
 };
