@@ -79,6 +79,19 @@ void AmsBackendAd5xIfs::on_started() {
                 handle_status_update(status);
             }
 
+            // Log initial state after processing query response
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                spdlog::debug("{} Initial query: has_ifs_vars={}, macro_exists={}, "
+                              "has_per_port_sensors={}, head_filament={}, "
+                              "port_presence=[{},{},{},{}], "
+                              "colors=[{},{},{},{}]",
+                              backend_log_tag(), has_ifs_vars_, macro_exists, has_per_port_sensors_,
+                              head_filament_, port_presence_[0], port_presence_[1],
+                              port_presence_[2], port_presence_[3], colors_[0], colors_[1],
+                              colors_[2], colors_[3]);
+            }
+
             // If parse_save_variables set has_ifs_vars_ but the macro doesn't exist,
             // fall back to native ZMOD. This happens when lessWaste/bambufy plugins
             // are partially installed (save_variables data exists but macros aren't loaded).
@@ -233,13 +246,32 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
     if (vars.contains(p + "_colors") && vars[p + "_colors"].is_array()) {
         const auto& colors = vars[p + "_colors"];
         for (size_t i = 0; i < std::min(colors.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
-            if (colors[i].is_string() && !dirty_[i]) {
-                colors_[i] = colors[i].get<std::string>();
+            if (!colors[i].is_string())
+                continue;
+            std::string incoming = colors[i].get<std::string>();
+            if (dirty_[i]) {
+                // Slot was edited locally. Check if Klipper has persisted our value.
+                // Case-insensitive compare: Klipper may normalize case.
+                bool match = std::equal(incoming.begin(), incoming.end(), colors_[i].begin(),
+                                        colors_[i].end(),
+                                        [](char a, char b) { return toupper(a) == toupper(b); });
+                if (match) {
+                    spdlog::debug("{} Slot {} dirty cleared — Klipper confirmed color {}",
+                                  backend_log_tag(), i, incoming);
+                    dirty_[i] = false;
+                } else {
+                    spdlog::debug("{} Slot {} still dirty — incoming color '{}' != local '{}'",
+                                  backend_log_tag(), i, incoming, colors_[i]);
+                }
+                continue;
             }
+            colors_[i] = incoming;
         }
     }
 
     // Materials: array of type strings ["PLA", "PETG", ...]
+    // Dirty is cleared by the color match path above — _IFS_VARS writes both
+    // colors and types atomically, so they arrive in the same status update.
     if (vars.contains(p + "_types") && vars[p + "_types"].is_array()) {
         const auto& types = vars[p + "_types"];
         for (size_t i = 0; i < std::min(types.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
@@ -284,12 +316,23 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
 void AmsBackendAd5xIfs::parse_port_sensor(int port_1based, bool detected) {
     int slot = port_1based - 1;
     if (slot >= 0 && slot < NUM_PORTS) {
+        bool was_first = !has_per_port_sensors_;
+        bool changed = port_presence_[static_cast<size_t>(slot)] != detected;
         has_per_port_sensors_ = true;
         port_presence_[static_cast<size_t>(slot)] = detected;
+        if (was_first || changed) {
+            spdlog::debug("{} Port {} sensor: {} (per_port_sensors=true{})", backend_log_tag(),
+                          port_1based, detected ? "present" : "empty",
+                          was_first ? ", first detection" : "");
+        }
     }
 }
 
 void AmsBackendAd5xIfs::parse_head_sensor(bool detected) {
+    if (head_filament_ != detected) {
+        spdlog::debug("{} Head sensor: {}", backend_log_tag(),
+                      detected ? "filament detected" : "no filament");
+    }
     head_filament_ = detected;
 }
 
@@ -325,12 +368,21 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
         has_filament = true;
     }
 
+    SlotStatus prev_status = entry->info.status;
     if (has_filament && is_active_slot && head_filament_) {
         entry->info.status = SlotStatus::LOADED;
     } else if (has_filament) {
         entry->info.status = SlotStatus::AVAILABLE;
     } else {
         entry->info.status = SlotStatus::EMPTY;
+    }
+
+    if (entry->info.status != prev_status) {
+        spdlog::debug("{} Slot {} status: {} → {} (port_presence={}, active={}, head={}, "
+                      "per_port_sensors={}, color={}, material={})",
+                      backend_log_tag(), slot_index, static_cast<int>(prev_status),
+                      static_cast<int>(entry->info.status), port_presence_[idx], is_active_slot,
+                      head_filament_, has_per_port_sensors_, colors_[idx], materials_[idx]);
     }
 
     // Reverse tool mapping: find first tool that maps to this port
@@ -584,6 +636,9 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
 
         materials_[idx] = info.material;
 
+        spdlog::debug("{} set_slot_info: slot {} dirty=true, color={}, material={}",
+                      backend_log_tag(), slot_index, hex, info.material);
+
         // Update entry directly
         entry->info.color_rgb = info.color_rgb;
         entry->info.material = info.material;
@@ -608,20 +663,12 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
                 type_val = build_type_list_value();
             }
 
-            auto err = write_ifs_var("colors", color_val);
-            if (!err.success()) {
-                std::lock_guard<std::mutex> lock(mutex_);
-                dirty_[idx] = false;
-                return err;
-            }
-
-            err = write_ifs_var("types", type_val);
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                dirty_[idx] = false;
-            }
-            if (!err.success())
-                return err;
+            // execute_gcode is async — these always return success immediately.
+            // dirty_ stays true until parse_save_variables sees the updated
+            // value come back from Klipper, preventing stale notify_status_update
+            // events from reverting our edit (#716).
+            write_ifs_var("colors", color_val);
+            write_ifs_var("types", type_val);
         } else {
             // Native ZMOD: per-slot update via Adventurer5M.json
             auto err = write_adventurer_json(slot_index);
@@ -972,6 +1019,8 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
             if (!hex.empty() && hex[0] == '#') {
                 hex = hex.substr(1);
             }
+            // Non-empty color means filament was loaded into this port
+            bool has_filament_data = !hex.empty();
             if (hex.empty()) {
                 hex = "808080";
             }
@@ -990,6 +1039,16 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
                 continue;
             colors_[static_cast<size_t>(idx)] = hex;
             materials_[static_cast<size_t>(idx)] = type;
+
+            // Native ZMOD has no per-port switch sensors — infer presence from
+            // Adventurer5M.json data. A non-empty color means filament is present.
+            // This is a one-way latch (never set back to false) — acceptable because
+            // native ZMOD doesn't provide removal events, and a backend restart
+            // re-reads fresh data.
+            if (has_filament_data && !has_per_port_sensors_) {
+                port_presence_[static_cast<size_t>(idx)] = true;
+            }
+
             update_slot_from_state(idx);
             ++parsed_count;
         }

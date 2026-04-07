@@ -1167,3 +1167,130 @@ TEST_CASE("AD5X IFS dirty flag protects against both parse paths", "[ams][ad5x_i
     REQUIRE(info.color_rgb == 0xDEADBE);
     REQUIRE(info.material == "SILK_PLA");
 }
+
+// ==========================================================================
+// Native ZMOD: parse_adventurer_json infers filament presence (#716)
+// ==========================================================================
+
+TEST_CASE("AD5X IFS parse_adventurer_json infers presence for native ZMOD", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // No per-port sensors — this is native ZMOD
+    REQUIRE_FALSE(Ad5xIfsTestAccess::has_per_port_sensors(backend));
+
+    SECTION("slots with non-empty color are marked AVAILABLE") {
+        std::string content = R"({
+            "FFMInfo": {
+                "ffmColor1": "#161616",
+                "ffmColor2": "#FFFFFF",
+                "ffmColor3": "#D3C4A3",
+                "ffmColor4": "#F72224",
+                "ffmType1": "PLA+",
+                "ffmType2": "PLA+",
+                "ffmType3": "PLA+",
+                "ffmType4": "PETG"
+            }
+        })";
+
+        Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+        for (int i = 0; i < 4; ++i) {
+            auto info = backend.get_slot_info(i);
+            REQUIRE(info.is_present());
+            REQUIRE(info.status == SlotStatus::AVAILABLE);
+            REQUIRE(Ad5xIfsTestAccess::port_presence(backend, i));
+        }
+    }
+
+    SECTION("slot with empty color is NOT marked present") {
+        std::string content = R"({
+            "FFMInfo": {
+                "ffmColor1": "",
+                "ffmType1": "?",
+                "ffmColor2": "#FF0000",
+                "ffmType2": "PLA"
+            }
+        })";
+
+        Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+        // Slot 0 (port 1): empty color → not present
+        auto info0 = backend.get_slot_info(0);
+        REQUIRE(info0.status == SlotStatus::EMPTY);
+        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 0));
+
+        // Slot 1 (port 2): has color → present
+        auto info1 = backend.get_slot_info(1);
+        REQUIRE(info1.is_present());
+        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 1));
+    }
+
+    SECTION("per-port sensors take precedence over JSON inference") {
+        // Simulate a per-port sensor detecting filament on port 1
+        Ad5xIfsTestAccess::handle_status(backend, make_port_sensor(1, true));
+        REQUIRE(Ad5xIfsTestAccess::has_per_port_sensors(backend));
+
+        // Now parse JSON for a slot with empty color
+        std::string content = R"({
+            "FFMInfo": {
+                "ffmColor2": "",
+                "ffmType2": "PLA"
+            }
+        })";
+        Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+        // Slot 1 (port 2): has_per_port_sensors is true, so JSON inference is skipped.
+        // port_presence stays false (no sensor for port 2 reported detected).
+        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 1));
+    }
+}
+
+// ==========================================================================
+// Dirty flag race: parse_save_variables clears dirty on value match (#716)
+// ==========================================================================
+
+TEST_CASE("AD5X IFS dirty flag cleared when save_variables match local edit", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed with initial save_variables
+    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+
+    // User edits slot 0
+    SlotInfo edit;
+    edit.color_rgb = 0x00FF00;
+    edit.material = "PETG";
+    backend.set_slot_info(0, edit, false);
+    REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
+
+    SECTION("stale save_variables do NOT clear dirty") {
+        // Simulate stale save_variables (old color still "FF0000")
+        Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
+
+        // Dirty must remain set
+        REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
+
+        // Local edit must be preserved
+        auto info = backend.get_slot_info(0);
+        REQUIRE(info.color_rgb == 0x00FF00);
+        REQUIRE(info.material == "PETG");
+    }
+
+    SECTION("matching save_variables clear dirty") {
+        // Simulate Klipper processing our edit — save_variables now contain new color
+        auto vars = standard_variables();
+        vars["bambufy_colors"][0] = "00FF00";
+        vars["bambufy_types"][0] = "PETG";
+        Ad5xIfsTestAccess::parse_vars(backend, vars);
+
+        // Dirty should be cleared — Klipper confirmed our value
+        REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 0));
+    }
+
+    SECTION("case-insensitive match works") {
+        auto vars = standard_variables();
+        vars["bambufy_colors"][0] = "00ff00"; // lowercase from Klipper
+        Ad5xIfsTestAccess::parse_vars(backend, vars);
+
+        REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 0));
+    }
+}

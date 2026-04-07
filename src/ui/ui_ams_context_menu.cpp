@@ -283,6 +283,11 @@ void AmsContextMenu::on_created(lv_obj_t* menu_obj) {
     // Disable Load if: system busy, slot empty, OR slot is already loaded to extruder
     bool can_load = !system_busy && !pending_is_loaded_ && slot_has_filament;
     lv_subject_set_int(&slot_can_load_subject_, can_load ? 1 : 0);
+    if (!can_load) {
+        spdlog::debug("[AmsContextMenu] Load disabled for slot {}: busy={}, loaded={}, "
+                      "has_filament={}",
+                      slot_index, system_busy, pending_is_loaded_, slot_has_filament);
+    }
 
     // Show Reset Lane button if backend supports it
     if (backend_ && backend_->supports_lane_reset()) {
