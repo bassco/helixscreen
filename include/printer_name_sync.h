@@ -23,12 +23,6 @@ class PrinterNameSync {
     /// @param api   Moonraker API (used for database writes)
     /// @param name  The new printer name to write
     static void write_back(MoonrakerAPI* api, const std::string& name);
-
-  private:
-    static constexpr const char* MAINSAIL_NAMESPACE = "mainsail";
-    static constexpr const char* MAINSAIL_KEY = "general.printername";
-    static constexpr const char* FLUIDD_NAMESPACE = "fluidd";
-    static constexpr const char* FLUIDD_KEY = "general.instanceName";
 };
 
 } // namespace helix

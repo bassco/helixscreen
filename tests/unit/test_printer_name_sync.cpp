@@ -14,12 +14,8 @@
  *   - write_back() with null/empty args is safe
  *   - resolve() with null API falls back to hostname
  *
- * NOTE: printer_name_sync.cpp line 66 calls get_moonraker_api() (not the passed-in
- * api parameter) when Mainsail returns an empty string and falls through to Fluidd.
- * In the unit test environment, get_moonraker_api() returns nullptr (ui_test_utils.cpp),
- * so that specific branch is untestable at the unit level. The "Mainsail empty →
- * Fluidd wins" test passes the mock api directly so both reads go through resolve()'s
- * error-callback path instead (Mainsail key not found → error cb → try Fluidd).
+ * The resolve() implementation captures the passed-in api pointer in all lambda
+ * callbacks, so every branch is fully testable with MoonrakerAPIMock.
  */
 
 #include "../test_helpers/update_queue_test_access.h"
@@ -151,21 +147,14 @@ TEST_CASE_METHOD(PrinterNameSyncFixture, "resolve: 'unknown' hostname treated as
 TEST_CASE_METHOD(PrinterNameSyncFixture,
                  "resolve: Mainsail empty string falls through and Fluidd wins", "[name-sync]") {
     // Mainsail key exists but value is empty string — resolve() treats this as "no name"
-    // and falls through. However, the fallback path in printer_name_sync.cpp calls
-    // get_moonraker_api() (not the passed-in api), which returns nullptr in tests.
-    // So we verify: the name does NOT get set to "" (empty Mainsail wins), and because
-    // the fallback via get_moonraker_api() returns nullptr, we end up with hostname.
+    // and falls through to Fluidd via the captured api pointer.
     api_->mock_set_db_value("mainsail", "general.printername", std::string(""));
-    // No fluidd entry (would require get_moonraker_api() to be non-null to query)
+    api_->mock_set_db_value("fluidd", "general.instanceName", std::string("Workshop Printer"));
 
-    PrinterNameSync::resolve(api_.get(), "Workshop Printer");
+    PrinterNameSync::resolve(api_.get(), "hostname-fallback");
     drain();
 
-    // With null get_moonraker_api(), the internal Fluidd fallback is skipped.
-    // The hostname path also only runs from the outer on_error or inner Fluidd on_error.
-    // Since Mainsail returned empty and get_moonraker_api() is null, name stays empty.
-    // This documents the current behavior rather than ideal behavior.
-    REQUIRE(get_name() == "");
+    REQUIRE(get_name() == "Workshop Printer");
 }
 
 TEST_CASE_METHOD(PrinterNameSyncFixture, "write_back: null API is safe no crash", "[name-sync]") {
@@ -193,4 +182,34 @@ TEST_CASE_METHOD(PrinterNameSyncFixture, "resolve: null API with unknown hostnam
                  "[name-sync]") {
     PrinterNameSync::resolve(nullptr, "unknown");
     REQUIRE(get_name() == "");
+}
+
+TEST_CASE_METHOD(PrinterNameSyncFixture, "write_back: writes to both Mainsail and Fluidd",
+                 "[name-sync]") {
+    PrinterNameSync::write_back(api_.get(), "My New Printer");
+
+    // Mock post_item stores values — verify both namespaces were written
+    nlohmann::json mainsail_val;
+    bool mainsail_found = false;
+    api_->database_get_item(
+        "mainsail", "general.printername",
+        [&](const nlohmann::json& v) {
+            mainsail_val = v;
+            mainsail_found = true;
+        },
+        nullptr);
+    REQUIRE(mainsail_found);
+    REQUIRE(mainsail_val == "My New Printer");
+
+    nlohmann::json fluidd_val;
+    bool fluidd_found = false;
+    api_->database_get_item(
+        "fluidd", "general.instanceName",
+        [&](const nlohmann::json& v) {
+            fluidd_val = v;
+            fluidd_found = true;
+        },
+        nullptr);
+    REQUIRE(fluidd_found);
+    REQUIRE(fluidd_val == "My New Printer");
 }
