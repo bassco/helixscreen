@@ -69,18 +69,17 @@ class MoonrakerRobustnessFixture {
     }
 
     ~MoonrakerRobustnessFixture() {
-        // Disconnect client while event loop is still running so libhv can
-        // process the close and cancel any pending reconnect timers.
+        // Destroy client while event loop is still running so libhv can
+        // process all close/cleanup callbacks, cancel reconnect timers, and
+        // release I/O handles. This prevents loop_thread_->join() from hanging
+        // on macOS where the event loop may block on orphaned kqueue events.
         client_->disconnect();
-
-        // Stop server before event loop so pending I/O completes promptly
-        server_->stop();
-
-        loop_thread_->stop();
-        loop_thread_->join();
-
         client_.reset();
+
+        server_->stop();
         server_.reset();
+
+        loop_thread_->stop(true); // stop + join in one call
     }
 
     std::string server_url() const {
