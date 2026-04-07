@@ -385,10 +385,11 @@ void PrinterManagerOverlay::on_activate() {
 }
 
 void PrinterManagerOverlay::on_deactivate() {
-    // Cancel name edit + hide keyboard before overlay closes
-    // (prevents screen staying shifted when dismissed via backdrop click)
+    // Save any in-progress name edit before overlay closes
+    // (user expects typing a name and navigating away to save it)
     if (lv_subject_get_int(&name_editing_) != 0) {
-        cancel_name_edit();
+        finish_name_edit();
+        KeyboardManager::instance().hide();
     }
 
     OverlayBase::on_deactivate();
