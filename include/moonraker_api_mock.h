@@ -210,6 +210,14 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
         return mock_spools_;
     }
 
+    /**
+     * @brief Get the current active spool ID for test assertions
+     * @return Active spool ID, or 0 if no spool is active
+     */
+    [[nodiscard]] int get_mock_active_spool_id() const {
+        return mock_active_spool_id_;
+    }
+
   private:
     bool mock_spoolman_enabled_ = true;
     int mock_active_spool_id_ = 1;

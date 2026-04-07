@@ -39,6 +39,22 @@ namespace helix::ui {
 // Static member initialization
 bool AmsEditModal::callbacks_registered_ = false;
 
+// Fire-and-forget: notify Moonraker of the active spool so other clients
+// (Mainsail, Fluidd) see the change and filament tracking works.
+// Pass 0 to clear the active spool (unlink).
+static void sync_active_spool(MoonrakerAPI* api, int spool_id) {
+    spdlog::info("[AmsEditModal] Syncing active spool to {} on server", spool_id);
+    api->spoolman().set_active_spool(
+        spool_id,
+        [spool_id]() {
+            spdlog::debug("[AmsEditModal] Active spool synced to {} on server", spool_id);
+        },
+        [spool_id](const MoonrakerError& err) {
+            spdlog::warn("[AmsEditModal] Failed to sync active spool to {}: {}", spool_id,
+                         err.message);
+        });
+}
+
 // ============================================================================
 // Construction / Destruction
 // ============================================================================
@@ -834,9 +850,9 @@ void AmsEditModal::handle_scan_qr() {
             }
         }
 
-        // Set active spool in Spoolman
+        // Sync active spool with Moonraker
         if (api && spool.id > 0) {
-            api->spoolman().set_active_spool(spool.id, nullptr, nullptr);
+            sync_active_spool(api, spool.id);
         }
 
         NOTIFY_INFO("{} {} assigned via QR scan", spool.vendor, spool.material);
@@ -1493,26 +1509,11 @@ void AmsEditModal::handle_save() {
         api_ = get_moonraker_api();
     }
 
-    // If slot was unlinked from Spoolman, clear active spool on server
-    if (original_info_.spoolman_id > 0 && working_info_.spoolman_id == 0 && api_) {
-        spdlog::info("[AmsEditModal] Spool unlinked — clearing active spool on server");
-        auto token = lifetime_.token();
-        api_->spoolman().set_active_spool(
-            0,
-            [this, token]() {
-                if (token.expired())
-                    return;
-                token.defer([this]() { fire_completion(true); });
-            },
-            [this, token](const MoonrakerError& err) {
-                if (token.expired())
-                    return;
-                token.defer([this, err]() {
-                    spdlog::warn("[AmsEditModal] Failed to clear active spool: {}", err.message);
-                    fire_completion(true); // Still save locally
-                });
-            });
-        return;
+    // Sync active spool with Moonraker when assignment changes (assign or unlink)
+    // so other clients (Mainsail, Fluidd) see the change and filament tracking works.
+    // Fire-and-forget: local save proceeds regardless of server response.
+    if (original_info_.spoolman_id != working_info_.spoolman_id && api_) {
+        sync_active_spool(api_, working_info_.spoolman_id);
     }
 
     // If slot is linked to Spoolman and there are changes, use SpoolmanSlotSaver

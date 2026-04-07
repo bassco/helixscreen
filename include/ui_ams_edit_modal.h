@@ -17,6 +17,7 @@
 #include <vector>
 
 class MoonrakerAPI;
+class AmsEditModalTestAccess;
 
 namespace helix::ui {
 
@@ -181,6 +182,8 @@ class AmsEditModal : public Modal {
 
     // === Save orchestration ===
     void fire_completion(bool saved); ///< Common exit path for save/cancel
+
+    friend class ::AmsEditModalTestAccess;
 
     // === Event Handlers ===
     void handle_close();
