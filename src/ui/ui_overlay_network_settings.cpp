@@ -647,8 +647,10 @@ void NetworkSettingsOverlay::clear_network_list() {
 
     spdlog::debug("[NetworkSettingsOverlay] Clearing network list");
 
-    // Defocus entire subtree once to avoid per-child group corruption
-    ui::defocus_tree(networks_list_);
+    // Freeze queue to prevent background thread from enqueueing callbacks
+    // targeting children we're about to delete
+    auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+    helix::ui::UpdateQueue::instance().drain();
 
     int32_t child_count = static_cast<int32_t>(lv_obj_get_child_count(networks_list_));
     for (int32_t i = child_count - 1; i >= 0; i--) {
@@ -658,7 +660,14 @@ void NetworkSettingsOverlay::clear_network_list() {
 
         const char* name = lv_obj_get_name(child);
         if (name && strncmp(name, "network_item_", 13) == 0) {
-            lv_obj_delete(child);
+            // Remove clickable flag to prevent stale indev click events —
+            // LVGL's indev may have cached this item as the pressed target.
+            lv_obj_remove_flag(child, LV_OBJ_FLAG_CLICKABLE);
+
+            // Defer deletion to next tick — safe_delete_deferred hides immediately
+            // and deletes via lv_obj_delete_async, preventing event list corruption
+            // when called from within process_pending() (token.defer callbacks).
+            helix::ui::safe_delete_deferred_raw(child);
         }
     }
 
