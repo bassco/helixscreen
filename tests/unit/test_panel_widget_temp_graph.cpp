@@ -3,9 +3,9 @@
 
 #include "../../include/ui_temp_graph.h"
 #include "../../src/ui/panel_widgets/temp_graph_widget.h"
-#include "panel_widget_registry.h"
 #include "../ui_test_utils.h"
 #include "lvgl/lvgl.h"
+#include "panel_widget_registry.h"
 
 #include "../catch_amalgamated.hpp"
 
@@ -47,7 +47,7 @@ TEST_CASE_METHOD(TempGraphFeatureFixture, "Feature flags default to all-on after
     REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
     REQUIRE((f & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0);
     REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
-    REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0);  // Off by default
+    REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0); // Off by default
     REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) != 0);
     REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);
     REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) != 0);
@@ -168,7 +168,6 @@ TEST_CASE("TempGraphWidget: registered in widget registry", "[temp_graph][panel_
 
 TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
           "[temp_graph][panel_widget][features]") {
-
     SECTION("1x1: lines + gradients only") {
         uint32_t f = TempGraphWidget::features_for_size(1, 1);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
@@ -176,18 +175,20 @@ TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) !=
+                0); // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 
-    SECTION("2x1 (wide): + target lines, legend, no X-axis (too narrow)") {
+    SECTION("2x1 (wide): + target lines, no legend (needs rowspan>=2), no X-axis") {
         uint32_t f = TempGraphWidget::features_for_size(2, 1);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);  // X-axis needs 3+ cols
+        REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) == 0); // Legend needs rowspan>=2
+        REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0); // X-axis needs 3+ cols
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) == 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) !=
+                0); // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 
@@ -198,7 +199,8 @@ TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) != 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);  // always on; draw callback auto-disables when >3 series
+        REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) !=
+                0); // always on; draw callback auto-disables when >3 series
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
     }
 
@@ -207,7 +209,7 @@ TEST_CASE("TempGraphWidget::features_for_size maps grid size to feature flags",
         REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_TARGET_LINES) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LEGEND) != 0);
-        REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0);  // X-axis needs 3+ cols
+        REQUIRE((f & TEMP_GRAPH_FEATURE_X_AXIS) == 0); // X-axis needs 3+ cols
         REQUIRE((f & TEMP_GRAPH_FEATURE_Y_AXIS) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_GRADIENTS) != 0);
         REQUIRE((f & TEMP_GRAPH_FEATURE_READOUTS) == 0);
@@ -241,12 +243,12 @@ TEST_CASE("TempGraphWidget: set_config stores and preserves sensor configuration
     TempGraphWidget widget("test_config_1");
 
     nlohmann::json config = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
-            {{"name", "heater_bed"}, {"enabled", true}, {"color", 0x88C0D0}},
-            {{"name", "temperature_sensor mcu_temp"}, {"enabled", false}, {"color", 0xA3BE8C}},
-        }}
-    };
+        {"sensors",
+         {
+             {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
+             {{"name", "heater_bed"}, {"enabled", true}, {"color", 0x88C0D0}},
+             {{"name", "temperature_sensor mcu_temp"}, {"enabled", false}, {"color", 0xA3BE8C}},
+         }}};
 
     widget.set_config(config);
 
@@ -279,11 +281,10 @@ TEST_CASE("TempGraphWidget: set_config preserves existing sensor entries",
     TempGraphWidget widget("test_sensor_preserve");
 
     // Config with only extruder — simulates a saved config before bed was discovered
-    nlohmann::json config = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
-        }}
-    };
+    nlohmann::json config = {{"sensors",
+                              {
+                                  {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
+                              }}};
 
     widget.set_config(config);
 
@@ -302,12 +303,12 @@ TEST_CASE("TempGraphWidget: config with unknown sensor name does not crash",
 
     // Contains a sensor name that doesn't match anything known — should be silently ignored
     nlohmann::json config = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
-            {{"name", "nonexistent_sensor_xyz"}, {"enabled", true}, {"color", 0x00FF00}},
-            {{"name", "heater_bed"}, {"enabled", false}, {"color", 0x88C0D0}},
-        }}
-    };
+        {"sensors",
+         {
+             {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
+             {{"name", "nonexistent_sensor_xyz"}, {"enabled", true}, {"color", 0x00FF00}},
+             {{"name", "heater_bed"}, {"enabled", false}, {"color", 0x88C0D0}},
+         }}};
 
     // Should not throw or crash
     REQUIRE_NOTHROW(widget.set_config(config));
@@ -327,11 +328,10 @@ TEST_CASE("TempGraphWidget: generation counter increments on config save path",
     TempGraphWidget w1("test_gen_1");
     TempGraphWidget w2("test_gen_2");
 
-    nlohmann::json cfg = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
-        }}
-    };
+    nlohmann::json cfg = {{"sensors",
+                           {
+                               {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF4444}},
+                           }}};
 
     // Both widgets should accept config independently without interfering
     REQUIRE_NOTHROW(w1.set_config(cfg));
@@ -346,9 +346,7 @@ TEST_CASE("TempGraphWidget: generation counter increments on config save path",
 // features_for_size edge cases
 // ============================================================================
 
-TEST_CASE("TempGraphWidget::features_for_size edge cases",
-          "[temp_graph][panel_widget][features]") {
-
+TEST_CASE("TempGraphWidget::features_for_size edge cases", "[temp_graph][panel_widget][features]") {
     SECTION("4x3 (larger than max defined): includes READOUTS") {
         uint32_t f = TempGraphWidget::features_for_size(4, 3);
         REQUIRE((f & TEMP_GRAPH_FEATURE_LINES) != 0);
@@ -385,12 +383,11 @@ TEST_CASE("TempGraphWidget: custom color hex strings round-trip through set_conf
     TempGraphWidget widget("test_color_roundtrip");
 
     // Use non-standard colors to verify they aren't overwritten
-    nlohmann::json config = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xDEADBE}},
-            {{"name", "heater_bed"}, {"enabled", true}, {"color", 0xCAFEBA}},
-        }}
-    };
+    nlohmann::json config = {{"sensors",
+                              {
+                                  {{"name", "extruder"}, {"enabled", true}, {"color", 0xDEADBE}},
+                                  {{"name", "heater_bed"}, {"enabled", true}, {"color", 0xCAFEBA}},
+                              }}};
 
     widget.set_config(config);
 
@@ -408,17 +405,15 @@ TEST_CASE("TempGraphWidget: two instances have independent configs",
     TempGraphWidget w1("temp_graph:1");
     TempGraphWidget w2("temp_graph:2");
 
-    nlohmann::json cfg1 = {
-        {"sensors", {
-            {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF0000}},
-        }}
-    };
-    nlohmann::json cfg2 = {
-        {"sensors", {
-            {{"name", "heater_bed"}, {"enabled", true}, {"color", 0x0000FF}},
-            {{"name", "extruder"}, {"enabled", false}, {"color", 0xFF0000}},
-        }}
-    };
+    nlohmann::json cfg1 = {{"sensors",
+                            {
+                                {{"name", "extruder"}, {"enabled", true}, {"color", 0xFF0000}},
+                            }}};
+    nlohmann::json cfg2 = {{"sensors",
+                            {
+                                {{"name", "heater_bed"}, {"enabled", true}, {"color", 0x0000FF}},
+                                {{"name", "extruder"}, {"enabled", false}, {"color", 0xFF0000}},
+                            }}};
 
     REQUIRE_NOTHROW(w1.set_config(cfg1));
     REQUIRE_NOTHROW(w2.set_config(cfg2));
