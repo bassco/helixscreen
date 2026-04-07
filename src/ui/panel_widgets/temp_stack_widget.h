@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "ui_heating_animator.h"
 #include "ui_observer_guard.h"
 
+#include "async_lifetime_guard.h"
 #include "panel_widget.h"
 
 #include <memory>
@@ -25,7 +25,9 @@ class TempStackWidget : public PanelWidget {
     std::string get_component_name() const override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
-    bool has_edit_configure() const override { return true; }
+    bool has_edit_configure() const override {
+        return true;
+    }
     bool on_edit_configure() override;
     const char* id() const override {
         return "temp_stack";
@@ -56,6 +58,8 @@ class TempStackWidget : public PanelWidget {
     // Observers
     ObserverGuard nozzle_temp_observer_;
     ObserverGuard nozzle_target_observer_;
+    SubjectLifetime bed_temp_lifetime_;
+    SubjectLifetime bed_target_lifetime_;
     ObserverGuard bed_temp_observer_;
     ObserverGuard bed_target_observer_;
 

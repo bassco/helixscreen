@@ -996,7 +996,7 @@ void PIDCalibrationPanel::start_progress_tracking() {
     if (selected_heater_ == Heater::EXTRUDER) {
         temp_subj = state.get_extruder_temp_subject("extruder", progress_temp_lifetime_);
     } else {
-        temp_subj = state.get_bed_temp_subject();
+        temp_subj = state.get_bed_temp_subject(progress_temp_lifetime_);
     }
 
     if (!temp_subj) {
@@ -1024,18 +1024,11 @@ void PIDCalibrationPanel::start_progress_tracking() {
         }
     }
 
-    // Observe temperature for phase tracking
-    // Extruder subject is dynamic (needs lifetime), bed is static (no lifetime)
-    if (selected_heater_ == Heater::EXTRUDER) {
-        progress_temp_observer_ = helix::ui::observe_int_sync<PIDCalibrationPanel>(
-            temp_subj, this,
-            [](PIDCalibrationPanel* self, int value) { self->on_progress_temperature(value); },
-            progress_temp_lifetime_);
-    } else {
-        progress_temp_observer_ = helix::ui::observe_int_sync<PIDCalibrationPanel>(
-            temp_subj, this,
-            [](PIDCalibrationPanel* self, int value) { self->on_progress_temperature(value); });
-    }
+    // Observe temperature for phase tracking (both extruder and bed need lifetime tokens)
+    progress_temp_observer_ = helix::ui::observe_int_sync<PIDCalibrationPanel>(
+        temp_subj, this,
+        [](PIDCalibrationPanel* self, int value) { self->on_progress_temperature(value); },
+        progress_temp_lifetime_);
 
     // Start ETA refresh timer (every 3 seconds)
     eta_update_timer_ = lv_timer_create(on_eta_timer_tick, 1000, this);

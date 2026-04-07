@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include "panel_widget.h"
 #include "ui_observer_guard.h"
+
+#include "panel_widget.h"
 
 #include <memory>
 #include <string>
@@ -25,7 +26,9 @@ class PreheatWidget : public PanelWidget {
     void set_config(const nlohmann::json& config) override;
     void attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) override;
     void detach() override;
-    const char* id() const override { return "preheat"; }
+    const char* id() const override {
+        return "preheat";
+    }
 
   private:
     PrinterState& printer_state_;
@@ -42,11 +45,12 @@ class PreheatWidget : public PanelWidget {
 
     // Observers for heater target temperatures
     ObserverGuard extruder_target_obs_;
+    SubjectLifetime bed_target_lifetime_;
     ObserverGuard bed_target_obs_;
     int cached_extruder_target_ = 0;
     int cached_bed_target_ = 0;
 
-    int tool_target_ = -1;     // -1 = all tools, 0..N = specific tool index
+    int tool_target_ = -1; // -1 = all tools, 0..N = specific tool index
 
     void handle_apply();
     void handle_cooldown();

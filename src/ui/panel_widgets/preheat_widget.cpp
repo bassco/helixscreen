@@ -11,6 +11,7 @@
 #include "app_globals.h"
 #include "config.h"
 #include "filament_database.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "macro_executor.h"
 #include "material_settings_manager.h"
 #include "moonraker_api.h"
@@ -18,8 +19,6 @@
 #include "panel_widget_registry.h"
 #include "printer_state.h"
 #include "tool_state.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include <spdlog/spdlog.h>
 
@@ -114,18 +113,18 @@ void PreheatWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     // Observe heater targets to toggle preheat/cooldown mode
     using helix::ui::observe_int_sync;
-    extruder_target_obs_ = observe_int_sync<PreheatWidget>(
-        printer_state_.get_active_extruder_target_subject(), this,
-        [](PreheatWidget* self, int target) {
-            self->cached_extruder_target_ = target;
-            self->update_heater_state();
-        });
-    bed_target_obs_ = observe_int_sync<PreheatWidget>(
-        printer_state_.get_bed_target_subject(), this,
-        [](PreheatWidget* self, int target) {
-            self->cached_bed_target_ = target;
-            self->update_heater_state();
-        });
+    extruder_target_obs_ =
+        observe_int_sync<PreheatWidget>(printer_state_.get_active_extruder_target_subject(), this,
+                                        [](PreheatWidget* self, int target) {
+                                            self->cached_extruder_target_ = target;
+                                            self->update_heater_state();
+                                        });
+    bed_target_obs_ =
+        observe_int_sync<PreheatWidget>(printer_state_.get_bed_target_subject(bed_target_lifetime_),
+                                        this, [](PreheatWidget* self, int target) {
+                                            self->cached_bed_target_ = target;
+                                            self->update_heater_state();
+                                        });
 
     spdlog::debug("[PreheatWidget] Attached (material={}, tool_target={})",
                   PRESET_NAMES[selected_material_], tool_target_);
@@ -138,6 +137,7 @@ void PreheatWidget::detach() {
 
     // Applying [L073]: subjects are alive during detach, use reset()
     extruder_target_obs_.reset();
+    bed_target_lifetime_.reset();
     bed_target_obs_.reset();
 
     if (split_btn_) {
@@ -309,15 +309,13 @@ void PreheatWidget::handle_cooldown() {
 
     // Use configured cooldown macro (user-overridable in settings.json)
     auto* cfg = Config::get_instance();
-    MacroConfig default_cooldown{"Cool Down",
-                                 "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
-                                 "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
+    MacroConfig default_cooldown{"Cool Down", "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\n"
+                                              "SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0"};
     auto cooldown = cfg ? cfg->get_macro("cooldown", default_cooldown) : default_cooldown;
 
     spdlog::info("[PreheatWidget] Cooldown requested - executing: {}", cooldown.gcode);
     api->execute_gcode(
-        cooldown.gcode,
-        []() { NOTIFY_SUCCESS(lv_tr("Heaters off")); },
+        cooldown.gcode, []() { NOTIFY_SUCCESS(lv_tr("Heaters off")); },
         [](const MoonrakerError& error) {
             NOTIFY_ERROR(lv_tr("Failed to cool down: {}"), error.user_message());
         });
@@ -338,7 +336,7 @@ void PreheatWidget::handle_bed_tap() {
 // ============================================================================
 
 std::vector<std::string> PreheatWidget::collect_preheat_heaters(const std::vector<ToolInfo>& tools,
-                                                                 int tool_target) {
+                                                                int tool_target) {
     std::vector<std::string> heaters;
 
     if (tool_target == -1) {

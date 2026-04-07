@@ -106,11 +106,11 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     // Overridden Spoolman Methods (return mock filament inventory)
     // ========================================================================
 
-    void get_spoolman_status(std::function<void(bool, int)> on_success,
-                             ErrorCallback on_error, bool silent = false) override;
+    void get_spoolman_status(std::function<void(bool, int)> on_success, ErrorCallback on_error,
+                             bool silent = false) override;
     void get_spoolman_spools(helix::SpoolListCallback on_success, ErrorCallback on_error) override;
-    void get_spoolman_spool(int spool_id, helix::SpoolCallback on_success,
-                            ErrorCallback on_error, bool silent = false) override;
+    void get_spoolman_spool(int spool_id, helix::SpoolCallback on_success, ErrorCallback on_error,
+                            bool silent = false) override;
     void set_active_spool(int spool_id, SuccessCallback on_success,
                           ErrorCallback on_error) override;
     void update_spoolman_spool_weight(int spool_id, double remaining_weight_g,
@@ -271,8 +271,7 @@ class MoonrakerAdvancedAPIMock : public MoonrakerAdvancedAPI {
      * @brief Mock bed mesh calibration with progress simulation
      */
     void start_bed_mesh_calibrate(BedMeshProgressCallback on_progress, SuccessCallback on_complete,
-                                  ErrorCallback on_error,
-                                  int expected_probes = 0) override;
+                                  ErrorCallback on_error, int expected_probes = 0) override;
 
     /**
      * @brief Simulate SCREWS_TILT_CALCULATE with iterative bed leveling
@@ -426,7 +425,8 @@ class MoonrakerAPIMock : public MoonrakerAPI {
     // Overridden Connection/Subscription/Database Proxies (no-ops for mock)
     // ========================================================================
 
-    helix::SubscriptionId subscribe_notifications(std::function<void(const json&)> callback) override;
+    helix::SubscriptionId
+    subscribe_notifications(std::function<void(const json&)> callback) override;
     bool unsubscribe_notifications(helix::SubscriptionId id) override;
     void register_method_callback(const std::string& method, const std::string& name,
                                   std::function<void(const json&)> callback) override;
@@ -586,6 +586,10 @@ class MoonrakerAPIMock : public MoonrakerAPI {
      */
     MoonrakerRestAPIMock& rest_mock();
 
+    /// Set a mock database value for testing
+    void mock_set_db_value(const std::string& namespace_name, const std::string& key,
+                           const nlohmann::json& value);
+
   private:
     // Shared mock state for coordination with MoonrakerClientMock
     std::shared_ptr<MockPrinterState> mock_state_;
@@ -595,4 +599,7 @@ class MoonrakerAPIMock : public MoonrakerAPI {
 
     // Mock subscription ID counter
     helix::SubscriptionId mock_next_subscription_id_ = 100;
+
+    /// Mock database storage: key = "namespace:key", value = JSON
+    std::map<std::string, nlohmann::json> mock_db_;
 };

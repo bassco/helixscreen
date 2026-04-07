@@ -146,13 +146,28 @@ void MoonrakerAPIMock::get_gcode_store(
     }
 }
 
-void MoonrakerAPIMock::database_get_item(const std::string& /*namespace_name*/,
-                                         const std::string& /*key*/,
+void MoonrakerAPIMock::database_get_item(const std::string& namespace_name, const std::string& key,
                                          std::function<void(const json&)> on_success,
-                                         ErrorCallback /*on_error*/) {
-    if (on_success) {
-        on_success(json{});
+                                         ErrorCallback on_error) {
+    std::string db_key = namespace_name + ":" + key;
+    auto it = mock_db_.find(db_key);
+    if (it != mock_db_.end()) {
+        if (on_success) {
+            on_success(it->second);
+        }
+    } else {
+        if (on_error) {
+            MoonrakerError err;
+            err.type = MoonrakerErrorType::UNKNOWN;
+            err.message = "Key not found in mock DB";
+            on_error(err);
+        }
     }
+}
+
+void MoonrakerAPIMock::mock_set_db_value(const std::string& namespace_name, const std::string& key,
+                                         const nlohmann::json& value) {
+    mock_db_[namespace_name + ":" + key] = value;
 }
 
 void MoonrakerAPIMock::database_post_item(const std::string& /*namespace_name*/,
@@ -1365,8 +1380,7 @@ void MoonrakerSpoolmanAPIMock::init_mock_spools() {
 }
 
 void MoonrakerSpoolmanAPIMock::get_spoolman_status(std::function<void(bool, int)> on_success,
-                                                   ErrorCallback /*on_error*/,
-                                                   bool /*silent*/) {
+                                                   ErrorCallback /*on_error*/, bool /*silent*/) {
     spdlog::debug("[MoonrakerAPIMock] get_spoolman_status() -> connected={}, active={}",
                   mock_spoolman_enabled_, mock_active_spool_id_);
 

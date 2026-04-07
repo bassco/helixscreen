@@ -321,6 +321,7 @@ void ZOffsetCalibrationPanel::cleanup() {
     // Reset ObserverGuards (applying [L020])
     manual_probe_active_observer_.reset();
     manual_probe_z_observer_.reset();
+    bed_temp_lifetime_.reset();
     bed_temp_observer_.reset();
 
     // Call base class to set cleanup_called_ flag
@@ -364,6 +365,7 @@ void ZOffsetCalibrationPanel::set_state(State new_state) {
     case State::ERROR:
     case State::IDLE:
         operation_guard_.end();
+        bed_temp_lifetime_.reset();
         bed_temp_observer_.reset(); // Stop watching bed temp when not warming
         break;
     }
@@ -413,7 +415,8 @@ void ZOffsetCalibrationPanel::start_calibration() {
 
         PrinterState& ps = get_printer_state();
         bed_temp_observer_ = observe_int_sync<ZOffsetCalibrationPanel>(
-            ps.get_bed_temp_subject(), this, [](ZOffsetCalibrationPanel* self, int temp_centi) {
+            ps.get_bed_temp_subject(bed_temp_lifetime_), this,
+            [](ZOffsetCalibrationPanel* self, int temp_centi) {
                 if (self->state_ != State::WARMING)
                     return;
 

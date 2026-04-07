@@ -206,9 +206,10 @@ class ZOffsetCalibrationPanel : public OverlayBase {
     float cumulative_z_delta_ = 0.0f; ///< Tracks total Z adjustment in gcode_offset mode
 
     // Warm bed for calibration
-    bool bed_was_warmed_ = false;     ///< True if we sent M140 to warm bed this session
-    int warm_bed_target_centi_ = 0;   ///< Target temp in centidegrees during WARMING
-    ObserverGuard bed_temp_observer_; ///< Watches bed temp during WARMING phase
+    bool bed_was_warmed_ = false;       ///< True if we sent M140 to warm bed this session
+    int warm_bed_target_centi_ = 0;     ///< Target temp in centidegrees during WARMING
+    SubjectLifetime bed_temp_lifetime_; ///< Lifetime token for bed temp subject (#734)
+    ObserverGuard bed_temp_observer_;   ///< Watches bed temp during WARMING phase
 
     // Subject manager for automatic cleanup
     SubjectManager subjects_;

@@ -566,8 +566,10 @@ void MoonrakerManager::init_print_start_collector() {
         ObserverGuard(get_printer_state().get_print_layer_current_subject(), fallback_cb, nullptr);
     m_print_progress_fallback_observer =
         ObserverGuard(get_printer_state().get_print_progress_subject(), fallback_cb, nullptr);
-    m_print_bed_target_fallback_observer =
-        ObserverGuard(get_printer_state().get_bed_target_subject(), fallback_cb, nullptr);
+    m_print_bed_target_fallback_observer = ObserverGuard(
+        get_printer_state().get_bed_target_subject(m_print_bed_target_fallback_lifetime),
+        fallback_cb, nullptr);
+    m_print_bed_target_fallback_observer.set_alive_token(m_print_bed_target_fallback_lifetime);
     m_print_ext_target_fallback_observer = ObserverGuard(
         get_printer_state().get_active_extruder_target_subject(), fallback_cb, nullptr);
 

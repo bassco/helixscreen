@@ -647,8 +647,9 @@ void GridEditMode::remove_selected_widget() {
     spdlog::info("[GridEditMode] Removing widget '{}' (config index {})",
                  entries[static_cast<size_t>(config_index)].id, config_index);
 
-    // Multi-instance widgets are deleted entirely; single-instance are disabled
-    const auto& widget_id = entries[static_cast<size_t>(config_index)].id;
+    // Copy by value — delete_entry() and page_entries_mut() modify the vector
+    // that entries references, invalidating any references into it (#736)
+    const auto widget_id = entries[static_cast<size_t>(config_index)].id;
     if (widget_id.find(':') != std::string::npos) {
         config_->delete_entry(widget_id);
     } else {

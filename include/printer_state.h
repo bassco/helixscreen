@@ -312,14 +312,26 @@ class PrinterState {
     lv_subject_t* get_bed_temp_subject() {
         return temperature_state_.get_bed_temp_subject();
     }
+    lv_subject_t* get_bed_temp_subject(SubjectLifetime& lifetime) {
+        return temperature_state_.get_bed_temp_subject(lifetime);
+    }
     lv_subject_t* get_bed_target_subject() {
         return temperature_state_.get_bed_target_subject();
+    }
+    lv_subject_t* get_bed_target_subject(SubjectLifetime& lifetime) {
+        return temperature_state_.get_bed_target_subject(lifetime);
     }
     lv_subject_t* get_chamber_temp_subject() {
         return temperature_state_.get_chamber_temp_subject();
     }
+    lv_subject_t* get_chamber_temp_subject(SubjectLifetime& lifetime) {
+        return temperature_state_.get_chamber_temp_subject(lifetime);
+    }
     lv_subject_t* get_chamber_target_subject() {
         return temperature_state_.get_chamber_target_subject();
+    }
+    lv_subject_t* get_chamber_target_subject(SubjectLifetime& lifetime) {
+        return temperature_state_.get_chamber_target_subject(lifetime);
     }
 
     // Print progress subjects - delegated to PrinterPrintState component

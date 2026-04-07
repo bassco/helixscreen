@@ -9,7 +9,6 @@
 #include "ui_fonts.h"
 #include "ui_nav_manager.h"
 #include "ui_overlay_temp_graph.h"
-#include "temperature_service.h"
 #include "ui_temp_display.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
@@ -19,6 +18,7 @@
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
 #include "printer_state.h"
+#include "temperature_service.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -144,20 +144,23 @@ void TempStackWidget::attach_stack(lv_obj_t* /*widget_obj*/) {
                                               self->on_nozzle_target_changed(target);
                                           });
 
-    // Bed observers
+    // Bed observers (subjects destroyed during deinit — need lifetime tokens #734)
     bed_temp_observer_ = observe_int_sync<TempStackWidget>(
-        printer_state_.get_bed_temp_subject(), this, [token](TempStackWidget* self, int temp) {
+        printer_state_.get_bed_temp_subject(bed_temp_lifetime_), this,
+        [token](TempStackWidget* self, int temp) {
             if (token.expired())
                 return;
             self->on_bed_temp_changed(temp);
-        });
-    bed_target_observer_ =
-        observe_int_sync<TempStackWidget>(printer_state_.get_bed_target_subject(), this,
-                                          [token](TempStackWidget* self, int target) {
-                                              if (token.expired())
-                                                  return;
-                                              self->on_bed_target_changed(target);
-                                          });
+        },
+        bed_temp_lifetime_);
+    bed_target_observer_ = observe_int_sync<TempStackWidget>(
+        printer_state_.get_bed_target_subject(bed_target_lifetime_), this,
+        [token](TempStackWidget* self, int target) {
+            if (token.expired())
+                return;
+            self->on_bed_target_changed(target);
+        },
+        bed_target_lifetime_);
 
     // Attach nozzle animator - look for the glyph inside the nozzle_icon component
     lv_obj_t* nozzle_icon = lv_obj_find_by_name(widget_obj_, "nozzle_icon_glyph");
@@ -311,18 +314,21 @@ void TempStackWidget::attach_carousel(lv_obj_t* widget_obj) {
                                               self->on_nozzle_target_changed(target);
                                           });
     bed_temp_observer_ = observe_int_sync<TempStackWidget>(
-        printer_state_.get_bed_temp_subject(), this, [token](TempStackWidget* self, int temp) {
+        printer_state_.get_bed_temp_subject(bed_temp_lifetime_), this,
+        [token](TempStackWidget* self, int temp) {
             if (token.expired())
                 return;
             self->on_bed_temp_changed(temp);
-        });
-    bed_target_observer_ =
-        observe_int_sync<TempStackWidget>(printer_state_.get_bed_target_subject(), this,
-                                          [token](TempStackWidget* self, int target) {
-                                              if (token.expired())
-                                                  return;
-                                              self->on_bed_target_changed(target);
-                                          });
+        },
+        bed_temp_lifetime_);
+    bed_target_observer_ = observe_int_sync<TempStackWidget>(
+        printer_state_.get_bed_target_subject(bed_target_lifetime_), this,
+        [token](TempStackWidget* self, int target) {
+            if (token.expired())
+                return;
+            self->on_bed_target_changed(target);
+        },
+        bed_target_lifetime_);
 
     int page_count = ui_carousel_get_page_count(carousel);
     spdlog::debug("[TempStackWidget] Attached carousel with {} pages", page_count);
@@ -391,6 +397,8 @@ void TempStackWidget::detach() {
     bed_animator_.detach();
     nozzle_temp_observer_.reset();
     nozzle_target_observer_.reset();
+    bed_temp_lifetime_.reset();
+    bed_target_lifetime_.reset();
     bed_temp_observer_.reset();
     bed_target_observer_.reset();
 

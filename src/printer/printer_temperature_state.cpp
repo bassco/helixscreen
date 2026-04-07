@@ -42,9 +42,13 @@ void PrinterTemperatureState::init_subjects(bool register_xml) {
 
     // Bed and chamber temperature subjects
     INIT_SUBJECT_INT(bed_temp, 0, subjects_, register_xml);
+    bed_temp_lifetime_ = std::make_shared<bool>(true);
     INIT_SUBJECT_INT(bed_target, 0, subjects_, register_xml);
+    bed_target_lifetime_ = std::make_shared<bool>(true);
     INIT_SUBJECT_INT(chamber_temp, 0, subjects_, register_xml);
+    chamber_temp_lifetime_ = std::make_shared<bool>(true);
     INIT_SUBJECT_INT(chamber_target, 0, subjects_, register_xml);
+    chamber_target_lifetime_ = std::make_shared<bool>(true);
 
     // Extruder version subject (bumped when extruder list changes)
     INIT_SUBJECT_INT(extruder_version, 0, subjects_, register_xml);
@@ -62,6 +66,10 @@ void PrinterTemperatureState::deinit_subjects() {
 
     // Destroy lifetime tokens FIRST — expires ObserverGuard weak_ptrs so they
     // won't call lv_observer_remove() on observers freed by lv_subject_deinit().
+    bed_temp_lifetime_.reset();
+    bed_target_lifetime_.reset();
+    chamber_temp_lifetime_.reset();
+    chamber_target_lifetime_.reset();
     for (auto& [name, info] : extruders_) {
         info.temp_lifetime.reset();
         info.target_lifetime.reset();

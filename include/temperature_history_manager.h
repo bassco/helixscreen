@@ -281,7 +281,9 @@ class TemperatureHistoryManager {
 
     // LVGL observer guards for automatic cleanup
     ObserverGuard extruder_temp_observer_;
+    SubjectLifetime bed_temp_lifetime_;
     ObserverGuard bed_temp_observer_;
     ObserverGuard extruder_target_observer_;
+    SubjectLifetime bed_target_lifetime_;
     ObserverGuard bed_target_observer_;
 };

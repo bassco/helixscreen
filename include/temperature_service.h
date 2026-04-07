@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "temp_graph_controller.h"
 #include "ui_heater_config.h"
 #include "ui_heating_animator.h"
 #include "ui_observer_guard.h"
@@ -12,6 +11,7 @@
 #include "lvgl/lvgl.h"
 #include "panel_lifecycle.h"
 #include "subject_managed_panel.h"
+#include "temp_graph_controller.h"
 
 #include <array>
 #include <functional>
@@ -82,6 +82,10 @@ struct HeaterState {
     std::vector<RegisteredGraph> temp_graphs;
 
     // Observer handles (RAII cleanup)
+    // Lifetimes MUST be declared before observers (destroyed after, so observers
+    // can still check alive token during destruction)
+    SubjectLifetime temp_lifetime;
+    SubjectLifetime target_lifetime;
     ObserverGuard temp_observer;
     ObserverGuard target_observer;
 };

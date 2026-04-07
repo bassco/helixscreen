@@ -119,10 +119,29 @@ class PrinterTemperatureState {
     lv_subject_t* get_bed_target_subject() {
         return &bed_target_;
     }
+
+    /// Get bed temp subject with lifetime token (use when creating observers)
+    lv_subject_t* get_bed_temp_subject(SubjectLifetime& lifetime) {
+        lifetime = bed_temp_lifetime_;
+        return &bed_temp_;
+    }
+    /// Get bed target subject with lifetime token (use when creating observers)
+    lv_subject_t* get_bed_target_subject(SubjectLifetime& lifetime) {
+        lifetime = bed_target_lifetime_;
+        return &bed_target_;
+    }
     lv_subject_t* get_chamber_temp_subject() {
         return &chamber_temp_;
     }
+    lv_subject_t* get_chamber_temp_subject(SubjectLifetime& lifetime) {
+        lifetime = chamber_temp_lifetime_;
+        return &chamber_temp_;
+    }
     lv_subject_t* get_chamber_target_subject() {
+        return &chamber_target_;
+    }
+    lv_subject_t* get_chamber_target_subject(SubjectLifetime& lifetime) {
+        lifetime = chamber_target_lifetime_;
         return &chamber_target_;
     }
 
@@ -193,8 +212,12 @@ class PrinterTemperatureState {
     lv_subject_t active_extruder_target_{};
     lv_subject_t bed_temp_{};
     lv_subject_t bed_target_{};
+    SubjectLifetime bed_temp_lifetime_;
+    SubjectLifetime bed_target_lifetime_;
     lv_subject_t chamber_temp_{};
     lv_subject_t chamber_target_{}; ///< 0 when sensor-only, actual target when heater present
+    SubjectLifetime chamber_temp_lifetime_;
+    SubjectLifetime chamber_target_lifetime_;
 
     // Dynamic per-extruder tracking
     std::unordered_map<std::string, ExtruderInfo> extruders_;

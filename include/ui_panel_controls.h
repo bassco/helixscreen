@@ -223,6 +223,8 @@ class ControlsPanel : public PanelBase {
     ObserverGuard fan_observer_;
     ObserverGuard fans_version_observer_;      // Multi-fan list changes
     ObserverGuard temp_sensor_count_observer_; // Temp sensor list changes
+    SubjectLifetime chamber_temp_lifetime_;    // Lifetime token for chamber subject (#734)
+    SubjectLifetime chamber_target_lifetime_;  // Lifetime token for chamber subject (#734)
     ObserverGuard chamber_temp_observer_;      // Chamber temperature observer
     ObserverGuard chamber_target_observer_;    // Chamber target temperature observer
 

@@ -143,21 +143,27 @@ TemperatureService::TemperatureService(PrinterState& printer_state, MoonrakerAPI
             self->on_target_changed(HeaterType::Nozzle, target);
         });
     bed.temp_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_bed_temp_subject(), this,
-        [](TemperatureService* self, int temp) { self->on_temp_changed(HeaterType::Bed, temp); });
+        printer_state_.get_bed_temp_subject(bed.temp_lifetime), this,
+        [](TemperatureService* self, int temp) { self->on_temp_changed(HeaterType::Bed, temp); },
+        bed.temp_lifetime);
     bed.target_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_bed_target_subject(), this, [](TemperatureService* self, int target) {
+        printer_state_.get_bed_target_subject(bed.target_lifetime), this,
+        [](TemperatureService* self, int target) {
             self->on_target_changed(HeaterType::Bed, target);
-        });
+        },
+        bed.target_lifetime);
     chamber.temp_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_chamber_temp_subject(), this, [](TemperatureService* self, int temp) {
+        printer_state_.get_chamber_temp_subject(chamber.temp_lifetime), this,
+        [](TemperatureService* self, int temp) {
             self->on_temp_changed(HeaterType::Chamber, temp);
-        });
+        },
+        chamber.temp_lifetime);
     chamber.target_observer = observe_int_sync<TemperatureService>(
-        printer_state_.get_chamber_target_subject(), this,
+        printer_state_.get_chamber_target_subject(chamber.target_lifetime), this,
         [](TemperatureService* self, int target) {
             self->on_target_changed(HeaterType::Chamber, target);
-        });
+        },
+        chamber.target_lifetime);
 
     // Register XML event callbacks (BEFORE any lv_xml_create calls)
     // Generic callbacks (used by chamber + can be used by nozzle/bed after XML update)

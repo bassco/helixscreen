@@ -61,6 +61,9 @@ class NozzleTempsWidget : public PanelWidget {
     lv_obj_t* bed_temp_label_ = nullptr;
     lv_obj_t* bed_target_label_ = nullptr;
     lv_obj_t* bed_progress_bar_ = nullptr;
+    // Lifetimes MUST be declared before observers (same pattern as ExtruderRow)
+    SubjectLifetime bed_temp_lifetime_;
+    SubjectLifetime bed_target_lifetime_;
     ObserverGuard bed_temp_observer_;
     ObserverGuard bed_target_observer_;
     int cached_bed_temp_ = 0;

@@ -301,23 +301,25 @@ void TemperatureHistoryManager::subscribe_to_subjects() {
             ObserverGuard(extruder_target, target_observer_callback, extruder_target_ctx_.get());
     }
 
-    // Subscribe to bed temperature subject
-    lv_subject_t* bed_temp = printer_state_.get_bed_temp_subject();
+    // Subscribe to bed temperature subject (lifetime token for reconnection safety #734)
+    lv_subject_t* bed_temp = printer_state_.get_bed_temp_subject(bed_temp_lifetime_);
     if (bed_temp != nullptr) {
         bed_temp_ctx_ = std::make_unique<ObserverContext>();
         bed_temp_ctx_->manager = this;
         bed_temp_ctx_->heater_name = "heater_bed";
         bed_temp_observer_ = ObserverGuard(bed_temp, temp_observer_callback, bed_temp_ctx_.get());
+        bed_temp_observer_.set_alive_token(bed_temp_lifetime_);
     }
 
     // Subscribe to bed target subject
-    lv_subject_t* bed_target = printer_state_.get_bed_target_subject();
+    lv_subject_t* bed_target = printer_state_.get_bed_target_subject(bed_target_lifetime_);
     if (bed_target != nullptr) {
         bed_target_ctx_ = std::make_unique<ObserverContext>();
         bed_target_ctx_->manager = this;
         bed_target_ctx_->heater_name = "heater_bed";
         bed_target_observer_ =
             ObserverGuard(bed_target, target_observer_callback, bed_target_ctx_.get());
+        bed_target_observer_.set_alive_token(bed_target_lifetime_);
     }
 }
 
@@ -325,6 +327,8 @@ void TemperatureHistoryManager::unsubscribe_from_subjects() {
     // ObserverGuard::reset() handles nullptr checks and lv_is_initialized() safety
     extruder_temp_observer_.reset();
     extruder_target_observer_.reset();
+    bed_temp_lifetime_.reset();
+    bed_target_lifetime_.reset();
     bed_temp_observer_.reset();
     bed_target_observer_.reset();
 }

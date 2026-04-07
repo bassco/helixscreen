@@ -537,17 +537,21 @@ void ControlsPanel::register_observers() {
     // Note: We check are_subjects_initialized() because observers may fire immediately
     // upon registration, but subjects aren't initialized until init_subjects() is called.
     chamber_temp_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_chamber_temp_subject(), this, [](ControlsPanel* self, int value) {
+        printer_state_.get_chamber_temp_subject(chamber_temp_lifetime_), this,
+        [](ControlsPanel* self, int value) {
             self->cached_chamber_temp_ = value;
             if (self->are_subjects_initialized() && self->active_)
                 self->update_chamber_temp_display();
-        });
+        },
+        chamber_temp_lifetime_);
     chamber_target_observer_ = observe_int_sync<ControlsPanel>(
-        printer_state_.get_chamber_target_subject(), this, [](ControlsPanel* self, int value) {
+        printer_state_.get_chamber_target_subject(chamber_target_lifetime_), this,
+        [](ControlsPanel* self, int value) {
             self->cached_chamber_target_ = value;
             if (self->are_subjects_initialized() && self->active_)
                 self->update_chamber_temp_display();
-        });
+        },
+        chamber_target_lifetime_);
 
     // Subscribe to fan updates (skip formatting when hidden)
     fan_observer_ = observe_int_sync<ControlsPanel>(printer_state_.get_fan_speed_subject(), this,

@@ -93,6 +93,10 @@ void NozzleTempsWidget::clear_rows() {
         row.target_observer.reset();
     }
     extruder_rows_.clear();
+    // Bed subjects are also destroyed during deinit_subjects() — need lifetime
+    // tokens to prevent lv_observer_remove() on freed subjects (#734)
+    bed_temp_lifetime_.reset();
+    bed_target_lifetime_.reset();
     bed_temp_observer_.reset();
     bed_target_observer_.reset();
 
@@ -195,9 +199,9 @@ void NozzleTempsWidget::rebuild_rows() {
     // Bed row at the end
     create_bed_row(container);
 
-    // Bed observers (static subjects, no lifetime token needed)
-    lv_subject_t* bed_temp_subj = printer_state_.get_bed_temp_subject();
-    lv_subject_t* bed_target_subj = printer_state_.get_bed_target_subject();
+    // Bed subjects are destroyed during deinit_subjects() — use lifetime tokens (#734)
+    lv_subject_t* bed_temp_subj = printer_state_.get_bed_temp_subject(bed_temp_lifetime_);
+    lv_subject_t* bed_target_subj = printer_state_.get_bed_target_subject(bed_target_lifetime_);
 
     if (bed_temp_subj) {
         cached_bed_temp_ = lv_subject_get_int(bed_temp_subj);
