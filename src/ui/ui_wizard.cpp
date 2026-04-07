@@ -222,10 +222,16 @@ void ui_wizard_init_subjects() {
     spdlog::debug("[Wizard] Initializing subjects");
 
     // Check if running in preset mode (pre-configured printer package)
-    preset_mode = Config::get_instance()->has_preset();
+    // Preset mode only applies to the initial printer setup — secondary printers
+    // added via the printer manager always need the full wizard flow.
+    auto* cfg = Config::get_instance();
+    preset_mode = cfg->has_preset();
+    if (preset_mode && cfg->get_printer_ids().size() > 1) {
+        preset_mode = false;
+        spdlog::info("[Wizard] Disabled preset mode for secondary printer setup");
+    }
     if (preset_mode) {
-        spdlog::info("[Wizard] Preset mode active (preset: {})",
-                     Config::get_instance()->get_preset());
+        spdlog::info("[Wizard] Preset mode active (preset: {})", cfg->get_preset());
     }
 
     // Initialize subjects with defaults using managed macros for RAII cleanup
