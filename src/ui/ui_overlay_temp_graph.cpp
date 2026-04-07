@@ -390,7 +390,7 @@ void TempGraphOverlay::create_chips() {
         lv_obj_t* label = lv_label_create(chip);
         lv_label_set_text(label, chip_label.c_str());
         lv_obj_set_style_text_font(label, theme_manager_get_font("font_small"), 0);
-        lv_obj_set_style_text_color(label, theme_manager_get_color("text_primary"), 0);
+        lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -688,10 +688,9 @@ void TempGraphOverlay::rebuild_extruder_selector() {
         lv_obj_t* label = lv_label_create(btn);
         lv_label_set_text(label, ext->display_name.c_str());
         lv_obj_set_style_text_font(label, theme_manager_get_font("font_small"), 0);
-        lv_obj_set_style_text_color(label,
-                                    is_active ? theme_manager_get_color("on_primary")
-                                              : theme_manager_get_color("text_primary"),
-                                    0);
+        lv_obj_set_style_text_color(
+            label,
+            is_active ? theme_manager_get_color("on_primary") : theme_manager_get_color("text"), 0);
         lv_obj_remove_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_flag(label, LV_OBJ_FLAG_EVENT_BUBBLE);
 

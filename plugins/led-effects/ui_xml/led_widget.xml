@@ -20,7 +20,7 @@
             scrollable="false" clickable="false"
             flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm">
       <icon name="led_icon" src="light" size="sm" variant="primary"/>
-      <text_body text="LED Control" style_text_color="#text_primary"/>
+      <text_body text="LED Control" style_text_color="#text"/>
     </lv_obj>
 
     <!-- Toggle button -->
