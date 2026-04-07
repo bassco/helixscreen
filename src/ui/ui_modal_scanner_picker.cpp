@@ -155,9 +155,6 @@ void ScannerPickerModal::populate_device_list() {
 
     spdlog::debug("[{}] Found {} HID devices from sysfs", get_name(), devices.size());
 
-    // Track MACs already present from sysfs (to avoid duplicates from BT discovery list)
-    std::vector<std::string> sysfs_macs;
-
     for (const auto& dev : devices) {
         std::string vendor_product = dev.vendor_id + ":" + dev.product_id;
         bool is_bt = (dev.bus_type == 0x05);
@@ -453,8 +450,9 @@ void ScannerPickerModal::start_bt_discovery() {
                 info.paired = dev->paired;
                 info.is_ble = dev->is_ble;
 
-                // Marshal to UI thread via queue_update
-                helix::ui::queue_update([dctx, info]() {
+                // Use tok.defer() for safe deferred callback — the token holds its own
+                // shared_ptr, preventing use-after-free if the modal is destroyed
+                dctx->token->defer([dctx, info]() {
                     if (!dctx->alive.load())
                         return;
                     auto* modal = dctx->modal;
@@ -606,12 +604,14 @@ void ScannerPickerModal::on_pair_confirm(lv_event_t* e) {
                                 s_active_instance_->on_select_("", name);
                             }
                             s_active_instance_ = nullptr;
-                            // Note: we can't call hide() here since we may be in a queued callback
-                            // The confirmation modal was already closed above; the picker modal
-                            // will close on next user interaction or we close it now via the stack
-                            auto* picker = Modal::get_top();
-                            if (picker)
-                                Modal::hide(picker);
+                            // Defer modal hide to avoid safe_delete() inside queue_update batch
+                            lv_async_call(
+                                [](void*) {
+                                    auto* picker = Modal::get_top();
+                                    if (picker)
+                                        Modal::hide(picker);
+                                },
+                                nullptr);
                         }
                     } else {
                         auto& ldr2 = helix::bluetooth::BluetoothLoader::instance();
