@@ -1885,3 +1885,65 @@ TEST_CASE_METHOD(TelemetryTestFixture, "Snapshot: state persisted to disk and re
     REQUIRE(snap_json.contains("panel_time_sec"));
     REQUIRE(snap_json.contains("panel_visits"));
 }
+
+// ============================================================================
+// Feature Adoption [telemetry][adoption]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Feature adoption: event contains feature flags",
+                 "[telemetry][adoption]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("macros");
+    tm.notify_panel_changed("camera");
+    tm.notify_widget_interaction("led_control");
+
+    tm.record_feature_adoption();
+
+    REQUIRE(tm.queue_size() == 1);
+    auto queue = tm.get_queue_snapshot();
+    auto event = queue[0];
+    REQUIRE(event["event"] == "feature_adoption");
+    REQUIRE(event.contains("features"));
+
+    auto& features = event["features"];
+    REQUIRE(features["macros"] == true);
+    REQUIRE(features["camera"] == true);
+    REQUIRE(features["led_control"] == true);
+    REQUIRE(features["bed_mesh"] == false);
+    REQUIRE(features["console_gcode"] == false);
+}
+
+// ============================================================================
+// Settings Changes [telemetry][settings]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Settings changes: batches changes and builds event",
+                 "[telemetry][settings]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_setting_changed("theme", "dark", "light");
+    tm.notify_setting_changed("brightness", "80", "60");
+
+    tm.flush_settings_changes();
+
+    REQUIRE(tm.queue_size() == 1);
+    auto queue = tm.get_queue_snapshot();
+    auto event = queue[0];
+    REQUIRE(event["event"] == "settings_changes");
+    REQUIRE(event["changes"].size() == 2);
+    REQUIRE(event["changes"][0]["setting"] == "theme");
+    REQUIRE(event["changes"][0]["old_value"] == "dark");
+    REQUIRE(event["changes"][0]["new_value"] == "light");
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Settings changes: no event if no changes pending",
+                 "[telemetry][settings]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.flush_settings_changes();
+    REQUIRE(tm.queue_size() == 0);
+}

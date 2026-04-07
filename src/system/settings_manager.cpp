@@ -3,6 +3,8 @@
 
 #include "settings_manager.h"
 
+#include "ams_backend.h"
+#include "ams_state.h"
 #include "app_globals.h"
 #include "audio_settings_manager.h"
 #include "config.h"
@@ -11,14 +13,13 @@
 #include "led/led_controller.h"
 #include "material_settings_manager.h"
 #include "moonraker_client.h"
-#include "ams_backend.h"
-#include "ams_state.h"
 #include "printer_detector.h"
 #include "printer_state.h"
 #include "runtime_config.h"
 #include "safety_settings_manager.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
+#include "system/telemetry_manager.h"
 #include "system_settings_manager.h"
 #include "wizard_config_paths.h"
 
@@ -142,8 +143,8 @@ void SettingsManager::init_subjects() {
 
     // Auto color map for filament mapping (default: off — positional assignment)
     bool auto_color_map = config->get<bool>(config->df() + "filament/auto_color_map", false);
-    UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0,
-                           "auto_color_map", subjects_);
+    UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0, "auto_color_map",
+                           subjects_);
 
     // Chamber assignment (default: "auto" = use name heuristics)
     chamber_heater_assignment_ =
@@ -155,8 +156,8 @@ void SettingsManager::init_subjects() {
     scanner_device_id_ = config->get<std::string>(config->df() + "scanner/usb_vendor_product", "");
     scanner_device_name_ = config->get<std::string>(config->df() + "scanner/usb_device_name", "");
     if (!scanner_device_id_.empty()) {
-        spdlog::info("[SettingsManager] Loaded scanner device: {} ({})",
-                     scanner_device_name_, scanner_device_id_);
+        spdlog::info("[SettingsManager] Loaded scanner device: {} ({})", scanner_device_name_,
+                     scanner_device_id_);
     }
 
     subjects_initialized_ = true;
@@ -198,11 +199,16 @@ bool SettingsManager::get_led_enabled() const {
 void SettingsManager::set_led_enabled(bool enabled) {
     spdlog::info("[SettingsManager] set_led_enabled({})", enabled);
 
+    auto old_val = std::to_string(lv_subject_get_int(&led_enabled_subject_));
+
     // 1. Delegate to LedController for actual hardware control
     helix::led::LedController::instance().light_set(enabled);
 
     // 2. Update subject (UI reacts)
     lv_subject_set_int(&led_enabled_subject_, enabled ? 1 : 0);
+
+    TelemetryManager::instance().notify_setting_changed("led_enabled", old_val,
+                                                        std::to_string(enabled ? 1 : 0));
 
     // 3. Persist startup preference via LedController
     helix::led::LedController::instance().set_led_on_at_start(enabled);
@@ -224,6 +230,8 @@ void SettingsManager::set_z_movement_style(ZMovementStyle style) {
     spdlog::info("[SettingsManager] set_z_movement_style({})",
                  val == 0 ? "Auto" : (val == 1 ? "Bed Moves" : "Nozzle Moves"));
 
+    auto old_val = std::to_string(lv_subject_get_int(&z_movement_style_subject_));
+
     // 1. Update subject (UI reacts)
     lv_subject_set_int(&z_movement_style_subject_, val);
 
@@ -231,6 +239,9 @@ void SettingsManager::set_z_movement_style(ZMovementStyle style) {
     Config* config = Config::get_instance();
     config->set<int>(config->df() + "z_movement_style", val);
     config->save();
+
+    TelemetryManager::instance().notify_setting_changed("z_movement_style", old_val,
+                                                        std::to_string(val));
 
     // 3. Apply override to printer state
     get_printer_state().apply_effective_bed_moves();
@@ -291,10 +302,13 @@ void SettingsManager::set_toolhead_style(ToolheadStyle style) {
     int val = static_cast<int>(style);
     val = std::clamp(val, 0, 7);
     spdlog::info("[SettingsManager] set_toolhead_style({})", val);
+    auto old_val = std::to_string(lv_subject_get_int(&toolhead_style_subject_));
     lv_subject_set_int(&toolhead_style_subject_, val);
     Config* config = Config::get_instance();
     config->set<int>("/appearance/toolhead_style", val);
     config->save();
+    TelemetryManager::instance().notify_setting_changed("toolhead_style", old_val,
+                                                        std::to_string(val));
 }
 
 const char* SettingsManager::get_toolhead_style_options() {
@@ -331,6 +345,8 @@ void SettingsManager::set_extrude_speed(int mm_per_sec) {
     mm_per_sec = std::clamp(mm_per_sec, 1, 50);
     spdlog::info("[SettingsManager] set_extrude_speed({} mm/s)", mm_per_sec);
 
+    auto old_val = std::to_string(lv_subject_get_int(&extrude_speed_subject_));
+
     // 1. Update subject (UI reacts)
     lv_subject_set_int(&extrude_speed_subject_, mm_per_sec);
 
@@ -338,6 +354,9 @@ void SettingsManager::set_extrude_speed(int mm_per_sec) {
     Config* config = Config::get_instance();
     config->set<int>(config->df() + "filament/extrude_speed", mm_per_sec);
     config->save();
+
+    TelemetryManager::instance().notify_setting_changed("extrude_speed", old_val,
+                                                        std::to_string(mm_per_sec));
 }
 
 // ============================================================================
@@ -377,8 +396,7 @@ void SettingsManager::set_show_widget_labels(bool show) {
 // ============================================================================
 
 bool SettingsManager::get_auto_color_map() const {
-    return lv_subject_get_int(
-               const_cast<lv_subject_t*>(&auto_color_map_subject_)) != 0;
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&auto_color_map_subject_)) != 0;
 }
 
 void SettingsManager::set_auto_color_map(bool enabled) {

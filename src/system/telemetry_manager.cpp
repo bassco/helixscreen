@@ -966,6 +966,7 @@ void TelemetryManager::start_auto_send() {
                  INITIAL_SEND_DELAY_MS / 1000, AUTO_SEND_INTERVAL_MS / 1000);
 
     start_snapshot_timer();
+    start_feature_adoption_timer();
 }
 
 void TelemetryManager::stop_auto_send() {
@@ -975,6 +976,8 @@ void TelemetryManager::stop_auto_send() {
         spdlog::info("[TelemetryManager] Auto-send timer stopped");
     }
     stop_snapshot_timer();
+    stop_feature_adoption_timer();
+    stop_settings_debounce_timer();
 }
 
 // =============================================================================
@@ -2311,14 +2314,159 @@ void TelemetryManager::record_performance_snapshot() {
 }
 
 // =============================================================================
-// Stub implementations for methods declared in header (implemented in later tasks)
+// Feature Adoption Event
 // =============================================================================
 
-void TelemetryManager::record_feature_adoption() {}
-void TelemetryManager::notify_setting_changed(const std::string& /*setting_name*/,
-                                              const std::string& /*old_value*/,
-                                              const std::string& /*new_value*/) {}
-void TelemetryManager::flush_settings_changes() {}
+nlohmann::json TelemetryManager::build_feature_adoption_event() const {
+    json event;
+    event["schema_version"] = SCHEMA_VERSION;
+    event["event"] = "feature_adoption";
+    event["device_id"] = get_hashed_device_id();
+    event["timestamp"] = get_timestamp();
+    event["app_version"] = HELIX_VERSION;
+    event["app_platform"] = UpdateChecker::get_platform_key();
+
+    auto has_panel = [&](const std::string& name) -> bool {
+        auto it = panel_visits_.find(name);
+        return it != panel_visits_.end() && it->second > 0;
+    };
+
+    auto has_widget = [&](const std::string& name) -> bool {
+        auto it = widget_interactions_.find(name);
+        return it != widget_interactions_.end() && it->second > 0;
+    };
+
+    json features;
+    features["macros"] = has_panel("macros") || has_widget("favorite_macro");
+    features["filament_management"] = has_panel("filament") || has_widget("filament");
+    features["camera"] = has_panel("camera");
+    features["console_gcode"] = has_panel("console");
+    features["bed_mesh"] = has_panel("bed_mesh");
+    features["input_shaper"] = has_panel("input_shaper");
+    features["manual_probe"] = has_widget("manual_probe");
+    features["spoolman"] = has_widget("spoolman");
+    features["led_control"] = has_widget("led_control");
+    features["power_devices"] = has_widget("power_device");
+    features["multi_printer"] = has_widget("printer_switcher");
+    features["theme_changed"] = false;
+    features["timelapse"] = has_widget("timelapse");
+    features["favorites"] = has_widget("favorite_macro");
+    features["pid_calibration"] = has_panel("pid_calibration");
+    features["firmware_retraction"] = has_panel("firmware_retraction");
+
+    event["features"] = features;
+    return event;
+}
+
+void TelemetryManager::record_feature_adoption() {
+    if (shutting_down_.load() || !initialized_.load() || !enabled_.load())
+        return;
+
+    spdlog::debug("[TelemetryManager] Recording feature adoption");
+    auto event = build_feature_adoption_event();
+    enqueue_event(event);
+}
+
+void TelemetryManager::start_feature_adoption_timer() {
+    if (feature_adoption_timer_)
+        return;
+
+    feature_adoption_timer_ = lv_timer_create(
+        [](lv_timer_t* timer) {
+            auto* self = static_cast<TelemetryManager*>(lv_timer_get_user_data(timer));
+            if (self && !self->shutting_down_.load()) {
+                self->record_feature_adoption();
+            }
+            lv_timer_delete(timer);
+            if (self)
+                self->feature_adoption_timer_ = nullptr;
+        },
+        FEATURE_ADOPTION_DELAY_MS, this);
+    lv_timer_set_repeat_count(feature_adoption_timer_, 1);
+}
+
+void TelemetryManager::stop_feature_adoption_timer() {
+    if (feature_adoption_timer_) {
+        lv_timer_delete(feature_adoption_timer_);
+        feature_adoption_timer_ = nullptr;
+    }
+}
+
+// =============================================================================
+// Settings Changes Event
+// =============================================================================
+
+void TelemetryManager::notify_setting_changed(const std::string& setting_name,
+                                              const std::string& old_value,
+                                              const std::string& new_value) {
+    if (!enabled_.load() || !initialized_.load() || shutting_down_.load())
+        return;
+
+    pending_settings_changes_.push_back({setting_name, old_value, new_value});
+    spdlog::trace("[TelemetryManager] Setting changed: {}='{}' -> '{}'", setting_name, old_value,
+                  new_value);
+
+    start_settings_debounce_timer();
+}
+
+void TelemetryManager::flush_settings_changes() {
+    if (pending_settings_changes_.empty())
+        return;
+
+    auto event = build_settings_changes_event();
+    enqueue_event(event);
+    pending_settings_changes_.clear();
+}
+
+nlohmann::json TelemetryManager::build_settings_changes_event() const {
+    json event;
+    event["schema_version"] = SCHEMA_VERSION;
+    event["event"] = "settings_changes";
+    event["device_id"] = get_hashed_device_id();
+    event["timestamp"] = get_timestamp();
+    event["app_version"] = HELIX_VERSION;
+    event["app_platform"] = UpdateChecker::get_platform_key();
+
+    json changes = json::array();
+    for (const auto& c : pending_settings_changes_) {
+        changes.push_back(
+            {{"setting", c.setting}, {"old_value", c.old_value}, {"new_value", c.new_value}});
+    }
+    event["changes"] = changes;
+    return event;
+}
+
+void TelemetryManager::start_settings_debounce_timer() {
+    if (settings_debounce_timer_) {
+        lv_timer_reset(settings_debounce_timer_);
+        return;
+    }
+
+    settings_debounce_timer_ = lv_timer_create(
+        [](lv_timer_t* timer) {
+            auto* self = static_cast<TelemetryManager*>(lv_timer_get_user_data(timer));
+            if (self && !self->shutting_down_.load()) {
+                self->flush_settings_changes();
+            }
+            lv_timer_delete(timer);
+            if (self)
+                self->settings_debounce_timer_ = nullptr;
+        },
+        SETTINGS_DEBOUNCE_MS, this);
+    lv_timer_set_repeat_count(settings_debounce_timer_, 1);
+}
+
+void TelemetryManager::stop_settings_debounce_timer() {
+    if (settings_debounce_timer_) {
+        lv_timer_delete(settings_debounce_timer_);
+        settings_debounce_timer_ = nullptr;
+    }
+}
+
+// =============================================================================
+// Periodic Snapshot
+// =============================================================================
+
 void TelemetryManager::fire_periodic_snapshot() {
     if (shutting_down_.load() || !initialized_.load() || !enabled_.load())
         return;
@@ -2331,13 +2479,6 @@ void TelemetryManager::fire_periodic_snapshot() {
 
     snapshot_seq_++;
     save_snapshot_state();
-}
-
-nlohmann::json TelemetryManager::build_feature_adoption_event() const {
-    return {};
-}
-nlohmann::json TelemetryManager::build_settings_changes_event() const {
-    return {};
 }
 
 void TelemetryManager::start_snapshot_timer() {
@@ -2454,11 +2595,6 @@ void TelemetryManager::load_snapshot_state() {
         spdlog::warn("[TelemetryManager] Failed to load snapshot state: {}", e.what());
     }
 }
-void TelemetryManager::start_feature_adoption_timer() {}
-void TelemetryManager::stop_feature_adoption_timer() {}
-void TelemetryManager::start_settings_debounce_timer() {}
-void TelemetryManager::stop_settings_debounce_timer() {}
-
 // =============================================================================
 // Print Outcome Observer
 // =============================================================================
