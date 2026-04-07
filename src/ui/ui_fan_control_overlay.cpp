@@ -16,11 +16,10 @@
 #include "display_settings_manager.h"
 #include "format_utils.h"
 #include "helix-xml/src/xml/lv_xml.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "ui/fan_spin_animation.h"
-
-#include "lvgl/src/others/translation/lv_translation.h"
 
 #include <spdlog/spdlog.h>
 
@@ -41,10 +40,11 @@ struct FanRenameData {
 
 void on_fan_long_pressed(lv_event_t* e) {
     auto* data = static_cast<FanRenameData*>(lv_event_get_user_data(e));
-    if (!data) return;
+    if (!data)
+        return;
     spdlog::debug("[FanControlOverlay] Long press on '{}'", data->object_name);
     helix::settings::get_fan_settings_overlay().handle_fan_rename(data->object_name,
-                                                                   data->display_name);
+                                                                  data->display_name);
 }
 
 void on_fan_rename_data_delete(lv_event_t* e) {
@@ -145,7 +145,8 @@ void FanControlOverlay::on_activate() {
     if (auto* fans_ver = printer_state_.get_fans_version_subject()) {
         fans_observer_ = observe_int_sync<FanControlOverlay>(
             fans_ver, this, [](FanControlOverlay* self, int /* version */) {
-                if (!self->is_visible()) return;
+                if (!self->is_visible())
+                    return;
                 // Use lifetime_.defer to defer the rebuild outside process_pending(),
                 // preventing lv_obj_clean() from corrupting the LVGL event linked
                 // list (issue #190).
@@ -153,7 +154,8 @@ void FanControlOverlay::on_activate() {
                     self->fans_rebuild_pending_ = true;
                     self->lifetime_.defer("FanControlOverlay::rebuild_fans", [self]() {
                         self->fans_rebuild_pending_ = false;
-                        if (!self->is_visible() || !self->fans_container_) return;
+                        if (!self->is_visible() || !self->fans_container_)
+                            return;
                         self->unsubscribe_from_fan_speeds();
                         self->populate_fans();
                         self->subscribe_to_fan_speeds();
@@ -258,14 +260,10 @@ void FanControlOverlay::populate_fans() {
                 send_fan_speed(fan_id, speed_percent);
             });
 
-            // Long-press to rename — registered on both card root and arc.
-            // The arc is interactive (speed control) so it can't bubble long-press
-            // to the card root. Each gets its own FanRenameData, freed on DELETE.
+            // Long-press to rename — registered on card root only.
+            // The arc is excluded so long-press on the arc/handle controls speed,
+            // not rename.
             attach_long_press_rename(afd.dial->get_root(), fan.object_name, fan.display_name);
-            lv_obj_t* dial_arc = lv_obj_find_by_name(afd.dial->get_root(), "dial_arc");
-            if (dial_arc) {
-                attach_long_press_rename(dial_arc, fan.object_name, fan.display_name);
-            }
 
             animated_fan_dials_.push_back(std::move(afd));
 
@@ -492,4 +490,3 @@ void FanControlOverlay::refresh_all_auto_fan_animations() {
         update_auto_fan_animation(card, card.last_speed_pct);
     }
 }
-
