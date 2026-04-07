@@ -61,11 +61,13 @@ class PrintStatusWidget : public PanelWidget {
     lv_obj_t* parent_screen_ = nullptr;
 
     // Cached widget references (looked up after XML creation)
-    lv_obj_t* print_card_thumb_ = nullptr;        // Idle state thumbnail
-    lv_obj_t* print_card_active_thumb_ = nullptr; // Active print thumbnail
-    lv_obj_t* print_card_layout_ = nullptr;       // Row/column layout container
-    lv_obj_t* print_card_thumb_wrap_ = nullptr;   // Thumbnail wrapper
-    lv_obj_t* print_card_info_ = nullptr;         // Info section (filename/progress)
+    lv_obj_t* print_card_thumb_ = nullptr;          // Idle state thumbnail
+    lv_obj_t* print_card_active_thumb_ = nullptr;   // Active print thumbnail
+    lv_obj_t* print_card_layout_ = nullptr;         // Row/column layout container
+    lv_obj_t* print_card_thumb_wrap_ = nullptr;     // Thumbnail wrapper
+    lv_obj_t* print_card_info_ = nullptr;           // Info section (filename/progress)
+    lv_obj_t* print_card_printing_ = nullptr;       // Active state container (preparing + printing)
+    lv_obj_t* print_card_preparing_info_ = nullptr; // Preparing info section
 
     // Library idle state widgets
     lv_obj_t* print_card_idle_ = nullptr;          // Full library idle card
@@ -81,6 +83,7 @@ class PrintStatusWidget : public PanelWidget {
 
     // Compact mode and state tracking
     bool is_compact_ = false;
+    bool is_column_ = false;
     bool last_print_available_ = false;
 
     // PrinterState reference for subject access

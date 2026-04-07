@@ -93,6 +93,8 @@ void PrintStatusWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     print_card_layout_ = lv_obj_find_by_name(widget_obj_, "print_card_layout");
     print_card_thumb_wrap_ = lv_obj_find_by_name(widget_obj_, "print_card_thumb_wrap");
     print_card_info_ = lv_obj_find_by_name(widget_obj_, "print_card_info");
+    print_card_printing_ = lv_obj_find_by_name(widget_obj_, "print_card_printing");
+    print_card_preparing_info_ = lv_obj_find_by_name(widget_obj_, "print_card_preparing_info");
 
     // Library idle state widgets
     print_card_idle_ = lv_obj_find_by_name(widget_obj_, "print_card_idle");
@@ -231,6 +233,8 @@ void PrintStatusWidget::detach() {
     print_card_layout_ = nullptr;
     print_card_thumb_wrap_ = nullptr;
     print_card_info_ = nullptr;
+    print_card_printing_ = nullptr;
+    print_card_preparing_info_ = nullptr;
     print_card_idle_ = nullptr;
     print_card_idle_compact_ = nullptr;
     print_card_thumb_compact_ = nullptr;
@@ -260,33 +264,47 @@ void PrintStatusWidget::on_size_changed(int colspan, int rowspan, int /*width_px
         update_idle_compact_mode();
     }
 
-    if (!print_card_layout_ || !print_card_thumb_wrap_ || !print_card_info_) {
+    if (!print_card_layout_ || !print_card_thumb_wrap_) {
         return;
     }
 
     // 2x2: column layout (thumbnail on top, info below)
     // 1x2, 3x2: row layout (thumbnail left, info right)
     bool use_column = (colspan == 2 && rowspan >= 2);
+    if (use_column == is_column_) {
+        return;
+    }
+    is_column_ = use_column;
 
     // Update subject for declarative icon visibility in XML
     lv_subject_set_int(&column_mode_subject_, use_column ? 1 : 0);
+
+    auto apply_info_layout = [use_column](lv_obj_t* info) {
+        if (!info)
+            return;
+        if (use_column) {
+            lv_obj_set_width(info, LV_PCT(100));
+            lv_obj_set_height(info, LV_SIZE_CONTENT);
+            lv_obj_set_style_flex_grow(info, 0, 0);
+        } else {
+            lv_obj_set_height(info, LV_PCT(100));
+            lv_obj_set_width(info, LV_SIZE_CONTENT);
+            lv_obj_set_style_flex_grow(info, 1, 0);
+        }
+    };
 
     if (use_column) {
         lv_obj_set_flex_flow(print_card_layout_, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_width(print_card_thumb_wrap_, LV_PCT(100));
         lv_obj_set_style_flex_grow(print_card_thumb_wrap_, 1, 0);
-        lv_obj_set_width(print_card_info_, LV_PCT(100));
-        lv_obj_set_height(print_card_info_, LV_SIZE_CONTENT);
-        lv_obj_set_style_flex_grow(print_card_info_, 0, 0);
     } else {
         lv_obj_set_flex_flow(print_card_layout_, LV_FLEX_FLOW_ROW);
         lv_obj_set_width(print_card_thumb_wrap_, LV_PCT(40));
         lv_obj_set_height(print_card_thumb_wrap_, LV_PCT(100));
         lv_obj_set_style_flex_grow(print_card_thumb_wrap_, 0, 0);
-        lv_obj_set_height(print_card_info_, LV_PCT(100));
-        lv_obj_set_width(print_card_info_, LV_SIZE_CONTENT);
-        lv_obj_set_style_flex_grow(print_card_info_, 1, 0);
     }
+    apply_info_layout(print_card_preparing_info_);
+    apply_info_layout(print_card_info_);
 
     spdlog::debug("[PrintStatusWidget] on_size_changed {}x{} -> {} (compact={})", colspan, rowspan,
                   use_column ? "column" : "row", is_compact_);
@@ -451,8 +469,16 @@ void PrintStatusWidget::on_print_state_changed(PrintJobState state) {
         if (print_card_idle_compact_ && lv_obj_is_valid(print_card_idle_compact_)) {
             lv_obj_add_flag(print_card_idle_compact_, LV_OBJ_FLAG_HIDDEN);
         }
+        // Show the active container (preparing/printing info visibility handled by XML bindings)
+        if (print_card_printing_ && lv_obj_is_valid(print_card_printing_)) {
+            lv_obj_remove_flag(print_card_printing_, LV_OBJ_FLAG_HIDDEN);
+        }
     } else {
         update_idle_compact_mode();
+        // Hide the active container
+        if (print_card_printing_ && lv_obj_is_valid(print_card_printing_)) {
+            lv_obj_add_flag(print_card_printing_, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 
     if (is_active) {
