@@ -5,6 +5,7 @@
 
 #include "ui_confetti.h"
 #include "ui_filename_utils.h"
+#include "ui_icon.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_print_status.h"
@@ -19,7 +20,7 @@
 #include "moonraker_manager.h"
 #include "printer_state.h"
 #include "sound_manager.h"
-#include "theme_manager.h"
+#include "static_subject_registry.h"
 
 #include <spdlog/spdlog.h>
 
@@ -35,6 +36,75 @@ static PrintJobState prev_print_state = PrintJobState::STANDBY;
 
 // Guard against false completion on startup - first update may have stale initial state
 static bool has_received_first_update = false;
+
+// --- Subjects for declarative XML bindings in print_completion_modal.xml ---
+static bool s_subjects_initialized = false;
+
+// String subjects with backing buffers
+static char s_title_buf[64];
+static lv_subject_t s_title_subject;
+
+static char s_filename_buf[256];
+static lv_subject_t s_filename_subject;
+
+static char s_duration_buf[64];
+static lv_subject_t s_duration_subject;
+
+static char s_estimate_buf[64];
+static lv_subject_t s_estimate_subject;
+
+static char s_layers_buf[64];
+static lv_subject_t s_layers_subject;
+
+static char s_filament_buf[64];
+static lv_subject_t s_filament_subject;
+
+// Int subjects for visibility flags (1=visible, 0=hidden)
+static lv_subject_t s_has_estimate_subject;
+static lv_subject_t s_has_filament_subject;
+
+static void init_completion_subjects() {
+    if (s_subjects_initialized)
+        return;
+
+    lv_subject_init_string(&s_title_subject, s_title_buf, nullptr, sizeof(s_title_buf), "");
+    lv_subject_init_string(&s_filename_subject, s_filename_buf, nullptr, sizeof(s_filename_buf),
+                           "");
+    lv_subject_init_string(&s_duration_subject, s_duration_buf, nullptr, sizeof(s_duration_buf),
+                           "");
+    lv_subject_init_string(&s_estimate_subject, s_estimate_buf, nullptr, sizeof(s_estimate_buf),
+                           "");
+    lv_subject_init_string(&s_layers_subject, s_layers_buf, nullptr, sizeof(s_layers_buf), "");
+    lv_subject_init_string(&s_filament_subject, s_filament_buf, nullptr, sizeof(s_filament_buf),
+                           "");
+    lv_subject_init_int(&s_has_estimate_subject, 1);
+    lv_subject_init_int(&s_has_filament_subject, 1);
+
+    lv_xml_register_subject(nullptr, "print_completion_title", &s_title_subject);
+    lv_xml_register_subject(nullptr, "print_completion_filename", &s_filename_subject);
+    lv_xml_register_subject(nullptr, "print_completion_duration", &s_duration_subject);
+    lv_xml_register_subject(nullptr, "print_completion_estimate", &s_estimate_subject);
+    lv_xml_register_subject(nullptr, "print_completion_layers", &s_layers_subject);
+    lv_xml_register_subject(nullptr, "print_completion_filament", &s_filament_subject);
+    lv_xml_register_subject(nullptr, "print_completion_has_estimate", &s_has_estimate_subject);
+    lv_xml_register_subject(nullptr, "print_completion_has_filament", &s_has_filament_subject);
+
+    s_subjects_initialized = true;
+
+    StaticSubjectRegistry::instance().register_deinit("PrintCompletion", []() {
+        if (!s_subjects_initialized)
+            return;
+        lv_subject_deinit(&s_title_subject);
+        lv_subject_deinit(&s_filename_subject);
+        lv_subject_deinit(&s_duration_subject);
+        lv_subject_deinit(&s_estimate_subject);
+        lv_subject_deinit(&s_layers_subject);
+        lv_subject_deinit(&s_filament_subject);
+        lv_subject_deinit(&s_has_estimate_subject);
+        lv_subject_deinit(&s_has_filament_subject);
+        s_subjects_initialized = false;
+    });
+}
 
 // Helper to cleanup .helix_temp modified G-code files after print ends
 static void cleanup_helix_temp_file(const std::string& filename) {
@@ -71,6 +141,8 @@ static void cleanup_helix_temp_file(const std::string& filename) {
 
 // Helper to show the rich print completion modal
 static void show_rich_completion_modal(PrintJobState state, const char* filename) {
+    init_completion_subjects();
+
     auto& printer_state = get_printer_state();
 
     // Get print stats (wall-clock elapsed including prep time)
@@ -82,29 +154,60 @@ static void show_rich_completion_modal(PrintJobState state, const char* filename
     spdlog::info("[PrintComplete] Stats: duration={}s, estimated={}s, layers={}, filament={}mm",
                  duration_secs, estimated_secs, total_layers, filament_mm);
 
-    // Determine icon colors and title based on state
-    const char* icon_color_token = "success";
+    // Determine icon and title based on state
+    const char* icon_src = "check_circle";
+    const char* icon_variant = "success";
     const char* title = "Print Complete";
 
     switch (state) {
     case PrintJobState::COMPLETE:
-        icon_color_token = "success";
+        icon_src = "check_circle";
+        icon_variant = "success";
         title = "Print Complete";
         break;
     case PrintJobState::CANCELLED:
-        icon_color_token = "warning";
+        icon_src = "cancel";
+        icon_variant = "warning";
         title = "Print Cancelled";
         break;
     case PrintJobState::ERROR:
-        icon_color_token = "danger";
+        icon_src = "alert";
+        icon_variant = "error";
         title = "Print Failed";
         break;
     default:
         break;
     }
 
-    // Show modal using unified Modal system
-    // Backdrop click-to-close and ESC handling come for free
+    // Set all subjects BEFORE showing modal so XML bindings resolve immediately
+    lv_subject_copy_string(&s_title_subject, lv_tr(title));
+    lv_subject_copy_string(&s_filename_subject, filename);
+
+    std::string duration_str = format::duration_padded(duration_secs) + " " + lv_tr("elapsed");
+    lv_subject_copy_string(&s_duration_subject, duration_str.c_str());
+
+    if (estimated_secs > 0) {
+        std::string est_str = std::string("est") + " " + format::duration_padded(estimated_secs);
+        lv_subject_copy_string(&s_estimate_subject, est_str.c_str());
+        lv_subject_set_int(&s_has_estimate_subject, 1);
+    } else {
+        lv_subject_set_int(&s_has_estimate_subject, 0);
+    }
+
+    char layers_tmp[32];
+    snprintf(layers_tmp, sizeof(layers_tmp), "%d %s", total_layers, lv_tr("layers"));
+    lv_subject_copy_string(&s_layers_subject, layers_tmp);
+
+    if (filament_mm > 0) {
+        std::string fil_str =
+            format::format_filament_length(static_cast<double>(filament_mm)) + " " + lv_tr("used");
+        lv_subject_copy_string(&s_filament_subject, fil_str.c_str());
+        lv_subject_set_int(&s_has_filament_subject, 1);
+    } else {
+        lv_subject_set_int(&s_has_filament_subject, 0);
+    }
+
+    // Show modal - XML bind_text and bind_flag_if_eq resolve from subjects above
     lv_obj_t* dialog = helix::ui::modal_show("print_completion_modal");
 
     if (!dialog) {
@@ -112,82 +215,14 @@ static void show_rich_completion_modal(PrintJobState state, const char* filename
         return;
     }
 
-    // Find and update the icon
+    // Icon src/variant must be set imperatively (no XML binding support for icon properties)
     lv_obj_t* icon_widget = lv_obj_find_by_name(dialog, "status_icon");
     if (icon_widget) {
-        // Update icon source
-        lv_obj_t* icon_label = lv_obj_get_child(icon_widget, 0);
-        if (icon_label) {
-            // Icon component stores the icon name, we need to update via the icon API
-            // For now, just update the color - the icon is set in XML
-            lv_color_t color = theme_manager_get_color(icon_color_token);
-            lv_obj_set_style_text_color(icon_label, color, LV_PART_MAIN);
-        }
+        ui_icon_set_source(icon_widget, icon_src);
+        ui_icon_set_variant(icon_widget, icon_variant);
     }
-
-    // Update title
-    lv_obj_t* title_label = lv_obj_find_by_name(dialog, "title_label");
-    if (title_label) {
-        lv_label_set_text(title_label, title);
-    }
-
-    // Update filename
-    lv_obj_t* filename_label = lv_obj_find_by_name(dialog, "filename_label");
-    if (filename_label) {
-        lv_label_set_text(filename_label, filename);
-    }
-
-    // Update duration
-    lv_obj_t* duration_label = lv_obj_find_by_name(dialog, "duration_label");
-    if (duration_label) {
-        std::string duration_str = format::duration_padded(duration_secs) + " " + lv_tr("elapsed");
-        lv_label_set_text(duration_label, duration_str.c_str());
-    }
-
-    // Update slicer estimate (only if available)
-    lv_obj_t* estimate_stat = lv_obj_find_by_name(dialog, "estimate_stat");
-    if (estimate_stat) {
-        if (estimated_secs > 0) {
-            std::string est_str =
-                std::string("est") + " " + format::duration_padded(estimated_secs);
-            lv_obj_t* estimate_label = lv_obj_find_by_name(dialog, "estimate_label");
-            if (estimate_label) {
-                lv_label_set_text(estimate_label, est_str.c_str());
-            }
-        } else {
-            // Hide estimate stat if no slicer estimate was available
-            lv_obj_add_flag(estimate_stat, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-
-    // Update layers
-    lv_obj_t* layers_label = lv_obj_find_by_name(dialog, "layers_label");
-    if (layers_label) {
-        char layers_buf[32];
-        snprintf(layers_buf, sizeof(layers_buf), "%d %s", total_layers, lv_tr("layers"));
-        lv_label_set_text(layers_label, layers_buf);
-    }
-
-    // Show filament usage (from Moonraker print_stats.filament_used)
-    lv_obj_t* filament_stat = lv_obj_find_by_name(dialog, "filament_stat");
-    if (filament_stat) {
-        if (filament_mm > 0) {
-            std::string fil_str = format::format_filament_length(static_cast<double>(filament_mm)) +
-                                  " " + lv_tr("used");
-            lv_obj_t* filament_label = lv_obj_find_by_name(dialog, "filament_label");
-            if (filament_label) {
-                lv_label_set_text(filament_label, fil_str.c_str());
-            }
-        } else {
-            lv_obj_add_flag(filament_stat, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-
-    // Note: OK button dismissal is wired via XML event_cb="on_print_complete_ok"
-    // Backdrop click-to-close and ESC handling are automatic via Modal system
 
     // Celebrate successful prints with confetti (respects animations setting)
-    // Create on lv_layer_top() so it renders above everything including modals
     if (state == PrintJobState::COMPLETE &&
         DisplaySettingsManager::instance().get_animations_enabled()) {
         lv_obj_t* confetti = ui_confetti_create(lv_layer_top());
@@ -330,6 +365,9 @@ static void on_print_state_changed_for_notification(lv_observer_t* observer,
 }
 
 ObserverGuard init_print_completion_observer() {
+    // Initialize subjects early so XML bindings are available when modal is shown
+    init_completion_subjects();
+
     // Reset state tracking on (re)initialization
     // prev_print_state will be set to actual state on first callback
     has_received_first_update = false;
