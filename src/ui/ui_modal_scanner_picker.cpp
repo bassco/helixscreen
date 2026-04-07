@@ -420,14 +420,15 @@ void ScannerPickerModal::start_bt_discovery() {
     bt_discovery_ctx_ = std::make_unique<BtDiscoveryContext>();
     bt_discovery_ctx_->alive.store(true);
     bt_discovery_ctx_->modal = this;
+    bt_discovery_ctx_->token = lifetime_.token();
 
     auto* disc_ctx = bt_discovery_ctx_.get();
     auto* ctx = bt_ctx_;
-    auto token = lifetime_.token();
 
     // Run discovery on a detached thread
-    std::thread([ctx, disc_ctx, token, &loader]() {
-        loader.discover(
+    std::thread([ctx, disc_ctx]() {
+        auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+        ldr.discover(
             ctx, 15000,
             [](const helix_bt_device* dev, void* user_data) {
                 auto* dctx = static_cast<BtDiscoveryContext*>(user_data);
@@ -452,7 +453,7 @@ void ScannerPickerModal::start_bt_discovery() {
                 info.paired = dev->paired;
                 info.is_ble = dev->is_ble;
 
-                // Marshal to UI thread
+                // Marshal to UI thread via queue_update
                 helix::ui::queue_update([dctx, info]() {
                     if (!dctx->alive.load())
                         return;
@@ -478,9 +479,7 @@ void ScannerPickerModal::start_bt_discovery() {
             disc_ctx);
 
         // Discovery completed (timeout or stopped)
-        helix::ui::queue_update([disc_ctx, token]() {
-            if (token.expired())
-                return;
+        disc_ctx->token->defer([disc_ctx]() {
             if (!disc_ctx->alive.load())
                 return;
 

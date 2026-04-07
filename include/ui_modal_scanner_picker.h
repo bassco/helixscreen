@@ -10,6 +10,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -77,6 +78,7 @@ class ScannerPickerModal : public Modal {
     struct BtDiscoveryContext {
         std::atomic<bool> alive{true};
         ScannerPickerModal* modal = nullptr;
+        std::optional<LifetimeToken> token; ///< For safe deferred callbacks from BG thread
     };
 
     helix_bt_context* bt_ctx_ = nullptr;
