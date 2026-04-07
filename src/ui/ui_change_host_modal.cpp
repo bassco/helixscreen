@@ -168,17 +168,17 @@ void ChangeHostModal::handle_test_connection() {
         return;
     }
     if (!is_valid_ip_or_hostname(ip)) {
-        set_status("icon_xmark_circle", "danger", "Invalid IP address or hostname");
+        set_status("icon_close_circle", "danger", "Invalid IP address or hostname");
         return;
     }
     if (!is_valid_port(port_clean)) {
-        set_status("icon_xmark_circle", "danger", "Invalid port (must be 1-65535)");
+        set_status("icon_close_circle", "danger", "Invalid port (must be 1-65535)");
         return;
     }
 
     MoonrakerClient* client = get_moonraker_client();
     if (!client) {
-        set_status("icon_xmark_circle", "danger", "Client not available");
+        set_status("icon_close_circle", "danger", "Client not available");
         return;
     }
 
@@ -217,7 +217,7 @@ void ChangeHostModal::handle_test_connection() {
 
     if (result != 0) {
         spdlog::error("[ChangeHostModal] Failed to initiate test connection: {}", result);
-        set_status("icon_xmark_circle", "danger", "Error starting connection test");
+        set_status("icon_close_circle", "danger", "Error starting connection test");
         lv_subject_set_int(&testing_subject_, 0);
     }
 }
@@ -248,7 +248,7 @@ void ChangeHostModal::on_test_failure() {
         if (!is_visible())
             return;
 
-        set_status("icon_xmark_circle", "danger", "Connection failed");
+        set_status("icon_close_circle", "danger", "Connection failed");
         lv_subject_set_int(&testing_subject_, 0);
 
         spdlog::debug("[ChangeHostModal] Test failed, keeping Save disabled");

@@ -211,13 +211,13 @@ void WizardConnectionStep::handle_test_connection_clicked() {
     }
 
     if (!is_valid_ip_or_hostname(ip)) {
-        set_status("icon_xmark_circle", StatusVariant::Danger, "Invalid IP address or hostname");
+        set_status("icon_close_circle", StatusVariant::Danger, "Invalid IP address or hostname");
         spdlog::warn("[{}] Invalid IP/hostname: {}", get_name(), ip);
         return;
     }
 
     if (!is_valid_port(port_clean)) {
-        set_status("icon_xmark_circle", StatusVariant::Danger, "Invalid port (must be 1-65535)");
+        set_status("icon_close_circle", StatusVariant::Danger, "Invalid port (must be 1-65535)");
         spdlog::warn("[{}] Invalid port: {}", get_name(), port_clean);
         return;
     }
@@ -225,7 +225,7 @@ void WizardConnectionStep::handle_test_connection_clicked() {
     // Get MoonrakerClient instance
     MoonrakerClient* client = get_moonraker_client();
     if (!client) {
-        set_status("icon_xmark_circle", StatusVariant::Danger,
+        set_status("icon_close_circle", StatusVariant::Danger,
                    "Error: Moonraker client not initialized");
         lv_subject_set_int(&connection_testing_, 0);
         LOG_ERROR_INTERNAL("[{}] MoonrakerClient is nullptr", get_name());
@@ -285,7 +285,7 @@ void WizardConnectionStep::handle_test_connection_clicked() {
 
     if (result != 0) {
         spdlog::error("[{}] Failed to initiate connection: {}", get_name(), result);
-        set_status("icon_xmark_circle", StatusVariant::Danger, "Error starting connection test");
+        set_status("icon_close_circle", StatusVariant::Danger, "Error starting connection test");
         lv_subject_set_int(&connection_testing_, 0);
     }
 
@@ -466,7 +466,7 @@ void WizardConnectionStep::on_connection_failure() {
             if (testing_state == 1) {
                 spdlog::error("[Wizard Connection] Connection failed");
 
-                self->set_status("icon_xmark_circle", StatusVariant::Danger,
+                self->set_status("icon_close_circle", StatusVariant::Danger,
                                  lv_tr("Connection failed. Check IP/port and try again."));
                 lv_subject_set_int(&self->connection_testing_, 0);
                 self->connection_validated_ = false;
