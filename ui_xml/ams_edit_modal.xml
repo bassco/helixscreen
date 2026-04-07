@@ -185,20 +185,20 @@
               scrollable="false" hidden="true">
         <bind_flag_if_eq subject="printer_has_spoolman" flag="hidden" ref_value="0"/>
         <ui_button name="btn_change_spool"
-                   height="#button_height_sm" text="Choose Saved Spool"
-                   translation_tag="Choose Saved Spool" variant="secondary">
+                   height="#button_height" text="Choose Spool"
+                   translation_tag="Choose Spool" variant="secondary">
           <event_cb trigger="clicked" callback="ams_edit_change_spool_cb"/>
         </ui_button>
         <ui_button name="btn_scan_qr_code"
-                   height="#button_height_sm" text="Scan QR Code"
+                   height="#button_height" text="Scan QR Code"
                    translation_tag="Scan QR Code" variant="secondary"
-                   icon="qrcode_scan">
+                   icon="qrcode_scan" hidden="true">
           <event_cb trigger="clicked" callback="ams_edit_scan_qr_cb"/>
         </ui_button>
         <ui_split_button name="btn_spool_actions"
-                         height="#button_height_sm" variant="secondary"
-                         icon="pencil" text="Spool Details"
-                         options="Spool Details&#10;Unlink" show_selection="false"
+                         height="#button_height" variant="secondary"
+                         icon="qrcode_scan" text="Scan QR Code"
+                         options="Scan QR Code&#10;Spool Details&#10;Unlink" show_selection="false"
                          hidden="true">
           <event_cb trigger="clicked" callback="ams_edit_spool_actions_clicked_cb"/>
           <event_cb trigger="value_changed" callback="ams_edit_spool_actions_changed_cb"/>

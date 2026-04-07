@@ -349,6 +349,7 @@ translations:
   Checking timelapse plugin...: Verificando plugin de timelapse...
   Choose 12-hour or 24-hour time display: Elija visualización de hora de 12 o 24 horas
   Choose Saved Spool: Elegir Bobina Guardada
+  Choose Spool: ''
   Choose an existing filament, or tap + New to create one.: Elige un filamento o toca
     + Nuevo para crear uno.
   Choose display language: Elija el idioma de visualización
@@ -495,6 +496,7 @@ translations:
   DETECTED USB PRINTERS: IMPRESORAS USB DETECTADAS
   DISABLED: DESACTIVADO
   DISCOVERED PRINTERS: IMPRESORAS DESCUBIERTAS
+  DISPLAY: ''
   Damping (Kd): Amortiguación (Kd)
   Danger: Peligro
   Danger Zone: Zona de peligro
@@ -531,6 +533,7 @@ translations:
   Discord Community: Comunidad de Discord
   Discovered Printers: Impresoras Descubiertas
   Dismiss: Descartar
+  Display & Sound: ''
   Display Mode: Modo de Visualización
   Display Settings: Configuración de Pantalla
   Display Sleep: Suspensión de Pantalla
@@ -571,6 +574,7 @@ translations:
   Emergency Stop: Parada de Emergencia
   Emergency Stop?: ¿Parada de Emergencia?
   Emergency stop activated: Parada de emergencia activada
+  Emergency stop and print alerts: ''
   'Emergency stop failed: not connected': 'Parada de emergencia fallida: no conectado'
   Empty: Vacío
   Empty slots disable the associated functionality: Las ranuras vacías desactivan
@@ -608,6 +612,7 @@ translations:
   Escalate to emergency stop if cancel doesn't respond: Escalar a parada de emergencia
     si cancelar no responde
   Escalation Timeout: Tiempo de Espera de Escalado
+  Estimating...: ''
   Ethernet: Ethernet
   Events appear here after sessions and prints: Los eventos aparecen aquí después
     de sesiones e impresiones
@@ -759,6 +764,7 @@ translations:
   Fine: Fino
   Fine-Tune: Ajuste Fino
   Finish: Finalizar
+  Finishing up...: ''
   Firmware Restart: Reinicio de Firmware
   Firmware restarting...: Reiniciando firmware...
   FlashForge IFS: FlashForge IFS
@@ -795,6 +801,7 @@ translations:
   Hang on, we'll be right back!: ¡Un momento, ya volvemos!
   Happy Hare MMU: Happy Hare MMU
   Hardware: Hardware
+  Hardware & Devices: ''
   Hardware Health: Estado del Hardware
   Hardware Issues: Problemas de Hardware
   Hardware Name: Nombre del Hardware
@@ -823,6 +830,7 @@ translations:
   Heating (%d°C below minimum): Calentando (%d°C por debajo del mínimo)
   Heating Bed...: Calentando cama...
   Heating Nozzle...: Calentando boquilla...
+  Heating to %d\xC2\xB0: ''
   Heating to %d°C...: Calentando a %d°C...
   Heating to target...: Calentando a temperatura objetivo...
   Heating to {}°C for {}...: Calentando a {}°C durante {}...
@@ -834,6 +842,7 @@ translations:
     orientación de su pantalla
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen
     se integrará con su cambiador de filamento para operaciones de impresión multi-bobina/color.
+  Help & About: ''
   Help Improve HelixScreen: Ayude a mejorar HelixScreen
   Help improve HelixScreen?: ¿Ayudar a mejorar HelixScreen?
   Higher = faster: Mayor = más rápido
@@ -946,6 +955,7 @@ translations:
   Labels: Etiquetas
   Labels Per Sheet: Etiquetas por hoja
   Language: Idioma
+  Language, theme, brightness, and sound: ''
   Last: Última
   Last print cancelled: Última impresión cancelada
   Last print failed: Última impresión fallida
@@ -1092,6 +1102,7 @@ translations:
     La impresora hará ruido — esto es normal.
   Multi-Filament: Multi-Filamento
   Multi-Filament Overview: Vista general multi-filamento
+  Multi-Filament System Management: ''
   'Multi-Filament:': 'Multi-Filamento:'
   Multi-Material: Multi-Material
   Multi-Material System Detected: Sistema Multi-Material Detectado
@@ -1243,6 +1254,7 @@ translations:
     una
   Or Enter Manually: O Ingrese Manualmente
   Oscillating around target...: Oscilando alrededor del objetivo...
+  Oscillating... cycle %d/%d: ''
   Out of range: Fuera de rango
   Output Mode: Modo de Salida
   Output Pin: Pin de Salida
@@ -1386,6 +1398,7 @@ translations:
   Printer name: Nombre de impresora
   Printer ready: Impresora lista
   Printers: Impresoras
+  Printers, AMS, fans, sensors, and LEDs: ''
   Printing: Imprimiendo
   Printing label...: Imprimiendo etiqueta...
   Printing test label...: Imprimiendo etiqueta de prueba...
@@ -1543,14 +1556,17 @@ translations:
     al precalentar este material
   Running {}...: Ejecutando {}...
   Runout Sensor: Sensor de Agotamiento
+  SETTINGS: ''
   SHIPPED IMAGES: IMÁGENES INCLUIDAS
   SOFTWARE: SOFTWARE
+  SOUND: ''
   STANDARD MACROS: MACROS ESTÁNDAR
   STARTUP: INICIO
   STOP: DETENER
   STYLE PROPERTIES: PROPIEDADES DE ESTILO
   SWITCH SENSORS: SENSORES DE INTERRUPTOR
   SYSTEM: SISTEMA
+  Safety & Notifications: ''
   Sample: Muestra
   Sample %d/%d: Muestra %d/%d
   Sample Dialog: Diálogo de Ejemplo
@@ -1603,6 +1619,7 @@ translations:
   Secondary: Secundario
   Section Detail: Detalle de sección
   Security: Seguridad
+  Security, network, host, and administration: ''
   See exactly what data will be sent: Ver exactamente qué datos se enviarán
   Select: Seleccionar
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: Seleccione
@@ -1646,6 +1663,7 @@ translations:
   'Set ': 'Establecer '
   Set Active: Establecer activo
   Set PIN: Establecer PIN
+  Set local timezone for time display: ''
   Set up your label printer in Settings: Configure su impresora de etiquetas en Ajustes
   Settings: Ajustes
   Settings reset to defaults. Restarting...: Ajustes restablecidos a valores predeterminados.
@@ -1756,6 +1774,7 @@ translations:
   Success: Éxito
   Success Rate: Tasa de Éxito
   Success!: ¡Éxito!
+  Support, documentation, and version info: ''
   Surfaces inherit app background tokens for light and dark modes.: Las superficies
     heredan los tokens de fondo de la aplicación para modos claro y oscuro.
   Switch Printer: Cambiar Impresora
@@ -1885,6 +1904,7 @@ translations:
   Timelapse plugin is already installed!: ¡El plugin de timelapse ya está instalado!
   Timelapse plugin is installed!: ¡El plugin de timelapse está instalado!
   Timelapse rendered successfully: Timelapse renderizado correctamente
+  Timezone: ''
   'Tip:': 'Consejo:'
   Toggle: Alternar
   Toggle (fire-and-forget): Alternar (fire-and-forget)
@@ -1894,6 +1914,7 @@ translations:
   Tool Changer: Cambiador de Herramientas
   'Tool change failed: {}': 'Error al cambiar herramienta: {}'
   Toolhead Style: Estilo de Cabezal
+  Toolhead, G-code, limits, and materials: ''
   Top: Superior
   Total Prints: Total de Impresiones
   Touch Cal: Cal Táctil
@@ -2089,6 +2110,7 @@ translations:
   of: de
   'off': apagado
   prints: impresiones
+  remaining: ''
   remaining before clog detection triggers: restante antes de que se active la detección
     de obstrucción
   set to: establecido en

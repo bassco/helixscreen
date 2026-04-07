@@ -349,6 +349,7 @@ translations:
   Checking timelapse plugin...: Verificando plugin de timelapse...
   Choose 12-hour or 24-hour time display: Escolha exibição de hora em 12 ou 24 horas
   Choose Saved Spool: Escolher Bobina Salva
+  Choose Spool: ''
   Choose an existing filament, or tap + New to create one.: Escolha um filamento existente
     ou toque em + Novo para criar um.
   Choose display language: Escolha o idioma de exibição
@@ -496,6 +497,7 @@ translations:
   DETECTED USB PRINTERS: IMPRESSORAS USB DETECTADAS
   DISABLED: DESABILITADO
   DISCOVERED PRINTERS: IMPRESSORAS DESCOBERTAS
+  DISPLAY: ''
   Damping (Kd): Amortecimento (Kd)
   Danger: Perigo
   Danger Zone: Zona de Perigo
@@ -531,6 +533,7 @@ translations:
   Discord Community: Comunidade Discord
   Discovered Printers: Impressoras Descobertas
   Dismiss: Dispensar
+  Display & Sound: ''
   Display Mode: Modo de Exibição
   Display Settings: Configurações de Exibição
   Display Sleep: Suspensão da Tela
@@ -570,6 +573,7 @@ translations:
   Emergency Stop: Parada de Emergência
   Emergency Stop?: Parada de Emergência?
   Emergency stop activated: Parada de emergência ativada
+  Emergency stop and print alerts: ''
   'Emergency stop failed: not connected': 'Parada de emergência falhou: não conectado'
   Empty: Vazio
   Empty slots disable the associated functionality: Slots vazios desabilitam a funcionalidade
@@ -607,6 +611,7 @@ translations:
   Escalate to emergency stop if cancel doesn't respond: Escalar para parada de emergência
     se cancelar não responder
   Escalation Timeout: Tempo de Escalação
+  Estimating...: ''
   Ethernet: Ethernet
   Events appear here after sessions and prints: Eventos aparecem aqui após sessões
     e impressões
@@ -758,6 +763,7 @@ translations:
   Fine: Fino
   Fine-Tune: Ajuste Fino
   Finish: Finalizar
+  Finishing up...: ''
   Firmware Restart: Reiniciar Firmware
   Firmware restarting...: Reiniciando firmware...
   FlashForge IFS: FlashForge IFS
@@ -793,6 +799,7 @@ translations:
   Hang on, we'll be right back!: Aguarde, já voltamos!
   Happy Hare MMU: Happy Hare MMU
   Hardware: Hardware
+  Hardware & Devices: ''
   Hardware Health: Saúde do Hardware
   Hardware Issues: Problemas de Hardware
   Hardware Name: Nome do Hardware
@@ -822,6 +829,7 @@ translations:
   Heating (%d°C below minimum): Aquecendo (%d°C abaixo do mínimo)
   Heating Bed...: Aquecendo mesa...
   Heating Nozzle...: Aquecendo bocal...
+  Heating to %d\xC2\xB0: ''
   Heating to %d°C...: Aquecendo para %d°C...
   Heating to target...: Aquecendo para a temperatura alvo...
   Heating to {}°C for {}...: Aquecendo a {}°C por {}...
@@ -834,6 +842,7 @@ translations:
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen
     se integrará com seu trocador de filamento para operações de impressão com múltiplos
     carretéis/cores.
+  Help & About: ''
   Help Improve HelixScreen: Ajude a melhorar o HelixScreen
   Help improve HelixScreen?: Ajudar a melhorar o HelixScreen?
   Higher = faster: Maior = mais rápido
@@ -949,6 +958,7 @@ translations:
   Labels: Etiquetas
   Labels Per Sheet: Etiquetas por folha
   Language: Idioma
+  Language, theme, brightness, and sound: ''
   Last: Última
   Last print cancelled: Última impressão cancelada
   Last print failed: Última impressão falhou
@@ -1094,6 +1104,7 @@ translations:
     A impressora fará barulho — isso é normal.
   Multi-Filament: Multi-Filamento
   Multi-Filament Overview: Visão geral multi-filamento
+  Multi-Filament System Management: ''
   'Multi-Filament:': 'Multi-Filamento:'
   Multi-Material: Multi-Material
   Multi-Material System Detected: Sistema Multi-Material Detectado
@@ -1244,6 +1255,7 @@ translations:
     uma
   Or Enter Manually: Ou Digite Manualmente
   Oscillating around target...: Oscilando em torno do alvo...
+  Oscillating... cycle %d/%d: ''
   Out of range: Fora do intervalo
   Output Mode: Modo de Saída
   Output Pin: Pino de Saída
@@ -1387,6 +1399,7 @@ translations:
   Printer name: Nome da impressora
   Printer ready: Impressora pronta
   Printers: Impressoras
+  Printers, AMS, fans, sensors, and LEDs: ''
   Printing: Imprimindo
   Printing label...: Imprimindo etiqueta...
   Printing test label...: Imprimindo etiqueta de teste...
@@ -1544,14 +1557,17 @@ translations:
     pré-aquecer este material
   Running {}...: Executando {}...
   Runout Sensor: Sensor de Fim de Filamento
+  SETTINGS: ''
   SHIPPED IMAGES: IMAGENS INCLUÍDAS
   SOFTWARE: SOFTWARE
+  SOUND: ''
   STANDARD MACROS: MACROS PADRÃO
   STARTUP: INICIALIZAÇÃO
   STOP: PARAR
   STYLE PROPERTIES: PROPRIEDADES DE ESTILO
   SWITCH SENSORS: SENSORES DE CHAVE
   SYSTEM: SISTEMA
+  Safety & Notifications: ''
   Sample: Amostra
   Sample %d/%d: Amostra %d/%d
   Sample Dialog: Diálogo de Exemplo
@@ -1604,6 +1620,7 @@ translations:
   Secondary: Secundário
   Section Detail: Detalhe da Seção
   Security: Segurança
+  Security, network, host, and administration: ''
   See exactly what data will be sent: Veja exatamente quais dados serão enviados
   Select: Selecionar
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: Selecione
@@ -1648,6 +1665,7 @@ translations:
   'Set ': 'Definir '
   Set Active: Definir Ativo
   Set PIN: Definir PIN
+  Set local timezone for time display: ''
   Set up your label printer in Settings: Configure sua impressora de etiquetas em
     Configurações
   Settings: Configurações
@@ -1760,6 +1778,7 @@ translations:
   Success: Sucesso
   Success Rate: Taxa de Sucesso
   Success!: Sucesso!
+  Support, documentation, and version info: ''
   Surfaces inherit app background tokens for light and dark modes.: Superfícies herdam
     tokens de fundo do aplicativo para modos claro e escuro.
   Switch Printer: Trocar Impressora
@@ -1861,8 +1880,8 @@ translations:
   This will immediately halt all printer operations. The printer will require a restart to resume.: Isso
     interromperá imediatamente todas as operações da impressora. A impressora precisará
     de um reinício para retomar.
-  This will remove all custom pages and restore the default widget layout.: Todas as páginas
-    personalizadas serão removidas e o layout padrão de widgets será restaurado.
+  This will remove all custom pages and restore the default widget layout.: Todas
+    as páginas personalizadas serão removidas e o layout padrão de widgets será restaurado.
   This will remove all entries from the display.: Isso removerá todas as entradas
     do display.
   This will remove the Spoolman configuration from Moonraker and restart the service.: Isso
@@ -1889,6 +1908,7 @@ translations:
   Timelapse plugin is already installed!: Plugin de timelapse já está instalado!
   Timelapse plugin is installed!: Plugin de timelapse está instalado!
   Timelapse rendered successfully: Timelapse renderizado com sucesso
+  Timezone: ''
   'Tip:': 'Dica:'
   Toggle: Alternar
   Toggle (fire-and-forget): Alternar (sem rastreamento)
@@ -1898,6 +1918,7 @@ translations:
   Tool Changer: Trocador de Ferramentas
   'Tool change failed: {}': 'Falha ao trocar ferramenta: {}'
   Toolhead Style: Estilo do Cabeçote
+  Toolhead, G-code, limits, and materials: ''
   Top: Topo
   Total Prints: Total de Impressões
   Touch Cal: Cal de Toque
@@ -2092,6 +2113,7 @@ translations:
   of: de
   'off': desligado
   prints: impressões
+  remaining: ''
   remaining before clog detection triggers: restante antes da detecção de obstrução
     ser acionada
   set to: definido para

@@ -336,6 +336,7 @@ translations:
   Checking timelapse plugin...: Checking timelapse plugin...
   Choose 12-hour or 24-hour time display: Choose 12-hour or 24-hour time display
   Choose Saved Spool: Choose Saved Spool
+  Choose Spool: Choose Spool
   Choose an existing filament, or tap + New to create one.: Choose an existing filament,
     or tap + New to create one.
   Choose display language: Choose display language
@@ -478,6 +479,7 @@ translations:
   DETECTED USB PRINTERS: DETECTED USB PRINTERS
   DISABLED: DISABLED
   DISCOVERED PRINTERS: DISCOVERED PRINTERS
+  DISPLAY: DISPLAY
   Damping (Kd): Damping (Kd)
   Danger: Danger
   Danger Zone: Danger Zone
@@ -513,6 +515,7 @@ translations:
   Discord Community: Discord Community
   Discovered Printers: Discovered Printers
   Dismiss: Dismiss
+  Display & Sound: Display & Sound
   Display Mode: Display Mode
   Display Settings: Display Settings
   Display Sleep: Display Sleep
@@ -552,6 +555,7 @@ translations:
   Emergency Stop: Emergency Stop
   Emergency Stop?: Emergency Stop?
   Emergency stop activated: Emergency stop activated
+  Emergency stop and print alerts: Emergency stop and print alerts
   'Emergency stop failed: not connected': 'Emergency stop failed: not connected'
   Empty: Empty
   Empty slots disable the associated functionality: Empty slots disable the associated
@@ -588,6 +592,7 @@ translations:
   Escalate to emergency stop if cancel doesn't respond: Escalate to emergency stop
     if cancel doesn't respond
   Escalation Timeout: Escalation Timeout
+  Estimating...: Estimating...
   Ethernet: Ethernet
   Events appear here after sessions and prints: Events appear here after sessions
     and prints
@@ -737,6 +742,7 @@ translations:
   Fine: Fine
   Fine-Tune: Fine-Tune
   Finish: Finish
+  Finishing up...: Finishing up...
   Firmware Restart: Firmware Restart
   Firmware restarting...: Firmware restarting...
   FlashForge IFS: FlashForge IFS
@@ -772,6 +778,7 @@ translations:
   Hang on, we'll be right back!: Hang on, we'll be right back!
   Happy Hare MMU: Happy Hare MMU
   Hardware: Hardware
+  Hardware & Devices: Hardware & Devices
   Hardware Health: Hardware Health
   Hardware Issues: Hardware Issues
   Hardware Name: Hardware Name
@@ -801,6 +808,7 @@ translations:
   Heating (%d°C below minimum): Heating (%d°C below minimum)
   Heating Bed...: Heating Bed...
   Heating Nozzle...: Heating Nozzle...
+  Heating to %d\xC2\xB0: Heating to %d\xC2\xB0
   Heating to %d°C...: Heating to %d°C...
   Heating to target...: Heating to target...
   Heating to {}°C for {}...: Heating to {}°C for {}...
@@ -812,6 +820,7 @@ translations:
     display orientation
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen
     will integrate with your filament changer for multi-spool/color print operations.
+  Help & About: Help & About
   Help Improve HelixScreen: Help Improve HelixScreen
   Help improve HelixScreen?: Help improve HelixScreen?
   Higher = faster: Higher = faster
@@ -923,6 +932,7 @@ translations:
   Labels: Labels
   Labels Per Sheet: Labels Per Sheet
   Language: Language
+  Language, theme, brightness, and sound: Language, theme, brightness, and sound
   Last: Last
   Last print cancelled: Last print cancelled
   Last print failed: Last print failed
@@ -1066,6 +1076,7 @@ translations:
     minutes. The printer will make noise — this is normal.
   Multi-Filament: Multi-Filament
   Multi-Filament Overview: Multi-Filament Overview
+  Multi-Filament System Management: Multi-Filament System Management
   'Multi-Filament:': 'Multi-Filament:'
   Multi-Material: Multi-Material
   Multi-Material System Detected: Multi-Material System Detected
@@ -1213,6 +1224,7 @@ translations:
     - select your main lighting source, or skip if your printer doesn't have one
   Or Enter Manually: Or Enter Manually
   Oscillating around target...: Oscillating around target...
+  Oscillating... cycle %d/%d: Oscillating... cycle %d/%d
   Out of range: Out of range
   Output Mode: Output Mode
   Output Pin: Output Pin
@@ -1355,6 +1367,7 @@ translations:
   Printer name: Printer name
   Printer ready: Printer ready
   Printers: Printers
+  Printers, AMS, fans, sensors, and LEDs: Printers, AMS, fans, sensors, and LEDs
   Printing: Printing
   Printing label...: Printing label...
   Printing test label...: Printing test label...
@@ -1511,14 +1524,17 @@ translations:
     this material
   Running {}...: Running {}...
   Runout Sensor: Runout Sensor
+  SETTINGS: SETTINGS
   SHIPPED IMAGES: SHIPPED IMAGES
   SOFTWARE: SOFTWARE
+  SOUND: SOUND
   STANDARD MACROS: STANDARD MACROS
   STARTUP: STARTUP
   STOP: STOP
   STYLE PROPERTIES: STYLE PROPERTIES
   SWITCH SENSORS: SWITCH SENSORS
   SYSTEM: SYSTEM
+  Safety & Notifications: Safety & Notifications
   Sample: Sample
   Sample %d/%d: Sample %d/%d
   Sample Dialog: Sample Dialog
@@ -1570,6 +1586,7 @@ translations:
   Secondary: Secondary
   Section Detail: Section Detail
   Security: Security
+  Security, network, host, and administration: Security, network, host, and administration
   See exactly what data will be sent: See exactly what data will be sent
   Select: Select
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: Select
@@ -1613,6 +1630,7 @@ translations:
   'Set ': 'Set '
   Set Active: Set Active
   Set PIN: Set PIN
+  Set local timezone for time display: Set local timezone for time display
   Set up your label printer in Settings: Set up your label printer in Settings
   Settings: Settings
   Settings reset to defaults. Restarting...: Settings reset to defaults. Restarting...
@@ -1719,6 +1737,7 @@ translations:
   Success: Success
   Success Rate: Success Rate
   Success!: Success!
+  Support, documentation, and version info: Support, documentation, and version info
   Surfaces inherit app background tokens for light and dark modes.: Surfaces inherit
     app background tokens for light and dark modes.
   Switch Printer: Switch Printer
@@ -1846,6 +1865,7 @@ translations:
   Timelapse plugin is already installed!: Timelapse plugin is already installed!
   Timelapse plugin is installed!: Timelapse plugin is installed!
   Timelapse rendered successfully: Timelapse rendered successfully
+  Timezone: Timezone
   'Tip:': 'Tip:'
   Toggle: Toggle
   Toggle (fire-and-forget): Toggle (fire-and-forget)
@@ -1855,6 +1875,7 @@ translations:
   Tool Changer: Tool Changer
   'Tool change failed: {}': 'Tool change failed: {}'
   Toolhead Style: Toolhead Style
+  Toolhead, G-code, limits, and materials: Toolhead, G-code, limits, and materials
   Top: Top
   Total Prints: Total Prints
   Touch Cal: Touch Cal
@@ -2048,6 +2069,7 @@ translations:
   of: of
   'off': 'off'
   prints: prints
+  remaining: remaining
   remaining before clog detection triggers: remaining before clog detection triggers
   set to: set to
   started: started

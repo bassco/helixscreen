@@ -156,7 +156,7 @@ bool AmsEditModal::show_for_slot(lv_obj_t* parent, int slot_index, const SlotInf
     }
 
     // Always start on the form view — it's the primary interface showing current
-    // slot state. The Spoolman picker is accessible via "Choose Saved Spool" button.
+    // slot state. The Spoolman picker is accessible via "Choose Spool" button.
     switch_to_form();
 
     // If linked to Spoolman, fetch authoritative filament data (vendor, material, color)
@@ -933,20 +933,21 @@ void AmsEditModal::update_spoolman_button_state() {
         }
     }
 
-    lv_obj_t* btn_change = find_widget("btn_change_spool");
     lv_obj_t* btn_actions = find_widget("btn_spool_actions");
+    lv_obj_t* btn_scan_qr = find_widget("btn_scan_qr_code");
 
     if (working_info_.spoolman_id > 0) {
-        // Linked: show "Change Saved Spool" and spool actions split button
-        if (btn_change) {
-            ui_button_set_text(btn_change, lv_tr("Change Saved Spool"));
+        // Linked: show split button with all spool actions
+        if (btn_scan_qr) {
+            lv_obj_add_flag(btn_scan_qr, LV_OBJ_FLAG_HIDDEN);
         }
         if (btn_actions) {
             lv_obj_remove_flag(btn_actions, LV_OBJ_FLAG_HIDDEN);
-            ui_split_button_set_text(btn_actions, lv_tr("Spool Details"));
+            ui_split_button_set_text(btn_actions, lv_tr("Scan QR Code"));
 
             // Build options list with translated strings
-            std::string options = std::string(lv_tr("Spool Details")) + "\n" + lv_tr("Unlink");
+            std::string options = std::string(lv_tr("Scan QR Code")) + "\n" +
+                                  lv_tr("Spool Details") + "\n" + lv_tr("Unlink");
 #if HELIX_HAS_LABEL_PRINTER
             if (helix::LabelPrinterSettingsManager::instance().is_configured()) {
                 options += std::string("\n") + lv_tr("Print Label");
@@ -955,9 +956,9 @@ void AmsEditModal::update_spoolman_button_state() {
             ui_split_button_set_options(btn_actions, options.c_str());
         }
     } else {
-        // Not linked: show "Choose Saved Spool", hide spool actions
-        if (btn_change) {
-            ui_button_set_text(btn_change, lv_tr("Choose Saved Spool"));
+        // Not linked: show standalone "Scan QR Code" button, hide split button
+        if (btn_scan_qr) {
+            lv_obj_remove_flag(btn_scan_qr, LV_OBJ_FLAG_HIDDEN);
         }
         if (btn_actions) {
             lv_obj_add_flag(btn_actions, LV_OBJ_FLAG_HIDDEN);
@@ -1692,7 +1693,7 @@ void AmsEditModal::on_change_spool_cb(lv_event_t* e) {
 void AmsEditModal::on_spool_actions_clicked_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
-        self->handle_spool_details();
+        self->handle_scan_qr();
     }
 }
 
@@ -1707,13 +1708,16 @@ void AmsEditModal::on_spool_actions_changed_cb(lv_event_t* e) {
     uint32_t idx = ui_split_button_get_selected(split_btn);
     switch (idx) {
     case 0:
-        self->handle_spool_details();
+        self->handle_scan_qr();
         break;
     case 1:
+        self->handle_spool_details();
+        break;
+    case 2:
         self->handle_unlink();
         break;
 #if HELIX_HAS_LABEL_PRINTER
-    case 2:
+    case 3:
         self->handle_print_label();
         break;
 #endif
