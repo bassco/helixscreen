@@ -104,12 +104,27 @@ lv_obj_t* PrinterManagerOverlay::create(lv_obj_t* parent) {
     // Find name editing widgets (visibility driven by pm_name_editing subject via XML bindings)
     name_input_ = lv_obj_find_by_name(overlay_root_, "pm_printer_name_input");
 
-    // Register READY/CANCEL/DEFOCUSED on textarea for name edit lifecycle
+    // Register READY/CANCEL on textarea for name edit lifecycle
     // (acceptable exception to declarative rule — textarea lifecycle event, like DELETE cleanup)
     if (name_input_) {
         lv_obj_add_event_cb(name_input_, pm_name_input_ready_cb, LV_EVENT_READY, nullptr);
-        lv_obj_add_event_cb(name_input_, pm_name_input_ready_cb, LV_EVENT_DEFOCUSED, nullptr);
         lv_obj_add_event_cb(name_input_, pm_name_input_cancel_cb, LV_EVENT_CANCEL, nullptr);
+    }
+
+    // Clicking the overlay content area while editing saves and dismisses the input.
+    // LVGL DEFOCUSED events don't fire reliably on touchscreens, so we use a
+    // click handler on the scrollable content instead.
+    auto* content = lv_obj_find_by_name(overlay_root_, "overlay_content");
+    if (content) {
+        lv_obj_add_event_cb(
+            content,
+            [](lv_event_t* e) {
+                auto& pm = get_printer_manager_overlay();
+                if (lv_subject_get_int(&pm.name_editing_) != 0) {
+                    pm.finish_name_edit();
+                }
+            },
+            LV_EVENT_CLICKED, nullptr);
     }
 
     return overlay_root_;
@@ -348,11 +363,17 @@ void PrinterManagerOverlay::finish_name_edit() {
         helix::PrinterNameSync::write_back(get_moonraker_api(), name_str);
     }
 
-    // Update subjects to reflect new name (local overlay + global PrinterState)
+    // Update subjects to reflect new name (local overlay + global PrinterState + image widget)
     std::strncpy(name_buf_, name_str.c_str(), sizeof(name_buf_) - 1);
     name_buf_[sizeof(name_buf_) - 1] = '\0';
     lv_subject_copy_string(&printer_manager_name_, name_buf_);
     get_printer_state().set_active_printer_name(name_str);
+
+    // Update the printer image widget's name subject directly
+    auto* type_subject = lv_xml_get_subject(nullptr, "printer_type_text");
+    if (type_subject) {
+        lv_subject_copy_string(type_subject, name_str.c_str());
+    }
 
     // Toggle back to viewing mode — XML bind_flag_if_eq handles visibility
     lv_subject_set_int(&name_editing_, 0);
@@ -381,9 +402,10 @@ void PrinterManagerOverlay::cancel_name_edit() {
 void PrinterManagerOverlay::on_activate() {
     OverlayBase::on_activate();
 
-    // Cancel any in-progress name edit when overlay is re-activated
+    // Ensure name editing is off (clean state on every open)
     if (lv_subject_get_int(&name_editing_) != 0) {
-        cancel_name_edit();
+        lv_subject_set_int(&name_editing_, 0);
+        KeyboardManager::instance().hide();
     }
 
     refresh_printer_info();
