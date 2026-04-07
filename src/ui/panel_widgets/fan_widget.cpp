@@ -127,11 +127,15 @@ void FanWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     name_label_ = lv_obj_find_by_name(widget_obj_, "fan_name");
     fan_icon_ = lv_obj_find_by_name(widget_obj_, "fan_widget_icon");
 
-    // If no fan saved, auto-select first available fan
+    // Only bind if fans are already discovered (e.g. reconnection, panel re-entry).
+    // At startup, fan subjects don't exist yet — the version observer (below)
+    // handles binding once init_fans() bumps fans_version.
     if (selected_fan_.empty()) {
         auto_select_first_fan();
-    } else {
+    } else if (!get_printer_state().get_fans().empty()) {
         bind_speed_observer();
+        update_display();
+    } else {
         update_display();
     }
 
@@ -223,7 +227,8 @@ void FanWidget::bind_speed_observer() {
             },
             speed_lifetime_);
     } else {
-        spdlog::warn("[FanWidget] No subject for fan: {}", selected_fan_);
+        spdlog::debug("[FanWidget] No subject for fan: {} (will retry on discovery)",
+                      selected_fan_);
     }
 }
 
