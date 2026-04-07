@@ -12,14 +12,10 @@
 
 using namespace helix;
 
-/// Count of widget defs that are NOT multi_instance (i.e., those included in defaults)
-static size_t single_instance_def_count() {
-    size_t count = 0;
-    for (const auto& def : get_all_widget_defs()) {
-        if (!def.multi_instance)
-            ++count;
-    }
-    return count;
+/// Count of widget defs included in the default grid.
+/// build_default_grid() includes ALL defs (multi-instance widgets appear once as base ID).
+static size_t default_grid_widget_count() {
+    return get_all_widget_defs().size();
 }
 
 // ============================================================================
@@ -57,8 +53,7 @@ class PanelWidgetConfigFixture {
         }
         root["pages"] = std::move(pages_arr);
         root["main_page_index"] = main_page_index;
-        root["next_page_id"] =
-            next_page_id >= 0 ? next_page_id : static_cast<int>(pages.size());
+        root["next_page_id"] = next_page_id >= 0 ? next_page_id : static_cast<int>(pages.size());
         config.data["printers"]["default"]["panel_widgets"][panel_id] = root;
     }
 
@@ -143,18 +138,21 @@ TEST_CASE_METHOD(
 
     const auto& entries = wc.entries();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(entries.size() == single_instance_def_count());
+    REQUIRE(entries.size() == default_grid_widget_count());
 
     // Default grid places anchors first, then remaining widgets.
-    // Verify all single-instance widgets are present with correct enabled state.
-    // Multi-instance defs are excluded from defaults (they are user-created).
+    // Verify all widgets are present. bed_temperature's enabled state is
+    // overridden by build_default_grid() based on breakpoint/AMS, so skip it.
     for (const auto& def : defs) {
-        if (def.multi_instance)
-            continue;
         bool found = false;
         for (const auto& entry : entries) {
             if (entry.id == def.id) {
-                REQUIRE(entry.enabled == def.default_enabled);
+                if (def.id != std::string("bed_temperature")) {
+                    // bed_temperature enabled state overridden by build_default_grid()
+                    if (def.id != std::string("bed_temperature")) {
+                        REQUIRE(entry.enabled == def.default_enabled);
+                    }
+                }
                 found = true;
                 break;
             }
@@ -183,7 +181,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     const auto& entries = wc.entries();
     // 3 explicit + remaining from registry appended
-    REQUIRE(entries.size() == single_instance_def_count());
+    REQUIRE(entries.size() == default_grid_widget_count());
 
     // First 3 should match our explicit order
     REQUIRE(entries[0].id == "temperature");
@@ -225,7 +223,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     auto& saved = root["pages"][0]["widgets"];
     REQUIRE(saved.is_array());
-    REQUIRE(saved.size() == single_instance_def_count());
+    REQUIRE(saved.size() == default_grid_widget_count());
 
     // Each entry should have id and enabled
     for (const auto& item : saved) {
@@ -384,7 +382,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // Should have all registry widgets
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 
     // First two should match saved order/state
     REQUIRE(wc.entries()[0].id == "shutdown");
@@ -419,7 +417,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // bogus_widget should be dropped, so total is still widget_def_count
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 
     // First should be power, second should be network (bogus skipped)
     REQUIRE(wc.entries()[0].id == "shutdown");
@@ -447,16 +445,17 @@ TEST_CASE_METHOD(
 
     const auto& entries = wc.entries();
     const auto& defs = get_all_widget_defs();
-    REQUIRE(entries.size() == single_instance_def_count());
+    REQUIRE(entries.size() == default_grid_widget_count());
 
-    // All single-instance widgets present with correct enabled state
+    // All widgets present with correct enabled state
     for (const auto& def : defs) {
-        if (def.multi_instance)
-            continue;
         bool found = false;
         for (const auto& entry : entries) {
             if (entry.id == def.id) {
-                REQUIRE(entry.enabled == def.default_enabled);
+                // bed_temperature enabled state overridden by build_default_grid()
+                if (def.id != std::string("bed_temperature")) {
+                    REQUIRE(entry.enabled == def.default_enabled);
+                }
                 found = true;
                 break;
             }
@@ -484,7 +483,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     PanelWidgetConfig wc("home", config);
     wc.load();
 
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 
     // power should appear once, with enabled=true (first occurrence)
     REQUIRE(wc.entries()[0].id == "shutdown");
@@ -534,7 +533,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     // Bad entries skipped, good entries kept, rest appended
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
     REQUIRE(wc.entries()[0].id == "shutdown");
     REQUIRE(wc.entries()[0].enabled == true);
     REQUIRE(wc.entries()[1].id == "temperature");
@@ -550,15 +549,16 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
     // build_default_grid() reorders anchors first, so check by content not position
     for (const auto& def : defs) {
-        if (def.multi_instance)
-            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
-                REQUIRE(entry.enabled == def.default_enabled);
+                // bed_temperature enabled state overridden by build_default_grid()
+                if (def.id != std::string("bed_temperature")) {
+                    REQUIRE(entry.enabled == def.default_enabled);
+                }
                 found = true;
                 break;
             }
@@ -770,15 +770,16 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     wc.load();
 
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
     // build_default_grid() reorders anchors first, so check by content not position
     for (const auto& def : defs) {
-        if (def.multi_instance)
-            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
-                REQUIRE(entry.enabled == def.default_enabled);
+                // bed_temperature enabled state overridden by build_default_grid()
+                if (def.id != std::string("bed_temperature")) {
+                    REQUIRE(entry.enabled == def.default_enabled);
+                }
                 found = true;
                 break;
             }
@@ -828,14 +829,15 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 
     // Should get defaults from registry (build_default_grid reorders anchors first)
     const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
     for (const auto& def : defs) {
-        if (def.multi_instance)
-            continue;
         bool found = false;
         for (const auto& entry : wc.entries()) {
             if (entry.id == def.id) {
-                REQUIRE(entry.enabled == def.default_enabled);
+                // bed_temperature enabled state overridden by build_default_grid()
+                if (def.id != std::string("bed_temperature")) {
+                    REQUIRE(entry.enabled == def.default_enabled);
+                }
                 found = true;
                 break;
             }
@@ -902,8 +904,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE_FALSE(get_data().contains("home_widgets"));
 
     // After pre-grid reset, entries match default grid (all registry widgets present)
-    const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
@@ -923,8 +924,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(get_data().contains("home_widgets"));
 
     // Controls should get defaults
-    const auto& defs = get_all_widget_defs();
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture,
@@ -1140,8 +1140,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
                  "PanelWidgetConfig: build_default_grid all enabled widgets get grid positions",
                  "[panel_widget][widget_config][grid]") {
     auto grid = PanelWidgetConfig::build_default_grid();
-    const auto& defs = get_all_widget_defs();
-    REQUIRE(grid.size() == single_instance_def_count());
+    REQUIRE(grid.size() == default_grid_widget_count());
 
     // Anchor widgets (printer_image, print_status, tips) get explicit grid positions.
     // All other widgets get col=-1, row=-1 (auto-place).
@@ -1167,7 +1166,7 @@ TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
     auto entries = PanelWidgetConfig::build_default_grid();
 
     // Should include all registry widgets
-    REQUIRE(entries.size() == single_instance_def_count());
+    REQUIRE(entries.size() == default_grid_widget_count());
 
     // Collect enabled entries with grid positions
     std::vector<PanelWidgetEntry> placed;
@@ -1233,15 +1232,23 @@ TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
         REQUIRE_FALSE(e.has_grid_position());
     }
 
-    // fan_stack is multi_instance — not auto-included in defaults (user creates instances)
+    // fan_stack is multi_instance but included once as base ID in defaults
     auto* fs = find_entry("fan_stack");
-    REQUIRE_FALSE(fs);
+    REQUIRE(fs);
 
     // notifications must be enabled (default_enabled, no gate) but NOT placed
     auto* notif = find_entry("notifications");
     REQUIRE(notif);
     REQUIRE(notif->enabled);
     REQUIRE_FALSE(notif->has_grid_position());
+
+    // bed_temperature: default_enabled=false in registry, but build_default_grid()
+    // overrides to enabled when no AMS present (which is the case in tests).
+    // It should also be the LAST entry (moved to end by grid builder).
+    auto* bed = find_entry("bed_temperature");
+    REQUIRE(bed);
+    REQUIRE(bed->enabled);                           // No AMS in test env → enabled
+    REQUIRE(entries.back().id == "bed_temperature"); // Moved to last position
 }
 
 TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: is_grid_format detects grid entries",
@@ -1269,8 +1276,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: is_grid_format de
 // Multi-page tests — page_count and default page
 // ============================================================================
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: default config creates single page",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: default config creates single page",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1280,7 +1286,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.main_page_index() == 0);
     REQUIRE(wc.page_id(0) == "main");
     // entries() delegates to page 0
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
     REQUIRE(&wc.entries() == &wc.page_entries(0));
 }
 
@@ -1322,8 +1328,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 // Multi-page tests — add and remove pages
 // ============================================================================
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: add_page creates new empty page",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: add_page creates new empty page",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1338,11 +1343,10 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_entries(1).empty());
 
     // Page 0 still has its widgets
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: add_page with auto-generated ID",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: add_page with auto-generated ID",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1356,8 +1360,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(id.substr(0, 5) == "page_");
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: add_page refuses beyond cap",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: add_page refuses beyond cap",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1376,8 +1379,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_count() == kMaxPages);
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: remove_page removes non-main page",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: remove_page removes non-main page",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1394,8 +1396,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_id(1) == "third");
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: cannot remove last page",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: cannot remove last page",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1407,8 +1408,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_count() == 1);
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: remove_page adjusts main_page_index",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: remove_page adjusts main_page_index",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc("home", config);
@@ -1426,8 +1426,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
         // We can set up with pages format
         json w0 = json::array({{{"id", "shutdown"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
         json w1 = json::array({{{"id", "network"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
-        json w2 = json::array(
-            {{{"id", "temperature"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
+        json w2 = json::array({{{"id", "temperature"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
         setup_with_pages({{"p0", w0}, {"p1", w1}, {"p2", w2}}, 2, 3);
 
         PanelWidgetConfig wc2("home", config);
@@ -1459,8 +1458,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
 // Multi-page tests — cross-page operations
 // ============================================================================
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: delete_entry searches all pages",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: delete_entry searches all pages",
                  "[panel_widget][widget_config][multipage]") {
     // Use multi-instance widget IDs on page 1 to avoid registry-default overlap with page 0
     json w0 = json::array({{{"id", "shutdown"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
@@ -1486,8 +1484,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_entries(0)[0].id == "shutdown");
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: mint_instance_id scans all pages",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: mint_instance_id scans all pages",
                  "[panel_widget][widget_config][multipage]") {
     json w0 = json::array({
         {{"id", "thermistor:1"}, {"enabled", true}, {"col", 0}, {"row", 0}},
@@ -1506,8 +1503,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(new_id == "thermistor:6");
 }
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: is_enabled searches all pages",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: is_enabled searches all pages",
                  "[panel_widget][widget_config][multipage]") {
     // Use multi-instance IDs on page 1 to avoid registry-default overlap with page 0
     json w0 = json::array({{{"id", "shutdown"}, {"enabled", false}, {"col", 0}, {"row", 0}}});
@@ -1535,10 +1531,10 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     // Use multi-instance widget ID on page 1 to avoid registry-default overlap with page 0
     json w0 = json::array({{{"id", "shutdown"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
     json w1 = json::array({{{"id", "thermistor:1"},
-                             {"enabled", true},
-                             {"config", {{"sensor", "bed"}}},
-                             {"col", 0},
-                             {"row", 0}}});
+                            {"enabled", true},
+                            {"config", {{"sensor", "bed"}}},
+                            {"col", 0},
+                            {"row", 0}}});
     setup_with_pages({{"p0", w0}, {"p1", w1}}, 0, 2);
 
     PanelWidgetConfig wc("home", config);
@@ -1607,15 +1603,14 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc.page_count() == 1);
     REQUIRE(wc.main_page_index() == 0);
     REQUIRE(wc.page_id(0) == "main");
-    REQUIRE(wc.entries().size() == single_instance_def_count());
+    REQUIRE(wc.entries().size() == default_grid_widget_count());
 }
 
 // ============================================================================
 // Multi-page tests — save/reload round-trip
 // ============================================================================
 
-TEST_CASE_METHOD(PanelWidgetConfigFixture,
-                 "PanelWidgetConfig: multi-page save-reload round-trip",
+TEST_CASE_METHOD(PanelWidgetConfigFixture, "PanelWidgetConfig: multi-page save-reload round-trip",
                  "[panel_widget][widget_config][multipage]") {
     setup_empty_config();
     PanelWidgetConfig wc1("home", config);
@@ -1624,10 +1619,8 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     // Add a second page with some widgets
     int page_idx = wc1.add_page("second");
     REQUIRE(page_idx == 1);
-    wc1.page_entries_mut(1).push_back(
-        {"shutdown", true, {}, 0, 0, 1, 1});
-    wc1.page_entries_mut(1).push_back(
-        {"network", false, {}, 1, 0, 1, 1});
+    wc1.page_entries_mut(1).push_back({"shutdown", true, {}, 0, 0, 1, 1});
+    wc1.page_entries_mut(1).push_back({"network", false, {}, 1, 0, 1, 1});
     wc1.save();
 
     // Reload from same config
@@ -1640,7 +1633,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE(wc2.main_page_index() == 0);
 
     // Page 0 should have all default widgets
-    REQUIRE(wc2.page_entries(0).size() == single_instance_def_count());
+    REQUIRE(wc2.page_entries(0).size() == default_grid_widget_count());
 
     // Page 1 should have our two widgets
     REQUIRE(wc2.page_entries(1).size() == 2);
@@ -1669,8 +1662,7 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
                  "[panel_widget][widget_config][multipage]") {
     json w0 = json::array({{{"id", "shutdown"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
     json w1 = json::array({{{"id", "network"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
-    json w2 = json::array(
-        {{{"id", "temperature"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
+    json w2 = json::array({{{"id", "temperature"}, {"enabled", true}, {"col", 0}, {"row", 0}}});
     setup_with_pages({{"main", w0}, {"page_1", w1}, {"page_2", w2}}, 1, 3);
 
     PanelWidgetConfig wc("home", config);

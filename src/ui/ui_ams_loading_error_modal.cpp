@@ -3,14 +3,9 @@
 
 #include "ui_ams_loading_error_modal.h"
 
-#include "ui_callback_helpers.h"
-
 #include <spdlog/spdlog.h>
 
 namespace helix::ui {
-
-// Static member initialization
-bool AmsLoadingErrorModal::callbacks_registered_ = false;
 
 // ============================================================================
 // Construction / Destruction
@@ -35,21 +30,15 @@ bool AmsLoadingErrorModal::show(lv_obj_t* parent, const std::string& error_messa
 
 bool AmsLoadingErrorModal::show(lv_obj_t* parent, const std::string& error_message,
                                 const std::string& hint_message, RetryCallback retry_callback) {
-    // Register callbacks once (idempotent)
-    register_callbacks();
-
     // Store state
     error_message_ = error_message;
     hint_message_ = hint_message;
     retry_callback_ = std::move(retry_callback);
 
-    // Show the modal via Modal base class
+    // Show the modal via Modal base class (buttons wired in on_show())
     if (!Modal::show(parent)) {
         return false;
     }
-
-    // Store 'this' in modal's user_data for callback traversal
-    lv_obj_set_user_data(dialog_, this);
 
     spdlog::info("[AmsLoadingErrorModal] Shown with message: {}", error_message_);
     return true;
@@ -60,6 +49,12 @@ bool AmsLoadingErrorModal::show(lv_obj_t* parent, const std::string& error_messa
 // ============================================================================
 
 void AmsLoadingErrorModal::on_show() {
+    // Wire buttons via Modal base class — uses per-callback user_data,
+    // safe from the user_data/name walk-up issues (prestonbrown/helixscreen#735)
+    wire_ok_button("btn_primary");       // Retry
+    wire_cancel_button("btn_secondary"); // Close (bottom)
+    wire_cancel_button("btn_close");     // X button (top-right)
+
     // Update error message label
     lv_obj_t* message_label = find_widget("error_message");
     if (message_label) {
@@ -87,26 +82,15 @@ void AmsLoadingErrorModal::on_hide() {
 }
 
 // ============================================================================
-// Event Handlers
+// Virtual Button Handlers
 // ============================================================================
 
-void AmsLoadingErrorModal::handle_close() {
-    spdlog::debug("[AmsLoadingErrorModal] Close requested");
-    hide();
-}
-
-void AmsLoadingErrorModal::handle_cancel() {
-    spdlog::debug("[AmsLoadingErrorModal] Cancel requested");
-    hide();
-}
-
-void AmsLoadingErrorModal::handle_retry() {
+void AmsLoadingErrorModal::on_ok() {
     spdlog::info("[AmsLoadingErrorModal] Retry requested");
 
     // Mark retry so on_hide() doesn't fire the dismiss callback
     retry_in_progress_ = true;
 
-    // Invoke retry callback
     if (retry_callback_) {
         retry_callback_();
     }
@@ -114,70 +98,9 @@ void AmsLoadingErrorModal::handle_retry() {
     hide();
 }
 
-// ============================================================================
-// Static Callback Registration
-// ============================================================================
-
-void AmsLoadingErrorModal::register_callbacks() {
-    if (callbacks_registered_) {
-        return;
-    }
-
-    register_xml_callbacks({
-        {"ams_loading_error_close_cb", on_close_cb},
-        {"ams_loading_error_cancel_cb", on_cancel_cb},
-        {"ams_loading_error_retry_cb", on_retry_cb},
-    });
-
-    callbacks_registered_ = true;
-    spdlog::debug("[AmsLoadingErrorModal] Callbacks registered");
-}
-
-// ============================================================================
-// Static Callbacks (Instance Lookup via User Data)
-// ============================================================================
-
-AmsLoadingErrorModal* AmsLoadingErrorModal::get_instance_from_event(lv_event_t* e) {
-    auto* target = static_cast<lv_obj_t*>(lv_event_get_target(e));
-
-    // Find modal root by name, then get instance from its user_data.
-    // Cannot walk parents checking any user_data — ui_button and other widgets
-    // set their own user_data, which would be miscast (prestonbrown/helixscreen#195).
-    lv_obj_t* obj = target;
-    while (obj) {
-        const char* name = lv_obj_get_name(obj);
-        if (name && strcmp(name, "ams_loading_error_modal") == 0) {
-            void* user_data = lv_obj_get_user_data(obj);
-            if (user_data) {
-                return static_cast<AmsLoadingErrorModal*>(user_data);
-            }
-        }
-        obj = lv_obj_get_parent(obj);
-    }
-
-    spdlog::warn("[AmsLoadingErrorModal] Could not find instance from event target");
-    return nullptr;
-}
-
-void AmsLoadingErrorModal::on_close_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (self) {
-        self->handle_close();
-    }
-}
-
-void AmsLoadingErrorModal::on_cancel_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (self) {
-        self->handle_cancel();
-    }
-}
-
-void AmsLoadingErrorModal::on_retry_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (self) {
-        self->handle_retry();
-    }
+void AmsLoadingErrorModal::on_cancel() {
+    spdlog::debug("[AmsLoadingErrorModal] Close requested");
+    hide();
 }
 
 } // namespace helix::ui

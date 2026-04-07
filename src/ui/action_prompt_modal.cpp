@@ -12,9 +12,6 @@
 
 namespace helix::ui {
 
-// Static member initialization
-bool ActionPromptModal::callbacks_registered_ = false;
-
 // ============================================================================
 // Construction / Destruction
 // ============================================================================
@@ -65,9 +62,6 @@ void ActionPromptModal::set_gcode_callback(GcodeCallback callback) {
 }
 
 bool ActionPromptModal::show_prompt(lv_obj_t* parent, const PromptData& data) {
-    // Register callbacks once (idempotent) - BEFORE creating XML [L013]
-    register_callbacks();
-
     // Store prompt data
     prompt_data_ = data;
 
@@ -75,9 +69,6 @@ bool ActionPromptModal::show_prompt(lv_obj_t* parent, const PromptData& data) {
     if (!Modal::show(parent)) {
         return false;
     }
-
-    // Store 'this' in modal's user_data for callback traversal
-    lv_obj_set_user_data(dialog_, this);
 
     spdlog::info("[ActionPromptModal] Shown with title: {}", prompt_data_.title);
     return true;
@@ -289,22 +280,6 @@ void ActionPromptModal::handle_button_click(const std::string& gcode) {
 
     // Close the modal
     hide();
-}
-
-// ============================================================================
-// Static Callback Registration
-// ============================================================================
-
-void ActionPromptModal::register_callbacks() {
-    if (callbacks_registered_) {
-        return;
-    }
-
-    // Note: We use lv_obj_add_event_cb directly for buttons since they're created
-    // dynamically. We don't register XML callbacks here.
-
-    callbacks_registered_ = true;
-    spdlog::debug("[ActionPromptModal] Callbacks registered");
 }
 
 // ============================================================================
