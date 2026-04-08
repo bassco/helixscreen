@@ -2036,6 +2036,14 @@ void TelemetryManager::record_print_start_context(const std::string& source, boo
     enqueue_event(std::move(event));
 }
 
+void TelemetryManager::notify_print_started_in_app() {
+    print_started_in_app_.store(true);
+}
+
+bool TelemetryManager::consume_print_started_in_app() {
+    return print_started_in_app_.exchange(false);
+}
+
 void TelemetryManager::record_error(const std::string& category, const std::string& code,
                                     const std::string& context) {
     // Check shutdown/initialized BEFORE touching the mutex — background threads
@@ -2693,10 +2701,11 @@ void on_print_state_changed_for_telemetry(lv_observer_t* observer, lv_subject_t*
                             spdlog::debug("[Telemetry] Cached filament: type='{}', total={:.1f}mm",
                                           s_telemetry_filament_type, s_telemetry_filament_used_mm);
 
-                            // Record print start context with metadata
-                            // Source left empty — Moonraker doesn't expose how the
-                            // print was initiated (local upload vs cloud vs USB)
-                            std::string source;
+                            // Determine print source: "in_app" if we started it,
+                            // "external" otherwise (Mainsail, Fluidd, Obico, etc.)
+                            bool in_app =
+                                TelemetryManager::instance().consume_print_started_in_app();
+                            std::string source = in_app ? "in_app" : "external";
                             int tools = ToolState::instance().tool_count();
                             bool ams =
                                 lv_subject_get_int(AmsState::instance().get_ams_type_subject()) !=

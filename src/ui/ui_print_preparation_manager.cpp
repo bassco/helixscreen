@@ -17,6 +17,7 @@
 #include "moonraker_manager.h"
 #include "observer_factory.h"
 #include "operation_registry.h"
+#include "system/telemetry_manager.h"
 
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
@@ -843,6 +844,9 @@ void PrintPreparationManager::start_print(const std::string& filename,
         }
         return;
     }
+
+    // Mark this as an in-app print for telemetry source tracking
+    TelemetryManager::instance().notify_print_started_in_app();
 
     // Prevent double-tap: reject if a print is already being started
     // This uses PrinterState's flag which is also checked by can_start_new_print()

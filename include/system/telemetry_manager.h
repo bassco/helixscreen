@@ -316,6 +316,26 @@ class TelemetryManager {
                                     bool ams_active);
 
     /**
+     * @brief Mark that the next print was started from within HelixScreen
+     *
+     * Call this before starting a print via Moonraker so that the telemetry
+     * observer can distinguish in-app prints from external prints (Mainsail,
+     * Fluidd, Obico, etc.). The flag is consumed once when the next
+     * print_start_context event is recorded.
+     *
+     * Thread-safe: may be called from any thread.
+     */
+    void notify_print_started_in_app();
+
+    /**
+     * @brief Check and consume the in-app print flag
+     *
+     * Returns true (once) if notify_print_started_in_app() was called since
+     * the last consume. Used internally by the print telemetry observer.
+     */
+    bool consume_print_started_in_app();
+
+    /**
      * @brief Record a non-fatal error event (rate-limited)
      *
      * Records non-fatal errors with category-based rate limiting (max 1 event
@@ -913,6 +933,9 @@ class TelemetryManager {
 
     /// Whether shutdown() has been called (prevents new work)
     std::atomic<bool> shutting_down_{false};
+
+    /// Set by notify_print_started_in_app(), consumed by print_start_context recording
+    std::atomic<bool> print_started_in_app_{false};
 
     /// Timestamp of when init() was called (for uptime calculation)
     std::chrono::steady_clock::time_point init_time_{};
