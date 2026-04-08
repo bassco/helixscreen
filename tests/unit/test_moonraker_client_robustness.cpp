@@ -46,12 +46,14 @@ using namespace std::chrono;
 class MoonrakerRobustnessFixture {
   public:
     MoonrakerRobustnessFixture() {
-        // Start mock WebSocket server first (use fixed port for testing)
+        // Start mock WebSocket server on a random port (port 0 = OS-assigned).
+        // Must use random ports because leaked event loop threads from previous
+        // test runs may still hold the old port open.
         server_ = std::make_unique<MockWebSocketServer>();
         server_->on_method("printer.info", [](const json&) {
             return json{{"state", "ready"}, {"hostname", "test-printer"}};
         });
-        int port = server_->start(18765); // Use fixed port for testing
+        int port = server_->start(0);
         if (port <= 0) {
             throw std::runtime_error("Failed to start mock server");
         }
@@ -69,11 +71,7 @@ class MoonrakerRobustnessFixture {
     }
 
     ~MoonrakerRobustnessFixture() {
-        // Disconnect and let the event loop process the close. The sleep
-        // ensures any in-flight callbacks finish before we destroy the client,
-        // preventing ~MoonrakerClient from blocking on callback_lifecycle_mutex_.
         client_->disconnect();
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         client_.reset();
         server_->stop();
         server_.reset();
