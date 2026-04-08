@@ -574,9 +574,56 @@ void LedController::update_output_pin_config(const nlohmann::json& configfile_co
     }
 }
 
+void LedController::update_led_pin_config(const nlohmann::json& configfile_config) {
+    if (!configfile_config.is_object()) {
+        return;
+    }
+
+    native_.update_pin_config(configfile_config);
+}
+
 // ============================================================================
 // NativeBackend
 // ============================================================================
+
+void NativeBackend::update_pin_config(const nlohmann::json& config_section) {
+    if (!config_section.is_object()) {
+        return;
+    }
+
+    for (auto& strip : strips_) {
+        // Klipper configfile uses the full section header as key (e.g., "led case_light"),
+        // matching strip.id directly — same pattern as update_output_pin_config.
+        if (!config_section.contains(strip.id)) {
+            continue;
+        }
+
+        const auto& led_cfg = config_section[strip.id];
+        if (!led_cfg.is_object()) {
+            continue;
+        }
+
+        bool has_red = led_cfg.contains("red_pin") && !led_cfg["red_pin"].is_null();
+        bool has_green = led_cfg.contains("green_pin") && !led_cfg["green_pin"].is_null();
+        bool has_blue = led_cfg.contains("blue_pin") && !led_cfg["blue_pin"].is_null();
+        bool has_white = led_cfg.contains("white_pin") && !led_cfg["white_pin"].is_null();
+
+        if (has_red || has_green || has_blue || has_white) {
+            strip.has_red_pin = has_red;
+            strip.has_green_pin = has_green;
+            strip.has_blue_pin = has_blue;
+            strip.has_white_pin = has_white;
+            strip.pin_config_known = true;
+
+            // Update supports_color / supports_white based on actual pins
+            strip.supports_color = (has_red || has_green || has_blue);
+            strip.supports_white = has_white;
+
+            spdlog::info("[NativeBackend] Strip '{}' pin config: R={} G={} B={} W={}", strip.id,
+                         has_red, has_green, has_blue, has_white);
+        }
+    }
+}
 
 void NativeBackend::add_strip(const LedStripInfo& strip) {
     strips_.push_back(strip);
@@ -601,6 +648,32 @@ void NativeBackend::set_color(const std::string& strip_id, double r, double g, d
     g = std::clamp(g, 0.0, 1.0);
     b = std::clamp(b, 0.0, 1.0);
     w = std::clamp(w, 0.0, 1.0);
+
+    // Determine if this strip is white-only based on actual pin configuration
+    // (from configfile) or fall back to prefix-based detection.
+    bool is_white_only = false;
+    for (const auto& s : strips_) {
+        if (s.id == strip_id) {
+            if (s.pin_config_known) {
+                // White-only if only white_pin is defined (no RGB pins)
+                is_white_only =
+                    s.has_white_pin && !s.has_red_pin && !s.has_green_pin && !s.has_blue_pin;
+            } else {
+                // Fall back: generic "led " prefix = white-only, neopixel/dotstar = RGB(W)
+                is_white_only = (strip_id.rfind("led ", 0) == 0);
+            }
+            break;
+        }
+    }
+
+    if (is_white_only) {
+        // Convert RGB to luminance for the white channel
+        double luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        w = std::max(luminance, w);
+        r = 0.0;
+        g = 0.0;
+        b = 0.0;
+    }
 
     // Cache the color we're sending
     strip_colors_[strip_id] = {r, g, b, w};
@@ -647,11 +720,9 @@ void NativeBackend::turn_on(const std::string& strip_id, SuccessCallback on_succ
     }
 
     spdlog::debug("[NativeBackend] turn_on: {}", strip_id);
-    api_->set_led_on(strip_id, on_success, [on_error](const MoonrakerError& err) {
-        if (on_error) {
-            on_error(err.message);
-        }
-    });
+    // Use cached color if available, otherwise default to full white
+    StripColor cached = get_strip_color(strip_id);
+    set_color(strip_id, cached.r, cached.g, cached.b, cached.w, on_success, on_error);
 }
 
 void NativeBackend::turn_off(const std::string& strip_id, SuccessCallback on_success,
@@ -665,11 +736,8 @@ void NativeBackend::turn_off(const std::string& strip_id, SuccessCallback on_suc
     }
 
     spdlog::debug("[NativeBackend] turn_off: {}", strip_id);
-    api_->set_led_off(strip_id, on_success, [on_error](const MoonrakerError& err) {
-        if (on_error) {
-            on_error(err.message);
-        }
-    });
+    // Set all channels to zero
+    set_color(strip_id, 0.0, 0.0, 0.0, 0.0, on_success, on_error);
 }
 
 uint32_t NativeBackend::StripColor::to_rgb() const {
@@ -1718,7 +1786,7 @@ void LedController::load_config() {
     auto& on_at_start_json = cfg->get_json(cfg->df() + "leds/led_on_at_start");
     led_on_at_start_ = on_at_start_json.is_boolean() ? on_at_start_json.get<bool>() : false;
 
-    auto& startup_brightness_json = cfg->get_json("/printer/leds/startup_brightness");
+    auto& startup_brightness_json = cfg->get_json(cfg->df() + "leds/startup_brightness");
     startup_brightness_ = startup_brightness_json.is_number_integer()
                               ? std::clamp(startup_brightness_json.get<int>(), 0, 100)
                               : 80;
@@ -2114,6 +2182,8 @@ int LedController::get_startup_brightness() const {
 
 void LedController::set_startup_brightness(int brightness_pct) {
     startup_brightness_ = std::clamp(brightness_pct, 0, 100);
+    // Also update last_brightness_ so subsequent LED commands use the new value
+    last_brightness_ = startup_brightness_;
 }
 
 void LedController::apply_startup_preference() {
