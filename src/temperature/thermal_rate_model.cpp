@@ -3,6 +3,9 @@
 
 #include "thermal_rate_model.h"
 
+#include "config.h"
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
 
 void ThermalRateModel::record_sample(float temp_c, uint32_t tick_ms) {
@@ -81,4 +84,75 @@ void ThermalRateModel::reset(float start_temp) {
     last_temp_ = start_temp;
     last_tick_ = 0;
     start_tick_ = 0;
+}
+
+// --- ThermalRateManager ---
+
+ThermalRateManager& ThermalRateManager::instance() {
+    static ThermalRateManager inst;
+    return inst;
+}
+
+ThermalRateModel& ThermalRateManager::get_model(const std::string& heater_name) {
+    return models_[heater_name];
+}
+
+float ThermalRateManager::estimate_heating_seconds(const std::string& heater_name,
+                                                   float current_temp, float target_temp) const {
+    auto it = models_.find(heater_name);
+    if (it != models_.end()) {
+        return it->second.estimate_seconds(current_temp, target_temp);
+    }
+    // No model exists yet — use a temporary with default rate
+    ThermalRateModel tmp;
+    return tmp.estimate_seconds(current_temp, target_temp);
+}
+
+void ThermalRateManager::load_from_config(helix::Config& config) {
+    for (const auto& heater : {"extruder", "heater_bed"}) {
+        std::string path = std::string("/thermal/rates/") + heater + "/heat_rate";
+        float rate = config.get<float>(path, 0.0f);
+        if (rate > 0.0f) {
+            models_[heater].load_history(rate);
+            spdlog::info("thermal: loaded {} rate {:.3f} s/°C from config", heater, rate);
+        }
+    }
+}
+
+void ThermalRateManager::save_to_config(helix::Config& config) {
+    for (auto& [name, model] : models_) {
+        float rate = model.blended_rate_for_save();
+        if (rate > 0.0f) {
+            std::string path = "/thermal/rates/" + name + "/heat_rate";
+            config.set<float>(path, rate);
+            spdlog::info("thermal: saved {} rate {:.3f} s/°C to config", name, rate);
+        }
+    }
+    config.save();
+}
+
+void ThermalRateManager::apply_archetype_defaults(float bed_x_max) {
+    // Extruder: universal default
+    models_["extruder"].set_default_rate(0.4f);
+
+    // Bed: size-dependent defaults
+    float bed_rate;
+    if (bed_x_max >= 350.0f) {
+        bed_rate = 2.0f;
+    } else if (bed_x_max >= 250.0f) {
+        bed_rate = 1.5f;
+    } else if (bed_x_max > 0.0f) {
+        bed_rate = 1.2f;
+    } else {
+        // Unknown size
+        bed_rate = 1.5f;
+    }
+    models_["heater_bed"].set_default_rate(bed_rate);
+
+    spdlog::info("thermal: archetype defaults — extruder=0.4, bed={:.1f} (bed_x_max={:.0f})",
+                 bed_rate, bed_x_max);
+}
+
+void ThermalRateManager::reset() {
+    models_.clear();
 }

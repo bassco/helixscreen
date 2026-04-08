@@ -4,7 +4,9 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <string>
 
 /**
  * @brief Reusable EMA-based thermal heating rate model
@@ -71,4 +73,31 @@ class ThermalRateModel {
     float last_temp_ = 0.0f;
     uint32_t last_tick_ = 0;
     uint32_t start_tick_ = 0;
+};
+
+namespace helix {
+class Config;
+} // namespace helix
+
+/**
+ * @brief Manages per-heater ThermalRateModel instances with persistence
+ *
+ * Singleton that provides printer-archetype-aware defaults and persists
+ * learned heating rates to Config between sessions.
+ */
+class ThermalRateManager {
+  public:
+    static ThermalRateManager& instance();
+    ThermalRateModel& get_model(const std::string& heater_name);
+    float estimate_heating_seconds(const std::string& heater_name, float current_temp,
+                                   float target_temp) const;
+    void load_from_config(helix::Config& config);
+    void save_to_config(helix::Config& config);
+    void apply_archetype_defaults(float bed_x_max);
+    void reset(); // For testing
+
+    ThermalRateManager() = default;
+
+  private:
+    std::map<std::string, ThermalRateModel> models_;
 };
