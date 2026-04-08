@@ -15,7 +15,6 @@
 
 #include "system/update_checker.h"
 
-#include "system/sha256_util.h"
 #include "ui_event_safety.h"
 #include "ui_modal.h"
 #include "ui_notification.h"
@@ -30,6 +29,7 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "printer_state.h"
 #include "spdlog/spdlog.h"
+#include "system/sha256_util.h"
 #include "system/telemetry_manager.h"
 #include "version.h"
 
@@ -432,7 +432,7 @@ void cleanup_stale_old_install() {
     }
 
     std::string old_dir = install_root + ".old";
-    struct stat st {};
+    struct stat st{};
     if (stat(old_dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
         return; // no .old directory
     }
@@ -711,7 +711,7 @@ static const char* const DOWNLOAD_FILENAME = "helixscreen-update.tar.gz";
 
 // Check if a directory is writable and return available bytes (0 on failure)
 static size_t get_available_space(const std::string& dir) {
-    struct statvfs stat {};
+    struct statvfs stat{};
     if (statvfs(dir.c_str(), &stat) != 0) {
         return 0;
     }
@@ -1003,16 +1003,15 @@ void UpdateChecker::do_download() {
         if (expected_sha256.empty()) {
             spdlog::info("[UpdateChecker] No SHA256 hash available, skipping verification");
         } else {
-            report_download_status(DownloadStatus::Verifying, 100,
-                                   "Verifying SHA256 checksum...");
+            report_download_status(DownloadStatus::Verifying, 100, "Verifying SHA256 checksum...");
             auto actual_sha256 = helix::compute_file_sha256(download_path);
             if (actual_sha256.empty()) {
                 spdlog::error("[UpdateChecker] Failed to compute SHA256 of {}", download_path);
                 std::remove(download_path.c_str());
                 report_download_status(DownloadStatus::Error, 0, "Error: Verification failed",
                                        "Could not compute checksum of downloaded file");
-                TelemetryManager::instance().record_update_failure("sha256_compute_failed",
-                                                                   version, get_platform_key());
+                TelemetryManager::instance().record_update_failure("sha256_compute_failed", version,
+                                                                   get_platform_key());
                 return;
             }
 
@@ -1166,7 +1165,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
             std::string fallback_dir = AppConstants::Update::backup_fallback_dir();
             safe_exec({mkdir_bin, "-p", fallback_dir});
 
-            struct stat st {};
+            struct stat st{};
             if (stat(config_src.c_str(), &st) == 0) {
                 int ret = safe_exec({cp_bin, "-f", config_src, config_bak});
                 if (ret == 0) {
@@ -1252,7 +1251,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                   geteuid(), getpid());
     }
     {
-        struct stat st {};
+        struct stat st{};
         if (stat(tarball_path.c_str(), &st) == 0) {
             flog_info("[UpdateChecker] tarball size: {} bytes", st.st_size);
         } else {
@@ -1266,7 +1265,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     int ret = -1;
     bool timed_out = false;
     std::string last_error_line;   // last line containing ERROR or FAILED
-    std::string last_warning_line;  // last line containing WARNING (lower priority)
+    std::string last_warning_line; // last line containing WARNING (lower priority)
     {
         int log_fd = open(install_log.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0640);
         if (log_fd < 0) {
@@ -1354,7 +1353,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
         // Read install log: emit to spdlog, and capture the last error/warning
         // line to show in the UI (the user can't see the log file from the touchscreen).
         {
-            struct stat log_stat {};
+            struct stat log_stat{};
             if (stat(install_log.c_str(), &log_stat) == 0) {
                 flog_info("[UpdateChecker] Install log exists: {} bytes", log_stat.st_size);
             } else {
@@ -1379,8 +1378,7 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
                 // Prioritize ERROR/FAILED over WARNING so rollback messages
                 // don't mask the actual failure reason.
                 std::string s(line);
-                if (s.find("ERROR") != std::string::npos ||
-                    s.find("FAILED") != std::string::npos) {
+                if (s.find("ERROR") != std::string::npos || s.find("FAILED") != std::string::npos) {
                     last_error_line = strip_ansi_codes(s);
                 } else if (s.find("WARNING") != std::string::npos) {
                     last_warning_line = strip_ansi_codes(s);
@@ -1465,7 +1463,8 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // Write to ~/.helixscreen/ (survives PrivateTmp, accessible from update.service).
     // Also write legacy /tmp sentinel for backward compat with old service files.
     {
-        std::string sentinel = AppConstants::Update::backup_fallback_dir() + "/self_restart_sentinel";
+        std::string sentinel =
+            AppConstants::Update::backup_fallback_dir() + "/self_restart_sentinel";
         std::ofstream ofs(sentinel);
         if (ofs) {
             spdlog::info("[UpdateChecker] Wrote self-restart sentinel: {}", sentinel);
@@ -1523,6 +1522,72 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
 #undef flog_error
 #undef flog_debug
 #undef FLOG
+
+// ============================================================================
+// External update detection (Moonraker notify_update_response)
+// ============================================================================
+
+void UpdateChecker::handle_external_update_complete() {
+    spdlog::info("[UpdateChecker] Moonraker completed external update of HelixScreen — restarting");
+
+    // Write sentinel so helixscreen-update.service (systemd path watcher) skips
+    // its restart — we're handling it here.  Same sentinel as self-update path.
+    {
+        std::string sentinel =
+            AppConstants::Update::backup_fallback_dir() + "/self_restart_sentinel";
+        std::ofstream ofs(sentinel);
+        if (ofs) {
+            spdlog::info("[UpdateChecker] Wrote self-restart sentinel: {}", sentinel);
+        } else {
+            spdlog::warn("[UpdateChecker] Failed to write sentinel: {}", sentinel);
+        }
+        std::ofstream ofs_legacy("/tmp/helixscreen_self_restart");
+    }
+
+    // Write restart marker so watchdog knows this exit is expected
+    {
+        std::string marker = AppConstants::Update::update_restart_marker_path();
+        std::ofstream ofs(marker);
+        if (ofs) {
+            spdlog::info("[UpdateChecker] Wrote update restart marker: {}", marker);
+        } else {
+            spdlog::warn("[UpdateChecker] Failed to write update restart marker: {}", marker);
+        }
+    }
+
+    // Restart strategy: same as do_install() but simpler — Moonraker already
+    // replaced the binary on disk, we just need to restart the process.
+    bool supervised = getenv("INVOCATION_ID") || getenv("HELIX_SUPERVISED");
+
+    if (!supervised) {
+        // No watchdog/systemd — fork+exec the new binary before exiting.
+        // resolve_install_root() strips the " (deleted)" suffix from /proc/self/exe
+        // to get the filesystem path where Moonraker extracted the new binary.
+        char** argv = app_get_stored_argv();
+        std::string install_root = resolve_install_root();
+        std::string bin_path = install_root.empty() ? "" : install_root + "/bin/helix-screen";
+
+        if (!bin_path.empty() && argv) {
+            spdlog::info("[UpdateChecker] Not supervised — fork+exec restart: {}", bin_path);
+            spdlog::default_logger()->flush();
+
+            pid_t pid = fork();
+            if (pid < 0) {
+                spdlog::error("[UpdateChecker] Fork failed: {} — falling back to _exit(0)",
+                              strerror(errno));
+                spdlog::default_logger()->flush();
+            } else if (pid == 0) {
+                usleep(200000); // 200ms for parent to exit
+                execv(bin_path.c_str(), argv);
+                ::_exit(127);
+            }
+        }
+    }
+
+    spdlog::info("[UpdateChecker] Restarting to apply external update (supervised={})", supervised);
+    spdlog::default_logger()->flush();
+    ::_exit(0);
+}
 
 // ============================================================================
 // Static helpers

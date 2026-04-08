@@ -226,6 +226,19 @@ class UpdateChecker {
     /** @brief Dismiss the current cached update version (persists to config) */
     void dismiss_current_version();
 
+    /**
+     * @brief Handle notification that Moonraker has finished updating HelixScreen
+     *
+     * Called when we receive a notify_update_response indicating our own update
+     * is complete. Writes the self-restart sentinel (so helixscreen-update.service
+     * skips its restart on systemd) and triggers _exit(0) to let the
+     * watchdog/systemd restart with the new binary.
+     *
+     * Works on all platforms (systemd, SysV, unsupervised) — the universal
+     * replacement for the systemd-only helixscreen-update.path watcher.
+     */
+    static void handle_external_update_complete();
+
     /** @brief Start automatic update checking (15s initial, then 24h periodic) */
     void start_auto_check();
 

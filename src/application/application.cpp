@@ -2024,6 +2024,35 @@ void Application::setup_discovery_callbacks() {
                     helix::TimelapseState::instance().handle_timelapse_event(data);
                 });
 
+            // Detect when Moonraker finishes updating HelixScreen (e.g. via Mainsail).
+            // On SysV platforms (AD5X, AD5M, K1) there is no systemd path watcher,
+            // so this WebSocket-based detection is the only restart trigger.
+            c->client->register_method_callback(
+                "notify_update_response", "external_update_restart", [](const nlohmann::json& msg) {
+                    // notify_update_response params: [{"application":"helixscreen",
+                    //   "proc_id":N, "message":"...", "complete":true/false}]
+                    // Method callbacks always receive the full JSON-RPC message
+                    if (!msg.contains("params") || !msg["params"].is_array() ||
+                        msg["params"].empty())
+                        return;
+                    const auto& p = msg["params"][0];
+                    if (!p.contains("application") || !p.contains("complete"))
+                        return;
+                    std::string app = p["application"].get<std::string>();
+                    bool complete = p["complete"].get<bool>();
+                    if (app != "helixscreen")
+                        return;
+                    if (!complete) {
+                        spdlog::debug("[Application] Moonraker updating helixscreen: {}",
+                                      p.value("message", ""));
+                        return;
+                    }
+                    // Defer to main thread — _exit(0) from a WebSocket callback
+                    // would skip flush and leave the display frozen.
+                    helix::ui::queue_update(
+                        []() { UpdateChecker::handle_external_update_complete(); });
+                });
+
             // Subscribe to power device and sensor state change notifications
             if (c->api) {
                 helix::PowerDeviceState::instance().subscribe(*c->api);
@@ -3182,6 +3211,8 @@ void Application::tear_down_printer_state() {
     if (m_moonraker && m_moonraker->client()) {
         m_moonraker->client()->unregister_method_callback("notify_timelapse_event",
                                                           "timelapse_state");
+        m_moonraker->client()->unregister_method_callback("notify_update_response",
+                                                          "external_update_restart");
     }
 
     // 8b. Unsubscribe power device and sensor state
