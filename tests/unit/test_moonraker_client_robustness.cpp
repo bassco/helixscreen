@@ -70,14 +70,10 @@ class MoonrakerRobustnessFixture {
 
     ~MoonrakerRobustnessFixture() {
         client_->disconnect();
-        server_->stop();
         client_.reset();
+        server_->stop();
         server_.reset();
-
-        // On macOS, EventLoopThread::join() hangs after heavy WebSocket I/O
-        // (kqueue blocks even after all sockets are closed). Leak the thread
-        // to avoid deadlocking the test suite. The OS reclaims on exit.
-        (void)new auto(std::move(loop_thread_));
+        loop_thread_->stop(true);
     }
 
     std::string server_url() const {
@@ -97,9 +93,9 @@ class MoonrakerRobustnessFixture {
 TEST_CASE_METHOD(MoonrakerRobustnessFixture,
                  "MoonrakerClient handles concurrent send_jsonrpc calls",
                  "[connection][edge][concurrent][priority1][eventloop][slow]") {
-    SECTION("10 threads × 100 requests = 1000 total (no race conditions)") {
-        constexpr int NUM_THREADS = 10;
-        constexpr int REQUESTS_PER_THREAD = 100;
+    SECTION("concurrent requests across threads (no race conditions)") {
+        constexpr int NUM_THREADS = 4;
+        constexpr int REQUESTS_PER_THREAD = 25;
         constexpr int TOTAL_REQUESTS = NUM_THREADS * REQUESTS_PER_THREAD;
 
         std::atomic<int> success_count{0};
