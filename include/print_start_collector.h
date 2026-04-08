@@ -226,7 +226,14 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     static const std::regex completion_pattern_;
 
     // Fallback detection constants
-    static constexpr auto FALLBACK_TIMEOUT = std::chrono::seconds(300);
+    static constexpr auto FALLBACK_TIMEOUT =
+        std::chrono::seconds(300); ///< Last resort when no predictions
+    static constexpr auto ABSOLUTE_MAX_TIMEOUT =
+        std::chrono::seconds(900); ///< Hard ceiling (stuck detection)
+    static constexpr float ADAPTIVE_TIMEOUT_MARGIN =
+        1.5f; ///< Multiply predicted total for adaptive timeout
+    static constexpr float ABSOLUTE_TIMEOUT_MARGIN =
+        2.5f; ///< Multiply predicted total for absolute ceiling
     static constexpr int TEMP_TOLERANCE_DECIDEGREES = 50; // 5°C (temps stored as value * 10)
 
     // Fallback detection state (for printers without G-code layer markers)

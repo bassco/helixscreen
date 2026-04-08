@@ -313,6 +313,7 @@ void PrintStartCollector::check_fallback_completion() {
     std::chrono::steady_clock::time_point start_time;
     PrintStartPhase current;
     bool print_start_was_detected;
+    float predicted_total;
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
         // Already complete - nothing to do
@@ -322,6 +323,7 @@ void PrintStartCollector::check_fallback_completion() {
         current = current_phase_;
         print_start_was_detected = print_start_detected_;
         start_time = printing_state_start_;
+        predicted_total = predicted_total_seconds_;
     }
 
     // Get temperature data for proactive and completion fallback checks
@@ -407,17 +409,69 @@ void PrintStartCollector::check_fallback_completion() {
         return;
     }
 
-    // Fallback 3: Timeout with temps near target (90% of target)
-    bool temps_near = (ext_target <= 0 || ext_temp >= static_cast<int>(ext_target * 0.9)) &&
-                      (bed_target <= 0 || bed_temp >= static_cast<int>(bed_target * 0.9));
+    // Fallback 3: Adaptive timeout with temp awareness
+    //
+    // ext_target == 0 during macro execution means the nozzle heat command (M109)
+    // hasn't been issued yet — NOT that no nozzle heating is needed. Bed-first
+    // macros (common on AD5M with ABS) heat bed, then home + mesh, then heat
+    // nozzle. Treating ext_target=0 as "nozzle satisfied" causes premature timeout.
+    bool nozzle_target_set = ext_target > 0;
+    bool nozzle_near = nozzle_target_set && ext_temp >= static_cast<int>(ext_target * 0.9);
+    bool bed_near = bed_target <= 0 || bed_temp >= static_cast<int>(bed_target * 0.9);
+    // temps_near requires nozzle target to be set AND near — unknown nozzle
+    // target (ext_target=0) means we can't confirm temps are ready
+    bool temps_near = nozzle_near && bed_near;
 
     auto elapsed = std::chrono::steady_clock::now() - start_time;
-    if (elapsed > FALLBACK_TIMEOUT && temps_near) {
-        auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-        spdlog::info("[PrintStartCollector] Fallback: timeout ({} sec)", elapsed_sec);
-        fallback_completion_ = true;
-        update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
-        return;
+    auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+
+    // Determine effective timeout: use prediction data when available,
+    // FALLBACK_TIMEOUT only when we have no information at all
+    if (predicted_total > 0) {
+        // Adaptive timeout from prediction data (with margin for variance)
+        auto adaptive_timeout =
+            std::chrono::seconds(static_cast<int>(predicted_total * ADAPTIVE_TIMEOUT_MARGIN));
+
+        if (elapsed > adaptive_timeout && temps_near) {
+            spdlog::info("[PrintStartCollector] Fallback: adaptive timeout ({} sec, "
+                         "predicted={:.0f}s)",
+                         elapsed_sec, predicted_total);
+            fallback_completion_ = true;
+            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+            return;
+        }
+
+        // Absolute ceiling based on predictions (something is seriously wrong)
+        auto absolute_timeout =
+            std::chrono::seconds(static_cast<int>(predicted_total * ABSOLUTE_TIMEOUT_MARGIN));
+        absolute_timeout = std::max(absolute_timeout, ABSOLUTE_MAX_TIMEOUT);
+        if (elapsed > absolute_timeout) {
+            spdlog::warn("[PrintStartCollector] Fallback: absolute timeout ({} sec, "
+                         "predicted={:.0f}s)",
+                         elapsed_sec, predicted_total);
+            fallback_completion_ = true;
+            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+            return;
+        }
+    } else {
+        // No prediction data — FALLBACK_TIMEOUT is the last resort
+        if (elapsed > FALLBACK_TIMEOUT && temps_near) {
+            spdlog::info("[PrintStartCollector] Fallback: timeout ({} sec, no predictions)",
+                         elapsed_sec);
+            fallback_completion_ = true;
+            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+            return;
+        }
+
+        // Hard ceiling when we have no predictions AND nozzle target unknown
+        if (elapsed > ABSOLUTE_MAX_TIMEOUT) {
+            spdlog::warn("[PrintStartCollector] Fallback: absolute timeout ({} sec, "
+                         "no predictions, nozzle_target_set={})",
+                         elapsed_sec, nozzle_target_set);
+            fallback_completion_ = true;
+            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+            return;
+        }
     }
 }
 
