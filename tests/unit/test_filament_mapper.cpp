@@ -106,7 +106,7 @@ TEST_CASE("materials_match is case-insensitive", "[filament_mapper][material]") 
     CHECK(FilamentMapper::materials_match("Pla", "pLA"));
     CHECK(FilamentMapper::materials_match("PETG", "petg"));
     CHECK_FALSE(FilamentMapper::materials_match("PLA", "PETG"));
-    CHECK(FilamentMapper::materials_match("PLA", "PLA+"));  // Same compat group
+    CHECK(FilamentMapper::materials_match("PLA", "PLA+")); // Same compat group
     CHECK(FilamentMapper::materials_match("", ""));
 }
 
@@ -408,8 +408,7 @@ TEST_CASE("compute_defaults empty slots participate in color matching",
 // compute_defaults — mixed scenarios
 // =============================================================================
 
-TEST_CASE("compute_defaults mixed firmware, color, and auto",
-          "[filament_mapper][compute][mixed]") {
+TEST_CASE("compute_defaults mixed firmware, color, and auto", "[filament_mapper][compute][mixed]") {
     std::vector<GcodeToolInfo> tools = {
         {0, 0xFF0000, "PLA"},
         {1, 0x00FF00, "PLA"},
@@ -536,7 +535,7 @@ TEST_CASE("FilamentMapper use_current_assignments", "[filament_mapper][current_a
         };
         std::vector<AvailableSlot> slots = {
             {0, 0, 0xFF0000, "PLA", false, 0},
-            {1, 0, 0x000000, "", true, -1},  // empty slot
+            {1, 0, 0x000000, "", true, -1}, // empty slot
         };
 
         auto mappings = FilamentMapper::use_current_assignments(tools, slots);
@@ -623,8 +622,7 @@ TEST_CASE("find_closest_color_slot picks first matching slot across backends",
 // materials_match — edge cases and cross-type detection
 // =============================================================================
 
-TEST_CASE("materials_match detects cross-material incompatibility",
-          "[filament_mapper][material]") {
+TEST_CASE("materials_match detects cross-material incompatibility", "[filament_mapper][material]") {
     // Common incompatible pairings that should NOT match
     CHECK_FALSE(FilamentMapper::materials_match("PLA", "ASA"));
     CHECK_FALSE(FilamentMapper::materials_match("PLA", "PETG"));
@@ -652,12 +650,12 @@ TEST_CASE("compute_defaults detects per-tool material mismatch in multi-tool pri
           "[filament_mapper][compute][material]") {
     // Simulates a 2-color PLA print with an AMS that has PLA and ASA
     std::vector<GcodeToolInfo> tools = {
-        {0, 0xFF0000, "PLA"},  // tool 0 wants PLA
-        {1, 0x0000FF, "PLA"},  // tool 1 wants PLA
+        {0, 0xFF0000, "PLA"}, // tool 0 wants PLA
+        {1, 0x0000FF, "PLA"}, // tool 1 wants PLA
     };
     std::vector<AvailableSlot> slots = {
-        {0, 0, 0xFF0000, "PLA", false, -1},  // red PLA — perfect match
-        {1, 0, 0x0000FF, "ASA", false, -1},  // blue ASA — color match but wrong material
+        {0, 0, 0xFF0000, "PLA", false, -1}, // red PLA — perfect match
+        {1, 0, 0x0000FF, "ASA", false, -1}, // blue ASA — color match but wrong material
     };
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
@@ -681,7 +679,7 @@ TEST_CASE("compute_defaults mixed materials with firmware mapping",
     };
     std::vector<AvailableSlot> slots = {
         {0, 0, 0xFF0000, "ASA", false, 0},   // firmware-mapped to T0, but ASA not PLA
-        {1, 0, 0x00FF00, "PETG", false, -1},  // color match for T1, material matches
+        {1, 0, 0x00FF00, "PETG", false, -1}, // color match for T1, material matches
     };
 
     auto result = FilamentMapper::compute_defaults(tools, slots);
@@ -712,8 +710,7 @@ TEST_CASE("compute_defaults single tool no material info skips mismatch",
 // materials_match — additional edge cases
 // =============================================================================
 
-TEST_CASE("materials_match handles trailing whitespace",
-          "[filament_mapper][material]") {
+TEST_CASE("materials_match handles trailing whitespace", "[filament_mapper][material]") {
     // Trailing spaces: base material extraction finds "PLA" in "PLA "
     CHECK(FilamentMapper::materials_match("PLA ", "PLA"));
     // Leading space: " PLA" has no known prefix, but "PLA" is known → unknown vs PLA = compatible
@@ -721,8 +718,7 @@ TEST_CASE("materials_match handles trailing whitespace",
     CHECK(FilamentMapper::materials_match("PLA ", "PLA "));
 }
 
-TEST_CASE("materials_match handles long material strings",
-          "[filament_mapper][material]") {
+TEST_CASE("materials_match handles long material strings", "[filament_mapper][material]") {
     std::string long_name(200, 'X');
     CHECK(FilamentMapper::materials_match(long_name, long_name));
     // Both unknown → compatible (can't determine incompatibility)
@@ -733,8 +729,7 @@ TEST_CASE("materials_match handles long material strings",
 // compute_defaults — extreme scenarios
 // =============================================================================
 
-TEST_CASE("compute_defaults handles zero tools",
-          "[filament_mapper][compute]") {
+TEST_CASE("compute_defaults handles zero tools", "[filament_mapper][compute]") {
     std::vector<GcodeToolInfo> tools;
     std::vector<AvailableSlot> slots = {
         {0, 0, 0xFF0000, "PLA", false, -1},
@@ -744,8 +739,7 @@ TEST_CASE("compute_defaults handles zero tools",
     CHECK(result.empty());
 }
 
-TEST_CASE("compute_defaults handles zero slots",
-          "[filament_mapper][compute]") {
+TEST_CASE("compute_defaults handles zero slots", "[filament_mapper][compute]") {
     std::vector<GcodeToolInfo> tools = {{0, 0xFF0000, "PLA"}};
     std::vector<AvailableSlot> slots;
 
@@ -754,8 +748,7 @@ TEST_CASE("compute_defaults handles zero slots",
     CHECK(result[0].mapped_slot == -1);
 }
 
-TEST_CASE("compute_defaults handles many tools (12+)",
-          "[filament_mapper][compute]") {
+TEST_CASE("compute_defaults handles many tools (12+)", "[filament_mapper][compute]") {
     // Simulate a 12-lane AMS system
     std::vector<GcodeToolInfo> tools;
     std::vector<AvailableSlot> slots;
@@ -896,8 +889,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit slot with material") {
         helix::AvailableSlot slot;
-        slot.slot_index = 4;         // global index
-        slot.local_slot_index = 0;   // first slot in unit
+        slot.slot_index = 4;       // global index
+        slot.local_slot_index = 0; // first slot in unit
         slot.backend_index = 0;
         slot.material = "PETG";
         slot.is_empty = false;
@@ -909,8 +902,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit slot without material") {
         helix::AvailableSlot slot;
-        slot.slot_index = 7;         // global index
-        slot.local_slot_index = 3;   // 4th slot in unit
+        slot.slot_index = 7;       // global index
+        slot.local_slot_index = 3; // 4th slot in unit
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = false;
@@ -922,8 +915,8 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
     SECTION("multi-unit empty slot") {
         helix::AvailableSlot slot;
-        slot.slot_index = 9;         // global index
-        slot.local_slot_index = 1;   // 2nd slot in unit
+        slot.slot_index = 9;       // global index
+        slot.local_slot_index = 1; // 2nd slot in unit
         slot.backend_index = 0;
         slot.material = "";
         slot.is_empty = true;
@@ -931,5 +924,179 @@ TEST_CASE("FilamentMapper format_slot_label", "[filament_mapper]") {
 
         auto label = helix::FilamentMapper::format_slot_label(slot);
         CHECK(label == "Turtle 3 \xc2\xb7 Slot 2: Empty");
+    }
+}
+
+// =============================================================================
+// Material mismatch detection for pre-print warnings
+// =============================================================================
+// These tests verify the material_mismatch flag is set correctly in scenarios
+// that the PrintStartController uses to show material compatibility warnings.
+
+TEST_CASE("compute_defaults flags mismatch for single-tool non-AMS-like scenario",
+          "[filament_mapper][material_mismatch]") {
+    // Simulates non-AMS: single tool, single slot, wrong material loaded
+    std::vector<GcodeToolInfo> tools = {{0, 0xFFFFFF, "PETG"}};
+    std::vector<AvailableSlot> slots = {
+        {0, 0, 0xFFFFFF, "PLA", false, -1},
+    };
+
+    auto result = FilamentMapper::compute_defaults(tools, slots);
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].mapped_slot == 0);
+    CHECK(result[0].material_mismatch); // PETG vs PLA = incompatible
+}
+
+TEST_CASE("compute_defaults no mismatch when materials are compatible",
+          "[filament_mapper][material_mismatch]") {
+    // PLA+ and PLA are in the same compatibility group
+    std::vector<GcodeToolInfo> tools = {{0, 0xFFFFFF, "PLA"}};
+    std::vector<AvailableSlot> slots = {
+        {0, 0, 0xFFFFFF, "PLA+", false, -1},
+    };
+
+    auto result = FilamentMapper::compute_defaults(tools, slots);
+    REQUIRE(result.size() == 1);
+    CHECK(result[0].mapped_slot == 0);
+    CHECK_FALSE(result[0].material_mismatch); // PLA and PLA+ are compatible
+}
+
+TEST_CASE("compute_defaults no mismatch when loaded material is empty",
+          "[filament_mapper][material_mismatch]") {
+    // If the slot has no material info, we can't warn — not a mismatch
+    std::vector<GcodeToolInfo> tools = {{0, 0xFFFFFF, "PETG"}};
+    std::vector<AvailableSlot> slots = {
+        {0, 0, 0xFFFFFF, "", false, -1},
+    };
+
+    auto result = FilamentMapper::compute_defaults(tools, slots);
+    REQUIRE(result.size() == 1);
+    CHECK_FALSE(result[0].material_mismatch);
+}
+
+TEST_CASE("compute_defaults no mismatch when gcode material is empty",
+          "[filament_mapper][material_mismatch]") {
+    // If the gcode doesn't specify a material, we can't warn
+    std::vector<GcodeToolInfo> tools = {{0, 0xFFFFFF, ""}};
+    std::vector<AvailableSlot> slots = {
+        {0, 0, 0xFFFFFF, "PLA", false, -1},
+    };
+
+    auto result = FilamentMapper::compute_defaults(tools, slots);
+    REQUIRE(result.size() == 1);
+    CHECK_FALSE(result[0].material_mismatch);
+}
+
+TEST_CASE("compute_defaults flags multiple mismatches in multi-tool scenario",
+          "[filament_mapper][material_mismatch]") {
+    // Multi-tool print where two tools have wrong materials
+    std::vector<GcodeToolInfo> tools = {
+        {0, 0xFF0000, "ABS"},
+        {1, 0x00FF00, "ABS"},
+        {2, 0x0000FF, "ABS"},
+    };
+    std::vector<AvailableSlot> slots = {
+        {0, 0, 0xFF0000, "PLA", false, 0},  // ABS vs PLA = mismatch
+        {1, 0, 0x00FF00, "ASA", false, 1},  // ABS vs ASA = compatible (same group)
+        {2, 0, 0x0000FF, "PETG", false, 2}, // ABS vs PETG = mismatch
+    };
+
+    auto result = FilamentMapper::compute_defaults(tools, slots);
+    REQUIRE(result.size() == 3);
+    CHECK(result[0].material_mismatch);       // ABS vs PLA
+    CHECK_FALSE(result[1].material_mismatch); // ABS vs ASA (same compat group)
+    CHECK(result[2].material_mismatch);       // ABS vs PETG
+}
+
+TEST_CASE("materials_match handles non-AMS external spool comparison",
+          "[filament_mapper][material_mismatch]") {
+    // These are the exact comparisons PrintStartController::find_material_mismatches()
+    // performs for non-AMS printers (gcode filament_type vs external spool material)
+
+    SECTION("exact match is compatible") {
+        CHECK(FilamentMapper::materials_match("PLA", "PLA"));
+        CHECK(FilamentMapper::materials_match("PETG", "PETG"));
+        CHECK(FilamentMapper::materials_match("ABS", "ABS"));
+    }
+
+    SECTION("case-insensitive match") {
+        CHECK(FilamentMapper::materials_match("pla", "PLA"));
+        CHECK(FilamentMapper::materials_match("Petg", "PETG"));
+    }
+
+    SECTION("compatible group members match") {
+        CHECK(FilamentMapper::materials_match("PLA", "PLA+"));
+        CHECK(FilamentMapper::materials_match("PLA", "PLA-CF"));
+        CHECK(FilamentMapper::materials_match("ABS", "ASA"));
+        CHECK(FilamentMapper::materials_match("ABS", "ABS+"));
+    }
+
+    SECTION("incompatible materials do not match") {
+        CHECK_FALSE(FilamentMapper::materials_match("PLA", "PETG"));
+        CHECK_FALSE(FilamentMapper::materials_match("PLA", "ABS"));
+        CHECK_FALSE(FilamentMapper::materials_match("PETG", "ABS"));
+        CHECK_FALSE(FilamentMapper::materials_match("PLA", "TPU"));
+        CHECK_FALSE(FilamentMapper::materials_match("PETG", "PA"));
+    }
+
+    SECTION("compound slicer names resolve to base material") {
+        // Slicers often use names like "PLA SnapSpeed" or "Generic PETG"
+        CHECK(FilamentMapper::materials_match("PLA SnapSpeed", "PLA"));
+        CHECK_FALSE(FilamentMapper::materials_match("PLA SnapSpeed", "PETG"));
+    }
+}
+
+// =============================================================================
+// Filament database temperature lookups (used by material mismatch warnings)
+// =============================================================================
+
+#include "filament_database.h"
+
+TEST_CASE("filament database provides temp ranges for mismatch warnings",
+          "[filament_mapper][material_mismatch]") {
+    SECTION("PLA vs PETG have non-overlapping nozzle ranges") {
+        auto pla = filament::find_material("PLA");
+        auto petg = filament::find_material("PETG");
+        REQUIRE(pla.has_value());
+        REQUIRE(petg.has_value());
+
+        // PLA max < PETG min — printing PLA at PETG temps would burn it
+        CHECK(pla->nozzle_max < petg->nozzle_min);
+        CHECK(pla->bed_temp < petg->bed_temp);
+    }
+
+    SECTION("ABS vs PLA have very different temp ranges") {
+        auto pla = filament::find_material("PLA");
+        auto abs = filament::find_material("ABS");
+        REQUIRE(pla.has_value());
+        REQUIRE(abs.has_value());
+
+        CHECK(pla->nozzle_max < abs->nozzle_min);
+        CHECK(pla->bed_temp < abs->bed_temp);
+    }
+
+    SECTION("compatible materials have overlapping ranges") {
+        auto abs = filament::find_material("ABS");
+        auto asa = filament::find_material("ASA");
+        REQUIRE(abs.has_value());
+        REQUIRE(asa.has_value());
+
+        // ABS and ASA have the same compat group and similar temps
+        CHECK(abs->nozzle_min == asa->nozzle_min);
+        CHECK(abs->bed_temp == asa->bed_temp);
+    }
+
+    SECTION("unknown material returns nullopt") {
+        auto unknown = filament::find_material("SuperPlastic3000");
+        CHECK_FALSE(unknown.has_value());
+    }
+
+    SECTION("alias resolution works for temp lookup") {
+        auto nylon = filament::find_material("Nylon");
+        auto pa = filament::find_material("PA");
+        REQUIRE(nylon.has_value());
+        REQUIRE(pa.has_value());
+        CHECK(nylon->nozzle_min == pa->nozzle_min);
+        CHECK(nylon->nozzle_max == pa->nozzle_max);
     }
 }

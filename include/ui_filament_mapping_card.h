@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-#include "filament_mapper.h"
 #include "ui_filament_mapping_modal.h"
 
-#include <lvgl.h>
+#include "filament_mapper.h"
 
+#include <lvgl.h>
 #include <string>
 #include <vector>
 
@@ -59,12 +59,23 @@ class FilamentMappingCard {
     /**
      * @brief Get current tool-to-slot mappings
      */
-    [[nodiscard]] std::vector<helix::ToolMapping> get_mappings() const { return mappings_; }
+    [[nodiscard]] std::vector<helix::ToolMapping> get_mappings() const {
+        return mappings_;
+    }
 
     /**
      * @brief Get per-tool gcode info (colors, materials)
      */
-    [[nodiscard]] std::vector<helix::GcodeToolInfo> get_tool_info() const { return tool_info_; }
+    [[nodiscard]] std::vector<helix::GcodeToolInfo> get_tool_info() const {
+        return tool_info_;
+    }
+
+    /**
+     * @brief Get available AMS slots (for material mismatch lookups)
+     */
+    [[nodiscard]] const std::vector<helix::AvailableSlot>& get_available_slots() const {
+        return available_slots_;
+    }
 
     /**
      * @brief Get per-tool mapped colors (RGB values from chosen slots)
@@ -79,7 +90,9 @@ class FilamentMappingCard {
     /**
      * @brief Register callback for when user changes mappings via the modal
      */
-    void set_on_mappings_changed(MappingsChangedCallback cb) { on_mappings_changed_ = std::move(cb); }
+    void set_on_mappings_changed(MappingsChangedCallback cb) {
+        on_mappings_changed_ = std::move(cb);
+    }
 
     /**
      * @brief Check if any mappings have material mismatches
@@ -110,9 +123,8 @@ class FilamentMappingCard {
     std::vector<helix::AvailableSlot> collect_available_slots();
 
     /// Build GcodeToolInfo list from color/material strings
-    std::vector<helix::GcodeToolInfo> build_tool_info(
-        const std::vector<std::string>& colors,
-        const std::vector<std::string>& materials);
+    std::vector<helix::GcodeToolInfo> build_tool_info(const std::vector<std::string>& colors,
+                                                      const std::vector<std::string>& materials);
 
     lv_obj_t* card_ = nullptr;
     lv_obj_t* rows_container_ = nullptr;

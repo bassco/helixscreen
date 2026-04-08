@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include "filament_mapper.h"
 #include "ui_observer_guard.h"
+
+#include "filament_mapper.h"
 
 #include <functional>
 #include <lvgl.h>
@@ -158,11 +159,35 @@ class PrintStartController {
     void show_color_mismatch_warning(const std::vector<int>& unresolved_tools,
                                      const std::vector<helix::GcodeToolInfo>& tool_info);
 
+    /// Per-tool material mismatch detail for the warning dialog
+    struct MaterialMismatchDetail {
+        int tool_index;
+        std::string expected_material;
+        std::string loaded_material;
+        int expected_nozzle_min = 0;
+        int expected_nozzle_max = 0;
+        int expected_bed_temp = 0;
+        int loaded_nozzle_min = 0;
+        int loaded_nozzle_max = 0;
+        int loaded_bed_temp = 0;
+    };
+
+    /// Find material mismatches for both AMS and non-AMS printers
+    std::vector<MaterialMismatchDetail> find_material_mismatches();
+
+    /// Show detailed material mismatch warning with temperature info
+    void show_material_mismatch_warning(const std::vector<MaterialMismatchDetail>& mismatches);
+
+    /// Continue the initiate() flow after the unresolved-tools check passes
+    void continue_after_unresolved_check();
+
     // Static callbacks for LVGL modal
     static void on_filament_warning_proceed_static(lv_event_t* e);
     static void on_filament_warning_cancel_static(lv_event_t* e);
     static void on_color_mismatch_proceed_static(lv_event_t* e);
     static void on_color_mismatch_cancel_static(lv_event_t* e);
+    static void on_material_mismatch_proceed_static(lv_event_t* e);
+    static void on_material_mismatch_cancel_static(lv_event_t* e);
 
     // === Dependencies ===
     PrinterState& printer_state_;
@@ -179,6 +204,7 @@ class PrintStartController {
     // === Modal References ===
     lv_obj_t* filament_warning_modal_ = nullptr;
     lv_obj_t* color_mismatch_modal_ = nullptr;
+    lv_obj_t* material_mismatch_modal_ = nullptr;
 
     // === Callbacks ===
     PrintStartedCallback on_print_started_;
@@ -213,7 +239,7 @@ class PrintStartController {
     /// Delete persisted remap state (called after successful restore)
     void clear_persisted_remap_state();
 
-public:
+  public:
     /// Check for and restore any pending remap from a previous crashed session.
     /// Call once after AMS backends are initialized.
     void recover_pending_remap();

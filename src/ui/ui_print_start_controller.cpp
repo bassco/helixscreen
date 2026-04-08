@@ -20,21 +20,24 @@
 
 #include "active_print_media_manager.h"
 #include "ams_state.h"
-#include "color_utils.h"
 #include "app_constants.h"
+#include "color_utils.h"
+#include "filament_database.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
 #include "printer_state.h"
+#include "settings_manager.h"
 
-#include "hv/json.hpp"
-
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+
+#include "hv/json.hpp"
 
 namespace helix::ui {
 
@@ -69,6 +72,10 @@ PrintStartController::~PrintStartController() {
         if (color_mismatch_modal_) {
             helix::ui::modal_hide(color_mismatch_modal_);
             color_mismatch_modal_ = nullptr;
+        }
+        if (material_mismatch_modal_) {
+            helix::ui::modal_hide(material_mismatch_modal_);
+            material_mismatch_modal_ = nullptr;
         }
     }
     spdlog::trace("[PrintStartController] Destroyed");
@@ -109,8 +116,7 @@ void PrintStartController::initiate() {
     // (file select → detail view → print button → filament warning confirm) in seconds.
     auto elapsed = std::chrono::steady_clock::now() - AppConstants::Startup::PROCESS_START_TIME;
     if (elapsed < AppConstants::Startup::PRINT_START_GRACE_PERIOD) {
-        auto secs =
-            std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+        auto secs = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         spdlog::warn("[PrintStartController] Rejected print start during startup grace period "
                      "({}s < {}s)",
                      secs, AppConstants::Startup::PRINT_START_GRACE_PERIOD.count());
@@ -161,8 +167,8 @@ void PrintStartController::initiate() {
         return;
     }
 
-    // All checks passed - proceed directly
-    execute_print_start();
+    // Check material compatibility (both AMS and non-AMS)
+    continue_after_unresolved_check();
 }
 
 void PrintStartController::execute_print_start() {
@@ -330,8 +336,15 @@ void PrintStartController::on_filament_warning_proceed_static(lv_event_t* e) {
             helix::ui::modal_hide(self->filament_warning_modal_);
             self->filament_warning_modal_ = nullptr;
         }
-        // Execute print
-        self->execute_print_start();
+
+        // Continue with remaining checks (unresolved tools, material mismatch)
+        auto unresolved = self->find_unresolved_tools();
+        if (!unresolved.empty()) {
+            auto tool_info = self->detail_view_->get_filament_tool_info();
+            self->show_color_mismatch_warning(unresolved, tool_info);
+            return;
+        }
+        self->continue_after_unresolved_check();
     }
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -388,8 +401,7 @@ std::vector<int> PrintStartController::find_unresolved_tools() {
 }
 
 void PrintStartController::show_color_mismatch_warning(
-    const std::vector<int>& unresolved_tools,
-    const std::vector<helix::GcodeToolInfo>& tool_info) {
+    const std::vector<int>& unresolved_tools, const std::vector<helix::GcodeToolInfo>& tool_info) {
     // Close any existing dialog first
     if (color_mismatch_modal_) {
         helix::ui::modal_hide(color_mismatch_modal_);
@@ -403,8 +415,8 @@ void PrintStartController::show_color_mismatch_warning(
         if (tool_idx < static_cast<int>(tool_info.size())) {
             const auto& tool = tool_info[tool_idx];
             std::string color_name = helix::describe_color(tool.color_rgb);
-            message += "  " + std::string(LV_SYMBOL_BULLET) + " T" +
-                       std::to_string(tool_idx) + ": " + color_name;
+            message += "  " + std::string(LV_SYMBOL_BULLET) + " T" + std::to_string(tool_idx) +
+                       ": " + color_name;
             if (!tool.material.empty()) {
                 message += " (" + tool.material + ")";
             }
@@ -445,8 +457,8 @@ void PrintStartController::on_color_mismatch_proceed_static(lv_event_t* e) {
             helix::ui::modal_hide(self->color_mismatch_modal_);
             self->color_mismatch_modal_ = nullptr;
         }
-        // Execute print despite mismatch
-        self->execute_print_start();
+        // Continue to material compatibility check before executing
+        self->continue_after_unresolved_check();
     }
     LVGL_SAFE_EVENT_CB_END();
 }
@@ -467,6 +479,239 @@ void PrintStartController::on_color_mismatch_cancel_static(lv_event_t* e) {
             self->on_print_cancelled_();
         }
         spdlog::debug("[PrintStartController] Print cancelled by user (color mismatch warning)");
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
+// Material Mismatch Detection
+// ============================================================================
+
+void PrintStartController::continue_after_unresolved_check() {
+    auto mismatches = find_material_mismatches();
+    if (!mismatches.empty()) {
+        show_material_mismatch_warning(mismatches);
+        return;
+    }
+
+    execute_print_start();
+}
+
+std::vector<PrintStartController::MaterialMismatchDetail>
+PrintStartController::find_material_mismatches() {
+    std::vector<MaterialMismatchDetail> mismatches;
+
+    if (!detail_view_) {
+        return mismatches;
+    }
+
+    auto& ams = AmsState::instance();
+
+    if (ams.is_available()) {
+        // AMS path: check ToolMapping.material_mismatch flags
+        auto mappings = detail_view_->get_filament_mappings();
+        auto tool_info = detail_view_->get_filament_tool_info();
+        const auto& slots = detail_view_->get_available_slots();
+
+        for (const auto& m : mappings) {
+            if (!m.material_mismatch) {
+                continue;
+            }
+
+            MaterialMismatchDetail detail;
+            detail.tool_index = m.tool_index;
+
+            // Get expected material from gcode tool info
+            if (m.tool_index >= 0 && m.tool_index < static_cast<int>(tool_info.size())) {
+                detail.expected_material = tool_info[m.tool_index].material;
+            }
+
+            // Get loaded material from the mapped AMS slot
+            for (const auto& slot : slots) {
+                if (slot.slot_index == m.mapped_slot && slot.backend_index == m.mapped_backend) {
+                    detail.loaded_material = slot.material;
+                    break;
+                }
+            }
+
+            // Skip if either material is unknown (can't warn about unknowns)
+            if (detail.expected_material.empty() || detail.loaded_material.empty()) {
+                continue;
+            }
+
+            // Look up temperature ranges from the filament database
+            auto expected_info = filament::find_material(detail.expected_material);
+            if (expected_info) {
+                detail.expected_nozzle_min = expected_info->nozzle_min;
+                detail.expected_nozzle_max = expected_info->nozzle_max;
+                detail.expected_bed_temp = expected_info->bed_temp;
+            }
+
+            auto loaded_info = filament::find_material(detail.loaded_material);
+            if (loaded_info) {
+                detail.loaded_nozzle_min = loaded_info->nozzle_min;
+                detail.loaded_nozzle_max = loaded_info->nozzle_max;
+                detail.loaded_bed_temp = loaded_info->bed_temp;
+            }
+
+            mismatches.push_back(std::move(detail));
+        }
+    } else {
+        // Non-AMS path: compare gcode filament_type vs external spool
+        const auto& gcode_materials = detail_view_->get_filament_materials();
+        if (gcode_materials.empty()) {
+            return mismatches;
+        }
+
+        auto spool_info = SettingsManager::instance().get_external_spool_info();
+        if (!spool_info || spool_info->material.empty()) {
+            return mismatches;
+        }
+
+        // Check the first tool (single extruder)
+        const auto& expected = gcode_materials[0];
+        if (expected.empty()) {
+            return mismatches;
+        }
+
+        if (!helix::FilamentMapper::materials_match(expected, spool_info->material)) {
+            MaterialMismatchDetail detail;
+            detail.tool_index = 0;
+            detail.expected_material = expected;
+            detail.loaded_material = spool_info->material;
+
+            // Temperature from filament database for expected material
+            auto expected_info = filament::find_material(expected);
+            if (expected_info) {
+                detail.expected_nozzle_min = expected_info->nozzle_min;
+                detail.expected_nozzle_max = expected_info->nozzle_max;
+                detail.expected_bed_temp = expected_info->bed_temp;
+            }
+
+            // Temperature from external spool (user-set) or fall back to database
+            if (spool_info->nozzle_temp_min > 0 && spool_info->nozzle_temp_max > 0) {
+                detail.loaded_nozzle_min = spool_info->nozzle_temp_min;
+                detail.loaded_nozzle_max = spool_info->nozzle_temp_max;
+                detail.loaded_bed_temp = spool_info->bed_temp;
+            } else {
+                auto loaded_info = filament::find_material(spool_info->material);
+                if (loaded_info) {
+                    detail.loaded_nozzle_min = loaded_info->nozzle_min;
+                    detail.loaded_nozzle_max = loaded_info->nozzle_max;
+                    detail.loaded_bed_temp = loaded_info->bed_temp;
+                }
+            }
+
+            mismatches.push_back(std::move(detail));
+        }
+    }
+
+    if (!mismatches.empty()) {
+        spdlog::info("[PrintStartController] {} material mismatch(es) detected", mismatches.size());
+    }
+    return mismatches;
+}
+
+void PrintStartController::show_material_mismatch_warning(
+    const std::vector<MaterialMismatchDetail>& mismatches) {
+    // Close any existing dialog first
+    if (material_mismatch_modal_) {
+        helix::ui::modal_hide(material_mismatch_modal_);
+        material_mismatch_modal_ = nullptr;
+    }
+
+    std::string message;
+
+    if (mismatches.size() == 1) {
+        // Single-tool format: "This file was sliced for X but Y is loaded."
+        const auto& m = mismatches[0];
+        message = fmt::format(lv_tr("This file was sliced for {} but {} is loaded."),
+                              m.expected_material, m.loaded_material);
+
+        // Add temperature details if available
+        if (m.expected_nozzle_min > 0 && m.loaded_nozzle_min > 0) {
+            message += "\n\n";
+            message +=
+                fmt::format("  {} {}: {}\u2013{}°C {}, {}°C {}\n"
+                            "  {} {}: {}\u2013{}°C {}, {}°C {}",
+                            LV_SYMBOL_BULLET, m.expected_material, m.expected_nozzle_min,
+                            m.expected_nozzle_max, lv_tr("nozzle"), m.expected_bed_temp,
+                            lv_tr("bed"), LV_SYMBOL_BULLET, m.loaded_material, m.loaded_nozzle_min,
+                            m.loaded_nozzle_max, lv_tr("nozzle"), m.loaded_bed_temp, lv_tr("bed"));
+        }
+    } else {
+        // Multi-tool format: list each mismatched tool
+        message = lv_tr("These tools have incompatible materials loaded:");
+        message += "\n\n";
+        for (const auto& m : mismatches) {
+            std::string expected_temps;
+            if (m.expected_nozzle_min > 0) {
+                expected_temps =
+                    fmt::format(" ({}\u2013{}°C)", m.expected_nozzle_min, m.expected_nozzle_max);
+            }
+            std::string loaded_temps;
+            if (m.loaded_nozzle_min > 0) {
+                loaded_temps =
+                    fmt::format(" ({}\u2013{}°C)", m.loaded_nozzle_min, m.loaded_nozzle_max);
+            }
+            message += fmt::format("  {} T{}: {} {}{} \u2192 {}{}\n", LV_SYMBOL_BULLET,
+                                   m.tool_index, lv_tr("needs"), m.expected_material,
+                                   expected_temps, m.loaded_material, loaded_temps);
+        }
+    }
+
+    message += "\n\n";
+    message += lv_tr("Printing with the wrong material can cause clogs, poor adhesion, "
+                     "or failed prints.");
+
+    // Static buffer for message — must persist during modal lifetime.
+    static char message_buffer[2048];
+    snprintf(message_buffer, sizeof(message_buffer), "%s", message.c_str());
+
+    material_mismatch_modal_ = helix::ui::modal_show_confirmation(
+        lv_tr("Material Mismatch"), message_buffer, ModalSeverity::Warning, lv_tr("Start Anyway"),
+        on_material_mismatch_proceed_static, on_material_mismatch_cancel_static, this);
+
+    if (!material_mismatch_modal_) {
+        spdlog::error("[PrintStartController] Failed to create material mismatch warning dialog");
+        if (update_print_button_) {
+            update_print_button_();
+        }
+        return;
+    }
+
+    spdlog::debug("[PrintStartController] Material mismatch warning shown for {} tool(s)",
+                  mismatches.size());
+}
+
+void PrintStartController::on_material_mismatch_proceed_static(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStartController] on_material_mismatch_proceed_static");
+    auto* self = static_cast<PrintStartController*>(lv_event_get_user_data(e));
+    if (self) {
+        if (self->material_mismatch_modal_) {
+            helix::ui::modal_hide(self->material_mismatch_modal_);
+            self->material_mismatch_modal_ = nullptr;
+        }
+        self->execute_print_start();
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStartController::on_material_mismatch_cancel_static(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStartController] on_material_mismatch_cancel_static");
+    auto* self = static_cast<PrintStartController*>(lv_event_get_user_data(e));
+    if (self) {
+        if (self->material_mismatch_modal_) {
+            helix::ui::modal_hide(self->material_mismatch_modal_);
+            self->material_mismatch_modal_ = nullptr;
+        }
+        if (self->update_print_button_) {
+            self->update_print_button_();
+        }
+        if (self->on_print_cancelled_) {
+            self->on_print_cancelled_();
+        }
+        spdlog::debug("[PrintStartController] Print cancelled by user (material mismatch warning)");
     }
     LVGL_SAFE_EVENT_CB_END();
 }

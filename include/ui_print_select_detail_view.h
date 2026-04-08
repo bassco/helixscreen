@@ -232,6 +232,23 @@ class PrintSelectDetailView : public OverlayBase {
         return filament_mapping_card_.get_tool_info();
     }
 
+    /**
+     * @brief Get per-tool filament materials from gcode metadata
+     *
+     * Available even when AMS is not present (unlike get_filament_tool_info
+     * which relies on the mapping card).
+     */
+    [[nodiscard]] const std::vector<std::string>& get_filament_materials() const {
+        return current_filament_materials_;
+    }
+
+    /**
+     * @brief Get available AMS slots from the mapping card
+     */
+    [[nodiscard]] const std::vector<helix::AvailableSlot>& get_available_slots() const {
+        return filament_mapping_card_.get_available_slots();
+    }
+
     // === Checkbox Access (for prep manager setup) ===
 
     [[nodiscard]] lv_obj_t* get_bed_mesh_checkbox() const {
