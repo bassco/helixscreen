@@ -69,18 +69,18 @@ class MoonrakerRobustnessFixture {
     }
 
     ~MoonrakerRobustnessFixture() {
-        // Disconnect and destroy client while event loop is still running
+        // Disconnect client (cancels reconnect, closes socket)
         client_->disconnect();
         server_->stop();
         client_.reset();
         server_.reset();
 
-        // Allow event loop to process the socket close before stopping.
-        // Without this delay, kqueue on macOS can block in the event loop
-        // thread after the socket is destroyed but before the I/O event fires.
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-        loop_thread_->stop(true);
+        // Stop the event loop. On macOS, kqueue may block the event loop
+        // thread after all sockets are closed, causing join() to hang.
+        // Intentionally leak the EventLoopThread to prevent ~EventLoopThread
+        // from calling join() and deadlocking the test suite.
+        loop_thread_->stop(false);
+        new std::shared_ptr<hv::EventLoopThread>(std::move(loop_thread_));
     }
 
     std::string server_url() const {
