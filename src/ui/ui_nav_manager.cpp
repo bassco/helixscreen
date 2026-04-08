@@ -1505,6 +1505,22 @@ bool NavigationManager::go_back() {
             }
         }
 
+        // Pop stack and clean up backdrop BEFORE animation — the no-animation path
+        // and the animation completion callback both expect the stack to already
+        // reflect the post-pop state when activating the previous panel/overlay.
+        if (!mgr.panel_stack_.empty()) {
+            lv_obj_t* popped = mgr.panel_stack_.back();
+            mgr.panel_stack_.pop_back();
+            auto it = mgr.overlay_backdrops_.find(popped);
+            if (it != mgr.overlay_backdrops_.end()) {
+                helix::ui::safe_delete_deferred(it->second);
+                mgr.overlay_backdrops_.erase(it);
+            }
+        }
+
+        // Determine the previous panel (what will be visible after pop)
+        lv_obj_t* previous_panel = mgr.panel_stack_.empty() ? nullptr : mgr.panel_stack_.back();
+
         // Animate out if overlay (zoom-out for zoomed overlays, slide-out otherwise)
         if (is_overlay && current_top) {
             auto zoom_it = mgr.zoom_source_rects_.find(current_top);
@@ -1516,12 +1532,6 @@ bool NavigationManager::go_back() {
                 mgr.overlay_animate_slide_out(current_top);
             }
             SoundManager::instance().play("nav_back");
-        }
-
-        // Determine the previous panel (what will be visible after pop)
-        lv_obj_t* previous_panel = nullptr;
-        if (mgr.panel_stack_.size() >= 2) {
-            previous_panel = mgr.panel_stack_[mgr.panel_stack_.size() - 2];
         }
 
         // Hide stale overlays (but skip current_top, previous panel, and system widgets)
@@ -1560,17 +1570,6 @@ bool NavigationManager::go_back() {
                     lv_obj_set_style_transform_scale(child, 256, LV_PART_MAIN);
                     lv_obj_set_style_opa(child, LV_OPA_COVER, LV_PART_MAIN);
                 }
-            }
-        }
-
-        // Pop and clean up backdrop
-        if (!mgr.panel_stack_.empty()) {
-            lv_obj_t* popped = mgr.panel_stack_.back();
-            mgr.panel_stack_.pop_back();
-            auto it = mgr.overlay_backdrops_.find(popped);
-            if (it != mgr.overlay_backdrops_.end()) {
-                helix::ui::safe_delete_deferred(it->second);
-                mgr.overlay_backdrops_.erase(it);
             }
         }
 
