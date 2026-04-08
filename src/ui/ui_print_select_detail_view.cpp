@@ -52,6 +52,7 @@ static void on_preprint_z_tilt_toggled(lv_event_t* e);
 static void on_preprint_nozzle_clean_toggled(lv_event_t* e);
 static void on_preprint_purge_line_toggled(lv_event_t* e);
 static void on_preprint_timelapse_toggled(lv_event_t* e);
+static void update_prep_time_label();
 
 // ============================================================================
 // Lifecycle
@@ -412,6 +413,9 @@ void PrintSelectDetailView::on_activate() {
     if (!current_filename_.empty() && prep_manager_) {
         prep_manager_->scan_file_for_operations(current_filename_, current_path_);
     }
+
+    // Calculate initial pre-print time estimate
+    update_prep_time_label();
 
     // Load gcode for 3D/2D preview (viewer stays paused until load completes)
     load_gcode_for_preview();
@@ -1002,6 +1006,46 @@ void PrintSelectDetailView::load_gcode_for_preview() {
 }
 
 // ============================================================================
+// Pre-print Estimate Label Update
+// ============================================================================
+
+static void update_prep_time_label() {
+    if (!s_detail_view_instance || !s_detail_view_instance->get_prep_manager()) {
+        return;
+    }
+    auto* mgr = s_detail_view_instance->get_prep_manager();
+    mgr->recalculate_estimate();
+
+    int estimate_s = lv_subject_get_int(mgr->get_preprint_estimate_subject());
+
+    auto* root = s_detail_view_instance->get_widget();
+    if (!root)
+        return;
+    auto* label = lv_obj_find_by_name(root, "prep_time_estimate");
+    if (!label)
+        return;
+
+    if (estimate_s <= 0) {
+        lv_label_set_text(label, "");
+        return;
+    }
+
+    // Round: >120s to nearest 30s, <=120s to nearest 10s
+    int rounded = estimate_s > 120 ? ((estimate_s + 15) / 30) * 30 : ((estimate_s + 5) / 10) * 10;
+    int mins = rounded / 60;
+    int secs = rounded % 60;
+    char buf[32];
+    if (mins > 0 && secs > 0) {
+        snprintf(buf, sizeof(buf), "~%d:%02d prep time", mins, secs);
+    } else if (mins > 0) {
+        snprintf(buf, sizeof(buf), "~%d min prep time", mins);
+    } else {
+        snprintf(buf, sizeof(buf), "~%d sec prep time", secs);
+    }
+    lv_label_set_text(label, buf);
+}
+
+// ============================================================================
 // Static Callbacks for Pre-print Switch Toggles (LT2 Phase 4)
 // ============================================================================
 
@@ -1013,6 +1057,7 @@ static void on_preprint_bed_mesh_toggled(lv_event_t* e) {
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     lv_subject_set_int(s_detail_view_instance->get_preprint_bed_mesh_subject(), checked ? 1 : 0);
     spdlog::debug("[DetailView] Bed mesh toggled: {}", checked);
+    update_prep_time_label();
 }
 
 static void on_preprint_qgl_toggled(lv_event_t* e) {
@@ -1023,6 +1068,7 @@ static void on_preprint_qgl_toggled(lv_event_t* e) {
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     lv_subject_set_int(s_detail_view_instance->get_preprint_qgl_subject(), checked ? 1 : 0);
     spdlog::debug("[DetailView] QGL toggled: {}", checked);
+    update_prep_time_label();
 }
 
 static void on_preprint_z_tilt_toggled(lv_event_t* e) {
@@ -1033,6 +1079,7 @@ static void on_preprint_z_tilt_toggled(lv_event_t* e) {
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     lv_subject_set_int(s_detail_view_instance->get_preprint_z_tilt_subject(), checked ? 1 : 0);
     spdlog::debug("[DetailView] Z-tilt toggled: {}", checked);
+    update_prep_time_label();
 }
 
 static void on_preprint_nozzle_clean_toggled(lv_event_t* e) {
@@ -1044,6 +1091,7 @@ static void on_preprint_nozzle_clean_toggled(lv_event_t* e) {
     lv_subject_set_int(s_detail_view_instance->get_preprint_nozzle_clean_subject(),
                        checked ? 1 : 0);
     spdlog::debug("[DetailView] Nozzle clean toggled: {}", checked);
+    update_prep_time_label();
 }
 
 static void on_preprint_purge_line_toggled(lv_event_t* e) {
@@ -1054,6 +1102,7 @@ static void on_preprint_purge_line_toggled(lv_event_t* e) {
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     lv_subject_set_int(s_detail_view_instance->get_preprint_purge_line_subject(), checked ? 1 : 0);
     spdlog::debug("[DetailView] Purge line toggled: {}", checked);
+    update_prep_time_label();
 }
 
 static void on_preprint_timelapse_toggled(lv_event_t* e) {
@@ -1064,6 +1113,7 @@ static void on_preprint_timelapse_toggled(lv_event_t* e) {
     bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
     lv_subject_set_int(s_detail_view_instance->get_preprint_timelapse_subject(), checked ? 1 : 0);
     spdlog::debug("[DetailView] Timelapse toggled: {}", checked);
+    update_prep_time_label();
 }
 
 } // namespace helix::ui

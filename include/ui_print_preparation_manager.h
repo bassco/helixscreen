@@ -3,16 +3,18 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "ui_observer_guard.h"
 
+#include "async_lifetime_guard.h"
 #include "capability_matrix.h"
 #include "gcode_file_modifier.h"
 #include "gcode_ops_detector.h"
 #include "moonraker_api.h"
+#include "preprint_predictor.h"
 #include "print_start_analyzer.h"
 #include "printer_detector.h"
 #include "printer_state.h"
+#include "thermal_rate_model.h"
 
 #include <functional>
 #include <lvgl.h>
@@ -443,6 +445,22 @@ class PrintPreparationManager {
                      PrintCompletionCallback on_completion = nullptr);
 
     /**
+     * @brief Get the pre-print time estimate subject (seconds)
+     *
+     * Updated by recalculate_estimate() whenever checkbox toggles change.
+     * Value is total estimated seconds for all enabled pre-print operations.
+     */
+    lv_subject_t* get_preprint_estimate_subject();
+
+    /**
+     * @brief Recalculate the pre-print time estimate
+     *
+     * Reads current temperatures, checkbox states, and historical timing data
+     * to produce an estimated prep time in seconds. Updates preprint_estimate_subject_.
+     */
+    void recalculate_estimate();
+
+    /**
      * @brief Check if a print is currently being started
      *
      * Delegates to PrinterState::is_print_in_progress(). Returns true from
@@ -477,6 +495,10 @@ class PrintPreparationManager {
     lv_subject_t* can_show_nozzle_clean_subject_ = nullptr;
     lv_subject_t* can_show_purge_line_subject_ = nullptr;
     lv_subject_t* can_show_timelapse_subject_ = nullptr;
+
+    // === Pre-print estimate ===
+    lv_subject_t preprint_estimate_subject_{};
+    bool estimate_subject_initialized_ = false;
 
     // === Scan Cache ===
     std::optional<gcode::ScanResult> cached_scan_result_;

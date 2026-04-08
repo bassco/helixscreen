@@ -92,6 +92,13 @@ void PrintPreparationManager::set_preprint_subjects(lv_subject_t* bed_mesh, lv_s
     preprint_nozzle_clean_subject_ = nozzle_clean;
     preprint_purge_line_subject_ = purge_line;
     preprint_timelapse_subject_ = timelapse;
+
+    // Initialize estimate subject (once)
+    if (!estimate_subject_initialized_) {
+        lv_subject_init_int(&preprint_estimate_subject_, 0);
+        estimate_subject_initialized_ = true;
+    }
+
     spdlog::debug("[PrintPreparationManager] Pre-print subjects set");
 }
 
@@ -108,6 +115,78 @@ void PrintPreparationManager::set_preprint_visibility_subjects(lv_subject_t* can
     can_show_purge_line_subject_ = can_show_purge_line;
     can_show_timelapse_subject_ = can_show_timelapse;
     spdlog::debug("[PrintPreparationManager] Visibility subjects set");
+}
+
+// ============================================================================
+// Pre-print Estimate
+// ============================================================================
+
+lv_subject_t* PrintPreparationManager::get_preprint_estimate_subject() {
+    return &preprint_estimate_subject_;
+}
+
+void PrintPreparationManager::recalculate_estimate() {
+    if (!estimate_subject_initialized_)
+        return;
+
+    if (!printer_state_)
+        return;
+
+    auto& mgr = ThermalRateManager::instance();
+
+    // Current temps (decidegrees -> degrees)
+    float ext_temp =
+        static_cast<float>(lv_subject_get_int(printer_state_->get_active_extruder_temp_subject())) /
+        10.0f;
+    float ext_target = static_cast<float>(lv_subject_get_int(
+                           printer_state_->get_active_extruder_target_subject())) /
+                       10.0f;
+    float bed_temp =
+        static_cast<float>(lv_subject_get_int(printer_state_->get_bed_temp_subject())) / 10.0f;
+    float bed_target =
+        static_cast<float>(lv_subject_get_int(printer_state_->get_bed_target_subject())) / 10.0f;
+
+    float total = 0.0f;
+
+    // Heating estimates
+    total += mgr.estimate_heating_seconds("extruder", ext_temp, ext_target);
+    total += mgr.estimate_heating_seconds("heater_bed", bed_temp, bed_target);
+
+    // Homing always happens
+    total += 20.0f;
+
+    // Non-heating ops from predictor
+    auto entries = helix::PreprintPredictor::load_entries_from_config();
+    helix::PreprintPredictor predictor;
+    bool is_warm = bed_temp >= 40.0f;
+    predictor.load_entries(entries, is_warm ? StartCondition::WARM : StartCondition::COLD);
+    auto phases = predictor.predicted_phases();
+
+    // Add phase estimate if checkbox is enabled
+    auto add_if_enabled = [&](lv_subject_t* subj, int phase_int, float default_s) {
+        if (subj && lv_subject_get_int(subj) == 1) {
+            auto it = phases.find(phase_int);
+            total += (it != phases.end()) ? static_cast<float>(it->second) : default_s;
+        }
+    };
+
+    // Use PrintStartPhase enum values
+    add_if_enabled(preprint_bed_mesh_subject_, static_cast<int>(helix::PrintStartPhase::BED_MESH),
+                   90.0f);
+    add_if_enabled(preprint_qgl_subject_, static_cast<int>(helix::PrintStartPhase::QGL), 60.0f);
+    add_if_enabled(preprint_z_tilt_subject_, static_cast<int>(helix::PrintStartPhase::Z_TILT),
+                   45.0f);
+    add_if_enabled(preprint_nozzle_clean_subject_,
+                   static_cast<int>(helix::PrintStartPhase::CLEANING), 15.0f);
+    add_if_enabled(preprint_purge_line_subject_, static_cast<int>(helix::PrintStartPhase::PURGING),
+                   10.0f);
+
+    int estimate_s = static_cast<int>(total);
+    if (lv_subject_get_int(&preprint_estimate_subject_) != estimate_s) {
+        lv_subject_set_int(&preprint_estimate_subject_, estimate_s);
+    }
+
+    spdlog::debug("[PrintPreparationManager] Pre-print estimate: {}s", estimate_s);
 }
 
 // ============================================================================
