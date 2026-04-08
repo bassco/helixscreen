@@ -17,7 +17,7 @@ namespace helix::gcode {
 /// Shared by all renderers (layer renderer, thumbnail renderer, etc.)
 enum class ViewMode {
     TOP_DOWN, ///< X/Y plane from above
-    FRONT,    ///< Isometric-style: -45° horizontal + 30° elevation (default)
+    FRONT,    ///< Isometric-style: -45° horizontal + 45° elevation (default)
     ISOMETRIC ///< X/Y plane with isometric projection (45° rotation, Y compressed)
 };
 
@@ -25,8 +25,8 @@ enum class ViewMode {
 // PROJECTION CONSTANTS
 // ============================================================================
 
-/// Projection constants for FRONT view (-45° azimuth, 30° elevation).
-/// Matching the default camera angle in GCodeCamera.
+/// Projection constants for FRONT view (-45° azimuth, 45° elevation).
+/// Matching OrcaSlicer's default thumbnail camera (Camera.cpp zenit=45°, phi=45°).
 namespace projection {
 
 // 90° CCW pre-rotation (applied before horizontal rotation)
@@ -36,9 +36,9 @@ namespace projection {
 constexpr float kCosH = 0.7071f;  // cos(45°)
 constexpr float kSinH = -0.7071f; // sin(-45°)
 
-// Elevation angle: 30° looking down
-constexpr float kCosE = 0.866f; // cos(30°)
-constexpr float kSinE = 0.5f;   // sin(30°)
+// Elevation angle: 45° looking down (matches OrcaSlicer thumbnail camera)
+constexpr float kCosE = 0.7071f; // cos(45°)
+constexpr float kSinE = 0.7071f; // sin(45°)
 
 // Isometric constants
 constexpr float kIsoAngle = 0.7071f; // cos(45°)
