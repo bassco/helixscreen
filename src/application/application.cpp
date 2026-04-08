@@ -894,6 +894,18 @@ bool Application::init_display() {
     m_screen_width = m_display->width();
     m_screen_height = m_display->height();
 
+#ifdef __ANDROID__
+    {
+        float ddpi = 0, hdpi = 0, vdpi = 0;
+        if (SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0) {
+            spdlog::info("[Application] Android display DPI: diagonal={:.0f} h={:.0f} v={:.0f}",
+                         ddpi, hdpi, vdpi);
+        }
+        spdlog::info("[Application] Android screen: {}x{} (DPI-aware sizing via SDL)",
+                     m_screen_width, m_screen_height);
+    }
+#endif
+
     // Register LVGL log handler AFTER lv_init() (called inside display->init())
     // Must be after lv_init() because it resets global state and clears callbacks
     helix::logging::register_lvgl_log_handler();
