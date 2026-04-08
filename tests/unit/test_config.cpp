@@ -2513,3 +2513,137 @@ TEST_CASE("Config::init() keeps tarball default when backup is corrupt",
 
     REQUIRE(test_config.is_wizard_required());
 }
+
+// ============================================================================
+// v10→v11 migration: PID heat rates to shared thermal path + strip heating phases
+// ============================================================================
+
+TEST_CASE("Config: v10→v11 migration moves heat rates and strips heating phases",
+          "[core][config][migration][v11]") {
+    std::string temp_dir = "/tmp/helix_test_v10_to_v11_" + std::to_string(rand());
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v10_config = {
+        {"config_version", 10},
+        {"calibration",
+         {{"pid_history",
+           {{"extruder", {{"heat_rate", 1.25}, {"oscillation_duration", 3.5}}},
+            {"heater_bed", {{"heat_rate", 0.42}, {"oscillation_duration", 8.0}}}}}}},
+        {"print_start_history",
+         {{"entries",
+           json::array({{{"phase_durations", {{"0", 5.0}, {"1", 10.0}, {"3", 30.0}, {"4", 20.0}}}},
+                        {{"phase_durations", {{"0", 6.0}, {"3", 25.0}, {"4", 15.0}}}},
+                        {{"no_phases", true}}})}}},
+        {"printer", {{"moonraker_host", "127.0.0.1"}, {"moonraker_port", 7125}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v10_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+
+    // Heat rates should be at new location
+    REQUIRE(test_config.get<double>("/thermal/rates/extruder/heat_rate") == Catch::Approx(1.25));
+    REQUIRE(test_config.get<double>("/thermal/rates/heater_bed/heat_rate") == Catch::Approx(0.42));
+
+    // Old heat_rate keys should be gone
+    REQUIRE_FALSE(test_config.exists("/calibration/pid_history/extruder/heat_rate"));
+    REQUIRE_FALSE(test_config.exists("/calibration/pid_history/heater_bed/heat_rate"));
+
+    // Oscillation duration should be preserved
+    REQUIRE(test_config.get<double>("/calibration/pid_history/extruder/oscillation_duration") ==
+            Catch::Approx(3.5));
+    REQUIRE(test_config.get<double>("/calibration/pid_history/heater_bed/oscillation_duration") ==
+            Catch::Approx(8.0));
+
+    // Heating phase durations (keys "3" and "4") should be stripped
+    auto entries = test_config.get<json>("/print_start_history/entries");
+    REQUIRE(entries.size() == 3);
+
+    // First entry: had phases 0, 1, 3, 4 → should keep 0, 1
+    REQUIRE(entries[0]["phase_durations"].contains("0"));
+    REQUIRE(entries[0]["phase_durations"].contains("1"));
+    REQUIRE_FALSE(entries[0]["phase_durations"].contains("3"));
+    REQUIRE_FALSE(entries[0]["phase_durations"].contains("4"));
+
+    // Second entry: had phases 0, 3, 4 → should keep 0
+    REQUIRE(entries[1]["phase_durations"].contains("0"));
+    REQUIRE_FALSE(entries[1]["phase_durations"].contains("3"));
+    REQUIRE_FALSE(entries[1]["phase_durations"].contains("4"));
+
+    // Third entry: no phase_durations → unchanged
+    REQUIRE(entries[2].contains("no_phases"));
+    REQUIRE_FALSE(entries[2].contains("phase_durations"));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v10→v11 migration is idempotent", "[core][config][migration][v11]") {
+    std::string temp_dir = "/tmp/helix_test_v10_to_v11_idempotent_" + std::to_string(rand());
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    // Config already at v11 with thermal rates in the new location
+    json v11_config = {
+        {"config_version", 10},
+        {"thermal", {{"rates", {{"extruder", {{"heat_rate", 1.25}}}}}}},
+        {"calibration",
+         {{"pid_history", {{"extruder", {{"heat_rate", 0.99}, {"oscillation_duration", 3.5}}}}}}},
+        {"printer", {{"moonraker_host", "127.0.0.1"}, {"moonraker_port", 7125}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v11_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    // Should keep existing value at new path (not overwrite with old)
+    REQUIRE(test_config.get<double>("/thermal/rates/extruder/heat_rate") == Catch::Approx(1.25));
+
+    // Old heat_rate should still be erased
+    REQUIRE_FALSE(test_config.exists("/calibration/pid_history/extruder/heat_rate"));
+
+    // Oscillation duration preserved
+    REQUIRE(test_config.get<double>("/calibration/pid_history/extruder/oscillation_duration") ==
+            Catch::Approx(3.5));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v10→v11 migration handles missing calibration data gracefully",
+          "[core][config][migration][v11]") {
+    std::string temp_dir = "/tmp/helix_test_v10_to_v11_empty_" + std::to_string(rand());
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    // Minimal v10 config with no calibration or print history
+    json v10_config = {{"config_version", 10},
+                       {"printer", {{"moonraker_host", "127.0.0.1"}, {"moonraker_port", 7125}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v10_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    // No crash, no thermal section created
+    REQUIRE_FALSE(test_config.exists("/thermal"));
+
+    std::filesystem::remove_all(temp_dir);
+}

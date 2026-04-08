@@ -481,6 +481,52 @@ static void migrate_v9_to_v10(json& config) {
     }
 }
 
+/// Migrate PID heat rates to shared thermal path; strip heating phases from predictor entries.
+static void migrate_v10_to_v11(json& config) {
+    // 1. Move PID heat rates to shared thermal path
+    for (const auto& heater : {"extruder", "heater_bed"}) {
+        if (config.contains("calibration") && config["calibration"].contains("pid_history") &&
+            config["calibration"]["pid_history"].contains(heater) &&
+            config["calibration"]["pid_history"][heater].contains("heat_rate")) {
+            // Copy to new location if not already present
+            bool dest_exists = config.contains("thermal") && config["thermal"].contains("rates") &&
+                               config["thermal"]["rates"].contains(heater) &&
+                               config["thermal"]["rates"][heater].contains("heat_rate");
+
+            if (!dest_exists) {
+                config["thermal"]["rates"][heater]["heat_rate"] =
+                    config["calibration"]["pid_history"][heater]["heat_rate"];
+                spdlog::info("[Config] Migration v11: copied heat_rate for '{}' to /thermal/rates",
+                             heater);
+            }
+
+            // Erase from old location (leave parent intact for oscillation_duration)
+            config["calibration"]["pid_history"][heater].erase("heat_rate");
+            spdlog::info(
+                "[Config] Migration v11: removed heat_rate from /calibration/pid_history/{}",
+                heater);
+        }
+    }
+
+    // 2. Strip heating phases (HEATING_BED=3, HEATING_NOZZLE=4) from predictor entries
+    if (config.contains("print_start_history") &&
+        config["print_start_history"].contains("entries") &&
+        config["print_start_history"]["entries"].is_array()) {
+        int count = 0;
+        for (auto& entry : config["print_start_history"]["entries"]) {
+            if (entry.contains("phase_durations") && entry["phase_durations"].is_object()) {
+                entry["phase_durations"].erase("3"); // HEATING_BED
+                entry["phase_durations"].erase("4"); // HEATING_NOZZLE
+                count++;
+            }
+        }
+        if (count > 0) {
+            spdlog::info(
+                "[Config] Migration v11: stripped heating phases from {} predictor entries", count);
+        }
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config) {
     int version = 0;
@@ -508,6 +554,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v8_to_v9(config);
     if (version < 10)
         migrate_v9_to_v10(config);
+    if (version < 11)
+        migrate_v10_to_v11(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
