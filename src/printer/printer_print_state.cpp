@@ -295,7 +295,21 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             // NOT total_duration (which includes prep/preheat and inflates the estimate)
             int print_time = lv_subject_get_int(&print_duration_);
             int progress = lv_subject_get_int(&print_progress_);
-            if (progress >= 1 && progress < 100 && print_time > 0) {
+
+            // During pre-print phase: combine prep remaining with slicer print estimate
+            int preprint_remaining = lv_subject_get_int(&preprint_remaining_);
+            if (progress == 0 && preprint_remaining > 0 && estimated_print_time_ > 0) {
+                int total_remaining = preprint_remaining + estimated_print_time_;
+                if (lv_subject_get_int(&print_time_left_) != total_remaining) {
+                    lv_subject_set_int(&print_time_left_, total_remaining);
+                }
+            } else if (progress >= 1 && progress < 5 && estimated_print_time_ > 0) {
+                // Early print: use slicer estimate directly (extrapolation too noisy)
+                int remaining = estimated_print_time_ * (100 - progress) / 100;
+                if (lv_subject_get_int(&print_time_left_) != remaining) {
+                    lv_subject_set_int(&print_time_left_, remaining);
+                }
+            } else if (progress >= 5 && progress < 100 && print_time > 0) {
                 double raw_remaining =
                     static_cast<double>(print_time) * (100 - progress) / progress;
 
@@ -303,8 +317,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                 // noisy extrapolation from small samples
                 if (progress < 15 && estimated_print_time_ > 0) {
                     double slicer_weight = (15.0 - progress) / 15.0;
-                    double slicer_remaining =
-                        estimated_print_time_ * (100.0 - progress) / 100.0;
+                    double slicer_remaining = estimated_print_time_ * (100.0 - progress) / 100.0;
                     raw_remaining =
                         slicer_weight * slicer_remaining + (1.0 - slicer_weight) * raw_remaining;
                 }
@@ -446,8 +459,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             if (sdcard.contains("layer_count") && sdcard["layer_count"].is_number_integer()) {
                 int vsd_total = sdcard["layer_count"].get<int>();
                 if (vsd_total != lv_subject_get_int(&print_layer_total_)) {
-                    spdlog::debug("[LayerTracker] total_layer={} (from virtual_sdcard)",
-                                  vsd_total);
+                    spdlog::debug("[LayerTracker] total_layer={} (from virtual_sdcard)", vsd_total);
                     lv_subject_set_int(&print_layer_total_, vsd_total);
                 }
             }
