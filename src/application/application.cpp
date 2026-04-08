@@ -2834,6 +2834,17 @@ void Application::handle_keyboard_shortcuts() {
             },
             [this]() { return get_runtime_config()->is_test_mode() && m_action_prompt_manager; });
 
+        // Android back button — pop navigation stack (overlay/modal/panel)
+        // At root panel, do nothing (Android convention: don't exit on back)
+        shortcuts.register_key(SDL_SCANCODE_AC_BACK, []() {
+            auto& nav = NavigationManager::instance();
+            if (nav.go_back()) {
+                spdlog::debug("[Application] Android back button - popped navigation");
+            } else {
+                spdlog::trace("[Application] Android back button - at root, ignoring");
+            }
+        });
+
 #ifdef HELIX_ENABLE_SCREENSAVER
         // Z key - cycle through screensavers (Off → Toasters → Starfield → Pipes → Off)
         shortcuts.register_key(SDL_SCANCODE_Z, []() {
