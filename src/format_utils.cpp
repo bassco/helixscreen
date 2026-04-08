@@ -288,4 +288,13 @@ std::string eta_clock_time(int remaining_seconds, std::time_t now, bool use_24h)
     return std::string(buf);
 }
 
+int round_eta_seconds(int seconds) {
+    if (seconds <= 0)
+        return 0;
+    if (seconds > 120) {
+        return ((seconds + 15) / 30) * 30;
+    }
+    return ((seconds + 5) / 10) * 10;
+}
+
 } // namespace helix::format

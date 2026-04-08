@@ -262,4 +262,17 @@ std::string format_filament_length(double mm);
  */
 std::string eta_clock_time(int remaining_seconds, std::time_t now = 0, bool use_24h = false);
 
+/**
+ * @brief Round ETA seconds for stable display
+ *
+ * Prevents jittery countdown by rounding to buckets:
+ * - Over 2 minutes: round to nearest 30s
+ * - 2 minutes or under: round to nearest 10s
+ * - Zero or negative: return 0
+ *
+ * @param seconds Raw remaining seconds
+ * @return Rounded seconds for display
+ */
+int round_eta_seconds(int seconds);
+
 } // namespace helix::format

@@ -864,8 +864,9 @@ void PrintStartCollector::update_eta_display() {
         return;
     }
 
-    // Format as "~X min left" or "~X:XX left"
-    std::string text = "~" + helix::format::duration_remaining(remaining);
+    // Round for stable display, then format as "~X min left" or "~X:XX left"
+    int display_remaining = helix::format::round_eta_seconds(remaining);
+    std::string text = "~" + helix::format::duration_remaining(display_remaining);
     state_.set_print_start_time_left(text.c_str());
 
     spdlog::trace("[PrintStartCollector] ETA: {}s remaining, predicted_total={}s", remaining,
