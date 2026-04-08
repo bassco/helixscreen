@@ -267,3 +267,13 @@ void app_request_quit() {
     // No-op for tests - display manager calls this on window close
     spdlog::debug("[TestStub] app_request_quit() called - no-op in tests");
 }
+
+// Stubs for app lifecycle notifications called from lv_sdl_window.c.
+// The real implementations live in application.cpp which is excluded from the test build.
+extern "C" void helix_notify_app_backgrounded() {
+    spdlog::debug("[TestStub] helix_notify_app_backgrounded() called - no-op in tests");
+}
+
+extern "C" void helix_notify_app_foregrounded() {
+    spdlog::debug("[TestStub] helix_notify_app_foregrounded() called - no-op in tests");
+}
