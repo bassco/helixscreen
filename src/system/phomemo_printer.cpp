@@ -4,8 +4,10 @@
 #if HELIX_HAS_LABEL_PRINTER
 
 #include "phomemo_printer.h"
-#include "phomemo_protocol.h"
+
 #include "ui_update_queue.h"
+
+#include "phomemo_protocol.h"
 
 #include <spdlog/spdlog.h>
 
@@ -39,24 +41,25 @@ std::vector<LabelSize> PhomemoPrinter::supported_sizes() const {
 std::vector<LabelSize> PhomemoPrinter::supported_sizes_static() {
     // All sizes at 203 DPI, gap/die-cut media (0x0A)
     return {
-        {"40x30mm",  319, 240, 203, 0x0A, 40, 30},
-        {"40x20mm",  319, 160, 203, 0x0A, 40, 20},
-        {"50x30mm",  400, 240, 203, 0x0A, 50, 30},
-        {"50x50mm",  400, 400, 203, 0x0A, 50, 50},
-        {"50x80mm",  400, 640, 203, 0x0A, 50, 80},
-        {"30x20mm",  240, 160, 203, 0x0A, 30, 20},
-        {"25x10mm",  200,  80, 203, 0x0A, 25, 10},
-        {"40x60mm",  319, 480, 203, 0x0A, 40, 60},
+        {"40x30mm", 319, 240, 203, 0x0A, 40, 30}, {"40x20mm", 319, 160, 203, 0x0A, 40, 20},
+        {"50x30mm", 400, 240, 203, 0x0A, 50, 30}, {"50x50mm", 400, 400, 203, 0x0A, 50, 50},
+        {"50x80mm", 400, 640, 203, 0x0A, 50, 80}, {"30x20mm", 240, 160, 203, 0x0A, 30, 20},
+        {"25x10mm", 200, 80, 203, 0x0A, 25, 10},  {"40x60mm", 319, 480, 203, 0x0A, 40, 60},
     };
 }
 
 std::vector<uint8_t> PhomemoPrinter::build_raster_commands(const LabelBitmap& bitmap,
-                                                            const LabelSize& size) {
+                                                           const LabelSize& size) {
     return helix::label::phomemo_build_raster(bitmap, size);
 }
 
 // Find the /dev/usb/lp* device node for a given VID:PID by checking sysfs
 static std::string find_usblp_device(uint16_t vid, uint16_t pid) {
+#ifdef __ANDROID__
+    (void)vid;
+    (void)pid;
+    return {}; // USB device nodes not accessible on Android
+#else
     // Scan /dev/usb/lp* and match against sysfs VID:PID
     namespace fs = std::filesystem;
 
@@ -67,7 +70,8 @@ static std::string find_usblp_device(uint16_t vid, uint16_t pid) {
         // Read VID/PID from sysfs
         auto read_hex = [](const std::string& path) -> uint16_t {
             std::ifstream f(path);
-            if (!f.is_open()) return 0;
+            if (!f.is_open())
+                return 0;
             std::string val;
             f >> val;
             return static_cast<uint16_t>(std::stoul(val, nullptr, 16));
@@ -82,14 +86,16 @@ static std::string find_usblp_device(uint16_t vid, uint16_t pid) {
         }
     }
     return {};
+#endif
 }
 
 void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
-                            PrintCallback callback) {
+                           PrintCallback callback) {
     if (vid_ == 0 || pid_ == 0) {
         spdlog::error("Phomemo: USB device not configured (vid/pid not set)");
         helix::ui::queue_update([callback]() {
-            if (callback) callback(false, "USB device not configured");
+            if (callback)
+                callback(false, "USB device not configured");
         });
         return;
     }
@@ -108,7 +114,8 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
         std::string dev_path = find_usblp_device(vid, pid);
         if (dev_path.empty()) {
             error = fmt::format("No USB printer device found for {:04x}:{:04x}. "
-                                "Is the printer turned on?", vid, pid);
+                                "Is the printer turned on?",
+                                vid, pid);
             spdlog::error("Phomemo: {}", error);
         } else {
             std::ofstream f(dev_path, std::ios::binary);
@@ -129,9 +136,7 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
             }
         }
 
-        helix::ui::queue_update([callback, success, error]() {
-            callback(success, error);
-        });
+        helix::ui::queue_update([callback, success, error]() { callback(success, error); });
     }).detach();
 }
 
