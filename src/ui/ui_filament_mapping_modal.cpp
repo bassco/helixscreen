@@ -87,6 +87,9 @@ void FilamentMappingModal::rebuild_rows() {
         return;
     }
 
+    // Hide picker before destroying trigger widgets it may reference
+    slot_picker_.hide();
+
     lv_obj_clean(tool_list_);
     toggle_switch_ = nullptr;
 

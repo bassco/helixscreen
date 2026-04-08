@@ -278,6 +278,15 @@ void FilamentSlotPicker::position_card(lv_obj_t* card) {
         card_y = trigger_area.y2 + 1;
     }
 
+    // Clamp horizontal position to screen bounds
+    int32_t screen_w = LV_HOR_RES;
+    if (card_x + card_w > screen_w) {
+        card_x = screen_w - card_w;
+    }
+    if (card_x < 0) {
+        card_x = 0;
+    }
+
     // Convert to backdrop-local coordinates
     lv_area_t backdrop_area;
     lv_obj_get_coords(backdrop_, &backdrop_area);
