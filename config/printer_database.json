@@ -4417,6 +4417,176 @@
           "reason": "LEMONTRON macro present (definitive Lemontron signature)"
         }
       ]
+    },
+    {
+      "id": "zerog_mercury_one",
+      "name": "Zero G Mercury One.1",
+      "manufacturer": "Zero G",
+      "image": "generic-corexy.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_3",
+          "confidence": 70,
+          "reason": "3 independent Z steppers (Hydra 3-point bed leveling)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "z_tilt",
+          "confidence": 50,
+          "reason": "Z tilt adjust present (Hydra 3-point leveling)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 240,
+          "max_x": 270,
+          "min_y": 240,
+          "max_y": 270,
+          "confidence": 45,
+          "reason": "Build volume ~255mm (Ender 5 / Ender 5 Pro frame)"
+        }
+      ]
+    },
+    {
+      "id": "zerog_mercury_one_plus",
+      "name": "Zero G Mercury One.1 Plus",
+      "manufacturer": "Zero G",
+      "image": "generic-corexy.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_3",
+          "confidence": 70,
+          "reason": "3 independent Z steppers (Hydra 3-point bed leveling)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "z_tilt",
+          "confidence": 50,
+          "reason": "Z tilt adjust present (Hydra 3-point leveling)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 340,
+          "max_x": 380,
+          "min_y": 340,
+          "max_y": 380,
+          "confidence": 55,
+          "reason": "Build volume ~350mm (Ender 5 Plus frame)"
+        }
+      ]
+    },
+    {
+      "id": "zerog_nebula_255",
+      "name": "Zero G Nebula 255",
+      "manufacturer": "Zero G",
+      "image": "zerog-nebula.webp",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_3",
+          "confidence": 70,
+          "reason": "3 independent Z steppers (Hydra 3-point bed leveling)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "z_tilt",
+          "confidence": 50,
+          "reason": "Z tilt adjust present (Hydra 3-point leveling)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 240,
+          "max_x": 270,
+          "min_y": 240,
+          "max_y": 270,
+          "confidence": 45,
+          "reason": "Build volume ~255mm (Ender 5 / Ender 5 Pro frame)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "chamber",
+          "confidence": 60,
+          "reason": "Chamber temperature sensor (enclosed Nebula)"
+        }
+      ]
+    },
+    {
+      "id": "zerog_nebula_370",
+      "name": "Zero G Nebula 370",
+      "manufacturer": "Zero G",
+      "image": "zerog-nebula.webp",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "stepper_count",
+          "field": "steppers",
+          "pattern": "z_count_3",
+          "confidence": 70,
+          "reason": "3 independent Z steppers (Hydra 3-point bed leveling)"
+        },
+        {
+          "type": "object_exists",
+          "field": "printer_objects",
+          "pattern": "z_tilt",
+          "confidence": 50,
+          "reason": "Z tilt adjust present (Hydra 3-point leveling)"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 340,
+          "max_x": 380,
+          "min_y": 340,
+          "max_y": 380,
+          "confidence": 55,
+          "reason": "Build volume ~350mm (Ender 5 Plus frame)"
+        },
+        {
+          "type": "sensor_match",
+          "field": "sensors",
+          "pattern": "chamber",
+          "confidence": 60,
+          "reason": "Chamber temperature sensor (enclosed Nebula)"
+        }
+      ]
     }
   ]
 }
