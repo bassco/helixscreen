@@ -8,6 +8,7 @@
  */
 
 #include "preprint_predictor.h"
+#include "printer_state.h"
 
 #include <set>
 
@@ -52,77 +53,77 @@ TEST_CASE("PreprintPredictor: single entry uses 100% weight", "[print][predictor
 // Two Entries (60/40 weighting)
 // ============================================================================
 
-TEST_CASE("PreprintPredictor: two entries use 60/40 weighting", "[print][predictor]") {
+TEST_CASE("PreprintPredictor: two entries favor newer entry", "[print][predictor]") {
     PreprintPredictor predictor;
     predictor.load_entries({
-        {100, 1700000000, {{2, 20}}}, // older: 40%
-        {100, 1700000001, {{2, 30}}}, // newer: 60%
+        {100, 1700000000, {{2, 20}}}, // older: lower weight
+        {100, 1700000001, {{2, 30}}}, // newer: higher weight
     });
 
     auto phases = predictor.predicted_phases();
-    // 30*0.6 + 20*0.4 = 18 + 8 = 26
-    REQUIRE(phases[2] == 26);
-    REQUIRE(predictor.predicted_total() == 26);
+    // Exponential weighting: newer entry dominates
+    // Prediction should be between 20 and 30, closer to 30
+    REQUIRE(phases[2] > 24);
+    REQUIRE(phases[2] <= 30);
 }
 
 // ============================================================================
 // Three Entries (50/30/20 weighting)
 // ============================================================================
 
-TEST_CASE("PreprintPredictor: three entries use 50/30/20 weighting", "[print][predictor]") {
+TEST_CASE("PreprintPredictor: three entries favor newest", "[print][predictor]") {
     PreprintPredictor predictor;
     predictor.load_entries({
-        {100, 1700000000, {{2, 10}}}, // oldest: 20%
-        {100, 1700000001, {{2, 20}}}, // middle: 30%
-        {100, 1700000002, {{2, 30}}}, // newest: 50%
+        {100, 1700000000, {{2, 10}}}, // oldest
+        {100, 1700000001, {{2, 20}}}, // middle
+        {100, 1700000002, {{2, 30}}}, // newest
     });
 
     auto phases = predictor.predicted_phases();
-    // 30*0.5 + 20*0.3 + 10*0.2 = 15 + 6 + 2 = 23
-    REQUIRE(phases[2] == 23);
+    // Exponential weighting: prediction closer to 30 than to 10
+    REQUIRE(phases[2] > 18);
+    REQUIRE(phases[2] <= 30);
 }
 
 // ============================================================================
 // FIFO Trimming
 // ============================================================================
 
-TEST_CASE("PreprintPredictor: add_entry trims to 3 (FIFO)", "[print][predictor]") {
+TEST_CASE("PreprintPredictor: add_entry FIFO trims to MAX_ENTRIES", "[print][predictor]") {
     PreprintPredictor predictor;
-    predictor.load_entries({
-        {100, 1700000000, {{2, 10}}},
-        {100, 1700000001, {{2, 20}}},
-        {100, 1700000002, {{2, 30}}},
-    });
+    // Load MAX_ENTRIES entries
+    std::vector<PreprintEntry> entries;
+    for (int i = 0; i < PreprintPredictor::MAX_ENTRIES; i++) {
+        entries.push_back({100, 1700000000 + i, {{2, 10 + i}}});
+    }
+    predictor.load_entries(entries);
+    REQUIRE(predictor.get_entries().size() == static_cast<size_t>(PreprintPredictor::MAX_ENTRIES));
 
-    // Add a 4th entry
-    predictor.add_entry({100, 1700000003, {{2, 40}}});
-
-    auto entries = predictor.get_entries();
-    REQUIRE(entries.size() == 3);
-
-    // Oldest (10s) should be gone
-    // Now: 20, 30, 40
-    auto phases = predictor.predicted_phases();
-    // 40*0.5 + 30*0.3 + 20*0.2 = 20 + 9 + 4 = 33
-    REQUIRE(phases[2] == 33);
+    // Add one more — oldest should be evicted
+    predictor.add_entry({100, 1700000000 + PreprintPredictor::MAX_ENTRIES, {{2, 99}}});
+    auto result = predictor.get_entries();
+    REQUIRE(result.size() == static_cast<size_t>(PreprintPredictor::MAX_ENTRIES));
+    // First entry should now be the second original one
+    REQUIRE(result.front().phase_durations.at(2) == 11);
+    // Last entry should be the newly added one
+    REQUIRE(result.back().phase_durations.at(2) == 99);
 }
 
 // ============================================================================
 // 15-Minute Cap
 // ============================================================================
 
-TEST_CASE("PreprintPredictor: entries over 15 min are rejected", "[print][predictor]") {
+TEST_CASE("PreprintPredictor: add_entry accepts any duration (MAD handles outliers)",
+          "[print][predictor]") {
     PreprintPredictor predictor;
 
-    // Entry with total > 900s should be ignored
+    // Large entries are no longer rejected at add time — MAD handles anomalies in prediction
     predictor.add_entry({901, 1700000000, {{2, 500}}});
-    REQUIRE_FALSE(predictor.has_predictions());
-    REQUIRE(predictor.get_entries().empty());
-
-    // Entry at exactly 900s should be accepted
-    predictor.add_entry({900, 1700000001, {{2, 500}}});
     REQUIRE(predictor.has_predictions());
     REQUIRE(predictor.get_entries().size() == 1);
+
+    predictor.add_entry({900, 1700000001, {{2, 500}}});
+    REQUIRE(predictor.get_entries().size() == 2);
 }
 
 // ============================================================================
@@ -139,17 +140,15 @@ TEST_CASE("PreprintPredictor: phases appearing in subset of entries", "[print][p
 
     auto phases = predictor.predicted_phases();
 
-    // Phase 2 (homing): all three entries
-    // 30*0.5 + 25*0.3 + 20*0.2 = 15 + 7.5 + 4 = 26.5 -> 27 (rounded)
-    REQUIRE(phases[2] == 27);
+    // Phase 2 (homing): all three entries, newest=30 dominates
+    REQUIRE(phases[2] >= 24);
+    REQUIRE(phases[2] <= 30);
 
-    // Phase 3 (heating): entries 0 and 2 only
-    // Weight redistribution: entry2=50/(50+20)=71.4%, entry0=20/(50+20)=28.6%
-    // 100*0.714 + 80*0.286 = 71.4 + 22.9 = 94.3 -> 94
-    REQUIRE(phases[3] == 94);
+    // Phase 3 (heating): entries 0 and 2 only, newest=100 dominates
+    REQUIRE(phases[3] >= 85);
+    REQUIRE(phases[3] <= 100);
 
-    // Phase 7 (mesh): only entry 2
-    // Only one entry with this phase -> 100% weight
+    // Phase 7 (mesh): only entry 2 — 100% of its weight
     REQUIRE(phases[7] == 40);
 }
 
@@ -267,21 +266,19 @@ TEST_CASE("PreprintPredictor: load_entries replaces existing data", "[print][pre
 }
 
 // ============================================================================
-// load_entries Caps at 3
+// load_entries Caps at MAX_ENTRIES
 // ============================================================================
 
-TEST_CASE("PreprintPredictor: load_entries caps at 3", "[print][predictor]") {
+TEST_CASE("PreprintPredictor: load_entries caps at MAX_ENTRIES", "[print][predictor]") {
     PreprintPredictor predictor;
-    predictor.load_entries({
-        {100, 1700000000, {{2, 10}}},
-        {100, 1700000001, {{2, 20}}},
-        {100, 1700000002, {{2, 30}}},
-        {100, 1700000003, {{2, 40}}},
-        {100, 1700000004, {{2, 50}}},
-    });
+    std::vector<PreprintEntry> entries;
+    for (int i = 0; i < PreprintPredictor::MAX_ENTRIES + 5; i++) {
+        entries.push_back({100, 1700000000 + i, {{2, 10 + i}}});
+    }
+    predictor.load_entries(entries);
 
-    // Should keep only the last 3
-    REQUIRE(predictor.get_entries().size() == 3);
+    // Should keep only the last MAX_ENTRIES
+    REQUIRE(predictor.get_entries().size() == static_cast<size_t>(PreprintPredictor::MAX_ENTRIES));
 }
 
 // ============================================================================
@@ -307,7 +304,7 @@ TEST_CASE("PreprintPredictor: load_entries filters by temp_bucket", "[print][pre
     PreprintPredictor predictor;
 
     std::vector<PreprintEntry> all_entries = {
-        {60, 1700000000, {{2, 10}, {4, 50}}, 200},  // PLA (200°C bucket)
+        {60, 1700000000, {{2, 10}, {4, 50}}, 200},   // PLA (200°C bucket)
         {120, 1700000001, {{2, 15}, {4, 105}}, 250}, // ASA (250°C bucket)
         {65, 1700000002, {{2, 12}, {4, 53}}, 200},   // PLA (200°C bucket)
     };
@@ -335,12 +332,11 @@ TEST_CASE("PreprintPredictor: load_entries filters by temp_bucket", "[print][pre
     }
 }
 
-TEST_CASE("PreprintPredictor: legacy entries (bucket=0) match any filter",
-          "[print][predictor]") {
+TEST_CASE("PreprintPredictor: legacy entries (bucket=0) match any filter", "[print][predictor]") {
     PreprintPredictor predictor;
 
     std::vector<PreprintEntry> entries = {
-        {80, 1700000000, {{2, 10}}, 0},   // legacy (no bucket)
+        {80, 1700000000, {{2, 10}}, 0},    // legacy (no bucket)
         {120, 1700000001, {{2, 15}}, 250}, // ASA bucket
     };
 
@@ -363,4 +359,99 @@ TEST_CASE("PreprintPredictor: temp_bucket stored in entry", "[print][predictor]"
     auto entries = predictor.get_entries();
     REQUIRE(entries.size() == 1);
     REQUIRE(entries[0].temp_bucket == 275);
+}
+
+// ============================================================================
+// Time-Decay Weighting
+// ============================================================================
+
+TEST_CASE("PreprintPredictor time-decay weighting", "[preprint_predictor]") {
+    PreprintPredictor predictor;
+    std::vector<PreprintEntry> entries;
+    int64_t base_time = 1700000000;
+    int qgl_phase = static_cast<int>(PrintStartPhase::QGL);
+    for (int i = 0; i < 5; i++) {
+        PreprintEntry e;
+        e.total_seconds = 60 + i * 10;
+        e.timestamp = base_time + i * 3600;
+        e.phase_durations[qgl_phase] = 60 + i * 10;
+        entries.push_back(e);
+    }
+    predictor.load_entries(entries);
+    auto phases = predictor.predicted_phases();
+    REQUIRE(phases.count(qgl_phase) == 1);
+    // Newest entries dominate — prediction should be closer to 100 than 60
+    REQUIRE(phases[qgl_phase] > 80);
+}
+
+// ============================================================================
+// MAD Anomaly Rejection
+// ============================================================================
+
+TEST_CASE("PreprintPredictor MAD anomaly rejection", "[preprint_predictor]") {
+    PreprintPredictor predictor;
+    int64_t base_time = 1700000000;
+    std::vector<PreprintEntry> entries;
+    int mesh_phase = static_cast<int>(PrintStartPhase::BED_MESH);
+    for (int i = 0; i < 4; i++) {
+        PreprintEntry e;
+        e.total_seconds = 90;
+        e.timestamp = base_time + i * 3600;
+        e.phase_durations[mesh_phase] = 85 + i * 3;
+        entries.push_back(e);
+    }
+    PreprintEntry anomaly;
+    anomaly.total_seconds = 800;
+    anomaly.timestamp = base_time + 5 * 3600;
+    anomaly.phase_durations[mesh_phase] = 800;
+    entries.push_back(anomaly);
+    predictor.load_entries(entries);
+    auto phases = predictor.predicted_phases();
+    REQUIRE(phases[mesh_phase] < 120);
+}
+
+// ============================================================================
+// Missing-Phase Normalization
+// ============================================================================
+
+TEST_CASE("PreprintPredictor missing-phase normalization", "[preprint_predictor]") {
+    PreprintPredictor predictor;
+    int64_t base_time = 1700000000;
+    int mesh_phase = static_cast<int>(PrintStartPhase::BED_MESH);
+    int qgl_phase = static_cast<int>(PrintStartPhase::QGL);
+    PreprintEntry e1;
+    e1.total_seconds = 150;
+    e1.timestamp = base_time;
+    e1.phase_durations[mesh_phase] = 90;
+    e1.phase_durations[qgl_phase] = 60;
+    PreprintEntry e2;
+    e2.total_seconds = 60;
+    e2.timestamp = base_time + 3600;
+    e2.phase_durations[qgl_phase] = 55;
+    predictor.load_entries({e1, e2});
+    auto phases = predictor.predicted_phases();
+    // Mesh only from e1
+    REQUIRE(phases[mesh_phase] == 90);
+    // QGL averages both
+    REQUIRE(phases[qgl_phase] > 50);
+    REQUIRE(phases[qgl_phase] < 65);
+}
+
+// ============================================================================
+// Accepts Up to 10 Entries
+// ============================================================================
+
+TEST_CASE("PreprintPredictor accepts up to 10 entries", "[preprint_predictor]") {
+    PreprintPredictor predictor;
+    int64_t base_time = 1700000000;
+    std::vector<PreprintEntry> entries;
+    for (int i = 0; i < 12; i++) {
+        PreprintEntry e;
+        e.total_seconds = 100;
+        e.timestamp = base_time + i * 3600;
+        e.phase_durations[static_cast<int>(PrintStartPhase::HOMING)] = 20;
+        entries.push_back(e);
+    }
+    predictor.load_entries(entries);
+    REQUIRE(predictor.get_entries().size() == 10);
 }

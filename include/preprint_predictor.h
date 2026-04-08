@@ -7,6 +7,9 @@
 #include <set>
 #include <vector>
 
+/// Whether the printer bed was cold or warm at print start
+enum class StartCondition { COLD, WARM };
+
 namespace helix {
 
 /**
@@ -19,7 +22,7 @@ struct PreprintEntry {
     int total_seconds;                  ///< Total pre-print duration
     int64_t timestamp;                  ///< Unix timestamp when entry was recorded
     std::map<int, int> phase_durations; ///< phase_enum -> seconds
-    int temp_bucket{0};                 ///< Nozzle target temp rounded to nearest 25°C (0 = unknown)
+    int temp_bucket{0}; ///< Nozzle target temp rounded to nearest 25°C (0 = unknown)
 };
 
 /**
@@ -36,23 +39,26 @@ struct PreprintEntry {
 class PreprintPredictor {
   public:
     /// Maximum entries to keep (FIFO)
-    static constexpr int MAX_ENTRIES = 3;
-
-    /// Reject entries with total > 15 minutes (likely anomalous)
-    static constexpr int MAX_TOTAL_SECONDS = 900;
+    static constexpr int MAX_ENTRIES = 10;
 
     /**
-     * @brief Load entries from storage, optionally filtering by temperature bucket
+     * @brief Load entries from storage, optionally filtering by start condition
      *
-     * When temp_bucket > 0, only entries matching that bucket (or with bucket 0
-     * for legacy entries) are loaded. Trims to MAX_ENTRIES.
+     * Trims to MAX_ENTRIES (FIFO, keeping newest).
      */
-    void load_entries(const std::vector<PreprintEntry>& entries, int temp_bucket = 0);
+    void load_entries(const std::vector<PreprintEntry>& entries,
+                      StartCondition condition = StartCondition::COLD);
 
     /**
-     * @brief Add a single entry, enforcing FIFO and 15-min cap
+     * @brief Load entries with legacy temp_bucket filtering (backward compat)
      *
-     * Rejects entries with total_seconds > MAX_TOTAL_SECONDS.
+     * bucket 0 = no filter, bucket 1 = cold, bucket 2 = warm,
+     * other values use simplified mapping.
+     */
+    void load_entries(const std::vector<PreprintEntry>& entries, int temp_bucket);
+
+    /**
+     * @brief Add a single entry, enforcing FIFO trim to MAX_ENTRIES
      */
     void add_entry(const PreprintEntry& entry);
 
@@ -108,6 +114,9 @@ class PreprintPredictor {
     [[nodiscard]] static int predicted_total_from_config();
 
   private:
+    /// Exponential time-decay weights (oldest=low, newest=high), normalized to sum=1
+    [[nodiscard]] std::vector<double> compute_weights() const;
+
     std::vector<PreprintEntry> entries_;
 };
 

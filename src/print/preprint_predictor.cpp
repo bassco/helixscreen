@@ -11,32 +11,57 @@
 
 namespace helix {
 
+void PreprintPredictor::load_entries(const std::vector<PreprintEntry>& entries,
+                                     StartCondition condition) {
+    entries_.clear();
+
+    for (const auto& e : entries) {
+        // temp_bucket 0 = legacy/unknown, always include
+        if (e.temp_bucket == 0) {
+            entries_.push_back(e);
+        } else if (condition == StartCondition::COLD && e.temp_bucket == 1) {
+            entries_.push_back(e);
+        } else if (condition == StartCondition::WARM && e.temp_bucket == 2) {
+            entries_.push_back(e);
+        }
+    }
+
+    // FIFO trim to MAX_ENTRIES (keep newest)
+    while (entries_.size() > static_cast<size_t>(MAX_ENTRIES)) {
+        entries_.erase(entries_.begin());
+    }
+}
+
 void PreprintPredictor::load_entries(const std::vector<PreprintEntry>& entries, int temp_bucket) {
     entries_.clear();
 
-    if (temp_bucket > 0) {
-        // Filter to matching bucket (or legacy entries with bucket 0)
+    if (temp_bucket == 0) {
+        // No filter — load all entries
+        entries_ = entries;
+    } else if (temp_bucket == 1) {
+        // Cold start bucket
+        load_entries(entries, StartCondition::COLD);
+        return;
+    } else if (temp_bucket == 2) {
+        // Warm start bucket
+        load_entries(entries, StartCondition::WARM);
+        return;
+    } else {
+        // Legacy temp_bucket values (e.g. 200, 250): filter by matching bucket or legacy 0
         for (const auto& e : entries) {
             if (e.temp_bucket == temp_bucket || e.temp_bucket == 0) {
                 entries_.push_back(e);
             }
         }
-    } else {
-        entries_ = entries;
     }
 
-    // Keep only the last MAX_ENTRIES
+    // FIFO trim to MAX_ENTRIES (keep newest)
     while (entries_.size() > static_cast<size_t>(MAX_ENTRIES)) {
         entries_.erase(entries_.begin());
     }
 }
 
 void PreprintPredictor::add_entry(const PreprintEntry& entry) {
-    // Reject anomalous entries
-    if (entry.total_seconds > MAX_TOTAL_SECONDS) {
-        return;
-    }
-
     entries_.push_back(entry);
 
     // FIFO trim
@@ -53,6 +78,24 @@ bool PreprintPredictor::has_predictions() const {
     return !entries_.empty();
 }
 
+std::vector<double> PreprintPredictor::compute_weights() const {
+    if (entries_.empty())
+        return {};
+
+    std::vector<double> weights(entries_.size());
+    // ln(10)/10 ≈ 0.23 — oldest of 10 entries gets ~10% relative weight
+    constexpr double lambda = 0.23;
+    double total = 0.0;
+    for (size_t i = 0; i < entries_.size(); ++i) {
+        weights[i] = std::exp(lambda * static_cast<double>(i));
+        total += weights[i];
+    }
+    for (auto& w : weights) {
+        w /= total;
+    }
+    return weights;
+}
+
 std::map<int, int> PreprintPredictor::predicted_phases() const {
     if (entries_.empty()) {
         return {};
@@ -66,35 +109,64 @@ std::map<int, int> PreprintPredictor::predicted_phases() const {
         }
     }
 
-    // Weights based on entry count (newest last in vector)
-    // 1 entry: [1.0]
-    // 2 entries: [0.4, 0.6]
-    // 3 entries: [0.2, 0.3, 0.5]
-    std::vector<double> weights;
-    switch (entries_.size()) {
-    case 1:
-        weights = {1.0};
-        break;
-    case 2:
-        weights = {0.4, 0.6};
-        break;
-    default: // 3+
-        weights = {0.2, 0.3, 0.5};
-        break;
-    }
+    auto weights = compute_weights();
 
     std::map<int, int> result;
     for (int phase : all_phases) {
-        // Find which entries have this phase and redistribute weights
-        double total_weight = 0.0;
-        double weighted_sum = 0.0;
-
+        // Step 1: Collect durations for entries that have this phase
+        std::vector<std::pair<size_t, double>> phase_entries; // (index, duration)
         for (size_t i = 0; i < entries_.size(); ++i) {
             auto it = entries_[i].phase_durations.find(phase);
             if (it != entries_[i].phase_durations.end()) {
-                total_weight += weights[i];
-                weighted_sum += weights[i] * it->second;
+                phase_entries.emplace_back(i, static_cast<double>(it->second));
             }
+        }
+
+        if (phase_entries.empty())
+            continue;
+
+        // Step 2: MAD anomaly rejection
+        // Compute median
+        std::vector<double> durations;
+        durations.reserve(phase_entries.size());
+        for (const auto& [_, dur] : phase_entries) {
+            durations.push_back(dur);
+        }
+        std::sort(durations.begin(), durations.end());
+
+        double median;
+        size_t n = durations.size();
+        if (n % 2 == 0) {
+            median = (durations[n / 2 - 1] + durations[n / 2]) / 2.0;
+        } else {
+            median = durations[n / 2];
+        }
+
+        // Compute MAD = median of |each - median|
+        std::vector<double> abs_devs;
+        abs_devs.reserve(n);
+        for (double d : durations) {
+            abs_devs.push_back(std::abs(d - median));
+        }
+        std::sort(abs_devs.begin(), abs_devs.end());
+
+        double mad;
+        if (n % 2 == 0) {
+            mad = (abs_devs[n / 2 - 1] + abs_devs[n / 2]) / 2.0;
+        } else {
+            mad = abs_devs[n / 2];
+        }
+
+        // Step 3: Weighted average of non-anomalous entries
+        double total_weight = 0.0;
+        double weighted_sum = 0.0;
+        for (const auto& [idx, dur] : phase_entries) {
+            // Reject if MAD > 0 and deviation exceeds 3*MAD
+            if (mad > 0.0 && std::abs(dur - median) > 3.0 * mad) {
+                continue;
+            }
+            total_weight += weights[idx];
+            weighted_sum += weights[idx] * dur;
         }
 
         if (total_weight > 0.0) {
