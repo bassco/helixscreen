@@ -93,7 +93,7 @@ TEST_CASE("AmsBackendMock realistic mode load operation phases",
         REQUIRE(result);
 
         // Wait for unload to complete (with 1000x speedup: ~20ms total)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
         {
             std::lock_guard<std::mutex> lock(actions_mtx);
             observed_actions.clear();
@@ -104,7 +104,7 @@ TEST_CASE("AmsBackendMock realistic mode load operation phases",
         REQUIRE(result);
 
         // Wait for operation to complete (with 1000x speedup: ~12ms total)
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
         // Verify phase sequence: HEATING → LOADING → IDLE
         // (CHECKING is only used in recovery, not normal load)

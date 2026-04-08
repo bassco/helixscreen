@@ -74,11 +74,14 @@ class MoonrakerRobustnessFixture {
         server_->stop();
         server_.reset();
 
-        // Signal the event loop to stop, but do NOT join — on macOS CI,
-        // the kqueue-based event loop hangs in join() after WebSocket I/O.
-        // Leak the EventLoopThread so its destructor (which calls join) never runs.
-        loop_thread_->stop(false);
-        leaked_loops_.push_back(std::move(loop_thread_));
+        // On macOS CI, the kqueue-based event loop hangs in join() after
+        // WebSocket I/O. Leak the EventLoopThread permanently — never call
+        // stop() or join(). The heap-allocated shared_ptr prevents
+        // ~EventLoopThread from running, avoiding the hang.
+        //
+        // NOLINTBEGIN(clang-analyzer-cplusplus.NewDeleteLeaks)
+        (void)new std::shared_ptr<hv::EventLoopThread>(std::move(loop_thread_));
+        // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
     }
 
     std::string server_url() const {
@@ -89,11 +92,7 @@ class MoonrakerRobustnessFixture {
     std::shared_ptr<hv::EventLoopThread> loop_thread_;
     std::unique_ptr<MoonrakerClient> client_;
 
-    // Leaked event loop threads that can't be joined on macOS CI
-    static std::vector<std::shared_ptr<hv::EventLoopThread>> leaked_loops_;
 };
-
-std::vector<std::shared_ptr<hv::EventLoopThread>> MoonrakerRobustnessFixture::leaked_loops_;
 
 // ============================================================================
 // Priority 1: Concurrent Access Testing

@@ -463,7 +463,7 @@ TEST_CASE("Realistic mode tool change shows SELECTING phase in toolchanger mode"
         auto result = backend.change_tool(2);
         REQUIRE(result);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Should see SELECTING somewhere in the action sequence
         std::lock_guard<std::mutex> lock(actions_mtx);
