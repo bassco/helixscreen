@@ -248,14 +248,19 @@
             </lv_obj>
             <!-- Part cooling hero section -->
             <text_small width="100%" text="Part Fan" translation_tag="Part Fan" style_margin_top="#space_sm"/>
-            <lv_slider name="part_fan_slider"
-                       width="80%" height="#space_lg" bind_value="controls_fan_pct" min_value="0" max_value="100"
-                       style_radius="#space_md" style_margin_left="#space_md" style_margin_right="#space_sm">
-              <event_cb trigger="value_changed" callback="on_controls_fan_slider"/>
-            </lv_slider>
-            <text_body name="fan_speed_display" width="80%" bind_text="controls_fan_speed" style_text_align="right">
-              <bind_flag_if_eq subject="ui_breakpoint" flag="hidden" ref_value="0"/>
-            </text_body>
+            <lv_obj width="100%" height="content" flex_flow="row"
+                    style_flex_cross_place="center" style_pad_gap="#space_sm"
+                    style_pad_left="0" style_pad_right="0" style_pad_top="#space_xs" style_pad_bottom="#space_xs"
+                    style_bg_opa="0" style_border_width="0" scrollable="false">
+              <lv_slider name="part_fan_slider"
+                         flex_grow="1" bind_value="controls_fan_pct" min_value="0"
+                         max_value="100">
+                <event_cb trigger="value_changed" callback="on_controls_fan_slider"/>
+              </lv_slider>
+              <text_body name="fan_speed_display" width="content" bind_text="controls_fan_speed">
+                <bind_flag_if_eq subject="ui_breakpoint" flag="hidden" ref_value="0"/>
+              </text_body>
+            </lv_obj>
             <!-- Secondary fans list (populated dynamically) -->
             <lv_obj name="secondary_fans_list"
                     width="100%" height="content" style_pad_all="0" scrollable="false" flex_flow="column"
