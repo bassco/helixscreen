@@ -56,15 +56,14 @@ class MoonrakerConnectionRetryFixture {
     }
 
     ~MoonrakerConnectionRetryFixture() {
-        // Disconnect while event loop is still running so libhv can
-        // process the close and cancel pending reconnect timers.
+        // Destroy client while event loop is still running so libhv can
+        // process close/cleanup callbacks and release I/O handles.
         if (client_) {
             client_->disconnect();
         }
-
-        loop_thread_->stop();
-        loop_thread_->join();
         client_.reset();
+
+        loop_thread_->stop(true);
     }
 
     std::shared_ptr<hv::EventLoopThread> loop_thread_;
