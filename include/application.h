@@ -171,6 +171,11 @@ class Application {
     void release_instance_lock();
     int m_lock_fd = -1;
 
+    // Android lifecycle pause/resume
+    void on_enter_background();
+    void on_enter_foreground();
+    bool m_backgrounded = false;
+
     // State
     bool m_running = false;
     bool m_wizard_active = false;

@@ -170,6 +170,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -195,6 +196,9 @@ extern std::string g_log_file_cli;
 extern std::string g_log_level_cli;
 
 namespace {
+
+// Android lifecycle: background/foreground state set from SDL event handler
+std::atomic<bool> s_app_backgrounded{false};
 
 // Crash loop detection marker file path
 constexpr const char* CRASH_MARKER_PATH = "config/.crash_restart_count";
@@ -227,6 +231,17 @@ void graceful_quit_signal_handler(int /*sig*/) {
 }
 
 } // namespace
+
+// C bridge functions called from SDL event handler (lv_sdl_window.c)
+extern "C" void helix_notify_app_backgrounded() {
+    s_app_backgrounded.store(true);
+    spdlog::info("[Application] App entering background");
+}
+
+extern "C" void helix_notify_app_foregrounded() {
+    s_app_backgrounded.store(false);
+    spdlog::info("[Application] App returning to foreground");
+}
 
 static constexpr const char* INSTANCE_LOCK_PATH = "config/.helix-screen.lock";
 
@@ -2633,6 +2648,20 @@ int Application::main_loop() {
 
         handle_keyboard_shortcuts();
 
+        // Android lifecycle: pause/resume when backgrounded
+        bool backgrounded = s_app_backgrounded.load();
+        if (backgrounded && !m_backgrounded) {
+            on_enter_background();
+        } else if (!backgrounded && m_backgrounded) {
+            on_enter_foreground();
+        }
+
+        // Skip heavy processing while backgrounded
+        if (m_backgrounded) {
+            DisplayManager::delay(200);
+            continue;
+        }
+
         // Break immediately if quit was requested (e.g., Cmd+Q) to avoid
         // running lv_timer_handler() with stale queued callbacks that may
         // reference destroyed objects (e.g., update_button_text_contrast
@@ -2743,6 +2772,54 @@ int Application::main_loop() {
     }
 
     return 0;
+}
+
+void Application::on_enter_background() {
+    if (m_backgrounded)
+        return;
+    m_backgrounded = true;
+    spdlog::info("[Application] Pausing for background");
+
+    // 1. Disconnect WebSocket (stops all status updates and reconnect timer)
+    if (m_moonraker) {
+        m_moonraker->client()->disconnect();
+    }
+
+    // 2. Mute sound
+    SoundManager::instance().shutdown();
+
+    // 3. Suppress rendering — save CPU/GPU
+    lv_display_enable_invalidation(nullptr, false);
+
+    spdlog::info("[Application] Background pause complete");
+}
+
+void Application::on_enter_foreground() {
+    if (!m_backgrounded)
+        return;
+    m_backgrounded = false;
+    spdlog::info("[Application] Resuming from background");
+
+    // 1. Re-enable rendering
+    lv_display_enable_invalidation(nullptr, true);
+
+    // 2. Re-initialize sound
+    SoundManager::instance().initialize();
+
+    // 3. Reconnect WebSocket (triggers discovery + full state refresh)
+    if (m_moonraker && m_moonraker->client()) {
+        m_moonraker->client()->force_reconnect();
+    }
+
+    // 4. Force full display redraw (framebuffer may be stale)
+    lv_obj_t* screen = lv_screen_active();
+    if (screen) {
+        lv_obj_update_layout(screen);
+        lv_obj_invalidate(screen);
+        lv_refr_now(nullptr);
+    }
+
+    spdlog::info("[Application] Foreground resume complete");
 }
 
 void Application::handle_keyboard_shortcuts() {
