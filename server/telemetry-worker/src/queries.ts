@@ -505,10 +505,10 @@ export function printStartQueries(days: number, filters?: FilterParams): string[
     `SELECT blob4 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context' AND blob4 != ''${f} GROUP BY name ORDER BY count DESC`,
     // File size buckets (by blob5)
     `SELECT blob5 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context' AND blob5 != ''${f} GROUP BY name ORDER BY count DESC`,
-    // Thumbnail adoption (avg double2)
-    `SELECT avg(double2) as thumbnail_rate FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context'${f}`,
-    // AMS usage (avg double3)
-    `SELECT avg(double3) as ams_rate FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context'${f}`,
+    // Thumbnail adoption (avg double2, convert 0-1 to percentage)
+    `SELECT avg(double2) * 100 as thumbnail_rate FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context'${f}`,
+    // AMS usage (avg double3, convert 0-1 to percentage)
+    `SELECT avg(double3) * 100 as ams_rate FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context'${f}`,
     // Source distribution (by blob7)
     `SELECT blob7 as name, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'print_start_context' AND blob7 != ''${f} GROUP BY name ORDER BY count DESC`,
   ];

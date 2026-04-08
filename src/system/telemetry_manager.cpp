@@ -1797,7 +1797,10 @@ nlohmann::json TelemetryManager::build_hardware_profile_event() const {
             event["mcus"] = mcus;
 
             // ---- build_volume section ----
-            const auto& bv = hw.build_volume();
+            // Read from MoonrakerAPI (not client) because set_build_volume()
+            // updates api->hardware(), not the discovery sequence's copy
+            auto* api = get_moonraker_api();
+            const auto& bv = api ? api->hardware().build_volume() : hw.build_volume();
             if (bv.x_max > 0 && bv.y_max > 0) {
                 json build_volume;
                 build_volume["x_mm"] = static_cast<int>(bv.x_max - bv.x_min);
@@ -2691,7 +2694,9 @@ void on_print_state_changed_for_telemetry(lv_observer_t* observer, lv_subject_t*
                                           s_telemetry_filament_type, s_telemetry_filament_used_mm);
 
                             // Record print start context with metadata
-                            std::string source = "local";
+                            // Source left empty — Moonraker doesn't expose how the
+                            // print was initiated (local upload vs cloud vs USB)
+                            std::string source;
                             int tools = ToolState::instance().tool_count();
                             bool ams =
                                 lv_subject_get_int(AmsState::instance().get_ams_type_subject()) !=
