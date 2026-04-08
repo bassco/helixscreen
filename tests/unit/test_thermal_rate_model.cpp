@@ -1,0 +1,135 @@
+// Copyright (C) 2025-2026 356C LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include "../../include/thermal_rate_model.h"
+
+#include "../catch_amalgamated.hpp"
+
+TEST_CASE("ThermalRateModel basic rate measurement", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // First sample establishes timing baseline
+    model.record_sample(25.0f, 1000);
+
+    // Small delta (< 2°C) — no measurement yet
+    model.record_sample(26.5f, 2000);
+    REQUIRE_FALSE(model.measured_rate().has_value());
+
+    // 2°C delta from last recorded but total movement < 5°C — still no seed
+    model.record_sample(28.0f, 4000);
+    REQUIRE_FALSE(model.measured_rate().has_value());
+
+    // Now at 31°C — total movement >= 5°C from start (25), seed from cumulative
+    // 31 - 25 = 6°C in (8000 - 1000) = 7000ms = 7s → 7/6 ≈ 1.167 s/°C
+    model.record_sample(31.0f, 8000);
+    REQUIRE(model.measured_rate().has_value());
+    float rate = model.measured_rate().value();
+    REQUIRE(rate > 1.0f);
+    REQUIRE(rate < 1.3f);
+}
+
+TEST_CASE("ThermalRateModel EMA smoothing", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // Establish baseline and seed measurement
+    model.record_sample(25.0f, 1000);
+    // Jump to 31°C in 6s → cumulative rate = 6/6 = 1.0 s/°C
+    model.record_sample(31.0f, 7000);
+    REQUIRE(model.measured_rate().has_value());
+    float seeded = model.measured_rate().value();
+    REQUIRE(seeded == Catch::Approx(1.0f).margin(0.05f));
+
+    // Next sample: 33°C at 9s → inst_rate = 2000ms/1000/2°C = 1.0 s/°C
+    // EMA: 0.3*1.0 + 0.7*1.0 = 1.0 (no change when rates match)
+    model.record_sample(33.0f, 9000);
+    REQUIRE(model.measured_rate().value() == Catch::Approx(1.0f).margin(0.05f));
+
+    // Sudden fast rate: 35°C at 10s → inst_rate = 1000/1000/2 = 0.5 s/°C
+    // EMA: 0.3*0.5 + 0.7*1.0 = 0.85 (damped, doesn't jump to 0.5)
+    model.record_sample(35.0f, 10000);
+    float after_fast = model.measured_rate().value();
+    REQUIRE(after_fast > 0.8f);
+    REQUIRE(after_fast < 0.9f);
+
+    // Sudden slow rate: 37°C at 14s → inst_rate = 4000/1000/2 = 2.0 s/°C
+    // EMA: 0.3*2.0 + 0.7*0.85 = 1.195
+    model.record_sample(37.0f, 14000);
+    float after_slow = model.measured_rate().value();
+    REQUIRE(after_slow > 1.1f);
+    REQUIRE(after_slow < 1.3f);
+}
+
+TEST_CASE("ThermalRateModel estimate_seconds", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // Seed at 1.0 s/°C
+    model.record_sample(25.0f, 1000);
+    model.record_sample(31.0f, 7000);
+
+    // 50 degrees remaining at 1.0 s/°C = 50 seconds
+    float eta = model.estimate_seconds(150.0f, 200.0f);
+    REQUIRE(eta == Catch::Approx(50.0f).margin(1.0f));
+
+    // Already at target — 0 seconds
+    float at_target = model.estimate_seconds(200.0f, 200.0f);
+    REQUIRE(at_target == 0.0f);
+
+    // Above target — 0 seconds
+    float above = model.estimate_seconds(210.0f, 200.0f);
+    REQUIRE(above == 0.0f);
+}
+
+TEST_CASE("ThermalRateModel rate priority", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // Default only
+    REQUIRE(model.best_rate() == Catch::Approx(ThermalRateModel::FALLBACK_DEFAULT_RATE));
+
+    // Custom default
+    model.set_default_rate(1.5f);
+    REQUIRE(model.best_rate() == Catch::Approx(1.5f));
+
+    // History overrides default
+    model.load_history(2.0f);
+    REQUIRE(model.best_rate() == Catch::Approx(2.0f));
+
+    // Measured overrides history
+    model.record_sample(25.0f, 1000);
+    model.record_sample(31.0f, 7000); // seed: 1.0 s/°C
+    REQUIRE(model.best_rate() == Catch::Approx(1.0f).margin(0.05f));
+}
+
+TEST_CASE("ThermalRateModel blended_rate_for_save", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // Seed measurement at 1.0 s/°C
+    model.record_sample(25.0f, 1000);
+    model.record_sample(31.0f, 7000);
+
+    // No history — returns measured directly
+    float no_hist = model.blended_rate_for_save();
+    REQUIRE(no_hist == Catch::Approx(1.0f).margin(0.05f));
+
+    // With history: 0.7 * measured + 0.3 * history
+    model.load_history(2.0f);
+    float blended = model.blended_rate_for_save();
+    // 0.7 * 1.0 + 0.3 * 2.0 = 1.3
+    REQUIRE(blended == Catch::Approx(1.3f).margin(0.05f));
+}
+
+TEST_CASE("ThermalRateModel no measurement returns 0 for save", "[thermal_rate]") {
+    ThermalRateModel model;
+    model.reset(25.0f);
+
+    // No measurements taken
+    REQUIRE(model.blended_rate_for_save() == 0.0f);
+
+    // Even with history, no measurement means nothing to save
+    model.load_history(2.0f);
+    REQUIRE(model.blended_rate_for_save() == 0.0f);
+}
