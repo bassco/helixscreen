@@ -514,9 +514,9 @@ static void migrate_v10_to_v11(json& config) {
         config["print_start_history"]["entries"].is_array()) {
         int count = 0;
         for (auto& entry : config["print_start_history"]["entries"]) {
-            if (entry.contains("phase_durations") && entry["phase_durations"].is_object()) {
-                entry["phase_durations"].erase("3"); // HEATING_BED
-                entry["phase_durations"].erase("4"); // HEATING_NOZZLE
+            if (entry.contains("phases") && entry["phases"].is_object()) {
+                entry["phases"].erase("3"); // HEATING_BED
+                entry["phases"].erase("4"); // HEATING_NOZZLE
                 count++;
             }
         }

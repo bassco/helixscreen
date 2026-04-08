@@ -2533,8 +2533,8 @@ TEST_CASE("Config: v10→v11 migration moves heat rates and strips heating phase
             {"heater_bed", {{"heat_rate", 0.42}, {"oscillation_duration", 8.0}}}}}}},
         {"print_start_history",
          {{"entries",
-           json::array({{{"phase_durations", {{"0", 5.0}, {"1", 10.0}, {"3", 30.0}, {"4", 20.0}}}},
-                        {{"phase_durations", {{"0", 6.0}, {"3", 25.0}, {"4", 15.0}}}},
+           json::array({{{"phases", {{"0", 5.0}, {"1", 10.0}, {"3", 30.0}, {"4", 20.0}}}},
+                        {{"phases", {{"0", 6.0}, {"3", 25.0}, {"4", 15.0}}}},
                         {{"no_phases", true}}})}}},
         {"printer", {{"moonraker_host", "127.0.0.1"}, {"moonraker_port", 7125}}}};
 
@@ -2568,19 +2568,19 @@ TEST_CASE("Config: v10→v11 migration moves heat rates and strips heating phase
     REQUIRE(entries.size() == 3);
 
     // First entry: had phases 0, 1, 3, 4 → should keep 0, 1
-    REQUIRE(entries[0]["phase_durations"].contains("0"));
-    REQUIRE(entries[0]["phase_durations"].contains("1"));
-    REQUIRE_FALSE(entries[0]["phase_durations"].contains("3"));
-    REQUIRE_FALSE(entries[0]["phase_durations"].contains("4"));
+    REQUIRE(entries[0]["phases"].contains("0"));
+    REQUIRE(entries[0]["phases"].contains("1"));
+    REQUIRE_FALSE(entries[0]["phases"].contains("3"));
+    REQUIRE_FALSE(entries[0]["phases"].contains("4"));
 
     // Second entry: had phases 0, 3, 4 → should keep 0
-    REQUIRE(entries[1]["phase_durations"].contains("0"));
-    REQUIRE_FALSE(entries[1]["phase_durations"].contains("3"));
-    REQUIRE_FALSE(entries[1]["phase_durations"].contains("4"));
+    REQUIRE(entries[1]["phases"].contains("0"));
+    REQUIRE_FALSE(entries[1]["phases"].contains("3"));
+    REQUIRE_FALSE(entries[1]["phases"].contains("4"));
 
-    // Third entry: no phase_durations → unchanged
+    // Third entry: no phases key → unchanged
     REQUIRE(entries[2].contains("no_phases"));
-    REQUIRE_FALSE(entries[2].contains("phase_durations"));
+    REQUIRE_FALSE(entries[2].contains("phases"));
 
     std::filesystem::remove_all(temp_dir);
 }
