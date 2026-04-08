@@ -48,11 +48,12 @@ MoonrakerAPI::MoonrakerAPI(MoonrakerClient& client, PrinterState& state) : clien
                       hardware_.sensors().size());
     });
 
-    client_.set_on_discovery_complete([this](const helix::PrinterDiscovery& hw) {
-        hardware_ = hw;
-        spdlog::debug("[MoonrakerAPI] Discovery complete: hostname='{}', kinematics='{}'",
-                      hardware_.hostname(), hardware_.kinematics());
-    });
+    client_.set_on_discovery_complete(
+        [this](const helix::PrinterDiscovery& hw, const nlohmann::json& /*initial_status*/) {
+            hardware_ = hw;
+            spdlog::debug("[MoonrakerAPI] Discovery complete: hostname='{}', kinematics='{}'",
+                          hardware_.hostname(), hardware_.kinematics());
+        });
 
     // Wire up bed mesh callback: Client pushes data to advanced API when it arrives from WebSocket
     client_.set_bed_mesh_callback(
@@ -104,12 +105,11 @@ void MoonrakerAPI::launch_http_thread(std::function<void()> func) {
     }
 
     auto done = std::make_shared<std::atomic<bool>>(false);
-    http_threads_.emplace_back(
-        std::thread([func = std::move(func), done]() {
-            func();
-            done->store(true);
-        }),
-        done);
+    http_threads_.emplace_back(std::thread([func = std::move(func), done]() {
+                                   func();
+                                   done->store(true);
+                               }),
+                               done);
 }
 
 bool MoonrakerAPI::ensure_http_base_url() {

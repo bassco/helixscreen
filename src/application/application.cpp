@@ -1948,15 +1948,17 @@ void Application::setup_discovery_callbacks() {
     // manager
     Application* app = this;
 
-    client->set_on_discovery_complete([api, client, app](const helix::PrinterDiscovery& hardware) {
+    client->set_on_discovery_complete([api, client, app](const helix::PrinterDiscovery& hardware,
+                                                         const nlohmann::json& initial_status) {
         struct DiscoveryCompleteCtx {
             helix::PrinterDiscovery hardware;
+            nlohmann::json initial_status;
             MoonrakerAPI* api;
             MoonrakerClient* client;
             Application* app;
         };
         auto ctx = std::make_unique<DiscoveryCompleteCtx>(
-            DiscoveryCompleteCtx{hardware, api, client, app});
+            DiscoveryCompleteCtx{hardware, initial_status, api, client, app});
         helix::ui::queue_update<DiscoveryCompleteCtx>(std::move(ctx), [](DiscoveryCompleteCtx* c) {
             // Safety check: if Application is shutting down, skip all processing
             // This prevents use-after-free if shutdown races with callback delivery
@@ -1989,6 +1991,14 @@ void Application::setup_discovery_callbacks() {
             get_printer_state().set_hardware(c->hardware);
             get_printer_state().init_fans(
                 c->hardware.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
+
+            // Dispatch initial subscription status AFTER init_fans so fan/sensor subjects
+            // exist when the status data is processed. The initial status is passed from the
+            // discovery sequence rather than dispatched separately to guarantee ordering.
+            if (!c->initial_status.empty()) {
+                c->client->dispatch_status_update(c->initial_status);
+            }
+
             get_printer_state().set_klipper_version(c->hardware.software_version());
             get_printer_state().set_moonraker_version(c->hardware.moonraker_version());
             if (!c->hardware.os_version().empty()) {

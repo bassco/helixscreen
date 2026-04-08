@@ -442,7 +442,9 @@ class MoonrakerClient : public hv::WebSocketClient {
      *
      * @param cb Callback invoked with discovered hardware
      */
-    void set_on_discovery_complete(std::function<void(const helix::PrinterDiscovery&)> cb) {
+    void set_on_discovery_complete(
+        std::function<void(const helix::PrinterDiscovery&, const nlohmann::json& initial_status)>
+            cb) {
         discovery_.set_on_discovery_complete(std::move(cb));
     }
 

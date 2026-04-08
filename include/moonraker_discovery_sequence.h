@@ -94,8 +94,16 @@ class MoonrakerDiscoverySequence {
         on_hardware_discovered_ = std::move(cb);
     }
 
-    /** @brief Set callback for discovery completion (after subscription) */
-    void set_on_discovery_complete(std::function<void(const PrinterDiscovery&)> cb) {
+    /**
+     * @brief Set callback for discovery completion (after subscription)
+     *
+     * The callback receives the discovered hardware AND the initial status from the
+     * subscription response. Callers MUST dispatch the initial status AFTER initializing
+     * subsystems (e.g., init_fans) to avoid race conditions where status updates are
+     * processed before fan/sensor subjects exist.
+     */
+    void set_on_discovery_complete(
+        std::function<void(const PrinterDiscovery&, const nlohmann::json& initial_status)> cb) {
         on_discovery_complete_ = std::move(cb);
     }
 
@@ -113,11 +121,8 @@ class MoonrakerDiscoverySequence {
             on_hardware_discovered_(hardware_);
     }
 
-    /** @brief Invoke the on_discovery_complete callback with current hardware */
-    void invoke_discovery_complete() {
-        if (on_discovery_complete_)
-            on_discovery_complete_(hardware_);
-    }
+    /** @brief Invoke the on_discovery_complete callback with current hardware (mock use) */
+    void invoke_discovery_complete();
 
     // ======== Hardware vector accessors (for mock to populate directly) ========
     // Thread safety: mutable accessors must only be called before start() or
@@ -237,7 +242,8 @@ class MoonrakerDiscoverySequence {
 
     // Callbacks
     std::function<void(const PrinterDiscovery&)> on_hardware_discovered_;
-    std::function<void(const PrinterDiscovery&)> on_discovery_complete_;
+    std::function<void(const PrinterDiscovery&, const nlohmann::json& initial_status)>
+        on_discovery_complete_;
     std::function<void(const json&)> bed_mesh_callback_;
     std::mutex callbacks_mutex_;
 };

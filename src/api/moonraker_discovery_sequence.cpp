@@ -948,18 +948,20 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
                     false); // Warning, not error - discovery still completes
             }
 
-            // Discovery complete - notify observers.
-            // on_discovery_complete_ fires first so fans/sensors are initialized
-            // before dispatch_status_update processes the initial state.
+            // Discovery complete - pass initial status to the callback so the caller
+            // can dispatch it AFTER initializing subsystems (init_fans, etc.).
+            // Previously dispatch_status_update was called here separately, but that
+            // used a different queue than the init_fans callback, causing a race where
+            // initial fan/sensor data was processed before subjects existed.
             // Copy hardware_ before invoking callback to prevent data races if
             // the callback defers work while this thread continues mutating (#562).
+            json initial_status;
+            if (sub_response.contains("result") && sub_response["result"].contains("status")) {
+                initial_status = sub_response["result"]["status"];
+            }
             if (on_discovery_complete_) {
                 auto hw_snapshot = hardware_;
-                on_discovery_complete_(hw_snapshot);
-            }
-            if (sub_response.contains("result")) {
-                const auto& status = sub_response["result"]["status"];
-                client_.dispatch_status_update(status);
+                on_discovery_complete_(hw_snapshot, initial_status);
             }
             if (on_complete_discovery_) {
                 auto cb = std::move(on_complete_discovery_);
@@ -967,6 +969,11 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription() {
                 cb();
             }
         });
+}
+
+void MoonrakerDiscoverySequence::invoke_discovery_complete() {
+    if (on_discovery_complete_)
+        on_discovery_complete_(hardware_, json::object());
 }
 
 void MoonrakerDiscoverySequence::parse_objects(const json& objects) {
