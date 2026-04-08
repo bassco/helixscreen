@@ -309,7 +309,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                 if (lv_subject_get_int(&print_time_left_) != remaining) {
                     lv_subject_set_int(&print_time_left_, remaining);
                 }
-            } else if (progress >= 5 && progress < 100 && print_time > 0) {
+            } else if (progress >= 1 && progress < 100 && print_time > 0) {
                 double raw_remaining =
                     static_cast<double>(print_time) * (100 - progress) / progress;
 
