@@ -880,8 +880,6 @@ void FilamentPanel::handle_load_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::LOAD);
-        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament load ({}°C, min: {}°C)"),
-                       nozzle_current_, min_extrude_temp_);
         return;
     }
 
@@ -915,8 +913,6 @@ void FilamentPanel::handle_unload_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::UNLOAD);
-        NOTIFY_WARNING(lv_tr("Nozzle too cold for filament unload ({}°C, min: {}°C)"),
-                       nozzle_current_, min_extrude_temp_);
         return;
     }
 
@@ -948,8 +944,6 @@ void FilamentPanel::handle_extrude_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::EXTRUDE);
-        NOTIFY_WARNING(lv_tr("Nozzle too cold for extrude ({}°C, min: {}°C)"), nozzle_current_,
-                       min_extrude_temp_);
         return;
     }
 
@@ -1003,8 +997,6 @@ void FilamentPanel::handle_purge_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::PURGE);
-        NOTIFY_WARNING(lv_tr("Nozzle too cold for purge ({}°C, min: {}°C)"), nozzle_current_,
-                       min_extrude_temp_);
         return;
     }
 
@@ -1118,8 +1110,6 @@ void FilamentPanel::handle_retract_button() {
 
     if (!is_extrusion_allowed()) {
         start_preheat_for_op(PreheatOp::RETRACT);
-        NOTIFY_WARNING(lv_tr("Nozzle too cold for retract ({}°C, min: {}°C)"), nozzle_current_,
-                       min_extrude_temp_);
         return;
     }
 
