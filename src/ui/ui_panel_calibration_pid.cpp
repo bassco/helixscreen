@@ -18,6 +18,7 @@
 #include "static_panel_registry.h"
 #include "static_subject_registry.h"
 #include "temperature_service.h"
+#include "thermal_rate_model.h"
 
 #include <spdlog/spdlog.h>
 
@@ -1011,11 +1012,15 @@ void PIDCalibrationPanel::start_progress_tracking() {
     auto* config = helix::Config::get_instance();
     if (config) {
         const char* heater_key = (selected_heater_ == Heater::EXTRUDER) ? "extruder" : "heater_bed";
-        std::string heat_path =
-            std::string("/calibration/pid_history/") + heater_key + "/heat_rate";
+
+        // Heat rate from shared ThermalRateManager (ensure loaded from config)
+        auto& thermal_mgr = ThermalRateManager::instance();
+        thermal_mgr.load_from_config(*config);
+        float heat_rate = thermal_mgr.get_model(heater_key).best_rate();
+
+        // Oscillation duration from PID-specific config path
         std::string osc_path =
             std::string("/calibration/pid_history/") + heater_key + "/oscillation_duration";
-        float heat_rate = config->get<float>(heat_path, 0.0f);
         float osc_dur = config->get<float>(osc_path, 0.0f);
         if (heat_rate > 0 && osc_dur > 0) {
             progress_tracker_.set_history(heat_rate, osc_dur);
@@ -1130,26 +1135,26 @@ void PIDCalibrationPanel::save_calibration_history() {
         return;
 
     const char* heater_key = (selected_heater_ == Heater::EXTRUDER) ? "extruder" : "heater_bed";
-    std::string heat_path = std::string("/calibration/pid_history/") + heater_key + "/heat_rate";
+
+    // Save heat rate to shared path at /thermal/rates/{heater}/heat_rate
+    // The progress tracker's thermal model has both history and measured data,
+    // so blended_rate_for_save() handles the 70/30 new/old weighting.
+    if (heat_rate > 0) {
+        const auto& pid_model = progress_tracker_.thermal_model();
+        float blended = pid_model.blended_rate_for_save();
+        if (blended <= 0)
+            blended = heat_rate;
+        std::string heat_path = "/thermal/rates/" + std::string(heater_key) + "/heat_rate";
+        config->set<float>(heat_path, blended);
+    }
+
+    // Save oscillation duration to PID-specific config path (with blending)
     std::string osc_path =
         std::string("/calibration/pid_history/") + heater_key + "/oscillation_duration";
-
-    // Weighted average with existing history (70% new, 30% old)
-    float old_heat = config->get<float>(heat_path, 0.0f);
     float old_osc = config->get<float>(osc_path, 0.0f);
-
-    float new_heat = heat_rate;
     float new_osc = osc_duration;
-
-    if (old_heat > 0 && heat_rate > 0) {
-        new_heat = 0.7f * heat_rate + 0.3f * old_heat;
-    }
     if (old_osc > 0 && osc_duration > 0) {
         new_osc = 0.7f * osc_duration + 0.3f * old_osc;
-    }
-
-    if (new_heat > 0) {
-        config->set<float>(heat_path, new_heat);
     }
     if (new_osc > 0) {
         config->set<float>(osc_path, new_osc);
@@ -1157,7 +1162,7 @@ void PIDCalibrationPanel::save_calibration_history() {
     config->save();
 
     spdlog::info("[PIDCal] Saved calibration history for {}: heat_rate={:.2f} s/deg, osc={:.0f}s",
-                 heater_key, new_heat, new_osc);
+                 heater_key, heat_rate, new_osc);
 }
 
 // ============================================================================
