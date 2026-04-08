@@ -7,16 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.99.25] - 2026-04-07
+## [0.99.25] - 2026-04-08
 
 ### Added
+- Adaptive pre-print time estimation: temperature-driven heating progress, thermal rate learning from PID calibration, and finish time ETA integration
 - Bluetooth QR scanner support: discover, pair, and persist BT scanners from the scanner picker
 - RGBW LED support: white channel toggle, detection, and color swatch (#737)
+- White-only LED detection from Klipper configfile pin config (#748)
 - Temperature graph legend chips displayed at 2x widget height or larger
+- Auto-preheat for extrude/retract/purge when nozzle is cold with a known spool loaded
 - Android Play Store readiness: AAB bundle build, back button handling, lifecycle pause/resume, and display diagnostics
 - Klipper shutdown state detection with error message in recovery dialog
 
 ### Fixed
+- Bed observer use-after-free from missing SubjectLifetime token (#746)
+- Duplicate Chamber Temperature sensor from mock sensor pollution
+- Fan widget 1x1 content centering and resolved display names at 2x1+
+- Tool remap colors in 2D G-code renderer and chamber temp alignment
+- Pre-print time composite remaining from thermal model + predictor
+- Config migration using wrong JSON key for phase durations
+- ETA extrapolation restored for progress 1–4% when no slicer estimate available
 - IFS native ZMOD presence detection and dirty flag race on AD5X (#716)
 - Spoolman active spool not syncing with Moonraker on assignment change
 - Bluetooth scanner use-after-free from background thread callbacks
@@ -24,10 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split button dropdown toggle, click-outside dismiss, and positioning
 - Wizard preset mode incorrectly enabled for secondary printers
 - Stale notification warnings after subject reinit
-- Android: WAKE_LOCK permission, USB sysfs guard, cache directory path, wizard localhost default
+- Android: SDL.h build failure on embedded targets, WAKE_LOCK permission, USB sysfs guard, cache directory path, wizard localhost default
+- Test runner false failures from teardown crashes and skipped test detection
 
 ### Changed
 - AMS spool edit actions consolidated into a split button ("Choose Spool")
+- ETA display rounds to 30s/10s buckets for stable readout
 
 ## [0.99.24] - 2026-04-07
 
