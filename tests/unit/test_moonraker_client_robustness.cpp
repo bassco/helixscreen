@@ -69,16 +69,17 @@ class MoonrakerRobustnessFixture {
     }
 
     ~MoonrakerRobustnessFixture() {
+        // Disconnect and let the event loop process the close. The sleep
+        // ensures any in-flight callbacks finish before we destroy the client,
+        // preventing ~MoonrakerClient from blocking on callback_lifecycle_mutex_.
         client_->disconnect();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         client_.reset();
         server_->stop();
         server_.reset();
 
         // On macOS CI, the kqueue-based event loop hangs in join() after
-        // WebSocket I/O. Leak the EventLoopThread permanently — never call
-        // stop() or join(). The heap-allocated shared_ptr prevents
-        // ~EventLoopThread from running, avoiding the hang.
-        //
+        // WebSocket I/O. Leak the EventLoopThread permanently to avoid hang.
         // NOLINTBEGIN(clang-analyzer-cplusplus.NewDeleteLeaks)
         (void)new std::shared_ptr<hv::EventLoopThread>(std::move(loop_thread_));
         // NOLINTEND(clang-analyzer-cplusplus.NewDeleteLeaks)
