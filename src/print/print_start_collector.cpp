@@ -10,6 +10,7 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "memory_monitor.h"
 #include "printer_detector.h"
+#include "thermal_rate_model.h"
 
 #include <spdlog/spdlog.h>
 
@@ -89,6 +90,15 @@ void PrintStartCollector::start() {
     spdlog::info("[PrintStartCollector] Baselines: layer={}, progress={}", baseline_layer_,
                  baseline_progress_);
     helix::MemoryMonitor::log_now("print_start_collector_start", spdlog::level::debug);
+
+    // Reset thermal rate models with current temperatures
+    {
+        auto& mgr = ThermalRateManager::instance();
+        int ext_temp = lv_subject_get_int(state_.get_active_extruder_temp_subject()) / 10;
+        int bed_temp = lv_subject_get_int(state_.get_bed_temp_subject()) / 10;
+        mgr.get_model("extruder").reset(static_cast<float>(ext_temp));
+        mgr.get_model("heater_bed").reset(static_cast<float>(bed_temp));
+    }
 
     // Load prediction history from config
     load_prediction_history();
@@ -755,6 +765,7 @@ void PrintStartCollector::update_eta_display() {
             std::chrono::duration_cast<std::chrono::seconds>(now - printing_state_start_).count());
     }
     state_.set_preprint_elapsed_seconds(total_elapsed);
+    feed_thermal_sample();
 
     // Re-check temp bucket — on printers like K1C, nozzle target starts at an
     // intermediate value (170°C during CX_ROUGH_G28) and only reaches the final
@@ -841,6 +852,28 @@ void PrintStartCollector::load_prediction_history() {
     }
 }
 
+void PrintStartCollector::feed_thermal_sample() {
+    auto& mgr = ThermalRateManager::instance();
+    auto now_ms =
+        static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now() - printing_state_start_)
+                                  .count());
+
+    PrintStartPhase phase;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        phase = current_phase_;
+    }
+
+    if (phase == PrintStartPhase::HEATING_BED || phase == PrintStartPhase::HEATING_NOZZLE) {
+        // Temps are in decidegrees (value * 10)
+        int ext_temp = lv_subject_get_int(state_.get_active_extruder_temp_subject());
+        int bed_temp = lv_subject_get_int(state_.get_bed_temp_subject());
+        mgr.get_model("extruder").record_sample(ext_temp / 10.0f, now_ms);
+        mgr.get_model("heater_bed").record_sample(bed_temp / 10.0f, now_ms);
+    }
+}
+
 void PrintStartCollector::save_prediction_entry() {
     // Compute per-phase durations from timestamps
     std::map<int, int> phase_durations;
@@ -857,11 +890,17 @@ void PrintStartCollector::save_prediction_entry() {
                   [](const auto& a, const auto& b) { return a.second < b.second; });
 
         for (size_t i = 0; i < sorted_phases.size(); ++i) {
+            int phase_int = sorted_phases[i].first;
+            // Heating phases tracked by ThermalRateModel, not predictor
+            if (phase_int == static_cast<int>(PrintStartPhase::HEATING_BED) ||
+                phase_int == static_cast<int>(PrintStartPhase::HEATING_NOZZLE)) {
+                continue;
+            }
             auto end_time = (i + 1 < sorted_phases.size()) ? sorted_phases[i + 1].second : now;
             int duration = static_cast<int>(
                 std::chrono::duration_cast<std::chrono::seconds>(end_time - sorted_phases[i].second)
                     .count());
-            phase_durations[sorted_phases[i].first] = duration;
+            phase_durations[phase_int] = duration;
             total_seconds += duration;
         }
     }
@@ -938,6 +977,7 @@ void PrintStartCollector::save_prediction_entry() {
             }
 
             cfg->set<json>(PREPRINT_HISTORY_PATH, entries_json);
+            ThermalRateManager::instance().save_to_config(*cfg);
             cfg->save();
 
             spdlog::debug("[PrintStartCollector] Saved prediction history ({} entries)",

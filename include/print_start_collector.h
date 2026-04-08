@@ -7,6 +7,7 @@
 #include "preprint_predictor.h"
 #include "print_start_profile.h"
 #include "printer_state.h"
+#include "thermal_rate_model.h"
 
 #include <atomic>
 #include <chrono>
@@ -248,6 +249,11 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
      * @brief Update ETA display from timer callback (main thread)
      */
     void update_eta_display();
+
+    /**
+     * @brief Feed current temperature readings to ThermalRateModel during heating phases
+     */
+    void feed_thermal_sample();
 
     /**
      * @brief Load prediction entries from helix::Config on start()
