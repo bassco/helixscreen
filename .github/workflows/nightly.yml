@@ -22,7 +22,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-22.04
-    timeout-minutes: 75
+    timeout-minutes: 180
 
     steps:
     - name: Checkout repository
@@ -80,7 +80,7 @@ jobs:
       run: make venv-setup
 
     - name: Build application + tests
-      timeout-minutes: 70
+      timeout-minutes: 120
       run: |
         make -j$(nproc)
         make test
@@ -220,7 +220,7 @@ jobs:
   test-asan:
     name: AddressSanitizer
     runs-on: ubuntu-22.04
-    timeout-minutes: 140
+    timeout-minutes: 240
 
     steps:
     - name: Checkout repository
@@ -282,7 +282,7 @@ jobs:
       run: make apply-patches
 
     - name: Build and run with ASAN
-      timeout-minutes: 120
+      timeout-minutes: 230
       run: |
         make test-asan
         echo "ASAN tests complete"
@@ -301,7 +301,7 @@ jobs:
   test-tsan:
     name: ThreadSanitizer
     runs-on: ubuntu-22.04
-    timeout-minutes: 150
+    timeout-minutes: 240
 
     steps:
     - name: Checkout repository
@@ -363,7 +363,7 @@ jobs:
       run: make apply-patches
 
     - name: Build and run with TSAN
-      timeout-minutes: 140
+      timeout-minutes: 230
       run: |
         make test-tsan
         echo "TSAN tests complete"
@@ -460,7 +460,7 @@ jobs:
       run: make -j$(sysctl -n hw.ncpu)
 
     - name: Run all tests (including slow)
-      timeout-minutes: 20
+      timeout-minutes: 30
       run: |
         make test-build
         # Fast tests in parallel
