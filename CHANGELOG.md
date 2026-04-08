@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.25] - 2026-04-07
+
+### Added
+- Bluetooth QR scanner support: discover, pair, and persist BT scanners from the scanner picker
+- RGBW LED support: white channel toggle, detection, and color swatch (#737)
+- Temperature graph legend chips displayed at 2x widget height or larger
+- Android Play Store readiness: AAB bundle build, back button handling, lifecycle pause/resume, and display diagnostics
+- Klipper shutdown state detection with error message in recovery dialog
+
+### Fixed
+- IFS native ZMOD presence detection and dirty flag race on AD5X (#716)
+- Spoolman active spool not syncing with Moonraker on assignment change
+- Bluetooth scanner use-after-free from background thread callbacks
+- Printer name discarded on manager overlay dismiss instead of saving
+- Split button dropdown toggle, click-outside dismiss, and positioning
+- Wizard preset mode incorrectly enabled for secondary printers
+- Stale notification warnings after subject reinit
+- Android: WAKE_LOCK permission, USB sysfs guard, cache directory path, wizard localhost default
+
+### Changed
+- AMS spool edit actions consolidated into a split button ("Choose Spool")
+
 ## [0.99.24] - 2026-04-07
 
 ### Added
@@ -2703,6 +2725,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.25]: https://github.com/prestonbrown/helixscreen/compare/v0.99.24...v0.99.25
 [0.99.24]: https://github.com/prestonbrown/helixscreen/compare/v0.99.23...v0.99.24
 [0.99.23]: https://github.com/prestonbrown/helixscreen/compare/v0.99.22...v0.99.23
 [0.99.22]: https://github.com/prestonbrown/helixscreen/compare/v0.99.21...v0.99.22
