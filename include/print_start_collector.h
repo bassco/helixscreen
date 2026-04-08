@@ -244,9 +244,10 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     // Duration-proportional progress weights (protected by state_mutex_)
     std::map<int, float> predicted_phase_weights_; ///< Phase -> fraction of total (0.0-1.0)
     float predicted_total_seconds_ = 0.0f;         ///< Total predicted pre-print duration
-    int start_ext_temp_ = 0; ///< Extruder temp at collector start (decideg/10)
-    int start_bed_temp_ = 0; ///< Bed temp at collector start (decideg/10)
-    int last_remaining_ = 0; ///< For monotonic bias
+    int start_ext_temp_ = 0;           ///< Extruder temp at collector start (decideg/10)
+    int start_bed_temp_ = 0;           ///< Bed temp at collector start (decideg/10)
+    int last_remaining_ = 0;           ///< For monotonic bias
+    bool fallback_completion_ = false; ///< True if COMPLETE was triggered by timeout fallback
 
     // LVGL timer for periodic ETA updates (main thread only)
     lv_timer_t* eta_timer_ = nullptr;

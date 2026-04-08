@@ -418,6 +418,11 @@ void PrintSelectDetailView::on_activate() {
         prep_manager_->scan_file_for_operations(current_filename_, current_path_);
     }
 
+    // Invalidate predictor cache so we pick up any new timing data from completed prints
+    if (prep_manager_) {
+        prep_manager_->invalidate_predictor_cache();
+    }
+
     // Calculate initial pre-print time estimate
     update_prep_time_label();
 

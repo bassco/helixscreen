@@ -96,6 +96,7 @@ void PrintStartCollector::start() {
     start_ext_temp_ = lv_subject_get_int(state_.get_active_extruder_temp_subject()) / 10;
     start_bed_temp_ = lv_subject_get_int(state_.get_bed_temp_subject()) / 10;
     last_remaining_ = 0;
+    fallback_completion_ = false;
 
     // Reset thermal rate models with current temperatures
     {
@@ -401,6 +402,7 @@ void PrintStartCollector::check_fallback_completion() {
     if (elapsed > FALLBACK_TIMEOUT && temps_near) {
         auto elapsed_sec = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
         spdlog::info("[PrintStartCollector] Fallback: timeout ({} sec)", elapsed_sec);
+        fallback_completion_ = true;
         update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
         return;
     }
@@ -1047,6 +1049,14 @@ float PrintStartCollector::compute_heating_fraction() const {
 }
 
 void PrintStartCollector::save_prediction_entry() {
+    // Don't save timing data from fallback timeout completions — phases may be
+    // interrupted or incomplete, producing misleading predictions
+    if (fallback_completion_) {
+        spdlog::debug(
+            "[PrintStartCollector] Skipping prediction save (fallback timeout completion)");
+        return;
+    }
+
     // Compute per-phase durations from timestamps
     std::map<int, int> phase_durations;
     auto now = std::chrono::steady_clock::now();
