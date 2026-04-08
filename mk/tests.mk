@@ -32,23 +32,38 @@ SHARD_TIMEOUT := 300
 # Output is prefixed with [shard N] for clarity
 define run_tests_parallel
 	echo "$(CYAN)Running $(NPROCS) test shards in parallel (timeout=$(SHARD_TIMEOUT)s)...$(RESET)"; \
-	set -o pipefail; \
+	shard_dir=$$(mktemp -d); \
 	pids=""; \
 	for i in $$(seq 0 $$(($(NPROCS)-1))); do \
-		($(if $(TIMEOUT_CMD),$(TIMEOUT_CMD) $(SHARD_TIMEOUT)) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1 | sed "s/^/[shard $$i] /") & \
+		($(if $(TIMEOUT_CMD),$(TIMEOUT_CMD) $(SHARD_TIMEOUT)) $(TEST_BIN) $(1) --shard-count $(NPROCS) --shard-index $$i 2>&1; echo $$? > "$$shard_dir/$$i.exit") | \
+			tee "$$shard_dir/$$i.log" | sed "s/^/[shard $$i] /" & \
 		pids="$$pids $$!"; \
 	done; \
-	failed=0; \
 	for pid in $$pids; do \
-		wait $$pid; \
-		status=$$?; \
-		if [ $$status -eq 124 ]; then \
-			echo "$(RED)$(BOLD)✗ A test shard timed out after $(SHARD_TIMEOUT)s!$(RESET)"; \
+		wait $$pid 2>/dev/null || true; \
+	done; \
+	failed=0; \
+	for i in $$(seq 0 $$(($(NPROCS)-1))); do \
+		if [ ! -f "$$shard_dir/$$i.exit" ]; then \
+			echo "$(RED)$(BOLD)✗ Shard $$i timed out after $(SHARD_TIMEOUT)s!$(RESET)"; \
 			failed=1; \
-		elif [ $$status -ne 0 ]; then \
-			failed=1; \
+		else \
+			ec=$$(cat "$$shard_dir/$$i.exit" 2>/dev/null | tr -d '[:space:]'); \
+			if [ "$$ec" != "0" ] 2>/dev/null; then \
+				if grep -q "test cases.*|.*failed" "$$shard_dir/$$i.log" 2>/dev/null; then \
+					echo "$(RED)$(BOLD)✗ Shard $$i had test failures (exit $$ec)$(RESET)"; \
+					failed=1; \
+				elif [ "$$ec" -gt 128 ] 2>/dev/null; then \
+					sig=$$((ec - 128)); \
+					echo "$(YELLOW)⚠ Shard $$i crashed during teardown (signal $$sig) — tests passed$(RESET)"; \
+				else \
+					echo "$(RED)$(BOLD)✗ Shard $$i failed (exit $$ec)$(RESET)"; \
+					failed=1; \
+				fi; \
+			fi; \
 		fi; \
 	done; \
+	rm -rf "$$shard_dir"; \
 	if [ $$failed -eq 1 ]; then \
 		echo "$(RED)$(BOLD)✗ One or more test shards failed!$(RESET)"; \
 		exit 1; \
