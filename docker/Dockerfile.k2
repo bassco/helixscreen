@@ -33,6 +33,9 @@ LABEL description="Cross-compilation toolchain for Creality K2 series (ARM Corte
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Configure apt to retry on transient network errors (deb.debian.org resets)
+RUN echo 'Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
+
 # Install build dependencies
 # Note: autotools required for building libnl submodule
 # NOTE: nlohmann-json is bundled with libhv (lib/libhv/cpputil/json.hpp)

@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auto-preheat for extrude/retract/purge when nozzle is cold with a known spool loaded
 - Android Play Store readiness: AAB bundle build, back button handling, lifecycle pause/resume, and display diagnostics
 - Klipper shutdown state detection with error message in recovery dialog
+- Bed mesh probe progress tracking during pre-print
+- Zero G Mercury One.1 and Nebula printer definitions
 
 ### Fixed
 - Bed observer use-after-free from missing SubjectLifetime token (#746)
@@ -36,10 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stale notification warnings after subject reinit
 - Android: SDL.h build failure on embedded targets, WAKE_LOCK permission, USB sysfs guard, cache directory path, wizard localhost default
 - Test runner false failures from teardown crashes and skipped test detection
+- 2D G-code renderer elevation angle mismatch with OrcaSlicer thumbnail camera
+- Navigation go_back re-activating closing overlay when animations disabled
+- Initial fan/sensor status lost on multi-printer due to queue ordering race (#740)
+- Fan speed percentage overlapping slider — moved inline to save vertical space
+- G-code render mode not restored on print status reactivation, thumbnail offset
+- Print status temperature card not fully clickable for temperature overlay
+- External spool info not centered in card when no AMS present
+- Pre-print predictor cache not invalidated on view open
+- Release builds failing from transient apt-get network errors in Docker toolchain images
 
 ### Changed
 - AMS spool edit actions consolidated into a split button ("Choose Spool")
 - ETA display rounds to 30s/10s buckets for stable readout
+- Print status temperature card is now fully clickable to open temperature overlay
 
 ## [0.99.24] - 2026-04-07
 
