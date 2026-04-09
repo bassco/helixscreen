@@ -147,39 +147,30 @@ void ActionPromptModal::create_buttons() {
     }
 
     bool has_footer_buttons = false;
-    int regular_button_count = 0;
+    bool has_regular_buttons = false;
+    int footer_button_count = 0;
 
     // Create buttons based on PromptData
     for (const auto& btn : prompt_data_.buttons) {
         if (btn.is_footer) {
             if (footer_container) {
+                // Add vertical divider between footer buttons
+                if (footer_button_count > 0) {
+                    lv_obj_t* divider = lv_obj_create(footer_container);
+                    lv_obj_set_size(divider, 1, lv_pct(100));
+                    lv_obj_set_style_bg_color(divider, theme_manager_get_color("divider"),
+                                              LV_PART_MAIN);
+                    lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, LV_PART_MAIN);
+                    lv_obj_set_style_pad_all(divider, 0, LV_PART_MAIN);
+                    lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
+                }
                 create_button(btn, footer_container);
                 has_footer_buttons = true;
+                footer_button_count++;
             }
         } else {
-            // Add vertical divider between regular buttons
-            if (regular_button_count > 0 && button_container) {
-                lv_obj_t* divider = lv_obj_create(button_container);
-                lv_obj_set_size(divider, 1, lv_pct(100));
-                lv_obj_set_style_bg_color(divider, theme_manager_get_color("divider"),
-                                          LV_PART_MAIN);
-                lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, LV_PART_MAIN);
-                lv_obj_set_style_pad_all(divider, 0, LV_PART_MAIN);
-                lv_obj_remove_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
-            }
             create_button(btn, button_container);
-            regular_button_count++;
-        }
-    }
-
-    // Show/hide regular button container and its divider
-    lv_obj_t* button_divider = find_widget("button_divider");
-    if (button_container) {
-        if (regular_button_count > 0) {
-            lv_obj_remove_flag(button_container, LV_OBJ_FLAG_HIDDEN);
-            if (button_divider) {
-                lv_obj_remove_flag(button_divider, LV_OBJ_FLAG_HIDDEN);
-            }
+            has_regular_buttons = true;
         }
     }
 
@@ -199,17 +190,28 @@ void ActionPromptModal::create_buttons() {
             lv_obj_add_flag(footer_divider, LV_OBJ_FLAG_HIDDEN);
         }
     }
+
+    // Hide button container if no regular buttons
+    if (!has_regular_buttons) {
+        lv_obj_add_flag(button_container, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 void ActionPromptModal::create_button(const PromptButton& btn, lv_obj_t* container) {
     lv_obj_t* button = lv_button_create(container);
 
-    // Both regular and footer buttons: full-width modal style
-    lv_obj_set_height(button, lv_pct(100));
-    lv_obj_set_flex_grow(button, 1);
-
-    // Apply button styling - no radius for flush modal look
-    lv_obj_set_style_radius(button, 0, LV_PART_MAIN);
+    if (btn.is_footer) {
+        // Footer buttons: full-width modal style with dividers
+        lv_obj_set_height(button, lv_pct(100));
+        lv_obj_set_flex_grow(button, 1);
+        lv_obj_set_style_radius(button, 0, LV_PART_MAIN);
+    } else {
+        // Regular buttons: content-sized with padding
+        lv_obj_set_size(button, LV_SIZE_CONTENT, theme_manager_get_spacing("space_xl") * 2);
+        lv_obj_set_style_pad_left(button, theme_manager_get_spacing("space_lg"), LV_PART_MAIN);
+        lv_obj_set_style_pad_right(button, theme_manager_get_spacing("space_lg"), LV_PART_MAIN);
+        lv_obj_set_style_radius(button, 8, LV_PART_MAIN);
+    }
     lv_obj_set_style_border_width(button, 0, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(button, 0, LV_PART_MAIN);
 
