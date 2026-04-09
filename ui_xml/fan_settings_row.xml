@@ -33,7 +33,7 @@
       <text_body name="name_label" text="$fan_name"
           clickable="false" event_bubble="true"/>
       <text_small name="object_label" text="$fan_object"
-          style_text_color="#text_secondary" style_opa="180"
+          style_text_color="#text_muted" style_opa="180"
           clickable="false" event_bubble="true"/>
     </lv_obj>
 

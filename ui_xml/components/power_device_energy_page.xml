@@ -23,17 +23,17 @@
 
     <!-- Voltage (V) -->
     <text_tiny name="energy_voltage_label" text="-- V"
-              style_text_color="#text_secondary" style_text_align="center"
+              style_text_color="#text_muted" style_text_align="center"
               width="100%" clickable="false" event_bubble="true"/>
 
     <!-- Current (A) -->
     <text_tiny name="energy_current_label" text="-- A"
-              style_text_color="#text_secondary" style_text_align="center"
+              style_text_color="#text_muted" style_text_align="center"
               width="100%" clickable="false" event_bubble="true"/>
 
     <!-- Energy (kWh) -->
     <text_tiny name="energy_energy_label" text="-- kWh"
-              style_text_color="#text_secondary" style_text_align="center"
+              style_text_color="#text_muted" style_text_align="center"
               width="100%" clickable="false" event_bubble="true"/>
   </view>
 </component>
