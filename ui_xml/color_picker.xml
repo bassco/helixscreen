@@ -471,22 +471,8 @@
     <lv_obj flex_grow="1" scrollable="false">
       <bind_flag_if_not_eq subject="ui_breakpoint" flag="hidden" ref_value="0"/>
     </lv_obj>
-    <!-- Horizontal divider above buttons -->
-    <divider_horizontal/>
-    <!-- Action buttons row -->
-    <lv_obj width="100%" height="#button_height" style_pad_all="0" style_pad_gap="0" flex_flow="row" scrollable="false">
-      <!-- Cancel button -->
-      <ui_button name="btn_cancel"
-                 height="100%" text="Cancel" translation_tag="Cancel" flex_grow="1" variant="ghost" focusable="false">
-        <event_cb trigger="clicked" callback="color_picker_cancel_cb"/>
-      </ui_button>
-      <!-- Vertical divider -->
-      <divider_vertical/>
-      <!-- Select button -->
-      <ui_button name="btn_select"
-                 height="100%" text="Select" translation_tag="Select" flex_grow="1" variant="ghost" focusable="false">
-        <event_cb trigger="clicked" callback="color_picker_select_cb"/>
-      </ui_button>
-    </lv_obj>
+    <!-- Action buttons row using standard modal component -->
+    <modal_button_row secondary_text="Cancel" secondary_tag="Cancel" secondary_callback="color_picker_cancel_cb"
+                      primary_text="Select" primary_tag="Select" primary_callback="color_picker_select_cb"/>
   </view>
 </component>
