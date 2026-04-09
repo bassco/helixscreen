@@ -101,8 +101,7 @@ struct ServiceRecord {
  */
 class MdnsDiscovery::Impl {
   public:
-    explicit Impl(std::string service_type)
-        : service_type_(std::move(service_type)) {}
+    explicit Impl(std::string service_type) : service_type_(std::move(service_type)) {}
     ~Impl() {
         stop();
     }
@@ -381,6 +380,19 @@ class MdnsDiscovery::Impl {
                     if (it == new_printers.end()) {
                         new_printers.push_back(printer);
                     }
+                }
+            }
+
+            // Prune stale incomplete records that failed to resolve across
+            // multiple query cycles.  Complete records and the address cache
+            // are kept so that services still on the network are recognised
+            // immediately on the next cycle without waiting for all DNS
+            // record types to arrive again.
+            for (auto it = pending_records_.begin(); it != pending_records_.end();) {
+                if (!it->second.is_complete()) {
+                    it = pending_records_.erase(it);
+                } else {
+                    ++it;
                 }
             }
         }
