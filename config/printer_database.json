@@ -4546,7 +4546,7 @@
       "id": "zerog_nebula_370",
       "name": "Zero G Nebula 370",
       "manufacturer": "Zero G",
-      "image": "zerog-nebula.webp",
+      "image": "zerog-nebula-370.webp",
       "heuristics": [
         {
           "type": "kinematics_match",
