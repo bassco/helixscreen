@@ -1967,8 +1967,10 @@ void FilamentPanel::execute_load() {
     // macro is wrong — it just runs the extruder motor endlessly without going
     // through the backend's tool change sequence (which includes cut/purge).
     // Redirect the user to the AMS panel where they can select a specific slot.
+    // Exception: bypass mode means the user is feeding filament directly, so
+    // treat it like no AMS and fall through to the standard macro / G-code path.
     AmsBackend* backend = AmsState::instance().get_backend();
-    if (backend) {
+    if (backend && !backend->is_bypass_active()) {
         spdlog::info("[{}] AMS backend active ({}), redirecting to AMS panel for slot selection",
                      get_name(), ams_type_to_string(backend->get_type()));
         NOTIFY_INFO(lv_tr("Select a filament slot to load"));
@@ -2047,8 +2049,9 @@ void FilamentPanel::execute_load() {
 void FilamentPanel::execute_unload() {
     // When an AMS backend is active, route unload through it so the backend's
     // tool change sequence runs (retract, cut, purge) instead of raw extrusion.
+    // Exception: bypass mode means direct filament feed — use standard macro path.
     AmsBackend* backend = AmsState::instance().get_backend();
-    if (backend) {
+    if (backend && !backend->is_bypass_active()) {
         AmsSystemInfo sys_info = backend->get_system_info();
         if (!sys_info.filament_loaded && sys_info.current_slot < 0) {
             NOTIFY_WARNING(lv_tr("No filament loaded to unload"));
