@@ -779,6 +779,7 @@ void PrintStartCollector::update_phase(PrintStartPhase phase, const char* messag
         entering_mesh =
             (phase == PrintStartPhase::BED_MESH && current_phase_ != PrintStartPhase::BED_MESH);
         current_phase_ = phase;
+        detected_phases_.insert(phase); // Track for progress calculation
 
         // Record phase enter timestamp (skip IDLE and INITIALIZING)
         int phase_int = static_cast<int>(phase);
