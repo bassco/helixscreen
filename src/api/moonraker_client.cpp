@@ -19,6 +19,7 @@
 
 #include "abort_manager.h"
 #include "app_globals.h"
+#include "helix_version.h"
 #include "printer_state.h"
 #include "system/telemetry_manager.h"
 
@@ -730,6 +731,7 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
 
     // Connect
     http_headers headers;
+    headers["User-Agent"] = std::string("HelixScreen/") + HELIX_VERSION;
     return open(url, headers);
 }
 
