@@ -76,7 +76,7 @@ std::vector<PreprintEntry> PreprintPredictor::get_entries() const {
 }
 
 bool PreprintPredictor::has_predictions() const {
-    return true;
+    return !entries_.empty();
 }
 
 std::vector<double> PreprintPredictor::compute_weights() const {
