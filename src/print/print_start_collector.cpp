@@ -1215,34 +1215,34 @@ void PrintStartCollector::compute_predicted_weights() {
     if (bed_heat > 0)
         durations[static_cast<int>(PrintStartPhase::HEATING_BED)] = bed_heat;
 
-    // Non-heating phases from predictor
-    std::map<int, int> pred_phases;
+    // Non-heating phases from predictor + write predicted weights under lock
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
-        pred_phases = predictor_.predicted_phases();
-    }
-    for (const auto& [phase, secs] : pred_phases) {
-        if (phase != static_cast<int>(PrintStartPhase::HEATING_BED) &&
-            phase != static_cast<int>(PrintStartPhase::HEATING_NOZZLE)) {
-            durations[phase] = static_cast<float>(secs);
+        auto pred_phases = predictor_.predicted_phases();
+
+        for (const auto& [phase, secs] : pred_phases) {
+            if (phase != static_cast<int>(PrintStartPhase::HEATING_BED) &&
+                phase != static_cast<int>(PrintStartPhase::HEATING_NOZZLE)) {
+                durations[phase] = static_cast<float>(secs);
+            }
         }
-    }
 
-    // Ensure homing has at least a default
-    int homing = static_cast<int>(PrintStartPhase::HOMING);
-    if (durations.find(homing) == durations.end()) {
-        durations[homing] = 20.0f;
-    }
+        // Ensure homing has at least a default
+        int homing = static_cast<int>(PrintStartPhase::HOMING);
+        if (durations.find(homing) == durations.end()) {
+            durations[homing] = 20.0f;
+        }
 
-    predicted_total_seconds_ = 0.0f;
-    for (const auto& [_, dur] : durations) {
-        predicted_total_seconds_ += dur;
-    }
+        predicted_total_seconds_ = 0.0f;
+        for (const auto& [_, dur] : durations) {
+            predicted_total_seconds_ += dur;
+        }
 
-    predicted_phase_weights_.clear();
-    if (predicted_total_seconds_ > 0.0f) {
-        for (const auto& [phase, dur] : durations) {
-            predicted_phase_weights_[phase] = dur / predicted_total_seconds_;
+        predicted_phase_weights_.clear();
+        if (predicted_total_seconds_ > 0.0f) {
+            for (const auto& [phase, dur] : durations) {
+                predicted_phase_weights_[phase] = dur / predicted_total_seconds_;
+            }
         }
     }
 
@@ -1326,10 +1326,11 @@ void PrintStartCollector::save_prediction_entry() {
     // Compute per-phase durations from timestamps
     std::map<int, int> phase_durations;
     auto now = std::chrono::steady_clock::now();
-    int total_seconds = 0;
+    std::chrono::steady_clock::time_point start_time;
 
     {
         std::lock_guard<std::mutex> lock(state_mutex_);
+        start_time = printing_state_start_;
 
         // Build sorted list of phase enter times
         std::vector<std::pair<int, std::chrono::steady_clock::time_point>> sorted_phases(
@@ -1349,7 +1350,6 @@ void PrintStartCollector::save_prediction_entry() {
                 std::chrono::duration_cast<std::chrono::seconds>(end_time - sorted_phases[i].second)
                     .count());
             phase_durations[phase_int] = duration;
-            total_seconds += duration;
         }
 
         // --- Diagnostic: predicted vs actual per-phase ---
@@ -1371,9 +1371,13 @@ void PrintStartCollector::save_prediction_entry() {
         return;
     }
 
+    // Use wall-clock elapsed time as total — includes heating phases omitted from phase_durations
+    int wall_clock_total = static_cast<int>(
+        std::chrono::duration_cast<std::chrono::seconds>(now - start_time).count());
+
     // Cold (1) vs Warm (2) based on bed temp at start
     helix::PreprintEntry entry;
-    entry.total_seconds = total_seconds;
+    entry.total_seconds = wall_clock_total;
     entry.timestamp = static_cast<int64_t>(std::time(nullptr));
     entry.phase_durations = std::move(phase_durations);
     entry.temp_bucket = (start_bed_temp_ >= 40) ? 2 : 1;
