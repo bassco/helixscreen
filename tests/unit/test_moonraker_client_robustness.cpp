@@ -90,7 +90,6 @@ class MoonrakerRobustnessFixture {
     std::unique_ptr<MockWebSocketServer> server_;
     std::shared_ptr<hv::EventLoopThread> loop_thread_;
     std::unique_ptr<MoonrakerClient> client_;
-
 };
 
 // ============================================================================
@@ -725,7 +724,8 @@ TEST_CASE_METHOD(MoonrakerRobustnessFixture,
 // Stress Tests
 // ============================================================================
 
-TEST_CASE("MoonrakerClient stress test - sustained load", "[connection][edge][stress][.slow]") {
+TEST_CASE("MoonrakerClient stress test - sustained load",
+          "[connection][edge][stress][eventloop][.slow]") {
     SECTION("1000 rapid-fire requests") {
         auto loop = std::make_shared<hv::EventLoopThread>();
         loop->start();

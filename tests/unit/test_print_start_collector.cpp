@@ -1778,3 +1778,99 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
 
     REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
 }
+
+// ============================================================================
+// PREDICTION SAVE/LOAD TESTS
+// ============================================================================
+
+TEST_CASE("PreprintPredictor load/save round-trip preserves entries",
+          "[print][preprint][persistence]") {
+    helix::PreprintPredictor predictor;
+
+    helix::PreprintEntry entry1;
+    entry1.total_seconds = 300;
+    entry1.timestamp = 1000;
+    entry1.temp_bucket = 1;
+    entry1.phase_durations = {{2, 15}, {7, 200}};
+
+    helix::PreprintEntry entry2;
+    entry2.total_seconds = 320;
+    entry2.timestamp = 2000;
+    entry2.temp_bucket = 1;
+    entry2.phase_durations = {{2, 18}, {7, 210}};
+
+    std::vector<helix::PreprintEntry> entries = {entry1, entry2};
+    predictor.load_entries(entries, 1); // cold bucket
+
+    auto loaded = predictor.get_entries();
+    REQUIRE(loaded.size() == 2);
+    REQUIRE(loaded[0].total_seconds == 300);
+    REQUIRE(loaded[1].total_seconds == 320);
+    REQUIRE(loaded[0].phase_durations.at(7) == 200);
+    REQUIRE(loaded[1].phase_durations.at(7) == 210);
+}
+
+TEST_CASE("PreprintPredictor FIFO trims to MAX_ENTRIES", "[print][preprint][persistence]") {
+    helix::PreprintPredictor predictor;
+
+    std::vector<helix::PreprintEntry> entries;
+    for (int i = 0; i < 15; ++i) {
+        helix::PreprintEntry e;
+        e.total_seconds = 100 + i;
+        e.timestamp = i;
+        e.temp_bucket = 1;
+        entries.push_back(e);
+    }
+
+    predictor.load_entries(entries, 1);
+    auto loaded = predictor.get_entries();
+    REQUIRE(loaded.size() == static_cast<size_t>(helix::PreprintPredictor::MAX_ENTRIES));
+    // Should keep the NEWEST entries (highest index = highest timestamps)
+    REQUIRE(loaded.front().total_seconds == 105); // 15 - 10 = index 5
+}
+
+TEST_CASE("PreprintPredictor bucket filtering separates cold and warm",
+          "[print][preprint][persistence]") {
+    helix::PreprintEntry cold_entry;
+    cold_entry.total_seconds = 300;
+    cold_entry.timestamp = 1000;
+    cold_entry.temp_bucket = 1; // cold
+
+    helix::PreprintEntry warm_entry;
+    warm_entry.total_seconds = 150;
+    warm_entry.timestamp = 2000;
+    warm_entry.temp_bucket = 2; // warm
+
+    helix::PreprintEntry legacy_entry;
+    legacy_entry.total_seconds = 250;
+    legacy_entry.timestamp = 500;
+    legacy_entry.temp_bucket = 0; // legacy -- included in both
+
+    std::vector<helix::PreprintEntry> all = {cold_entry, warm_entry, legacy_entry};
+
+    SECTION("Cold bucket includes cold + legacy") {
+        helix::PreprintPredictor predictor;
+        predictor.load_entries(all, 1);
+        REQUIRE(predictor.get_entries().size() == 2);
+    }
+
+    SECTION("Warm bucket includes warm + legacy") {
+        helix::PreprintPredictor predictor;
+        predictor.load_entries(all, 2);
+        REQUIRE(predictor.get_entries().size() == 2);
+    }
+}
+
+TEST_CASE("PreprintPredictor has_predictions reflects actual entries", "[print][preprint]") {
+    helix::PreprintPredictor predictor;
+    REQUIRE_FALSE(predictor.has_predictions());
+
+    helix::PreprintEntry entry;
+    entry.total_seconds = 200;
+    entry.timestamp = 1000;
+    entry.temp_bucket = 1;
+    entry.phase_durations = {{2, 10}, {7, 180}};
+    predictor.add_entry(entry);
+
+    REQUIRE(predictor.has_predictions());
+}
