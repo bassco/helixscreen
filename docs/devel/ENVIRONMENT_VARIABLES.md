@@ -8,7 +8,7 @@ This document provides a comprehensive reference for all environment variables u
 |----------|-------|--------|
 | [Display & Backend](#display--backend-configuration) | 14 | `HELIX_` |
 | [Touch Calibration](#touch-calibration) | 7 | `HELIX_TOUCH_*` |
-| [G-Code Viewer](#g-code-viewer) | 3 | `HELIX_` |
+| [G-Code Viewer](#g-code-viewer) | 4 | `HELIX_` |
 | [Bed Mesh](#bed-mesh) | 1 | `HELIX_` |
 | [Mock & Testing](#mock--testing) | 14 | `HELIX_MOCK_*` |
 | [UI Automation](#ui-automation) | 3 | `HELIX_AUTO_*` |
@@ -514,6 +514,30 @@ HELIX_GCODE_STREAMING=auto ./build/bin/helix-screen --test -p print-status -vv
 **Related config options:**
 - `gcode_viewer.streaming_mode`: `"auto"`, `"on"`, or `"off"`
 - `gcode_viewer.streaming_threshold_percent`: 1-90 (default 40)
+
+### `HELIX_SSAO`
+
+Control enhanced 2D G-code shading. When enabled (default), the 2D layer renderer applies per-segment directional lighting, anti-aliased line drawing (Wu's algorithm), and a silhouette outline post-process for improved depth perception.
+
+| Property | Value |
+|----------|-------|
+| **Values** | `0` (disable), unset (enabled by default) |
+| **Default** | Enabled |
+| **File** | `src/ui/ui_gcode_viewer.cpp`, `src/rendering/gcode_layer_renderer.cpp` |
+
+```bash
+# Disable enhanced shading (use original flat rendering)
+HELIX_SSAO=0 ./build/bin/helix-screen --test -p gcode-test -vv
+```
+
+**What it adds:**
+- **Normal-based directional shading:** Each extrusion segment is shaded based on its surface normal relative to a fixed upper-left light source, creating visible surface variation
+- **Anti-aliased lines:** Wu's line algorithm replaces Bresenham for smoother edges
+- **Silhouette outline:** 1px darkened border on the alpha boundary of the model for edge definition
+
+Performance impact is minimal (~2ms post-process pass for the outline, negligible overhead for AA lines and normal shading).
+
+Can also be toggled programmatically via `ui_gcode_viewer_set_ssao_enabled()`.
 
 ---
 
