@@ -695,8 +695,8 @@ void PrintStartCollector::check_phase_patterns(const std::string& line) {
             } else {
                 update_phase(match.phase, match.message.c_str());
             }
-            spdlog::debug("[PrintStartCollector] Detected phase: {} (progress: {}%)",
-                          static_cast<int>(match.phase), calculate_progress());
+            spdlog::debug("[PrintStartCollector] Detected phase: {}",
+                          static_cast<int>(match.phase));
         }
     }
 }
@@ -1396,7 +1396,7 @@ void PrintStartCollector::save_prediction_entry() {
         auto all_entries = helix::PreprintPredictor::load_entries_from_config();
         std::vector<helix::PreprintEntry> merged;
         for (const auto& e : all_entries) {
-            if (e.temp_bucket != temp_bucket && e.temp_bucket != 0) {
+            if (e.temp_bucket != temp_bucket) {
                 merged.push_back(e);
             }
         }
