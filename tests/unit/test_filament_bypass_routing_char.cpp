@@ -191,7 +191,17 @@ TEST_CASE("Filament unload routing", "[filament][bypass][char]") {
         REQUIRE(sm.resolve_unload() == Route::BLOCKED_NO_LOAD);
     }
 
-    SECTION("AMS active, bypass ON — still routes through AMS backend") {
+    SECTION("AMS active, slot selected but no filament — proceeds to backend unload") {
+        // Filament retracted partway: slot is selected but nothing in the extruder.
+        // Production code only blocks when BOTH filament_loaded==false AND current_slot<0.
+        sm.ams.backend_active = true;
+        sm.ams.filament_loaded = false;
+        sm.ams.current_slot = 2;
+
+        REQUIRE(sm.resolve_unload() == Route::AMS_UNLOAD);
+    }
+
+    SECTION("AMS active, bypass ON, filament loaded — routes through AMS backend") {
         // Backend handles bypass unload internally (e.g. AFC calls user's
         // unload_filament macro when bypass is enabled)
         sm.ams.backend_active = true;
@@ -199,6 +209,16 @@ TEST_CASE("Filament unload routing", "[filament][bypass][char]") {
         sm.ams.current_slot = -2; // bypass slot
 
         REQUIRE(sm.resolve_unload() == Route::AMS_UNLOAD);
+    }
+
+    SECTION("AMS active, bypass ON, no filament — blocked") {
+        // current_slot == -2 satisfies < 0, so with filament_loaded == false
+        // the user correctly sees "No filament loaded to unload"
+        sm.ams.backend_active = true;
+        sm.ams.filament_loaded = false;
+        sm.ams.current_slot = -2; // bypass slot
+
+        REQUIRE(sm.resolve_unload() == Route::BLOCKED_NO_LOAD);
     }
 }
 
