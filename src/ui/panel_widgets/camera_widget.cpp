@@ -343,6 +343,12 @@ void CameraWidget::stop_stream() {
         if (camera_image_) {
             lv_image_set_src(camera_image_, nullptr);
         }
+        // Wait for any in-flight render to complete. The render thread may
+        // still be reading from the old draw buffer even after we cleared the
+        // image source — it captured the buffer pointer before our set_src(nullptr).
+        // Without this fence, stop() → free_buffers() frees memory the render
+        // thread is actively blending from → SIGSEGV in argb8888_image_blend (#749).
+        lv_draw_wait_for_finish();
     }
 
     stream_->stop();

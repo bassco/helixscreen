@@ -8,6 +8,7 @@
 #include "ui_event_safety.h"
 #include "ui_notification.h"
 #include "ui_subject_registry.h"
+#include "ui_timer_guard.h"
 #include "ui_update_queue.h"
 #include "ui_wizard.h"
 
@@ -991,10 +992,11 @@ void WizardConnectionStep::cleanup() {
         mdns_discovery_->stop_discovery();
     }
 
-    // Cancel any pending auto-probe timer
-    // Guard against LVGL shutdown - timer may already be destroyed
+    // Cancel any pending auto-probe timer.
+    // Use lv_timer_cancel_safe to avoid corrupting LVGL's timer linked list
+    // when cleanup is called from within lv_timer_handler (via click event).
     if (auto_probe_timer_ && lv_is_initialized()) {
-        lv_timer_delete(auto_probe_timer_);
+        helix::ui::lv_timer_cancel_safe(auto_probe_timer_);
         auto_probe_timer_ = nullptr;
     }
 

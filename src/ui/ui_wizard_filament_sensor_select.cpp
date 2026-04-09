@@ -5,6 +5,7 @@
 
 #include "ui_error_reporting.h"
 #include "ui_notification.h"
+#include "ui_timer_guard.h"
 #include "ui_wizard.h"
 #include "ui_wizard_helpers.h"
 
@@ -359,9 +360,11 @@ void WizardFilamentSensorSelectStep::auto_configure_single_sensor() {
 void WizardFilamentSensorSelectStep::cleanup() {
     spdlog::debug("[{}] Cleaning up resources", get_name());
 
-    // Cancel pending refresh timer to prevent stale access after navigation
+    // Cancel pending refresh timer to prevent stale access after navigation.
+    // Use lv_timer_cancel_safe to avoid corrupting LVGL's timer linked list
+    // when cleanup is called from within lv_timer_handler (via click event).
     if (refresh_timer_) {
-        lv_timer_delete(refresh_timer_);
+        helix::ui::lv_timer_cancel_safe(refresh_timer_);
         refresh_timer_ = nullptr;
     }
 

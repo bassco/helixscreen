@@ -6,6 +6,25 @@
 namespace helix::ui {
 
 /**
+ * @brief Safely cancel an LVGL timer without modifying the timer linked list.
+ *
+ * Calling lv_timer_delete() from within lv_timer_handler iteration (e.g., during
+ * input event processing in a click callback) can corrupt the linked list and
+ * cause SIGSEGV in node_set_next/lv_ll_remove (#750, #751).
+ *
+ * This function neuters the timer (nulls callback, sets repeat_count=0) so that
+ * lv_timer_handler auto-deletes it safely on the next pass.
+ */
+inline void lv_timer_cancel_safe(lv_timer_t* timer) {
+    if (!timer || !lv_is_initialized())
+        return;
+    lv_timer_set_cb(timer, nullptr);
+    lv_timer_set_repeat_count(timer, 0);
+    lv_timer_set_period(timer, 0);
+    lv_timer_reset(timer);
+}
+
+/**
  * @brief RAII wrapper for LVGL timers - automatically deletes timer on destruction
  *
  * Handles the edge case where LVGL may be deinitialized before the timer owner,
@@ -39,7 +58,7 @@ class LvglTimerGuard {
 
     void reset(lv_timer_t* timer = nullptr) {
         if (timer_ && lv_is_initialized()) {
-            lv_timer_delete(timer_);
+            lv_timer_cancel_safe(timer_);
         }
         timer_ = timer;
     }

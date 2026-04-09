@@ -865,13 +865,13 @@ static void ui_wizard_load_screen(int step) {
         {
             auto* step = get_wizard_filament_sensor_select_step();
             step->refresh_timer_ = lv_timer_create(
-                [](lv_timer_t* timer) {
+                [](lv_timer_t*) {
                     auto* s = get_wizard_filament_sensor_select_step();
                     s->refresh_timer_ = nullptr;
                     s->refresh();
-                    lv_timer_delete(timer);
                 },
                 1500, nullptr);
+            lv_timer_set_repeat_count(step->refresh_timer_, 1);
         }
         break;
 
