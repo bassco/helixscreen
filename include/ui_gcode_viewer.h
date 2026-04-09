@@ -478,6 +478,24 @@ void ui_gcode_viewer_set_ghost_opacity(lv_obj_t* obj, lv_opa_t opacity);
 void ui_gcode_viewer_set_ghost_mode(lv_obj_t* obj, int mode);
 
 /**
+ * @brief Enable/disable screen-space ambient occlusion post-processing
+ * @param obj Viewer widget
+ * @param enable true to enable SSAO
+ *
+ * Applies a post-processing pass that darkens pixels in concavities for
+ * improved depth perception. Only active in FRONT view when cache is complete.
+ * Toggle with HELIX_SSAO=1 environment variable for testing.
+ */
+void ui_gcode_viewer_set_ssao_enabled(lv_obj_t* obj, bool enable);
+
+/**
+ * @brief Check if SSAO is enabled
+ * @param obj Viewer widget
+ * @return true if SSAO post-processing is enabled
+ */
+bool ui_gcode_viewer_get_ssao_enabled(lv_obj_t* obj);
+
+/**
  * @brief Set vertical content offset (shifts render center up/down)
  * @param obj Viewer widget
  * @param offset_percent Offset as percentage of canvas height (-1.0 to 1.0)

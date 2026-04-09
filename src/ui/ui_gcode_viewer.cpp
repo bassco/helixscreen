@@ -97,6 +97,13 @@ class GCodeViewerState {
             render_mode_ = GcodeViewerRenderMode::Auto;
             spdlog::debug("[GCode Viewer] Default render mode: Auto");
         }
+
+        // Check HELIX_SSAO env var for SSAO post-processing
+        const char* ssao_env = std::getenv("HELIX_SSAO");
+        if (ssao_env && std::strcmp(ssao_env, "1") == 0) {
+            ssao_enabled_at_init_ = true;
+            spdlog::info("[GCode Viewer] HELIX_SSAO=1: SSAO post-processing enabled");
+        }
     }
 
     ~GCodeViewerState() {
@@ -251,6 +258,9 @@ class GCodeViewerState {
 
     /// Content offset (stored to apply when 2D renderer is lazily created)
     float content_offset_y_percent_{0.0f};
+
+    /// SSAO enabled at init (from HELIX_SSAO env var, applied when 2D renderer is created)
+    bool ssao_enabled_at_init_{false};
 
     /// Render mode setting - set by constructor based on HELIX_GCODE_MODE env var
     /// Render mode setting - configurable via HELIX_GCODE_MODE env var
@@ -444,6 +454,11 @@ static void gcode_viewer_draw_cb(lv_event_t* e) {
             // Apply any stored content offset
             if (st->content_offset_y_percent_ != 0.0f) {
                 st->layer_renderer_2d_->set_content_offset_y(st->content_offset_y_percent_);
+            }
+
+            // Apply SSAO setting from env var or prior API call
+            if (st->ssao_enabled_at_init_) {
+                st->layer_renderer_2d_->set_ssao_enabled(true);
             }
 
             spdlog::debug("[GCode Viewer] Initialized 2D layer renderer ({}x{})", width, height);
@@ -1212,6 +1227,11 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                                       st->content_offset_y_percent_ * 100);
                     }
 
+                    // Apply SSAO setting
+                    if (st->ssao_enabled_at_init_) {
+                        st->layer_renderer_2d_->set_ssao_enabled(true);
+                    }
+
                     st->viewer_state = GcodeViewerState::Loaded;
                     st->first_render = false;
 
@@ -1682,6 +1702,10 @@ void ui_gcode_viewer_set_render_mode(lv_obj_t* obj, GcodeViewerRenderMode mode) 
         int height = lv_area_get_height(&coords);
         st->layer_renderer_2d_->set_canvas_size(width, height);
         st->layer_renderer_2d_->auto_fit();
+
+        if (st->ssao_enabled_at_init_) {
+            st->layer_renderer_2d_->set_ssao_enabled(true);
+        }
     }
 
     lv_obj_invalidate(obj);
@@ -2176,6 +2200,29 @@ void ui_gcode_viewer_set_ghost_mode(lv_obj_t* obj, int mode) {
 
     st->renderer_->set_ghost_render_mode(render_mode);
     lv_obj_invalidate(obj);
+}
+
+void ui_gcode_viewer_set_ssao_enabled(lv_obj_t* obj, bool enable) {
+    gcode_viewer_state_t* st = get_state(obj);
+    if (!st)
+        return;
+
+    if (st->layer_renderer_2d_) {
+        st->layer_renderer_2d_->set_ssao_enabled(enable);
+    }
+    st->ssao_enabled_at_init_ = enable;
+    lv_obj_invalidate(obj);
+}
+
+bool ui_gcode_viewer_get_ssao_enabled(lv_obj_t* obj) {
+    gcode_viewer_state_t* st = get_state(obj);
+    if (!st)
+        return false;
+
+    if (st->layer_renderer_2d_) {
+        return st->layer_renderer_2d_->get_ssao_enabled();
+    }
+    return st->ssao_enabled_at_init_;
 }
 
 void ui_gcode_viewer_set_content_offset_y(lv_obj_t* obj, float offset_percent) {

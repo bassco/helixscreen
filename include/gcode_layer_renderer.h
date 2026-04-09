@@ -219,6 +219,26 @@ class GCodeLayerRenderer {
     }
 
     /**
+     * @brief Enable/disable screen-space ambient occlusion post-processing
+     * @param enable true to enable SSAO (default: OFF)
+     *
+     * When enabled in FRONT view, applies a post-processing pass to the solid
+     * cache buffer that darkens pixels in concavities (corners, crevices) for
+     * improved depth perception. Only applied when the cache is fully rendered.
+     *
+     * Toggle via HELIX_SSAO=1 environment variable for testing.
+     */
+    void set_ssao_enabled(bool enable) {
+        ssao_enabled_.store(enable, std::memory_order_relaxed);
+        ssao_cache_valid_ = false;
+    }
+
+    /** @brief Check if SSAO is enabled */
+    bool get_ssao_enabled() const {
+        return ssao_enabled_.load(std::memory_order_relaxed);
+    }
+
+    /**
      * @brief Enable/disable ghost mode (shows faded preview of remaining layers)
      * @param enable true to enable ghost mode (default: ON)
      */
@@ -512,6 +532,7 @@ class GCodeLayerRenderer {
     std::atomic<bool> show_extrusions_{true};
     std::atomic<bool> show_supports_{true};
     std::atomic<bool> depth_shading_{true}; // Enabled by default for 3D-like appearance
+    std::atomic<bool> ssao_enabled_{false}; // Screen-space AO post-processing
     std::atomic<int> view_mode_{static_cast<int>(ViewMode::FRONT)}; // Default to front view
 
     // Colors
@@ -552,6 +573,12 @@ class GCodeLayerRenderer {
     int cached_up_to_layer_ = -1; // Highest layer rendered in cache
     int cached_width_ = 0;        // Dimensions cache was built for
     int cached_height_ = 0;
+
+    // SSAO post-processing buffer - copy of cache with ambient occlusion applied
+    lv_draw_buf_t* ssao_buf_ = nullptr;
+    int ssao_cached_width_ = 0;
+    int ssao_cached_height_ = 0;
+    bool ssao_cache_valid_ = false;
 
     // Ghost cache - all layers rendered once at reduced opacity
     // Note: We only use draw buffers (no canvas widgets) to avoid clip area
@@ -599,6 +626,12 @@ class GCodeLayerRenderer {
     void render_layers_to_cache(int from_layer, int to_layer);
     void blit_cache(lv_layer_t* target);
     void destroy_cache();
+
+    // SSAO post-processing
+    void ensure_ssao_cache(int width, int height);
+    void apply_ssao();
+    void blit_ssao_cache(lv_layer_t* target);
+    void destroy_ssao_cache();
 
     // Ghost cache methods (LVGL-based, for main thread progressive rendering)
     void ensure_ghost_cache(int width, int height);
@@ -655,6 +688,15 @@ class GCodeLayerRenderer {
 
     /// Blend a pixel directly into the solid LVGL cache buffer
     void blend_pixel_solid(int x, int y, uint32_t color);
+
+    /// Blend a pixel with coverage (0-255) into solid cache buffer (for AA)
+    void blend_pixel_solid_alpha(int x, int y, uint32_t color, uint8_t coverage);
+
+    /// Anti-aliased line drawing (Wu's algorithm) to solid cache buffer
+    void draw_line_aa_solid(int x0, int y0, int x1, int y1, uint32_t color);
+
+    /// Thick anti-aliased line drawing (parallel Wu's lines) to solid cache
+    void draw_thick_line_aa_solid(int x0, int y0, int x1, int y1, uint32_t color, int width);
 
     /// Compute line width in pixels from extrusion width metadata and current scale
     int get_extrusion_pixel_width() const;

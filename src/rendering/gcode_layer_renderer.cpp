@@ -79,6 +79,7 @@ GCodeLayerRenderer::~GCodeLayerRenderer() {
     cancel_background_ghost_render();
 
     destroy_cache();
+    destroy_ssao_cache();
     destroy_ghost_cache();
 }
 
@@ -287,7 +288,8 @@ void GCodeLayerRenderer::auto_fit() {
             auto segments = streaming_controller_->get_layer_segments(layer_idx);
             if (segments && !segments->empty()) {
                 for (const auto& seg : *segments) {
-                    if (!seg.is_extrusion) continue;
+                    if (!seg.is_extrusion)
+                        continue;
                     bb.min.x = std::min(bb.min.x, std::min(seg.start.x, seg.end.x));
                     bb.max.x = std::max(bb.max.x, std::max(seg.start.x, seg.end.x));
                     bb.min.y = std::min(bb.min.y, std::min(seg.start.y, seg.end.y));
@@ -473,6 +475,7 @@ void GCodeLayerRenderer::invalidate_cache() {
         lv_draw_buf_clear(cache_buf_, nullptr);
     }
     cached_up_to_layer_ = -1;
+    ssao_cache_valid_ = false;
 
     // Cancel any in-progress background ghost rendering
     cancel_background_ghost_render();
@@ -483,6 +486,113 @@ void GCodeLayerRenderer::invalidate_cache() {
     }
     ghost_cache_valid_ = false;
     ghost_rendered_up_to_ = -1;
+}
+
+// ============================================================================
+// SSAO Post-Processing
+// ============================================================================
+
+void GCodeLayerRenderer::ensure_ssao_cache(int width, int height) {
+    if (ssao_buf_ && ssao_cached_width_ == width && ssao_cached_height_ == height)
+        return;
+
+    destroy_ssao_cache();
+    ssao_buf_ = lv_draw_buf_create(width, height, LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
+    if (!ssao_buf_) {
+        spdlog::error("[GCodeLayerRenderer] Failed to create SSAO buffer {}x{}", width, height);
+        return;
+    }
+    lv_draw_buf_clear(ssao_buf_, nullptr);
+    ssao_cached_width_ = width;
+    ssao_cached_height_ = height;
+}
+
+void GCodeLayerRenderer::destroy_ssao_cache() {
+    if (ssao_buf_) {
+        if (lv_is_initialized()) {
+            lv_draw_buf_destroy(ssao_buf_);
+        }
+        ssao_buf_ = nullptr;
+    }
+    ssao_cached_width_ = 0;
+    ssao_cached_height_ = 0;
+    ssao_cache_valid_ = false;
+}
+
+void GCodeLayerRenderer::apply_ssao() {
+    if (!cache_buf_)
+        return;
+
+    const int w = cached_width_;
+    const int h = cached_height_;
+
+    ensure_ssao_cache(w, h);
+    if (!ssao_buf_)
+        return;
+
+    auto* src_data = static_cast<uint8_t*>(cache_buf_->data);
+    auto* dst_data = static_cast<uint8_t*>(ssao_buf_->data);
+    uint32_t stride = cache_buf_->header.stride;
+    uint32_t stride_px = stride / 4;
+
+    auto* src = reinterpret_cast<const uint32_t*>(src_data);
+    auto* dst = reinterpret_cast<uint32_t*>(dst_data);
+
+    // Copy source to destination first
+    std::memcpy(dst_data, src_data, static_cast<size_t>(h) * stride);
+
+    uint32_t start_ms = lv_tick_get();
+
+    // =========================================================================
+    // Silhouette outline: 1px dark border on alpha boundary
+    // For each empty pixel adjacent to a filled pixel, draw a dark outline.
+    // Makes the model pop from the background.
+    // =========================================================================
+    constexpr float kOutlineDarken = 0.3f; // Outline brightness (0=black, 1=original)
+
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            uint32_t pixel = src[y * stride_px + x];
+            uint8_t alpha = (pixel >> 24) & 0xFF;
+
+            if (alpha > 0) {
+                // Filled pixel: check if it's on the silhouette edge
+                // (has at least one empty neighbor in 4-connected)
+                bool on_edge = ((src[(y - 1) * stride_px + x] >> 24) == 0) ||
+                               ((src[(y + 1) * stride_px + x] >> 24) == 0) ||
+                               ((src[y * stride_px + (x - 1)] >> 24) == 0) ||
+                               ((src[y * stride_px + (x + 1)] >> 24) == 0);
+
+                if (on_edge) {
+                    uint8_t r = static_cast<uint8_t>(((pixel >> 16) & 0xFF) * kOutlineDarken);
+                    uint8_t g = static_cast<uint8_t>(((pixel >> 8) & 0xFF) * kOutlineDarken);
+                    uint8_t b = static_cast<uint8_t>((pixel & 0xFF) * kOutlineDarken);
+                    dst[y * stride_px + x] =
+                        (static_cast<uint32_t>(alpha) << 24) | (r << 16) | (g << 8) | b;
+                }
+            }
+        }
+    }
+
+    uint32_t elapsed = lv_tick_elaps(start_ms);
+    spdlog::debug("[GCodeLayerRenderer] SSAO (outline) applied in {}ms ({}x{})", elapsed, w, h);
+
+    ssao_cache_valid_ = true;
+}
+
+void GCodeLayerRenderer::blit_ssao_cache(lv_layer_t* target) {
+    if (!ssao_buf_)
+        return;
+
+    lv_draw_image_dsc_t dsc;
+    lv_draw_image_dsc_init(&dsc);
+    dsc.src = ssao_buf_;
+
+    lv_area_t coords = {widget_offset_x_, widget_offset_y_,
+                        widget_offset_x_ + ssao_cached_width_ - 1,
+                        widget_offset_y_ + ssao_cached_height_ - 1};
+
+    lv_draw_image(target, &dsc, &coords);
 }
 
 void GCodeLayerRenderer::ensure_cache(int width, int height) {
@@ -587,6 +697,32 @@ void GCodeLayerRenderer::render_layers_to_cache(int from_layer, int to_layer) {
                 float brightness = compute_depth_brightness(avg_z, bounds_min_z_, bounds_max_z_,
                                                             avg_y, bounds_min_y_, bounds_max_y_);
 
+                // Normal-based shading: segment direction gives us a surface normal
+                // in screen space. Light from upper-left (-0.707, -0.707).
+                // Perpendicular to segment = surface normal of the "tube".
+                if (ssao_enabled_.load(std::memory_order_relaxed)) {
+                    float dx = static_cast<float>(p2.x - p1.x);
+                    float dy = static_cast<float>(p2.y - p1.y);
+                    float len = std::sqrt(dx * dx + dy * dy);
+                    if (len > 0.5f) {
+                        // Normal perpendicular to segment (rotated 90° CCW)
+                        float nx = -dy / len;
+                        float ny = dx / len;
+                        // Dot product with light direction (-0.707, -0.707)
+                        constexpr float kLightX = -0.707f;
+                        constexpr float kLightY = -0.707f;
+                        float ndotl = nx * kLightX + ny * kLightY;
+                        // Map [-1, 1] → [0.7, 1.3] brightness modifier
+                        constexpr float kNormalStrength = 0.12f;
+                        float normal_mod = 1.0f + ndotl * kNormalStrength;
+                        brightness *= normal_mod;
+                        if (brightness > 1.0f)
+                            brightness = 1.0f;
+                        if (brightness < 0.15f)
+                            brightness = 0.15f;
+                    }
+                }
+
                 r = static_cast<uint8_t>(r * brightness);
                 g = static_cast<uint8_t>(g * brightness);
                 b = static_cast<uint8_t>(b * brightness);
@@ -601,8 +737,8 @@ void GCodeLayerRenderer::render_layers_to_cache(int from_layer, int to_layer) {
                         r = kExcludedR;
                         g = kExcludedG;
                         b = kExcludedB;
-                        uint32_t color =
-                            (static_cast<uint32_t>(kExcludedAlpha) << 24) | (r << 16) | (g << 8) | b;
+                        uint32_t color = (static_cast<uint32_t>(kExcludedAlpha) << 24) | (r << 16) |
+                                         (g << 8) | b;
                         draw_thick_line_bresenham_solid(p1.x, p1.y, p2.x, p2.y, color, line_width);
                         ++segments_rendered;
                         continue;
@@ -619,8 +755,12 @@ void GCodeLayerRenderer::render_layers_to_cache(int from_layer, int to_layer) {
             // Build ARGB8888 color (full alpha for solid layers)
             uint32_t color = (255u << 24) | (r << 16) | (g << 8) | b;
 
-            // Draw using software Bresenham - bypasses LVGL draw API for AD5M compatibility
-            draw_thick_line_bresenham_solid(p1.x, p1.y, p2.x, p2.y, color, line_width);
+            // Draw using software line drawing - bypasses LVGL draw API for AD5M compatibility
+            if (ssao_enabled_.load(std::memory_order_relaxed)) {
+                draw_thick_line_aa_solid(p1.x, p1.y, p2.x, p2.y, color, line_width);
+            } else {
+                draw_thick_line_bresenham_solid(p1.x, p1.y, p2.x, p2.y, color, line_width);
+            }
             ++segments_rendered;
         }
     }
@@ -867,7 +1007,18 @@ void GCodeLayerRenderer::render(lv_layer_t* layer, const lv_area_t* widget_area)
             if (ghost_enabled && ghost_buf_) {
                 blit_ghost_cache(layer);
             }
-            blit_cache(layer);
+
+            // Apply SSAO post-processing when enabled and cache is fully built
+            bool ssao_on = ssao_enabled_.load(std::memory_order_relaxed);
+            bool cache_complete = (cached_up_to_layer_ >= target_layer);
+            if (ssao_on && cache_complete) {
+                if (!ssao_cache_valid_) {
+                    apply_ssao();
+                }
+                blit_ssao_cache(layer);
+            } else {
+                blit_cache(layer);
+            }
             segments_rendered = last_segment_count_;
         }
     } else {
@@ -1059,7 +1210,8 @@ glm::ivec2 GCodeLayerRenderer::world_to_screen(float x, float y, float z) const 
 }
 
 std::string GCodeLayerRenderer::resolve_object_name(int16_t index) const {
-    if (index < 0) return {};
+    if (index < 0)
+        return {};
     if (gcode_) {
         return gcode_->get_object_name(index);
     }
@@ -1075,7 +1227,8 @@ static bool name_looks_like_support(const std::string& name) {
     static constexpr const char kSupport[] = "support";
     static constexpr size_t kSupportLen = 7;
 
-    if (name.size() < kSupportLen) return false;
+    if (name.size() < kSupportLen)
+        return false;
 
     for (size_t i = 0; i <= name.size() - kSupportLen; ++i) {
         bool match = true;
@@ -1085,13 +1238,15 @@ static bool name_looks_like_support(const std::string& name) {
                 break;
             }
         }
-        if (match) return true;
+        if (match)
+            return true;
     }
     return false;
 }
 
 bool GCodeLayerRenderer::is_support_segment(const ToolpathSegment& seg) const {
-    if (seg.object_name_index < 0) return false;
+    if (seg.object_name_index < 0)
+        return false;
     return name_looks_like_support(resolve_object_name(seg.object_name_index));
 }
 
@@ -1417,9 +1572,12 @@ void GCodeLayerRenderer::background_ghost_render_thread() {
 
     // Local object name resolver using captured pointers (not member fields)
     auto local_resolve_name = [local_gcode, local_streaming](int16_t index) -> std::string {
-        if (index < 0) return {};
-        if (local_gcode) return local_gcode->get_object_name(index);
-        if (local_streaming) return local_streaming->get_object_name(index);
+        if (index < 0)
+            return {};
+        if (local_gcode)
+            return local_gcode->get_object_name(index);
+        if (local_streaming)
+            return local_streaming->get_object_name(index);
         return {};
     };
 
@@ -1462,8 +1620,7 @@ void GCodeLayerRenderer::background_ghost_render_thread() {
 
         if (local_streaming) {
             // Streaming mode: get segments from controller (returns shared_ptr)
-            segments_holder =
-                local_streaming->get_layer_segments(static_cast<size_t>(layer_idx));
+            segments_holder = local_streaming->get_layer_segments(static_cast<size_t>(layer_idx));
             segments = segments_holder.get();
         } else if (local_gcode) {
             segments = &local_gcode->layers[layer_idx].segments;
@@ -1601,6 +1758,121 @@ void GCodeLayerRenderer::blend_pixel_solid(int x, int y, uint32_t color) {
     pixel[1] = (color >> 8) & 0xFF;  // G
     pixel[2] = (color >> 16) & 0xFF; // R
     pixel[3] = (color >> 24) & 0xFF; // A
+}
+
+void GCodeLayerRenderer::blend_pixel_solid_alpha(int x, int y, uint32_t color, uint8_t coverage) {
+    if (x < 0 || x >= cached_width_ || y < 0 || y >= cached_height_ || !cache_buf_)
+        return;
+    if (coverage == 0)
+        return;
+
+    uint32_t stride = cache_buf_->header.stride;
+    uint8_t* pixel = static_cast<uint8_t*>(cache_buf_->data) + y * stride + x * 4;
+
+    uint8_t src_b = color & 0xFF;
+    uint8_t src_g = (color >> 8) & 0xFF;
+    uint8_t src_r = (color >> 16) & 0xFF;
+
+    if (coverage == 255 || pixel[3] == 0) {
+        // Full coverage or empty destination: just write
+        pixel[0] = src_b;
+        pixel[1] = src_g;
+        pixel[2] = src_r;
+        pixel[3] = coverage;
+    } else {
+        // Alpha blend: src over dst
+        uint8_t dst_a = pixel[3];
+        uint16_t inv = 255 - coverage;
+        pixel[0] = static_cast<uint8_t>((src_b * coverage + pixel[0] * inv) / 255);
+        pixel[1] = static_cast<uint8_t>((src_g * coverage + pixel[1] * inv) / 255);
+        pixel[2] = static_cast<uint8_t>((src_r * coverage + pixel[2] * inv) / 255);
+        pixel[3] = static_cast<uint8_t>(coverage + (dst_a * inv) / 255);
+    }
+}
+
+void GCodeLayerRenderer::draw_line_aa_solid(int x0, int y0, int x1, int y1, uint32_t color) {
+    // Xiaolin Wu's anti-aliased line algorithm
+    bool steep = std::abs(y1 - y0) > std::abs(x1 - x0);
+    if (steep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+    }
+    if (x0 > x1) {
+        std::swap(x0, x1);
+        std::swap(y0, y1);
+    }
+
+    float dx = static_cast<float>(x1 - x0);
+    float dy = static_cast<float>(y1 - y0);
+    float gradient = (dx < 0.001f) ? 1.0f : dy / dx;
+
+    // Strip alpha from color — we'll set it per-pixel via coverage
+    uint32_t base_color = color & 0x00FFFFFF;
+
+    // First endpoint
+    float yend = static_cast<float>(y0);
+    float intery = yend + gradient;
+
+    if (steep) {
+        blend_pixel_solid_alpha(static_cast<int>(yend), x0, base_color, 255);
+    } else {
+        blend_pixel_solid_alpha(x0, static_cast<int>(yend), base_color, 255);
+    }
+
+    // Second endpoint
+    if (steep) {
+        blend_pixel_solid_alpha(y1, x1, base_color, 255);
+    } else {
+        blend_pixel_solid_alpha(x1, y1, base_color, 255);
+    }
+
+    // Main loop — draw pixels with fractional coverage for AA
+    for (int x = x0 + 1; x < x1; x++) {
+        int iy = static_cast<int>(intery);
+        float frac = intery - iy;
+        uint8_t coverage_lo = static_cast<uint8_t>((1.0f - frac) * 255);
+        uint8_t coverage_hi = static_cast<uint8_t>(frac * 255);
+
+        if (steep) {
+            blend_pixel_solid_alpha(iy, x, base_color, coverage_lo);
+            blend_pixel_solid_alpha(iy + 1, x, base_color, coverage_hi);
+        } else {
+            blend_pixel_solid_alpha(x, iy, base_color, coverage_lo);
+            blend_pixel_solid_alpha(x, iy + 1, base_color, coverage_hi);
+        }
+        intery += gradient;
+    }
+}
+
+void GCodeLayerRenderer::draw_thick_line_aa_solid(int x0, int y0, int x1, int y1, uint32_t color,
+                                                  int width) {
+    if (width <= 1) {
+        draw_line_aa_solid(x0, y0, x1, y1, color);
+        return;
+    }
+
+    float dx = static_cast<float>(x1 - x0);
+    float dy = static_cast<float>(y1 - y0);
+    constexpr float kMinLineLength = 0.5f;
+    float len = std::sqrt(dx * dx + dy * dy);
+
+    if (len < kMinLineLength) {
+        draw_line_aa_solid(x0, y0, x1, y1, color);
+        return;
+    }
+
+    // Perpendicular direction for thickness offset
+    float px = -dy / len;
+    float py = dx / len;
+
+    // Draw parallel lines offset perpendicular to the main line
+    int half = width / 2;
+    for (int i = -half; i <= half; i++) {
+        float offset = static_cast<float>(i);
+        int ox = static_cast<int>(std::round(px * offset));
+        int oy = static_cast<int>(std::round(py * offset));
+        draw_line_aa_solid(x0 + ox, y0 + oy, x1 + ox, y1 + oy, color);
+    }
 }
 
 int GCodeLayerRenderer::get_extrusion_pixel_width() const {
