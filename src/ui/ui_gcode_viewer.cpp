@@ -98,11 +98,12 @@ class GCodeViewerState {
             spdlog::debug("[GCode Viewer] Default render mode: Auto");
         }
 
-        // Check HELIX_SSAO env var for SSAO post-processing
+        // Enhanced shading is ON by default. Set HELIX_SSAO=0 to disable.
+        ssao_enabled_at_init_ = true;
         const char* ssao_env = std::getenv("HELIX_SSAO");
-        if (ssao_env && std::strcmp(ssao_env, "1") == 0) {
-            ssao_enabled_at_init_ = true;
-            spdlog::info("[GCode Viewer] HELIX_SSAO=1: SSAO post-processing enabled");
+        if (ssao_env && std::strcmp(ssao_env, "0") == 0) {
+            ssao_enabled_at_init_ = false;
+            spdlog::info("[GCode Viewer] HELIX_SSAO=0: enhanced shading disabled");
         }
     }
 

@@ -532,7 +532,7 @@ class GCodeLayerRenderer {
     std::atomic<bool> show_extrusions_{true};
     std::atomic<bool> show_supports_{true};
     std::atomic<bool> depth_shading_{true}; // Enabled by default for 3D-like appearance
-    std::atomic<bool> ssao_enabled_{false}; // Screen-space AO post-processing
+    std::atomic<bool> ssao_enabled_{true};  // Enhanced shading (normals, AA, outline)
     std::atomic<int> view_mode_{static_cast<int>(ViewMode::FRONT)}; // Default to front view
 
     // Colors
