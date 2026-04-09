@@ -6,9 +6,9 @@
 #include "printer_state.h"
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <mutex>
 
 namespace helix {
 
@@ -219,7 +219,7 @@ int PreprintPredictor::remaining_seconds(const std::set<int>& completed_phases, 
         if (phase == current_phase && current_phase != 0) {
             // Currently in this phase - subtract elapsed
             remaining += std::max(0, predicted_duration - elapsed_in_current_phase_seconds);
-        } else if (!completed_phases.count(phase) && phase != current_phase) {
+        } else {
             // Future phase
             remaining += predicted_duration;
         }
@@ -261,14 +261,23 @@ std::vector<PreprintEntry> PreprintPredictor::load_entries_from_config() {
 }
 
 int PreprintPredictor::predicted_total_from_config() {
-    // Cache result for 60s to avoid re-parsing config on every file in a list
-    static std::atomic<int> cached_value{-1};
-    static std::atomic<int64_t> cached_at{0};
-    auto now = std::chrono::steady_clock::now().time_since_epoch();
-    auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(now).count();
+    // Cache result for 60s to avoid re-parsing config on every call
+    struct CacheEntry {
+        int value{-1};
+        int64_t timestamp{0};
+    };
+    static std::mutex cache_mutex;
+    static CacheEntry cache;
 
-    if (cached_value.load() >= 0 && (now_sec - cached_at.load()) < 60) {
-        return cached_value.load();
+    auto now_sec = std::chrono::duration_cast<std::chrono::seconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count();
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (cache.value >= 0 && (now_sec - cache.timestamp) < 60) {
+            return cache.value;
+        }
     }
 
     auto entries = load_entries_from_config();
@@ -279,8 +288,11 @@ int PreprintPredictor::predicted_total_from_config() {
         result = predictor.predicted_total();
     }
 
-    cached_value.store(result);
-    cached_at.store(now_sec);
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        cache.value = result;
+        cache.timestamp = now_sec;
+    }
     return result;
 }
 
