@@ -1341,7 +1341,9 @@ When reporting issues, gather this information. **Most importantly, enable debug
 
 ### Enabling Debug Logging
 
-By default, HelixScreen only logs warnings and errors. To capture useful diagnostic information, you need to temporarily enable debug-level logging (`-vv`), reproduce the problem, then collect the logs.
+By default, HelixScreen only logs warnings and errors. To capture useful diagnostic information, you need to temporarily enable debug-level logging, reproduce the problem, then collect the logs.
+
+**Quickest method:** Go to **Settings > System > Log Level** and select **Debug**. This takes effect immediately with no restart needed. Remember to set it back to **Warn** when done.
 
 **Verbosity levels:**
 | Flag | Level | What it captures |

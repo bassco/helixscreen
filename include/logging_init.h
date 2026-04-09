@@ -103,6 +103,16 @@ spdlog::level::level_enum verbosity_to_level(int verbosity);
 int to_hv_level(spdlog::level::level_enum level);
 
 /**
+ * @brief Change log level at runtime (no restart needed)
+ *
+ * Updates both spdlog and libhv log levels immediately.
+ * Call from the main thread when the user changes the log level setting.
+ *
+ * @param level New spdlog log level
+ */
+void set_runtime_level(spdlog::level::level_enum level);
+
+/**
  * @brief Resolve log level with precedence: CLI > config > defaults
  *
  * @param cli_verbosity CLI -v flag count (0 = none)

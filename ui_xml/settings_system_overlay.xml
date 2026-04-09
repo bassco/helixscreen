@@ -75,6 +75,15 @@
         <bind_flag_if_eq subject="settings_telemetry_enabled" flag="hidden" ref_value="0"/>
       </setting_action_row>
       <!-- ================================================================== -->
+      <!-- LOG LEVEL -->
+      <!-- ================================================================== -->
+      <setting_dropdown_row name="row_log_level"
+                            label="Log Level" label_tag="Log Level" icon="console"
+                            description="Set logging verbosity for troubleshooting"
+                            description_tag="Set logging verbosity for troubleshooting"
+                            options="Warn&#10;Info&#10;Debug&#10;Trace" options_tag="Warn&#10;Info&#10;Debug&#10;Trace"
+                            callback="on_log_level_changed"/>
+      <!-- ================================================================== -->
       <!-- RESTART -->
       <!-- ================================================================== -->
       <setting_action_row name="row_restart_helix"

@@ -231,6 +231,14 @@ static void on_language_changed(lv_event_t* e) {
     SystemSettingsManager::instance().set_language_by_index(index);
 }
 
+// Static callback for log level dropdown
+static void on_log_level_changed(lv_event_t* e) {
+    lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
+    spdlog::info("[SettingsPanel] Log level changed: index {}", index);
+    SystemSettingsManager::instance().set_log_level_by_index(index);
+}
+
 // Note: Sensors overlay callbacks are now in SensorSettingsOverlay class
 // See ui_settings_sensors.cpp
 // Note: Macro Buttons overlay callbacks are now in MacroButtonsOverlay class
@@ -325,6 +333,7 @@ void SettingsPanel::init_subjects() {
         {"on_timezone_changed", on_timezone_changed},
         {"on_time_format_changed", on_time_format_changed},
         {"on_language_changed", on_language_changed},
+        {"on_log_level_changed", on_log_level_changed},
 
         // Toggle switches
         {"on_dark_mode_changed", on_dark_mode_changed},
@@ -1496,6 +1505,7 @@ void register_settings_panel_callbacks() {
         {"on_cancel_escalation_timeout_changed", on_cancel_escalation_timeout_changed},
         {"on_telemetry_changed", SettingsPanel::on_telemetry_changed},
         {"on_telemetry_view_data", SettingsPanel::on_telemetry_view_data},
+        {"on_log_level_changed", on_log_level_changed},
         // Action row callbacks used in settings_panel.xml
         {"on_printers_clicked", SettingsPanel::on_printers_clicked},
         {"on_display_settings_clicked", SettingsPanel::on_display_settings_clicked},

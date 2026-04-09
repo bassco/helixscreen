@@ -3,19 +3,43 @@
 
 #include "system_settings_manager.h"
 
+#include "cjk_font_manager.h"
 #include "config.h"
 #include "locale_formats.h"
+#include "logging_init.h"
 #include "lv_i18n_translations.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 #include "system/telemetry_manager.h"
 #include "system/update_checker.h"
-#include "cjk_font_manager.h"
 
 #include <algorithm>
 
 using namespace helix;
+
+// Log level options (dropdown index → spdlog level)
+// Order: Warn=0, Info=1, Debug=2, Trace=3
+static const spdlog::level::level_enum LOG_LEVEL_VALUES[] = {
+    spdlog::level::warn,
+    spdlog::level::info,
+    spdlog::level::debug,
+    spdlog::level::trace,
+};
+static const int LOG_LEVEL_COUNT = sizeof(LOG_LEVEL_VALUES) / sizeof(LOG_LEVEL_VALUES[0]);
+static const char* LOG_LEVEL_OPTIONS_TEXT = "Warn\nInfo\nDebug\nTrace";
+
+// Config key strings matching the dropdown indices
+static const char* LOG_LEVEL_STRINGS[] = {"warn", "info", "debug", "trace"};
+
+static int spdlog_level_to_index(spdlog::level::level_enum level) {
+    for (int i = 0; i < LOG_LEVEL_COUNT; ++i) {
+        if (LOG_LEVEL_VALUES[i] == level) {
+            return i;
+        }
+    }
+    return 0; // Default to Warn
+}
 
 // Language options - codes and display names
 // Order: en, de, fr, es, ru, pt, it, zh, ja (indices 0-8)
@@ -63,6 +87,19 @@ void SystemSettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(telemetry_enabled_subject_, telemetry_enabled ? 1 : 0,
                            "settings_telemetry_enabled", subjects_);
     spdlog::debug("[SystemSettingsManager] telemetry_enabled: {}", telemetry_enabled);
+
+    // Log level (default from current spdlog level)
+    std::string config_log_level = config->get<std::string>("/log_level", "");
+    int log_level_index;
+    if (!config_log_level.empty()) {
+        auto level = helix::logging::parse_level(config_log_level, spdlog::level::warn);
+        log_level_index = spdlog_level_to_index(level);
+    } else {
+        log_level_index = spdlog_level_to_index(spdlog::get_level());
+    }
+    UI_MANAGED_SUBJECT_INT(log_level_subject_, log_level_index, "settings_log_level", subjects_);
+    spdlog::debug("[SystemSettingsManager] log_level: {} (index {})",
+                  LOG_LEVEL_STRINGS[log_level_index], log_level_index);
 
     subjects_initialized_ = true;
 
@@ -203,4 +240,33 @@ void SystemSettingsManager::set_telemetry_enabled(bool enabled) {
 
     // Apply to TelemetryManager
     TelemetryManager::instance().set_enabled(enabled);
+}
+
+// =============================================================================
+// LOG LEVEL SETTINGS
+// =============================================================================
+
+int SystemSettingsManager::get_log_level_index() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&log_level_subject_));
+}
+
+void SystemSettingsManager::set_log_level_by_index(int index) {
+    int clamped = std::clamp(index, 0, LOG_LEVEL_COUNT - 1);
+    spdlog::info("[SystemSettingsManager] set_log_level_by_index({}) -> {}", clamped,
+                 LOG_LEVEL_STRINGS[clamped]);
+
+    // 1. Update subject (UI reacts)
+    lv_subject_set_int(&log_level_subject_, clamped);
+
+    // 2. Apply immediately — no restart needed
+    helix::logging::set_runtime_level(LOG_LEVEL_VALUES[clamped]);
+
+    // 3. Persist to config
+    Config* config = Config::get_instance();
+    config->set<std::string>("/log_level", LOG_LEVEL_STRINGS[clamped]);
+    config->save();
+}
+
+const char* SystemSettingsManager::get_log_level_options() {
+    return LOG_LEVEL_OPTIONS_TEXT;
 }

@@ -481,7 +481,9 @@ Open a GitHub issue with the "enhancement" label, or suggest it in the [Discord]
 
 ### How do I enable debug logging?
 
-Add `HELIX_LOG_LEVEL=debug` to your `helixscreen.env` file and restart:
+**Easiest method:** Go to **Settings > System > Log Level** and select **Debug** from the dropdown. The change takes effect immediately — no restart needed. Set it back to **Warn** when you're done.
+
+**Alternative (via config file):** Add `HELIX_LOG_LEVEL=debug` to your `helixscreen.env` file and restart:
 
 ```bash
 # MainsailOS / Pi
@@ -493,7 +495,7 @@ echo 'HELIX_LOG_LEVEL=debug' >> /opt/helixscreen/config/helixscreen.env
 /etc/init.d/S90helixscreen restart
 ```
 
-Available levels: `warn` (default), `info`, `debug`, `trace`. **Remove the line after debugging** — verbose logging impacts performance.
+Available levels: `warn` (default), `info`, `debug`, `trace`. **Set back to Warn after debugging** — verbose logging impacts performance.
 
 ### Where are the logs?
 

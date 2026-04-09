@@ -99,6 +99,19 @@ class SystemSettingsManager {
     void set_telemetry_enabled(bool enabled);
 
     // =========================================================================
+    // LOG LEVEL SETTINGS
+    // =========================================================================
+
+    /** @brief Get current log level index (0=Warn, 1=Info, 2=Debug, 3=Trace) */
+    int get_log_level_index() const;
+
+    /** @brief Set log level by dropdown index, apply immediately, and persist */
+    void set_log_level_by_index(int index);
+
+    /** @brief Get dropdown options string "Warn\nInfo\nDebug\nTrace" */
+    static const char* get_log_level_options();
+
+    // =========================================================================
     // SUBJECT ACCESSORS (for XML binding)
     // =========================================================================
 
@@ -117,6 +130,11 @@ class SystemSettingsManager {
         return &telemetry_enabled_subject_;
     }
 
+    /** @brief Log level subject (integer: 0=Warn, 1=Info, 2=Debug, 3=Trace) */
+    lv_subject_t* subject_log_level() {
+        return &log_level_subject_;
+    }
+
   private:
     SystemSettingsManager();
     ~SystemSettingsManager() = default;
@@ -126,6 +144,7 @@ class SystemSettingsManager {
     lv_subject_t language_subject_;
     lv_subject_t update_channel_subject_;
     lv_subject_t telemetry_enabled_subject_;
+    lv_subject_t log_level_subject_;
 
     bool subjects_initialized_ = false;
 };

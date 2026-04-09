@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "logging_init.h"
 
+#include "hv/hlog.h"
 #include "lvgl_assert_handler.h"
 #include "lvgl_log_handler.h"
 
@@ -311,6 +312,13 @@ int to_hv_level(spdlog::level::level_enum level) {
     default:
         return 3; // LOG_LEVEL_WARN
     }
+}
+
+void set_runtime_level(spdlog::level::level_enum level) {
+    spdlog::set_level(level);
+    hlog_set_level(to_hv_level(level));
+    spdlog::info("[Logging] Runtime log level changed to {}",
+                 spdlog::level::to_string_view(level).data());
 }
 
 spdlog::level::level_enum resolve_log_level(int cli_verbosity, const std::string& config_level_str,

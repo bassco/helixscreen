@@ -126,6 +126,7 @@ void SystemSettingsOverlay::on_activate() {
     init_telemetry_toggle();
     init_touch_cal_description();
     init_host_description();
+    init_log_level_dropdown();
 }
 
 void SystemSettingsOverlay::on_deactivate() {
@@ -176,6 +177,23 @@ void SystemSettingsOverlay::init_host_description() {
     lv_obj_t* host_row = lv_obj_find_by_name(overlay_root_, "row_printer_host");
     if (host_row) {
         spdlog::trace("[{}] Host row present", get_name());
+    }
+}
+
+void SystemSettingsOverlay::init_log_level_dropdown() {
+    if (!overlay_root_)
+        return;
+
+    lv_obj_t* row = lv_obj_find_by_name(overlay_root_, "row_log_level");
+    if (!row)
+        return;
+
+    lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
+    if (dropdown) {
+        lv_dropdown_set_options(dropdown, SystemSettingsManager::get_log_level_options());
+        int index = SystemSettingsManager::instance().get_log_level_index();
+        lv_dropdown_set_selected(dropdown, static_cast<uint32_t>(index));
+        spdlog::trace("[{}] Log level dropdown initialized (index={})", get_name(), index);
     }
 }
 

@@ -76,6 +76,7 @@ class SystemSettingsOverlay : public OverlayBase {
     void init_telemetry_toggle();
     void init_touch_cal_description();
     void init_host_description();
+    void init_log_level_dropdown();
 };
 
 /**

@@ -265,7 +265,7 @@ Located in the `theme` section:
 - `debug` - Detailed debugging information
 - `trace` - Extremely verbose, all internal operations
 
-**Note:** CLI `-v` flags override this setting (`-v`=info, `-vv`=debug, `-vvv`=trace).
+**Note:** This can also be changed at runtime via **Settings > System > Log Level** without restarting. CLI `-v` flags override this setting (`-v`=info, `-vv`=debug, `-vvv`=trace).
 
 ---
 

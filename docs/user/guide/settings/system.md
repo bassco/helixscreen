@@ -106,6 +106,23 @@ When enabled, a **View Telemetry Data** row appears below the toggle. Tap it to 
 
 ---
 
+## Log Level
+
+Control how much detail HelixScreen writes to its logs. This is useful when troubleshooting issues or gathering diagnostic information for a bug report.
+
+| Level | What it captures |
+|-------|-----------------|
+| **Warn** | Errors and warnings only (default — quiet) |
+| **Info** | Connection events, panel changes, milestones |
+| **Debug** | State changes, API calls, component init (use this for bug reports) |
+| **Trace** | Everything including LVGL internals (very verbose, rarely needed) |
+
+Changes take effect immediately — no restart required. Set to **Debug** before reproducing a problem, then set back to **Warn** when done.
+
+> **Tip:** Debug and Trace levels increase CPU usage and log volume. Don't leave them enabled long-term.
+
+---
+
 ## Restart HelixScreen
 
 Restart the display application. Useful after changing settings that require a restart (like theme changes) or if the UI becomes unresponsive. Shows a brief "Restarting..." toast before the app restarts.
