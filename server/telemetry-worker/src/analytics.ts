@@ -385,6 +385,23 @@ function mapEventToDataPointInternal(
         });
       }
 
+      // Expand per-overlay visit counts into separate data points
+      const overlayVisitMap = (event.overlay_visits ?? {}) as Record<string, unknown>;
+      for (const [overlayName, count] of Object.entries(overlayVisitMap)) {
+        points.push({
+          indexes: ["overlay_visit"],
+          blobs: [
+            deviceId, version, platform, overlayName,
+            "", "", "", "", "", "", "", "",
+          ],
+          doubles: [
+            sessionDuration,
+            Number(count),
+            0, 0, 0, 0, 0, 0,
+          ],
+        });
+      }
+
       return points;
     }
 

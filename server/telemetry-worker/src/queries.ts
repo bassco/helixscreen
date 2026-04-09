@@ -436,6 +436,8 @@ export function engagementQueries(days: number, filters?: FilterParams): string[
     `SELECT blob4 as widget, count(DISTINCT blob1) as devices FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'widget_placement' AND blob4 != ''${f} GROUP BY widget ORDER BY devices DESC`,
     // Widget interactions (sum double2 by blob4 from widget_interaction)
     `SELECT blob4 as widget, sum(double2) as interactions FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'widget_interaction' AND blob4 != ''${f} GROUP BY widget ORDER BY interactions DESC`,
+    // Overlay visits (sum double2 by blob4 from overlay_visit)
+    `SELECT blob4 as overlay, sum(double2) as total_visits FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'overlay_visit' AND blob4 != ''${f} GROUP BY overlay ORDER BY total_visits DESC`,
   ];
 }
 

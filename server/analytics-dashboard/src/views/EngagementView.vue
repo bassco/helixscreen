@@ -26,6 +26,11 @@
           <BarChart :data="panelVisitsChartData" :options="horizontalBarOpts" />
         </div>
 
+        <div class="chart-section" v-if="overlayVisitsChartData.labels.length">
+          <h3>Visit Count per Overlay</h3>
+          <BarChart :data="overlayVisitsChartData" :options="horizontalBarOpts" />
+        </div>
+
         <div class="chart-section">
           <h3>Avg Session Duration Over Time</h3>
           <LineChart :data="sessionDurationChartData" />
@@ -102,6 +107,15 @@ const panelVisitsChartData = computed(() => ({
     label: 'Visits',
     data: data.value?.panel_visits.map(p => p.total_visits) ?? [],
     backgroundColor: '#10b981'
+  }]
+}))
+
+const overlayVisitsChartData = computed(() => ({
+  labels: data.value?.overlay_visits?.map(o => o.overlay) ?? [],
+  datasets: [{
+    label: 'Visits',
+    data: data.value?.overlay_visits?.map(o => o.total_visits) ?? [],
+    backgroundColor: '#f59e0b'
   }]
 }))
 

@@ -106,6 +106,7 @@ export interface EngagementData {
   brightness: { p25: number; p50: number; p75: number }
   widget_placement: { widget: string; devices: number }[]
   widget_interactions: { widget: string; interactions: number }[]
+  overlay_visits: { overlay: string; total_visits: number }[]
 }
 
 export interface ReliabilityData {

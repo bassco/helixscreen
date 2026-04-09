@@ -704,7 +704,7 @@ export default {
         // GET /v1/dashboard/engagement
         if (url.pathname === "/v1/dashboard/engagement") {
           const queries = engagementQueries(days, filters);
-          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes, darkLightRes, widgetPlacementRes, widgetInteractionRes] =
+          const [panelTimeRes, panelVisitsRes, sessionTrendRes, themeRes, localeRes, brightnessRes, darkLightRes, widgetPlacementRes, widgetInteractionRes, overlayVisitsRes] =
             await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
 
           const toList = (res: unknown) => {
@@ -735,6 +735,7 @@ export default {
 
           const widgetPlacementData = widgetPlacementRes as { data: Array<{ widget: string; devices: number }> };
           const widgetInteractionData = widgetInteractionRes as { data: Array<{ widget: string; interactions: number }> };
+          const overlayVisitsData = overlayVisitsRes as { data: Array<{ overlay: string; total_visits: number }> };
 
           return json({
             panel_time: (panelTimeData.data ?? []).map((r) => ({
@@ -764,6 +765,10 @@ export default {
             widget_interactions: (widgetInteractionData.data ?? []).map((r) => ({
               widget: r.widget,
               interactions: r.interactions,
+            })),
+            overlay_visits: (overlayVisitsData.data ?? []).map((r) => ({
+              overlay: r.overlay,
+              total_visits: r.total_visits,
             })),
           });
         }
