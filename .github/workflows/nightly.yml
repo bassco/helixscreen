@@ -462,7 +462,7 @@ jobs:
       run: make -j$(sysctl -n hw.ncpu)
 
     - name: Run all tests (including slow)
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         make test-build
         # Fast tests in parallel
