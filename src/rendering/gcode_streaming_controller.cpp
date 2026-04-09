@@ -126,6 +126,10 @@ void BackgroundGhostBuilder::worker_thread() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
+    // Set running_ false BEFORE complete_ true so callers polling is_complete()
+    // always see is_running()==false when is_complete()==true (avoids race on CI)
+    running_.store(false);
+
     if (!cancelled_.load()) {
         complete_.store(true);
         spdlog::info("[GhostBuilder] Ghost build complete ({} layers)", current_layer_.load());
@@ -133,8 +137,6 @@ void BackgroundGhostBuilder::worker_thread() {
         spdlog::debug("[GhostBuilder] Ghost build cancelled at layer {}/{}", current_layer_.load(),
                       total);
     }
-
-    running_.store(false);
 }
 
 // Static member initialization
