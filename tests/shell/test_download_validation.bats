@@ -14,6 +14,11 @@ setup() {
     unset _HELIX_RELEASE_SOURCED
     source "$RELEASE_SH"
 
+    # Pre-set the _has_real_curl cache so mock curl scripts don't need to
+    # handle --version.  Tests that exercise the "no curl" path use subshells
+    # with restricted PATH and re-source release.sh, so this won't affect them.
+    _REAL_CURL=yes
+
     # Override log_error so validate_tarball output is testable
     # (helpers.bash stubs it as a no-op, but we need the messages)
     log_error() { echo "ERROR: $*"; }
