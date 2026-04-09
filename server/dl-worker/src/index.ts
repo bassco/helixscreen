@@ -7,8 +7,9 @@
 //   GET  /            - Health check
 //   GET  /health      - Health check
 //   GET  /install.sh  - Install script
-//   GET  /{channel}/manifest.json         - Release manifest
-//   GET  /{channel}/helixscreen-*.tar.gz  - Release tarball
+//   GET  /{channel}/manifest.json                    - Release manifest
+//   GET  /{channel}/helixscreen-*.tar.gz             - Release tarball (by channel)
+//   GET  /releases/{version}/helixscreen-*.tar.gz    - Release tarball (by version)
 //   HEAD (same paths) - Metadata without body
 
 /** Valid release channels. */
@@ -113,35 +114,57 @@ function resolvePath(path: string): ResolvedPath | null {
     };
   }
 
-  // Split into segments: {channel}/{filename}
   const parts = trimmed.split("/");
-  if (parts.length !== 2) {
+
+  // {channel}/{filename} — manifest or tarball by channel
+  if (parts.length === 2) {
+    const [channel, filename] = parts;
+
+    if (!VALID_CHANNELS.has(channel)) {
+      return null;
+    }
+
+    // {channel}/manifest.json
+    if (filename === "manifest.json") {
+      return {
+        r2Key: trimmed,
+        contentType: "application/json",
+        cacheControl: "public, max-age=300",
+      };
+    }
+
+    // {channel}/helixscreen-*.tar.gz
+    if (TARBALL_PATTERN.test(filename)) {
+      return {
+        r2Key: trimmed,
+        contentType: "application/gzip",
+        cacheControl: "public, max-age=86400, immutable",
+      };
+    }
+
     return null;
   }
 
-  const [channel, filename] = parts;
+  // releases/{version}/{filename} — tarball by version
+  // The HTTPS CDN (releases.helixscreen.org) uses this path structure.
+  // Mirror it here so BusyBox wget (K1, AD5M) can download via plain HTTP.
+  if (parts.length === 3 && parts[0] === "releases") {
+    const [, version, filename] = parts;
 
-  // Validate channel
-  if (!VALID_CHANNELS.has(channel)) {
+    // Validate version format (e.g., "v0.99.25")
+    if (!/^v\d+\.\d+\.\d+/.test(version)) {
+      return null;
+    }
+
+    if (TARBALL_PATTERN.test(filename)) {
+      return {
+        r2Key: trimmed,
+        contentType: "application/gzip",
+        cacheControl: "public, max-age=86400, immutable",
+      };
+    }
+
     return null;
-  }
-
-  // {channel}/manifest.json
-  if (filename === "manifest.json") {
-    return {
-      r2Key: trimmed,
-      contentType: "application/json",
-      cacheControl: "public, max-age=300",
-    };
-  }
-
-  // {channel}/helixscreen-*.tar.gz
-  if (TARBALL_PATTERN.test(filename)) {
-    return {
-      r2Key: trimmed,
-      contentType: "application/gzip",
-      cacheControl: "public, max-age=86400, immutable",
-    };
   }
 
   return null;

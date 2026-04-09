@@ -226,6 +226,56 @@ describe("GET /{channel}/helixscreen-*.tar.gz", () => {
   });
 });
 
+describe("GET /releases/{version}/helixscreen-*.tar.gz", () => {
+  it("returns tarball with correct content type and cache headers", async () => {
+    const env = createEnv();
+    env.RELEASES_BUCKET.seed(
+      "releases/v0.99.25/helixscreen-k1-v0.99.25.tar.gz",
+      "binary-data",
+    );
+    const res = await worker.fetch(
+      makeRequest("/releases/v0.99.25/helixscreen-k1-v0.99.25.tar.gz"),
+      env,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/gzip");
+    expect(res.headers.get("Cache-Control")).toBe(
+      "public, max-age=86400, immutable",
+    );
+  });
+
+  it("returns 404 when tarball does not exist in R2", async () => {
+    const res = await worker.fetch(
+      makeRequest("/releases/v1.0.0/helixscreen-k1-v1.0.0.tar.gz"),
+      createEnv(),
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for invalid version format", async () => {
+    const env = createEnv();
+    env.RELEASES_BUCKET.seed(
+      "releases/latest/helixscreen-k1-v1.0.0.tar.gz",
+      "data",
+    );
+    const res = await worker.fetch(
+      makeRequest("/releases/latest/helixscreen-k1-v1.0.0.tar.gz"),
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for non-tarball files under releases path", async () => {
+    const env = createEnv();
+    env.RELEASES_BUCKET.seed("releases/v1.0.0/secrets.txt", "secret");
+    const res = await worker.fetch(
+      makeRequest("/releases/v1.0.0/secrets.txt"),
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("Disallowed paths", () => {
   it("returns 404 for arbitrary paths", async () => {
     const res = await worker.fetch(makeRequest("/some/random/path"), createEnv());

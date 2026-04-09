@@ -2212,11 +2212,26 @@ stop_competing_uis() {
 # Cached manifest from R2 (set by get_latest_version, consumed by download_release)
 _R2_MANIFEST=""
 
+# Detect whether curl supports the flags we need (not BusyBox curl).
+# BusyBox curl lacks -S, -L, --connect-timeout, --max-time, --progress-bar, etc.
+# Cache the result so we only probe once.
+_REAL_CURL=""
+_has_real_curl() {
+    if [ -z "$_REAL_CURL" ]; then
+        if command -v curl >/dev/null 2>&1 && curl --version 2>/dev/null | grep -qi "curl"; then
+            _REAL_CURL=yes
+        else
+            _REAL_CURL=no
+        fi
+    fi
+    [ "$_REAL_CURL" = "yes" ]
+}
+
 # Fetch a URL to stdout using curl or wget
 # Returns non-zero if neither is available or fetch fails
 fetch_url() {
     local url=$1
-    if command -v curl >/dev/null 2>&1; then
+    if _has_real_curl; then
         curl -sSL --connect-timeout 10 "$url" 2>/dev/null
     elif command -v wget >/dev/null 2>&1; then
         wget -qO- --timeout=10 "$url" 2>/dev/null
@@ -2231,7 +2246,7 @@ fetch_url_http() {
     local url=$1
     if command -v wget >/dev/null 2>&1; then
         wget -qO- --timeout=10 "$url" 2>/dev/null
-    elif command -v curl >/dev/null 2>&1; then
+    elif _has_real_curl; then
         curl -sSL --connect-timeout 10 "$url" 2>/dev/null
     else
         return 1
@@ -2250,7 +2265,7 @@ download_file_http() {
             wget -q --timeout="$max_secs" -O "$dest" "$url" && \
                 [ -f "$dest" ] && [ -s "$dest" ]
         fi
-    elif command -v curl >/dev/null 2>&1; then
+    elif _has_real_curl; then
         download_file "$url" "$dest" "$max_secs"
     else
         return 1
@@ -2269,7 +2284,7 @@ _DOWNLOAD_HTTP_CODE=""
 download_file() {
     local url=$1 dest=$2 max_secs=${3:-300} min_speed=${4:-0}
     _DOWNLOAD_HTTP_CODE=""
-    if command -v curl >/dev/null 2>&1; then
+    if _has_real_curl; then
         local http_code progress_flag speed_flags
         if [ -t 2 ]; then
             progress_flag="--progress-bar"
@@ -2351,8 +2366,8 @@ validate_tarball() {
 # Check if we can download from HTTPS URLs
 # BusyBox wget on AD5M doesn't support HTTPS
 check_https_capability() {
-    # curl with SSL support works
-    if command -v curl >/dev/null 2>&1; then
+    # curl with SSL support works (skip BusyBox curl which lacks needed flags)
+    if _has_real_curl; then
         # Test if curl can reach HTTPS (quick timeout)
         if curl -sSL --connect-timeout 5 -o /dev/null "https://github.com" 2>/dev/null; then
             return 0
