@@ -712,7 +712,7 @@ void GCodeLayerRenderer::render_layers_to_cache(int from_layer, int to_layer) {
                         constexpr float kLightX = -0.707f;
                         constexpr float kLightY = -0.707f;
                         float ndotl = nx * kLightX + ny * kLightY;
-                        // Map [-1, 1] → [0.7, 1.3] brightness modifier
+                        // Map [-1, 1] → brightness modifier
                         constexpr float kNormalStrength = 0.12f;
                         float normal_mod = 1.0f + ndotl * kNormalStrength;
                         brightness *= normal_mod;
