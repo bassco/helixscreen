@@ -254,10 +254,16 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     // Duration-proportional progress weights (protected by state_mutex_)
     std::map<int, float> predicted_phase_weights_; ///< Phase -> fraction of total (0.0-1.0)
     float predicted_total_seconds_ = 0.0f;         ///< Total predicted pre-print duration
-    int start_ext_temp_ = 0;           ///< Extruder temp at collector start (decideg/10)
-    int start_bed_temp_ = 0;           ///< Bed temp at collector start (decideg/10)
-    int last_remaining_ = 0;           ///< For monotonic bias
-    bool fallback_completion_ = false; ///< True if COMPLETE was triggered by timeout fallback
+    int start_ext_temp_ = 0; ///< Extruder temp at collector start (decideg/10)
+    int start_bed_temp_ = 0; ///< Bed temp at collector start (decideg/10)
+    // Cached temperature readings for thread-safe access from calculate_progress_locked()
+    // Updated from main thread in check_fallback_completion() and start()
+    std::atomic<int> cached_ext_temp_{0};   ///< Current extruder temp (decideg/10)
+    std::atomic<int> cached_ext_target_{0}; ///< Current extruder target (decideg/10)
+    std::atomic<int> cached_bed_temp_{0};   ///< Current bed temp (decideg/10)
+    std::atomic<int> cached_bed_target_{0}; ///< Current bed target (decideg/10)
+    int last_remaining_ = 0;                ///< For monotonic bias
+    bool fallback_completion_ = false;      ///< True if COMPLETE was triggered by timeout fallback
 
     // Bed mesh probe tracking (protected by state_mutex_)
     // Parsed from G-code responses during BED_MESH phase to provide sub-phase

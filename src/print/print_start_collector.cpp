@@ -102,6 +102,12 @@ void PrintStartCollector::start() {
     // Capture start temperatures for heating fraction calculation
     start_ext_temp_ = lv_subject_get_int(state_.get_active_extruder_temp_subject()) / 10;
     start_bed_temp_ = lv_subject_get_int(state_.get_bed_temp_subject()) / 10;
+    cached_ext_temp_.store(start_ext_temp_, std::memory_order_relaxed);
+    cached_bed_temp_.store(start_bed_temp_, std::memory_order_relaxed);
+    cached_ext_target_.store(lv_subject_get_int(state_.get_active_extruder_target_subject()) / 10,
+                             std::memory_order_relaxed);
+    cached_bed_target_.store(lv_subject_get_int(state_.get_bed_target_subject()) / 10,
+                             std::memory_order_relaxed);
     last_remaining_ = 0;
     fallback_completion_ = false;
 
@@ -331,6 +337,12 @@ void PrintStartCollector::check_fallback_completion() {
     int ext_target = lv_subject_get_int(state_.get_active_extruder_target_subject());
     int bed_temp = lv_subject_get_int(state_.get_bed_temp_subject());
     int bed_target = lv_subject_get_int(state_.get_bed_target_subject());
+
+    // Cache for thread-safe access from calculate_progress_locked()
+    cached_ext_temp_.store(ext_temp / 10, std::memory_order_relaxed);
+    cached_ext_target_.store(ext_target / 10, std::memory_order_relaxed);
+    cached_bed_temp_.store(bed_temp / 10, std::memory_order_relaxed);
+    cached_bed_target_.store(bed_target / 10, std::memory_order_relaxed);
 
     // Temps are in decidegrees (value * 10), targets may be 0 if not set
     bool bed_heating = bed_target > 0 && bed_temp < bed_target - TEMP_TOLERANCE_DECIDEGREES;
@@ -1239,10 +1251,11 @@ void PrintStartCollector::compute_predicted_weights() {
 }
 
 float PrintStartCollector::compute_heating_fraction() const {
-    int ext_temp = lv_subject_get_int(state_.get_active_extruder_temp_subject()) / 10;
-    int ext_target = lv_subject_get_int(state_.get_active_extruder_target_subject()) / 10;
-    int bed_temp = lv_subject_get_int(state_.get_bed_temp_subject()) / 10;
-    int bed_target = lv_subject_get_int(state_.get_bed_target_subject()) / 10;
+    // Use cached temps (thread-safe atomics) instead of LVGL subjects
+    int ext_temp = cached_ext_temp_.load(std::memory_order_relaxed);
+    int ext_target = cached_ext_target_.load(std::memory_order_relaxed);
+    int bed_temp = cached_bed_temp_.load(std::memory_order_relaxed);
+    int bed_target = cached_bed_target_.load(std::memory_order_relaxed);
 
     if (current_phase_ == PrintStartPhase::HEATING_NOZZLE && ext_target > 0) {
         float start = start_ext_temp_ > 0 ? static_cast<float>(start_ext_temp_) : 25.0f;
