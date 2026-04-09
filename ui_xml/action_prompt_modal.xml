@@ -25,11 +25,12 @@
             style_pad_gap="#space_xs" scrollable="true" scroll_snap_y="none">
       <!-- Text lines will be added dynamically -->
     </lv_obj>
-    <!-- Regular button container (row_wrap for grouped buttons) -->
+    <!-- Horizontal divider above buttons -->
+    <divider_horizontal name="button_divider" hidden="true"/>
+    <!-- Regular button container (modal-style: full width, no gaps, dividers between) -->
     <lv_obj name="button_container"
-            width="100%" height="content" style_pad_left="#space_md" style_pad_right="#space_md"
-            style_pad_top="#space_sm" style_pad_bottom="#space_sm" flex_flow="row_wrap" style_flex_main_place="center"
-            style_flex_cross_place="center" style_pad_gap="#space_sm" scrollable="false">
+            width="100%" height="#button_height" style_pad_all="0" style_pad_gap="0"
+            flex_flow="row" scrollable="false" hidden="true">
       <!-- Buttons will be added dynamically based on PromptData.buttons -->
     </lv_obj>
     <!-- Horizontal divider above footer -->
