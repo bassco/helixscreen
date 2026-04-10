@@ -38,9 +38,12 @@ extern "C" int helix_bt_sdp_find_rfcomm_channel(helix_bt_context* ctx, const cha
         return -EINVAL;
     }
 
-    // BDADDR_ANY is defined in <bluetooth/bluetooth.h> as a pointer to an
-    // all-zero bdaddr_t. Use it directly rather than constructing our own.
-    sdp_session_t* session = sdp_connect(BDADDR_ANY, &target, SDP_RETRY_IF_BUSY);
+    // NOTE: <bluetooth/bluetooth.h> defines BDADDR_ANY as a compound literal
+    // (&(bdaddr_t){{0,0,0,0,0,0}}). g++ rejects taking the address of a
+    // compound-literal rvalue outside -fpermissive, so we build a local
+    // zero bdaddr_t instead.
+    bdaddr_t any_addr = {{0, 0, 0, 0, 0, 0}};
+    sdp_session_t* session = sdp_connect(&any_addr, &target, SDP_RETRY_IF_BUSY);
     if (!session) {
         int err = errno ? errno : EIO;
         std::lock_guard<std::mutex> lock(ctx->mutex);
