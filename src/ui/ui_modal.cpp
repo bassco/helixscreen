@@ -404,6 +404,38 @@ Modal::~Modal() {
     // RAII: auto-hide if still visible
     // Use safe delete to handle shutdown race conditions
     if (backdrop_) {
+        // Defensive guard against a stale backdrop_ pointer. This can happen
+        // when an owning C++ object (e.g. an overlay holding a unique_ptr<Modal>)
+        // outlives the widget tree the backdrop was created in — for example,
+        // after a screen switch that tore down lv_screen_active()'s children.
+        // Touching the dangling LVGL object here triggered crash signature
+        // 739584fa: ~Modal → lv_obj_remove_event_cb → lv_event_get_count UAF.
+        //
+        // If the backdrop is no longer a live LVGL object, or is no longer
+        // tracked by ModalStack (another path already removed/deleted it),
+        // just drop our pointers and skip cleanup.
+        auto& stack = ModalStack::instance();
+        if (!lv_obj_is_valid(backdrop_) || !stack.backdrop_for_backdrop(backdrop_)) {
+            spdlog::debug("[Modal] ~Modal: backdrop already cleaned up externally, "
+                          "skipping widget cleanup");
+            backdrop_ = nullptr;
+            dialog_ = nullptr;
+            spdlog::trace("[Modal] Destroyed");
+            return;
+        }
+
+        // If the backdrop is mid-exit-animation, exit_animation_done owns
+        // final cleanup. Removing event callbacks or deleting the widget here
+        // races with the animation and corrupts LVGL's event list. Leave the
+        // widget alone and let the animation complete.
+        if (stack.is_exiting(backdrop_)) {
+            spdlog::debug("[Modal] ~Modal: backdrop mid-exit, deferring to animation");
+            backdrop_ = nullptr;
+            dialog_ = nullptr;
+            spdlog::trace("[Modal] Destroyed");
+            return;
+        }
+
         // Cancel any exit animations BEFORE deleting — prevents exit_animation_done
         // callback from firing on the soon-to-be-freed backdrop
         lv_anim_delete(backdrop_, nullptr);
@@ -422,7 +454,7 @@ Modal::~Modal() {
 
         // Hide immediately without calling virtual on_hide() - derived class already destroyed
         // Note: lv_obj_safe_delete handles focus group cleanup (helix::ui::defocus_tree)
-        ModalStack::instance().remove(backdrop_);
+        stack.remove(backdrop_);
         helix::ui::safe_delete(backdrop_);
         // dialog_ is a child of backdrop_ and was destroyed with it
         dialog_ = nullptr;
