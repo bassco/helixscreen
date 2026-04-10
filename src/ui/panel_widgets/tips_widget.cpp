@@ -6,6 +6,7 @@
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
 #include "ui_modal.h"
+#include "ui_timer_guard.h"
 
 #include "display_settings_manager.h"
 #include "panel_widget_registry.h"
@@ -107,7 +108,7 @@ void TipsWidget::detach() {
         }
 
         if (tip_rotation_timer_) {
-            lv_timer_delete(tip_rotation_timer_);
+            helix::ui::lv_timer_cancel_safe(tip_rotation_timer_);
             tip_rotation_timer_ = nullptr;
         }
     }
@@ -149,7 +150,7 @@ void TipsWidget::on_deactivate() {
     }
 
     if (tip_rotation_timer_) {
-        lv_timer_delete(tip_rotation_timer_);
+        helix::ui::lv_timer_cancel_safe(tip_rotation_timer_);
         tip_rotation_timer_ = nullptr;
         spdlog::debug("[TipsWidget] Stopped tip rotation timer");
     }

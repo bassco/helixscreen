@@ -2,6 +2,8 @@
 
 #include "ui_coalesced_timer.h"
 
+#include "ui_timer_guard.h"
+
 namespace helix::ui {
 
 CoalescedTimer::CoalescedTimer(uint32_t period_ms) : period_ms_(period_ms) {}
@@ -47,7 +49,8 @@ void CoalescedTimer::schedule(std::function<void()> cb) {
 
 void CoalescedTimer::cancel() {
     if (timer_) {
-        lv_timer_delete(timer_);
+        lv_timer_set_user_data(timer_, nullptr);
+        lv_timer_cancel_safe(timer_);
         timer_ = nullptr;
     }
     callback_ = nullptr;
