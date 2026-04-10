@@ -55,6 +55,9 @@ class ScannerPickerModal : public Modal {
     // Bluetooth pairing
     void pair_bt_device(const std::string& mac, const std::string& name);
 
+    // Bluetooth unpair (Forget button on paired BT rows)
+    void handle_bt_forget(const std::string& mac);
+
     // Pairing modal callbacks
     static void on_pair_confirm(lv_event_t* e);
     static void on_pair_cancel(lv_event_t* e);

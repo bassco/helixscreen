@@ -304,6 +304,57 @@ void ScannerPickerModal::add_device_row(lv_obj_t* list, const std::string& label
     lv_obj_remove_flag(name_label, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(name_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+    // Forget (unpair) button for BT-discovered rows (non-empty MAC).
+    // NOTE: CLAUDE.md Rule #1 says "no lv_obj_add_event_cb", but this is the
+    // documented exception for dynamic per-row state that cannot be expressed
+    // in XML — each row's Forget button needs its own MAC, and XML component
+    // instances can't carry per-instance data.
+    if (!bt_mac.empty()) {
+        lv_obj_t* forget_btn = lv_button_create(name_row);
+        lv_obj_set_size(forget_btn, 44, 44);
+        lv_obj_set_style_pad_all(forget_btn, 4, 0);
+        lv_obj_set_style_bg_opa(forget_btn, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(forget_btn, 0, 0);
+        lv_obj_set_style_shadow_width(forget_btn, 0, 0);
+
+        // Heap-allocate the MAC so its lifetime survives the row;
+        // freed in LV_EVENT_DELETE below.
+        auto* mac_copy = new std::string(bt_mac);
+        lv_obj_set_user_data(forget_btn, mac_copy);
+
+        lv_obj_add_event_cb(
+            forget_btn,
+            [](lv_event_t* e) {
+                LVGL_SAFE_EVENT_CB_BEGIN("[ScannerPickerModal] forget_btn");
+                auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                auto* mac_ptr = static_cast<std::string*>(lv_obj_get_user_data(btn));
+                if (mac_ptr && s_active_instance_) {
+                    s_active_instance_->handle_bt_forget(*mac_ptr);
+                }
+                LVGL_SAFE_EVENT_CB_END();
+            },
+            LV_EVENT_CLICKED, nullptr);
+
+        // Free the heap-allocated MAC when the button is destroyed.
+        lv_obj_add_event_cb(
+            forget_btn,
+            [](lv_event_t* e) {
+                auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+                delete static_cast<std::string*>(lv_obj_get_user_data(btn));
+                lv_obj_set_user_data(btn, nullptr);
+            },
+            LV_EVENT_DELETE, nullptr);
+
+        // Trash icon label
+        lv_obj_t* icon = lv_label_create(forget_btn);
+        const char* del_cp = ui_icon::lookup_codepoint("delete");
+        lv_label_set_text(icon, del_cp ? del_cp : "");
+        lv_obj_set_style_text_font(icon, theme_manager_get_font("icon_font_sm"), 0);
+        lv_obj_set_style_text_color(icon, theme_manager_get_color("danger"), 0);
+        lv_obj_center(icon);
+        lv_obj_remove_flag(icon, LV_OBJ_FLAG_CLICKABLE);
+    }
+
     // Sublabel (small font, muted color) — clickable=false so clicks bubble to row
     lv_obj_t* sub_label = lv_label_create(row);
     lv_label_set_text(sub_label, sublabel.c_str());
@@ -557,6 +608,63 @@ void ScannerPickerModal::pair_bt_device(const std::string& mac, const std::strin
         delete pair_data;
         spdlog::warn("[{}] Failed to show pairing confirmation modal", get_name());
     }
+}
+
+// ============================================================================
+// BLUETOOTH UNPAIR (Forget)
+// ============================================================================
+
+void ScannerPickerModal::handle_bt_forget(const std::string& mac) {
+    spdlog::info("[{}] Forgetting BT scanner {}", get_name(), mac);
+
+    auto tok = lifetime_.token();
+    std::thread([this, tok, mac]() {
+        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+        if (!loader.is_available() || !loader.remove_device) {
+            spdlog::error("[ScannerPickerModal] remove_device symbol missing");
+        } else {
+            auto* ctx = loader.get_or_create_context();
+            if (!ctx) {
+                spdlog::error("[ScannerPickerModal] Failed to get BT context for remove_device");
+            } else {
+                int r = loader.remove_device(ctx, mac.c_str());
+                if (r < 0) {
+                    const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
+                    spdlog::error("[ScannerPickerModal] remove_device failed for {}: r={} err={}",
+                                  mac, r, err);
+                    // Fall through and clear settings anyway so the UI doesn't
+                    // show a stale config.
+                } else {
+                    spdlog::info("[ScannerPickerModal] BlueZ unpair succeeded for {}", mac);
+                }
+            }
+        }
+
+        if (tok.expired())
+            return;
+        tok.defer([this, mac]() {
+            // If this was the currently-selected scanner, revert to auto-detect.
+            auto& settings = helix::SettingsManager::instance();
+            if (settings.get_scanner_bt_address() == mac) {
+                settings.set_scanner_bt_address("");
+                settings.set_scanner_device_id("");
+                settings.set_scanner_device_name("");
+                current_device_id_.clear();
+            }
+
+            // Drop the forgotten device from the local discovery list.
+            bt_devices_.erase(
+                std::remove_if(bt_devices_.begin(), bt_devices_.end(),
+                               [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
+                bt_devices_.end());
+
+            // Rebuild the device list.
+            populate_device_list();
+
+            ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                          lv_tr("Bluetooth scanner forgotten"), 2000);
+        });
+    }).detach();
 }
 
 void ScannerPickerModal::on_pair_confirm(lv_event_t* e) {
