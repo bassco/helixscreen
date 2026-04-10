@@ -9,6 +9,7 @@
 #include "bluetooth_loader.h"
 #include "brother_pt_protocol.h"
 #include "bt_print_utils.h"
+#include "label_printer_settings.h"
 #include "label_renderer.h"
 #include "spoolman_types.h"
 
@@ -80,8 +81,9 @@ void BrotherPTBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
     std::string mac = mac_;
 
     std::thread([mac, commands = std::move(commands), callback]() {
-        // fallback_channel=0 — rely on SDP cache+lookup inside rfcomm_send
-        auto result = helix::bluetooth::rfcomm_send(mac, 0, commands, "Brother PT BT");
+        // fallback_channel=1 preserves first-run behavior on SDP-less builds.
+        // Brother PT-E550W / P750W historically advertise SPP on channel 1.
+        auto result = helix::bluetooth::rfcomm_send(mac, 1, commands, "Brother PT BT");
         helix::ui::queue_update([callback, result]() {
             if (callback)
                 callback(result.success, result.error);
@@ -123,8 +125,9 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
             return;
         }
 
-        // Resolve RFCOMM channel via cache + SDP (fallback_channel=0 → SDP must succeed)
-        int channel = helix::label::resolve_label_printer_channel(mac, 0);
+        // Resolve RFCOMM channel via cache + SDP. Fallback 1 matches Brother PT
+        // historical SPP channel for builds without a working SDP symbol.
+        int channel = helix::label::resolve_label_printer_channel(mac, 1);
         if (channel <= 0) {
             spdlog::error("[Brother PT BT] No RFCOMM channel resolved for {}", mac);
             helix::ui::queue_update([callback]() {
@@ -138,6 +141,15 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
         spdlog::info("[Brother PT BT] Connecting to {} ch{}", mac, channel);
         int fd = loader.connect_rfcomm(ctx, mac.c_str(), channel);
         if (fd < 0) {
+            // If we used a cached channel, invalidate it so the next print retries
+            // with fresh SDP. Matches the invalidate-on-failure pattern in MakeID.
+            int cached = helix::LabelPrinterSettingsManager::instance().get_bt_channel();
+            if (cached > 0 && cached == channel) {
+                spdlog::warn(
+                    "[Brother PT BT] cached channel {} failed; invalidating for next print",
+                    channel);
+                helix::LabelPrinterSettingsManager::instance().set_bt_channel(0);
+            }
             const char* err = loader.last_error ? loader.last_error(ctx) : "Unknown error";
             helix::ui::queue_update([callback, e = std::string(err)]() {
                 if (callback)
