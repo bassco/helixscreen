@@ -35,11 +35,11 @@ class DebugBundleCollector {
     /// Individual collectors (public for testing)
     static nlohmann::json collect_system_info();
     static nlohmann::json collect_printer_info();
-    static std::string collect_log_tail(int num_lines = 500);
+    static std::string collect_log_tail(int num_lines = 2000);
     static std::string collect_crash_txt();
     static nlohmann::json collect_sanitized_settings();
-    static std::string collect_klipper_log_tail(int num_lines = 500);
-    static std::string collect_moonraker_log_tail(int num_lines = 200);
+    static std::string collect_klipper_log_tail(int num_lines = 2000);
+    static std::string collect_moonraker_log_tail(int num_lines = 2000);
 
     /// Read crash_report.txt from config_dir (persists after crash.txt consumed)
     static std::string collect_crash_report_txt(const std::string& config_dir);
@@ -55,7 +55,7 @@ class DebugBundleCollector {
                                                    int num_lines);
 
     /// Read helix-screen entries from syslog (fallback for embedded platforms)
-    static std::string collect_syslog_tail(int num_lines = 500);
+    static std::string collect_syslog_tail(int num_lines = 2000);
 
     /// Collect Moonraker state via REST (server info, printer state, config)
     static nlohmann::json collect_moonraker_info();
