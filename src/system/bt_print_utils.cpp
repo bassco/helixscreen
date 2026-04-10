@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "bt_print_utils.h"
+
 #include "bluetooth_loader.h"
+#include "label_printer_settings.h"
 
 #include <spdlog/spdlog.h>
 
+#include <mutex>
 #include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#include <mutex>
 
 namespace helix::bluetooth {
 
 // Single mutex for ALL Bluetooth RFCOMM prints — only one connection at a time
 static std::mutex s_rfcomm_mutex;
 
-RfcommSendResult rfcomm_send(const std::string& mac, int channel,
-                              const std::vector<uint8_t>& data,
-                              const std::string& log_tag) {
+RfcommSendResult rfcomm_send(const std::string& mac, int channel, const std::vector<uint8_t>& data,
+                             const std::string& log_tag) {
     std::lock_guard<std::mutex> lock(s_rfcomm_mutex);
 
     RfcommSendResult result;
@@ -42,8 +42,7 @@ RfcommSendResult rfcomm_send(const std::string& mac, int channel,
 
     size_t total_sent = 0;
     while (total_sent < data.size()) {
-        ssize_t sent = ::write(fd, data.data() + total_sent,
-                               data.size() - total_sent);
+        ssize_t sent = ::write(fd, data.data() + total_sent, data.size() - total_sent);
         if (sent < 0) {
             result.error = fmt::format("Write failed: {}", strerror(errno));
             spdlog::error("{}: {}", log_tag, result.error);
@@ -66,9 +65,8 @@ RfcommSendResult rfcomm_send(const std::string& mac, int channel,
 }
 
 RfcommSendResult rfcomm_send_receive(const std::string& mac, int channel,
-                                      const std::vector<uint8_t>& data,
-                                      size_t response_len,
-                                      const std::string& log_tag) {
+                                     const std::vector<uint8_t>& data, size_t response_len,
+                                     const std::string& log_tag) {
     std::lock_guard<std::mutex> lock(s_rfcomm_mutex);
 
     RfcommSendResult result;
@@ -93,8 +91,7 @@ RfcommSendResult rfcomm_send_receive(const std::string& mac, int channel,
     // Send request
     size_t total_sent = 0;
     while (total_sent < data.size()) {
-        ssize_t sent = ::write(fd, data.data() + total_sent,
-                               data.size() - total_sent);
+        ssize_t sent = ::write(fd, data.data() + total_sent, data.size() - total_sent);
         if (sent < 0) {
             result.error = fmt::format("Write failed: {}", strerror(errno));
             spdlog::error("{}: {}", log_tag, result.error);
@@ -126,8 +123,7 @@ RfcommSendResult rfcomm_send_receive(const std::string& mac, int channel,
         int ready = ::poll(&pfd, 1, static_cast<int>(remaining.count()));
         if (ready <= 0)
             break;
-        ssize_t n = ::read(fd, result.response.data() + total_read,
-                           response_len - total_read);
+        ssize_t n = ::read(fd, result.response.data() + total_read, response_len - total_read);
         if (n <= 0)
             break;
         total_read += static_cast<size_t>(n);
@@ -143,4 +139,47 @@ RfcommSendResult rfcomm_send_receive(const std::string& mac, int channel,
     return result;
 }
 
-}  // namespace helix::bluetooth
+} // namespace helix::bluetooth
+
+namespace helix::label {
+
+namespace {
+constexpr int kMinChannel = 1;
+constexpr int kMaxChannel = 30;
+} // namespace
+
+int resolve_label_printer_channel(const std::string& mac, int fallback_channel) {
+    auto& settings = helix::LabelPrinterSettingsManager::instance();
+    int cached = settings.get_bt_channel();
+    if (cached >= kMinChannel && cached <= kMaxChannel) {
+        spdlog::debug("[BT] Using cached RFCOMM channel {} for {}", cached, mac);
+        return cached;
+    }
+
+    auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    if (!loader.sdp_find_rfcomm_channel) {
+        spdlog::warn("[BT] SDP symbol missing; using fallback channel {} for {}", fallback_channel,
+                     mac);
+        return (fallback_channel >= kMinChannel && fallback_channel <= kMaxChannel)
+                   ? fallback_channel
+                   : -1;
+    }
+
+    auto* ctx = loader.get_or_create_context();
+    int channel = -1;
+    int r = loader.sdp_find_rfcomm_channel(ctx, mac.c_str(), kSppUuid16, &channel);
+    if (r == 0 && channel >= kMinChannel && channel <= kMaxChannel) {
+        spdlog::info("[BT] SDP resolved RFCOMM channel {} for {} (caching)", channel, mac);
+        settings.set_bt_channel(channel);
+        return channel;
+    }
+
+    spdlog::warn("[BT] SDP lookup failed for {} (r={}, ch={}); falling back to {}", mac, r, channel,
+                 fallback_channel);
+    if (fallback_channel >= kMinChannel && fallback_channel <= kMaxChannel) {
+        return fallback_channel; // do NOT cache fallback
+    }
+    return -1;
+}
+
+} // namespace helix::label
