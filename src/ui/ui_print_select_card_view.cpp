@@ -71,13 +71,16 @@ PrintSelectCardView::PrintSelectCardView(PrintSelectCardView&& other) noexcept
       cached_gradient_dark_(other.cached_gradient_dark_),
       theme_observer_(std::move(other.theme_observer_)),
       on_file_click_(std::move(other.on_file_click_)),
-      on_metadata_fetch_(std::move(other.on_metadata_fetch_)) {
+      on_file_long_press_(std::move(other.on_file_long_press_)),
+      on_metadata_fetch_(std::move(other.on_metadata_fetch_)),
+      suppress_next_click_(other.suppress_next_click_) {
     other.container_ = nullptr;
     other.leading_spacer_ = nullptr;
     other.trailing_spacer_ = nullptr;
     other.visible_start_row_ = -1;
     other.visible_end_row_ = -1;
     other.cached_gradient_ = nullptr;
+    other.suppress_next_click_ = false;
 }
 
 PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other) noexcept {
@@ -99,7 +102,9 @@ PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other)
         cached_gradient_dark_ = other.cached_gradient_dark_;
         theme_observer_ = std::move(other.theme_observer_);
         on_file_click_ = std::move(other.on_file_click_);
+        on_file_long_press_ = std::move(other.on_file_long_press_);
         on_metadata_fetch_ = std::move(other.on_metadata_fetch_);
+        suppress_next_click_ = other.suppress_next_click_;
 
         other.container_ = nullptr;
         other.leading_spacer_ = nullptr;
@@ -107,6 +112,7 @@ PrintSelectCardView& PrintSelectCardView::operator=(PrintSelectCardView&& other)
         other.visible_start_row_ = -1;
         other.visible_end_row_ = -1;
         other.cached_gradient_ = nullptr;
+        other.suppress_next_click_ = false;
     }
     return *this;
 }
@@ -265,6 +271,11 @@ void PrintSelectCardView::init_pool(const CardDimensions& dims) {
             // LVGL fires LV_EVENT_LONG_PRESSED on its hold-timer BEFORE release, so releasing
             // after a long-press also fires LV_EVENT_CLICKED — we suppress it in on_card_clicked.
             lv_obj_add_event_cb(card, on_card_long_pressed, LV_EVENT_LONG_PRESSED, this);
+
+            // If the long-press fires and then the user drags off the card without releasing,
+            // LVGL sends PRESS_LOST instead of CLICKED, leaving suppress_next_click_ stuck.
+            // Clearing it here keeps the state machine robust against that sequence.
+            lv_obj_add_event_cb(card, on_card_press_lost, LV_EVENT_PRESS_LOST, this);
 
             // Create per-card data with subjects for declarative text binding
             auto data = std::make_unique<CardWidgetData>();
@@ -688,6 +699,14 @@ void PrintSelectCardView::on_card_long_pressed(lv_event_t* e) {
         auto file_index = reinterpret_cast<size_t>(lv_obj_get_user_data(card));
         spdlog::debug("[PrintSelectCardView] long-press fired for file_index={}", file_index);
         self->on_file_long_press_(file_index);
+    }
+}
+
+void PrintSelectCardView::on_card_press_lost(lv_event_t* e) {
+    auto* self = static_cast<PrintSelectCardView*>(lv_event_get_user_data(e));
+    if (self && self->suppress_next_click_) {
+        self->suppress_next_click_ = false;
+        spdlog::trace("[PrintSelectCardView] suppress flag cleared on PRESS_LOST");
     }
 }
 

@@ -313,6 +313,7 @@ class PrintSelectCardView {
     // === Static Callbacks ===
     static void on_card_clicked(lv_event_t* e);
     static void on_card_long_pressed(lv_event_t* e);
+    static void on_card_press_lost(lv_event_t* e);
 };
 
 } // namespace helix::ui
