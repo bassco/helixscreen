@@ -55,7 +55,18 @@ $(BUILD_DIR)/splash/%.o: src/%.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_D
 # on backlight at startup), and a UI notification stub (config.cpp calls ui_notification_error
 # on save failures). Note: both config.o and backlight_backend.o must be compiled separately with
 # HELIX_SPLASH_ONLY to skip runtime_config dependency (which pulls in main app symbols).
-SPLASH_EXTRA_OBJS := $(BUILD_DIR)/splash/config.o $(BUILD_DIR)/splash/config_backup.o $(BUILD_DIR)/splash/backlight_backend.o $(BUILD_DIR)/splash/ui_notification_stub.o
+#
+# Display backends also reference drm_mode_matching.o, fbdev_size_helper.o, and
+# pending_startup_warnings.o (added for #766 -s resolution support). These are small,
+# dependency-free modules that can be linked into splash as extra objects.
+SPLASH_EXTRA_OBJS := \
+    $(BUILD_DIR)/splash/config.o \
+    $(BUILD_DIR)/splash/config_backup.o \
+    $(BUILD_DIR)/splash/backlight_backend.o \
+    $(BUILD_DIR)/splash/ui_notification_stub.o \
+    $(BUILD_DIR)/splash/drm_mode_matching.o \
+    $(BUILD_DIR)/splash/fbdev_size_helper.o \
+    $(BUILD_DIR)/splash/pending_startup_warnings.o
 
 # Compile config for splash (with HELIX_SPLASH_ONLY to guard get_runtime_config dependency)
 $(BUILD_DIR)/splash/config.o: src/system/config.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
@@ -64,6 +75,21 @@ $(BUILD_DIR)/splash/config.o: src/system/config.cpp $(LIBHV_LIB) $(LIBHV_JSON_HE
 
 # Compile config_backup for splash (config.cpp references it)
 $(BUILD_DIR)/splash/config_backup.o: src/system/config_backup.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
+	@echo "[CXX] $< (splash)"
+	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# DRM mode-matching helper (pure, referenced by display_backend_drm.cpp). Added for #766.
+$(BUILD_DIR)/splash/drm_mode_matching.o: src/api/drm_mode_matching.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
+	@echo "[CXX] $< (splash)"
+	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# Fbdev kernel-size helper (pure, referenced by display_backend_fbdev.cpp). Added for #766.
+$(BUILD_DIR)/splash/fbdev_size_helper.o: src/api/fbdev_size_helper.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
+	@echo "[CXX] $< (splash)"
+	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# PendingStartupWarnings queue (referenced by both display backends). Added for #766.
+$(BUILD_DIR)/splash/pending_startup_warnings.o: src/system/pending_startup_warnings.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
 	@echo "[CXX] $< (splash)"
 	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 

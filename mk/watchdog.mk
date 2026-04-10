@@ -64,11 +64,19 @@ $(BUILD_DIR)/watchdog/%.o: src/%.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD
 # Watchdog needs config.o (for reading settings.json), backlight_backend.o,
 # logging_init.o (for spdlog journal/syslog detection), and notification stub.
 # Note: config.o must be compiled separately with HELIX_WATCHDOG to skip runtime_config dependency.
+#
+# Display backends (via DISPLAY_LIB, linked with --whole-archive) reference
+# drm_mode_matching.o, fbdev_size_helper.o, and pending_startup_warnings.o
+# (added for #766 -s resolution support). These are small, dependency-free
+# modules that can be linked into watchdog as extra objects.
 WATCHDOG_EXTRA_OBJS := $(BUILD_DIR)/watchdog/config.o \
                        $(BUILD_DIR)/watchdog/config_backup.o \
                        $(BUILD_DIR)/watchdog/backlight_backend.o \
                        $(BUILD_DIR)/watchdog/logging_init.o \
-                       $(BUILD_DIR)/watchdog/ui_notification_stub.o
+                       $(BUILD_DIR)/watchdog/ui_notification_stub.o \
+                       $(BUILD_DIR)/watchdog/drm_mode_matching.o \
+                       $(BUILD_DIR)/watchdog/fbdev_size_helper.o \
+                       $(BUILD_DIR)/watchdog/pending_startup_warnings.o
 
 # Compile config for watchdog (with HELIX_WATCHDOG to guard get_runtime_config dependency)
 $(BUILD_DIR)/watchdog/config.o: src/system/config.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
@@ -93,6 +101,21 @@ $(BUILD_DIR)/watchdog/logging_init.o: src/system/logging_init.cpp $(LIBHV_LIB) $
 # Compile notification stub for watchdog (with dependency tracking)
 $(BUILD_DIR)/watchdog/ui_notification_stub.o: tools/ui_notification_stub.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
 	@echo "[CXX] $< (watchdog stub)"
+	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# DRM mode-matching helper (pure, referenced by display_backend_drm.cpp). Added for #766.
+$(BUILD_DIR)/watchdog/drm_mode_matching.o: src/api/drm_mode_matching.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
+	@echo "[CXX] $< (watchdog)"
+	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# Fbdev kernel-size helper (pure, referenced by display_backend_fbdev.cpp). Added for #766.
+$(BUILD_DIR)/watchdog/fbdev_size_helper.o: src/api/fbdev_size_helper.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
+	@echo "[CXX] $< (watchdog)"
+	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# PendingStartupWarnings queue (referenced by both display backends). Added for #766.
+$(BUILD_DIR)/watchdog/pending_startup_warnings.o: src/system/pending_startup_warnings.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
+	@echo "[CXX] $< (watchdog)"
 	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
 # Link watchdog binary
