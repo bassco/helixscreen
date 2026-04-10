@@ -24,14 +24,18 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     // OverlayBase interface
     void init_subjects() override;
     void register_callbacks() override;
-    const char* get_name() const override { return "Label Printer"; }
+    const char* get_name() const override {
+        return "Label Printer";
+    }
     void on_activate() override;
     void on_deactivate() override;
 
     // UI creation
     lv_obj_t* create(lv_obj_t* parent) override;
     void show(lv_obj_t* parent_screen);
-    bool is_created() const { return overlay_root_ != nullptr; }
+    bool is_created() const {
+        return overlay_root_ != nullptr;
+    }
 
     // Event handlers (public for static callbacks)
     void handle_address_changed();
@@ -45,6 +49,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     void handle_bt_printer_selected(int index);
     void handle_bt_scan();
     void handle_bt_connect();
+    void handle_bt_forget();
     void handle_label_count_changed(int index);
 
   private:
@@ -108,13 +113,15 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     std::unique_ptr<BtDiscoveryContext> bt_discovery_ctx_;
     std::vector<BtDeviceInfo> bt_devices_;
     bool bt_discovering_ = false;
-    lv_subject_t bt_scanning_subject_{}; ///< 0=idle, 1=scanning
+    lv_subject_t bt_scanning_subject_{};   ///< 0=idle, 1=scanning
     lv_subject_t test_printing_subject_{}; ///< 0=idle, 1=printing
 
   public:
-    void test_printing_subject_set(int val) { lv_subject_set_int(&test_printing_subject_, val); }
-  private:
+    void test_printing_subject_set(int val) {
+        lv_subject_set_int(&test_printing_subject_, val);
+    }
 
+  private:
     // Static callbacks
     static void on_address_done(lv_event_t* e);
     static void on_port_done(lv_event_t* e);
@@ -127,6 +134,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
     static void on_bt_printer_selected(lv_event_t* e);
     static void on_bt_scan(lv_event_t* e);
     static void on_bt_connect(lv_event_t* e);
+    static void on_bt_forget(lv_event_t* e);
     static void on_label_count_changed(lv_event_t* e);
 
     // Pairing modal callbacks

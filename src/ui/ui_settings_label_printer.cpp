@@ -15,15 +15,15 @@
 #include "bluetooth_loader.h"
 #include "brother_pt_bt_printer.h"
 #include "brother_ql_printer.h"
-#include "ipp_printer.h"
-#include "sheet_label_layout.h"
 #include "bt_discovery_utils.h"
+#include "ipp_printer.h"
 #include "label_printer_settings.h"
 #include "label_printer_utils.h"
 #include "makeid_protocol.h"
 #include "niimbot_protocol.h"
 #include "phomemo_printer.h"
 #include "runtime_config.h"
+#include "sheet_label_layout.h"
 #include "spoolman_types.h"
 #include "static_panel_registry.h"
 #include "usb_printer_detector.h"
@@ -55,7 +55,7 @@ static std::string friendly_bt_name(const std::string& name) {
 /// @param saved   Device address is saved in our settings (may not be BlueZ-paired)
 /// @param connected  Active BLE/RFCOMM connection
 static std::string bt_device_label(const std::string& name, bool paired, bool saved,
-                                    bool connected) {
+                                   bool connected) {
     std::string label = friendly_bt_name(name);
     if (connected) {
         label += " (Connected)";
@@ -187,7 +187,9 @@ void LabelPrinterSettingsOverlay::init_subjects() {
 
     // IPP selected subject (0=not IPP, 1=IPP protocol selected within network type)
     int ipp_initial = (LabelPrinterSettingsManager::instance().get_printer_type() == "network" &&
-                       LabelPrinterSettingsManager::instance().get_printer_protocol() == "ipp") ? 1 : 0;
+                       LabelPrinterSettingsManager::instance().get_printer_protocol() == "ipp")
+                          ? 1
+                          : 0;
     lv_subject_init_int(&ipp_selected_subject_, ipp_initial);
     lv_xml_register_subject(nullptr, "ipp_selected", &ipp_selected_subject_);
 
@@ -206,6 +208,7 @@ void LabelPrinterSettingsOverlay::register_callbacks() {
         {"on_lp_bt_printer_selected", on_bt_printer_selected},
         {"on_lp_bt_scan", on_bt_scan},
         {"on_lp_bt_connect", on_bt_connect},
+        {"on_lp_bt_forget", on_bt_forget},
         {"on_lp_label_count_changed", on_label_count_changed},
     });
 
@@ -407,8 +410,8 @@ void LabelPrinterSettingsOverlay::init_preset_dropdown() {
 
         // For small square labels, only QR-only is available
         auto sizes = get_sizes_for_current_printer();
-        int size_idx = std::clamp(settings.get_label_size_index(), 0,
-                                  static_cast<int>(sizes.size()) - 1);
+        int size_idx =
+            std::clamp(settings.get_label_size_index(), 0, static_cast<int>(sizes.size()) - 1);
         const auto& sz = sizes[size_idx];
         if (sz.width_px <= 250 && sz.height_px > 0 && sz.height_px <= 250) {
             lv_dropdown_set_options(dropdown, lv_tr("QR Only"));
@@ -453,7 +456,8 @@ void LabelPrinterSettingsOverlay::start_label_printer_discovery() {
         auto token = lifetime_.token();
         mdns_discovery_->start_discovery(
             [this, token](const std::vector<DiscoveredPrinter>& printers) {
-                if (token.expired()) return;
+                if (token.expired())
+                    return;
                 raw_printers_ = printers;
                 merge_and_update_discovery();
             });
@@ -465,7 +469,8 @@ void LabelPrinterSettingsOverlay::start_label_printer_discovery() {
         auto token = lifetime_.token();
         ipp_mdns_discovery_->start_discovery(
             [this, token](const std::vector<DiscoveredPrinter>& printers) {
-                if (token.expired()) return;
+                if (token.expired())
+                    return;
                 ipp_printers_ = printers;
                 merge_and_update_discovery();
             });
@@ -618,10 +623,12 @@ void LabelPrinterSettingsOverlay::handle_printer_selected(int index) {
 }
 
 void LabelPrinterSettingsOverlay::update_ipp_selected_subject() {
-    if (!subjects_initialized_) return;
+    if (!subjects_initialized_)
+        return;
     auto& settings = LabelPrinterSettingsManager::instance();
-    int ipp_val = (settings.get_printer_type() == "network" &&
-                   settings.get_printer_protocol() == "ipp") ? 1 : 0;
+    int ipp_val =
+        (settings.get_printer_type() == "network" && settings.get_printer_protocol() == "ipp") ? 1
+                                                                                               : 0;
     lv_subject_set_int(&ipp_selected_subject_, ipp_val);
 }
 
@@ -642,8 +649,7 @@ void LabelPrinterSettingsOverlay::init_printer_type_dropdown() {
         const bool bt_available = helix::bluetooth::BluetoothLoader::instance().is_available();
         std::string options;
         if (bt_available) {
-            options = fmt::format("{}\n{}\n{}", lv_tr("Network"), lv_tr("USB"),
-                                 lv_tr("Bluetooth"));
+            options = fmt::format("{}\n{}\n{}", lv_tr("Network"), lv_tr("USB"), lv_tr("Bluetooth"));
         } else {
             options = fmt::format("{}\n{}", lv_tr("Network"), lv_tr("USB"));
         }
@@ -748,8 +754,8 @@ void LabelPrinterSettingsOverlay::init_label_count_dropdown() {
     // Determine max labels from current sheet template
     auto& settings = LabelPrinterSettingsManager::instance();
     const auto& templates = helix::label::get_sheet_templates();
-    int tmpl_idx = std::clamp(settings.get_label_size_index(), 0,
-                              static_cast<int>(templates.size()) - 1);
+    int tmpl_idx =
+        std::clamp(settings.get_label_size_index(), 0, static_cast<int>(templates.size()) - 1);
     int max_labels = templates[tmpl_idx].labels_per_sheet();
 
     std::string options;
@@ -937,11 +943,11 @@ void LabelPrinterSettingsOverlay::handle_label_size_changed(int index) {
                         settings.set_label_preset(static_cast<int>(LabelPreset::MINIMAL));
                     } else {
                         // Restore full options
-                        auto opts = fmt::format("{}\n{}\n{}",
-                            lv_tr("Standard"), lv_tr("Compact"), lv_tr("QR Only"));
+                        auto opts = fmt::format("{}\n{}\n{}", lv_tr("Standard"), lv_tr("Compact"),
+                                                lv_tr("QR Only"));
                         lv_dropdown_set_options(dd, opts.c_str());
-                        lv_dropdown_set_selected(dd,
-                            static_cast<uint32_t>(settings.get_label_preset()));
+                        lv_dropdown_set_selected(
+                            dd, static_cast<uint32_t>(settings.get_label_preset()));
                         lv_obj_remove_state(dd, LV_STATE_DISABLED);
                     }
                 }
@@ -1046,11 +1052,11 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
         saved_dev.name = saved_name.empty() ? saved_addr : saved_name;
         // Name-based BLE detection overrides saved transport setting —
         // some devices were incorrectly saved as "spp" before the fix
-        saved_dev.is_ble = helix::bluetooth::name_suggests_ble(saved_dev.name.c_str())
-            || (settings.get_bt_transport() == "ble");
+        saved_dev.is_ble = helix::bluetooth::name_suggests_ble(saved_dev.name.c_str()) ||
+                           (settings.get_bt_transport() == "ble");
         if (saved_dev.is_ble && settings.get_bt_transport() != "ble") {
-            spdlog::info("[{}] Correcting saved transport from spp to ble for {}",
-                         get_name(), saved_dev.name);
+            spdlog::info("[{}] Correcting saved transport from spp to ble for {}", get_name(),
+                         saved_dev.name);
             settings.set_bt_transport("ble");
         }
 
@@ -1063,15 +1069,20 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
 
         // Show "(Saved)" immediately — BLE devices don't persist pairing so
         // our settings ARE the "saved" state
-        lv_dropdown_set_options(
-            dropdown,
-            bt_device_label(saved_dev.name, false, true, false).c_str());
+        lv_dropdown_set_options(dropdown,
+                                bt_device_label(saved_dev.name, false, true, false).c_str());
         lv_dropdown_set_selected(dropdown, 0);
 
         // Enable connect button (will update after async check)
         lv_obj_t* btn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect");
         if (btn) {
             lv_obj_remove_state(btn, LV_STATE_DISABLED);
+        }
+
+        // Enable Forget button whenever a BT MAC is configured
+        lv_obj_t* forget_btn = lv_obj_find_by_name(overlay_root_, "btn_bt_forget");
+        if (forget_btn) {
+            lv_obj_remove_state(forget_btn, LV_STATE_DISABLED);
         }
 
         // Check actual paired/connected state asynchronously to avoid
@@ -1088,8 +1099,8 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
                 auto& ldr = helix::bluetooth::BluetoothLoader::instance();
                 int paired_r = ldr.is_paired ? ldr.is_paired(ctx, addr.c_str()) : -1;
                 bool connected = check_bt_connected(ctx, addr);
-                spdlog::debug("[Label Printer] Async BT state: is_paired={} connected={}",
-                              paired_r, connected);
+                spdlog::debug("[Label Printer] Async BT state: is_paired={} connected={}", paired_r,
+                              connected);
 
                 helix::ui::queue_update([bt_token, paired_r, connected, addr]() {
                     if (bt_token.expired())
@@ -1132,6 +1143,11 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
         }
     } else {
         lv_dropdown_set_options(dropdown, lv_tr("Press Scan to search"));
+        // No saved BT printer — ensure Forget button is disabled
+        lv_obj_t* forget_btn = lv_obj_find_by_name(overlay_root_, "btn_bt_forget");
+        if (forget_btn) {
+            lv_obj_add_state(forget_btn, LV_STATE_DISABLED);
+        }
     }
 }
 
@@ -1233,7 +1249,8 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                     for (const auto& d : overlay->bt_devices_) {
                                         if (!options.empty())
                                             options += "\n";
-                                        options += bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                        options += bt_device_label(d.name, d.paired, !d.mac.empty(),
+                                                                   d.connected);
                                     }
                                     lv_dropdown_close(dropdown);
                                     lv_dropdown_set_options(dropdown, options.c_str());
@@ -1272,7 +1289,8 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                             for (const auto& d : overlay->bt_devices_) {
                                 if (!options.empty())
                                     options += "\n";
-                                options += bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                options +=
+                                    bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
                             }
                             lv_dropdown_set_options(dropdown, options.c_str());
                         }
@@ -1488,9 +1506,13 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
         // try a brief scan to rediscover, then retry
         if (ret < 0 && ldr.discover && ldr.pair) {
             spdlog::info("[LabelPrinterSettings] Pair failed, scanning to rediscover {}...", mac);
-            struct ScanCtx { std::string target; bool found = false; };
+            struct ScanCtx {
+                std::string target;
+                bool found = false;
+            };
             ScanCtx scan_ctx{mac};
-            ldr.discover(init_ctx, 8000,
+            ldr.discover(
+                init_ctx, 8000,
                 [](const helix_bt_device* dev, void* user_data) {
                     auto* sc = static_cast<ScanCtx*>(user_data);
                     if (dev->mac && sc->target == dev->mac) {
@@ -1541,7 +1563,8 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
                         for (const auto& d : ov.bt_devices_) {
                             if (!options.empty())
                                 options += "\n";
-                            options += bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                            options +=
+                                bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
                         }
                         lv_dropdown_set_options(dropdown, options.c_str());
                     }
@@ -1561,8 +1584,7 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
             if (paired_ok) {
                 ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Paired"), 2000);
             } else {
-                ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"),
-                                              2000);
+                ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 2000);
             }
         });
     }).detach();
@@ -1571,6 +1593,82 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
 void LabelPrinterSettingsOverlay::on_bt_connect(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_bt_connect");
     get_label_printer_settings_overlay().handle_bt_connect();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void LabelPrinterSettingsOverlay::handle_bt_forget() {
+    auto& settings = LabelPrinterSettingsManager::instance();
+    std::string mac = settings.get_bt_address();
+    if (mac.empty()) {
+        spdlog::warn("[{}] Forget clicked but no BT MAC configured", get_name());
+        return;
+    }
+
+    spdlog::info("[{}] Forgetting BT printer {}", get_name(), mac);
+
+    // Disable Forget + Connect buttons while the unpair is in flight
+    if (overlay_root_) {
+        if (auto* fbtn = lv_obj_find_by_name(overlay_root_, "btn_bt_forget")) {
+            lv_obj_add_state(fbtn, LV_STATE_DISABLED);
+        }
+        if (auto* cbtn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect")) {
+            lv_obj_add_state(cbtn, LV_STATE_DISABLED);
+        }
+    }
+
+    auto tok = lifetime_.token();
+    std::thread([this, tok, mac]() {
+        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+        if (!loader.is_available() || !loader.remove_device) {
+            spdlog::error("[LabelPrinterSettings] remove_device symbol missing");
+        } else {
+            auto* ctx = loader.get_or_create_context();
+            if (!ctx) {
+                spdlog::error("[LabelPrinterSettings] Failed to get BT context for remove_device");
+            } else {
+                int r = loader.remove_device(ctx, mac.c_str());
+                if (r < 0) {
+                    const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
+                    spdlog::error("[LabelPrinterSettings] remove_device failed for {}: r={} err={}",
+                                  mac, r, err);
+                    // Fall through and clear settings anyway so the UI doesn't
+                    // show a stale config.
+                } else {
+                    spdlog::info("[LabelPrinterSettings] BlueZ unpair succeeded for {}", mac);
+                }
+            }
+        }
+
+        if (tok.expired())
+            return;
+        tok.defer([this, mac]() {
+            auto& s = LabelPrinterSettingsManager::instance();
+            s.set_bt_address("");
+            s.set_bt_name("");
+            s.set_bt_channel(0);
+            s.set_bt_transport("");
+
+            // Drop the forgotten device from the local discovery list so the
+            // dropdown no longer lists it.
+            bt_devices_.erase(
+                std::remove_if(bt_devices_.begin(), bt_devices_.end(),
+                               [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
+                bt_devices_.end());
+
+            // Rebuild the BT printer dropdown to match the "no saved printer" state.
+            init_bt_printer_dropdown();
+            // Refresh label size dropdown (selected printer/transport just cleared).
+            init_label_size_dropdown();
+
+            ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                          lv_tr("Bluetooth printer forgotten"), 2000);
+        });
+    }).detach();
+}
+
+void LabelPrinterSettingsOverlay::on_bt_forget(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[LabelPrinterSettings] on_bt_forget");
+    get_label_printer_settings_overlay().handle_bt_forget();
     LVGL_SAFE_EVENT_CB_END();
 }
 
@@ -1616,8 +1714,8 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
         if (ret == 0) {
             paired_r = ldr.is_paired ? ldr.is_paired(bt_ctx, mac.c_str()) : -1;
             connected = check_bt_connected(bt_ctx, mac);
-            spdlog::info("[LabelPrinterSettings] Post-pair: is_paired={} connected={}",
-                         paired_r, connected);
+            spdlog::info("[LabelPrinterSettings] Post-pair: is_paired={} connected={}", paired_r,
+                         connected);
         }
 
         helix::ui::queue_update([ret, mac, token, bt_ctx, paired_r, connected]() {
@@ -1654,7 +1752,8 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                             for (const auto& d : ov.bt_devices_) {
                                 if (!options.empty())
                                     options += "\n";
-                                options += bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                options +=
+                                    bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
                             }
                             lv_dropdown_set_options(dropdown, options.c_str());
                         }
