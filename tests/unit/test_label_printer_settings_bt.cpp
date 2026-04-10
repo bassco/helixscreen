@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "../catch_amalgamated.hpp"
 #include "../lvgl_test_fixture.h"
 #include "label_printer_settings.h"
+
+#include "../catch_amalgamated.hpp"
 
 using namespace helix;
 
@@ -52,4 +53,19 @@ TEST_CASE("Label printer settings - BT configured check", "[label][settings]") {
 
     settings.set_bt_address("AA:BB:CC:DD:EE:FF");
     REQUIRE(settings.is_configured());
+}
+
+TEST_CASE("LabelPrinterSettings bt_channel round-trips", "[label_printer][bt]") {
+    LVGLTestFixture fixture;
+
+    auto& s = LabelPrinterSettingsManager::instance();
+    s.init_subjects();
+
+    s.set_bt_channel(0);
+    REQUIRE(s.get_bt_channel() == 0);
+
+    s.set_bt_channel(7);
+    REQUIRE(s.get_bt_channel() == 7);
+
+    s.set_bt_channel(0); // reset for subsequent tests
 }

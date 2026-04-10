@@ -41,8 +41,10 @@ void LabelPrinterSettingsManager::init_subjects() {
         spdlog::info("[LabelPrinterSettings] Migrated legacy ipp type to network+ipp protocol");
     }
     int type_int = 0;
-    if (type_str == "usb") type_int = 1;
-    else if (type_str == "bluetooth") type_int = 2;
+    if (type_str == "usb")
+        type_int = 1;
+    else if (type_str == "bluetooth")
+        type_int = 2;
     UI_MANAGED_SUBJECT_INT(printer_type_subject_, type_int, "label_printer_type", subjects_);
 
     // Configured flag: depends on printer type
@@ -52,12 +54,12 @@ void LabelPrinterSettingsManager::init_subjects() {
 
     subjects_initialized_ = true;
 
-    StaticSubjectRegistry::instance().register_deinit(
-        "LabelPrinterSettingsManager",
-        []() { LabelPrinterSettingsManager::instance().deinit_subjects(); });
+    StaticSubjectRegistry::instance().register_deinit("LabelPrinterSettingsManager", []() {
+        LabelPrinterSettingsManager::instance().deinit_subjects();
+    });
 
-    spdlog::debug("[LabelPrinterSettings] Subjects initialized: type='{}', configured={}",
-                  type_str, configured);
+    spdlog::debug("[LabelPrinterSettings] Subjects initialized: type='{}', configured={}", type_str,
+                  configured);
 }
 
 void LabelPrinterSettingsManager::deinit_subjects() {
@@ -90,8 +92,10 @@ void LabelPrinterSettingsManager::set_printer_type(const std::string& type) {
     // Update type subject (0=network, 1=usb, 2=bluetooth)
     if (subjects_initialized_) {
         int type_int = 0;
-        if (type == "usb") type_int = 1;
-        else if (type == "bluetooth") type_int = 2;
+        if (type == "usb")
+            type_int = 1;
+        else if (type == "bluetooth")
+            type_int = 2;
         lv_subject_set_int(&printer_type_subject_, type_int);
         lv_subject_set_int(&printer_configured_subject_, is_configured() ? 1 : 0);
     }
@@ -253,6 +257,19 @@ void LabelPrinterSettingsManager::set_bt_transport(const std::string& transport)
 
     Config* config = Config::get_instance();
     config->set<std::string>("/label_printer/bt_transport", transport);
+    config->save();
+}
+
+int LabelPrinterSettingsManager::get_bt_channel() const {
+    Config* config = Config::get_instance();
+    return config->get<int>("/label_printer/bt_channel", 0);
+}
+
+void LabelPrinterSettingsManager::set_bt_channel(int channel) {
+    spdlog::info("[LabelPrinterSettings] set_bt_channel({})", channel);
+
+    Config* config = Config::get_instance();
+    config->set<int>("/label_printer/bt_channel", channel);
     config->save();
 }
 

@@ -121,13 +121,20 @@ class LabelPrinterSettingsManager {
     /** @brief Set Bluetooth transport type ("spp" or "ble", persists) */
     void set_bt_transport(const std::string& transport);
 
+    /** @brief Get cached Bluetooth RFCOMM channel (0 = unknown, do SDP lookup) */
+    [[nodiscard]] int get_bt_channel() const;
+
+    /** @brief Set cached Bluetooth RFCOMM channel (persists; 0 clears cache) */
+    void set_bt_channel(int channel);
+
     /** @brief Get label count per print job (IPP sheet labels, default 1) */
     int get_label_count() const;
 
     /** @brief Set label count per print job (persists to config) */
     void set_label_count(int count);
 
-    /** @brief True if printer is configured (network: address non-empty; USB: VID+PID set; BT: address non-empty) */
+    /** @brief True if printer is configured (network: address non-empty; USB: VID+PID set; BT:
+     * address non-empty) */
     bool is_configured() const;
 
     // =========================================================================
