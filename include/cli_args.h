@@ -85,10 +85,11 @@ struct OverlayFlags {
 struct CliArgs {
     // Screen settings
     ScreenSize screen_size = ScreenSize::MEDIUM;
-    int dpi = -1;         // -1 = use default
-    int display_num = -1; // -1 = not set
-    int x_pos = -1;       // -1 = not set
-    int y_pos = -1;       // -1 = not set
+    bool size_was_explicit = false; ///< True if -s/--size was specified on the CLI
+    int dpi = -1;                   // -1 = use default
+    int display_num = -1;           // -1 = not set
+    int x_pos = -1;                 // -1 = not set
+    int y_pos = -1;                 // -1 = not set
 
     // Panel navigation
     int initial_panel = -1; // -1 = auto-select based on screen size

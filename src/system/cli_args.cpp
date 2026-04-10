@@ -434,6 +434,7 @@ bool parse_cli_args(int argc, char** argv, CliArgs& args, int& screen_width, int
                        "like 480x400)\n");
                 return false;
             }
+            args.size_was_explicit = true;
         }
         // Panel selection
         else if (strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--panel") == 0) {
