@@ -376,6 +376,10 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
         // Metadata fetch callback
         [self](size_t start, size_t end) { self->fetch_metadata_range(start, end); });
 
+    // Long-press on a file card → delete confirmation (card view only; list view unchanged).
+    card_view_->set_on_file_long_press(
+        [self](size_t file_index) { self->on_file_long_pressed(file_index); });
+
     list_view_ = std::make_unique<helix::ui::PrintSelectListView>();
     list_view_->setup(
         list_rows_container_,
@@ -2371,6 +2375,34 @@ void PrintSelectPanel::handle_file_click(size_t file_index) {
         apply_file_selection(file);
         show_detail_view();
     }
+}
+
+void PrintSelectPanel::on_file_long_pressed(size_t file_index) {
+    if (file_index >= file_list_.size()) {
+        spdlog::warn("[{}] Ignoring long-press on stale file index {} (list size {})", get_name(),
+                     file_index, file_list_.size());
+        return;
+    }
+
+    const auto& file = file_list_[file_index];
+    if (file.is_dir) {
+        // Card view already filters directories, but double-check in case the
+        // list mutated between the long-press timer starting and firing.
+        spdlog::trace("[{}] long-press on directory ignored: {}", get_name(), file.filename);
+        return;
+    }
+
+    spdlog::info("[{}] Long-press delete requested: {}", get_name(), file.filename);
+
+    // Apply the same selection state a normal tap would, so the existing
+    // delete_file() path (which reads selected_filename_buffer_ and friends)
+    // works unchanged.
+    apply_file_selection(file);
+
+    // Reuse the existing confirmation modal. The detail view's
+    // show_delete_confirmation() is a thin wrapper around modal_show_confirmation()
+    // and does not require the detail view to be visible.
+    show_delete_confirmation();
 }
 
 void PrintSelectPanel::start_print() {

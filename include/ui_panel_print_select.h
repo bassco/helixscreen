@@ -686,6 +686,15 @@ class PrintSelectPanel : public PanelBase {
     void handle_file_click(size_t file_index);
 
     /**
+     * @brief Handle long-press on a file card: select the file then show the delete modal.
+     * @param file_index Index into file_list_
+     *
+     * Bounds-checks the index, ignores directories (belt-and-suspenders — the card view
+     * also filters), applies the selection, then delegates to show_delete_confirmation().
+     */
+    void on_file_long_pressed(size_t file_index);
+
+    /**
      * @brief Merge print history status into file list
      *
      * Uses PrintHistoryManager to populate FileHistoryStatus and success_count
