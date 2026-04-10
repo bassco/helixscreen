@@ -670,6 +670,15 @@ class PrintSelectPanel : public PanelBase {
     void attach_row_click_handler(lv_obj_t* row, size_t file_index);
 
     /**
+     * @brief Copy a file's fields into the panel's "selected file" state.
+     *
+     * Shared by handle_file_click() (which then opens the detail view) and
+     * on_file_long_pressed() (which then opens the delete confirmation modal).
+     * Only valid when file.is_dir == false.
+     */
+    void apply_file_selection(const PrintFileData& file);
+
+    /**
      * @brief Handle file card/row click
      *
      * @param file_index Index of clicked file in file_list_

@@ -2325,6 +2325,24 @@ void PrintSelectPanel::attach_row_click_handler(lv_obj_t* row, size_t file_index
     lv_obj_add_event_cb(row, on_file_clicked_static, LV_EVENT_CLICKED, this);
 }
 
+void PrintSelectPanel::apply_file_selection(const PrintFileData& file) {
+    // For filament display, prefer filament_name if available (e.g., "PolyMaker PolyLite ABS")
+    // Fallback to short filament_type (e.g., "ABS") if no name provided
+    std::string filament_display =
+        file.filament_name.empty() ? file.filament_type : file.filament_name;
+    set_selected_file(file.filename.c_str(), file.thumbnail_path.c_str(),
+                      file.original_thumbnail_url.c_str(), file.print_time_str.c_str(),
+                      file.filament_str.c_str(), file.layer_count_str.c_str(),
+                      file.print_height_str.c_str(), file.modified_timestamp,
+                      file.layer_height_str.c_str(), filament_display.c_str());
+    selected_filament_type_ = file.filament_type;
+    selected_filament_colors_ = file.filament_colors;
+    selected_filament_materials_ = file.filament_types;
+    selected_file_size_bytes_ = file.file_size_bytes;
+    selected_history_status_ = file.history_status;
+    selected_success_count_ = file.success_count;
+}
+
 void PrintSelectPanel::handle_file_click(size_t file_index) {
     if (file_index >= file_list_.size()) {
         spdlog::warn("[{}] Ignoring click on stale file index {} (list size {})", get_name(),
@@ -2349,22 +2367,8 @@ void PrintSelectPanel::handle_file_click(size_t file_index) {
             navigate_to_directory(file.filename);
         }
     } else {
-        // File clicked - show detail view
-        // For filament display, prefer filament_name if available (e.g., "PolyMaker PolyLite ABS")
-        // Fallback to short filament_type (e.g., "ABS") if no name provided
-        std::string filament_display =
-            file.filament_name.empty() ? file.filament_type : file.filament_name;
-        set_selected_file(file.filename.c_str(), file.thumbnail_path.c_str(),
-                          file.original_thumbnail_url.c_str(), file.print_time_str.c_str(),
-                          file.filament_str.c_str(), file.layer_count_str.c_str(),
-                          file.print_height_str.c_str(), file.modified_timestamp,
-                          file.layer_height_str.c_str(), filament_display.c_str());
-        selected_filament_type_ = file.filament_type;
-        selected_filament_colors_ = file.filament_colors;
-        selected_filament_materials_ = file.filament_types;
-        selected_file_size_bytes_ = file.file_size_bytes;
-        selected_history_status_ = file.history_status;
-        selected_success_count_ = file.success_count;
+        // File clicked - apply selection state and open the detail view
+        apply_file_selection(file);
         show_detail_view();
     }
 }
