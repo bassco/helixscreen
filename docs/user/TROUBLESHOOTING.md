@@ -404,11 +404,13 @@ sudo usermod -aG video $USER
 
 **Solutions:**
 
-HelixScreen auto-detects resolution from DRM and framebuffer backends. If auto-detection returns wrong values, override via command line:
+HelixScreen auto-detects resolution from DRM and framebuffer backends. If auto-detection picks the wrong resolution, override it with the `-s` flag:
 
 ```bash
-# In helixscreen.service ExecStart, add flags:
-ExecStart=/opt/helixscreen/bin/helix-launcher.sh --width 800 --height 480
+# In helixscreen.service ExecStart, add -s with a named size or WxH:
+ExecStart=/opt/helixscreen/bin/helix-launcher.sh -s large
+# or: -s 1024x600
+# Named sizes: micro, tiny, small, medium, large, xlarge
 ```
 
 Then reload:
