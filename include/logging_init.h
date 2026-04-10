@@ -108,9 +108,15 @@ int to_hv_level(spdlog::level::level_enum level);
  * Updates both spdlog and libhv log levels immediately.
  * Call from the main thread when the user changes the log level setting.
  *
+ * Not available in the watchdog build — the watchdog intentionally does not
+ * link libhv, so runtime level changes for libhv's logger are not supported
+ * there. The watchdog has its own static log level set at init.
+ *
  * @param level New spdlog log level
  */
+#ifndef HELIX_WATCHDOG
 void set_runtime_level(spdlog::level::level_enum level);
+#endif
 
 /**
  * @brief Resolve log level with precedence: CLI > config > defaults
