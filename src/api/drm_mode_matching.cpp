@@ -3,6 +3,8 @@
 
 #include "../../include/drm_mode_matching.h"
 
+#include <cstddef>
+
 namespace helix {
 
 int find_matching_mode(const std::vector<DrmModeInfo>& modes, uint32_t requested_w,

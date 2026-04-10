@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#if HELIX_HAS_LABEL_PRINTER
+
 #include "bt_print_utils.h"
 
 #include "bluetooth_loader.h"
@@ -229,3 +231,5 @@ int resolve_label_printer_channel(const std::string& mac, int fallback_channel) 
 }
 
 } // namespace helix::label
+
+#endif // HELIX_HAS_LABEL_PRINTER
