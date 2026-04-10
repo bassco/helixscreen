@@ -8,10 +8,12 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <thread>
+#include <unistd.h>
 
 MockWebSocketServer::MockWebSocketServer()
     : ws_service_(std::make_unique<hv::WebSocketService>()),
@@ -53,60 +55,64 @@ int MockWebSocketServer::start(int port) {
         return port_.load();
     }
 
-    server_->port = port;
-    int result = server_->start();
+    int actual_port = port;
 
-    if (result == 0) {
-        running_.store(true);
+    // libhv's http_server_run() short-circuits its internal Listen() call when
+    // server->port == 0, so ephemeral-port mode leaves listenfd[0] permanently
+    // at -1 and the worker loop has nothing to accept on. Work around it by
+    // binding a loopback socket ourselves, reading back the kernel-assigned
+    // port via getsockname(), and handing the already-listening fd to libhv
+    // via setListenFD(). libhv's loop_thread picks it up directly, and we
+    // leave server_->port == 0 so http_server_run() doesn't try to re-bind.
+    if (port == 0) {
+        int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) {
+            spdlog::error("[MockWS] socket() failed: errno={}", errno);
+            return -1;
+        }
+        int reuse = 1;
+        ::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
-        // When using ephemeral port (0), get actual port via getsockname
-        // libhv's start() is async, so wait for socket to be ready
-        int actual_port = server_->port;
-        spdlog::debug("[MockWS] server_->port={}, listenfd[0]={}", server_->port,
-                      server_->listenfd[0]);
-
-        if (actual_port == 0) {
-            // Wait up to 5 seconds for libhv's async start() to open the listen socket
-            for (int i = 0; i < 500 && server_->listenfd[0] < 0; ++i) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-            spdlog::debug("[MockWS] After wait: listenfd[0]={}", server_->listenfd[0]);
-
-            if (server_->listenfd[0] >= 0) {
-                struct sockaddr_in addr;
-                socklen_t addr_len = sizeof(addr);
-                int gsn_result =
-                    getsockname(server_->listenfd[0], (struct sockaddr*)&addr, &addr_len);
-                spdlog::debug("[MockWS] getsockname returned {}, port={}", gsn_result,
-                              gsn_result == 0 ? ntohs(addr.sin_port) : -1);
-                if (gsn_result == 0) {
-                    actual_port = ntohs(addr.sin_port);
-                }
-            }
-
-            // If we still couldn't get a valid port, fail the start.
-            // IMPORTANT: On macOS, libhv's partially-initialized server hangs in
-            // http_server_stop → pthread_join when the listen socket never became
-            // ready (kqueue issue). Also the ~WebSocketServer destructor will
-            // try to stop/join the same way. So we release() the unique_ptr and
-            // intentionally leak the partially-started libhv server. running_ stays
-            // false so our own stop()/destructor short-circuits.
-            if (actual_port <= 0) {
-                spdlog::error("[MockWS] Timed out waiting for ephemeral port assignment — "
-                              "leaking partially-started libhv server to avoid hang");
-                running_.store(false);
-                [[maybe_unused]] auto* leaked = server_.release();
-                return -1;
-            }
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            spdlog::error("[MockWS] bind(127.0.0.1:0) failed: errno={}", errno);
+            ::close(fd);
+            return -1;
         }
 
-        port_.store(actual_port);
-        spdlog::info("[MockWS] Server started on port {}", port_.load());
-        return port_.load();
+        socklen_t addr_len = sizeof(addr);
+        if (::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &addr_len) < 0) {
+            spdlog::error("[MockWS] getsockname failed: errno={}", errno);
+            ::close(fd);
+            return -1;
+        }
+        actual_port = ntohs(addr.sin_port);
+
+        if (::listen(fd, SOMAXCONN) < 0) {
+            spdlog::error("[MockWS] listen failed: errno={}", errno);
+            ::close(fd);
+            return -1;
+        }
+
+        server_->setListenFD(fd);
+        server_->port = 0; // leave at 0 so http_server_run() skips its own Listen()
     } else {
+        server_->port = port;
+    }
+
+    int result = server_->start();
+    if (result != 0) {
         spdlog::error("[MockWS] Failed to start server: {}", result);
         return -1;
     }
+
+    running_.store(true);
+    port_.store(actual_port);
+    spdlog::info("[MockWS] Server started on port {}", actual_port);
+    return actual_port;
 }
 
 void MockWebSocketServer::stop() {
