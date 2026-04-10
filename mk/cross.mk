@@ -826,7 +826,7 @@ pi-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi; \
 	fi
 	$(call ensure-ccache-dir,pi)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
 		make PLATFORM_TARGET=pi SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -837,7 +837,7 @@ pi-fbdev-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi; \
 	fi
 	$(call ensure-ccache-dir,pi-fbdev)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi-fbdev) helixscreen/toolchain-pi \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi-fbdev) helixscreen/toolchain-pi \
 		make PLATFORM_TARGET=pi-fbdev SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -848,7 +848,7 @@ pi-all-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi; \
 	fi
 	$(call ensure-ccache-dir,pi)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
 		make PLATFORM_TARGET=pi-both SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -859,7 +859,7 @@ pi32-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi32; \
 	fi
 	$(call ensure-ccache-dir,pi32)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
 		make PLATFORM_TARGET=pi32 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -870,7 +870,7 @@ pi32-fbdev-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi32; \
 	fi
 	$(call ensure-ccache-dir,pi32-fbdev)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32-fbdev) helixscreen/toolchain-pi32 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32-fbdev) helixscreen/toolchain-pi32 \
 		make PLATFORM_TARGET=pi32-fbdev SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -881,7 +881,7 @@ pi32-all-docker: ensure-docker
 		$(MAKE) docker-toolchain-pi32; \
 	fi
 	$(call ensure-ccache-dir,pi32)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi32) helixscreen/toolchain-pi32 \
 		make PLATFORM_TARGET=pi32-both SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -892,7 +892,7 @@ ad5m-docker: ensure-docker
 		$(MAKE) docker-toolchain-ad5m; \
 	fi
 	$(call ensure-ccache-dir,ad5m)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,ad5m) helixscreen/toolchain-ad5m \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,ad5m) helixscreen/toolchain-ad5m \
 		make PLATFORM_TARGET=ad5m SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/ad5m/certs
@@ -908,7 +908,7 @@ ad5x-docker: ensure-docker
 		$(MAKE) docker-toolchain-ad5x; \
 	fi
 	$(call ensure-ccache-dir,ad5x)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,ad5x) helixscreen/toolchain-ad5x \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,ad5x) helixscreen/toolchain-ad5x \
 		make PLATFORM_TARGET=ad5x SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/ad5x/certs
@@ -924,7 +924,7 @@ cc1-docker: ensure-docker
 		$(MAKE) docker-toolchain-cc1; \
 	fi
 	$(call ensure-ccache-dir,cc1)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,cc1) helixscreen/toolchain-cc1 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,cc1) helixscreen/toolchain-cc1 \
 		make PLATFORM_TARGET=cc1 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/cc1/certs
@@ -941,7 +941,7 @@ mips-docker: ensure-docker
 	fi
 	$(call ensure-ccache-dir,k1)
 	# Do not inherit host jobserver flags into containerized make.
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -e MAKEFLAGS= -v "$(PWD)":/src -w /src $(call docker-ccache-args,k1) helixscreen/toolchain-k1 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -e MAKEFLAGS= -v "$(PWD)":/src -w /src $(call docker-ccache-args,k1) helixscreen/toolchain-k1 \
 		make PLATFORM_TARGET=mips SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/mips/certs
@@ -960,7 +960,7 @@ k1-dynamic-docker: ensure-docker
 		$(MAKE) docker-toolchain-k1-dynamic; \
 	fi
 	$(call ensure-ccache-dir,k1-dynamic)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,k1-dynamic) helixscreen/toolchain-k1-dynamic \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,k1-dynamic) helixscreen/toolchain-k1-dynamic \
 		make PLATFORM_TARGET=k1-dynamic SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -971,7 +971,7 @@ k2-docker: ensure-docker
 		$(MAKE) docker-toolchain-k2; \
 	fi
 	$(call ensure-ccache-dir,k2)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,k2) helixscreen/toolchain-k2 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,k2) helixscreen/toolchain-k2 \
 		make PLATFORM_TARGET=k2 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -982,7 +982,7 @@ snapmaker-u1-docker: ensure-docker
 		$(MAKE) docker-toolchain-snapmaker-u1; \
 	fi
 	$(call ensure-ccache-dir,snapmaker-u1)
-	$(Q)docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,snapmaker-u1) helixscreen/toolchain-snapmaker-u1 \
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,snapmaker-u1) helixscreen/toolchain-snapmaker-u1 \
 		make PLATFORM_TARGET=snapmaker-u1 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@# Extract CA certificates from Docker image for HTTPS verification on device
 	@mkdir -p build/snapmaker-u1/certs
@@ -998,7 +998,7 @@ x86-docker: ensure-docker
 		$(MAKE) docker-toolchain-x86; \
 	fi
 	$(call ensure-ccache-dir,x86)
-	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
+	$(Q)scripts/cross-compile-lock.sh docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
 		make PLATFORM_TARGET=x86 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -1009,7 +1009,7 @@ x86-fbdev-docker: ensure-docker
 		$(MAKE) docker-toolchain-x86; \
 	fi
 	$(call ensure-ccache-dir,x86-fbdev)
-	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86-fbdev) helixscreen/toolchain-x86 \
+	$(Q)scripts/cross-compile-lock.sh docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86-fbdev) helixscreen/toolchain-x86 \
 		make PLATFORM_TARGET=x86-fbdev SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
@@ -1020,7 +1020,7 @@ x86-all-docker: ensure-docker
 		$(MAKE) docker-toolchain-x86; \
 	fi
 	$(call ensure-ccache-dir,x86)
-	$(Q)docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
+	$(Q)scripts/cross-compile-lock.sh docker run --platform linux/amd64 --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,x86) helixscreen/toolchain-x86 \
 		make PLATFORM_TARGET=x86-both SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
