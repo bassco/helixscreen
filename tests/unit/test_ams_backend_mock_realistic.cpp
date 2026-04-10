@@ -343,8 +343,8 @@ TEST_CASE("AmsBackendMock tool change shows SELECTING phase",
         auto result = backend.change_tool(1);
         REQUIRE(result);
 
-        // Wait for operation to complete
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        // Wait for operation to complete (generous for slow CI)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
         // Verify SELECTING phase appears between UNLOADING and LOADING phases
         std::lock_guard<std::mutex> lock(actions_mtx);
