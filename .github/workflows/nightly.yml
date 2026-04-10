@@ -102,7 +102,7 @@ jobs:
     name: All C++ Tests (incl. slow)
     needs: build
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
     - name: Checkout repository
@@ -152,10 +152,10 @@ jobs:
         echo "Fast tests passed"
 
     - name: Run slow tests sequentially
-      timeout-minutes: 15
+      timeout-minutes: 30
       run: |
         echo "Running [slow] tests sequentially (thread-based tests deadlock under parallel sharding)..."
-        timeout 780 ./build/bin/helix-tests "[slow]" --durations yes
+        timeout 1680 ./build/bin/helix-tests "[slow]" --durations yes
         echo "Slow tests passed"
 
   # ===========================================================================

@@ -66,7 +66,8 @@ int MockWebSocketServer::start(int port) {
                       server_->listenfd[0]);
 
         if (actual_port == 0) {
-            for (int i = 0; i < 100 && server_->listenfd[0] < 0; ++i) {
+            // Wait up to 5 seconds for libhv's async start() to open the listen socket
+            for (int i = 0; i < 500 && server_->listenfd[0] < 0; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             spdlog::debug("[MockWS] After wait: listenfd[0]={}", server_->listenfd[0]);
@@ -81,6 +82,14 @@ int MockWebSocketServer::start(int port) {
                 if (gsn_result == 0) {
                     actual_port = ntohs(addr.sin_port);
                 }
+            }
+
+            // If we still couldn't get a valid port, fail the start
+            if (actual_port <= 0) {
+                spdlog::error("[MockWS] Timed out waiting for ephemeral port assignment");
+                running_.store(false);
+                server_->stop();
+                return -1;
             }
         }
 
