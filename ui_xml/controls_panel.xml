@@ -35,7 +35,9 @@
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_all="0"
                 style_pad_gap="#space_sm">
           <icon src="axis_arrow" size="sm" variant="primary"/>
-          <text_small text="Position" translation_tag="Position" text_transform="uppercase" style_translate_y="2" style_text_color="#text"/>
+          <text_small text="Position"
+                      translation_tag="Position" text_transform="uppercase" style_translate_y="2"
+                      style_text_color="#text"/>
         </lv_obj>
         <!-- Position display with homing indicators -->
         <!-- Split into static label + dynamic value for proper alignment with proportional fonts -->
@@ -86,8 +88,7 @@
         </lv_obj>
         <!-- Save Z-Offset button: hidden when firmware auto-saves (GCODE_OFFSET strategy)
              or when gcode_z_offset == 0. Wrapper binds to strategy, button binds to offset. -->
-        <lv_obj width="100%" height="content" hidden="true"
-                style_pad_all="0" style_bg_opa="0" style_border_width="0">
+        <lv_obj width="100%" height="content" hidden="true" style_pad_all="0" style_bg_opa="0" style_border_width="0">
           <bind_flag_if_eq subject="z_offset_can_save" flag="hidden" ref_value="0"/>
           <ui_button name="btn_save_z_offset"
                      width="100%" height="#button_height_sm" variant="success" icon="check" text="Save Z-Offset"
@@ -130,7 +131,8 @@
                     style_pad_gap="#space_sm" scrollable="false">
               <icon src="thermometer" size="sm" variant="primary"/>
               <text_small text="Temperature"
-                          translation_tag="Temperature" text_transform="uppercase" style_translate_y="2" style_text_color="#text"/>
+                          translation_tag="Temperature" text_transform="uppercase" style_translate_y="2"
+                          style_text_color="#text"/>
             </lv_obj>
             <!-- Nozzle section (clickable) -->
             <lv_obj name="btn_nozzle_temp"
@@ -244,17 +246,18 @@
                     height="content" flex_flow="row" style_flex_cross_place="center" style_pad_all="0"
                     style_pad_gap="#space_sm" scrollable="false">
               <icon name="fan_icon" src="fan" size="sm" variant="primary"/>
-              <text_small text="Cooling" translation_tag="Cooling" text_transform="uppercase" style_translate_y="2" style_text_color="#text"/>
+              <text_small text="Cooling"
+                          translation_tag="Cooling" text_transform="uppercase" style_translate_y="2"
+                          style_text_color="#text"/>
             </lv_obj>
             <!-- Part cooling hero section -->
             <text_small width="100%" text="Part Fan" translation_tag="Part Fan" style_margin_top="#space_sm"/>
-            <lv_obj width="100%" height="content" flex_flow="row"
-                    style_flex_cross_place="center" style_pad_gap="#space_sm"
-                    style_pad_left="#space_lg" style_pad_right="0" style_pad_top="#space_xs" style_pad_bottom="#space_xs"
-                    style_bg_opa="0" style_border_width="0" scrollable="false">
+            <lv_obj width="100%"
+                    height="content" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_sm"
+                    style_pad_left="#space_lg" style_pad_right="0" style_pad_top="#space_xs"
+                    style_pad_bottom="#space_xs" style_bg_opa="0" style_border_width="0" scrollable="false">
               <lv_slider name="part_fan_slider"
-                         flex_grow="1" bind_value="controls_fan_pct" min_value="0"
-                         max_value="100">
+                         flex_grow="1" bind_value="controls_fan_pct" min_value="0" max_value="100">
                 <event_cb trigger="value_changed" callback="on_controls_fan_slider"/>
               </lv_slider>
               <text_body name="fan_speed_display" width="content" bind_text="controls_fan_speed">
@@ -285,7 +288,8 @@
                 style_pad_gap="#space_sm">
           <icon src="wrench" size="sm" variant="primary"/>
           <text_small text="Calibration &amp; Tools"
-                      translation_tag="Calibration &amp; Tools" text_transform="uppercase" style_translate_y="2" style_text_color="#text"/>
+                      translation_tag="Calibration &amp; Tools" text_transform="uppercase" style_translate_y="2"
+                      style_text_color="#text"/>
         </lv_obj>
         <!-- 2x2 Grid Container -->
         <lv_obj width="100%"
@@ -374,7 +378,8 @@
           <bind_flag_if_eq subject="macro_header_visible" flag="hidden" ref_value="0"/>
           <icon src="flash" size="sm" variant="primary"/>
           <text_small text="Quick Actions"
-                      translation_tag="Quick Actions" text_transform="uppercase" style_translate_y="2" style_text_color="#text"/>
+                      translation_tag="Quick Actions" text_transform="uppercase" style_translate_y="2"
+                      style_text_color="#text"/>
         </lv_obj>
         <!-- Home row: label + homing buttons inline -->
         <lv_obj width="100%"
