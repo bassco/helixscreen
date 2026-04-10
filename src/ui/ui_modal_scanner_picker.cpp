@@ -618,53 +618,63 @@ void ScannerPickerModal::handle_bt_forget(const std::string& mac) {
     spdlog::info("[{}] Forgetting BT scanner {}", get_name(), mac);
 
     auto tok = lifetime_.token();
-    std::thread([this, tok, mac]() {
-        auto& loader = helix::bluetooth::BluetoothLoader::instance();
-        if (!loader.is_available() || !loader.remove_device) {
-            spdlog::error("[ScannerPickerModal] remove_device symbol missing");
-        } else {
-            auto* ctx = loader.get_or_create_context();
-            if (!ctx) {
-                spdlog::error("[ScannerPickerModal] Failed to get BT context for remove_device");
+    // Wrap std::thread spawn in try/catch per feedback_no_bare_threads_arm.md
+    // (#724) — thread creation can fail on AD5M/CC1 due to tight thread limits.
+    try {
+        std::thread([this, tok, mac]() {
+            auto& loader = helix::bluetooth::BluetoothLoader::instance();
+            if (!loader.is_available() || !loader.remove_device) {
+                spdlog::error("[ScannerPickerModal] remove_device symbol missing");
             } else {
-                int r = loader.remove_device(ctx, mac.c_str());
-                if (r < 0) {
-                    const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
-                    spdlog::error("[ScannerPickerModal] remove_device failed for {}: r={} err={}",
-                                  mac, r, err);
-                    // Fall through and clear settings anyway so the UI doesn't
-                    // show a stale config.
+                auto* ctx = loader.get_or_create_context();
+                if (!ctx) {
+                    spdlog::error(
+                        "[ScannerPickerModal] Failed to get BT context for remove_device");
                 } else {
-                    spdlog::info("[ScannerPickerModal] BlueZ unpair succeeded for {}", mac);
+                    int r = loader.remove_device(ctx, mac.c_str());
+                    if (r < 0) {
+                        const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
+                        spdlog::error(
+                            "[ScannerPickerModal] remove_device failed for {}: r={} err={}", mac, r,
+                            err);
+                        // Fall through and clear settings anyway so the UI doesn't
+                        // show a stale config.
+                    } else {
+                        spdlog::info("[ScannerPickerModal] BlueZ unpair succeeded for {}", mac);
+                    }
                 }
             }
-        }
 
-        if (tok.expired())
-            return;
-        tok.defer([this, mac]() {
-            // If this was the currently-selected scanner, revert to auto-detect.
-            auto& settings = helix::SettingsManager::instance();
-            if (settings.get_scanner_bt_address() == mac) {
-                settings.set_scanner_bt_address("");
-                settings.set_scanner_device_id("");
-                settings.set_scanner_device_name("");
-                current_device_id_.clear();
-            }
+            if (tok.expired())
+                return;
+            tok.defer([this, mac]() {
+                // If this was the currently-selected scanner, revert to auto-detect.
+                // current_device_id_ mirrors scanner_device_id — keep in sync.
+                auto& settings = helix::SettingsManager::instance();
+                if (settings.get_scanner_bt_address() == mac) {
+                    settings.set_scanner_bt_address("");
+                    settings.set_scanner_device_id("");
+                    settings.set_scanner_device_name("");
+                    current_device_id_.clear();
+                }
 
-            // Drop the forgotten device from the local discovery list.
-            bt_devices_.erase(
-                std::remove_if(bt_devices_.begin(), bt_devices_.end(),
-                               [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
-                bt_devices_.end());
+                // Drop the forgotten device from the local discovery list.
+                bt_devices_.erase(
+                    std::remove_if(bt_devices_.begin(), bt_devices_.end(),
+                                   [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
+                    bt_devices_.end());
 
-            // Rebuild the device list.
-            populate_device_list();
+                // Rebuild the device list.
+                populate_device_list();
 
-            ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                          lv_tr("Bluetooth scanner forgotten"), 2000);
-        });
-    }).detach();
+                ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                              lv_tr("Bluetooth scanner forgotten"), 2000);
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[ScannerPickerModal] Failed to spawn forget thread: {}", e.what());
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Could not forget device"), 3000);
+    }
 }
 
 void ScannerPickerModal::on_pair_confirm(lv_event_t* e) {

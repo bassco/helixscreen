@@ -1617,53 +1617,62 @@ void LabelPrinterSettingsOverlay::handle_bt_forget() {
     }
 
     auto tok = lifetime_.token();
-    std::thread([this, tok, mac]() {
-        auto& loader = helix::bluetooth::BluetoothLoader::instance();
-        if (!loader.is_available() || !loader.remove_device) {
-            spdlog::error("[LabelPrinterSettings] remove_device symbol missing");
-        } else {
-            auto* ctx = loader.get_or_create_context();
-            if (!ctx) {
-                spdlog::error("[LabelPrinterSettings] Failed to get BT context for remove_device");
+    // Wrap the std::thread spawn in try/catch per feedback_no_bare_threads_arm.md
+    // (#724) — thread creation can fail on AD5M/CC1 due to tight thread limits.
+    try {
+        std::thread([this, tok, mac]() {
+            auto& loader = helix::bluetooth::BluetoothLoader::instance();
+            if (!loader.is_available() || !loader.remove_device) {
+                spdlog::error("[LabelPrinterSettings] remove_device symbol missing");
             } else {
-                int r = loader.remove_device(ctx, mac.c_str());
-                if (r < 0) {
-                    const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
-                    spdlog::error("[LabelPrinterSettings] remove_device failed for {}: r={} err={}",
-                                  mac, r, err);
-                    // Fall through and clear settings anyway so the UI doesn't
-                    // show a stale config.
+                auto* ctx = loader.get_or_create_context();
+                if (!ctx) {
+                    spdlog::error(
+                        "[LabelPrinterSettings] Failed to get BT context for remove_device");
                 } else {
-                    spdlog::info("[LabelPrinterSettings] BlueZ unpair succeeded for {}", mac);
+                    int r = loader.remove_device(ctx, mac.c_str());
+                    if (r < 0) {
+                        const char* err = loader.last_error ? loader.last_error(ctx) : "unknown";
+                        spdlog::error(
+                            "[LabelPrinterSettings] remove_device failed for {}: r={} err={}", mac,
+                            r, err);
+                        // Fall through and clear settings anyway so the UI doesn't
+                        // show a stale config.
+                    } else {
+                        spdlog::info("[LabelPrinterSettings] BlueZ unpair succeeded for {}", mac);
+                    }
                 }
             }
-        }
 
-        if (tok.expired())
-            return;
-        tok.defer([this, mac]() {
-            auto& s = LabelPrinterSettingsManager::instance();
-            s.set_bt_address("");
-            s.set_bt_name("");
-            s.set_bt_channel(0);
-            s.set_bt_transport("");
+            if (tok.expired())
+                return;
+            tok.defer([this, mac]() {
+                auto& s = LabelPrinterSettingsManager::instance();
+                s.set_bt_address("");
+                s.set_bt_name("");
+                s.set_bt_channel(0);
+                s.set_bt_transport("");
 
-            // Drop the forgotten device from the local discovery list so the
-            // dropdown no longer lists it.
-            bt_devices_.erase(
-                std::remove_if(bt_devices_.begin(), bt_devices_.end(),
-                               [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
-                bt_devices_.end());
+                // Drop the forgotten device from the local discovery list so the
+                // dropdown no longer lists it.
+                bt_devices_.erase(
+                    std::remove_if(bt_devices_.begin(), bt_devices_.end(),
+                                   [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
+                    bt_devices_.end());
 
-            // Rebuild the BT printer dropdown to match the "no saved printer" state.
-            init_bt_printer_dropdown();
-            // Refresh label size dropdown (selected printer/transport just cleared).
-            init_label_size_dropdown();
+                // Rebuild the BT printer dropdown to match the "no saved printer" state.
+                init_bt_printer_dropdown();
+                // Refresh label size dropdown (selected printer/transport just cleared).
+                init_label_size_dropdown();
 
-            ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                          lv_tr("Bluetooth printer forgotten"), 2000);
-        });
-    }).detach();
+                ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                              lv_tr("Bluetooth printer forgotten"), 2000);
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[LabelPrinterSettings] Failed to spawn forget thread: {}", e.what());
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Could not forget device"), 3000);
+    }
 }
 
 void LabelPrinterSettingsOverlay::on_bt_forget(lv_event_t* /*e*/) {
