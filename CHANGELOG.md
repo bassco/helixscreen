@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.28] - 2026-04-10
+
+### Added
+- `-s WxH` CLI flag now honored end-to-end on DRM and fbdev backends: DRM connector mode selection, simpledrm detection with fbdev fallback, and fbdev kernel-size mismatch warnings surfaced as toasts once the UI is ready (#766)
+- Bluetooth SDP channel resolver with cache — MakeID and Brother PT label printer backends auto-discover the correct RFCOMM channel and invalidate on stale-cache failures
+- Forget button in the scanner picker modal and label printer settings panel for paired Bluetooth devices (plugin ABI: `helix_bt_remove_device`)
+- Long-press a file card in print select to open the delete confirmation dialog
+- Runtime log level setting in System settings
+- Debug bundle default log tail raised from 200 to 2000 lines
+
+### Fixed
+- Back-to-back WiFi scans in the setup wizard could crash inside `std::sort` when a background callback rewrote the cached network list mid-sort (#769)
+- LED toggle and brightness sent an all-zero color when the stored config was in a poisoned state, turning the strip off unintentionally
+- Scroll position in print select card view was jarringly reset on every refresh tick
+- Pre-print ETA now uses wall-clock total on printers with sparse phase detection, instead of producing wildly inaccurate phase-based estimates
+- Modal destructor could dereference a stale backdrop pointer
+- Printer discovery could double-fire hardware-discovered callbacks after the setup wizard, crashing in a race
+- PrinterDiscovery hw-discovered callbacks accessed a destroyed instance when the discovery loop outlived the caller (#761)
+- TipsWidget and CoalescedTimer could corrupt LVGL's timer linked list when cancelled during event dispatch (#760)
+- Ethernet backend failed to detect non-standard interface names (#762)
+- Emergency-stop warning text and position restored on probe calibration panel; cartographer calibration UX tightened (#754)
+- BT Forget thread spawns wrapped in try/catch to survive ARM thread limits
+- Cross-compilation targets serialize via a mkdir lock to prevent concurrent libhv source tree corruption
+- Splash and watchdog binaries now link the display helpers added for #766
+- Missing translations for settings menu across all languages
+- Invalid `text_tag` XML attribute replaced with `translation_tag` on label printer and other panels
+- Wizard defaulted to an empty host on fresh installs; now restores `127.0.0.1` when no config exists
+
+### Changed
+- Enhanced 2D G-code shading enabled by default (opt out via `HELIX_SSAO=0`); normal shading reverted to bidirectional at 0.12 strength for legibility
+
 ## [0.99.27] - 2026-04-09
 
 ### Added
@@ -2797,6 +2828,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.28]: https://github.com/prestonbrown/helixscreen/compare/v0.99.27...v0.99.28
 [0.99.27]: https://github.com/prestonbrown/helixscreen/compare/v0.99.26...v0.99.27
 [0.99.26]: https://github.com/prestonbrown/helixscreen/compare/v0.99.25...v0.99.26
 [0.99.25]: https://github.com/prestonbrown/helixscreen/compare/v0.99.24...v0.99.25
