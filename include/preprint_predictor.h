@@ -69,7 +69,15 @@ class PreprintPredictor {
     [[nodiscard]] std::vector<PreprintEntry> get_entries() const;
 
     /**
-     * @brief Sum of all weighted phase averages
+     * @brief Weighted-average wall-clock pre-print duration
+     *
+     * Uses the `total_seconds` field from history entries (exponential
+     * time-decay weighted, same weights as predicted_phases()). This is the
+     * honest end-to-end duration including heating and any unmapped macro
+     * time — NOT the sum of predicted_phases(), which silently loses time
+     * for phases the matcher failed to detect.
+     *
+     * With no history, falls back to the sum of default_phase_durations().
      */
     [[nodiscard]] int predicted_total() const;
 

@@ -1342,9 +1342,13 @@ void PrintStartCollector::compute_predicted_weights() {
             }
         }
 
-        // Ensure homing has at least a default
+        // Ensure homing has at least a default. History often records
+        // HOMING=0 on printers whose PRINT_START macros don't emit a
+        // distinct "Homing..." message before the next phase starts, so
+        // check both "missing" and "zero" cases.
         int homing = static_cast<int>(PrintStartPhase::HOMING);
-        if (durations.find(homing) == durations.end()) {
+        auto homing_it = durations.find(homing);
+        if (homing_it == durations.end() || homing_it->second < 20.0f) {
             durations[homing] = 20.0f;
         }
 
@@ -1356,17 +1360,29 @@ void PrintStartCollector::compute_predicted_weights() {
             durations[nozzle_phase] = 60.0f; // Conservative placeholder
         }
 
-        predicted_total_seconds_ = 0.0f;
+        float durations_sum = 0.0f;
         for (const auto& [_, dur] : durations) {
-            predicted_total_seconds_ += dur;
+            durations_sum += dur;
         }
 
+        // Phase weights are fractions of durations_sum so they always sum
+        // to 1.0, regardless of the total used for display.
         predicted_phase_weights_.clear();
-        if (predicted_total_seconds_ > 0.0f) {
+        if (durations_sum > 0.0f) {
             for (const auto& [phase, dur] : durations) {
-                predicted_phase_weights_[phase] = dur / predicted_total_seconds_;
+                predicted_phase_weights_[phase] = dur / durations_sum;
             }
         }
+
+        // Use the max of our built-up sum and the predictor's wall-clock
+        // weighted average. On printers where the phase-matching regexes
+        // miss PURGING/CLEANING/etc., durations_sum systematically under-
+        // estimates total pre-print time while history's total_seconds
+        // captured the real wall-clock duration. Taking the max folds that
+        // unmapped time back into the display estimate without double-
+        // counting the current thermal estimate.
+        int wall_clock_estimate = predictor_.predicted_total();
+        predicted_total_seconds_ = std::max(durations_sum, static_cast<float>(wall_clock_estimate));
     }
 
     // Track targets used so we can detect changes and recompute
@@ -1478,6 +1494,14 @@ void PrintStartCollector::save_prediction_entry() {
             int duration = static_cast<int>(
                 std::chrono::duration_cast<std::chrono::seconds>(end_time - sorted_phases[i].second)
                     .count());
+            // Skip zero-second phases — these happen when two phases enter
+            // within the same second (e.g. G28 followed immediately by
+            // proactive HEATING_BED detection on AD5M). Recording HOMING=0
+            // repeatedly would poison the MAD filter and suppress the
+            // default-floor fallback in compute_predicted_weights().
+            if (duration <= 0) {
+                continue;
+            }
             phase_durations[phase_int] = duration;
         }
 

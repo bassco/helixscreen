@@ -5,6 +5,8 @@
 #include "config.h"
 #include "printer_state.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -190,12 +192,28 @@ std::map<int, int> PreprintPredictor::predicted_phases() const {
 }
 
 int PreprintPredictor::predicted_total() const {
-    auto phases = predicted_phases();
-    int total = 0;
-    for (const auto& [_, duration] : phases) {
-        total += duration;
+    // With no history, fall back to sum of default phase durations so UI
+    // callers still get a ballpark.
+    if (entries_.empty()) {
+        int total = 0;
+        for (const auto& [_, duration] : default_phase_durations()) {
+            total += duration;
+        }
+        return total;
     }
-    return total;
+
+    // Use weighted average of recorded wall-clock totals. This is the honest
+    // end-to-end pre-print duration — it includes heating phases and any
+    // gcode/macro time the phase-matching regexes failed to map to a
+    // PrintStartPhase. Summing predicted_phases() would silently lose that
+    // unmapped time (on AD5M-style printers the phase map captures <40% of
+    // real elapsed time).
+    auto weights = compute_weights();
+    double weighted_sum = 0.0;
+    for (size_t i = 0; i < entries_.size(); ++i) {
+        weighted_sum += weights[i] * static_cast<double>(entries_[i].total_seconds);
+    }
+    return static_cast<int>(std::round(weighted_sum));
 }
 
 int PreprintPredictor::remaining_seconds(const std::set<int>& completed_phases, int current_phase,
@@ -242,17 +260,33 @@ std::vector<PreprintEntry> PreprintPredictor::load_entries_from_config() {
         }
 
         std::vector<PreprintEntry> entries;
+        int dropped_legacy = 0;
         for (const auto& ej : entries_json) {
             PreprintEntry entry;
             entry.total_seconds = ej.value("total", 0);
             entry.timestamp = ej.value("timestamp", static_cast<int64_t>(0));
             entry.temp_bucket = ej.value("temp_bucket", 0);
+            // Drop legacy entries that predate the cold/warm bucket scheme.
+            // Older versions stored the raw nozzle target temperature here
+            // (e.g. 200, 225, 250). Only 0 (unknown), 1 (cold), and 2 (warm)
+            // are valid under the current scheme. Dropping at load time
+            // causes the next save_prediction_entry() to persist a clean
+            // list, so this acts as a one-shot migration.
+            if (entry.temp_bucket != 0 && entry.temp_bucket != 1 && entry.temp_bucket != 2) {
+                ++dropped_legacy;
+                continue;
+            }
             if (ej.contains("phases") && ej["phases"].is_object()) {
                 for (auto& [key, val] : ej["phases"].items()) {
                     entry.phase_durations[std::stoi(key)] = val.get<int>();
                 }
             }
             entries.push_back(std::move(entry));
+        }
+        if (dropped_legacy > 0) {
+            spdlog::info("[PreprintPredictor] Dropped {} legacy history entries "
+                         "(pre-cold/warm-bucket scheme)",
+                         dropped_legacy);
         }
         return entries;
     } catch (...) {

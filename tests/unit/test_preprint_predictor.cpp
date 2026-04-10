@@ -56,7 +56,9 @@ TEST_CASE("PreprintPredictor: single entry uses 100% weight", "[print][predictor
     predictor.load_entries({{185, 1700000000, {{2, 25}, {3, 90}, {7, 30}, {9, 20}}}});
 
     REQUIRE(predictor.has_predictions());
-    REQUIRE(predictor.predicted_total() == 165); // 25+90+30+20
+    // predicted_total() returns wall-clock total_seconds (185), not phase sum.
+    // The 20s gap vs phase sum (165) represents unmapped/heating time.
+    REQUIRE(predictor.predicted_total() == 185);
 
     auto phases = predictor.predicted_phases();
     REQUIRE(phases[2] == 25);
@@ -271,10 +273,11 @@ TEST_CASE("PreprintPredictor: single phase entry", "[print][predictor]") {
 TEST_CASE("PreprintPredictor: load_entries replaces existing data", "[print][predictor]") {
     PreprintPredictor predictor;
     predictor.load_entries({{100, 1700000000, {{2, 50}}}});
-    REQUIRE(predictor.predicted_total() == 50);
+    // predicted_total() returns wall-clock total_seconds, not phase sum
+    REQUIRE(predictor.predicted_total() == 100);
 
-    predictor.load_entries({{100, 1700000001, {{3, 30}}}});
-    REQUIRE(predictor.predicted_total() == 30);
+    predictor.load_entries({{80, 1700000001, {{3, 30}}}});
+    REQUIRE(predictor.predicted_total() == 80);
 
     auto phases = predictor.predicted_phases();
     REQUIRE(phases.count(2) == 0); // Old data gone
