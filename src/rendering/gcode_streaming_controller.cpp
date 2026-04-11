@@ -306,37 +306,57 @@ void GCodeStreamingController::open_file_async(const std::string& filepath,
     indexing_.store(true);
     index_progress_.store(0.0f);
 
-    // Build index in background thread
+    // Build index in background thread.
+    // Wrap the whole body in try/catch: a throw escaping this lambda (OOM under
+    // memory pressure, fmt format_error from a logging call, etc.) would unwind
+    // through std::async's noexcept boundary and terminate the process. On
+    // constrained devices (AD5M/AD5X) allocations during indexing of a large
+    // gcode file can fail — surface that as a failed load, not a crash.
     index_future_ = std::async(std::launch::async, [this, filepath]() {
-        bool success = build_index();
+        bool success = false;
+        try {
+            success = build_index();
+        } catch (const std::exception& e) {
+            spdlog::error("[StreamingController] Exception during build_index: {}", e.what());
+            success = false;
+        } catch (...) {
+            spdlog::error("[StreamingController] Unknown exception during build_index");
+            success = false;
+        }
 
         indexing_.store(false);
         index_progress_.store(1.0f);
 
-        if (success) {
-            is_open_.store(true);
-            spdlog::info("[StreamingController] Async open complete: {} layers",
-                         index_.get_layer_count());
-        } else {
-            spdlog::error("[StreamingController] Async indexing failed");
-            data_source_.reset();
-        }
+        try {
+            if (success) {
+                is_open_.store(true);
+                spdlog::info("[StreamingController] Async open complete: {} layers",
+                             index_.get_layer_count());
+            } else {
+                spdlog::error("[StreamingController] Async indexing failed");
+                data_source_.reset();
+            }
 
-        // Capture callback under lock to prevent race with close()
-        // The callback may have been nullified if close() was called
-        std::function<void(bool)> callback;
-        {
-            std::lock_guard<std::mutex> lock(callback_mutex_);
-            callback = index_complete_callback_;
-        }
+            // Capture callback under lock to prevent race with close()
+            // The callback may have been nullified if close() was called
+            std::function<void(bool)> callback;
+            {
+                std::lock_guard<std::mutex> lock(callback_mutex_);
+                callback = index_complete_callback_;
+            }
 
-        if (callback) {
-            spdlog::debug("[StreamingController] Invoking completion callback (success={})",
-                          success);
-            callback(success);
-            spdlog::debug("[StreamingController] Completion callback returned");
-        } else {
-            spdlog::debug("[StreamingController] No completion callback registered");
+            if (callback) {
+                spdlog::debug("[StreamingController] Invoking completion callback (success={})",
+                              success);
+                callback(success);
+                spdlog::debug("[StreamingController] Completion callback returned");
+            } else {
+                spdlog::debug("[StreamingController] No completion callback registered");
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("[StreamingController] Exception in completion path: {}", e.what());
+        } catch (...) {
+            spdlog::error("[StreamingController] Unknown exception in completion path");
         }
 
         return success;

@@ -3,6 +3,7 @@
 
 #include "ui_gcode_viewer.h"
 
+#include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 #include "ui_utils.h"
 
@@ -15,6 +16,7 @@
 #include "geometry_budget_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "memory_utils.h"
+#include "system/telemetry_manager.h"
 #include "theme_manager.h"
 
 #include <filesystem>
@@ -1247,6 +1249,11 @@ static void ui_gcode_viewer_load_file_async(lv_obj_t* obj, const char* file_path
                     spdlog::error("[GCode Viewer] Streaming mode: failed to index {}", r->path);
                     st->viewer_state = GcodeViewerState::Error;
                     st->streaming_controller_.reset();
+
+                    ToastManager::instance().show(ToastSeverity::ERROR,
+                                                  lv_tr("Failed to load G-code preview"));
+                    TelemetryManager::instance().record_error("gcode_viewer",
+                                                              "streaming_load_failed", r->path);
 
                     if (st->load_callback) {
                         st->load_callback(obj, st->load_callback_user_data, false);
