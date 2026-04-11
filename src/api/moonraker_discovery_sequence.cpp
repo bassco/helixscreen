@@ -337,25 +337,82 @@ void MoonrakerDiscoverySequence::continue_discovery_objects(uint64_t seq) {
                     "server.webcams.list", json::object(),
                     [](json response) {
                         bool has_webcam = false;
+                        std::string chosen_name;
+                        std::string chosen_service;
                         std::string stream_url;
                         std::string snapshot_url;
                         bool flip_h = false;
                         bool flip_v = false;
                         if (response.contains("result") && response["result"].contains("webcams")) {
-                            for (const auto& cam : response["result"]["webcams"]) {
-                                if (cam.value("enabled", true)) {
+                            const auto& cams = response["result"]["webcams"];
+
+                            // MJPEG-family service substrings CameraStream can consume
+                            // directly. Everything else (webrtc-*, ipcamera, hlsstream, …)
+                            // returns HTML/SDP/HLS and wastes three failover attempts
+                            // before snapshot polling kicks in.
+                            auto is_mjpeg_service = [](const std::string& svc) {
+                                if (svc.empty())
+                                    return false;
+                                return svc.find("mjpeg") != std::string::npos ||
+                                       svc.find("ustreamer") != std::string::npos;
+                            };
+
+                            // First pass: prefer an enabled MJPEG-compatible webcam so we
+                            // get the real live stream for QR decoding.
+                            for (const auto& cam : cams) {
+                                if (!cam.value("enabled", true))
+                                    continue;
+                                std::string service = cam.value("service", "");
+                                if (is_mjpeg_service(service)) {
                                     has_webcam = true;
+                                    chosen_name = cam.value("name", "");
+                                    chosen_service = service;
                                     stream_url = cam.value("stream_url", "");
                                     snapshot_url = cam.value("snapshot_url", "");
                                     flip_h = cam.value("flip_horizontal", false);
                                     flip_v = cam.value("flip_vertical", false);
                                     break;
+                                } else {
+                                    spdlog::debug("[Discovery] Skipping webcam '{}' stream_url: "
+                                                  "service '{}' is not MJPEG-compatible",
+                                                  cam.value("name", ""),
+                                                  service.empty() ? "<unset>" : service);
+                                }
+                            }
+
+                            // Second pass: no MJPEG entry — fall back to any enabled entry
+                            // with a usable snapshot_url. Force snapshot-only mode by
+                            // leaving stream_url empty so CameraStream doesn't waste three
+                            // failed MJPEG attempts on a WebRTC/HLS endpoint first.
+                            if (!has_webcam) {
+                                for (const auto& cam : cams) {
+                                    if (!cam.value("enabled", true))
+                                        continue;
+                                    std::string snap = cam.value("snapshot_url", "");
+                                    if (snap.empty())
+                                        continue;
+                                    has_webcam = true;
+                                    chosen_name = cam.value("name", "");
+                                    chosen_service = cam.value("service", "");
+                                    stream_url = "";
+                                    snapshot_url = snap;
+                                    flip_h = cam.value("flip_horizontal", false);
+                                    flip_v = cam.value("flip_vertical", false);
+                                    spdlog::info(
+                                        "[Discovery] No MJPEG webcam found; using snapshot-only "
+                                        "fallback for service '{}'",
+                                        chosen_service.empty() ? "<unset>" : chosen_service);
+                                    break;
                                 }
                             }
                         }
                         if (has_webcam) {
-                            spdlog::info("[Discovery] Webcam found via Moonraker: stream={}",
-                                         stream_url);
+                            spdlog::info("[Discovery] Webcam selected: name='{}' service='{}' "
+                                         "stream={} snapshot={}",
+                                         chosen_name,
+                                         chosen_service.empty() ? "<unset>" : chosen_service,
+                                         stream_url.empty() ? "<none>" : stream_url,
+                                         snapshot_url.empty() ? "<none>" : snapshot_url);
                             get_printer_state().set_webcam_available(true, stream_url, snapshot_url,
                                                                      flip_h, flip_v);
                         } else {
