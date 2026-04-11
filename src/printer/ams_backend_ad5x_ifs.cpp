@@ -1058,12 +1058,20 @@ void AmsBackendAd5xIfs::parse_adventurer_json(const std::string& content) {
             materials_[static_cast<size_t>(idx)] = type;
 
             // Native ZMOD has no per-port switch sensors — infer presence from
-            // Adventurer5M.json data. A non-empty color means filament is present.
-            // This is a one-way latch (never set back to false) — acceptable because
-            // native ZMOD doesn't provide removal events, and a backend restart
-            // re-reads fresh data.
-            if (has_filament_data && !has_per_port_sensors_) {
-                port_presence_[static_cast<size_t>(idx)] = true;
+            // Adventurer5M.json data. A non-empty color means filament is present;
+            // an empty color means the spool has been fully ejected. Only act on
+            // eject when the system is IDLE so a transient read mid-unload cannot
+            // wipe presence (#631 follow-up).
+            if (!has_per_port_sensors_) {
+                auto& presence = port_presence_[static_cast<size_t>(idx)];
+                if (has_filament_data) {
+                    presence = true;
+                } else if (presence && system_info_.action == AmsAction::IDLE) {
+                    spdlog::info("{} Slot {} eject detected (empty color in "
+                                 "Adventurer5M.json)",
+                                 backend_log_tag(), idx);
+                    presence = false;
+                }
             }
 
             update_slot_from_state(idx);
