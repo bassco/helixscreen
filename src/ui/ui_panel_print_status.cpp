@@ -1656,6 +1656,28 @@ void PrintStatusPanel::on_print_state_changed(PrintJobState job_state) {
             if (progress_bar_) {
                 lv_bar_set_value(progress_bar_, lifecycle_.progress(), LV_ANIM_OFF);
             }
+
+            // Re-freeze gcode viewer layer. The viewer has its own observer on
+            // print_layer_current_subject that already zeroed the display before
+            // the lifecycle guard kicked in; push the frozen mapped layer back.
+            // Deferred via queue_update for the same reason as the live update
+            // path below — observer callbacks can fire mid-render.
+            if (gcode_viewer_) {
+                int viewer_max_layer = ui_gcode_viewer_get_max_layer(gcode_viewer_);
+                int viewer_layer = lifecycle_.map_current_layer_to_viewer(viewer_max_layer);
+                struct ViewerProgressCtx {
+                    lv_obj_t* viewer;
+                    int layer;
+                };
+                auto ctx = std::make_unique<ViewerProgressCtx>(
+                    ViewerProgressCtx{gcode_viewer_, viewer_layer});
+                helix::ui::queue_update<ViewerProgressCtx>(
+                    std::move(ctx), [](ViewerProgressCtx* c) {
+                        if (c->viewer && lv_obj_is_valid(c->viewer)) {
+                            ui_gcode_viewer_set_print_progress(c->viewer, c->layer);
+                        }
+                    });
+            }
         }
         // Don't call update_all_displays() or show_gcode_viewer() — keep display frozen
         spdlog::debug("[{}] Print state changed: {} -> {} (display frozen)", get_name(),
@@ -1855,10 +1877,7 @@ void PrintStatusPanel::on_print_layer_changed(int current_layer) {
         // Map from Moonraker layer count (e.g., 240) to viewer layer count (e.g., 2912)
         // The slicer metadata and parsed G-code often have different layer counts
         int viewer_max_layer = ui_gcode_viewer_get_max_layer(gcode_viewer_);
-        int viewer_layer = current_layer;
-        if (lifecycle_.total_layers() > 0 && viewer_max_layer > 0) {
-            viewer_layer = (current_layer * viewer_max_layer) / lifecycle_.total_layers();
-        }
+        int viewer_layer = lifecycle_.map_current_layer_to_viewer(viewer_max_layer);
 
         // CRITICAL: Defer to avoid lv_obj_invalidate() during render phase
         // Observer callbacks can fire during lv_timer_handler() which may be mid-render

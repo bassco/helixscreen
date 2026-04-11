@@ -527,6 +527,90 @@ TEST_CASE("Temperature/speed/flow always accepted", "[lifecycle]") {
     }
 }
 
+// ============================================================================
+// map_current_layer_to_viewer — layer rescaling used by both the live update
+// path and the terminal→Idle re-freeze path in PrintStatusPanel.
+//
+// Regression: the from_terminal_to_idle block in ui_panel_print_status.cpp
+// previously re-froze only the progress bar. On print completion Moonraker
+// sends zeroed layer/progress subjects in the same batch as STANDBY, and the
+// gcode viewer's direct observer zeroed its display before the lifecycle
+// guard could reject the update. The viewer-layer mapping lives here so it
+// can be exercised without instantiating the full panel; the panel calls
+// this helper in both the live and re-freeze paths so they cannot drift.
+// ============================================================================
+
+TEST_CASE("map_current_layer_to_viewer rescales by total_layers", "[lifecycle][viewer]") {
+    PrintLifecycleState sm;
+    TA::set_state(sm, PrintState::Printing);
+    TA::set_layers(sm, 60, 240);
+
+    // 60/240 of 2912 = 728
+    REQUIRE(sm.map_current_layer_to_viewer(2912) == 728);
+}
+
+TEST_CASE("map_current_layer_to_viewer returns current_layer when total unknown",
+          "[lifecycle][viewer]") {
+    PrintLifecycleState sm;
+    TA::set_state(sm, PrintState::Printing);
+    TA::set_layers(sm, 42, 0);
+
+    REQUIRE(sm.map_current_layer_to_viewer(2912) == 42);
+}
+
+TEST_CASE("map_current_layer_to_viewer returns current_layer when viewer has no layers",
+          "[lifecycle][viewer]") {
+    PrintLifecycleState sm;
+    TA::set_state(sm, PrintState::Printing);
+    TA::set_layers(sm, 42, 100);
+
+    REQUIRE(sm.map_current_layer_to_viewer(0) == 42);
+}
+
+TEST_CASE("map_current_layer_to_viewer stays frozen after Complete→Idle",
+          "[lifecycle][viewer][race]") {
+    // This is the direct regression coverage for the bug where the panel's
+    // from_terminal_to_idle re-freeze path forgot to update the gcode viewer.
+    // After Moonraker sends zeroed subjects on STANDBY, the lifecycle guard
+    // keeps current_layer_ at its terminal value, so the mapping still yields
+    // the final printed layer — not 0.
+    PrintLifecycleState sm;
+    TA::set_state(sm, PrintState::Printing);
+    TA::set_layers(sm, 50, 100);
+
+    // Complete snaps current_layer to total_layers
+    sm.on_job_state_changed(PrintJobState::COMPLETE, PrintOutcome::COMPLETE);
+    REQUIRE(sm.current_layer() == 100);
+
+    // Transition to Idle, then Moonraker's zeroed layer arrives
+    sm.on_job_state_changed(PrintJobState::STANDBY, PrintOutcome::NONE);
+    REQUIRE(sm.on_layer_changed(0, 100, true) == false);
+    REQUIRE(sm.current_layer() == 100);
+
+    // Mapping must still yield the final viewer layer, not 0
+    REQUIRE(sm.map_current_layer_to_viewer(2912) == 2912);
+}
+
+TEST_CASE("map_current_layer_to_viewer stays frozen after Cancelled→Idle",
+          "[lifecycle][viewer][race]") {
+    PrintLifecycleState sm;
+    TA::set_state(sm, PrintState::Printing);
+    TA::set_layers(sm, 37, 100);
+
+    // Cancel mid-print — lifecycle preserves current_layer (unlike Complete
+    // which snaps to total). Frozen value should map into viewer space.
+    sm.on_job_state_changed(PrintJobState::CANCELLED, PrintOutcome::CANCELLED);
+    REQUIRE(sm.current_layer() == 37);
+
+    // Transition to Idle with zeroed layer from Moonraker
+    sm.on_job_state_changed(PrintJobState::STANDBY, PrintOutcome::NONE);
+    REQUIRE(sm.on_layer_changed(0, 100, true) == false);
+    REQUIRE(sm.current_layer() == 37);
+
+    // 37/100 of 2900 = 1073
+    REQUIRE(sm.map_current_layer_to_viewer(2900) == 1073);
+}
+
 TEST_CASE("Duration ignored when outcome != NONE", "[lifecycle][guard]") {
     PrintLifecycleState sm;
     TA::set_state(sm, PrintState::Printing);

@@ -190,6 +190,24 @@ class PrintLifecycleState {
         return current_state_ != PrintState::Idle;
     }
 
+    /**
+     * @brief Map current_layer from Moonraker total_layers space into the
+     * gcode viewer's layer space.
+     *
+     * Slicer metadata total_layers and the viewer's parsed layer count often
+     * differ (e.g. Moonraker 240 vs viewer 2912), so the viewer layer must be
+     * rescaled. Returns current_layer_ unchanged when either count is unknown.
+     *
+     * Used by both the live progress update path and the terminal→Idle
+     * re-freeze path so they cannot drift.
+     */
+    int map_current_layer_to_viewer(int viewer_max_layer) const {
+        if (total_layers_ > 0 && viewer_max_layer > 0) {
+            return (current_layer_ * viewer_max_layer) / total_layers_;
+        }
+        return current_layer_;
+    }
+
   private:
     friend class PrintLifecycleStateTestAccess;
 
