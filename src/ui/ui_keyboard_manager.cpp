@@ -510,7 +510,7 @@ void KeyboardManager::keyboard_event_cb(lv_event_t* e) {
         spdlog::debug("[KeyboardManager] Close pressed - hiding keyboard");
         mgr.hide();
     } else if (code == LV_EVENT_VALUE_CHANGED) {
-        if (mgr.longpress_state_ == LP_LONG_DETECTED) {
+        if (mgr.longpress_state_ == LP_LONG_DETECTED || mgr.longpress_state_ == LP_ALT_SELECTED) {
             spdlog::debug("[KeyboardManager] Ignoring VALUE_CHANGED during long-press mode");
             return;
         }
