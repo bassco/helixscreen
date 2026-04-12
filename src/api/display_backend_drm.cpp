@@ -332,6 +332,24 @@ lv_display_t* DisplayBackendDRM::create_display(int width, int height) {
         close(enum_fd);
     }
 
+    // Auto-downscale: if the preferred EDID mode exceeds 1920px on either
+    // axis, pick the highest sub-1920 mode available. This handles phone-class
+    // panels (e.g. 5.5" QHD 1440x2560) that would otherwise render with
+    // unreadably small text. See prestonbrown/helixscreen#773, #774.
+    static constexpr uint32_t kHighDpiThreshold = 1920;
+    int downscale_idx = helix::find_best_downscale_mode(modes, kHighDpiThreshold);
+    if (downscale_idx != helix::DrmModeMatch::kNoMatch) {
+        int pref_idx = helix::find_preferred_mode_index(modes);
+        const auto& native = modes[pref_idx];
+        const auto& target = modes[downscale_idx];
+        spdlog::info("[DRM Backend] Native resolution {}x{} exceeds {}px threshold, "
+                     "selecting {}x{}@{} mode",
+                     native.hdisplay, native.vdisplay, kHighDpiThreshold, target.hdisplay,
+                     target.vdisplay, target.vrefresh);
+        width = static_cast<int>(target.hdisplay);
+        height = static_cast<int>(target.vdisplay);
+    }
+
     // Decide which mode to use based on the user's request.
     uint32_t chosen_w = 0, chosen_h = 0;
     bool mismatch_warned = false;
