@@ -437,10 +437,7 @@ TEST_CASE("PrinterDiscovery detects new AFC object types", "[printer_discovery][
 
     SECTION("AFC_stepper used as lanes when no AFC_lane objects exist") {
         // Box Turtle firmware only has AFC_stepper for lanes
-        json objects = {"AFC",
-                        "AFC_stepper lane1",
-                        "AFC_stepper lane2",
-                        "AFC_stepper lane3",
+        json objects = {"AFC", "AFC_stepper lane1", "AFC_stepper lane2", "AFC_stepper lane3",
                         "AFC_stepper lane4"};
         hw.parse_objects(objects);
 
@@ -475,11 +472,8 @@ TEST_CASE("PrinterDiscovery detects new AFC object types", "[printer_discovery][
     SECTION("Vivid motors not merged with AFC_lane objects") {
         // Vivid has AFC_stepper for motors (not lanes) + AFC_lane for actual lanes.
         // Motor names should NOT be merged since they don't match "lane" prefix.
-        json objects = {"AFC",
-                        "AFC_stepper Vivid_1_drive",
-                        "AFC_stepper Vivid_1_selector",
-                        "AFC_lane lane1",
-                        "AFC_lane lane2"};
+        json objects = {"AFC", "AFC_stepper Vivid_1_drive", "AFC_stepper Vivid_1_selector",
+                        "AFC_lane lane1", "AFC_lane lane2"};
         hw.parse_objects(objects);
 
         auto lanes = hw.afc_lane_names();
@@ -769,6 +763,78 @@ TEST_CASE("PrinterDiscovery detects tool changer", "[printer_discovery]") {
 
     auto tools = hw.tool_names();
     REQUIRE(tools.size() == 3);
+}
+
+TEST_CASE("PrinterDiscovery prefers AFC over Snapmaker when both present", "[printer_discovery]") {
+    // SnapMaker U1 with aftermarket AFC filament changers — filament_detect
+    // (native Snapmaker) is present but AFC should win since it provides
+    // real filament management with lanes and hubs.
+    PrinterDiscovery hw;
+
+    json objects = {"filament_detect",
+                    "toolchanger",
+                    "tool T0",
+                    "tool T1",
+                    "tool T2",
+                    "tool T3",
+                    "AFC",
+                    "AFC_hub Turtle",
+                    "AFC_hub Vivid",
+                    "AFC_hub EMU",
+                    "AFC_hub HTLF Claymore",
+                    "AFC_lane lane1",
+                    "AFC_lane lane2",
+                    "AFC_lane lane3",
+                    "AFC_lane lane4",
+                    "AFC_lane lane5",
+                    "AFC_lane lane6",
+                    "AFC_lane lane7",
+                    "AFC_lane lane8"};
+    hw.parse_objects(objects);
+
+    // AFC should win over Snapmaker
+    REQUIRE(hw.has_mmu());
+    REQUIRE(hw.mmu_type() == AmsType::AFC);
+    REQUIRE(hw.detected_ams_systems().size() == 1);
+    REQUIRE(hw.detected_ams_systems()[0].type == AmsType::AFC);
+
+    // Snapmaker and toolchanger flags still set for other queries
+    REQUIRE(hw.has_snapmaker());
+    REQUIRE(hw.has_tool_changer());
+
+    // AFC discovery data preserved
+    REQUIRE(hw.afc_hub_names().size() == 4);
+    REQUIRE(hw.afc_lane_names().size() == 8);
+    REQUIRE(hw.tool_names().size() == 4);
+}
+
+TEST_CASE("PrinterDiscovery prefers AFC over standalone toolchanger", "[printer_discovery]") {
+    // Generic toolchanger with AFC — AFC should win
+    PrinterDiscovery hw;
+
+    json objects = {"toolchanger",    "tool T0",        "tool T1",        "AFC",
+                    "AFC_hub Turtle", "AFC_lane lane1", "AFC_lane lane2", "AFC_lane lane3",
+                    "AFC_lane lane4"};
+    hw.parse_objects(objects);
+
+    REQUIRE(hw.has_mmu());
+    REQUIRE(hw.mmu_type() == AmsType::AFC);
+    REQUIRE(hw.detected_ams_systems().size() == 1);
+    REQUIRE(hw.detected_ams_systems()[0].type == AmsType::AFC);
+    REQUIRE(hw.has_tool_changer());
+}
+
+TEST_CASE("PrinterDiscovery uses Snapmaker backend when no MMU present", "[printer_discovery]") {
+    // Native Snapmaker U1 without aftermarket filament changer
+    PrinterDiscovery hw;
+
+    json objects = {"filament_detect", "toolchanger", "tool T0", "tool T1", "tool T2", "tool T3"};
+    hw.parse_objects(objects);
+
+    REQUIRE(hw.has_snapmaker());
+    REQUIRE(hw.mmu_type() == AmsType::SNAPMAKER);
+    REQUIRE(hw.detected_ams_systems().size() == 1);
+    REQUIRE(hw.detected_ams_systems()[0].type == AmsType::SNAPMAKER);
 }
 
 // ============================================================================
@@ -1176,12 +1242,7 @@ TEST_CASE("PrinterDiscovery detects screws_tilt_adjust from config when missing 
 
 TEST_CASE("AFC unknown unit types detected generically", "[printer_discovery][afc]") {
     PrinterDiscovery hw;
-    json objects = json::array({
-        "AFC",
-        "AFC_stepper lane1",
-        "AFC_NightOwl Owl_1",
-        "AFC_buffer TN"
-    });
+    json objects = json::array({"AFC", "AFC_stepper lane1", "AFC_NightOwl Owl_1", "AFC_buffer TN"});
     hw.parse_objects(objects);
 
     REQUIRE(hw.has_mmu());
@@ -1194,15 +1255,14 @@ TEST_CASE("AFC unknown unit types detected generically", "[printer_discovery][af
 
     // Known component types should NOT appear as unit objects
     CHECK(hw.afc_lane_names().size() == 1);   // lane1 from AFC_stepper
-    CHECK(hw.afc_buffer_names().size() == 1);  // TN from AFC_buffer
+    CHECK(hw.afc_buffer_names().size() == 1); // TN from AFC_buffer
 }
 
 // ==========================================================================
 // AD5X IFS Detection
 // ==========================================================================
 
-TEST_CASE("PrinterDiscovery detects AD5X IFS via zmod sensors",
-          "[printer_discovery][ad5x_ifs]") {
+TEST_CASE("PrinterDiscovery detects AD5X IFS via zmod sensors", "[printer_discovery][ad5x_ifs]") {
     helix::PrinterDiscovery discovery;
     discovery.parse_objects(nlohmann::json::array({
         "extruder",

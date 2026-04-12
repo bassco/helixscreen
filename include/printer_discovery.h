@@ -275,12 +275,9 @@ class PrinterDiscovery {
             }
             // AFC unit-level objects (BoxTurtle, OpenAMS, ViViD, NightOwl, etc.)
             // Any AFC_ object not matching known component prefixes is a unit type
-            else if (name.rfind("AFC_", 0) == 0 &&
-                     name.rfind("AFC_stepper ", 0) != 0 &&
-                     name.rfind("AFC_hub ", 0) != 0 &&
-                     name.rfind("AFC_extruder ", 0) != 0 &&
-                     name.rfind("AFC_lane ", 0) != 0 &&
-                     name.rfind("AFC_buffer ", 0) != 0 &&
+            else if (name.rfind("AFC_", 0) == 0 && name.rfind("AFC_stepper ", 0) != 0 &&
+                     name.rfind("AFC_hub ", 0) != 0 && name.rfind("AFC_extruder ", 0) != 0 &&
+                     name.rfind("AFC_lane ", 0) != 0 && name.rfind("AFC_buffer ", 0) != 0 &&
                      name.rfind("AFC_led ", 0) != 0) {
                 afc_unit_object_names_.push_back(name); // Store FULL name for Klipper queries
             }
@@ -442,14 +439,12 @@ class PrinterDiscovery {
         // Collect all detected AMS systems
         detected_ams_systems_.clear();
 
-        // Register the actual filament management backend. Only one AMS backend
-        // can be active at a time on Klipper. When a real MMU (AFC, Happy Hare)
-        // is present alongside klipper-toolchanger, prefer the MMU — toolchanger
-        // just handles tool switching, not filament management.
-        if (has_snapmaker_) {
-            detected_ams_systems_.push_back({AmsType::SNAPMAKER, "Snapmaker"});
-            mmu_type_ = AmsType::SNAPMAKER;
-        } else if (has_mmu_) {
+        // Register the filament management backend. When a real MMU (AFC, Happy
+        // Hare, etc.) is present, it always wins — even on Snapmaker U1 hardware
+        // that also reports filament_detect. The Snapmaker backend is a basic
+        // 4-slot fallback for U1s without an aftermarket MMU. Toolchanger alone
+        // only handles tool switching, not filament management.
+        if (has_mmu_) {
             if (mmu_type_ == AmsType::HAPPY_HARE) {
                 detected_ams_systems_.push_back({AmsType::HAPPY_HARE, "Happy Hare"});
             } else if (mmu_type_ == AmsType::AFC) {
@@ -461,6 +456,10 @@ class PrinterDiscovery {
             } else if (mmu_type_ == AmsType::ACE) {
                 detected_ams_systems_.push_back({AmsType::ACE, "ACE"});
             }
+        } else if (has_snapmaker_) {
+            // Native Snapmaker filament system (no aftermarket MMU)
+            detected_ams_systems_.push_back({AmsType::SNAPMAKER, "Snapmaker"});
+            mmu_type_ = AmsType::SNAPMAKER;
         } else if (has_tool_changer_ && !tool_names_.empty()) {
             // Standalone tool changer with no MMU — show parallel topology
             detected_ams_systems_.push_back({AmsType::TOOL_CHANGER, "Tool Changer"});
@@ -496,9 +495,8 @@ class PrinterDiscovery {
 
         for (const auto& [key, value] : config.items()) {
             if (key == "adxl345" || key.rfind("adxl345 ", 0) == 0 || key == "lis2dw" ||
-                key.rfind("lis2dw ", 0) == 0 || key == "mpu9250" ||
-                key.rfind("mpu9250 ", 0) == 0 || key == "lis3dh" ||
-                key.rfind("lis3dh ", 0) == 0 || key == "icm20948" ||
+                key.rfind("lis2dw ", 0) == 0 || key == "mpu9250" || key.rfind("mpu9250 ", 0) == 0 ||
+                key == "lis3dh" || key.rfind("lis3dh ", 0) == 0 || key == "icm20948" ||
                 key.rfind("icm20948 ", 0) == 0 || key == "resonance_tester") {
                 has_accelerometer_ = true;
                 spdlog::debug("[PrinterDiscovery] Accelerometer detected from config: {}", key);
