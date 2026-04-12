@@ -58,6 +58,9 @@ class AudioSettingsManager {
     /** @brief Get master volume (0-100) */
     int get_volume() const;
 
+    /** @brief Get perceptually-scaled volume as 0.0–1.0 float (quadratic curve) */
+    float get_volume_scaled() const;
+
     /** @brief Set master volume (clamped 0-100, updates subject + persists) */
     void set_volume(int volume);
 

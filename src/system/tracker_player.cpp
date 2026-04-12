@@ -64,7 +64,8 @@ bool TrackerPlayer::is_playing() const {
 }
 
 void TrackerPlayer::tick(float dt_ms) {
-    if (!playing_.load(std::memory_order_acquire)) return;
+    if (!playing_.load(std::memory_order_acquire))
+        return;
 
     const float ms_per_tick = 2500.0f / static_cast<float>(tempo_);
     tick_accum_ += dt_ms;
@@ -72,13 +73,15 @@ void TrackerPlayer::tick(float dt_ms) {
     while (tick_accum_ >= ms_per_tick) {
         tick_accum_ -= ms_per_tick;
 
-        if (!playing_.load(std::memory_order_relaxed)) break;
+        if (!playing_.load(std::memory_order_relaxed))
+            break;
 
         tick_++;
         if (tick_ >= speed_) {
             tick_ = 0;
             advance_row();
-            if (!playing_.load(std::memory_order_relaxed)) break;
+            if (!playing_.load(std::memory_order_relaxed))
+                break;
             process_row();
         }
 
@@ -88,16 +91,25 @@ void TrackerPlayer::tick(float dt_ms) {
 }
 
 TrackerPlayer::ChannelSnapshot TrackerPlayer::get_channel(int ch) const {
-    if (ch < 0 || ch >= 4) return {0, 0, false};
+    if (ch < 0 || ch >= 4)
+        return {0, 0, false};
     const auto& c = channels_[static_cast<size_t>(ch)];
     return {c.freq, c.volume, c.active};
 }
 
-int TrackerPlayer::current_row() const { return row_; }
-int TrackerPlayer::current_order() const { return order_idx_; }
-int TrackerPlayer::current_tick() const { return tick_; }
+int TrackerPlayer::current_row() const {
+    return row_;
+}
+int TrackerPlayer::current_order() const {
+    return order_idx_;
+}
+int TrackerPlayer::current_tick() const {
+    return tick_;
+}
 
-void TrackerPlayer::set_volume_override(int vol) { volume_override_ = vol; }
+void TrackerPlayer::set_volume_override(int vol) {
+    volume_override_ = vol;
+}
 
 // ---------------------------------------------------------------------------
 // Row processing — tick 0 of each row
@@ -124,7 +136,8 @@ void TrackerPlayer::process_row() {
 
     for (int ch = 0; ch < 4; ++ch) {
         const size_t idx = static_cast<size_t>(row_ * 4 + ch);
-        if (idx >= pattern.size()) continue;
+        if (idx >= pattern.size())
+            continue;
 
         const auto& note = pattern[idx];
         auto& cs = channels_[static_cast<size_t>(ch)];
@@ -134,11 +147,9 @@ void TrackerPlayer::process_row() {
         cs.effect_data = note.effect_data;
 
         // Set instrument
-        if (note.instrument > 0 &&
-            note.instrument <= module_.instruments.size()) {
+        if (note.instrument > 0 && note.instrument <= module_.instruments.size()) {
             cs.instrument = note.instrument;
-            const auto& inst =
-                module_.instruments[note.instrument - 1];
+            const auto& inst = module_.instruments[note.instrument - 1];
             cs.volume = inst.volume;
             cs.base_volume = inst.volume;
             cs.waveform = inst.waveform;
@@ -159,7 +170,8 @@ void TrackerPlayer::process_row() {
             if (cs.effect == 0x03) {
                 // Tone portamento: set target, keep current freq/period
                 cs.target_freq = freq;
-                if (note_period > 0) cs.target_period = note_period;
+                if (note_period > 0)
+                    cs.target_period = note_period;
             } else {
                 cs.freq = freq;
                 cs.base_freq = freq;
@@ -180,7 +192,7 @@ void TrackerPlayer::process_row() {
         const uint8_t ey = note.effect_data & 0x0F;
 
         switch (note.effect) {
-        case 0x00:  // Arpeggio
+        case 0x00: // Arpeggio
             if (note.effect_data != 0) {
                 cs.arp_x = ex;
                 cs.arp_y = ey;
@@ -188,65 +200,70 @@ void TrackerPlayer::process_row() {
             }
             break;
 
-        case 0x03:  // Tone portamento
+        case 0x03: // Tone portamento
             if (note.effect_data > 0) {
                 cs.porta_speed = note.effect_data;
             }
             break;
 
-        case 0x04:  // Vibrato
-            if (ex > 0) cs.vibrato_speed = ex;
-            if (ey > 0) cs.vibrato_depth = ey;
+        case 0x04: // Vibrato
+            if (ex > 0)
+                cs.vibrato_speed = ex;
+            if (ey > 0)
+                cs.vibrato_depth = ey;
             break;
 
-        case 0x07:  // Tremolo
-            if (ex > 0) cs.tremolo_speed = ex;
-            if (ey > 0) cs.tremolo_depth = ey;
+        case 0x07: // Tremolo
+            if (ex > 0)
+                cs.tremolo_speed = ex;
+            if (ey > 0)
+                cs.tremolo_depth = ey;
             break;
 
-        case 0x0B:  // Position jump
+        case 0x0B: // Position jump
             next_order_ = note.effect_data;
             break;
 
-        case 0x0C:  // Set volume
-            cs.volume = std::clamp(
-                static_cast<float>(note.effect_data) / 64.0f, 0.0f, 1.0f);
+        case 0x0C: // Set volume
+            cs.volume = std::clamp(static_cast<float>(note.effect_data) / 64.0f, 0.0f, 1.0f);
             cs.base_volume = cs.volume;
             break;
 
-        case 0x0D:  // Pattern break
+        case 0x0D: // Pattern break
             next_row_ = ex * 10 + ey;
             if (next_order_ < 0) {
                 next_order_ = order_idx_ + 1;
             }
             break;
 
-        case 0x0E:  // Extended effects
+        case 0x0E: // Extended effects
             switch (ex) {
-            case 0x1:  // Fine porta up
+            case 0x1: // Fine porta up
                 cs.freq *= std::pow(2.0f, static_cast<float>(ey) / (12.0f * 16.0f));
                 cs.base_freq = cs.freq;
                 if (module_.has_samples) {
-                    cs.period = static_cast<uint16_t>(std::max(113, static_cast<int>(cs.period) - ey));
+                    cs.period =
+                        static_cast<uint16_t>(std::max(113, static_cast<int>(cs.period) - ey));
                     cs.base_period = cs.period;
                 }
                 break;
-            case 0x2:  // Fine porta down
+            case 0x2: // Fine porta down
                 cs.freq /= std::pow(2.0f, static_cast<float>(ey) / (12.0f * 16.0f));
                 cs.base_freq = cs.freq;
                 if (module_.has_samples) {
-                    cs.period = static_cast<uint16_t>(std::min(856, static_cast<int>(cs.period) + ey));
+                    cs.period =
+                        static_cast<uint16_t>(std::min(856, static_cast<int>(cs.period) + ey));
                     cs.base_period = cs.period;
                 }
                 break;
-            case 0x6:  // Pattern loop
+            case 0x6: // Pattern loop
                 if (ey == 0) {
                     cs.loop_start_row = row_;
                 } else if (cs.loop_start_row >= 0) {
                     if (cs.loop_count == 0) {
                         cs.loop_count = ey;
                         next_row_ = cs.loop_start_row;
-                        next_order_ = order_idx_;  // stay in same pattern
+                        next_order_ = order_idx_; // stay in same pattern
                     } else {
                         cs.loop_count--;
                         if (cs.loop_count > 0) {
@@ -256,10 +273,10 @@ void TrackerPlayer::process_row() {
                     }
                 }
                 break;
-            case 0xA:  // Fine volume up
+            case 0xA: // Fine volume up
                 cs.volume = std::min(1.0f, cs.volume + static_cast<float>(ey) / 64.0f);
                 break;
-            case 0xB:  // Fine volume down
+            case 0xB: // Fine volume down
                 cs.volume = std::max(0.0f, cs.volume - static_cast<float>(ey) / 64.0f);
                 break;
             default:
@@ -267,7 +284,7 @@ void TrackerPlayer::process_row() {
             }
             break;
 
-        case 0x0F:  // Set speed/tempo
+        case 0x0F: // Set speed/tempo
             if (note.effect_data > 0) {
                 if (note.effect_data < 32) {
                     speed_ = note.effect_data;
@@ -290,7 +307,8 @@ void TrackerPlayer::process_row() {
 void TrackerPlayer::process_tick_effects() {
     for (int ch = 0; ch < 4; ++ch) {
         auto& cs = channels_[static_cast<size_t>(ch)];
-        if (!cs.active) continue;
+        if (!cs.active)
+            continue;
 
         const uint8_t ex = (cs.effect_data >> 4) & 0x0F;
         const uint8_t ey = cs.effect_data & 0x0F;
@@ -298,14 +316,20 @@ void TrackerPlayer::process_tick_effects() {
         // Per-tick effects (tick > 0 only)
         if (tick_ > 0) {
             switch (cs.effect) {
-            case 0x00:  // Arpeggio
+            case 0x00: // Arpeggio
                 if (cs.effect_data != 0) {
                     cs.arp_tick = static_cast<uint8_t>((cs.arp_tick + 1) % 3);
                     int semitones = 0;
                     switch (cs.arp_tick) {
-                    case 0: semitones = 0; break;
-                    case 1: semitones = cs.arp_x; break;
-                    case 2: semitones = cs.arp_y; break;
+                    case 0:
+                        semitones = 0;
+                        break;
+                    case 1:
+                        semitones = cs.arp_x;
+                        break;
+                    case 2:
+                        semitones = cs.arp_y;
+                        break;
                     }
                     float ratio = std::pow(2.0f, static_cast<float>(semitones) / 12.0f);
                     cs.freq = cs.base_freq * ratio;
@@ -316,9 +340,8 @@ void TrackerPlayer::process_tick_effects() {
                 }
                 break;
 
-            case 0x01:  // Porta up
-                cs.freq *= std::pow(2.0f,
-                    static_cast<float>(cs.effect_data) / (12.0f * 16.0f));
+            case 0x01: // Porta up
+                cs.freq *= std::pow(2.0f, static_cast<float>(cs.effect_data) / (12.0f * 16.0f));
                 cs.base_freq = cs.freq;
                 if (module_.has_samples) {
                     cs.period = static_cast<uint16_t>(
@@ -327,9 +350,8 @@ void TrackerPlayer::process_tick_effects() {
                 }
                 break;
 
-            case 0x02:  // Porta down
-                cs.freq /= std::pow(2.0f,
-                    static_cast<float>(cs.effect_data) / (12.0f * 16.0f));
+            case 0x02: // Porta down
+                cs.freq /= std::pow(2.0f, static_cast<float>(cs.effect_data) / (12.0f * 16.0f));
                 cs.base_freq = cs.freq;
                 if (module_.has_samples) {
                     cs.period = static_cast<uint16_t>(
@@ -338,59 +360,61 @@ void TrackerPlayer::process_tick_effects() {
                 }
                 break;
 
-            case 0x03:  // Tone portamento
+            case 0x03: // Tone portamento
                 if (cs.target_freq > 0) {
-                    const float slide = std::pow(2.0f,
-                        static_cast<float>(cs.porta_speed) / (12.0f * 16.0f));
+                    const float slide =
+                        std::pow(2.0f, static_cast<float>(cs.porta_speed) / (12.0f * 16.0f));
                     if (cs.freq < cs.target_freq) {
                         cs.freq *= slide;
-                        if (cs.freq > cs.target_freq) cs.freq = cs.target_freq;
+                        if (cs.freq > cs.target_freq)
+                            cs.freq = cs.target_freq;
                     } else if (cs.freq > cs.target_freq) {
                         cs.freq /= slide;
-                        if (cs.freq < cs.target_freq) cs.freq = cs.target_freq;
+                        if (cs.freq < cs.target_freq)
+                            cs.freq = cs.target_freq;
                     }
                     cs.base_freq = cs.freq;
                 }
                 if (module_.has_samples && cs.target_period > 0) {
                     if (cs.period > cs.target_period) {
                         cs.period = std::max(cs.target_period,
-                            static_cast<uint16_t>(cs.period - cs.porta_speed));
+                                             static_cast<uint16_t>(cs.period - cs.porta_speed));
                     } else if (cs.period < cs.target_period) {
                         cs.period = std::min(cs.target_period,
-                            static_cast<uint16_t>(cs.period + cs.porta_speed));
+                                             static_cast<uint16_t>(cs.period + cs.porta_speed));
                     }
                     cs.base_period = cs.period;
                 }
                 break;
 
-            case 0x04:  // Vibrato
+            case 0x04: // Vibrato
             {
                 cs.vibrato_phase += static_cast<float>(cs.vibrato_speed);
-                const float vib = std::sin(cs.vibrato_phase * 2.0f *
-                                           static_cast<float>(M_PI) / 64.0f);
-                cs.freq = cs.base_freq *
-                          std::pow(2.0f, vib * static_cast<float>(cs.vibrato_depth) /
-                                             (128.0f * 12.0f));
+                const float vib =
+                    std::sin(cs.vibrato_phase * 2.0f * static_cast<float>(M_PI) / 64.0f);
+                cs.freq = cs.base_freq * std::pow(2.0f, vib * static_cast<float>(cs.vibrato_depth) /
+                                                            (128.0f * 12.0f));
                 if (module_.has_samples && cs.base_period > 0) {
-                    int vib_period = static_cast<int>(
-                        vib * static_cast<float>(cs.vibrato_depth));
+                    int vib_period = static_cast<int>(vib * static_cast<float>(cs.vibrato_depth));
                     cs.period = static_cast<uint16_t>(
                         std::clamp(static_cast<int>(cs.base_period) + vib_period, 113, 856));
                 }
                 break;
             }
 
-            case 0x05:  // Tone porta + volume slide
+            case 0x05: // Tone porta + volume slide
                 // Tone porta part (freq)
                 if (cs.target_freq > 0) {
-                    const float slide = std::pow(2.0f,
-                        static_cast<float>(cs.porta_speed) / (12.0f * 16.0f));
+                    const float slide =
+                        std::pow(2.0f, static_cast<float>(cs.porta_speed) / (12.0f * 16.0f));
                     if (cs.freq < cs.target_freq) {
                         cs.freq *= slide;
-                        if (cs.freq > cs.target_freq) cs.freq = cs.target_freq;
+                        if (cs.freq > cs.target_freq)
+                            cs.freq = cs.target_freq;
                     } else if (cs.freq > cs.target_freq) {
                         cs.freq /= slide;
-                        if (cs.freq < cs.target_freq) cs.freq = cs.target_freq;
+                        if (cs.freq < cs.target_freq)
+                            cs.freq = cs.target_freq;
                     }
                     cs.base_freq = cs.freq;
                 }
@@ -398,10 +422,10 @@ void TrackerPlayer::process_tick_effects() {
                 if (module_.has_samples && cs.target_period > 0) {
                     if (cs.period > cs.target_period) {
                         cs.period = std::max(cs.target_period,
-                            static_cast<uint16_t>(cs.period - cs.porta_speed));
+                                             static_cast<uint16_t>(cs.period - cs.porta_speed));
                     } else if (cs.period < cs.target_period) {
                         cs.period = std::min(cs.target_period,
-                            static_cast<uint16_t>(cs.period + cs.porta_speed));
+                                             static_cast<uint16_t>(cs.period + cs.porta_speed));
                     }
                     cs.base_period = cs.period;
                 }
@@ -414,18 +438,16 @@ void TrackerPlayer::process_tick_effects() {
                 cs.base_volume = cs.volume;
                 break;
 
-            case 0x06:  // Vibrato + volume slide
+            case 0x06: // Vibrato + volume slide
             {
                 // Vibrato part
                 cs.vibrato_phase += static_cast<float>(cs.vibrato_speed);
-                const float vib = std::sin(cs.vibrato_phase * 2.0f *
-                                           static_cast<float>(M_PI) / 64.0f);
-                cs.freq = cs.base_freq *
-                          std::pow(2.0f, vib * static_cast<float>(cs.vibrato_depth) /
-                                             (128.0f * 12.0f));
+                const float vib =
+                    std::sin(cs.vibrato_phase * 2.0f * static_cast<float>(M_PI) / 64.0f);
+                cs.freq = cs.base_freq * std::pow(2.0f, vib * static_cast<float>(cs.vibrato_depth) /
+                                                            (128.0f * 12.0f));
                 if (module_.has_samples && cs.base_period > 0) {
-                    int vib_period = static_cast<int>(
-                        vib * static_cast<float>(cs.vibrato_depth));
+                    int vib_period = static_cast<int>(vib * static_cast<float>(cs.vibrato_depth));
                     cs.period = static_cast<uint16_t>(
                         std::clamp(static_cast<int>(cs.base_period) + vib_period, 113, 856));
                 }
@@ -439,17 +461,17 @@ void TrackerPlayer::process_tick_effects() {
                 break;
             }
 
-            case 0x07:  // Tremolo
+            case 0x07: // Tremolo
             {
                 cs.tremolo_phase += static_cast<float>(cs.tremolo_speed);
-                const float trem = std::sin(cs.tremolo_phase * 2.0f *
-                                            static_cast<float>(M_PI) / 64.0f) *
-                                   static_cast<float>(cs.tremolo_depth) / 64.0f;
+                const float trem =
+                    std::sin(cs.tremolo_phase * 2.0f * static_cast<float>(M_PI) / 64.0f) *
+                    static_cast<float>(cs.tremolo_depth) / 64.0f;
                 cs.volume = std::clamp(cs.base_volume + trem, 0.0f, 1.0f);
                 break;
             }
 
-            case 0x0A:  // Volume slide
+            case 0x0A: // Volume slide
                 if (ex > 0) {
                     cs.volume = std::min(1.0f, cs.volume + static_cast<float>(ex) / 64.0f);
                 } else if (ey > 0) {
@@ -466,19 +488,18 @@ void TrackerPlayer::process_tick_effects() {
         // Any-tick extended effects
         if (cs.effect == 0x0E) {
             switch (ex) {
-            case 0x9:  // Retrigger every x ticks
+            case 0x9: // Retrigger every x ticks
                 if (ey > 0 && tick_ > 0 && (tick_ % ey) == 0) {
                     cs.freq = cs.base_freq;
                     cs.vibrato_phase = 0;
                     cs.tremolo_phase = 0;
-                    if (cs.instrument > 0 &&
-                        cs.instrument <= module_.instruments.size()) {
+                    if (cs.instrument > 0 && cs.instrument <= module_.instruments.size()) {
                         cs.volume = module_.instruments[cs.instrument - 1].volume;
                         cs.base_volume = cs.volume;
                     }
                 }
                 break;
-            case 0xC:  // Note cut at tick x
+            case 0xC: // Note cut at tick x
                 if (tick_ == ey) {
                     cs.active = false;
                     cs.volume = 0;
@@ -496,7 +517,8 @@ void TrackerPlayer::process_tick_effects() {
 // ---------------------------------------------------------------------------
 
 void TrackerPlayer::apply_to_backend() {
-    if (!backend_) return;
+    if (!backend_)
+        return;
 
     // When the module has PCM samples AND the backend supports direct audio
     // rendering, render_audio() handles output. Just compute sample_speed here.
@@ -516,10 +538,9 @@ void TrackerPlayer::apply_to_backend() {
 
     // Synth fallback: frequency-only backends (PWM, M300), or modules without samples.
     // Derive frequency from period when available for accurate pitch.
-    const int raw_vol = (volume_override_ >= 0)
-                             ? volume_override_
-                             : helix::AudioSettingsManager::instance().get_volume();
-    const float master_vol = static_cast<float>(raw_vol) / 100.0f;
+    const float master_vol = (volume_override_ >= 0)
+                                 ? (static_cast<float>(volume_override_) / 100.0f)
+                                 : helix::AudioSettingsManager::instance().get_volume_scaled();
 
     for (int ch = 0; ch < 4; ++ch) {
         const auto& cs = channels_[static_cast<size_t>(ch)];
@@ -580,10 +601,9 @@ void TrackerPlayer::render_audio(float* output, size_t frames, int sample_rate) 
 
     std::atomic_thread_fence(std::memory_order_acquire);
 
-    const int raw_vol = (volume_override_ >= 0)
-                             ? volume_override_
-                             : helix::AudioSettingsManager::instance().get_volume();
-    const float master_vol = static_cast<float>(raw_vol) / 100.0f;
+    const float master_vol = (volume_override_ >= 0)
+                                 ? (static_cast<float>(volume_override_) / 100.0f)
+                                 : helix::AudioSettingsManager::instance().get_volume_scaled();
     const double inv_sr = 1.0 / static_cast<double>(sample_rate);
 
     for (size_t i = 0; i < frames; ++i) {
@@ -591,17 +611,20 @@ void TrackerPlayer::render_audio(float* output, size_t frames, int sample_rate) 
 
         for (int ch = 0; ch < 4; ++ch) {
             auto& cs = channels_[static_cast<size_t>(ch)];
-            if (!cs.active || cs.freq <= 0) continue;
+            if (!cs.active || cs.freq <= 0)
+                continue;
 
             const auto* inst = cs.current_instrument;
-            if (!inst || !inst->has_sample()) continue;
+            if (!inst || !inst->has_sample())
+                continue;
 
             const auto& sdata = inst->sample_data;
             const size_t slen = sdata.size();
 
             if (cs.sample_pos >= static_cast<double>(slen)) {
                 // Past end of non-looping sample
-                if (inst->loop_length == 0) continue;
+                if (inst->loop_length == 0)
+                    continue;
             }
 
             // Linear interpolation between samples
@@ -609,7 +632,8 @@ void TrackerPlayer::render_audio(float* output, size_t frames, int sample_rate) 
             if (pos_int >= slen) {
                 if (inst->loop_length > 0) {
                     // Wrap into loop region
-                    double excess = cs.sample_pos - static_cast<double>(inst->loop_start + inst->loop_length);
+                    double excess =
+                        cs.sample_pos - static_cast<double>(inst->loop_start + inst->loop_length);
                     cs.sample_pos = static_cast<double>(inst->loop_start) +
                                     std::fmod(excess, static_cast<double>(inst->loop_length));
                     if (cs.sample_pos < static_cast<double>(inst->loop_start))
@@ -646,6 +670,6 @@ void TrackerPlayer::render_audio(float* output, size_t frames, int sample_rate) 
     }
 }
 
-}  // namespace helix::audio
+} // namespace helix::audio
 
-#endif  // HELIX_HAS_TRACKER
+#endif // HELIX_HAS_TRACKER

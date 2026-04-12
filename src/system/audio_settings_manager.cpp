@@ -111,6 +111,11 @@ int AudioSettingsManager::get_volume() const {
     return lv_subject_get_int(const_cast<lv_subject_t*>(&volume_subject_));
 }
 
+float AudioSettingsManager::get_volume_scaled() const {
+    float normalized = static_cast<float>(get_volume()) / 100.0f;
+    return normalized * normalized; // Quadratic curve for perceptual loudness
+}
+
 void AudioSettingsManager::set_volume(int volume) {
     volume = std::clamp(volume, 0, 100);
     spdlog::info("[AudioSettingsManager] set_volume({})", volume);

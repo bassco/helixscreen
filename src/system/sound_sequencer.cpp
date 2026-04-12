@@ -254,9 +254,8 @@ void SoundSequencer::tick(float dt_ms) {
         }
     }
 
-    // Apply master volume attenuation
-    float volume = AudioSettingsManager::instance().get_volume() / 100.0f;
-    amplitude *= volume;
+    // Apply master volume attenuation (perceptual curve)
+    amplitude *= AudioSettingsManager::instance().get_volume_scaled();
 
     // Clamp outputs
     freq = std::clamp(freq, 20.0f, 20000.0f);
