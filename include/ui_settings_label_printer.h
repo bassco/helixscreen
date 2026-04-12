@@ -101,6 +101,7 @@ class LabelPrinterSettingsOverlay : public OverlayBase {
         bool paired = false;
         bool connected = false;
         bool is_ble = false;
+        bool is_scanner = false; ///< HID barcode scanner — exclude from printer dropdown
     };
 
     /// C callback safety: prevent use-after-free when overlay is destroyed during discovery

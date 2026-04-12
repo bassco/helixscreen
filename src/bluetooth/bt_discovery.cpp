@@ -169,6 +169,8 @@ static void parse_device_properties(sd_bus_message* msg, discover_ctx* dctx) {
     dev.paired = paired;
     dev.is_ble = is_ble;
     dev.service_uuid = matching_uuid.empty() ? nullptr : matching_uuid.c_str();
+    // Classification mirrored in tests/unit/test_bt_device_classification.cpp
+    dev.is_scanner = dominated_by_scanner && !dominated_by_uuid && !dominated_by_name;
 
     if (dctx->cb) {
         dctx->cb(&dev, dctx->user_data);

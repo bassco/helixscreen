@@ -1217,6 +1217,13 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                 info.paired = dev->paired;
                 info.connected = false; // updated on UI thread below
                 info.is_ble = dev->is_ble;
+                info.is_scanner = dev->is_scanner;
+
+                // Skip barcode scanners before marshaling to UI thread
+                if (info.is_scanner) {
+                    spdlog::debug("[Label Printer] Skipping scanner: {} ({})", info.name, info.mac);
+                    return;
+                }
 
                 // Marshal to UI thread
                 helix::ui::queue_update([dctx, info]() {
@@ -1330,6 +1337,11 @@ void LabelPrinterSettingsOverlay::handle_bt_printer_selected(int index) {
         return;
 
     const auto& device = bt_devices_[index];
+    if (device.is_scanner) {
+        spdlog::warn("[{}] Ignoring selection of scanner device: {} ({})", get_name(), device.name,
+                     device.mac);
+        return;
+    }
     spdlog::info("[{}] Selected BT printer: {} ({})", get_name(), device.name, device.mac);
 
     // If not paired and not already saved (i.e. a newly discovered device), prompt for pairing.

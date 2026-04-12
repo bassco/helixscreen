@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-#define HELIX_BT_API_VERSION 1
+#define HELIX_BT_API_VERSION 2
 
 /// Plugin metadata returned by helix_bt_get_info()
 typedef struct {
@@ -37,6 +37,7 @@ typedef struct {
     bool paired;
     bool is_ble;              ///< false=Classic, true=BLE
     const char* service_uuid; ///< Primary service UUID (SPP or vendor)
+    bool is_scanner;          ///< true if device is a HID barcode scanner, not a printer
 } helix_bt_device;
 
 /// Opaque context — allocated by plugin, freed by plugin
