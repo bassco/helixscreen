@@ -114,7 +114,7 @@ public class HelixActivity extends SDLActivity {
         // Our explicit show() for the custom swipe gesture keeps them visible
         // until the 3-second auto-hide timer fires.
         controller.setSystemBarsBehavior(
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_GESTURE);
+                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
 
         if (mNavBarVisible) {
             controller.show(WindowInsets.Type.navigationBars());
@@ -122,9 +122,12 @@ public class HelixActivity extends SDLActivity {
             controller.hide(WindowInsets.Type.systemBars());
         }
 
-        // Transparent bars so they overlay content without a colored strip
+        // Transparent dark bars — disable Android's default contrast scrim
+        // (API 29+ adds a white scrim behind the nav bar when enforced)
         window.setNavigationBarColor(Color.TRANSPARENT);
         window.setStatusBarColor(Color.TRANSPARENT);
+        window.setNavigationBarContrastEnforced(false);
+        window.setStatusBarContrastEnforced(false);
     }
 
     /**
