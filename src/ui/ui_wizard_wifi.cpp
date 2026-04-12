@@ -539,8 +539,8 @@ void WizardWifiStep::handle_wifi_toggle_changed(lv_event_t* e) {
 
 void WizardWifiStep::handle_network_item_clicked(lv_event_t* e) {
     lv_obj_t* item = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    if (!item)
-        return;
+    if (!item || lv_obj_has_flag(item, LV_OBJ_FLAG_HIDDEN))
+        return; // Deferred-deleted item, ignore stale click (#778)
 
     WifiWizardNetworkItemData* item_data =
         static_cast<WifiWizardNetworkItemData*>(lv_obj_get_user_data(item));

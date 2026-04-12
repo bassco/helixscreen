@@ -1162,10 +1162,15 @@ void LedControlOverlay::refresh_wled_status() {
     if (!controller.is_initialized() || selected_backend_type_ != LedBackendType::WLED)
         return;
 
-    controller.wled().poll_status([this]() {
-        // poll_status callback fires on the libhv background thread —
-        // all LVGL operations must be deferred to the UI thread.
-        helix::ui::queue_update("LEDControlOverlay::poll_wled_status", [this]() {
+    auto tok = lifetime_.token();
+    controller.wled().poll_status([this, tok]() {
+        if (tok.expired())
+            return;
+        // poll_status fires on the BG thread — defer to main thread, then
+        // defer again via lv_async_call so lv_obj_clean() runs outside
+        // UpdateQueue::process_pending() (prevents lv_event_mark_deleted
+        // corruption, #776).
+        tok.defer([this]() {
             if (cleanup_called())
                 return;
             if (wled_presets_container_) {
