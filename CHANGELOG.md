@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.29] - 2026-04-12
+
+### Added
+- High-DPI display support: DRM auto-downscale for panels exceeding 1920px, xlarge font constants for large displays, and fbdev resolution warnings (#773, #774)
+- Android system keyboard toggle using native IME via SDL_StartTextInput (#774)
+- Android ghost navigation bar with edge-swipe reveal and inactivity auto-hide
+- GPU-accelerated SDL drawing backend with fixed temperature graph gradient bands
+- Pre-print overlay now dismisses via authoritative Moonraker PRINTING state and RESPOND gcode completion match, replacing heuristic layer/progress triggers
+- Zip archive support in release pipeline with tar.gz fallback
+- Heap stats and startup phase snapshots in telemetry
+- UX micro-breakpoints for responsive layouts (#763)
+
+### Fixed
+- Android black screen on app resume caused by missed SDL events while backgrounded (#774)
+- Android high-DPI aliasing eliminated with integer display scaling (#774)
+- Android crash reporter HTTPS failures bridged via JNI on devices without libhv SSL (#774)
+- WiFi wizard click handler crash on deferred-deleted list items (#778)
+- Nozzle temperature rows going stale due to lifetime token gate on version observer (#782)
+- Printer discovery SIGSEGV from unsynchronized hardware struct copy (#777)
+- DRM auto-downscale now correctly skipped when user explicitly sets `-s` (#773)
+- Bed mesh fallback probe count divided by samples-per-point to match actual probe density
+- G-code viewer streaming load failure now shows an error toast instead of crashing
+- Null-guard on Moonraker API notify callback (#765)
+- IFS spool eject detection via empty color field on Adventurer5M (#631)
+- QWERTZ and AZERTY barcode scanner keymap support
+- Webcam list filtered by service type to exclude unsupported streams
+- Print select retries empty thumbnails on panel revisit
+- G-code viewer layer re-frozen on terminal to idle transition
+
 ## [0.99.28] - 2026-04-10
 
 ### Added
@@ -2828,6 +2857,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.29]: https://github.com/prestonbrown/helixscreen/compare/v0.99.28...v0.99.29
 [0.99.28]: https://github.com/prestonbrown/helixscreen/compare/v0.99.27...v0.99.28
 [0.99.27]: https://github.com/prestonbrown/helixscreen/compare/v0.99.26...v0.99.27
 [0.99.26]: https://github.com/prestonbrown/helixscreen/compare/v0.99.25...v0.99.26
