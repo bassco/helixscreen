@@ -431,33 +431,6 @@ void PrintStartCollector::check_fallback_completion() {
     // COMPLETION DETECTION: Detect when PRINT_START is done
     // =========================================================================
 
-    // Fallback 1: Layer count (slicer-dependent but reliable when present)
-    // Triggers when current_layer advances past baseline — the baseline snapshot at
-    // collector start guards against stale values from a previous print.
-    {
-        int layer = lv_subject_get_int(state_.get_print_layer_current_subject());
-        if (layer >= 1 && layer != baseline_layer_) {
-            spdlog::info("[PrintStartCollector] Fallback: layer {} detected (baseline={})", layer,
-                         baseline_layer_);
-            update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
-            return;
-        }
-    }
-
-    // Fallback 2: Progress advancing with temps at target
-    // Require progress >= 3% to avoid false triggers during START_PRINT macro execution.
-    // Typical START_PRINT macros occupy < 1% of the file (gcode_start_byte / file_size),
-    // but virtual_sdcard.progress advances through them. 3% ensures actual layer printing
-    // has begun. On K1C, progress stays at 0 during the entire pre-print macro then
-    // jumps once the first layer begins.
-    int progress = lv_subject_get_int(state_.get_print_progress_subject());
-    if (progress > baseline_progress_ && progress >= 3 && temps_ready) {
-        spdlog::info("[PrintStartCollector] Fallback: progress {}% with temps ready (baseline={})",
-                     progress, baseline_progress_);
-        update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
-        return;
-    }
-
     // Suppress timeout while mesh probing is actively progressing.
     // During mesh, the nozzle target may be 0 (macro cleared it for cooldown),
     // making temps_near unreliable. Active probing = we're making real progress.
@@ -600,14 +573,6 @@ void PrintStartCollector::on_gcode_response(const json& msg) {
     if (should_set_initializing) {
         update_phase(PrintStartPhase::INITIALIZING, lv_tr("Starting Print..."));
         spdlog::info("[PrintStartCollector] PRINT_START detected");
-        return;
-    }
-
-    // Check for completion (layer 1 indicator)
-    if (is_completion_marker(line)) {
-        update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
-        spdlog::debug("[PrintStartCollector] Print start complete - layer 1 detected");
-        // Note: The caller (main.cpp) should stop the collector when print state becomes PRINTING
         return;
     }
 

@@ -1342,8 +1342,12 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
 // ============================================================================
 
 TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
-                 "Fallback completion: layer count triggers COMPLETE",
+                 "Fallback completion: layer count no longer triggers COMPLETE",
                  "[print][collector][fallback][completion]") {
+    // Layer count heuristic has been removed — authoritative signals (RESPOND match
+    // and Moonraker state=printing) now handle dismissal. These sections verify the
+    // heuristic no longer fires.
+
     // Initialize temps to prevent proactive detection
     set_all_temps(0, 0, 0, 0);
 
@@ -1354,24 +1358,24 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
-    SECTION("Layer 1 triggers completion") {
+    SECTION("Layer 1 does not trigger completion") {
         set_progress_and_layer(0, 1);
         set_all_temps(600, 600, 2100, 2100); // Temps at target
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
+        REQUIRE(get_current_phase() != PrintStartPhase::COMPLETE);
     }
 
-    SECTION("Layer 2 also triggers completion") {
+    SECTION("Layer 2 does not trigger completion") {
         set_progress_and_layer(0, 2);
         set_all_temps(600, 600, 2100, 2100);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
+        REQUIRE(get_current_phase() != PrintStartPhase::COMPLETE);
     }
 
     SECTION("Layer 0 does not trigger completion - stays IDLE when no heating") {
@@ -1388,15 +1392,10 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
 }
 
 TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
-                 "Fallback completion: 2% progress with temps ready triggers COMPLETE",
+                 "Fallback completion: progress threshold no longer triggers COMPLETE",
                  "[print][collector][fallback][completion]") {
-    // NOTE: The fallback completion tests have a fundamental issue - they want
-    // to test behavior when the phase is already PURGING, but we can't set the
-    // collector's internal state externally. state().set_print_start_state() only
-    // sets the PrinterState subject, not the collector's internal current_phase_.
-    //
-    // For now, we test completion detection from IDLE state (which is what
-    // the proactive detection branch handles).
+    // Progress-threshold heuristic has been removed — authoritative signals handle
+    // dismissal. These sections verify the heuristic no longer fires.
 
     // Initialize temps to prevent proactive detection
     set_all_temps(0, 0, 0, 0);
@@ -1408,14 +1407,14 @@ TEST_CASE_METHOD(PrintStartCollectorHeaterFixture,
     collector().enable_fallbacks();
     REQUIRE(get_current_phase() == PrintStartPhase::IDLE);
 
-    SECTION("3% progress with temps at target triggers COMPLETE") {
+    SECTION("3% progress with temps at target does not trigger COMPLETE") {
         set_progress_and_layer(3, 0); // 3% progress, layer 0
         set_all_temps(600, 600, 2100, 2100);
 
         collector().check_fallback_completion();
         drain_async_updates();
 
-        REQUIRE(get_current_phase() == PrintStartPhase::COMPLETE);
+        REQUIRE(get_current_phase() != PrintStartPhase::COMPLETE);
     }
 
     SECTION("2% progress with temps at target does NOT trigger (threshold is >= 3%)") {
