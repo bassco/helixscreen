@@ -46,13 +46,20 @@ void NozzleTempsWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
 
     // Observe extruder version changes to rebuild rows when tools are discovered.
     // Capture current version to skip the initial immediate callback — rows already built.
-    auto token = lifetime_.token();
+    //
+    // NOTE: Do NOT gate this on lifetime_.token(). The lifetime is invalidated on
+    // every rebuild_rows() → clear_rows() call, which would make the version observer
+    // a one-shot: the first rebuild expires the token, and subsequent version changes
+    // are silently ignored (#782). This left the widget with stale rows pointing to
+    // freed subjects, crashing in lv_observer_remove during the next clear_rows().
+    //
+    // Safety is provided by: (1) weak_alive in observe_int_sync context (expires when
+    // version_observer_ is reset in detach()), (2) rebuilding_ re-entrancy guard,
+    // (3) initial_version skip for the attach-time callback.
     int initial_version = lv_subject_get_int(printer_state_.get_extruder_version_subject());
     version_observer_ = helix::ui::observe_int_sync<NozzleTempsWidget>(
         printer_state_.get_extruder_version_subject(), this,
-        [token, initial_version](NozzleTempsWidget* self, int version) {
-            if (token.expired())
-                return;
+        [initial_version](NozzleTempsWidget* self, int version) {
             if (version == initial_version)
                 return; // Skip initial callback — rows already built in attach()
             self->rebuild_rows();
