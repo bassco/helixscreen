@@ -320,6 +320,14 @@ void PrintStartCollector::enable_fallbacks() {
     // incoming data updates (observer callbacks on layer/progress subjects).
 }
 
+void PrintStartCollector::complete_from_external_signal(const char* source) {
+    if (!active_.load()) {
+        return;
+    }
+    spdlog::info("[PrintStartCollector] External completion signal: {}", source);
+    update_phase(PrintStartPhase::COMPLETE, lv_tr("Starting Print..."));
+}
+
 void PrintStartCollector::check_fallback_completion() {
     if (!active_.load() || !fallbacks_enabled_.load()) {
         return;

@@ -101,6 +101,16 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     void enable_fallbacks();
 
     /**
+     * @brief Complete the pre-print phase from an external authoritative signal
+     *
+     * Called when an external source (e.g., Moonraker state transition) definitively
+     * indicates the print has started. Immediately transitions to COMPLETE.
+     *
+     * @param source Description of the signal source (for logging)
+     */
+    void complete_from_external_signal(const char* source);
+
+    /**
      * @brief Set the print start profile for pattern/signal matching
      *
      * Must be called before start(). Ignored if the collector is active.

@@ -518,6 +518,13 @@ void MoonrakerManager::init_print_start_collector() {
                     spdlog::info("[MoonrakerManager] PRINT_START collector started");
                 }
                 s_is_initial_transition = false;
+            } else if (new_state == PrintJobState::PRINTING && collector->is_active()) {
+                // Authoritative signal: Moonraker confirms print is running.
+                // This is the hard cutoff — if the collector is still active when
+                // Klipper reports PRINTING, the pre-print phase is definitively over.
+                spdlog::info("[MoonrakerManager] Authoritative: print_stats.state=printing, "
+                             "completing pre-print phase");
+                collector->complete_from_external_signal("Moonraker state=printing");
             } else if (s_is_initial_transition && s_prev_print_state != PrintJobState::PRINTING &&
                        s_prev_print_state != PrintJobState::PAUSED &&
                        new_state == PrintJobState::PRINTING && current_progress > 0) {
