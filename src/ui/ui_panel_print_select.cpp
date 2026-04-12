@@ -462,6 +462,20 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
 
             panel->refresh_in_flight_ = false;
 
+            // Snapshot previous file list (filename + modified time, in sorted
+            // order) before replacing — used to skip repopulation when nothing
+            // changed. Timestamps catch re-uploads of the same filename.
+            struct FileSnapshot {
+                std::string filename;
+                time_t modified;
+            };
+            const size_t prev_count = panel->file_list_.size();
+            std::vector<FileSnapshot> prev_files;
+            prev_files.reserve(prev_count);
+            for (const auto& f : panel->file_list_) {
+                prev_files.push_back({f.filename, f.modified_timestamp});
+            }
+
             // Preserve cached metadata from previous file list before replacing.
             // Without this, all metadata resets on every refresh, causing expensive
             // metadata re-fetches and metascans on every scroll cycle (8-15s per
@@ -504,12 +518,32 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
             panel->merge_history_into_file_list(); // Populate history status for each file
             panel->update_sort_indicators();
 
-            // Preserve scroll if still in the same directory (e.g., refresh after metadata)
+            // Skip repopulation when the file list hasn't materially changed.
+            // The 5-second poll frequently returns the same data; rebuilding the
+            // card view each time causes thumbnail flashing and scrambling because
+            // populate() invalidates all pool indices and triggers new metadata
+            // fetches that race with stale async callbacks.
             bool same_dir = (panel->current_path_ == panel->last_populated_path_);
-            if (panel->current_view_mode_ == PrintSelectViewMode::CARD) {
-                panel->populate_card_view(same_dir);
+            bool list_changed = !same_dir || panel->file_list_.size() != prev_count;
+            if (!list_changed) {
+                for (size_t i = 0; i < panel->file_list_.size(); i++) {
+                    if (panel->file_list_[i].filename != prev_files[i].filename ||
+                        panel->file_list_[i].modified_timestamp != prev_files[i].modified) {
+                        list_changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (list_changed) {
+                spdlog::debug("[{}] File list changed, repopulating", panel->get_name());
+                if (panel->current_view_mode_ == PrintSelectViewMode::CARD) {
+                    panel->populate_card_view(same_dir);
+                } else {
+                    panel->populate_list_view(same_dir);
+                }
             } else {
-                panel->populate_list_view(same_dir);
+                spdlog::debug("[{}] File list unchanged, skipping repopulation", panel->get_name());
             }
             panel->last_populated_path_ = panel->current_path_;
 

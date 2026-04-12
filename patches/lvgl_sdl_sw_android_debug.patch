@@ -1,5 +1,5 @@
 diff --git a/src/drivers/sdl/lv_sdl_sw.c b/src/drivers/sdl/lv_sdl_sw.c
-index 7427739da..d38529183 100644
+index 7427739da..474746da8 100644
 --- a/src/drivers/sdl/lv_sdl_sw.c
 +++ b/src/drivers/sdl/lv_sdl_sw.c
 @@ -22,6 +22,13 @@
@@ -16,7 +16,23 @@ index 7427739da..d38529183 100644
  #include "../../display/lv_display_private.h"
  #include "../../misc/lv_types.h"
  #include "../../draw/sw/lv_draw_sw_utils.h"
-@@ -176,7 +183,15 @@ static lv_result_t resize_display(lv_display_t * display)
+@@ -58,7 +65,15 @@ static lv_result_t window_update(lv_display_t * disp);
+ 
+ static inline int sdl_render_mode(void)
+ {
++#ifdef __ANDROID__
++    /* FULL mode redraws the entire screen when anything is dirty, avoiding stale
++     * framebuffer artifacts from DIRECT mode's partial dirty-region tracking.
++     * Performance impact is minimal: LVGL still skips rendering when nothing
++     * changes, and a full-screen redraw is cheap on mobile GPUs. */
++    return LV_DISPLAY_RENDER_MODE_FULL;
++#else
+     return LV_SDL_RENDER_MODE;
++#endif
+ }
+ 
+ static lv_result_t init_display(lv_display_t * display);
+@@ -176,7 +191,15 @@ static lv_result_t resize_display(lv_display_t * display)
  
      ddata->texture = SDL_CreateTexture(ddata->renderer, px_format,
                                         SDL_TEXTUREACCESS_STATIC, display->hor_res, display->ver_res);
@@ -33,7 +49,7 @@ index 7427739da..d38529183 100644
      return LV_RESULT_OK;
  }
  
-@@ -329,6 +344,13 @@ static lv_result_t window_update(lv_display_t * display)
+@@ -329,6 +352,13 @@ static lv_result_t window_update(lv_display_t * display)
          cf = LV_COLOR_FORMAT_ARGB8888;
      }
      uint32_t stride = lv_draw_buf_width_to_stride(display->hor_res, cf);
