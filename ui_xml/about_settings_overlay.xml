@@ -67,7 +67,7 @@
                               options="Stable&#10;Beta&#10;Dev" options_tag="Stable&#10;Beta&#10;Dev" bind_selected="update_channel"
                               hide_description="true" callback="on_about_update_channel_changed"/>
       </lv_obj>
-      <!-- Check for Updates (reactive description shows available version; hidden on Android) -->
+      <!-- Check for Updates (reactive description shows available version) -->
       <lv_obj name="container_check_updates" width="100%" style_pad_all="0" scrollable="false">
         <bind_flag_if_eq subject="show_update_settings" flag="hidden" ref_value="0"/>
         <setting_action_row name="row_check_updates"

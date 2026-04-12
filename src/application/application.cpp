@@ -451,10 +451,9 @@ int Application::run(int argc, char** argv) {
     }
 
     // Initialize UpdateChecker before panel subjects (subjects must exist for XML binding)
-    // On Android, updates are managed by the Play Store — skip self-update system
-    if (!helix::is_android_platform()) {
-        UpdateChecker::instance().init();
-    }
+    // On Android the checker still runs (so "Check for Updates" works), but
+    // "Install Update" redirects to the Play Store instead of self-updating.
+    UpdateChecker::instance().init();
 
     // Initialize CrashReporter (independent of telemetry)
     // Write mock crash file first if --mock-crash flag is set (requires --test)

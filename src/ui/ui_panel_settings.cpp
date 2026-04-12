@@ -305,7 +305,9 @@ void SettingsPanel::init_subjects() {
     subjects_.register_subject(&show_network_settings_subject_);
     lv_xml_register_subject(nullptr, "show_network_settings", &show_network_settings_subject_);
 
-    lv_subject_init_int(&show_update_settings_subject_, on_android ? 0 : 1);
+    // Update checker runs on all platforms — on Android, "Install Update"
+    // redirects to the Play Store instead of self-updating.
+    lv_subject_init_int(&show_update_settings_subject_, 1);
     subjects_.register_subject(&show_update_settings_subject_);
     lv_xml_register_subject(nullptr, "show_update_settings", &show_update_settings_subject_);
 
