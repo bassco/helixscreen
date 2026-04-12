@@ -27,6 +27,10 @@ helix_assert_callback_t g_helix_assert_cpp_callback = nullptr;
 #include <spdlog/sinks/syslog_sink.h>
 #endif
 
+#ifdef HELIX_PLATFORM_ANDROID
+#include <spdlog/sinks/android_sink.h>
+#endif
+
 namespace helix {
 namespace logging {
 
@@ -95,7 +99,10 @@ std::string resolve_log_file_path(const std::string& override_path) {
 
 /// Detect best available logging target at runtime
 LogTarget detect_best_target() {
-#ifdef __linux__
+#ifdef HELIX_PLATFORM_ANDROID
+    // Android: use logcat sink (stdout is invisible in adb logcat)
+    return LogTarget::Android;
+#elif defined(__linux__)
 #ifdef HELIX_HAS_SYSTEMD
     // Check for systemd journal socket
     std::error_code ec;
@@ -133,6 +140,11 @@ void add_system_sink(std::vector<spdlog::sink_ptr>& sinks, LogTarget target,
             std::make_shared<spdlog::sinks::rotating_file_sink_mt>(path, 5 * 1024 * 1024, 3));
         break;
     }
+#ifdef HELIX_PLATFORM_ANDROID
+    case LogTarget::Android:
+        sinks.push_back(std::make_shared<spdlog::sinks::android_sink_mt>("HelixScreen"));
+        break;
+#endif
     case LogTarget::Console:
     case LogTarget::Auto:
         // Console-only or auto (which would have been resolved already)
@@ -193,7 +205,8 @@ void init(const LogConfig& config) {
 
     // Console sink — always add when enabled. The enable_console flag defaults
     // to true and callers can disable it for headless/service deployments.
-    if (config.enable_console) {
+    // Skip on Android where stdout is invisible; the android_sink handles output.
+    if (config.enable_console && effective_target != LogTarget::Android) {
         sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
     }
 
@@ -233,6 +246,8 @@ LogTarget parse_log_target(const std::string& str) {
         return LogTarget::File;
     if (str == "console")
         return LogTarget::Console;
+    if (str == "android")
+        return LogTarget::Android;
     return LogTarget::Auto; // Default for "auto" or unrecognized
 }
 
@@ -248,6 +263,8 @@ const char* log_target_name(LogTarget target) {
         return "file";
     case LogTarget::Console:
         return "console";
+    case LogTarget::Android:
+        return "android";
     }
     return "unknown";
 }

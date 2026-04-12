@@ -24,7 +24,8 @@ enum class LogTarget {
     Journal, ///< systemd journal (Linux only)
     Syslog,  ///< Traditional syslog (Linux only)
     File,    ///< Rotating file log
-    Console  ///< Console only (disable system logging)
+    Console, ///< Console only (disable system logging)
+    Android  ///< Android logcat via __android_log_print
 };
 
 /**
