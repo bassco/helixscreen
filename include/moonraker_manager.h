@@ -206,8 +206,6 @@ class MoonrakerManager {
     std::shared_ptr<PrintStartCollector> m_print_start_collector;
     ObserverGuard m_print_start_observer;
     ObserverGuard m_print_start_phase_observer;
-    ObserverGuard m_print_layer_fallback_observer;
-    ObserverGuard m_print_progress_fallback_observer;
     SubjectLifetime m_print_bed_target_fallback_lifetime;
     ObserverGuard m_print_bed_target_fallback_observer;
     ObserverGuard m_print_ext_target_fallback_observer;

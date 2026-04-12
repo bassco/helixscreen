@@ -103,8 +103,6 @@ void MoonrakerManager::shutdown() {
     // Using release() avoids double-free of already-removed observers.
     m_print_start_observer.release();
     m_print_start_phase_observer.release();
-    m_print_layer_fallback_observer.release();
-    m_print_progress_fallback_observer.release();
     m_print_bed_target_fallback_observer.release();
     m_print_ext_target_fallback_observer.release();
 
@@ -563,9 +561,8 @@ void MoonrakerManager::init_print_start_collector() {
         },
         nullptr);
 
-    // Fallback observers: trigger check_fallback_completion() when key subjects change.
-    // Layer/progress detect when actual printing starts; temperature targets trigger
-    // proactive heating phase detection immediately when heater targets change (without
+    // Fallback observers: trigger check_fallback_completion() when temperature targets change.
+    // Proactive heating phase detection fires immediately when heater targets change (without
     // these, proactive detection only runs from the 5-second ETA timer).
     auto fallback_cb = [](lv_observer_t*, lv_subject_t*) {
         auto collector = s_collector.lock();
@@ -573,10 +570,6 @@ void MoonrakerManager::init_print_start_collector() {
             collector->check_fallback_completion();
         }
     };
-    m_print_layer_fallback_observer =
-        ObserverGuard(get_printer_state().get_print_layer_current_subject(), fallback_cb, nullptr);
-    m_print_progress_fallback_observer =
-        ObserverGuard(get_printer_state().get_print_progress_subject(), fallback_cb, nullptr);
     m_print_bed_target_fallback_observer = ObserverGuard(
         get_printer_state().get_bed_target_subject(m_print_bed_target_fallback_lifetime),
         fallback_cb, nullptr);
