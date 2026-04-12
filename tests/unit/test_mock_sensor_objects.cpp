@@ -44,14 +44,16 @@ static bool has_object(const std::vector<std::string>& objects, const std::strin
 
 class MockSensorObjectsFixture {
   public:
-    MockSensorObjectsFixture() : client_(MoonrakerClientMock::PrinterType::VORON_24) {}
+    MockSensorObjectsFixture()
+        : client_(MoonrakerClientMock::PrinterType::VORON_24), hw_(client_.hardware()) {}
 
   protected:
     const std::vector<std::string>& objects() const {
-        return client_.hardware().printer_objects();
+        return hw_.printer_objects();
     }
 
     MoonrakerClientMock client_;
+    helix::PrinterDiscovery hw_;
 };
 
 // ============================================================================
