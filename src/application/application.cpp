@@ -2742,8 +2742,13 @@ int Application::main_loop() {
             on_enter_foreground();
         }
 
-        // Skip heavy processing while backgrounded
+        // While backgrounded, still pump SDL events so we detect the
+        // foreground transition (SDL_APP_DIDENTERFOREGROUND arrives via
+        // sdl_event_handler which runs inside lv_timer_handler).
+        // Rendering is suppressed via lv_display_enable_invalidation(false)
+        // so the timer handler is cheap — just event processing + timers.
         if (m_backgrounded) {
+            lv_timer_handler();
             DisplayManager::delay(200);
             continue;
         }
@@ -2897,11 +2902,14 @@ void Application::on_enter_foreground() {
         m_moonraker->client()->force_reconnect();
     }
 
-    // 4. Force full display redraw (framebuffer may be stale)
+    // 4. Force full display redraw — EGL surface may have been destroyed and
+    //    recreated by Android while backgrounded.  Use invalidate_all_recursive
+    //    (same as post-splash handoff) because partial-render mode won't
+    //    propagate a single lv_obj_invalidate() to all descendants.
     lv_obj_t* screen = lv_screen_active();
     if (screen) {
         lv_obj_update_layout(screen);
-        lv_obj_invalidate(screen);
+        invalidate_all_recursive(screen);
         lv_refr_now(nullptr);
     }
 
