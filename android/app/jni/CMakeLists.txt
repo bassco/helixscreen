@@ -134,6 +134,7 @@ target_include_directories(main PRIVATE
     "${PROJECT_ROOT}/lib/cpp-terminal/include"
     "${PROJECT_ROOT}/assets/fonts"
     "${PROJECT_ROOT}/src/generated"
+    "${PROJECT_ROOT}/build/generated"   # For contributors.h (from gen-contributors.sh)
     "${PROJECT_ROOT}/lib/helix-xml"     # For helix_xml.h
     "${PROJECT_ROOT}/lib/helix-xml/src" # For xml/*.h internal headers
 )

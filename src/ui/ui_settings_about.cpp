@@ -22,9 +22,13 @@
 #if __has_include("contributors.h")
 #include "contributors.h"
 #else
-// Fallback when contributors.h is not generated (e.g., Android CMake builds)
-inline constexpr const char* kContributors[] = {"HelixScreen Contributors"};
-inline constexpr int kContributorCount = 1;
+// Fallback when contributors.h is not generated (e.g., Android CMake builds
+// without git available). Keep in sync with actual contributors from git log.
+inline constexpr const char* kContributors[] = {
+    "Andrew Basson",  "Justin Hayes", "Pierre Poissinger", "Preston Brown", "RNGIllSkillz",
+    "Sergei Rozhkov", "Timo V",
+};
+inline constexpr int kContributorCount = sizeof(kContributors) / sizeof(kContributors[0]);
 #endif
 #include "format_utils.h"
 #include "helix_version.h"
