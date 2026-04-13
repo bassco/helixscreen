@@ -252,14 +252,12 @@
 /* Use Renesas Dave2D on RA  platforms. */
 #define LV_USE_DRAW_DAVE2D 0
 
-/* Draw using cached SDL textures - GPU-accelerated on desktop (Metal/OpenGL)
- * and on Android (GLES2). Offloads LVGL draw ops to the GPU, leaving the CPU
- * free for UI logic. Requires patched lv_draw_sdl.c (see patches/). */
-#ifdef HELIX_DISPLAY_SDL
-    #define LV_USE_DRAW_SDL 1
-#else
-    #define LV_USE_DRAW_SDL 0
-#endif
+/* LVGL's SDL GPU draw backend (cached SDL textures).  Disabled because it
+ * lacks mask, blur, and rounded-corner clipping support — producing
+ * visible artifacts on modals and overlays.  The SW renderer handles all
+ * LVGL drawing correctly.  3D gcode viewing uses its own independent
+ * OpenGL ES context (FBO + glReadPixels) and does NOT depend on this. */
+#define LV_USE_DRAW_SDL 0
 
 /* Draw using OpenGL ES textures (GLAD-based desktop OpenGL ES draw engine).
  * NOT for DRM+EGL — the DRM EGL driver uses its own rendering path.

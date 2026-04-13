@@ -152,6 +152,8 @@ target_compile_definitions(main PRIVATE
     HELIX_PLATFORM_ANDROID
     HELIX_HAS_SOUND
     HELIX_HAS_TRACKER
+    ENABLE_GLES_3D
+    $<$<CONFIG:Debug>:HELIX_ENABLE_MOCKS>
     LV_CONF_INCLUDE_SIMPLE
     HELIX_VERSION="${HELIX_VERSION}"
     HELIX_VERSION_MAJOR=${HELIX_VERSION_MAJOR}
@@ -181,6 +183,7 @@ target_link_libraries(main
     helix_xml
     lv_markdown
     hv_static
+    GLESv2
     ${log-lib}
     ${z-lib}
     android
