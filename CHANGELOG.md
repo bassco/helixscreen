@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.30] - 2026-04-12
+
+### Added
+- ZeroG Hydra printer variants and updated Nebula naming in the printer database
+- Power Devices chip in the printer manager overlay alongside LED controls
+- Android `--test` mode launchable via intent extra
+
+### Fixed
+- Use-after-free in gradient cache during layout walk (#788)
+- Hash table iteration crash in PrinterDiscovery copy-assignment (#789)
+- Self-sizing gradient canvas replaces pre-rendered .bin files for correct rendering on high-res displays
+- Diagonal smearing in backdrop blur caused by stride mismatch
+- Aligned stride handling in the no-downscale blur path
+- Spool canvas draw buffer resize use-after-free
+- Modal dialog scroll confined to content area; added minimum height for breathing room
+- Print select no longer repopulates when the file list is unchanged
+- Metadata overlay flush and reduced thumbnail offset in print select
+- Android display buffer resize after scaling, SW/GPU renderer routing, and GLES screen corruption
+- Android nav bar white scrim eliminated; persistent nav bar with wider swipe edge zone
+- Android contributor marquee animation on wide screens
+- Android sounds and tracker MOD files extracted to writable storage
+- Android update checker enabled with Play Store redirect
+- Barcode scanners filtered from label printer Bluetooth dropdown (#779)
+- AFC preferred over Snapmaker backend on U1 with aftermarket MMU (#779)
+- Keyboard base character no longer inserted on long-press alternate key
+- Perceptual volume curve replaces linear scaling for more natural sound levels
+
+### Changed
+- Android software renderer switched from FULL to DIRECT mode for better performance
+
 ## [0.99.29] - 2026-04-12
 
 ### Added
@@ -2857,6 +2887,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.30]: https://github.com/prestonbrown/helixscreen/compare/v0.99.29...v0.99.30
 [0.99.29]: https://github.com/prestonbrown/helixscreen/compare/v0.99.28...v0.99.29
 [0.99.28]: https://github.com/prestonbrown/helixscreen/compare/v0.99.27...v0.99.28
 [0.99.27]: https://github.com/prestonbrown/helixscreen/compare/v0.99.26...v0.99.27
