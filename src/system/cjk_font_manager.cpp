@@ -25,6 +25,8 @@ static const FontMapping REGULAR_FONTS[] = {
     {&noto_sans_24, "noto_sans_cjk_24.bin"},
     {&noto_sans_26, "noto_sans_cjk_26.bin"},
     {&noto_sans_28, "noto_sans_cjk_28.bin"},
+    {&noto_sans_32, "noto_sans_cjk_32.bin"},
+    {&noto_sans_40, "noto_sans_cjk_40.bin"},
 };
 
 static const FontMapping BOLD_FONTS[] = {
@@ -34,6 +36,8 @@ static const FontMapping BOLD_FONTS[] = {
     {&noto_sans_bold_20, "noto_sans_cjk_bold_20.bin"},
     {&noto_sans_bold_24, "noto_sans_cjk_bold_24.bin"},
     {&noto_sans_bold_28, "noto_sans_cjk_bold_28.bin"},
+    {&noto_sans_bold_32, "noto_sans_cjk_bold_32.bin"},
+    {&noto_sans_bold_40, "noto_sans_cjk_bold_40.bin"},
 };
 
 static const FontMapping LIGHT_FONTS[] = {
@@ -43,6 +47,8 @@ static const FontMapping LIGHT_FONTS[] = {
     {&noto_sans_light_14, "noto_sans_cjk_light_14.bin"},
     {&noto_sans_light_16, "noto_sans_cjk_light_16.bin"},
     {&noto_sans_light_18, "noto_sans_cjk_light_18.bin"},
+    {&noto_sans_light_20, "noto_sans_cjk_light_20.bin"},
+    {&noto_sans_light_26, "noto_sans_cjk_light_26.bin"},
 };
 // clang-format on
 
