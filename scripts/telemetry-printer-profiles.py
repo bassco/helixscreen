@@ -678,8 +678,12 @@ def main():
             "total_profiles": len(profiles),
             "detected_count": sum(len(v) for k, v in groups.items() if k),
             "undetected_count": len(undetected),
+            "unique_devices": len(set(p.get("device_id", "") for p in profiles)),
             "model_distribution": {
-                model: len(members)
+                model: {
+                    "profiles": len(members),
+                    "unique_devices": len(set(p.get("device_id", "") for p in members)),
+                }
                 for model, members in sorted(groups.items(), key=lambda x: -len(x[1]))
                 if model
             },
