@@ -2086,8 +2086,9 @@ void Application::setup_discovery_callbacks() {
             }
 
             // Hardware validation: check config expectations vs discovered hardware
+            // NOTE: use api->hardware() — the snapshot was std::move'd into it above (#789)
             HardwareValidator validator;
-            auto validation_result = validator.validate(Config::get_instance(), (*snapshot));
+            auto validation_result = validator.validate(Config::get_instance(), api->hardware());
             get_printer_state().set_hardware_validation_result(validation_result);
 
             if (validation_result.has_issues() && !Config::get_instance()->is_wizard_required() &&
@@ -2096,7 +2097,7 @@ void Application::setup_discovery_callbacks() {
             }
 
             // Save session snapshot for next comparison (even if no issues)
-            validator.save_session_snapshot(Config::get_instance(), (*snapshot));
+            validator.save_session_snapshot(Config::get_instance(), api->hardware());
 
             // Auto-detect printer type if not already set (e.g., fresh install with preset)
             // Skip during wizard — the user selects their printer type in the identify step,
