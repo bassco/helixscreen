@@ -269,6 +269,29 @@ public class HelixActivity extends SDLActivity {
     }
 
     // =========================================================================
+    // JNI theme bridge — called from native theme_manager
+    // =========================================================================
+
+    /**
+     * Set the window background color to match the active theme.
+     * Called from native code via JNI whenever the theme changes so the
+     * area behind transparent system bars matches the app's screen_bg.
+     *
+     * @param argb  0xAARRGGBB color value (alpha typically 0xFF)
+     */
+    public static void setWindowBackgroundColor(final int argb) {
+        final SDLActivity activity = (SDLActivity) SDLActivity.getContext();
+        if (activity == null) return;
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.getWindow().getDecorView()
+                        .setBackgroundColor(argb);
+            }
+        });
+    }
+
+    // =========================================================================
     // JNI HTTPS bridge — called from native crash reporter
     // =========================================================================
 

@@ -29,6 +29,38 @@
 #include <unordered_set>
 #include <vector>
 
+#ifdef __ANDROID__
+#include <SDL_system.h>
+#include <jni.h>
+
+/// Push the theme's screen_bg color to Android's window background so the area
+/// behind transparent system bars matches the app theme (dark or light).
+static void android_set_window_bg_color(lv_color_t color) {
+    JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    if (!env)
+        return;
+
+    jclass cls = env->FindClass("org/helixscreen/app/HelixActivity");
+    if (!cls) {
+        env->ExceptionClear();
+        return;
+    }
+
+    jmethodID method = env->GetStaticMethodID(cls, "setWindowBackgroundColor", "(I)V");
+    if (!method) {
+        env->DeleteLocalRef(cls);
+        env->ExceptionClear();
+        return;
+    }
+
+    // Pack as 0xFFRRGGBB (fully opaque)
+    uint32_t rgb = lv_color_to_u32(color);
+    jint argb = static_cast<jint>(0xFF000000u | rgb);
+    env->CallStaticVoidMethod(cls, method, argb);
+    env->DeleteLocalRef(cls);
+}
+#endif // __ANDROID__
+
 using namespace helix;
 
 static lv_theme_t* current_theme = nullptr;
@@ -1450,6 +1482,12 @@ void theme_manager_init(lv_display_t* display, bool use_dark_mode_param) {
     } else {
         spdlog::error("[Theme] Failed to initialize HelixScreen theme");
     }
+
+#ifdef __ANDROID__
+    // Set Android window background to match theme so transparent system bars
+    // don't reveal a white window background on startup
+    android_set_window_bg_color(theme_manager_parse_hex_color(mode_palette.screen_bg.c_str()));
+#endif
 }
 
 void theme_manager_deinit() {
@@ -1635,6 +1673,11 @@ void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
     // Update screen background directly (XML inline styles are baked at parse time)
     lv_color_t screen_bg = theme_manager_parse_hex_color(mode_palette.screen_bg.c_str());
     lv_obj_set_style_bg_color(lv_screen_active(), screen_bg, LV_PART_MAIN);
+
+#ifdef __ANDROID__
+    // Sync Android window background so area behind transparent system bars matches
+    android_set_window_bg_color(screen_bg);
+#endif
 
     // Refresh widget tree: shared styles + local/inline styles + palette-styled widgets
     theme_manager_refresh_widget_tree(lv_screen_active());
