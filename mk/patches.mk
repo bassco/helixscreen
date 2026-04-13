@@ -436,7 +436,7 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 		echo "$(GREEN)✓ LVGL display sync callback patch already applied$(RESET)"; \
 	fi
 	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_obj_delete_null_guards.patch 2>/dev/null; then \
-		echo "$(YELLOW)→ Applying LVGL obj delete NULL guards patch (event_mark_deleted + obj_destructor + obj_delete_core)...$(RESET)"; \
+		echo "$(YELLOW)→ Applying LVGL obj delete NULL guards patch (event depth guard + mark_deleted + obj_destructor + obj_delete_core)...$(RESET)"; \
 		git -C $(LVGL_DIR) apply ../../patches/lvgl_obj_delete_null_guards.patch && \
 		echo "$(GREEN)✓ obj delete NULL guards patch applied$(RESET)"; \
 	else \

@@ -63,7 +63,7 @@ Applied in order by `mk/patches.mk`. Grouped by subsystem.
 | `lvgl-strdup-null-guard.patch` | `lv_string_builtin.c`, `lv_string_clib.c` | NULL input guard for lv_strdup | PR #9827 |
 | `lvgl_observer_debug.patch` | `lv_observer.c` | Enhanced error logging with pointer/type info | Project-specific |
 | `lvgl_observer_remove_null_guard.patch` | `lv_observer.c` | NULL guard for observer removal | Project-specific |
-| `lvgl_obj_delete_null_guards.patch` | `lv_event.c`, `lv_obj.c`, `lv_obj_tree.c` | NULL guards in obj deletion path (event_mark_deleted, destructor, delete_core) | Pending |
+| `lvgl_obj_delete_null_guards.patch` | `lv_global.h`, `lv_event.c`, `lv_obj.c`, `lv_obj_tree.c` | Event depth counter for corruption detection, NULL guards + alignment/depth-limit checks in event_mark_deleted, async cancel before child recursion in obj_delete_core | Pending |
 
 ### Project-Specific (not submitted upstream)
 
