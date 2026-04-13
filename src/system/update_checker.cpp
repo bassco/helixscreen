@@ -1024,10 +1024,15 @@ void UpdateChecker::do_download() {
     spdlog::info("[UpdateChecker] Download complete: {} bytes", result);
     report_download_status(DownloadStatus::Verifying, 100, "Verifying download...");
 
-    // Verify gzip integrity (fork/exec to avoid shell injection)
-    auto ret = safe_exec({resolve_tool("gunzip"), "-t", download_path});
+    // Verify archive integrity (fork/exec to avoid shell injection)
+    int ret;
+    if (path_is_zip(download_path)) {
+        ret = safe_exec({resolve_tool("unzip"), "-tqq", download_path});
+    } else {
+        ret = safe_exec({resolve_tool("gunzip"), "-t", download_path});
+    }
     if (ret != 0) {
-        spdlog::error("[UpdateChecker] Tarball verification failed");
+        spdlog::error("[UpdateChecker] Archive verification failed");
         std::remove(download_path.c_str());
         report_download_status(DownloadStatus::Error, 0, "Error: Corrupt download",
                                "Downloaded file failed integrity check");
@@ -1036,7 +1041,7 @@ void UpdateChecker::do_download() {
         return;
     }
 
-    spdlog::info("[UpdateChecker] Tarball verified OK");
+    spdlog::info("[UpdateChecker] Archive verified OK");
 
     // Validate architecture before installing
     if (!validate_elf_architecture(download_path)) {
@@ -1114,6 +1119,10 @@ bool UpdateChecker::validate_elf_architecture(const std::string& tarball_path) {
         expected_class = 2;      // ELFCLASS64
         expected_machine = 0x3E; // EM_X86_64
         expected_arch_name = "x86_64 64-bit";
+    } else if (platform == "k1" || platform == "ad5x") {
+        expected_class = 1;      // ELFCLASS32
+        expected_machine = 0x08; // EM_MIPS
+        expected_arch_name = "MIPS 32-bit";
     } else {
         spdlog::info("[UpdateChecker] Platform '{}' — skipping ELF validation", platform);
         return true;
