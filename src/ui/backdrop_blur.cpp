@@ -109,21 +109,21 @@ void box_blur_argb8888(uint8_t* data, int width, int height, int iterations) {
     }
 }
 
-void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int src_height) {
+void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int src_height,
+                           int src_stride) {
     if (!src || !dst || src_width < 2 || src_height < 2) {
         return;
     }
 
     const int dst_width = src_width / 2;
     const int dst_height = src_height / 2;
-    const int src_stride = src_width * 4;
 
     for (int dy = 0; dy < dst_height; dy++) {
         for (int dx = 0; dx < dst_width; dx++) {
             int sx = dx * 2;
             int sy = dy * 2;
 
-            // Average 2x2 block
+            // Average 2x2 block (use src_stride for row offset, not width*4)
             const uint8_t* p00 = src + sy * src_stride + sx * 4;
             const uint8_t* p10 = p00 + 4;
             const uint8_t* p01 = p00 + src_stride;
@@ -625,7 +625,8 @@ lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
 
     if (blur_w != snap_w) {
         blur_buf.resize(static_cast<size_t>(blur_w) * blur_h * 4);
-        detail::downscale_2x_argb8888(snap_data, blur_buf.data(), snap_w, snap_h);
+        detail::downscale_2x_argb8888(snap_data, blur_buf.data(), snap_w, snap_h,
+                                      static_cast<int>(snapshot->header.stride));
         blur_data = blur_buf.data();
     } else {
         // No downscale; work on snapshot data directly
@@ -658,7 +659,21 @@ lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
         return nullptr;
     }
 
-    std::memcpy(result_buf->data, blur_data, static_cast<size_t>(blur_w) * blur_h * 4);
+    // Copy row-by-row: blur_data uses tight stride (blur_w * 4) but result_buf
+    // uses LVGL's aligned stride (rounded up to LV_DRAW_BUF_STRIDE_ALIGN).
+    // A flat memcpy shifts every row when the strides differ, causing diagonal smearing.
+    {
+        uint32_t tight_stride = static_cast<uint32_t>(blur_w) * 4;
+        uint32_t aligned_stride = result_buf->header.stride;
+        if (tight_stride == aligned_stride) {
+            std::memcpy(result_buf->data, blur_data, static_cast<size_t>(blur_w) * blur_h * 4);
+        } else {
+            auto* dst = static_cast<uint8_t*>(result_buf->data);
+            for (int y = 0; y < blur_h; y++) {
+                std::memcpy(dst + y * aligned_stride, blur_data + y * tight_stride, tight_stride);
+            }
+        }
+    }
 
     // Done with snapshot
     lv_draw_buf_destroy(snapshot);

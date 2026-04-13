@@ -41,7 +41,8 @@ void box_blur_argb8888(uint8_t* data, int width, int height, int iterations = 3)
 /// @param dst       Destination pixel buffer (half dimensions)
 /// @param src_width  Source width (must be even)
 /// @param src_height Source height (must be even)
-void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int src_height);
+void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int src_height,
+                           int src_stride);
 
 /// Reset the circuit breaker (for testing only).
 void reset_circuit_breaker();

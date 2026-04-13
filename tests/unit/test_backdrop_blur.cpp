@@ -123,7 +123,7 @@ TEST_CASE("downscale_2x: 4x4 to 2x2 with correct averaging", "[backdrop_blur][do
     constexpr int dw = sw / 2, dh = sh / 2;
     std::vector<uint8_t> dst(dw * dh * 4, 0);
 
-    downscale_2x_argb8888(src.data(), dst.data(), sw, sh);
+    downscale_2x_argb8888(src.data(), dst.data(), sw, sh, sw * 4);
 
     // Top-left output pixel should be average of (100,100,100,100) = 100
     REQUIRE(dst[0] == 100); // B
@@ -149,7 +149,7 @@ TEST_CASE("downscale_2x: 2x2 to 1x1 averages all four pixels", "[backdrop_blur][
     };
 
     uint8_t dst[4] = {};
-    downscale_2x_argb8888(src, dst, 2, 2);
+    downscale_2x_argb8888(src, dst, 2, 2, 2 * 4);
 
     REQUIRE(dst[0] == 85);  // B
     REQUIRE(dst[1] == 85);  // G
