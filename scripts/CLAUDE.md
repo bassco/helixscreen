@@ -58,10 +58,30 @@ Build, asset generation, deployment, and developer tooling for HelixScreen.
 | `telemetry-pull.sh` | Pull events from telemetry worker API. Needs `HELIX_TELEMETRY_ADMIN_KEY` |
 | `telemetry-analyze.py` | Adoption, reliability, crash metrics. Output: terminal/JSON/HTML |
 | `telemetry-printer-profiles.py` | Printer detection analysis: model distribution, name clustering, candidate heuristics, DB validation |
+| `telemetry-update-printer-db.py` | Interactive updater: consumes profile analysis, walks operator through augmenting/creating printer_database.json entries and presets |
 | `telemetry-crashes.py` | Resolve ASLR crash addresses → function names, group by signature |
 | `telemetry-backfill.sh` | Backfill Analytics Engine from R2 (90-day retention limit) |
 | `resolve-backtrace.sh` | Resolve raw backtrace addresses using `.sym` files from R2 |
 | `debug-bundle.sh` | Fetch and display debug bundles from `crash.helixscreen.org` |
+
+#### Printer Hardware Profile Pipeline
+
+Composable pipeline for improving `printer_database.json` from real-world telemetry:
+
+```bash
+# 1. Pull raw telemetry events to .telemetry-data/events/
+./scripts/telemetry-pull.sh --since 2026-01-01
+
+# 2. Analyze: aggregate by model, find discriminators, cluster unknowns
+./scripts/telemetry-printer-profiles.py --json --candidates > /tmp/analysis.json
+
+# 3. Interactively update printer DB and generate presets
+./scripts/telemetry-update-printer-db.py /tmp/analysis.json
+```
+
+**Data flow:** Client `hardware_profile` events (fans, sensors, steppers, LEDs, macros, MCUs, build volume, full Klipper object list) → Worker R2 storage → `telemetry-pull.sh` → local `.telemetry-data/events/` → `telemetry-printer-profiles.py` aggregates per detected model → `telemetry-update-printer-db.py` diffs against `printer_database.json` and walks operator through changes.
+
+**Spec:** `docs/superpowers/specs/2026-04-13-telemetry-printer-db-updater-design.md`
 
 ### Quality & Auditing
 | Script | Purpose |
