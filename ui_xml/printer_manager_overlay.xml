@@ -258,6 +258,18 @@
           <text_small text="Fans" translation_tag="Fans"/>
         </lv_obj>
 
+        <!-- Power Devices -->
+        <lv_obj name="pm_chip_power"
+                width="content" height="content" style_bg_color="#card_bg" style_bg_opa="255" style_radius="16"
+                style_pad_top="#space_xs" style_pad_bottom="#space_xs" style_pad_left="#space_sm"
+                style_pad_right="#space_sm" flex_flow="row" style_pad_gap="#space_xs" style_flex_cross_place="center"
+                scrollable="false" style_border_width="0" clickable="true">
+          <bind_flag_if_eq subject="power_device_count" flag="hidden" ref_value="0"/>
+          <event_cb trigger="clicked" callback="pm_chip_power_clicked"/>
+          <icon src="power_plug" size="xs" variant="success"/>
+          <text_small text="Power" translation_tag="Power"/>
+        </lv_obj>
+
         <!-- Chamber Sensor -->
         <lv_obj width="content"
                 height="content" style_bg_color="#card_bg" style_bg_opa="255" style_radius="16"

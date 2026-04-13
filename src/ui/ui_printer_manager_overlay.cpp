@@ -13,16 +13,16 @@
 #include "ui_panel_ams.h"
 #include "ui_panel_bed_mesh.h"
 #include "ui_panel_input_shaper.h"
+#include "ui_panel_power.h"
 #include "ui_panel_screws_tilt.h"
 #include "ui_panel_spoolman.h"
 #include "ui_printer_list_overlay.h"
 #include "ui_settings_display_sound.h"
-#include "ui_toast_manager.h"
+#include "ui_settings_led.h"
 
 #include "app_globals.h"
 #include "config.h"
 #include "helix_version.h"
-#include "lvgl/src/others/translation/lv_translation.h"
 #include "printer_detector.h"
 #include "printer_image_manager.h"
 #include "printer_images.h"
@@ -146,6 +146,7 @@ void PrinterManagerOverlay::register_callbacks() {
         {"pm_chip_screws_tilt_clicked", on_chip_screws_tilt_clicked},
         {"pm_chip_ams_clicked", on_chip_ams_clicked},
         {"pm_chip_fans_clicked", on_chip_fans_clicked},
+        {"pm_chip_power_clicked", on_chip_power_clicked},
         {"pm_chip_speaker_clicked", on_chip_speaker_clicked},
         // Printer name click callback (inline rename)
         {"pm_printer_name_clicked", pm_printer_name_clicked_cb},
@@ -172,8 +173,8 @@ void PrinterManagerOverlay::on_chip_bed_mesh_clicked(lv_event_t* e) {
 void PrinterManagerOverlay::on_chip_leds_clicked(lv_event_t* e) {
     (void)e;
     spdlog::debug("[Printer Manager] LEDs chip clicked");
-    // TODO: Navigate to LED settings when available
-    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("LED settings coming soon"), 2000);
+    auto& overlay = helix::settings::get_led_settings_overlay();
+    overlay.show(lv_display_get_screen_active(nullptr));
 }
 
 void PrinterManagerOverlay::on_chip_adxl_clicked(lv_event_t* e) {
@@ -261,6 +262,16 @@ void PrinterManagerOverlay::on_chip_fans_clicked(lv_event_t* e) {
     if (pm.fan_control_panel_) {
         get_fan_control_overlay().set_api(get_moonraker_api());
         NavigationManager::instance().push_overlay(pm.fan_control_panel_);
+    }
+}
+
+void PrinterManagerOverlay::on_chip_power_clicked(lv_event_t* e) {
+    (void)e;
+    spdlog::debug("[Printer Manager] Power Devices chip clicked");
+    auto& panel = get_global_power_panel();
+    lv_obj_t* overlay = panel.get_or_create_overlay(lv_display_get_screen_active(nullptr));
+    if (overlay) {
+        NavigationManager::instance().push_overlay(overlay);
     }
 }
 

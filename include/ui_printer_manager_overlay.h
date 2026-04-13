@@ -172,6 +172,7 @@ class PrinterManagerOverlay : public OverlayBase {
     static void on_chip_screws_tilt_clicked(lv_event_t* e);
     static void on_chip_ams_clicked(lv_event_t* e);
     static void on_chip_fans_clicked(lv_event_t* e);
+    static void on_chip_power_clicked(lv_event_t* e);
     static void on_chip_speaker_clicked(lv_event_t* e);
 
     // Name editing callbacks
