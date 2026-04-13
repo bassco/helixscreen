@@ -178,6 +178,8 @@ class BedMeshPanel : public OverlayBase {
     static constexpr uint32_t SLOW_OPERATION_TIMEOUT_MS =
         120000; // load, save_config (Klipper restart)
     static constexpr uint32_t CALIBRATION_TIMEOUT_MS = 300000; // 5 min for BED_MESH_CALIBRATE
+    static constexpr double PROBE_NOZZLE_TEMP = 150.0; // °C — warm nozzle prevents ooze interference
+    static constexpr double PROBE_BED_TEMP = 60.0;     // °C — thermal expansion for accurate mesh
 
     // RAII subscription guard - auto-unsubscribes from Moonraker on destruction
     SubscriptionGuard subscription_;
@@ -199,7 +201,14 @@ class BedMeshPanel : public OverlayBase {
     lv_obj_t* parent_screen_ = nullptr;
     bool callbacks_registered_ = false;
 
+    // Preheat tracking — true when we turned on a heater that was off before probing
+    bool preheat_turned_on_nozzle_ = false;
+    bool preheat_turned_on_bed_ = false;
+
     // ========== Private Methods ==========
+    void preheat_for_probing();
+    void cooldown_after_probing();
+    void start_home_and_probe();
     void setup_profile_dropdown();
     void setup_moonraker_subscription();
     void setup_build_volume_observer();

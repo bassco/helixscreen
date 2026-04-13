@@ -879,7 +879,81 @@ void BedMeshPanel::rename_profile(int index) {
     show_rename_modal(name);
 }
 
+void BedMeshPanel::preheat_for_probing() {
+    preheat_turned_on_nozzle_ = false;
+    preheat_turned_on_bed_ = false;
+
+    MoonrakerAPI* api = get_moonraker_api();
+    if (!api) return;
+
+    auto& state = get_printer_state();
+
+    // Subject values are centidegrees (value * 10) — target of 0 means heater is off
+    int nozzle_target = lv_subject_get_int(state.get_active_extruder_target_subject());
+    int bed_target = lv_subject_get_int(state.get_bed_target_subject());
+
+    auto set_temp = [api](const std::string& heater, double temp, const char* label) {
+        api->set_temperature(
+            heater, temp, []() {},
+            [label](const MoonrakerError& err) {
+                spdlog::warn("[BedMeshPanel] Failed to preheat {}: {}", label, err.message);
+            });
+    };
+
+    if (nozzle_target == 0) {
+        preheat_turned_on_nozzle_ = true;
+        spdlog::info("[BedMeshPanel] Preheating nozzle to {}°C for probing", PROBE_NOZZLE_TEMP);
+        set_temp(state.active_extruder_name(), PROBE_NOZZLE_TEMP, "nozzle");
+    } else {
+        spdlog::info("[BedMeshPanel] Nozzle already heating (target={}°C), skipping",
+                     nozzle_target / 10.0);
+    }
+
+    if (bed_target == 0) {
+        preheat_turned_on_bed_ = true;
+        spdlog::info("[BedMeshPanel] Preheating bed to {}°C for probing", PROBE_BED_TEMP);
+        set_temp("heater_bed", PROBE_BED_TEMP, "bed");
+    } else {
+        spdlog::info("[BedMeshPanel] Bed already heating (target={}°C), skipping",
+                     bed_target / 10.0);
+    }
+}
+
+void BedMeshPanel::cooldown_after_probing() {
+    if (!preheat_turned_on_nozzle_ && !preheat_turned_on_bed_) return;
+
+    MoonrakerAPI* api = get_moonraker_api();
+    if (!api) return;
+
+    auto turn_off = [api](const std::string& heater, const char* label) {
+        spdlog::info("[BedMeshPanel] Turning off {} (was off before probing)", label);
+        api->set_temperature(
+            heater, 0.0, []() {},
+            [label](const MoonrakerError& err) {
+                spdlog::warn("[BedMeshPanel] Failed to turn off {}: {}", label, err.message);
+            });
+    };
+
+    if (preheat_turned_on_nozzle_) {
+        turn_off(get_printer_state().active_extruder_name(), "nozzle");
+        preheat_turned_on_nozzle_ = false;
+    }
+
+    if (preheat_turned_on_bed_) {
+        turn_off("heater_bed", "bed");
+        preheat_turned_on_bed_ = false;
+    }
+}
+
 void BedMeshPanel::start_calibration() {
+    // Prevent double-tap while already probing
+    auto current_state = static_cast<BedMeshCalibrationState>(
+        lv_subject_get_int(&bed_mesh_calibrate_state_));
+    if (current_state == BedMeshCalibrationState::PROBING) {
+        spdlog::debug("[BedMeshPanel] Calibration already in progress, ignoring");
+        return;
+    }
+
     // Reset state to PROBING
     lv_subject_set_int(&bed_mesh_calibrate_state_,
                        static_cast<int>(BedMeshCalibrationState::PROBING));
@@ -898,6 +972,61 @@ void BedMeshPanel::start_calibration() {
         return;
     }
 
+    // Preheat nozzle and bed for probing (respects existing targets)
+    preheat_for_probing();
+
+    // If we turned on any heaters, wait for them to reach target before proceeding
+    if (preheat_turned_on_nozzle_ || preheat_turned_on_bed_) {
+        lv_subject_set_int(&bed_mesh_probe_indeterminate_, 1);
+        lv_subject_copy_string(&bed_mesh_probe_text_, lv_tr("Heating..."));
+
+        // Build TEMPERATURE_WAIT command for heaters we turned on
+        std::string wait_cmd;
+        if (preheat_turned_on_nozzle_) {
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "TEMPERATURE_WAIT SENSOR=%s MINIMUM=%.0f\n",
+                          get_printer_state().active_extruder_name().c_str(), PROBE_NOZZLE_TEMP);
+            wait_cmd += buf;
+        }
+        if (preheat_turned_on_bed_) {
+            char buf[128];
+            std::snprintf(buf, sizeof(buf), "TEMPERATURE_WAIT SENSOR=heater_bed MINIMUM=%.0f",
+                          PROBE_BED_TEMP);
+            wait_cmd += buf;
+        }
+
+        spdlog::info("[BedMeshPanel] Waiting for preheat: {}", wait_cmd);
+
+        auto token = lifetime_.token();
+        api->execute_gcode(
+            wait_cmd,
+            [this, token]() {
+                if (token.expired()) return;
+                token.defer("BedMeshPanel::preheat_done", [this]() {
+                    spdlog::info("[BedMeshPanel] Preheat complete, proceeding to home/probe");
+                    start_home_and_probe();
+                });
+            },
+            [this, token](const MoonrakerError& err) {
+                if (token.expired()) return;
+                std::string msg = "Preheat failed: " + err.message;
+                token.defer("BedMeshPanel::preheat_error",
+                            [this, msg]() { on_calibration_error(msg); });
+            },
+            CALIBRATION_TIMEOUT_MS);
+    } else {
+        // Heaters already on — go straight to home/probe
+        start_home_and_probe();
+    }
+}
+
+void BedMeshPanel::start_home_and_probe() {
+    MoonrakerAPI* api = get_moonraker_api();
+    if (!api) {
+        on_calibration_error("API not available");
+        return;
+    }
+
     // Check homing state — auto-home if needed before probing
     const char* homed = lv_subject_get_string(get_printer_state().get_homed_axes_subject());
     bool all_homed = homed && std::string(homed).find("xyz") != std::string::npos;
@@ -907,22 +1036,21 @@ void BedMeshPanel::start_calibration() {
     } else {
         spdlog::info("[BedMeshPanel] Not fully homed (axes={}), sending G28 first",
                      homed ? homed : "none");
+        lv_subject_set_int(&bed_mesh_probe_indeterminate_, 1);
         lv_subject_copy_string(&bed_mesh_probe_text_, lv_tr("Homing..."));
 
         auto token = lifetime_.token();
         api->execute_gcode(
             "G28",
             [this, token]() {
-                if (token.expired())
-                    return;
+                if (token.expired()) return;
                 token.defer("BedMeshPanel::g28_done", [this]() {
                     spdlog::info("[BedMeshPanel] G28 complete, starting calibration");
                     start_calibration_probing();
                 });
             },
             [this, token](const MoonrakerError& err) {
-                if (token.expired())
-                    return;
+                if (token.expired()) return;
                 std::string msg = (err.type == MoonrakerErrorType::TIMEOUT)
                                       ? "Homing timed out — printer may still be homing"
                                       : "Homing failed: " + err.message;
@@ -1379,6 +1507,7 @@ void BedMeshPanel::on_probe_progress(int current, int total) {
 
 void BedMeshPanel::on_calibration_complete() {
     spdlog::info("[BedMeshPanel] Calibration complete, transitioning to naming state");
+    cooldown_after_probing();
     lv_subject_set_int(&bed_mesh_calibrate_state_,
                        static_cast<int>(BedMeshCalibrationState::NAMING));
 }
@@ -1421,6 +1550,7 @@ static std::string sanitize_error_message(const std::string& raw) {
 }
 
 void BedMeshPanel::on_calibration_error(const std::string& message) {
+    cooldown_after_probing();
     spdlog::error("[BedMeshPanel] Calibration error: {}", message);
     std::string clean = sanitize_error_message(message);
     std::strncpy(error_message_buf_, clean.c_str(), sizeof(error_message_buf_) - 1);
@@ -1432,6 +1562,10 @@ void BedMeshPanel::on_calibration_error(const std::string& message) {
 
 void BedMeshPanel::handle_emergency_stop() {
     spdlog::warn("[BedMeshPanel] Emergency stop during bed mesh calibration");
+
+    // E-stop kills all heaters — just reset preheat tracking flags
+    preheat_turned_on_nozzle_ = false;
+    preheat_turned_on_bed_ = false;
 
     // Suppress recovery dialog — user intentionally triggered E-Stop from this modal
     EmergencyStopOverlay::instance().suppress_recovery_dialog(RecoverySuppression::LONG);
