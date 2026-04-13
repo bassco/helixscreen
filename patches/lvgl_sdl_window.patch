@@ -1,5 +1,5 @@
 diff --git a/src/drivers/sdl/lv_sdl_window.c b/src/drivers/sdl/lv_sdl_window.c
-index 15a87ab12..6cf4b9902 100644
+index 15a87ab12..27930e9a1 100644
 --- a/src/drivers/sdl/lv_sdl_window.c
 +++ b/src/drivers/sdl/lv_sdl_window.c
 @@ -21,6 +21,10 @@
@@ -126,7 +126,7 @@ index 15a87ab12..6cf4b9902 100644
      }
  }
  
-@@ -294,24 +348,143 @@ static lv_result_t window_create(lv_display_t * disp)
+@@ -294,24 +348,150 @@ static lv_result_t window_create(lv_display_t * disp)
  #if LV_SDL_FULLSCREEN
      flag |= SDL_WINDOW_FULLSCREEN;
  #endif
@@ -253,6 +253,13 @@ index 15a87ab12..6cf4b9902 100644
 +            hor_res = logical_w;
 +            ver_res = logical_h;
 +            lv_display_set_resolution(disp, logical_w, logical_h);
++
++            /* The SW backend allocated framebuffers at the initial 800x480.
++             * After changing the logical resolution, resize the backend's
++             * buffers and texture to match the new dimensions. */
++            if(lv_sdl_backend_ops.resize_display) {
++                lv_sdl_backend_ops.resize_display(disp);
++            }
 +
 +            __android_log_print(ANDROID_LOG_INFO, "HelixSDL",
 +                "scaling: native %dx%d -> logical %dx%d (%dx integer)",
