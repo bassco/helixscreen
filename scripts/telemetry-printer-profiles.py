@@ -205,6 +205,7 @@ def find_discriminating_names(
     group_sizes: dict[str, int],
     min_prevalence: float = 0.4,
     max_other_prevalence: float = 0.1,
+    min_samples: int = 3,
 ) -> dict[str, list[dict]]:
     """
     Find names that are common in one group but rare in others.
@@ -218,7 +219,7 @@ def find_discriminating_names(
         discriminators = []
         model_freqs = group_freqs[model]
         model_size = group_sizes[model]
-        if model_size < 3:
+        if model_size < min_samples:
             continue
 
         for source, counter in model_freqs.items():
@@ -638,6 +639,12 @@ def main():
         default=3,
         help="Minimum cluster size for undetected grouping (default: 3)",
     )
+    parser.add_argument(
+        "--min-samples",
+        type=int,
+        default=3,
+        help="Minimum number of samples per model for candidate generation (default: 3)",
+    )
     args = parser.parse_args()
 
     profiles = load_hardware_profiles(args.data_dir, args.since, args.until)
@@ -655,7 +662,7 @@ def main():
         group_freqs[model] = compute_name_frequencies(members)
 
     # Find discriminating names
-    discriminators = find_discriminating_names(group_freqs, group_sizes)
+    discriminators = find_discriminating_names(group_freqs, group_sizes, min_samples=args.min_samples)
 
     # Cluster undetected printers
     undetected = groups.get("", [])
