@@ -206,9 +206,14 @@ def find_discriminating_names(
     min_prevalence: float = 0.4,
     max_other_prevalence: float = 0.1,
     min_samples: int = 3,
+    unique_device_counts: Optional[dict[str, int]] = None,
 ) -> dict[str, list[dict]]:
     """
     Find names that are common in one group but rare in others.
+
+    When unique_device_counts is provided, min_samples filters on unique
+    devices rather than profile count (avoids one user with many sessions
+    looking like a significant sample).
 
     Returns {model: [{name, source, prevalence, max_other_prevalence, confidence_suggestion}]}
     """
@@ -219,7 +224,9 @@ def find_discriminating_names(
         discriminators = []
         model_freqs = group_freqs[model]
         model_size = group_sizes[model]
-        if model_size < min_samples:
+        # Filter on unique devices if available, else profile count
+        device_count = (unique_device_counts or {}).get(model, model_size)
+        if device_count < min_samples:
             continue
 
         for source, counter in model_freqs.items():
@@ -655,14 +662,20 @@ def main():
     # Group by detected model
     groups = group_by_model(profiles)
     group_sizes = {model: len(members) for model, members in groups.items()}
+    # Unique device counts for min-samples filtering
+    group_unique_devices = {
+        model: len(set(p.get("device_id", "") for p in members))
+        for model, members in groups.items()
+    }
 
     # Compute name frequencies per group
     group_freqs: dict[str, dict[NameSource, Counter]] = {}
     for model, members in groups.items():
         group_freqs[model] = compute_name_frequencies(members)
 
-    # Find discriminating names
-    discriminators = find_discriminating_names(group_freqs, group_sizes, min_samples=args.min_samples)
+    # Find discriminating names (filter by unique devices, not profile count)
+    discriminators = find_discriminating_names(group_freqs, group_sizes, min_samples=args.min_samples,
+                                               unique_device_counts=group_unique_devices)
 
     # Cluster undetected printers
     undetected = groups.get("", [])
