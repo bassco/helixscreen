@@ -1965,22 +1965,24 @@ void Application::setup_discovery_callbacks() {
     Application* app = this;
 
     client->set_on_hardware_discovered([api, client, app](const helix::PrinterDiscovery& hardware) {
-        // Copy hardware into an immutable snapshot on the BG thread so the
+        // Copy hardware into a mutable snapshot on the BG thread so the
         // queued main-thread callback owns a stable, non-aliased copy. Previous
         // implementations used an aggregate ctx struct which triggered multiple
         // PrinterDiscovery copies and a crash on main-thread copy-assign (#761).
-        auto snapshot = std::make_shared<const helix::PrinterDiscovery>(hardware);
+        // Use std::move on the main thread to avoid iterating hash table nodes
+        // during copy-assign, which is vulnerable to heap corruption (#789).
+        auto snapshot = std::make_shared<helix::PrinterDiscovery>(hardware);
         helix::ui::queue_update([api, client, app, snapshot]() {
             if (app->m_shutdown_complete)
                 return;
-            api->hardware() = *snapshot;
-            helix::init_subsystems_from_hardware(*snapshot, api, client);
+            api->hardware() = std::move(*snapshot);
+            helix::init_subsystems_from_hardware(api->hardware(), api, client);
         });
     });
 
     client->set_on_discovery_complete([api, client, app](const helix::PrinterDiscovery& hardware,
                                                          const nlohmann::json& initial_status) {
-        auto snapshot = std::make_shared<const helix::PrinterDiscovery>(hardware);
+        auto snapshot = std::make_shared<helix::PrinterDiscovery>(hardware);
         auto status_snapshot = std::make_shared<const nlohmann::json>(initial_status);
         helix::ui::queue_update([api, client, app, snapshot, status_snapshot]() {
             // Safety check: if Application is shutting down, skip all processing
@@ -1989,8 +1991,8 @@ void Application::setup_discovery_callbacks() {
                 return;
             }
 
-            // Update API's hardware data (replaces MoonrakerAPI constructor callback)
-            api->hardware() = *snapshot;
+            // Update API's hardware data — use move to avoid hash table iteration (#789)
+            api->hardware() = std::move(*snapshot);
 
             // Mark discovery complete so splash can exit
             app->m_splash_manager.on_discovery_complete();
@@ -2011,9 +2013,10 @@ void Application::setup_discovery_callbacks() {
                 fs::remove("/tmp/helixscreen_self_restart", ec);
             }
 
-            get_printer_state().set_hardware((*snapshot));
+            const auto& hw = api->hardware();
+            get_printer_state().set_hardware(hw);
             get_printer_state().init_fans(
-                (*snapshot).fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
+                hw.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
 
             // Dispatch initial subscription status AFTER init_fans so fan/sensor subjects
             // exist when the status data is processed. The initial status is passed from the
@@ -2022,10 +2025,10 @@ void Application::setup_discovery_callbacks() {
                 client->dispatch_status_update((*status_snapshot));
             }
 
-            get_printer_state().set_klipper_version((*snapshot).software_version());
-            get_printer_state().set_moonraker_version((*snapshot).moonraker_version());
-            if (!(*snapshot).os_version().empty()) {
-                get_printer_state().set_os_version((*snapshot).os_version());
+            get_printer_state().set_klipper_version(hw.software_version());
+            get_printer_state().set_moonraker_version(hw.moonraker_version());
+            if (!hw.os_version().empty()) {
+                get_printer_state().set_os_version(hw.os_version());
             }
 
             // Populate LED chips now that hardware is discovered
