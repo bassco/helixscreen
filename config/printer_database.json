@@ -4422,7 +4422,57 @@
       "id": "zerog_mercury_one",
       "name": "Zero G Mercury One.1",
       "manufacturer": "Zero G",
-      "image": "generic-corexy.png",
+      "image": "zerog-hydra-255.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 240,
+          "max_x": 270,
+          "min_y": 240,
+          "max_y": 270,
+          "confidence": 45,
+          "reason": "Build volume ~255mm (Ender 5 / Ender 5 Pro frame)"
+        }
+      ]
+    },
+    {
+      "id": "zerog_mercury_one_plus",
+      "name": "Zero G Mercury One.1 Plus",
+      "manufacturer": "Zero G",
+      "image": "zerog-hydra-370.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 35,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 340,
+          "max_x": 380,
+          "min_y": 340,
+          "max_y": 380,
+          "confidence": 55,
+          "reason": "Build volume ~350mm (Ender 5 Plus frame)"
+        }
+      ]
+    },
+    {
+      "id": "zerog_mercury_one_hydra",
+      "name": "Zero G Mercury One.1 Hydra",
+      "manufacturer": "Zero G",
+      "image": "zerog-hydra-255.png",
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -4458,10 +4508,10 @@
       ]
     },
     {
-      "id": "zerog_mercury_one_plus",
-      "name": "Zero G Mercury One.1 Plus",
+      "id": "zerog_mercury_one_plus_hydra",
+      "name": "Zero G Mercury One.1 Plus Hydra",
       "manufacturer": "Zero G",
-      "image": "generic-corexy.png",
+      "image": "zerog-hydra-370.png",
       "heuristics": [
         {
           "type": "kinematics_match",
@@ -4498,7 +4548,7 @@
     },
     {
       "id": "zerog_nebula_255",
-      "name": "Zero G Nebula 255",
+      "name": "Zero G Mercury One.1 Nebula",
       "manufacturer": "Zero G",
       "image": "zerog-nebula.png",
       "heuristics": [
@@ -4544,7 +4594,7 @@
     },
     {
       "id": "zerog_nebula_370",
-      "name": "Zero G Nebula 370",
+      "name": "Zero G Mercury One.1 Plus Nebula",
       "manufacturer": "Zero G",
       "image": "zerog-nebula-370.png",
       "heuristics": [
