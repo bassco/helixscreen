@@ -31,7 +31,6 @@ static constexpr float SPOOL_DEPTH = 0.35f; // Depth/width of spool (distance be
 static constexpr int32_t DEFAULT_SIZE = 64;
 static constexpr uint32_t DEFAULT_COLOR = 0xE0E0E0; // Default white/light filament
 
-
 // Note: Spool body colors now come from theme tokens in globals.xml:
 // - spool_body: Front flange color
 // - spool_body_shade: Back flange color (darker shade)
@@ -444,15 +443,20 @@ void ui_spool_canvas_set_size(lv_obj_t* canvas, int32_t size) {
         return;
 
     data->size = size;
-    if (data->draw_buf) {
-        lv_draw_buf_destroy(data->draw_buf);
-    }
+    auto* old_buf = data->draw_buf;
     data->draw_buf = lv_draw_buf_create(size, size, LV_COLOR_FORMAT_ARGB8888, 0);
     if (!data->draw_buf) {
+        data->draw_buf = old_buf;
         spdlog::error("[SpoolCanvas] Failed to create draw buffer for size {}", size);
         return;
     }
+    /* Set new buffer BEFORE destroying old — lv_canvas_set_draw_buf drops the
+     * old image source from LVGL's cache, which reads its header.  Destroying
+     * the old buffer first leaves a dangling pointer that corrupts the heap. */
     lv_canvas_set_draw_buf(data->canvas, data->draw_buf);
+    if (old_buf) {
+        lv_draw_buf_destroy(old_buf);
+    }
     lv_obj_set_size(data->canvas, size, size);
     redraw_spool(data);
 }
