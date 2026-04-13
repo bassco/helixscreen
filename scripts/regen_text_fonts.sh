@@ -159,9 +159,9 @@ if [ -n "$RUNTIME_CJKCHARS" ]; then
 fi
 
 # Font sizes
-SIZES_REGULAR="8 10 11 12 14 16 18 20 24 26 28"
-SIZES_LIGHT="10 11 12 14 16 18"
-SIZES_BOLD="14 16 18 20 24 28"
+SIZES_REGULAR="8 10 11 12 14 16 18 20 24 26 28 32 40"
+SIZES_LIGHT="10 11 12 14 16 18 20 26"
+SIZES_BOLD="14 16 18 20 24 28 32 40"
 
 echo ""
 echo "Regenerating Noto Sans text fonts for LVGL..."
@@ -234,7 +234,7 @@ done
 
 # Generate Source Code Pro Monospace (for console/terminal)
 FONT_MONO=assets/fonts/SourceCodePro-Regular.ttf
-SIZES_MONO="8 10 12 14 16"
+SIZES_MONO="8 10 12 14 16 18 20 24"
 
 if [ -f "$FONT_MONO" ]; then
     echo ""
