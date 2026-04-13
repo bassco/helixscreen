@@ -1014,10 +1014,9 @@ void WizardConnectionStep::cleanup() {
     // Reset auto-probe state (but NOT auto_probe_attempted_ - that persists)
     auto_probe_state_.store(AutoProbeState::IDLE);
 
-    // Clear status (must be before screen_root_ is cleared)
-    set_status(nullptr, StatusVariant::None, "");
-
-    // Reset UI references (wizard framework handles deletion)
+    // Skip set_status() here — widgets are about to be deleted by lv_obj_clean()
+    // in ui_wizard_load_screen(). Changing label text during cleanup triggers
+    // lv_obj_invalidate → blur tree walk which can hit freed objects (#792).
     screen_root_ = nullptr;
 
     spdlog::debug("[{}] Cleanup complete", get_name());
