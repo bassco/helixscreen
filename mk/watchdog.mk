@@ -76,7 +76,8 @@ WATCHDOG_EXTRA_OBJS := $(BUILD_DIR)/watchdog/config.o \
                        $(BUILD_DIR)/watchdog/ui_notification_stub.o \
                        $(BUILD_DIR)/watchdog/drm_mode_matching.o \
                        $(BUILD_DIR)/watchdog/fbdev_size_helper.o \
-                       $(BUILD_DIR)/watchdog/pending_startup_warnings.o
+                       $(BUILD_DIR)/watchdog/pending_startup_warnings.o \
+                       $(BUILD_DIR)/watchdog/helix_lvgl_anomaly_stub.o
 
 # Compile config for watchdog (with HELIX_WATCHDOG to guard get_runtime_config dependency)
 $(BUILD_DIR)/watchdog/config.o: src/system/config.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
@@ -100,6 +101,12 @@ $(BUILD_DIR)/watchdog/logging_init.o: src/system/logging_init.cpp $(LIBHV_LIB) $
 
 # Compile notification stub for watchdog (with dependency tracking)
 $(BUILD_DIR)/watchdog/ui_notification_stub.o: tools/ui_notification_stub.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/watchdog
+	@echo "[CXX] $< (watchdog stub)"
+	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# No-op stub for helix_lvgl_anomaly() — patched LVGL references it but watchdog
+# has no telemetry pipeline. Real impl lives in src/system/helix_lvgl_anomaly.cpp.
+$(BUILD_DIR)/watchdog/helix_lvgl_anomaly_stub.o: tools/helix_lvgl_anomaly_stub.cpp | $(BUILD_DIR)/watchdog
 	@echo "[CXX] $< (watchdog stub)"
 	$(Q)$(CXX) $(WATCHDOG_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 

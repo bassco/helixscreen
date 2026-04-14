@@ -66,7 +66,8 @@ SPLASH_EXTRA_OBJS := \
     $(BUILD_DIR)/splash/ui_notification_stub.o \
     $(BUILD_DIR)/splash/drm_mode_matching.o \
     $(BUILD_DIR)/splash/fbdev_size_helper.o \
-    $(BUILD_DIR)/splash/pending_startup_warnings.o
+    $(BUILD_DIR)/splash/pending_startup_warnings.o \
+    $(BUILD_DIR)/splash/helix_lvgl_anomaly_stub.o
 
 # Compile config for splash (with HELIX_SPLASH_ONLY to guard get_runtime_config dependency)
 $(BUILD_DIR)/splash/config.o: src/system/config.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
@@ -100,6 +101,12 @@ $(BUILD_DIR)/splash/backlight_backend.o: src/api/backlight_backend.cpp $(LIBHV_L
 
 # Compile notification stub for splash (with dependency tracking)
 $(BUILD_DIR)/splash/ui_notification_stub.o: tools/ui_notification_stub.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) | $(BUILD_DIR)/splash
+	@echo "[CXX] $< (splash stub)"
+	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
+
+# No-op stub for helix_lvgl_anomaly() — patched LVGL references it but splash
+# has no telemetry pipeline. Real impl lives in src/system/helix_lvgl_anomaly.cpp.
+$(BUILD_DIR)/splash/helix_lvgl_anomaly_stub.o: tools/helix_lvgl_anomaly_stub.cpp | $(BUILD_DIR)/splash
 	@echo "[CXX] $< (splash stub)"
 	$(Q)$(CXX) $(SPLASH_CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
