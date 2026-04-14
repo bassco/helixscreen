@@ -1141,31 +1141,43 @@ PKLA_EOF
 #
 # Initialize INIT_SYSTEM (will be set by detect_init_system)
 INIT_SYSTEM=""
-# Check required commands exist
-# Requires: curl or wget, tar, gunzip
+# Run `apt-get update` at most once per installer run. The first call updates
+# the package index; subsequent calls become no-ops. Avoids 5-15s of redundant
+# index refreshes when both check_requirements and install_runtime_deps need apt.
+_HELIX_APT_UPDATED=""
+_apt_update_once() {
+    [ -n "$_HELIX_APT_UPDATED" ] && return 0
+    $SUDO apt-get update -qq 2>/dev/null || true
+    _HELIX_APT_UPDATED=1
+}
+
+# Append a name to the global $missing list, comma-separated.
+_helix_add_missing() { missing="${missing:+$missing, }$1"; }
+
+# Check required commands exist. unzip is mandatory because release archives
+# ship as .zip (Moonraker Update Manager contract); tar/gunzip remain required
+# for bridge-release tar.gz fallback until 1.0 retires the format.
 check_requirements() {
     local missing=""
 
     # Need either curl or wget
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        missing="curl or wget"
+        _helix_add_missing "curl or wget"
     fi
+    command -v tar >/dev/null 2>&1 || _helix_add_missing "tar"
+    # gunzip needed for AD5M BusyBox tar which doesn't support -z
+    command -v gunzip >/dev/null 2>&1 || _helix_add_missing "gunzip"
 
-    # Need tar
-    if ! command -v tar >/dev/null 2>&1; then
-        if [ -n "$missing" ]; then
-            missing="$missing, tar"
+    # Try transparent apt-install of unzip when missing — many minimal
+    # Debian/Ubuntu images (notably Snapmaker U1 extended firmware) ship without it.
+    if ! command -v unzip >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1 && ! _has_no_new_privs; then
+            log_info "Installing missing dependency: unzip"
+            _apt_update_once
+            $SUDO apt-get install -y --no-install-recommends unzip >/dev/null 2>&1 \
+                || _helix_add_missing "unzip"
         else
-            missing="tar"
-        fi
-    fi
-
-    # Need gunzip (for AD5M BusyBox tar which doesn't support -z)
-    if ! command -v gunzip >/dev/null 2>&1; then
-        if [ -n "$missing" ]; then
-            missing="$missing, gunzip"
-        else
-            missing="gunzip"
+            _helix_add_missing "unzip"
         fi
     fi
 
@@ -1236,7 +1248,7 @@ install_runtime_deps() {
             return 0
         fi
         log_info "Installing missing libraries: $missing"
-        $SUDO apt-get update -qq 2>/dev/null || true
+        _apt_update_once
         # shellcheck disable=SC2086
         if ! $SUDO apt-get install -y --no-install-recommends $missing; then
             log_warn "Failed to install some runtime libraries: $missing"
@@ -4586,7 +4598,17 @@ main() {
         clean_old_installation "$platform"
     fi
 
-    # Stop existing service if updating
+    # Download/stage the release archive BEFORE stopping the service.
+    # Stopping helixscreen first can disrupt the network on some platforms
+    # (e.g. Snapmaker U1 where platform_post_stop restarts the stock GUI which
+    # owns wpa_supplicant and drops WiFi/SSH mid-update). Staging first also
+    # means a failed download leaves the running service untouched.
+    if [ -n "$local_tarball" ]; then
+        use_local_tarball "$local_tarball"
+    else
+        download_release "$version" "$platform"
+    fi
+
     if [ "$update_mode" = true ]; then
         if [ ! -d "$INSTALL_DIR" ]; then
             log_warn "No existing installation found. Performing fresh install."
@@ -4594,12 +4616,6 @@ main() {
         stop_service "$platform"
     fi
 
-    # Download and install (or use local tarball)
-    if [ -n "$local_tarball" ]; then
-        use_local_tarball "$local_tarball"
-    else
-        download_release "$version" "$platform"
-    fi
     extract_release "$platform"
     fix_install_ownership
     install_service "$platform"

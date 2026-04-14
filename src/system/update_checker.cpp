@@ -289,18 +289,48 @@ bool is_update_available(const std::string& current_version, const std::string& 
  * @param name Tool name (e.g., "tar", "cp", "gunzip")
  * @return Full absolute path if found, bare name as fallback (relies on $PATH)
  */
-std::string resolve_tool(const std::string& name) {
-    static const char* const SEARCH_DIRS[] = {"/usr/bin", "/bin",           "/usr/sbin",
-                                              "/sbin",    "/usr/local/bin", nullptr};
-    for (int i = 0; SEARCH_DIRS[i]; ++i) {
-        std::string path = std::string(SEARCH_DIRS[i]) + "/" + name;
+constexpr const char* TOOL_SEARCH_DIRS[] = {"/usr/bin", "/bin",           "/usr/sbin",
+                                            "/sbin",    "/usr/local/bin", nullptr};
+
+/// Walk TOOL_SEARCH_DIRS for an executable `name`. Returns absolute path on
+/// the first hit, empty string when nothing is found.
+std::string find_tool_path(const std::string& name) {
+    for (int i = 0; TOOL_SEARCH_DIRS[i]; ++i) {
+        std::string path = std::string(TOOL_SEARCH_DIRS[i]) + "/" + name;
         if (access(path.c_str(), X_OK) == 0) {
             return path;
         }
     }
+    return "";
+}
+
+std::string resolve_tool(const std::string& name) {
+    auto path = find_tool_path(name);
+    if (!path.empty()) {
+        return path;
+    }
     spdlog::warn("[UpdateChecker] resolve_tool: '{}' not found in standard paths, using bare name",
                  name);
     return name; // fallback: rely on PATH
+}
+
+bool tool_available(const std::string& name) {
+    return !find_tool_path(name).empty();
+}
+
+/// Populate ReleaseInfo download URLs from a per-platform manifest asset
+/// object (R2 + dev manifest schema). Prefers `zip_url`/`zip_sha256`, falls
+/// back to legacy `url`/`sha256` (tar.gz) only when no zip is in the manifest.
+void populate_release_urls_from_manifest(const json& platform_asset,
+                                         UpdateChecker::ReleaseInfo& info) {
+    std::string zip_url = json_string_or_empty(platform_asset, "zip_url");
+    if (!zip_url.empty()) {
+        info.download_url = zip_url;
+        info.sha256 = json_string_or_empty(platform_asset, "zip_sha256");
+    } else {
+        info.download_url = json_string_or_empty(platform_asset, "url");
+        info.sha256 = json_string_or_empty(platform_asset, "sha256");
+    }
 }
 
 /**
@@ -939,6 +969,21 @@ void UpdateChecker::do_download() {
             return;
         url = cached_info_->download_url;
         version = cached_info_->version;
+    }
+
+    // `unzip` is required to install zip releases. Hard-fail with an actionable
+    // message instead of letting the verify step emit a misleading "Corrupt
+    // download" error. The shell installer apt-installs unzip on first run, so
+    // this should only fire on systems where apt isn't available or the user
+    // manually removed it.
+    if (path_is_zip(url) && !tool_available("unzip")) {
+        spdlog::error("[UpdateChecker] `unzip` is required to install updates "
+                      "but is not installed on this system");
+        report_download_status(DownloadStatus::Error, 0, "Error: `unzip` not installed",
+                               "Run: sudo apt-get install unzip — then retry the update");
+        TelemetryManager::instance().record_update_failure("missing_unzip", version,
+                                                           get_platform_key());
+        return;
     }
 
     auto download_path = get_download_path();
@@ -2261,18 +2306,7 @@ bool UpdateChecker::fetch_r2_manifest(const std::string& channel, ReleaseInfo& i
             return false;
         }
 
-        const auto& platform_asset = assets[platform];
-        // Prefer the zip asset (matches Moonraker Update Manager and lets us
-        // drop the tar.gz in a future release). Fall back to the legacy tar.gz
-        // URL when the manifest doesn't carry a zip_url for this platform.
-        std::string zip_url = json_string_or_empty(platform_asset, "zip_url");
-        if (!zip_url.empty()) {
-            info.download_url = zip_url;
-            info.sha256 = json_string_or_empty(platform_asset, "zip_sha256");
-        } else {
-            info.download_url = json_string_or_empty(platform_asset, "url");
-            info.sha256 = json_string_or_empty(platform_asset, "sha256");
-        }
+        populate_release_urls_from_manifest(assets[platform], info);
 
         spdlog::debug("[UpdateChecker] R2 manifest parsed: {} ({})", info.version, channel);
         return true;
@@ -2476,16 +2510,7 @@ bool UpdateChecker::fetch_dev_release(ReleaseInfo& info, std::string& error) {
                 return false;
             }
 
-            const auto& platform_asset = assets[platform];
-            // Prefer the zip asset for the same reasons as fetch_r2_manifest().
-            std::string zip_url = json_string_or_empty(platform_asset, "zip_url");
-            if (!zip_url.empty()) {
-                info.download_url = zip_url;
-                info.sha256 = json_string_or_empty(platform_asset, "zip_sha256");
-            } else {
-                info.download_url = json_string_or_empty(platform_asset, "url");
-                info.sha256 = json_string_or_empty(platform_asset, "sha256");
-            }
+            populate_release_urls_from_manifest(assets[platform], info);
 
             return true;
 

@@ -210,7 +210,17 @@ main() {
         clean_old_installation "$platform"
     fi
 
-    # Stop existing service if updating
+    # Download/stage the release archive BEFORE stopping the service.
+    # Stopping helixscreen first can disrupt the network on some platforms
+    # (e.g. Snapmaker U1 where platform_post_stop restarts the stock GUI which
+    # owns wpa_supplicant and drops WiFi/SSH mid-update). Staging first also
+    # means a failed download leaves the running service untouched.
+    if [ -n "$local_tarball" ]; then
+        use_local_tarball "$local_tarball"
+    else
+        download_release "$version" "$platform"
+    fi
+
     if [ "$update_mode" = true ]; then
         if [ ! -d "$INSTALL_DIR" ]; then
             log_warn "No existing installation found. Performing fresh install."
@@ -218,12 +228,6 @@ main() {
         stop_service "$platform"
     fi
 
-    # Download and install (or use local tarball)
-    if [ -n "$local_tarball" ]; then
-        use_local_tarball "$local_tarball"
-    else
-        download_release "$version" "$platform"
-    fi
     extract_release "$platform"
     install_service "$platform"
 

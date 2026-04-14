@@ -135,9 +135,10 @@ platform_post_stop() {
         DRM_KEEPALIVE_PID=""
     fi
 
-    # Restart stock GUI directly (not via S99screen, which may delegate back to us)
-    if [ -x /usr/bin/gui ]; then
-        start-stop-daemon -S -b -x /usr/bin/gui -m -p /var/run/gui.pid 2>/dev/null || true
-    fi
+    # Do NOT restart /usr/bin/gui — the stock Snapmaker UI takes ownership of
+    # wpa_supplicant on launch and drops the active WiFi connection, breaking
+    # SSH and any in-flight install/update mid-stream (issue #797). Leaving the
+    # display blank during stop is preferable to wedging the network. The stock
+    # UI is restored by the uninstaller when the user explicitly removes us.
     return 0
 }

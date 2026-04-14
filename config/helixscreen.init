@@ -85,14 +85,24 @@ start() {
     # Enable backlight (some firmware may leave it off)
     platform_enable_backlight
 
-    # Check if already running
+    # Check if already running. The PIDFILE may store a recycled PID after a
+    # reboot or crash — confirm by looking for the actual helix-screen process
+    # before trusting it. Otherwise a stale PID owned by an unrelated process
+    # makes us return "already running" while no UI is actually up.
+    DAEMON_NAME=$(basename "$DAEMON")
     if [ -f "$PIDFILE" ]; then
         PID=$(cat "$PIDFILE")
-        if kill -0 "$PID" 2>/dev/null; then
+        if kill -0 "$PID" 2>/dev/null && pidof "$DAEMON_NAME" >/dev/null 2>&1; then
             echo "$NAME is already running (PID $PID)"
             return 0
         fi
         rm -f "$PIDFILE"
+    fi
+    # Catch the no-PIDFILE-but-running case (e.g., started outside this script)
+    if pidof "$DAEMON_NAME" >/dev/null 2>&1; then
+        RUNNING_PID=$(pidof "$DAEMON_NAME" | awk '{print $1}')
+        echo "$NAME is already running (PID $RUNNING_PID, no PID file)"
+        return 0
     fi
 
     cd "$DAEMON_DIR" || exit 1
