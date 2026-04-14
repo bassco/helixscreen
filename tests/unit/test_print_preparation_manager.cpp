@@ -1133,9 +1133,10 @@ class MacroAnalysisRetryFixture {
         // Initialize PrinterState subjects (needed for dependency injection)
         printer_state_.init_subjects(false); // false = no XML registration
 
-        // Start mock WebSocket server on fixed port (ephemeral port lookup is unreliable)
+        // Start mock WebSocket server on an ephemeral port (fixed ports caused
+        // intermittent bind/TIME_WAIT flakes when sections re-created the fixture).
         server_ = std::make_unique<MockWebSocketServer>();
-        int port = server_->start(18766); // Fixed port for retry tests
+        int port = server_->start(0);
         REQUIRE(port > 0);
 
         // Create event loop and client
@@ -1171,6 +1172,13 @@ class MacroAnalysisRetryFixture {
     }
 
     ~MacroAnalysisRetryFixture() {
+        // Clear server handlers BEFORE anything else — registered lambdas
+        // capture `this`, so a late request arriving during teardown would
+        // otherwise reference freed fixture state (SIGSEGV on eventloop CI).
+        if (server_) {
+            server_->clear_handlers();
+        }
+
         // Destroy client/API while event loop is still running so libhv can
         // process close/cleanup callbacks and release I/O handles.
         if (client_) {
