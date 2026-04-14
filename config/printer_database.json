@@ -1641,6 +1641,45 @@
       ]
     },
     {
+      "id": "elegoo_centauri_carbon",
+      "name": "Elegoo Centauri Carbon",
+      "manufacturer": "Elegoo",
+      "image": "elegoo-centauri-carbon.png",
+      "heuristics": [
+        {
+          "type": "kinematics_match",
+          "field": "kinematics",
+          "pattern": "corexy",
+          "confidence": 30,
+          "reason": "CoreXY kinematics"
+        },
+        {
+          "type": "build_volume_range",
+          "field": "bed_mesh",
+          "min_x": 250,
+          "max_x": 260,
+          "min_y": 260,
+          "max_y": 275,
+          "confidence": 50,
+          "reason": "256×270 build volume"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "centauri",
+          "confidence": 95,
+          "reason": "Hostname contains 'centauri'"
+        },
+        {
+          "type": "hostname_match",
+          "field": "hostname",
+          "pattern": "opencentauri",
+          "confidence": 95,
+          "reason": "Hostname contains 'opencentauri' (COSMOS)"
+        }
+      ]
+    },
+    {
       "id": "elegoo_neptune_4",
       "name": "Elegoo Neptune 4",
       "manufacturer": "Elegoo",

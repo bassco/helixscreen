@@ -179,6 +179,15 @@ package_platform() {
         cp -r "${PROJECT_DIR}/config/platform" "$pkg_dir/config/"
     fi
 
+    # Ship built-in theme defaults so the "helixscreen" theme and other named
+    # presets resolve on first launch. Without this, ThemeLoader silently falls
+    # back to auto-creating nord.json.
+    if [ -d "${PROJECT_DIR}/config/themes/defaults" ]; then
+        mkdir -p "$pkg_dir/config/themes"
+        cp -r "${PROJECT_DIR}/config/themes/defaults" "$pkg_dir/config/themes/"
+        log_info "  Included $(ls -1 "${PROJECT_DIR}/config/themes/defaults"/*.json 2>/dev/null | wc -l | tr -d ' ') theme files"
+    fi
+
     # Ship all presets for runtime detection-based loading
     # (auto_detect_and_save applies the matching preset after identifying the printer)
     if [ -d "${PROJECT_DIR}/config/presets" ]; then

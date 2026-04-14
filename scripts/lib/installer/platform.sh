@@ -27,11 +27,20 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "ad5x", "k1", "k2", "pi", "pi32", "x86", or "unsupported"
+# Returns: "ad5m", "ad5x", "cc1", "k1", "k2", "pi", "pi32", "snapmaker-u1", "x86", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
     kernel=$(uname -r)
+
+    # Check for Elegoo Centauri Carbon running OpenCentauri COSMOS firmware.
+    # MUST come before AD5M check — both are armv7l with kernel 5.4.61.
+    # COSMOS replaces the stock Tina/OpenWrt userland with a Yocto-based rootfs
+    # that ships Klipper, Moonraker, and its own update tool.
+    if [ "$arch" = "armv7l" ] && [ -x "/usr/bin/update-cosmos" ]; then
+        echo "cc1"
+        return
+    fi
 
     # Check for Creality K2 series (armv7l, OpenWrt/Tina Linux, /mnt/UDISK)
     # MUST come before AD5M check — both are armv7l with kernel 5.4.61
@@ -475,6 +484,20 @@ set_install_paths() {
         KLIPPER_USER="root"
         KLIPPER_HOME="/root"
         log_info "Platform: Creality K2 series"
+        log_info "Install directory: ${INSTALL_DIR}"
+    elif [ "$platform" = "cc1" ]; then
+        # Elegoo Centauri Carbon running OpenCentauri COSMOS.
+        # - / is read-only squashfs; /etc is an overlay on /data (writable).
+        # - /user-resource is the 6.3 GB ext4 partition where user installs go.
+        # - COSMOS provides gui-switcher: drop /etc/init.d/<name>, then
+        #   `config-manager ui screen_ui <name>` + restart gui-switcher.
+        INSTALL_DIR="/user-resource/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/helixscreen"
+        PREVIOUS_UI_SCRIPT=""
+        KLIPPER_USER="root"
+        KLIPPER_HOME="/root"
+        INIT_SYSTEM="sysv"
+        log_info "Platform: Elegoo Centauri Carbon (COSMOS)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "snapmaker-u1" ]; then
         INSTALL_DIR="/userdata/helixscreen"

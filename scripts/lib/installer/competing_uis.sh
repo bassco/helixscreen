@@ -184,6 +184,36 @@ INITEOF
     chmod +x /etc/init.d/S50dropbear
 }
 
+# Register HelixScreen with COSMOS's gui-switcher and stop the currently active GUI.
+# On Centauri Carbon / COSMOS, sibling UIs (grumpyscreen, guppyscreen, atomscreen) are
+# peers managed by gui-switcher — we DO NOT chmod them out. Instead we tell
+# config-manager to pick HelixScreen and let gui-switcher do the handoff.
+stop_cc1_competing_uis() {
+    if ! command -v config-manager >/dev/null 2>&1; then
+        log_warn "config-manager not found — cannot register with gui-switcher"
+        return 0
+    fi
+
+    # Stop the currently active GUI before we hand the framebuffer to ourselves.
+    local current_ui
+    current_ui=$(config-manager ui screen_ui 2>/dev/null || echo "")
+    if [ -n "$current_ui" ] && [ -x "/etc/init.d/${current_ui}" ]; then
+        log_info "Stopping active COSMOS GUI: ${current_ui}"
+        /etc/init.d/"${current_ui}" stop 2>/dev/null || true
+        found_any=true
+    fi
+
+    # Register HelixScreen as the selected UI. `config-manager` on COSMOS uses
+    # a 3-arg form to set; fall back to editing cosmos.conf if the set form
+    # isn't supported.
+    if config-manager ui screen_ui helixscreen 2>/dev/null; then
+        log_info "Registered HelixScreen with gui-switcher"
+    elif [ -f /etc/klipper/config/cosmos.conf ]; then
+        log_info "Updating /etc/klipper/config/cosmos.conf directly..."
+        $SUDO sed -i "s|^screen_ui[[:space:]]*=.*|screen_ui = helixscreen|" /etc/klipper/config/cosmos.conf 2>/dev/null || true
+    fi
+}
+
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
@@ -215,6 +245,17 @@ stop_competing_uis() {
     case "${K1_FIRMWARE:-}" in
         stock_klipper|guilouz) stop_k1_stock_competing_uis ;;
     esac
+
+    # CC1 / COSMOS: use gui-switcher handoff instead of disabling peers.
+    # Early-return so the generic loop below doesn't chmod out grumpyscreen/guppyscreen/atomscreen.
+    if [ "${platform:-}" = "cc1" ]; then
+        stop_cc1_competing_uis
+        if [ "$found_any" = true ]; then
+            log_info "Waiting for previous GUI to stop..."
+            sleep 2
+        fi
+        return 0
+    fi
 
     # Snapmaker U1 stock UI
     if pgrep -x "unisrv" >/dev/null 2>&1; then

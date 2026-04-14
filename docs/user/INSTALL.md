@@ -224,24 +224,61 @@ wget -O - http://dl.helixscreen.org/install.sh | sh
 
 **If you're testing on this printer**, please report your results via [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues) or [Discord](https://discord.gg/RZCT2StKhr).
 
-### Elegoo Centauri Carbon 1 (Testing)
+### Elegoo Centauri Carbon (Testing)
 
-> **Active testing is underway on this platform.** Prebuilt binaries are included in releases, but there is no installer script support yet — manual deployment only.
+> **Active testing is underway on this platform.** Prebuilt binaries ship in releases and the installer has auto-detection support. Requires the community [OpenCentauri COSMOS firmware](https://docs.opencentauri.cc/klipper-conversion/cosmos/) — stock Elegoo firmware is not supported (no SSH, no Klipper, no Moonraker).
 
 - **Hardware:**
-  - Elegoo Centauri Carbon 1
-  - Stock touchscreen display
-  - Network connection
+  - Elegoo Centauri Carbon (4.3" 480×272 touchscreen, Allwinner R528, armv7l)
+  - Network connection (WiFi or Ethernet)
 
 - **Software:**
-  - Klipper + Moonraker running on the printer
-  - SSH access to the printer
+  - [OpenCentauri COSMOS firmware](https://github.com/OpenCentauri/cosmos/releases) installed (replaces stock Elegoo firmware; ships Klipper + Moonraker + grumpyscreen/atomscreen/guppyscreen)
+  - SSH access: `root` / default password `OpenCentauri` (change it after install)
 
-**Current status:**
-- Build target: `make cc1-docker` produces a static armv7-a binary
-- Deploy targets exist: `make deploy-cc1 CC1_HOST=<ip>`
-- Prebuilt `cc1` binaries are included in GitHub releases
-- No installer script support yet — manual deployment only
+#### Step 1: Install COSMOS firmware
+
+OpenCentauri COSMOS is a full firmware replacement for the Centauri Carbon. It ships with Klipper, Moonraker, Mainsail, and a `gui-switcher` that lets you pick which touch UI to run.
+
+1. Download the latest `update.swu` from https://github.com/OpenCentauri/cosmos/releases
+2. Copy it to the root of a FAT32-formatted USB stick
+3. Insert the USB stick into the printer, power on
+4. From the stock Elegoo UI, navigate to the firmware-update menu and apply the update
+5. **First boot takes 5–10 minutes** while it reflashes the toolhead and bed boards — be patient
+6. After reboot, connect to WiFi from the COSMOS UI and note the printer's IP address
+
+If the update fails or the device won't boot, consult the OpenCentauri [install guide](https://docs.opencentauri.cc/klipper-conversion/cosmos/install/) and [emergency USB recovery](https://docs.opencentauri.cc/software/updates/) docs.
+
+#### Step 2: Install HelixScreen
+
+SSH into the printer (replace `<ip>` with your printer's IP):
+
+```bash
+ssh root@<ip>
+# Default password: OpenCentauri
+```
+
+Then run the installer:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/prestonbrown/helixscreen/main/scripts/install.sh | sh
+```
+
+The installer auto-detects COSMOS, installs HelixScreen to `/user-resource/helixscreen/`, and registers it with `gui-switcher` as the selected touch UI. It stops the currently active UI (grumpyscreen, atomscreen, or guppyscreen) and starts HelixScreen in its place.
+
+#### Step 3: Switch back to another UI (optional)
+
+COSMOS's `config-manager` tool lets you switch between installed UIs without uninstalling HelixScreen:
+
+```bash
+config-manager ui screen_ui grumpyscreen   # or atomscreen, guppyscreen, helixscreen
+/etc/init.d/gui-switcher restart
+```
+
+**Notes:**
+- Moonraker on COSMOS listens on port `80` directly (no nginx); HelixScreen's `cc1` preset is configured for this
+- Install directory: `/user-resource/helixscreen/` (`/` is read-only squashfs on COSMOS)
+- Init script: `/etc/init.d/helixscreen` (LSB-style, PIDFILE=`/var/run/gui.pid` for gui-switcher compatibility)
 
 **If you're testing on this printer**, please report your results via [GitHub Issues](https://github.com/prestonbrown/helixscreen/issues) or [Discord](https://discord.gg/RZCT2StKhr).
 

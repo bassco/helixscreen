@@ -268,11 +268,20 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "ad5x", "k1", "k2", "pi", "pi32", "x86", or "unsupported"
+# Returns: "ad5m", "ad5x", "cc1", "k1", "k2", "pi", "pi32", "snapmaker-u1", "x86", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
     kernel=$(uname -r)
+
+    # Check for Elegoo Centauri Carbon running OpenCentauri COSMOS firmware.
+    # MUST come before AD5M check — both are armv7l with kernel 5.4.61.
+    # COSMOS replaces the stock Tina/OpenWrt userland with a Yocto-based rootfs
+    # that ships Klipper, Moonraker, and its own update tool.
+    if [ "$arch" = "armv7l" ] && [ -x "/usr/bin/update-cosmos" ]; then
+        echo "cc1"
+        return
+    fi
 
     # Check for Creality K2 series (armv7l, OpenWrt/Tina Linux, /mnt/UDISK)
     # MUST come before AD5M check — both are armv7l with kernel 5.4.61
@@ -716,6 +725,20 @@ set_install_paths() {
         KLIPPER_USER="root"
         KLIPPER_HOME="/root"
         log_info "Platform: Creality K2 series"
+        log_info "Install directory: ${INSTALL_DIR}"
+    elif [ "$platform" = "cc1" ]; then
+        # Elegoo Centauri Carbon running OpenCentauri COSMOS.
+        # - / is read-only squashfs; /etc is an overlay on /data (writable).
+        # - /user-resource is the 6.3 GB ext4 partition where user installs go.
+        # - COSMOS provides gui-switcher: drop /etc/init.d/<name>, then
+        #   `config-manager ui screen_ui <name>` + restart gui-switcher.
+        INSTALL_DIR="/user-resource/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/helixscreen"
+        PREVIOUS_UI_SCRIPT=""
+        KLIPPER_USER="root"
+        KLIPPER_HOME="/root"
+        INIT_SYSTEM="sysv"
+        log_info "Platform: Elegoo Centauri Carbon (COSMOS)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "snapmaker-u1" ]; then
         INSTALL_DIR="/userdata/helixscreen"
@@ -2115,6 +2138,36 @@ INITEOF
     chmod +x /etc/init.d/S50dropbear
 }
 
+# Register HelixScreen with COSMOS's gui-switcher and stop the currently active GUI.
+# On Centauri Carbon / COSMOS, sibling UIs (grumpyscreen, guppyscreen, atomscreen) are
+# peers managed by gui-switcher — we DO NOT chmod them out. Instead we tell
+# config-manager to pick HelixScreen and let gui-switcher do the handoff.
+stop_cc1_competing_uis() {
+    if ! command -v config-manager >/dev/null 2>&1; then
+        log_warn "config-manager not found — cannot register with gui-switcher"
+        return 0
+    fi
+
+    # Stop the currently active GUI before we hand the framebuffer to ourselves.
+    local current_ui
+    current_ui=$(config-manager ui screen_ui 2>/dev/null || echo "")
+    if [ -n "$current_ui" ] && [ -x "/etc/init.d/${current_ui}" ]; then
+        log_info "Stopping active COSMOS GUI: ${current_ui}"
+        /etc/init.d/"${current_ui}" stop 2>/dev/null || true
+        found_any=true
+    fi
+
+    # Register HelixScreen as the selected UI. `config-manager` on COSMOS uses
+    # a 3-arg form to set; fall back to editing cosmos.conf if the set form
+    # isn't supported.
+    if config-manager ui screen_ui helixscreen 2>/dev/null; then
+        log_info "Registered HelixScreen with gui-switcher"
+    elif [ -f /etc/klipper/config/cosmos.conf ]; then
+        log_info "Updating /etc/klipper/config/cosmos.conf directly..."
+        $SUDO sed -i "s|^screen_ui[[:space:]]*=.*|screen_ui = helixscreen|" /etc/klipper/config/cosmos.conf 2>/dev/null || true
+    fi
+}
+
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
 # Dispatches platform-specific logic, then runs generic UI stopping
 stop_competing_uis() {
@@ -2146,6 +2199,17 @@ stop_competing_uis() {
     case "${K1_FIRMWARE:-}" in
         stock_klipper|guilouz) stop_k1_stock_competing_uis ;;
     esac
+
+    # CC1 / COSMOS: use gui-switcher handoff instead of disabling peers.
+    # Early-return so the generic loop below doesn't chmod out grumpyscreen/guppyscreen/atomscreen.
+    if [ "${platform:-}" = "cc1" ]; then
+        stop_cc1_competing_uis
+        if [ "$found_any" = true ]; then
+            log_info "Waiting for previous GUI to stop..."
+            sleep 2
+        fi
+        return 0
+    fi
 
     # Snapmaker U1 stock UI
     if pgrep -x "unisrv" >/dev/null 2>&1; then
