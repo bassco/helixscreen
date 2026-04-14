@@ -542,63 +542,68 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     __android_log_print(ANDROID_LOG_FATAL, "HelixScreen", "CRASH: signal %d", sig);
 #endif
 
-    // Dump stack memory around SP for ARM32 crash analysis.
-    // On ARM32 static binaries, backtrace() is useless (can't unwind past signal frame).
-    // Stack scanning lets us find return addresses back into the binary text segment.
-#if defined(__arm__) && defined(__linux__)
+    // Dump stack memory around SP and emit any words that fall within our .text
+    // as synthetic backtrace entries. Essential fallback when backtrace() can't
+    // unwind past the signal frame (common on static binaries and when libgcc's
+    // DWARF unwinder bails at the signal tramp). Runs on every arch — backtrace()
+    // may succeed, but the stack scan catches cases where it fails or returns
+    // only 1-2 libc frames.
+#ifdef __linux__
     if (ucontext) {
         const auto* uctx = static_cast<const ucontext_t*>(ucontext);
-        auto sp = uctx->uc_mcontext.arm_sp;
-        safe_write(fd, "stack_base:");
-        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), sp));
-        safe_write(fd, "\n");
-        const auto* stack_ptr = reinterpret_cast<const uint32_t*>(sp);
-        for (int i = 0; i < 128; ++i) {
-            safe_write(fd, "stk:");
-            safe_write(fd,
-                       ptr_to_hex(hex_buf, sizeof(hex_buf), static_cast<uintptr_t>(stack_ptr[i])));
+        uintptr_t sp = 0;
+#if defined(__arm__)
+        sp = uctx->uc_mcontext.arm_sp;
+        constexpr int kWordSize = 4;
+#elif defined(__aarch64__)
+        sp = static_cast<uintptr_t>(uctx->uc_mcontext.sp);
+        constexpr int kWordSize = 8;
+#elif defined(__x86_64__)
+        sp = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[REG_RSP]);
+        constexpr int kWordSize = 8;
+#elif defined(__mips__)
+        sp = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[29]);
+        constexpr int kWordSize = 4;
+#else
+        constexpr int kWordSize = 0;
+#endif
+        if (sp != 0 && kWordSize != 0) {
+            safe_write(fd, "stack_base:");
+            safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), sp));
             safe_write(fd, "\n");
-        }
 
-        // Stack-scanned synthetic backtrace: re-read stack words and emit
-        // those falling within the binary text segment as bt: entries
-        if (s_text_start != 0 && s_text_end > s_text_start) {
-            safe_write(fd, "bt_source:stack_scan\n");
-            for (int i = 0; i < 128; ++i) {
-                auto word = static_cast<uintptr_t>(stack_ptr[i]);
-                if (word >= s_text_start && word < s_text_end) {
-                    safe_write(fd, "bt:");
-                    safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), word));
-                    safe_write(fd, "\n");
+            // Scan up to 256 words (1-2 KB of stack) for better coverage on
+            // 64-bit archs with larger frames. Raw stk: dump kept to 128 words
+            // to bound output size.
+            constexpr int kDumpWords = 128;
+            constexpr int kScanWords = 256;
+
+            auto read_word = [&](int i) -> uintptr_t {
+                if (kWordSize == 8) {
+                    return reinterpret_cast<const uint64_t*>(sp)[i];
+                } else {
+                    return static_cast<uintptr_t>(reinterpret_cast<const uint32_t*>(sp)[i]);
                 }
-            }
-        }
-    }
-#elif defined(__mips__) && defined(__linux__)
-    if (ucontext) {
-        const auto* uctx = static_cast<const ucontext_t*>(ucontext);
-        auto sp = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[29]);
-        safe_write(fd, "stack_base:");
-        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), sp));
-        safe_write(fd, "\n");
-        const auto* stack_ptr = reinterpret_cast<const uint32_t*>(sp);
-        for (int i = 0; i < 128; ++i) {
-            safe_write(fd, "stk:");
-            safe_write(fd,
-                       ptr_to_hex(hex_buf, sizeof(hex_buf), static_cast<uintptr_t>(stack_ptr[i])));
-            safe_write(fd, "\n");
-        }
+            };
 
-        // Stack-scanned synthetic backtrace: re-read stack words and emit
-        // those falling within the binary text segment as bt: entries
-        if (s_text_start != 0 && s_text_end > s_text_start) {
-            safe_write(fd, "bt_source:stack_scan\n");
-            for (int i = 0; i < 128; ++i) {
-                auto word = static_cast<uintptr_t>(stack_ptr[i]);
-                if (word >= s_text_start && word < s_text_end) {
-                    safe_write(fd, "bt:");
-                    safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), word));
-                    safe_write(fd, "\n");
+            for (int i = 0; i < kDumpWords; ++i) {
+                safe_write(fd, "stk:");
+                safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), read_word(i)));
+                safe_write(fd, "\n");
+            }
+
+            // Stack-scanned synthetic backtrace: emit any stack word that falls
+            // within the binary .text segment as a bt: entry. Downstream resolver
+            // symbolizes these — at least one frame is usually a real return addr.
+            if (s_text_start != 0 && s_text_end > s_text_start) {
+                safe_write(fd, "bt_source:stack_scan\n");
+                for (int i = 0; i < kScanWords; ++i) {
+                    uintptr_t word = read_word(i);
+                    if (word >= s_text_start && word < s_text_end) {
+                        safe_write(fd, "bt:");
+                        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), word));
+                        safe_write(fd, "\n");
+                    }
                 }
             }
         }
