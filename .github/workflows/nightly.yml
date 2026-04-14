@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies
       uses: nick-fields/retry@v4
       with:
-        timeout_minutes: 5
+        timeout_minutes: 10
         max_attempts: 3
         command: |
           sudo apt-get update
@@ -231,7 +231,7 @@ jobs:
     - name: Install dependencies
       uses: nick-fields/retry@v4
       with:
-        timeout_minutes: 5
+        timeout_minutes: 10
         max_attempts: 3
         command: |
           sudo apt-get update
@@ -312,7 +312,7 @@ jobs:
     - name: Install dependencies
       uses: nick-fields/retry@v4
       with:
-        timeout_minutes: 5
+        timeout_minutes: 10
         max_attempts: 3
         command: |
           sudo apt-get update
