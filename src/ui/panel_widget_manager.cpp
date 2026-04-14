@@ -738,62 +738,39 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
                                               RebuildCallback rebuild_cb) {
     using helix::ui::observe_int_sync;
 
-    // Observers must be destroyed BEFORE timers — observer callbacks
-    // capture &timer references into rebuild_timers_
     gate_observers_.erase(panel_id);
-    rebuild_timers_.erase(panel_id);
     auto& observers = gate_observers_[panel_id];
-    // Gate observers only fire from hardware discovery (WebSocket data from
-    // Moonraker), never from user interaction — config changes and grid edit
-    // mode bypass the coalesced timer entirely via force=true.
+
+    // Two signals drive panel rebuilds:
     //
-    // The window must be short enough that a late-arriving subject (e.g.
-    // printer_has_led flips ~3-5s into discovery on a busy Voron) doesn't
-    // miss the first fire and force the user to stare at a gated widget
-    // for 5+ seconds. Each rebuild is ~free when the visible-ID list is
-    // unchanged (HomePanel::populate_page short-circuits on equal lists),
-    // so firing several times during startup is fine.
-    auto& timer = rebuild_timers_.emplace(panel_id, ui::CoalescedTimer(300)).first->second;
-
-    // Collect unique gate subject names from the widget registry
-    std::vector<const char*> gate_names;
-    for (const auto& def : get_all_widget_defs()) {
-        if (def.hardware_gate_subject) {
-            // Avoid duplicates
-            bool found = false;
-            for (const auto* existing : gate_names) {
-                if (std::strcmp(existing, def.hardware_gate_subject) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                gate_names.push_back(def.hardware_gate_subject);
-            }
-        }
-    }
-
-    // Also observe klippy_state for firmware_restart conditional injection
-    gate_names.push_back("klippy_state");
-
-    for (const auto* name : gate_names) {
+    //   capabilities_version  Monotonically bumped once per settled batch of
+    //                         hardware-capability changes (see
+    //                         PrinterCapabilitiesState::bump_capabilities_version).
+    //                         Replaces the old "observe every printer_has_*
+    //                         subject + coalesce with a timer" strategy — that
+    //                         was a timing guess, this is deterministic: N gate
+    //                         subjects changing in one batch → one bump → one
+    //                         rebuild, with all gates already in their settled
+    //                         state when the rebuild runs.
+    //
+    //   klippy_state          Required for firmware_restart widget conditional
+    //                         injection on shutdown/error states. Changes
+    //                         individually, never in batches with capabilities.
+    //
+    // Direct rebuild on each observer fire — HomePanel::populate_page
+    // short-circuits if the visible-ID list is unchanged, so a spurious fire
+    // is near-free.
+    const char* subject_names[] = {"capabilities_version", "klippy_state"};
+    for (const char* name : subject_names) {
         lv_subject_t* subject = lv_xml_get_subject(nullptr, name);
         if (!subject) {
-            spdlog::trace("[PanelWidgetManager] Gate subject '{}' not registered yet", name);
+            spdlog::trace("[PanelWidgetManager] Subject '{}' not registered yet", name);
             continue;
         }
-
-        // Use observe_int_sync with PanelWidgetManager as the class template parameter.
-        // The callback ignores the value and schedules a coalesced rebuild.
-        // Multiple gate subjects changing in the same LVGL tick (common during
-        // startup discovery) coalesce into a single rebuild instead of one each.
         observers.push_back(observe_int_sync<PanelWidgetManager>(
-            subject, this, [&timer, rebuild_cb](PanelWidgetManager* /*self*/, int /*value*/) {
-                timer.schedule(rebuild_cb);
-            }));
-
-        spdlog::trace("[PanelWidgetManager] Observing gate subject '{}' for panel '{}'", name,
-                      panel_id);
+            subject, this,
+            [rebuild_cb](PanelWidgetManager* /*self*/, int /*value*/) { rebuild_cb(); }));
+        spdlog::trace("[PanelWidgetManager] Observing '{}' for panel '{}'", name, panel_id);
     }
 
     spdlog::debug("[PanelWidgetManager] Set up {} gate observers for panel '{}'", observers.size(),
@@ -805,11 +782,8 @@ void PanelWidgetManager::clear_gate_observers(const std::string& panel_id) {
     if (it != gate_observers_.end()) {
         spdlog::debug("[PanelWidgetManager] Clearing {} gate observers for panel '{}'",
                       it->second.size(), panel_id);
-        // Observers must be destroyed BEFORE timers — observer callbacks
-        // capture &timer references into rebuild_timers_
         gate_observers_.erase(it);
     }
-    rebuild_timers_.erase(panel_id);
 }
 
 void PanelWidgetManager::clear_panel_config(const std::string& panel_id) {
