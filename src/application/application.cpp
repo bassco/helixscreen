@@ -1982,9 +1982,14 @@ void Application::setup_discovery_callbacks() {
 
     client->set_on_discovery_complete([api, client, app](const helix::PrinterDiscovery& hardware,
                                                          const nlohmann::json& initial_status) {
+        spdlog::debug("[Application] on_discovery_complete BG-thread entry (status keys: {})",
+                      initial_status.is_object() ? initial_status.size() : 0);
         auto snapshot = std::make_shared<helix::PrinterDiscovery>(hardware);
         auto status_snapshot = std::make_shared<const nlohmann::json>(initial_status);
-        helix::ui::queue_update([api, client, app, snapshot, status_snapshot]() {
+        helix::ui::queue_update("Application::on_discovery_complete",
+                                [api, client, app, snapshot, status_snapshot]() {
+            spdlog::debug("[Application] on_discovery_complete UI-thread entry (shutdown={})",
+                          app->m_shutdown_complete);
             // Safety check: if Application is shutting down, skip all processing
             // This prevents use-after-free if shutdown races with callback delivery
             if (app->m_shutdown_complete) {
@@ -2103,7 +2108,10 @@ void Application::setup_discovery_callbacks() {
             // Skip during wizard — the user selects their printer type in the identify step,
             // and auto-detection here would overwrite PRINTER_TYPE before they choose.
             if (!is_wizard_active()) {
-                PrinterDetector::auto_detect_and_save((*snapshot), Config::get_instance());
+                // NOTE: use api->hardware() — snapshot was std::move'd into it above (#789).
+                // Reading *snapshot here would pass an empty/moved-from PrinterDiscovery and
+                // detection would fail with "0 sensors, 0 fans, hostname ''" (#802).
+                PrinterDetector::auto_detect_and_save(api->hardware(), Config::get_instance());
             }
 
             // Record telemetry session event now that hardware data is available
