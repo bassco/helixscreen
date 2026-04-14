@@ -28,6 +28,7 @@ void register_print_status_widget();
 void register_shutdown_widget();
 void register_lock_widget();
 void register_macros_widget();
+void register_motion_widget();
 void register_clock_widget();
 void register_job_queue_widget();
 void register_clog_detection_widget();
@@ -77,6 +78,7 @@ static std::vector<PanelWidgetDef> s_widget_defs = {
     {"width_sensor",     "Width Sensor",      "ruler",            "Filament width sensor readings",               "Width Sensor",     "width_sensor_count", "No width sensor detected",            false, 1, 1, 1, 1, 2, 2},
     {"favorite_macro", "Macro Button",    "play",             "Run a configured macro with one tap",          "Macro Button",     nullptr,              nullptr,                               false, 1, 1, 1, 1, 2, 1, true},
     {"macros",           "Macros",            "script_text",      "Browse and execute Klipper macros",            "Macros",           nullptr,              nullptr,                               false, 1, 1, 1, 1, 1, 1},
+    {"motion",           "Motion",            "cursor_move",      "Jump directly to motion control / jogging",    "Motion",           nullptr,              nullptr,                               false, 1, 1, 1, 1, 1, 1},
     {"clock",            "Digital Clock",     "clock",            "Current time and date",                       "Digital Clock",    nullptr,              nullptr,                               false, 2, 1, 1, 1, 3, 3},
     {"job_queue",        "Job Queue",         "progress_clock",   "Queued print jobs",                           "Job Queue",        nullptr,              nullptr,                               false, 2, 2, 2, 1, 4, 3},
     //                                                                                                                                          hint                                en  col row min_c min_r max_c max_r
@@ -170,6 +172,7 @@ void init_widget_registrations() {
     register_print_stats_widget();
     register_gcode_console_widget();
     register_macros_widget();
+    register_motion_widget();
     register_preheat_widget();
     register_active_spool_widget();
     register_tool_switcher_widget();
