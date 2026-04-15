@@ -810,7 +810,10 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
         }
         observers.push_back(observe_int_sync<PanelWidgetManager>(
             subject, this,
-            [rebuild_cb](PanelWidgetManager* /*self*/, int /*value*/) { rebuild_cb(); }));
+            [rebuild_cb, name](PanelWidgetManager* /*self*/, int value) {
+                spdlog::debug("[PanelWidgetManager] gate '{}' -> {} (rebuild)", name, value);
+                rebuild_cb();
+            }));
         spdlog::trace("[PanelWidgetManager] Observing gate subject '{}' for panel '{}'", name,
                       panel_id);
     }
