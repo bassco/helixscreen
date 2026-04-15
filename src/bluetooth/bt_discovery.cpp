@@ -8,8 +8,9 @@
  *   - SPP UUID 00001101-0000-1000-8000-00805f9b34fb (Brother QL Classic)
  *   - Phomemo UUID 0000ff00-0000-1000-8000-00805f9b34fb (Phomemo BLE)
  *
- * The discover function blocks, running its own sd_bus_process loop.
- * No background thread is used.
+ * The discover function blocks the calling thread until timeout or stop, while
+ * the plugin's BusThread drives sd_bus_process so InterfacesAdded signals fire.
+ * All sd-bus calls run via ctx->bus_thread->run_sync() for thread-safety.
  */
 
 #include "bluetooth_plugin.h"
