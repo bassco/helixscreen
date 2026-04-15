@@ -12,10 +12,13 @@
 #include <systemd/sd-bus.h>
 
 #include <atomic>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
 #include <vector>
+
+#include "bt_bus_thread.h"
 
 /// Convert MAC address "AA:BB:CC:DD:EE:FF" to BlueZ D-Bus object path
 /// "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"
@@ -30,6 +33,7 @@ struct helix_bt_context {
     std::string last_error;
     std::atomic<bool> discovering{false};
     sd_bus_slot* discovery_slot = nullptr;
+    std::unique_ptr<helix::bluetooth::BusThread> bus_thread;
 
     // RFCOMM fd tracking (for safe disconnect)
     std::set<int> rfcomm_fds;

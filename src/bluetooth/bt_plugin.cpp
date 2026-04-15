@@ -72,6 +72,9 @@ extern "C" helix_bt_context* helix_bt_init(void)
     // freezes the UI when is_paired/is_connected checks are called synchronously)
     sd_bus_set_method_call_timeout(ctx->bus, 5 * 1000000ULL);  // microseconds
 
+    ctx->bus_thread = std::make_unique<helix::bluetooth::BusThread>(ctx->bus);
+    ctx->bus_thread->start();
+
     fprintf(stderr, "[bt] plugin initialized (api_version=%d)\n", HELIX_BT_API_VERSION);
     return ctx;
 }
@@ -79,6 +82,13 @@ extern "C" helix_bt_context* helix_bt_init(void)
 extern "C" void helix_bt_deinit(helix_bt_context* ctx)
 {
     if (!ctx) return;
+
+    // Stop the bus thread first — later tasks will route sd-bus calls through
+    // it, and they must finish before we tear the bus down.
+    if (ctx->bus_thread) {
+        ctx->bus_thread->stop();
+        ctx->bus_thread.reset();
+    }
 
     // Close BLE acquired fds
     {
