@@ -202,12 +202,15 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
         }
     }
 
-    // Check if widget list is unchanged — skip teardown+rebuild if nothing changed
+    // Check if widget list is unchanged — skip teardown+rebuild if nothing changed.
+    // Gate status is part of the key: a widget transitioning from gated→ungated
+    // must trigger a rebuild so its cancel-icon overlay + OPA_40 are removed and
+    // the PanelWidget instance gets attached. Matches compute_visible_widget_ids().
     {
         std::vector<std::string> new_ids;
         new_ids.reserve(enabled_widgets.size());
         for (const auto& slot : enabled_widgets) {
-            new_ids.push_back(slot.widget_id);
+            new_ids.push_back(slot.hardware_gated ? slot.widget_id + "~gated" : slot.widget_id);
         }
 
         auto cache_key = make_cache_key(panel_id, page_index);
