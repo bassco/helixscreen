@@ -815,6 +815,38 @@ std::string PrinterDetector::get_image_for_printer_id(const std::string& printer
     return "";
 }
 
+std::string PrinterDetector::get_name_for_preset(const std::string& preset_name) {
+    if (preset_name.empty()) {
+        return "";
+    }
+
+    if (!g_database.load()) {
+        spdlog::warn("[PrinterDetector] Cannot lookup preset without database");
+        return "";
+    }
+
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return "";
+    }
+
+    std::string preset_lower = preset_name;
+    std::transform(preset_lower.begin(), preset_lower.end(), preset_lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    for (const auto& printer : g_database.data["printers"]) {
+        std::string db_preset = printer.value("preset", "");
+        std::string db_preset_lower = db_preset;
+        std::transform(db_preset_lower.begin(), db_preset_lower.end(), db_preset_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (db_preset_lower == preset_lower) {
+            return printer.value("name", "");
+        }
+    }
+
+    return "";
+}
+
 // ============================================================================
 // Dynamic List Builder
 // ============================================================================

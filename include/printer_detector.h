@@ -166,6 +166,19 @@ class PrinterDetector {
     static std::string get_image_for_printer_id(const std::string& printer_id);
 
     /**
+     * @brief Get printer display name for a platform preset
+     *
+     * Looks up the database entry whose `preset` field matches and returns its
+     * `name` (e.g. preset "ad5x" → "FlashForge Adventurer 5X"). Used to populate
+     * the per-printer `type` field when a platform preset is applied from the
+     * installer, so the home panel can resolve the correct printer image.
+     *
+     * @param preset_name Platform preset name (e.g., "ad5x", "k1", "cc1")
+     * @return Matching printer name, empty string if no entry matches
+     */
+    static std::string get_name_for_preset(const std::string& preset_name);
+
+    /**
      * @brief Build list options string from database
      *
      * Dynamically builds a newline-separated string of printer names suitable

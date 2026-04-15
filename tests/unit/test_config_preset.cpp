@@ -152,11 +152,12 @@ TEST_CASE_METHOD(PresetConfigFixture, "Config::apply_preset_file returns false f
     TearDown();
 }
 
-TEST_CASE_METHOD(PresetConfigFixture, "Config::apply_preset_file erases keys not present in preset",
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file preserves scaffolded keys not mentioned in preset",
                  "[config][preset]") {
     SetUp();
 
-    // Add leds to initial config
+    // Add leds to initial (scaffolded) config
     printer_data()["leds"] = {{"strip", "neopixel led_strip"}};
 
     // Write preset WITHOUT leds
@@ -168,7 +169,104 @@ TEST_CASE_METHOD(PresetConfigFixture, "Config::apply_preset_file erases keys not
 
     config.apply_preset_file("no_leds");
 
-    REQUIRE_FALSE(printer_data().contains("leds"));
+    // Deep-merge leaves untouched subtrees in place. The wizard_completed guard
+    // ensures this only runs pre-wizard, so preserving scaffolded defaults is safe
+    // and avoids dropping values like moonraker_host that aren't part of every preset.
+    REQUIRE(printer_data().contains("leds"));
+    REQUIRE(printer_data()["leds"]["strip"] == "neopixel led_strip");
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file merges moonraker host/port and input block",
+                 "[config][preset]") {
+    SetUp();
+
+    // Scaffold with empty moonraker_host (simulates fresh install where installer
+    // seeded the printer entry without a pre-filled host)
+    printer_data()["moonraker_host"] = "";
+    printer_data().erase("moonraker_port");
+
+    json preset = {{"printer",
+                    {{"moonraker_host", "127.0.0.1"},
+                     {"moonraker_port", 7125},
+                     {"input",
+                      {{"scroll_limit", 10},
+                       {"scroll_throw", 25},
+                       {"jitter_threshold", 5},
+                       {"scroll_guard", true}}},
+                     {"heaters", {{"bed", "heater_bed"}}}}}};
+    write_preset("network_preset", preset);
+
+    REQUIRE(config.apply_preset_file("network_preset") == true);
+
+    auto& pd = printer_data();
+    REQUIRE(pd["moonraker_host"] == "127.0.0.1");
+    REQUIRE(pd["moonraker_port"] == 7125);
+    REQUIRE(pd["input"]["scroll_limit"] == 10);
+    REQUIRE(pd["input"]["scroll_throw"] == 25);
+    REQUIRE(pd["input"]["jitter_threshold"] == 5);
+    REQUIRE(pd["input"]["scroll_guard"] == true);
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file sets printer type from database preset lookup",
+                 "[config][preset]") {
+    SetUp();
+
+    // Ensure no prior type is set on this scaffolded printer
+    printer_data().erase("type");
+
+    // Use a preset name that exists in the shipped printer_database.json so the
+    // DB lookup can resolve "ad5x" → "FlashForge Adventurer 5X".
+    json preset = {{"printer", {{"heaters", {{"bed", "heater_bed"}}}}}};
+    write_preset("ad5x", preset);
+
+    REQUIRE(config.apply_preset_file("ad5x") == true);
+
+    REQUIRE(printer_data().contains("type"));
+    REQUIRE(printer_data()["type"] == "FlashForge Adventurer 5X");
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file does not overwrite existing printer type",
+                 "[config][preset]") {
+    SetUp();
+
+    // User/wizard already picked a printer type explicitly
+    printer_data()["type"] = "Custom Voron";
+
+    json preset = {{"printer", {{"heaters", {{"bed", "heater_bed"}}}}}};
+    write_preset("ad5x", preset);
+
+    REQUIRE(config.apply_preset_file("ad5x") == true);
+
+    // Should preserve the user-selected type even though the preset maps to a DB entry
+    REQUIRE(printer_data()["type"] == "Custom Voron");
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file tolerates preset with no database mapping",
+                 "[config][preset]") {
+    SetUp();
+
+    printer_data().erase("type");
+
+    json preset = {{"printer", {{"heaters", {{"bed", "heater_bed"}}}}}};
+    write_preset("not_a_real_preset_xyz", preset);
+
+    REQUIRE(config.apply_preset_file("not_a_real_preset_xyz") == true);
+
+    // No DB match → type remains unset; merge still succeeds
+    REQUIRE_FALSE(printer_data().contains("type"));
+    REQUIRE(printer_data()["heaters"]["bed"] == "heater_bed");
 
     TearDown();
 }

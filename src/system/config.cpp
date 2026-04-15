@@ -13,7 +13,9 @@
 
 #include "app_constants.h"
 #include "config_backup.h"
+#include "printer_detector.h"
 #include "runtime_config.h"
+#include "wizard_config_paths.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1313,30 +1315,41 @@ bool Config::apply_preset_file(const std::string& preset_name) {
         return false;
     }
 
-    // Merge hardware keys from preset's "printer" section into active printer config
-    static const std::vector<std::string> hardware_keys = {
-        "fans",     "heaters",          "temp_sensors",  "leds",
-        "hardware", "filament_sensors", "default_macros"};
-
-    if (preset_json.contains("printer") && preset_json["printer"].is_object()) {
-        const auto& printer = preset_json["printer"];
-        for (const auto& key : hardware_keys) {
-            json::json_pointer ptr(df() + key);
-            if (printer.contains(key)) {
-                data[ptr] = printer[key];
-            } else if (data.contains(ptr)) {
-                erase_at_pointer(data, ptr);
-            }
+    // Deep-merge the entire "printer" section into the active printer subtree.
+    // Guarded by wizard_completed above, so this only runs on fresh-install / pre-wizard
+    // state — safe to overwrite any scaffolded defaults (e.g. empty moonraker_host) with
+    // preset values. Covers all preset keys (hardware, moonraker_host/port, input, etc.)
+    // without a hardcoded allowlist.
+    if (preset_json.contains("printer") && preset_json["printer"].is_object() &&
+        !active_printer_id_.empty()) {
+        auto& printer_node = data["printers"][active_printer_id_];
+        if (!printer_node.is_object()) {
+            printer_node = json::object();
         }
+        printer_node.merge_patch(preset_json["printer"]);
     }
 
-    // Merge display settings key-by-key (preserves existing keys not in preset)
+    // Deep-merge device-level display settings (preserves keys not in preset)
     if (preset_json.contains("display") && preset_json["display"].is_object()) {
-        if (!data.contains("display")) {
+        if (!data.contains("display") || !data["display"].is_object()) {
             data["display"] = json::object();
         }
-        for (auto& [key, value] : preset_json["display"].items()) {
-            data["display"][key] = value;
+        data["display"].merge_patch(preset_json["display"]);
+    }
+
+    // Populate per-printer `type` from the database entry whose `preset` field matches.
+    // Without this, the home panel's image widget has no printer_type to look up and
+    // falls back to the generic CoreXY image.
+    std::string type_key = df() + helix::wizard::PRINTER_TYPE;
+    if (get<std::string>(type_key, "").empty()) {
+        std::string type_name = PrinterDetector::get_name_for_preset(preset_name);
+        if (!type_name.empty()) {
+            set<std::string>(type_key, type_name);
+            spdlog::info("[Config] Preset '{}' resolved to printer type '{}'", preset_name,
+                         type_name);
+        } else {
+            spdlog::warn("[Config] No database entry matches preset '{}' — printer type unset",
+                         preset_name);
         }
     }
 

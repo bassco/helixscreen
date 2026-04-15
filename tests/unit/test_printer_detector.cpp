@@ -3097,6 +3097,23 @@ TEST_CASE("PrinterDetector: compact_database strips heuristics, preserves lookup
     }
 }
 
+TEST_CASE("PrinterDetector: get_name_for_preset resolves DB preset field",
+          "[printer_detector][preset]") {
+    PrinterDetector::reload();
+
+    // Presets bundled in config/printer_database.json
+    REQUIRE(PrinterDetector::get_name_for_preset("ad5x") == "FlashForge Adventurer 5X");
+
+    // Case-insensitive
+    REQUIRE(PrinterDetector::get_name_for_preset("AD5X") == "FlashForge Adventurer 5X");
+
+    // Unknown preset returns empty
+    REQUIRE(PrinterDetector::get_name_for_preset("not_a_real_preset_xyz").empty());
+
+    // Empty input returns empty without touching the DB
+    REQUIRE(PrinterDetector::get_name_for_preset("").empty());
+}
+
 TEST_CASE_METHOD(PrinterDetectorFixture,
                  "PrinterDetector: No unknown heuristic warning for Venture Delta",
                  "[printer_detector]") {
