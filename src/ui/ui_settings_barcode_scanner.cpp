@@ -795,14 +795,49 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                      ret, paired_r);
                     }
 
-                    helix::ui::queue_update([ret, mac, name, token, bt_ctx, paired_r]() {
+                    // After BlueZ reports Pair success, the kernel still has to
+                    // bring up the HID profile and create /dev/input/eventN.
+                    // That can fail silently (e.g. BlueZ rejects the HID
+                    // connection from a non-bonded device). Poll for up to 5s.
+                    // A false "hid_ok" lets us warn the user honestly instead
+                    // of celebrating a half-broken pair.
+                    bool hid_ok = false;
+                    if (ret >= 0) {
+                        for (int i = 0; i < 25; ++i) {
+                            if (helix::input::find_bt_hid_device_by_mac(mac)) {
+                                hid_ok = true;
+                                break;
+                            }
+                            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                        }
+                        spdlog::info("[BarcodeScannerSettings] Post-pair HID probe: hid_ok={}",
+                                     hid_ok);
+                    }
+
+                    helix::ui::queue_update([ret, mac, name, token, bt_ctx, paired_r, hid_ok]() {
                         if (token.expired())
                             return;
 
-                        if (ret >= 0) {
+                        if (ret >= 0 && hid_ok) {
                             ToastManager::instance().show(ToastSeverity::SUCCESS,
                                                           lv_tr("Paired successfully"), 2000);
+                        } else if (ret >= 0) {
+                            // Paired but HID profile never came up. This almost always means
+                            // the scanner did Just-Works pairing (no PIN) and BlueZ's input
+                            // plugin refuses the HID connection because the device isn't
+                            // bonded. Tell the user what actually happened.
+                            spdlog::warn("[BarcodeScannerSettings] Paired but HID profile did "
+                                         "not connect within 5s — scanner will not be usable");
+                            ToastManager::instance().show(
+                                ToastSeverity::WARNING,
+                                lv_tr("Paired, but scanner is not usable. BlueZ refused the HID "
+                                      "connection (non-bonded device). Try BLE mode on the "
+                                      "scanner, or set ClassicBondable=false in "
+                                      "/etc/bluetooth/input.conf."),
+                                8000);
+                        }
 
+                        if (ret >= 0) {
                             if (s_active_instance_) {
                                 for (auto& dev : s_active_instance_->bt_devices_) {
                                     if (dev.mac == mac) {
@@ -811,10 +846,16 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                     }
                                 }
 
-                                helix::SettingsManager::instance().set_scanner_bt_address(mac);
-                                helix::SettingsManager::instance().set_scanner_device_name(name);
-
-                                s_active_instance_->refresh_current_selection_label();
+                                // Only adopt this scanner as the active one when
+                                // the HID link actually came up. Persisting a
+                                // broken bond means the app would keep "using" a
+                                // scanner that can't send any input.
+                                if (hid_ok) {
+                                    helix::SettingsManager::instance().set_scanner_bt_address(mac);
+                                    helix::SettingsManager::instance().set_scanner_device_name(
+                                        name);
+                                    s_active_instance_->refresh_current_selection_label();
+                                }
                                 s_active_instance_->populate_device_list();
                                 s_active_instance_->populate_bt_dropdown();
                             }

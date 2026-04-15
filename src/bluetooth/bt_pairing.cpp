@@ -56,10 +56,28 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac) {
             sd_bus_error error = SD_BUS_ERROR_NULL;
             r = sd_bus_call_method(bus, "org.bluez", path.c_str(), "org.bluez.Device1", "Pair",
                                    &error, nullptr, "");
+            auto try_connect_profile = [&](sd_bus* b) {
+                sd_bus_error cerr = SD_BUS_ERROR_NULL;
+                int cr = sd_bus_call_method(b, "org.bluez", path.c_str(), "org.bluez.Device1",
+                                            "Connect", &cerr, nullptr, "");
+                if (cr >= 0) {
+                    fprintf(stderr, "[bt] post-pair Connect() succeeded for %s\n", mac);
+                } else if (sd_bus_error_has_name(&cerr, "org.bluez.Error.AlreadyConnected")) {
+                    fprintf(stderr, "[bt] device %s already connected\n", mac);
+                } else {
+                    fprintf(stderr, "[bt] post-pair Connect() failed for %s: %s\n", mac,
+                            cerr.message ? cerr.message : strerror(-cr));
+                }
+                sd_bus_error_free(&cerr);
+            };
+
             if (r >= 0) {
                 sd_bus_error_free(&error);
                 trust_device(bus, path.c_str());
                 fprintf(stderr, "[bt] paired successfully with %s\n", mac);
+                // Classic HID devices need Connect() after Pair() to bring up
+                // the HID profile so the kernel creates an evdev node.
+                try_connect_profile(bus);
                 r = 0;
                 return;
             }
@@ -69,6 +87,7 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac) {
                 fprintf(stderr, "[bt] device %s already paired\n", mac);
                 trust_device(bus, path.c_str());
                 sd_bus_error_free(&error);
+                try_connect_profile(bus);
                 r = 0;
                 return;
             }
