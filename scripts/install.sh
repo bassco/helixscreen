@@ -632,7 +632,10 @@ detect_tmp_dir() {
     fi
 
     local required_mb=100
-    local candidates="/data/helixscreen-install /mnt/data/helixscreen-install /usr/data/helixscreen-install /var/tmp/helixscreen-install /tmp/helixscreen-install"
+    # /user-resource is CC1's large writable partition (4GB+); /data is tiny (~118MB)
+    # and often too full once the tarball is downloaded there, so list /user-resource
+    # ahead of the smaller candidates.
+    local candidates="/user-resource/helixscreen-install /data/helixscreen-install /mnt/data/helixscreen-install /usr/data/helixscreen-install /var/tmp/helixscreen-install /tmp/helixscreen-install"
 
     for candidate in $candidates; do
         local check_dir
