@@ -431,11 +431,11 @@ void BarcodeScannerSettingsOverlay::on_bs_keymap_changed(lv_event_t* e) {
 
 void BarcodeScannerSettingsOverlay::on_bs_row_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_row_clicked");
-    if (!s_active_instance_) { LVGL_SAFE_EVENT_CB_END(); return; }
+    if (!s_active_instance_) return;
     auto* row = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    if (!row) { LVGL_SAFE_EVENT_CB_END(); return; }
+    if (!row) return;
     auto* data = static_cast<RowData*>(lv_obj_get_user_data(row));
-    if (!data) { LVGL_SAFE_EVENT_CB_END(); return; }
+    if (!data) return;
     s_active_instance_->handle_device_selected(data->vendor_product, data->device_name,
                                                 data->bt_mac);
     LVGL_SAFE_EVENT_CB_END();
