@@ -29,10 +29,14 @@ void BusThread::start() {
     if (!running_.compare_exchange_strong(expected, true))
         return;
     stopping_.store(false);
-    thread_ = std::thread([this]{ loop(); });
-    thread_id_ = thread_.get_id();  // Assigned by the calling thread before start() returns —
-                                    // happens-before any later call to on_thread() via the caller's
-                                    // subsequent actions on this object.
+    thread_ = std::thread([this]{
+        // Publish our id from inside the worker BEFORE any work runs, so
+        // on_thread() always sees a valid id — the parent thread used to
+        // write thread_id_ after std::thread construction, which races the
+        // worker's first on_thread() check.
+        thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
+        loop();
+    });
 }
 
 void BusThread::stop() {
@@ -47,11 +51,18 @@ void BusThread::stop() {
     // can enter the queue from the worker side, and submit() callers either
     // (a) saw running_ == false and got an immediately-broken-promise future,
     // or (b) pushed before our running_.exchange and we catch them here.
+    // (May also be empty already if loop() already drained on an error exit.)
     std::lock_guard<std::mutex> lk(mu_);
+    drain_and_break_promises_locked("BusThread stopped");
+}
+
+void BusThread::drain_and_break_promises_locked(const char* reason) {
     while (!queue_.empty()) {
-        queue_.front().second.set_exception(
-            std::make_exception_ptr(std::runtime_error("BusThread stopped")));
+        // Move the promise out before popping so set_exception runs on a local
+        // — defensive against any future change that lets pop_front destroy it.
+        auto p = std::move(queue_.front().second);
         queue_.pop_front();
+        p.set_exception(std::make_exception_ptr(std::runtime_error(reason)));
     }
 }
 
@@ -66,6 +77,14 @@ std::future<void> BusThread::submit(BusWork work) {
 
     {
         std::lock_guard<std::mutex> lk(mu_);
+        // Re-check under the lock: a concurrent stop() can drain the queue
+        // between our unlocked pre-check and this emplace. Without the re-check
+        // the work would sit in the queue as an orphan whose promise never
+        // resolves until ~BusThread.
+        if (stopping_.load() || !running_.load()) {
+            p.set_exception(std::make_exception_ptr(std::runtime_error("BusThread not running")));
+            return fut;
+        }
         queue_.emplace_back(std::move(work), std::move(p));
     }
     notify();
@@ -89,7 +108,7 @@ void BusThread::notify() {
 }
 
 bool BusThread::on_thread() const noexcept {
-    return std::this_thread::get_id() == thread_id_;
+    return std::this_thread::get_id() == thread_id_.load(std::memory_order_acquire);
 }
 
 void BusThread::loop() {
@@ -166,6 +185,22 @@ void BusThread::loop() {
             uint8_t buf[16];
             while (read(wakeup_fds_[0], buf, sizeof(buf)) > 0) {}
         }
+    }
+
+    // Post-loop drain: break promises for any work items still queued. This
+    // matters most for the sd_bus_process error path — without it, those items
+    // would sit in the queue until ~BusThread (or stop()) ran, and any caller
+    // already blocked on .get() would hang.
+    //
+    // For the normal stop() path this is usually a no-op: stop() flipped
+    // running_ to false (which submit() re-checks under the lock), so no new
+    // items can be queued, and stop()'s post-join drain would handle anything
+    // left. Doing it here too just frees promises a few microseconds earlier
+    // and shrinks the window where a caller hangs on .get() before stop()
+    // completes its join.
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        drain_and_break_promises_locked("BusThread exited");
     }
 }
 

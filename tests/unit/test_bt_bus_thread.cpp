@@ -154,6 +154,124 @@ TEST_CASE("BusThread start is idempotent", "[bt][slow]") {
     SUCCEED();  // didn't crash or deadlock
 }
 
+TEST_CASE("BusThread concurrent start+submit: on_thread never races thread_id_", "[bt][bus_thread][slow]") {
+    // Regression: thread_id_ used to be written by the parent after std::thread
+    // construction, so the worker's first on_thread() check could race with a
+    // submit() from another thread calling on_thread() via run_sync(). Here we
+    // start the thread and immediately submit work items whose body reads
+    // on_thread() — with the fix (worker publishes its own id before loop()),
+    // every work item sees on_thread() == true.
+    for (int iter = 0; iter < 20; ++iter) {
+        BusThread bt(nullptr);
+        std::atomic<bool> go{false};
+        constexpr int kSubmitters = 4;
+        std::vector<std::thread> threads;
+        std::atomic<int> on_thread_true{0};
+        std::atomic<int> on_thread_total{0};
+        std::mutex fm;
+        std::vector<std::future<void>> futs;
+        for (int i = 0; i < kSubmitters; ++i) {
+            threads.emplace_back([&] {
+                while (!go.load()) { /* spin */ }
+                auto f = bt.submit([&](sd_bus*) {
+                    on_thread_total.fetch_add(1);
+                    if (bt.on_thread()) on_thread_true.fetch_add(1);
+                });
+                std::lock_guard<std::mutex> lk(fm);
+                futs.push_back(std::move(f));
+            });
+        }
+        bt.start();
+        go.store(true);
+        for (auto& t : threads) t.join();
+        for (auto& f : futs) REQUIRE_NOTHROW(f.get());
+        bt.stop();
+        REQUIRE(on_thread_total.load() == kSubmitters);
+        REQUIRE(on_thread_true.load() == kSubmitters);
+    }
+}
+
+TEST_CASE("BusThread submit racing with stop: no orphan tasks", "[bt][bus_thread][slow]") {
+    // Regression: submit()'s pre-check of running_/stopping_ was outside mu_,
+    // so a concurrent stop() could drain the queue between the check and the
+    // emplace — leaving the newly-pushed item as an orphan whose promise never
+    // resolved until ~BusThread. With the in-lock re-check, every future
+    // either completes successfully or throws; none hang.
+    for (int iter = 0; iter < 50; ++iter) {
+        BusThread bt(nullptr);
+        bt.start();
+        std::vector<std::future<void>> futs;
+        std::mutex fm;
+        std::atomic<bool> go{false};
+        constexpr int kSubmitters = 3;
+        std::vector<std::thread> threads;
+        for (int i = 0; i < kSubmitters; ++i) {
+            threads.emplace_back([&] {
+                while (!go.load()) { /* spin */ }
+                for (int j = 0; j < 50; ++j) {
+                    try {
+                        auto f = bt.submit([](sd_bus*) {});
+                        std::lock_guard<std::mutex> lk(fm);
+                        futs.push_back(std::move(f));
+                    } catch (...) {
+                        // submit() doesn't throw, but defensively ignore.
+                    }
+                }
+            });
+        }
+        go.store(true);
+        // Let a few submits land before stopping.
+        std::this_thread::sleep_for(1ms);
+        bt.stop();
+        for (auto& t : threads) t.join();
+        // Every future must be ready (either fulfilled or exceptional) — no orphans.
+        for (auto& f : futs) {
+            REQUIRE(f.wait_for(1s) == std::future_status::ready);
+            try { f.get(); } catch (const std::runtime_error&) { /* expected post-stop */ }
+        }
+    }
+}
+
+TEST_CASE("BusThread post-loop drain breaks promises before destructor", "[bt][bus_thread][slow]") {
+    // Regression for the sd_bus_process error-exit orphan-task leak: when
+    // loop() exits early (error path), queued items used to sit in the queue
+    // until ~BusThread, hanging callers blocked on .get(). With the post-loop
+    // drain in loop(), every future resolves promptly when the loop exits —
+    // we don't need the destructor to run.
+    //
+    // Simulating an sd_bus_process failure isn't possible with a null bus
+    // (the sd_bus_* branch is skipped entirely), so we exercise the normal
+    // exit path and confirm the drain happens INSIDE loop() — by checking
+    // futures are ready BEFORE the BusThread is destroyed. Without the
+    // post-loop drain, this still passes because stop() drains too; but the
+    // test documents the contract and guards against regressions in either
+    // drain site.
+    auto bt = std::make_unique<BusThread>(nullptr);
+    bt->start();
+
+    // Block the worker on a slow item so the next submits sit in the queue.
+    auto slow = bt->submit([](sd_bus*) { std::this_thread::sleep_for(50ms); });
+    std::this_thread::sleep_for(5ms);  // ensure worker picked up `slow`
+
+    std::vector<std::future<void>> pending;
+    for (int i = 0; i < 5; ++i) {
+        pending.push_back(bt->submit([](sd_bus*) {}));
+    }
+
+    // Begin shutdown.
+    bt->stop();
+    REQUIRE_NOTHROW(slow.get());
+
+    // All pending futures must be ready (and exceptional) without us
+    // destroying bt — proving the drain ran inside stop()/loop(), not in the
+    // destructor.
+    for (auto& f : pending) {
+        REQUIRE(f.wait_for(100ms) == std::future_status::ready);
+        REQUIRE_THROWS_AS(f.get(), std::runtime_error);
+    }
+    bt.reset();  // destructor runs last, finds nothing to clean up
+}
+
 TEST_CASE("BusThread run_sync inside a work item runs inline (no deadlock)", "[bt][slow]") {
     BusThread t(nullptr);
     t.start();

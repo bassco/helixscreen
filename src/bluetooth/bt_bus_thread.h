@@ -71,13 +71,22 @@ public:
 private:
     void loop();
 
+    /// Pop every queued work item and break its promise with `reason`. Caller
+    /// must hold mu_. Used by both stop() (after join) and loop() (on the
+    /// worker thread when sd_bus_process fails) to ensure no submit()ted future
+    /// is ever orphaned waiting on ~BusThread.
+    void drain_and_break_promises_locked(const char* reason);
+
     sd_bus* bus_;
     std::thread thread_;
     std::mutex mu_;
     std::deque<std::pair<BusWork, std::promise<void>>> queue_;
     std::atomic<bool> running_{false};
     std::atomic<bool> stopping_{false};
-    std::thread::id thread_id_{};
+    // Assigned by the worker itself at the top of loop() (before any work runs),
+    // so on_thread() always sees a valid id without racing against the parent's
+    // post-spawn write. Atomic because any thread may read via on_thread().
+    std::atomic<std::thread::id> thread_id_{std::thread::id{}};
 
     /// File descriptor pair used to wake sd_bus_wait() when work is queued.
     /// sd_bus_wait() only returns on bus activity or timeout; to get work
