@@ -120,10 +120,17 @@ static void setup_signal_handlers() {
  * @return Timeout in seconds (0 = disabled), or default on failure
  */
 static int read_auto_restart_timeout() {
-    const char* paths[] = {"config/settings.json", "config/helixconfig.json",
-                           "helixconfig.json", "/opt/helixscreen/helixconfig.json"};
+    std::vector<std::string> paths;
+    // HELIX_CONFIG_DIR override: mirrors Config::init so the watchdog reads
+    // from the same writable dir helix-screen saves into on RO baseline installs.
+    if (const char* env_dir = std::getenv("HELIX_CONFIG_DIR");
+        env_dir != nullptr && env_dir[0] != '\0') {
+        paths.emplace_back(std::string(env_dir) + "/settings.json");
+    }
+    paths.insert(paths.end(), {"config/settings.json", "config/helixconfig.json",
+                               "helixconfig.json", "/opt/helixscreen/helixconfig.json"});
 
-    for (const char* path : paths) {
+    for (const std::string& path : paths) {
         std::ifstream file(path);
         if (!file.is_open()) {
             continue;
@@ -150,10 +157,15 @@ static int read_auto_restart_timeout() {
  * @brief Read brightness from settings.json (same as splash)
  */
 static int read_config_brightness(int default_value = 100) {
-    const char* paths[] = {"config/settings.json", "config/helixconfig.json",
-                           "helixconfig.json", "/opt/helixscreen/helixconfig.json"};
+    std::vector<std::string> paths;
+    if (const char* env_dir = std::getenv("HELIX_CONFIG_DIR");
+        env_dir != nullptr && env_dir[0] != '\0') {
+        paths.emplace_back(std::string(env_dir) + "/settings.json");
+    }
+    paths.insert(paths.end(), {"config/settings.json", "config/helixconfig.json",
+                               "helixconfig.json", "/opt/helixscreen/helixconfig.json"});
 
-    for (const char* path : paths) {
+    for (const std::string& path : paths) {
         std::ifstream file(path);
         if (!file.is_open()) {
             continue;

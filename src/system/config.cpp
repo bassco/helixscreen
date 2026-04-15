@@ -21,6 +21,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <sys/stat.h>
@@ -628,20 +629,41 @@ Config* Config::get_instance() {
 }
 
 void Config::init(const std::string& config_path) {
-    path = config_path;
+    // HELIX_CONFIG_DIR override: redirect settings into a caller-chosen
+    // directory. Lets a read-only baseline install (e.g., the cosmos .ipk
+    // under /usr/share/helixscreen) persist user settings into a writable
+    // path — typically ~/printer_data/config/helixscreen — without first
+    // requiring the in-app updater to relocate the install itself. The env
+    // var supplies the DIRECTORY; we keep the caller's filename so the
+    // settings.json / settings-test.json distinction is preserved.
+    std::string resolved_path = config_path;
+    if (const char* env_dir = std::getenv("HELIX_CONFIG_DIR");
+        env_dir != nullptr && env_dir[0] != '\0') {
+        std::error_code ec;
+        fs::path base(env_dir);
+        fs::create_directories(base, ec);
+        if (fs::is_directory(base, ec)) {
+            resolved_path = (base / fs::path(config_path).filename()).string();
+            spdlog::info("[Config] HELIX_CONFIG_DIR override: using {}", resolved_path);
+        } else {
+            spdlog::warn("[Config] HELIX_CONFIG_DIR={} unusable ({}); falling back to {}",
+                         env_dir, ec ? ec.message() : "not a directory", config_path);
+        }
+    }
+    path = resolved_path;
     struct stat buffer;
 
     // Migration: rename helixconfig.json -> settings.json if old name exists
-    fs::path old_config = fs::path(config_path).parent_path() / "helixconfig.json";
-    if (stat(config_path.c_str(), &buffer) != 0 && fs::exists(old_config) &&
+    fs::path old_config = fs::path(path).parent_path() / "helixconfig.json";
+    if (stat(path.c_str(), &buffer) != 0 && fs::exists(old_config) &&
         !fs::is_symlink(old_config)) {
-        spdlog::info("[Config] Migrating {} -> {}", old_config.string(), config_path);
+        spdlog::info("[Config] Migrating {} -> {}", old_config.string(), path);
         std::error_code ec;
-        fs::rename(old_config, config_path, ec);
+        fs::rename(old_config, path, ec);
         if (ec) {
             spdlog::warn("[Config] Migration rename failed: {} — trying copy", ec.message());
             try {
-                fs::copy_file(old_config, config_path);
+                fs::copy_file(old_config, path);
                 fs::remove(old_config);
                 spdlog::info("[Config] Migration complete (copy+remove)");
             } catch (const fs::filesystem_error& e) {
@@ -650,7 +672,7 @@ void Config::init(const std::string& config_path) {
         } else {
             spdlog::info("[Config] Migration complete");
         }
-    } else if (stat(config_path.c_str(), &buffer) != 0 && fs::is_symlink(old_config)) {
+    } else if (stat(path.c_str(), &buffer) != 0 && fs::is_symlink(old_config)) {
         // Old config is a symlink (Pi/SonicPad: points to printer_data).
         // Don't rename symlinks — the installer handles that. Just use the
         // symlink path directly so we read/write the user's real config.
@@ -662,14 +684,14 @@ void Config::init(const std::string& config_path) {
         } else {
             spdlog::warn("[Config] {} is a dangling symlink", old_config.string());
         }
-    } else if (stat(config_path.c_str(), &buffer) == 0 && fs::exists(old_config)) {
+    } else if (stat(path.c_str(), &buffer) == 0 && fs::exists(old_config)) {
         spdlog::warn("[Config] Both settings.json and helixconfig.json exist; "
                      "using settings.json (old file left in place)");
     }
 
     // Migrate test config unconditionally (has its own existence guard)
-    fs::path old_test = fs::path(config_path).parent_path() / "helixconfig-test.json";
-    fs::path new_test = fs::path(config_path).parent_path() / "settings-test.json";
+    fs::path old_test = fs::path(path).parent_path() / "helixconfig-test.json";
+    fs::path new_test = fs::path(path).parent_path() / "settings-test.json";
     if (fs::exists(old_test) && !fs::exists(new_test)) {
         std::error_code ec;
         fs::rename(old_test, new_test, ec);
