@@ -9,12 +9,14 @@
 #include <cerrno>
 #include <cstring>
 #include <dirent.h>
+#include <filesystem>
 #include <fstream>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <sys/stat.h>
 
+#include "data_root_resolver.h"
 #include "hv/json.hpp"
 
 namespace helix {
@@ -323,6 +325,16 @@ bool save_theme_to_file(const ThemeData& theme, const std::string& filepath) {
     json["handle_style"] = theme.properties.handle_style;
     json["handle_color"] = theme.properties.handle_color;
 
+    // Ensure parent directory exists — writable config dir may not yet have
+    // a themes/ subdir on a fresh HELIX_CONFIG_DIR baseline.
+    {
+        std::error_code ec;
+        std::filesystem::path p(filepath);
+        if (p.has_parent_path()) {
+            std::filesystem::create_directories(p.parent_path(), ec);
+        }
+    }
+
     // Write with pretty formatting
     std::ofstream file(filepath);
     if (!file.is_open()) {
@@ -335,7 +347,7 @@ bool save_theme_to_file(const ThemeData& theme, const std::string& filepath) {
 }
 
 std::string get_themes_directory() {
-    return "config/themes";
+    return get_user_config_dir() + "/themes";
 }
 
 std::string get_default_themes_directory() {

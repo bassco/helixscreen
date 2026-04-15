@@ -22,6 +22,7 @@
 #include "ams_state.h"
 #include "app_constants.h"
 #include "color_utils.h"
+#include "data_root_resolver.h"
 #include "filament_database.h"
 #include "filament_sensor_manager.h"
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -909,6 +910,10 @@ void PrintStartController::restore_filament_mapping() {
 
 static constexpr const char* PENDING_REMAP_FILENAME = "pending_remap.json";
 
+static std::filesystem::path pending_remap_path() {
+    return std::filesystem::path(helix::get_user_config_dir()) / PENDING_REMAP_FILENAME;
+}
+
 void PrintStartController::persist_remap_state() {
     namespace fs = std::filesystem;
 
@@ -920,9 +925,9 @@ void PrintStartController::persist_remap_state() {
     j["backend_index"] = saved_backend_index_;
     j["tool_mapping"] = saved_tool_mapping_;
 
-    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    auto path = pending_remap_path();
     try {
-        fs::create_directories("config");
+        fs::create_directories(path.parent_path());
         std::ofstream ofs(path);
         if (ofs.is_open()) {
             ofs << j.dump(2);
@@ -936,7 +941,7 @@ void PrintStartController::persist_remap_state() {
 void PrintStartController::clear_persisted_remap_state() {
     namespace fs = std::filesystem;
 
-    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    auto path = pending_remap_path();
     try {
         if (fs::exists(path)) {
             fs::remove(path);
@@ -950,7 +955,7 @@ void PrintStartController::clear_persisted_remap_state() {
 void PrintStartController::recover_pending_remap() {
     namespace fs = std::filesystem;
 
-    auto path = fs::path("config") / PENDING_REMAP_FILENAME;
+    auto path = pending_remap_path();
     if (!fs::exists(path)) {
         return;
     }
