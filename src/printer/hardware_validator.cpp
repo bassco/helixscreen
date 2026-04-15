@@ -406,10 +406,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     // Check configured heater (bed)
     try {
         std::string bed_name = config->get<std::string>(config->df() + "heaters/bed", "heater_bed");
-        if (!bed_name.empty() && !contains_name(heaters, bed_name)) {
-            bool is_optional = is_hardware_optional(config, bed_name);
+        if (!bed_name.empty() && !contains_name(heaters, bed_name) &&
+            !is_hardware_optional(config, bed_name)) {
             result.expected_missing.push_back(HardwareIssue::warning(
-                bed_name, HardwareType::HEATER, "Configured bed heater not found", is_optional));
+                bed_name, HardwareType::HEATER, "Configured bed heater not found"));
         }
     } catch (...) {
         // Config key doesn't exist, that's fine
@@ -419,11 +419,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     try {
         std::string hotend_name =
             config->get<std::string>(config->df() + "heaters/hotend", "extruder");
-        if (!hotend_name.empty() && !contains_name(heaters, hotend_name)) {
-            bool is_optional = is_hardware_optional(config, hotend_name);
-            result.expected_missing.push_back(
-                HardwareIssue::warning(hotend_name, HardwareType::HEATER,
-                                       "Configured hotend heater not found", is_optional));
+        if (!hotend_name.empty() && !contains_name(heaters, hotend_name) &&
+            !is_hardware_optional(config, hotend_name)) {
+            result.expected_missing.push_back(HardwareIssue::warning(
+                hotend_name, HardwareType::HEATER, "Configured hotend heater not found"));
         }
     } catch (...) {
     }
@@ -431,10 +430,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     // Check configured fan (part cooling)
     try {
         std::string part_fan = config->get<std::string>(config->df() + "fans/part", "fan");
-        if (!part_fan.empty() && !contains_name(fans, part_fan)) {
-            bool is_optional = is_hardware_optional(config, part_fan);
+        if (!part_fan.empty() && !contains_name(fans, part_fan) &&
+            !is_hardware_optional(config, part_fan)) {
             result.expected_missing.push_back(HardwareIssue::warning(
-                part_fan, HardwareType::FAN, "Configured part cooling fan not found", is_optional));
+                part_fan, HardwareType::FAN, "Configured part cooling fan not found"));
         }
     } catch (...) {
     }
@@ -442,10 +441,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     // Check configured fan (hotend)
     try {
         std::string hotend_fan = config->get<std::string>(config->df() + "fans/hotend", "");
-        if (!hotend_fan.empty() && !contains_name(fans, hotend_fan)) {
-            bool is_optional = is_hardware_optional(config, hotend_fan);
+        if (!hotend_fan.empty() && !contains_name(fans, hotend_fan) &&
+            !is_hardware_optional(config, hotend_fan)) {
             result.expected_missing.push_back(HardwareIssue::warning(
-                hotend_fan, HardwareType::FAN, "Configured hotend fan not found", is_optional));
+                hotend_fan, HardwareType::FAN, "Configured hotend fan not found"));
         }
     } catch (...) {
     }
@@ -453,10 +452,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     // Check configured fan (chamber)
     try {
         std::string chamber_fan = config->get<std::string>(config->df() + "fans/chamber", "");
-        if (!chamber_fan.empty() && !contains_name(fans, chamber_fan)) {
-            bool is_optional = is_hardware_optional(config, chamber_fan);
+        if (!chamber_fan.empty() && !contains_name(fans, chamber_fan) &&
+            !is_hardware_optional(config, chamber_fan)) {
             result.expected_missing.push_back(HardwareIssue::warning(
-                chamber_fan, HardwareType::FAN, "Configured chamber fan not found", is_optional));
+                chamber_fan, HardwareType::FAN, "Configured chamber fan not found"));
         }
     } catch (...) {
     }
@@ -464,10 +463,10 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     // Check configured fan (exhaust)
     try {
         std::string exhaust_fan = config->get<std::string>(config->df() + "fans/exhaust", "");
-        if (!exhaust_fan.empty() && !contains_name(fans, exhaust_fan)) {
-            bool is_optional = is_hardware_optional(config, exhaust_fan);
+        if (!exhaust_fan.empty() && !contains_name(fans, exhaust_fan) &&
+            !is_hardware_optional(config, exhaust_fan)) {
             result.expected_missing.push_back(HardwareIssue::warning(
-                exhaust_fan, HardwareType::FAN, "Configured exhaust fan not found", is_optional));
+                exhaust_fan, HardwareType::FAN, "Configured exhaust fan not found"));
         }
     } catch (...) {
     }
@@ -499,10 +498,9 @@ void HardwareValidator::validate_configured_hardware(Config* config,
         }
 
         for (const auto& led_name : configured_leds) {
-            if (!contains_name(leds, led_name)) {
-                bool is_optional = is_hardware_optional(config, led_name);
+            if (!contains_name(leds, led_name) && !is_hardware_optional(config, led_name)) {
                 result.expected_missing.push_back(HardwareIssue::warning(
-                    led_name, HardwareType::LED, "Configured LED strip not found", is_optional));
+                    led_name, HardwareType::LED, "Configured LED strip not found"));
             }
         }
     } catch (...) {
@@ -515,11 +513,11 @@ void HardwareValidator::validate_configured_hardware(Config* config,
             for (const auto& sensor : sensors_config) {
                 if (sensor.is_object() && sensor.contains("name")) {
                     std::string sensor_name = sensor["name"].get<std::string>();
-                    if (!contains_name(filament_sensors, sensor_name)) {
-                        bool is_optional = is_hardware_optional(config, sensor_name);
-                        result.expected_missing.push_back(HardwareIssue::warning(
-                            sensor_name, HardwareType::FILAMENT_SENSOR,
-                            "Configured filament sensor not found", is_optional));
+                    if (!contains_name(filament_sensors, sensor_name) &&
+                        !is_hardware_optional(config, sensor_name)) {
+                        result.expected_missing.push_back(
+                            HardwareIssue::warning(sensor_name, HardwareType::FILAMENT_SENSOR,
+                                                   "Configured filament sensor not found"));
                     }
                 }
             }
@@ -557,12 +555,9 @@ void HardwareValidator::validate_configured_hardware(Config* config,
                         found = true;
                     }
 
-                    if (!found) {
-
-                        bool is_optional = is_hardware_optional(config, hw_name);
-                        result.expected_missing.push_back(
-                            HardwareIssue::warning(hw_name, HardwareType::OTHER,
-                                                   "AMS/MMU system not detected", is_optional));
+                    if (!found && !is_hardware_optional(config, hw_name)) {
+                        result.expected_missing.push_back(HardwareIssue::warning(
+                            hw_name, HardwareType::OTHER, "AMS/MMU system not detected"));
                         spdlog::debug("[HardwareValidator] Expected AMS hardware '{}' not found",
                                       hw_name);
                     }
@@ -668,9 +663,8 @@ void HardwareValidator::validate_new_hardware(Config* config,
 
     for (const auto& fan : discovered_fans) {
         if (!contains_name(configured_fans, fan) && !contains_name(expected_hardware, fan)) {
-            result.newly_discovered.push_back(
-                HardwareIssue::info(fan, HardwareType::FAN,
-                                    "Fan available but not assigned to any role"));
+            result.newly_discovered.push_back(HardwareIssue::info(
+                fan, HardwareType::FAN, "Fan available but not assigned to any role"));
         }
     }
 
