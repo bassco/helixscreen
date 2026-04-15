@@ -663,21 +663,35 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
             spdlog::debug("[PanelWidgetManager] Placed widget '{}' at ({},{} {}x{})",
                           slot.widget_id, p.col, p.row, p.colspan, p.rowspan);
 
-            // Apply gated visual treatment — widget is placed but hardware not detected
+            // Apply gated visual treatment — widget is placed but hardware not detected.
+            // Stack the widget's own type icon underneath a slash-circle badge, both
+            // centered, so the user can tell *which* widget is disabled (filament,
+            // AMS, etc.) and that it's currently inactive. Both icons are FLOATING
+            // so they sit on top of any existing widget content.
             if (slot.hardware_gated) {
                 lv_obj_set_style_opa(widget, LV_OPA_40, 0);
                 lv_obj_add_state(widget, LV_STATE_DISABLED);
 
-                // Overlay a "not available" cancel icon centered on the widget.
-                // FLOATING removes it from flex layout so it sits on top.
-                const char* icon_attrs[] = {
+                const auto* gated_def = find_widget_def(slot.widget_id);
+                const char* type_icon =
+                    (gated_def && gated_def->icon) ? gated_def->icon : "cancel";
+
+                const char* type_icon_attrs[] = {
+                    "src",    type_icon,   "size",  "xl",           "variant", "muted", "align",
+                    "center", "clickable", "false", "event_bubble", "true",    nullptr};
+                if (auto* type_overlay = static_cast<lv_obj_t*>(
+                        lv_xml_create(widget, "icon", type_icon_attrs))) {
+                    lv_obj_add_flag(type_overlay, LV_OBJ_FLAG_FLOATING);
+                    lv_obj_set_style_opa(type_overlay, LV_OPA_COVER, 0);
+                }
+
+                const char* badge_attrs[] = {
                     "src",    "cancel",    "size",  "xl",           "variant", "muted", "align",
                     "center", "clickable", "false", "event_bubble", "true",    nullptr};
-                auto* overlay_icon =
-                    static_cast<lv_obj_t*>(lv_xml_create(widget, "icon", icon_attrs));
-                if (overlay_icon) {
-                    lv_obj_add_flag(overlay_icon, LV_OBJ_FLAG_FLOATING);
-                    lv_obj_set_style_opa(overlay_icon, LV_OPA_COVER, 0);
+                if (auto* badge = static_cast<lv_obj_t*>(
+                        lv_xml_create(widget, "icon", badge_attrs))) {
+                    lv_obj_add_flag(badge, LV_OBJ_FLAG_FLOATING);
+                    lv_obj_set_style_opa(badge, LV_OPA_COVER, 0);
                 }
 
                 spdlog::debug("[PanelWidgetManager] Widget '{}' gated: {}", slot.widget_id,
