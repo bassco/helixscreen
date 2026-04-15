@@ -573,7 +573,10 @@ ifeq ($(YOCTO_BUILD),yes)
     # link against system libraries resolved by the sysroot-aware toolchain.
     NPROC := $(shell nproc 2>/dev/null || echo 4)
     LIBNL_LIBS := -lnl-genl-3 -lnl-3
-    LDFLAGS := $(LIBHV_LIBS) $(FMT_LIBS) -lwpa_client $(LIBNL_LIBS) -ldl -lz -lm -lpthread
+    # Preserve bitbake's env LDFLAGS (--hash-style=gnu, -Wl,-z,relro, etc.) —
+    # do not clobber. Prepending $(LDFLAGS) lets Yocto's security/packaging
+    # flags flow through the final link.
+    LDFLAGS := $(LDFLAGS) $(LIBHV_LIBS) $(FMT_LIBS) -lwpa_client $(LIBNL_LIBS) -ldl -lz -lm -lpthread
     ifeq ($(ENABLE_SSL),yes)
         LDFLAGS += -lssl -lcrypto
     endif
