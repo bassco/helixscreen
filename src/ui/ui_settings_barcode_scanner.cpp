@@ -128,7 +128,9 @@ void BarcodeScannerSettingsOverlay::register_callbacks() {
         {"on_bs_refresh_usb", on_bs_refresh_usb},
         {"on_bs_keymap_changed", on_bs_keymap_changed},
         {"on_bs_row_clicked", on_bs_row_clicked},
-        {"on_bs_row_forget", on_bs_row_forget},
+        {"on_bs_bt_scanner_selected", on_bs_bt_scanner_selected},
+        {"on_bs_bt_pair", on_bs_bt_pair},
+        {"on_bs_bt_forget", on_bs_bt_forget},
         {"on_bs_pair_confirm", on_bs_pair_confirm},
         {"on_bs_pair_cancel", on_bs_pair_cancel},
     });
@@ -193,17 +195,72 @@ void BarcodeScannerSettingsOverlay::on_activate() {
     s_active_instance_ = this;
 
     usb_list_ = lv_obj_find_by_name(overlay_root_, "usb_device_list");
-    bt_list_  = lv_obj_find_by_name(overlay_root_, "bt_device_list");
+
+    if (auto* row = lv_obj_find_by_name(overlay_root_, "row_bt_scanners"))
+        bt_dropdown_ = lv_obj_find_by_name(row, "dropdown");
+    btn_bt_pair_   = lv_obj_find_by_name(overlay_root_, "btn_bt_pair");
+    btn_bt_forget_ = lv_obj_find_by_name(overlay_root_, "btn_bt_forget");
+
+    // Seed bt_devices_ from BlueZ's known-devices list (paired + previously
+    // seen scanners) so the dropdown is populated before any active scan.
+    bt_devices_.clear();
+    auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    if (loader.is_available() && loader.enumerate_known) {
+        if (!bt_ctx_ && loader.init)
+            bt_ctx_ = loader.init();
+        if (bt_ctx_) {
+            loader.enumerate_known(
+                bt_ctx_,
+                [](const helix_bt_device* dev, void* ud) {
+                    if (!dev) return;
+                    auto* self = static_cast<BarcodeScannerSettingsOverlay*>(ud);
+                    bool looks_like_scanner =
+                        helix::bluetooth::is_hid_scanner_uuid(dev->service_uuid) ||
+                        helix::bluetooth::is_likely_bt_scanner(dev->name);
+                    if (!looks_like_scanner) return;
+                    BtDeviceInfo info;
+                    info.mac    = dev->mac    ? dev->mac    : "";
+                    info.name   = dev->name   ? dev->name   : "Unknown";
+                    info.paired = dev->paired;
+                    info.is_ble = dev->is_ble;
+                    for (const auto& existing : self->bt_devices_)
+                        if (existing.mac == info.mac) return;
+                    self->bt_devices_.push_back(info);
+                },
+                this);
+        }
+    }
+
+    // If the saved scanner isn't in BlueZ's known list (e.g., plugin unavailable),
+    // seed from settings so the user still sees it.
+    const auto saved_mac  = helix::SettingsManager::instance().get_scanner_bt_address();
+    const auto saved_name = helix::SettingsManager::instance().get_scanner_device_name();
+    if (!saved_mac.empty()) {
+        bool present = false;
+        for (const auto& d : bt_devices_) {
+            if (d.mac == saved_mac) { present = true; break; }
+        }
+        if (!present) {
+            BtDeviceInfo saved;
+            saved.mac    = saved_mac;
+            saved.name   = saved_name.empty() ? saved_mac : saved_name;
+            saved.paired = true;
+            bt_devices_.push_back(saved);
+        }
+    }
 
     refresh_current_selection_label();
     populate_device_list();
+    populate_bt_dropdown();
 }
 
 void BarcodeScannerSettingsOverlay::on_deactivate() {
     stop_bt_discovery();
     s_active_instance_ = nullptr;
-    usb_list_ = nullptr;
-    bt_list_ = nullptr;
+    usb_list_      = nullptr;
+    bt_dropdown_   = nullptr;
+    btn_bt_pair_   = nullptr;
+    btn_bt_forget_ = nullptr;
     OverlayBase::on_deactivate();
 }
 
@@ -285,108 +342,86 @@ void BarcodeScannerSettingsOverlay::add_auto_detect_row(lv_obj_t* container) {
     }, LV_EVENT_DELETE, nullptr);
 }
 
-void BarcodeScannerSettingsOverlay::add_bt_row(lv_obj_t* container, const std::string& label,
-                                                const std::string& sublabel,
-                                                const std::string& vendor_product,
-                                                const std::string& bt_mac, bool paired) {
-    if (!container) return;
-
-    const auto& saved_bt_mac =
-        helix::SettingsManager::instance().get_scanner_bt_address();
-    const auto& saved_vp =
-        helix::SettingsManager::instance().get_scanner_device_id();
-    const bool selected =
-        (!vendor_product.empty() && vendor_product == saved_vp) ||
-        (!bt_mac.empty() && bt_mac == saved_bt_mac);
-
-    const char* attrs[] = {
-        "row_icon",     "bluetooth",
-        "row_label",    label.c_str(),
-        "row_sublabel", sublabel.c_str(),
-        "hide_check",   selected ? "false" : "true",
-        "hide_forget",  paired ? "false" : "true",
-        nullptr,
-    };
-    lv_obj_t* row = static_cast<lv_obj_t*>(
-        lv_xml_create(container, "barcode_scanner_device_row", attrs));
-    if (!row) return;
-
-    auto* data = new RowData{vendor_product, label, bt_mac};
-    lv_obj_set_user_data(row, data);
-
-    lv_obj_add_event_cb(row, [](lv_event_t* e) {
-        if (lv_event_get_code(e) != LV_EVENT_DELETE) return;
-        delete static_cast<RowData*>(lv_obj_get_user_data(
-            static_cast<lv_obj_t*>(lv_event_get_target(e))));
-    }, LV_EVENT_DELETE, nullptr);
-}
-
 void BarcodeScannerSettingsOverlay::populate_device_list() {
     if (usb_list_) lv_obj_clean(usb_list_);
-    if (bt_list_)  lv_obj_clean(bt_list_);
-
     if (!usb_list_) return;
 
     // Auto-detect always first
     add_auto_detect_row(usb_list_);
 
-    // Enumerate sysfs HID devices. bus_type == 0x05 = Bluetooth (already connected as HID).
-    // Unpaired BT discovery devices appear in bt_list_ (populated by Task 7 logic).
     auto devices = helix::input::enumerate_usb_hid_devices();
     spdlog::debug("[{}] Enumerated {} HID devices", get_name(), devices.size());
 
     int usb_count = 0;
-    int bt_connected_count = 0;
     for (const auto& dev : devices) {
+        if (dev.bus_type == 0x05) continue;  // BT HIDs handled via dropdown
         const std::string vendor_product = dev.vendor_id + ":" + dev.product_id;
         const std::string sublabel = vendor_product + "  " + dev.event_path;
-        const bool is_bt = (dev.bus_type == 0x05);
-        if (is_bt && bt_list_) {
-            add_bt_row(bt_list_, dev.name, sublabel, vendor_product, std::string{}, true);
-            bt_connected_count++;
-        } else {
-            add_usb_row(usb_list_, dev.name, sublabel, vendor_product);
-            usb_count++;
-        }
+        add_usb_row(usb_list_, dev.name, sublabel, vendor_product);
+        usb_count++;
     }
 
-    // Append discovered-but-unpaired BT devices (populated by start_bt_discovery).
-    for (const auto& bt_dev : bt_devices_) {
-        // Skip if already represented by a sysfs (connected) BT device above
-        bool already_shown = false;
-        for (const auto& dev : devices) {
-            if (dev.bus_type == 0x05 && dev.name == bt_dev.name) {
-                already_shown = true;
-                break;
-            }
-        }
-        if (already_shown) continue;
-        if (bt_list_) {
-            add_bt_row(bt_list_, bt_dev.name, bt_dev.mac, std::string{}, bt_dev.mac,
-                       bt_dev.paired);
-        }
-    }
-
-    const bool any = usb_count > 0 || bt_connected_count > 0 || !bt_devices_.empty();
+    const bool any = usb_count > 0 || !bt_devices_.empty();
     lv_subject_set_int(&has_devices_subject_, any ? 1 : 0);
+}
+
+int BarcodeScannerSettingsOverlay::selected_bt_index() const {
+    if (!bt_dropdown_) return -1;
+    if (bt_devices_.empty()) return -1;
+    const uint32_t sel = lv_dropdown_get_selected(bt_dropdown_);
+    if (sel >= bt_devices_.size()) return -1;
+    return static_cast<int>(sel);
+}
+
+void BarcodeScannerSettingsOverlay::populate_bt_dropdown() {
+    if (!bt_dropdown_) return;
+
+    const auto saved_mac = helix::SettingsManager::instance().get_scanner_bt_address();
+
+    if (bt_devices_.empty()) {
+        lv_dropdown_set_options(bt_dropdown_, "(none)");
+        lv_dropdown_set_selected(bt_dropdown_, 0);
+        update_bt_action_buttons();
+        return;
+    }
+
+    std::string options;
+    int selected_idx = 0;
+    for (size_t i = 0; i < bt_devices_.size(); ++i) {
+        const auto& d = bt_devices_[i];
+        if (!options.empty()) options += "\n";
+        options += d.name;
+        if (d.paired) options += " (paired)";
+        if (!d.mac.empty() && d.mac == saved_mac) selected_idx = static_cast<int>(i);
+    }
+    lv_dropdown_set_options(bt_dropdown_, options.c_str());
+    lv_dropdown_set_selected(bt_dropdown_, selected_idx);
+    update_bt_action_buttons();
+}
+
+void BarcodeScannerSettingsOverlay::update_bt_action_buttons() {
+    const int idx = selected_bt_index();
+    const bool has_sel = (idx >= 0);
+    const bool paired  = has_sel && bt_devices_[idx].paired;
+
+    if (btn_bt_pair_) {
+        if (has_sel && !paired)
+            lv_obj_remove_state(btn_bt_pair_, LV_STATE_DISABLED);
+        else
+            lv_obj_add_state(btn_bt_pair_, LV_STATE_DISABLED);
+    }
+    if (btn_bt_forget_) {
+        if (has_sel && paired)
+            lv_obj_remove_state(btn_bt_forget_, LV_STATE_DISABLED);
+        else
+            lv_obj_add_state(btn_bt_forget_, LV_STATE_DISABLED);
+    }
 }
 
 void BarcodeScannerSettingsOverlay::handle_device_selected(const std::string& vendor_product,
                                                             const std::string& device_name,
                                                             const std::string& bt_mac) {
     auto& s = helix::SettingsManager::instance();
-
-    // If unpaired BT-only device (Task 7 handles pairing)
-    if (!bt_mac.empty() && vendor_product.empty()) {
-        bool already_paired = false;
-        for (const auto& d : bt_devices_) {
-            if (d.mac == bt_mac && d.paired) { already_paired = true; break; }
-        }
-        if (!already_paired) {
-            pair_bt_device(bt_mac, device_name);
-            return;
-        }
-    }
 
     spdlog::info("[{}] Selected: '{}' ({}{})", get_name(), device_name,
                  vendor_product.empty() ? "auto-detect" : vendor_product,
@@ -444,6 +479,7 @@ void BarcodeScannerSettingsOverlay::start_bt_discovery() {
     // Refresh device list immediately so paired BT devices are visible
     // while discovery is in progress.
     populate_device_list();
+    populate_bt_dropdown();
 
     // Set up discovery context (shared_ptr so the detached thread keeps it alive)
     bt_discovery_ctx_ = std::make_shared<BtDiscoveryContext>();
@@ -499,7 +535,7 @@ void BarcodeScannerSettingsOverlay::start_bt_discovery() {
                             overlay->bt_devices_.push_back(info);
                             spdlog::debug("[BarcodeScannerSettings] BT discovered: {} ({})",
                                           info.name, info.mac);
-                            overlay->populate_device_list();
+                            overlay->populate_bt_dropdown();
                         }
                     });
                 },
@@ -514,7 +550,7 @@ void BarcodeScannerSettingsOverlay::start_bt_discovery() {
                 lv_subject_set_int(&overlay->bt_discovering_subject_, 0);
                 spdlog::info("[BarcodeScannerSettings] BT discovery finished, {} scanner(s) found",
                              overlay->bt_devices_.size());
-                overlay->populate_device_list();
+                overlay->populate_bt_dropdown();
             });
         }).detach();
     } catch (const std::system_error& e) {
@@ -616,7 +652,9 @@ void BarcodeScannerSettingsOverlay::handle_bt_forget(const std::string& mac) {
                                    [&mac](const BtDeviceInfo& d) { return d.mac == mac; }),
                     bt_devices_.end());
 
+                refresh_current_selection_label();
                 populate_device_list();
+                populate_bt_dropdown();
 
                 ToastManager::instance().show(ToastSeverity::SUCCESS,
                                               lv_tr("Bluetooth scanner forgotten"), 2000);
@@ -668,21 +706,32 @@ void BarcodeScannerSettingsOverlay::on_bs_row_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void BarcodeScannerSettingsOverlay::on_bs_row_forget(lv_event_t* e) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_row_forget");
+void BarcodeScannerSettingsOverlay::on_bs_bt_scanner_selected(lv_event_t*) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_bt_scanner_selected");
     if (!s_active_instance_) return;
-    auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    if (!btn) return;
-    // Walk up until the parent is bt_list_. That node is the row.
-    lv_obj_t* row = lv_obj_get_parent(btn);
-    while (row && lv_obj_get_parent(row) &&
-           lv_obj_get_parent(row) != s_active_instance_->bt_list_) {
-        row = lv_obj_get_parent(row);
-    }
-    if (!row) return;
-    auto* data = static_cast<RowData*>(lv_obj_get_user_data(row));
-    if (!data || data->bt_mac.empty()) return;
-    s_active_instance_->handle_bt_forget(data->bt_mac);
+    s_active_instance_->update_bt_action_buttons();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void BarcodeScannerSettingsOverlay::on_bs_bt_pair(lv_event_t*) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_bt_pair");
+    if (!s_active_instance_) return;
+    const int idx = s_active_instance_->selected_bt_index();
+    if (idx < 0) return;
+    const auto& dev = s_active_instance_->bt_devices_[idx];
+    if (dev.paired) return;  // already paired; button should be disabled
+    s_active_instance_->pair_bt_device(dev.mac, dev.name);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void BarcodeScannerSettingsOverlay::on_bs_bt_forget(lv_event_t*) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_bt_forget");
+    if (!s_active_instance_) return;
+    const int idx = s_active_instance_->selected_bt_index();
+    if (idx < 0) return;
+    const auto& dev = s_active_instance_->bt_devices_[idx];
+    if (dev.mac.empty()) return;
+    s_active_instance_->handle_bt_forget(dev.mac);
     LVGL_SAFE_EVENT_CB_END();
 }
 
@@ -720,16 +769,18 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                     auto& ldr   = helix::bluetooth::BluetoothLoader::instance();
                     int ret     = ldr.pair(bt_ctx, mac.c_str());
                     int paired_r = -1;
-                    if (ret == 0) {
+                    // sd_bus_call_method returns any non-negative integer on success.
+                    if (ret >= 0) {
                         paired_r = ldr.is_paired ? ldr.is_paired(bt_ctx, mac.c_str()) : -1;
-                        spdlog::info("[BarcodeScannerSettings] Post-pair: is_paired={}", paired_r);
+                        spdlog::info("[BarcodeScannerSettings] Post-pair: ret={} is_paired={}",
+                                     ret, paired_r);
                     }
 
                     helix::ui::queue_update([ret, mac, name, token, bt_ctx, paired_r]() {
                         if (token.expired())
                             return;
 
-                        if (ret == 0) {
+                        if (ret >= 0) {
                             ToastManager::instance().show(ToastSeverity::SUCCESS,
                                                           lv_tr("Paired successfully"), 2000);
 
@@ -746,6 +797,7 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
 
                                 s_active_instance_->refresh_current_selection_label();
                                 s_active_instance_->populate_device_list();
+                                s_active_instance_->populate_bt_dropdown();
                             }
                         } else {
                             auto& ldr2    = helix::bluetooth::BluetoothLoader::instance();

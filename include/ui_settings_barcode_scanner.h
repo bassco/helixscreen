@@ -45,8 +45,6 @@ class BarcodeScannerSettingsOverlay : public OverlayBase {
     void populate_device_list();
     void add_usb_row(lv_obj_t* container, const std::string& label, const std::string& sublabel,
                      const std::string& vendor_product);
-    void add_bt_row(lv_obj_t* container, const std::string& label, const std::string& sublabel,
-                    const std::string& vendor_product, const std::string& bt_mac, bool paired);
     void add_auto_detect_row(lv_obj_t* container);
 
     void handle_device_selected(const std::string& vendor_product, const std::string& device_name,
@@ -56,15 +54,20 @@ class BarcodeScannerSettingsOverlay : public OverlayBase {
     // Bluetooth
     void start_bt_discovery();
     void stop_bt_discovery();
+    void populate_bt_dropdown();
+    void update_bt_action_buttons();
     void pair_bt_device(const std::string& mac, const std::string& name);
     void handle_bt_forget(const std::string& mac);
+    int  selected_bt_index() const;
 
     // XML event handlers
     static void on_bs_scan_bluetooth(lv_event_t* e);
     static void on_bs_refresh_usb(lv_event_t* e);
     static void on_bs_keymap_changed(lv_event_t* e);
     static void on_bs_row_clicked(lv_event_t* e);
-    static void on_bs_row_forget(lv_event_t* e);
+    static void on_bs_bt_scanner_selected(lv_event_t* e);
+    static void on_bs_bt_pair(lv_event_t* e);
+    static void on_bs_bt_forget(lv_event_t* e);
     static void on_bs_pair_confirm(lv_event_t* e);
     static void on_bs_pair_cancel(lv_event_t* e);
 
@@ -78,7 +81,9 @@ class BarcodeScannerSettingsOverlay : public OverlayBase {
 
     // Widget references (set in on_activate)
     lv_obj_t* usb_list_ = nullptr;
-    lv_obj_t* bt_list_ = nullptr;
+    lv_obj_t* bt_dropdown_ = nullptr;
+    lv_obj_t* btn_bt_pair_ = nullptr;
+    lv_obj_t* btn_bt_forget_ = nullptr;
 
     // BT state (lifted from ScannerPickerModal)
     struct BtDeviceInfo {
