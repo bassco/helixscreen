@@ -481,27 +481,30 @@ extern "C" int helix_bt_connect_ble(helix_bt_context* ctx, const char* mac,
         ctx->ble_connections.push_back(std::move(conn));
     }
 
-    // Register a PropertiesChanged match on the characteristic regardless of
-    // whether we got a notify_fd — signals are a cheap belt-and-suspenders.
+    // With an AcquireNotify fd, BlueZ delivers bytes via the fd and does NOT emit
+    // PropertiesChanged for Value. We only need the signal match when we fell back
+    // to StartNotify (no fd), which DOES emit PropertiesChanged.
     // conn_raw is stable because unique_ptr storage doesn't move the pointee.
-    try {
-        ctx->bus_thread->run_sync([&](sd_bus* bus) {
-            int mr = sd_bus_match_signal(bus,
-                                         &conn_raw->notify_slot,
-                                         "org.bluez",
-                                         conn_raw->char_path.c_str(),
-                                         "org.freedesktop.DBus.Properties",
-                                         "PropertiesChanged",
-                                         on_notify_changed,
-                                         conn_raw);
-            if (mr < 0) {
-                fprintf(stderr, "[bt] sd_bus_match_signal for PropertiesChanged failed: %s\n",
-                        strerror(-mr));
-                conn_raw->notify_slot = nullptr;
-            }
-        });
-    } catch (const std::exception& e) {
-        fprintf(stderr, "[bt] exception registering signal match: %s\n", e.what());
+    if (notify_fd < 0) {
+        try {
+            ctx->bus_thread->run_sync([&](sd_bus* bus) {
+                int mr = sd_bus_match_signal(bus,
+                                             &conn_raw->notify_slot,
+                                             "org.bluez",
+                                             conn_raw->char_path.c_str(),
+                                             "org.freedesktop.DBus.Properties",
+                                             "PropertiesChanged",
+                                             on_notify_changed,
+                                             conn_raw);
+                if (mr < 0) {
+                    fprintf(stderr, "[bt] sd_bus_match_signal for PropertiesChanged failed: %s\n",
+                            strerror(-mr));
+                    conn_raw->notify_slot = nullptr;
+                }
+            });
+        } catch (const std::exception& e) {
+            fprintf(stderr, "[bt] exception registering signal match: %s\n", e.what());
+        }
     }
 
     int handle = BLE_HANDLE_OFFSET + index;

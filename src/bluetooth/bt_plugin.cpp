@@ -83,14 +83,41 @@ extern "C" void helix_bt_deinit(helix_bt_context* ctx)
 {
     if (!ctx) return;
 
-    // Stop the bus thread first — later tasks will route sd-bus calls through
-    // it, and they must finish before we tear the bus down.
+    // Route any remaining sd_bus_slot_unref calls through the bus thread
+    // BEFORE stopping it — all sd_bus_* calls must happen on the bus thread.
     if (ctx->bus_thread) {
+        try {
+            ctx->bus_thread->run_sync([ctx](sd_bus* /*bus*/) {
+                std::lock_guard<std::mutex> lock(ctx->ble_mutex);
+                for (auto& conn : ctx->ble_connections) {
+                    if (conn->notify_slot) {
+                        sd_bus_slot_unref(conn->notify_slot);
+                        conn->notify_slot = nullptr;
+                    }
+                }
+            });
+        } catch (const std::exception&) {
+            // Best-effort — if the thread already stopped, slots get cleaned up
+            // by bus teardown.
+        }
+
+        if (ctx->discovery_slot) {
+            try {
+                ctx->bus_thread->run_sync([ctx](sd_bus* /*bus*/) {
+                    if (ctx->discovery_slot) {
+                        sd_bus_slot_unref(ctx->discovery_slot);
+                        ctx->discovery_slot = nullptr;
+                    }
+                });
+            } catch (const std::exception&) {
+            }
+        }
+
         ctx->bus_thread->stop();
         ctx->bus_thread.reset();
     }
 
-    // Close BLE acquired fds
+    // Close BLE acquired fds (slots were already freed on the bus thread above).
     {
         std::lock_guard<std::mutex> lock(ctx->ble_mutex);
         for (auto& conn : ctx->ble_connections) {
@@ -101,10 +128,6 @@ extern "C" void helix_bt_deinit(helix_bt_context* ctx)
             if (conn->notify_fd >= 0) {
                 close(conn->notify_fd);
                 conn->notify_fd = -1;
-            }
-            if (conn->notify_slot) {
-                sd_bus_slot_unref(conn->notify_slot);
-                conn->notify_slot = nullptr;
             }
             conn->active = false;
         }
@@ -118,12 +141,6 @@ extern "C" void helix_bt_deinit(helix_bt_context* ctx)
             close(fd);
         }
         ctx->rfcomm_fds.clear();
-    }
-
-    // Free discovery slot if still held
-    if (ctx->discovery_slot) {
-        sd_bus_slot_unref(ctx->discovery_slot);
-        ctx->discovery_slot = nullptr;
     }
 
     // Close the bus
