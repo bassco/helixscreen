@@ -14,6 +14,7 @@
 #include "helix-xml/src/xml/lv_xml.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "settings_manager.h"
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -107,6 +108,8 @@ void ModalStack::push(lv_obj_t* backdrop, lv_obj_t* dialog, const std::string& c
     stack_.push_back({backdrop, dialog, component_name, false /* exiting */});
     spdlog::debug("[ModalStack] Pushed modal '{}' (stack depth: {})", component_name,
                   stack_.size());
+    crash_handler::breadcrumb::note("modal+", component_name.c_str(),
+                                    static_cast<long>(stack_.size()));
 }
 
 void ModalStack::remove(lv_obj_t* backdrop) {
@@ -115,6 +118,8 @@ void ModalStack::remove(lv_obj_t* backdrop) {
     if (it != stack_.end()) {
         spdlog::debug("[ModalStack] Removed modal '{}' (stack depth: {})", it->component_name,
                       stack_.size() - 1);
+        crash_handler::breadcrumb::note("modal-", it->component_name.c_str(),
+                                        static_cast<long>(stack_.size() - 1));
         stack_.erase(it);
     }
 }

@@ -136,6 +136,13 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     if (crash_data.contains("queue_callback"))
         report.queue_callback = crash_data["queue_callback"];
 
+    // Activity breadcrumbs from the in-process ring buffer
+    if (crash_data.contains("breadcrumbs") && crash_data["breadcrumbs"].is_array()) {
+        for (const auto& line : crash_data["breadcrumbs"]) {
+            report.breadcrumbs.push_back(line.get<std::string>());
+        }
+    }
+
     // Stack-scanned backtrace metadata
     if (crash_data.contains("bt_source"))
         report.bt_source = crash_data["bt_source"];
@@ -302,6 +309,11 @@ nlohmann::json CrashReporter::report_to_json(const CrashReport& report) {
         j["queue_callback"] = report.queue_callback;
     }
 
+    // Activity breadcrumbs (in-process ring buffer)
+    if (!report.breadcrumbs.empty()) {
+        j["breadcrumbs"] = report.breadcrumbs;
+    }
+
     // Stack-scanned backtrace metadata
     if (!report.bt_source.empty())
         j["bt_source"] = report.bt_source;
@@ -383,6 +395,14 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
 
     if (!report.queue_callback.empty()) {
         ss << "Queue Callback: " << report.queue_callback << "\n";
+    }
+
+    if (!report.breadcrumbs.empty()) {
+        ss << "--- Breadcrumbs (last " << report.breadcrumbs.size() << ") ---\n";
+        for (const auto& line : report.breadcrumbs) {
+            ss << "  " << line << "\n";
+        }
+        ss << "\n";
     }
 
     ss << "--- System Info ---\n";
@@ -469,6 +489,20 @@ std::string CrashReporter::generate_github_url(const CrashReport& report) {
         body << "- **Load Base:** " << report.load_base << "\n";
     }
     body << "\n";
+
+    if (!report.breadcrumbs.empty()) {
+        body << "## Breadcrumbs\n```\n";
+        // Cap breadcrumb lines to keep the URL under QR-code length.
+        size_t max_b = std::min(report.breadcrumbs.size(), static_cast<size_t>(16));
+        size_t start = report.breadcrumbs.size() - max_b;
+        for (size_t i = start; i < report.breadcrumbs.size(); ++i) {
+            body << report.breadcrumbs[i] << "\n";
+        }
+        if (start > 0) {
+            body << "... (" << start << " older breadcrumbs omitted)\n";
+        }
+        body << "```\n\n";
+    }
 
     if (!report.backtrace.empty()) {
         body << "## Backtrace\n```\n";

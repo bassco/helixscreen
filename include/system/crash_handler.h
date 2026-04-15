@@ -97,4 +97,41 @@ void write_mock_crash_file(const std::string& crash_file_path);
  */
 void register_callback_tag_ptr(volatile const char* const* tag_ptr);
 
+/**
+ * @brief Breadcrumb ring buffer for crash-time activity context
+ *
+ * Records short, structured events into a fixed-size ring. On crash, the last
+ * ~64 entries are dumped to crash.txt as `crumb:<ms> <category> <subject>`
+ * lines. Producers can be called from any thread and from signal handlers
+ * (though not intended to be the latter).
+ *
+ * Storage is entirely static (no heap). Writers are lock-free; readers
+ * tolerate torn writes by requiring a complete timestamp.
+ *
+ * Use for high-signal transitions: panel navigation, modal show/hide, XML
+ * component instantiation, style add/remove. Avoid for hot-path events.
+ */
+namespace breadcrumb {
+
+/**
+ * @brief Record an activity breadcrumb
+ *
+ * @param category Short tag (<= 7 chars): "nav", "modal", "xml", "style",
+ *                 "frame", "evt". Truncated if longer.
+ * @param subject  Object/panel/component name (<= 59 chars). Truncated.
+ *
+ * Both pointers may be nullptr (treated as empty). Safe to call from any
+ * context including signal handlers — lock-free, no heap, no syscalls.
+ */
+void note(const char* category, const char* subject) noexcept;
+
+/**
+ * @brief Record an activity breadcrumb with a numeric detail
+ *
+ * Appends " <detail>" to the subject. Signal-safe.
+ */
+void note(const char* category, const char* subject, long detail) noexcept;
+
+} // namespace breadcrumb
+
 } // namespace crash_handler

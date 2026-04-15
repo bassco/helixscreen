@@ -20,6 +20,7 @@
 #include "printer_state.h" // For KlippyState enum
 #include "sound_manager.h"
 #include "static_subject_registry.h"
+#include "system/crash_handler.h"
 #include "system/telemetry_manager.h"
 #include "theme_manager.h"
 
@@ -1120,6 +1121,16 @@ void NavigationManager::set_active(PanelId panel_id) {
     lv_subject_set_int(&active_panel_subject_, static_cast<int>(panel_id));
     active_panel_ = panel_id;
 
+    // Crash-diagnostic breadcrumb: records which panel transition was in flight
+    // if we crash during on_activate/layout/first-paint.
+    {
+        const char* name = panel_instances_[static_cast<int>(panel_id)]
+                               ? panel_instances_[static_cast<int>(panel_id)]->get_name()
+                               : nullptr;
+        crash_handler::breadcrumb::note("nav", name ? name : "",
+                                        static_cast<long>(panel_id));
+    }
+
     // Call on_activate() AFTER state update
     if (panel_instances_[static_cast<int>(panel_id)]) {
         spdlog::trace("[NavigationManager] Calling on_activate() for panel {}",
@@ -1293,6 +1304,7 @@ void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous
         auto* lc = mgr.resolve_overlay_lifecycle(overlay_panel);
         std::string overlay_name = lc ? lc->get_name() : "unknown";
         TelemetryManager::instance().notify_overlay_opened(overlay_name);
+        crash_handler::breadcrumb::note("overlay+", overlay_name.c_str());
 
         // Lifecycle: Deactivate what's currently visible before showing new overlay
         if (is_first_overlay) {
@@ -1387,6 +1399,7 @@ void NavigationManager::push_overlay_zoom_from(lv_obj_t* overlay_panel, lv_area_
         auto* lc = mgr.resolve_overlay_lifecycle(overlay_panel);
         std::string overlay_name = lc ? lc->get_name() : "unknown";
         TelemetryManager::instance().notify_overlay_opened(overlay_name);
+        crash_handler::breadcrumb::note("overlay+", overlay_name.c_str());
 
         // Lifecycle: Deactivate what's currently visible
         if (is_first_overlay) {
@@ -1475,6 +1488,8 @@ bool NavigationManager::go_back() {
         auto& mgr = NavigationManager::instance();
         spdlog::trace("[NavigationManager] go_back executing, stack depth: {}",
                       mgr.panel_stack_.size());
+        crash_handler::breadcrumb::note("nav",  "go_back",
+                                        static_cast<long>(mgr.panel_stack_.size()));
 
         // Dismiss keyboard before navigation to restore screen position
         if (KeyboardManager::instance().is_visible()) {

@@ -2726,6 +2726,12 @@ int Application::main_loop() {
     uint32_t last_fb_selfheal_tick = start_time;
     static constexpr uint32_t FB_SELFHEAL_INTERVAL_MS = 10000; // 10 seconds
 
+    // Liveness breadcrumb: emits every ~30 s so a crashed session's last moments
+    // always show recent activity, even if the user was idle on one panel.
+    uint32_t last_tick_crumb = start_time;
+    static constexpr uint32_t TICK_CRUMB_INTERVAL_MS = 30000;
+    uint64_t frame_counter = 0;
+
     // Failsafe: track invalidation suppression with a hard deadline.
     // If splash handoff doesn't complete within this time, force rendering back on
     // to avoid a permanently black screen.
@@ -2804,6 +2810,14 @@ int Application::main_loop() {
             (current_tick - last_fb_selfheal_tick) >= FB_SELFHEAL_INTERVAL_MS) {
             lv_obj_invalidate(lv_screen_active());
             last_fb_selfheal_tick = current_tick;
+        }
+
+        // Periodic liveness breadcrumb (counts frames so crash bundles know
+        // whether the loop was spinning normally or stalled).
+        ++frame_counter;
+        if ((current_tick - last_tick_crumb) >= TICK_CRUMB_INTERVAL_MS) {
+            crash_handler::breadcrumb::note("tick", "", static_cast<long>(frame_counter));
+            last_tick_crumb = current_tick;
         }
 
         // Run LVGL tasks — returns ms until next timer needs to fire

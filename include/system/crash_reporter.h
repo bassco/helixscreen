@@ -77,6 +77,10 @@ class CrashReporter {
         // UpdateQueue callback tag (identifies which queued callback was executing)
         std::string queue_callback;
 
+        // Breadcrumbs from the in-process ring buffer.
+        // Each entry: "<monotonic_ms> <category> <subject>" (space-separated)
+        std::vector<std::string> breadcrumbs;
+
         // Memory map (/proc/self/maps lines, for mapping addresses to libraries)
         std::vector<std::string> memory_map;
 

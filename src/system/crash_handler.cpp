@@ -7,6 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -76,6 +77,41 @@ static uintptr_t s_text_end = 0;
 
 /// Pointer to the UpdateQueue's current callback tag (registered at init)
 static volatile const char* const* s_callback_tag_ptr = nullptr;
+
+// =============================================================================
+// Breadcrumb ring buffer (activity context for crash diagnosis)
+// =============================================================================
+
+/// Single breadcrumb slot. Size = 72 bytes.
+struct BreadcrumbSlot {
+    /// Monotonic ms since s_start_time. 0 means empty/uninitialized.
+    /// Stored last with release semantics so readers see a complete slot.
+    uint32_t ts_ms;
+    char     category[8];  // null-terminated, truncated
+    char     subject[60];  // null-terminated, truncated
+};
+
+/// Ring size: 64 slots × 72 bytes = 4608 bytes static.
+static constexpr size_t kBreadcrumbRingSize = 64;
+static BreadcrumbSlot   s_breadcrumb_ring[kBreadcrumbRingSize] = {};
+
+/// Monotonically-incrementing write index. Modulo ring size gives slot.
+/// Wraps at 2^32 — at 100 crumbs/sec that's ~500 days, acceptable.
+static std::atomic<uint32_t> s_breadcrumb_idx{0};
+
+/// Copy a C string into a fixed-size buffer, always null-terminating.
+/// Returns number of bytes written (excluding terminator).
+static size_t copy_truncated(char* dst, size_t dst_size, const char* src) noexcept {
+    if (dst_size == 0) return 0;
+    if (!src) { dst[0] = '\0'; return 0; }
+    size_t i = 0;
+    while (i + 1 < dst_size && src[i] != '\0') {
+        dst[i] = src[i];
+        ++i;
+    }
+    dst[i] = '\0';
+    return i;
+}
 
 /// Saved previous signal actions for restoration
 static struct sigaction s_old_sigsegv = {};
@@ -478,6 +514,29 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         }
     }
 
+    // Dump breadcrumb ring (oldest → newest). Torn writes are tolerated:
+    // slot.ts_ms is stored last with release semantics, so a zero ts means the
+    // slot is either empty or mid-write. In both cases we skip.
+    {
+        uint32_t end = s_breadcrumb_idx.load(std::memory_order_acquire);
+        uint32_t start = (end > kBreadcrumbRingSize) ? end - kBreadcrumbRingSize : 0;
+        for (uint32_t i = start; i < end; ++i) {
+            const BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
+            uint32_t ts = __atomic_load_n(&slot.ts_ms, __ATOMIC_ACQUIRE);
+            if (ts == 0) continue;
+            safe_write(fd, "crumb:");
+            safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(ts)));
+            safe_write(fd, " ");
+            // category and subject are always null-terminated by copy_truncated.
+            // An empty category is still written as an empty field between spaces
+            // so the parser can split on whitespace deterministically.
+            safe_write(fd, slot.category[0] ? slot.category : "-");
+            safe_write(fd, " ");
+            safe_write(fd, slot.subject[0] ? slot.subject : "-");
+            safe_write(fd, "\n");
+        }
+    }
+
     // Inject ucontext PC and LR as the first backtrace entries.
     // On ARM32 (static binary), backtrace() cannot unwind past the signal
     // frame — it only returns crash_handler + signal_restorer (useless).
@@ -670,6 +729,69 @@ void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_pt
     s_callback_tag_ptr = tag_ptr;
 }
 
+// -----------------------------------------------------------------------------
+// Breadcrumb producers (signal-safe)
+// -----------------------------------------------------------------------------
+
+namespace {
+
+/// Compute monotonic ms since s_start_time for breadcrumb timestamps.
+/// clock_gettime(CLOCK_MONOTONIC) is async-signal-safe on Linux.
+/// Returns 1+ms (never zero — zero is reserved for "empty slot").
+static uint32_t breadcrumb_now_ms() noexcept {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 1;
+    // Use raw monotonic — s_start_time is wall-clock, they're not comparable.
+    // Low 32 bits of ms-since-boot: wraps every ~49 days but deltas within a
+    // crash bundle are always meaningful.
+    uint64_t ms = static_cast<uint64_t>(ts.tv_sec) * 1000 +
+                  static_cast<uint64_t>(ts.tv_nsec) / 1000000;
+    uint32_t v = static_cast<uint32_t>(ms);
+    return v == 0 ? 1 : v;
+}
+
+} // namespace
+
+void crash_handler::breadcrumb::note(const char* category, const char* subject) noexcept {
+    uint32_t i = s_breadcrumb_idx.fetch_add(1, std::memory_order_relaxed);
+    BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
+
+    // Invalidate the slot while we overwrite it, so a concurrent reader sees
+    // "empty" rather than a mix of old and new strings.
+    __atomic_store_n(&slot.ts_ms, 0u, __ATOMIC_RELAXED);
+
+    copy_truncated(slot.category, sizeof(slot.category), category);
+    copy_truncated(slot.subject,  sizeof(slot.subject),  subject);
+
+    // Publish with release so readers (signal handler) see a complete slot.
+    __atomic_store_n(&slot.ts_ms, breadcrumb_now_ms(), __ATOMIC_RELEASE);
+}
+
+void crash_handler::breadcrumb::note(const char* category, const char* subject,
+                                     long detail) noexcept {
+    uint32_t i = s_breadcrumb_idx.fetch_add(1, std::memory_order_relaxed);
+    BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
+
+    __atomic_store_n(&slot.ts_ms, 0u, __ATOMIC_RELAXED);
+
+    copy_truncated(slot.category, sizeof(slot.category), category);
+    size_t n = copy_truncated(slot.subject, sizeof(slot.subject), subject);
+
+    // Append " <detail>" if there's room. int_to_str writes right-aligned into
+    // a small scratch buffer and returns a pointer into it.
+    if (n + 2 < sizeof(slot.subject)) {
+        slot.subject[n++] = ' ';
+        char numbuf[24];
+        char* num = int_to_str(numbuf, sizeof(numbuf), detail);
+        while (*num && n + 1 < sizeof(slot.subject)) {
+            slot.subject[n++] = *num++;
+        }
+        slot.subject[n] = '\0';
+    }
+
+    __atomic_store_n(&slot.ts_ms, breadcrumb_now_ms(), __ATOMIC_RELEASE);
+}
+
 void crash_handler::install(const std::string& crash_file_path) {
     if (s_installed) {
         spdlog::debug("[CrashHandler] Already installed, skipping");
@@ -745,6 +867,11 @@ void crash_handler::install(const std::string& crash_file_path) {
 
     s_installed = 1;
     spdlog::info("[CrashHandler] Installed signal handlers (crash file: {})", s_crash_path);
+
+    // Seed the ring with a boot marker so crashes very early in startup still
+    // show at least one breadcrumb — absence of any crumb then indicates the
+    // ring wasn't populated rather than a pre-install crash.
+    crash_handler::breadcrumb::note("boot", HELIX_VERSION);
 }
 
 void crash_handler::uninstall() {
@@ -872,6 +999,14 @@ nlohmann::json crash_handler::read_crash_file(const std::string& crash_file_path
                     result["stack_dump"] = json::array();
                 }
                 result["stack_dump"].push_back(value);
+            } else if (key == "crumb") {
+                // Breadcrumb line: "<ms> <category> <subject>"
+                // Preserve as a raw string — downstream (crash_reporter, telemetry)
+                // is free to split and pretty-print.
+                if (!result.contains("breadcrumbs")) {
+                    result["breadcrumbs"] = json::array();
+                }
+                result["breadcrumbs"].push_back(value);
             } else if (key.rfind("reg_", 0) == 0) {
                 // Generic register capture (reg_r0, reg_fp, etc.)
                 result[key] = value;
@@ -932,6 +1067,11 @@ void crash_handler::write_mock_crash_file(const std::string& crash_file_path) {
     ofs << "bt:0x00401234\n";
     ofs << "bt:0x00405678\n";
     ofs << "bt:0x00409abc\n";
+    ofs << "crumb:1000 boot v0.0.0\n";
+    ofs << "crumb:5200 nav home\n";
+    ofs << "crumb:5210 xml home_card\n";
+    ofs << "crumb:8300 modal confirm_print\n";
+    ofs << "crumb:9100 nav status\n";
 
     spdlog::info("[CrashHandler] Wrote mock crash file: {}", crash_file_path);
 }
