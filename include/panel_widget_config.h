@@ -47,8 +47,16 @@ class PanelWidgetConfig {
   public:
     PanelWidgetConfig(const std::string& panel_id, Config& config);
 
-    /// Load widget order from config, merging with registry defaults
+    /// Load widget order from config, merging with registry defaults.
+    /// No-op if already loaded; call mark_dirty() first to force a reload.
     void load();
+
+    /// Mark the cached pages_ vector as stale so the next load() reloads from disk.
+    /// Used by the settings overlay and widget catalog when they mutate Config
+    /// directly rather than going through this object's setters.
+    void mark_dirty() {
+        loaded_ = false;
+    }
 
     /// Save current order to config
     void save();
@@ -151,6 +159,7 @@ class PanelWidgetConfig {
     std::vector<PageConfig> pages_;
     size_t main_page_index_ = 0;
     int next_page_id_ = 1;
+    bool loaded_ = false;
 
     static std::vector<PanelWidgetEntry> build_defaults();
 

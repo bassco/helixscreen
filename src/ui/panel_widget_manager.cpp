@@ -64,6 +64,12 @@ void PanelWidgetManager::unregister_rebuild_callback(const std::string& panel_id
 }
 
 void PanelWidgetManager::notify_config_changed(const std::string& panel_id) {
+    // Invalidate the cached PanelWidgetConfig so the next access reloads from disk.
+    // Callers that mutate panel_widgets/<panel_id> directly via Config (rather
+    // than via PanelWidgetConfig setters + save) must route through here so the
+    // cache can't serve stale data (#804 defensive).
+    get_widget_config(panel_id).mark_dirty();
+
     auto it = rebuild_callbacks_.find(panel_id);
     if (it != rebuild_callbacks_.end()) {
         it->second();
@@ -71,13 +77,18 @@ void PanelWidgetManager::notify_config_changed(const std::string& panel_id) {
 }
 
 static PanelWidgetConfig& get_widget_config_impl(const std::string& panel_id) {
-    // Per-panel config instances cached by panel ID
+    // Per-panel config instances cached by panel ID. Main-thread only — no
+    // synchronization on the static map.
     static std::unordered_map<std::string, PanelWidgetConfig> configs;
     auto it = configs.find(panel_id);
     if (it == configs.end()) {
         it = configs.emplace(panel_id, PanelWidgetConfig(panel_id, *Config::get_instance())).first;
     }
-    // Always reload to pick up changes from settings overlay
+    // load() is a no-op if already loaded. Callers that bypass the setters
+    // must call notify_config_changed() → mark_dirty() to trigger a reload.
+    // Previously this unconditionally reloaded on every access, churning
+    // pages_ many times per panel populate and leaving outer frames exposed
+    // to invalidated references (#804).
     it->second.load();
     return it->second;
 }

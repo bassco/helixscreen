@@ -121,6 +121,9 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::parse_widget_array(const nlohma
 }
 
 void PanelWidgetConfig::load() {
+    if (loaded_) {
+        return;
+    }
     pages_.clear();
     main_page_index_ = 0;
     next_page_id_ = 1;
@@ -180,6 +183,7 @@ void PanelWidgetConfig::load() {
             save();
         }
 
+        loaded_ = true;
         return;
     }
 
@@ -211,6 +215,7 @@ void PanelWidgetConfig::load() {
 
         // Migrate to new format on disk
         save();
+        loaded_ = true;
         return;
     }
 
@@ -221,6 +226,7 @@ void PanelWidgetConfig::load() {
     pages_.push_back(std::move(page));
     next_page_id_ = 1;
     save(); // Persist default grid positions for future launches
+    loaded_ = true;
 }
 
 void PanelWidgetConfig::save() {
