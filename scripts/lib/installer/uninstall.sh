@@ -78,7 +78,7 @@ uninstall() {
 
     # Kill any remaining processes (watchdog first to prevent crash dialog flash)
     # shellcheck disable=SC2086
-    kill_process_by_name $HELIX_PROCESSES
+    kill_process_by_name $HELIX_PROCESSES || true
 
     # Clean up PID files and log file
     $SUDO rm -f /var/run/helixscreen.pid 2>/dev/null || true

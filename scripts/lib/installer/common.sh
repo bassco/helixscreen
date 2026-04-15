@@ -176,32 +176,41 @@ cleanup_on_success() {
     fi
 }
 
-# Kill process(es) by name, using killall or pidof fallback
-# Works on both GNU systems and BusyBox (AD5M/K1)
+# Kill process(es) by name — SIGTERM first, then SIGKILL any survivors.
+# helix-watchdog and helix-screen catch SIGTERM but don't always exit (e.g.
+# during splash handoff or when blocked on I/O), so the installer must
+# escalate or uninstall leaves zombie processes behind (#xxx observed on CC1).
+# Works on both GNU systems and BusyBox (AD5M/K1/CC1).
 # Args: process_name [process_name2 ...]
 # Returns: 0 if any process was killed, 1 if none found
 kill_process_by_name() {
     local killed_any=false
+    local proc pids pid
 
     for proc in "$@"; do
-        if command -v killall >/dev/null 2>&1; then
-            if killall -0 "$proc" 2>/dev/null; then
-                $SUDO killall "$proc" 2>/dev/null || true
-                killed_any=true
-            fi
-        elif command -v pidof >/dev/null 2>&1; then
-            local pids
-            pids=$(pidof "$proc" 2>/dev/null)
-            if [ -n "$pids" ]; then
-                for pid in $pids; do
-                    $SUDO kill "$pid" 2>/dev/null || true
-                done
-                killed_any=true
-            fi
+        pids=$(pidof "$proc" 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            for pid in $pids; do
+                $SUDO kill "$pid" 2>/dev/null || true
+            done
+            killed_any=true
         fi
     done
 
-    [ "$killed_any" = true ]
+    [ "$killed_any" = true ] || return 1
+
+    # Give caught-SIGTERM handlers a moment, then SIGKILL any survivors.
+    sleep 1
+    for proc in "$@"; do
+        pids=$(pidof "$proc" 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            for pid in $pids; do
+                $SUDO kill -9 "$pid" 2>/dev/null || true
+            done
+        fi
+    done
+
+    return 0
 }
 
 # Print post-install commands for the user

@@ -190,26 +190,27 @@ stop() {
         rm -f "$PIDFILE"
     fi
 
-    # Also kill by name in case PID file is stale
-    # Kill watchdog first to prevent crash dialog flash during clean shutdown
+    # Also kill by name in case PID file is stale or the launcher died before
+    # signaling its children. Kill watchdog first to prevent crash dialog flash
+    # during clean shutdown. SIGTERM then SIGKILL: helix-watchdog and helix-screen
+    # may catch SIGTERM without exiting (splash handoff, blocked I/O).
     WATCHDOG_NAME=$(basename "$WATCHDOG")
     DAEMON_NAME=$(basename "$DAEMON")
     SPLASH_NAME=$(basename "$SPLASH")
-    if command -v killall >/dev/null 2>&1; then
-        killall "$WATCHDOG_NAME" 2>/dev/null || true
-        killall "$DAEMON_NAME" 2>/dev/null || true
-        killall "$SPLASH_NAME" 2>/dev/null || true
-    else
-        for pid in $(pidof "$WATCHDOG_NAME" 2>/dev/null); do
-            kill "$pid" 2>/dev/null || true
-        done
-        for pid in $(pidof "$DAEMON_NAME" 2>/dev/null); do
-            kill "$pid" 2>/dev/null || true
-        done
-        for pid in $(pidof "$SPLASH_NAME" 2>/dev/null); do
-            kill "$pid" 2>/dev/null || true
-        done
-    fi
+    for proc in "$WATCHDOG_NAME" "$DAEMON_NAME" "$SPLASH_NAME"; do
+        pids=$(pidof "$proc" 2>/dev/null || true)
+        [ -n "$pids" ] || continue
+        # shellcheck disable=SC2086
+        kill $pids 2>/dev/null || true
+    done
+    # Give caught-SIGTERM handlers a moment, then SIGKILL any survivors.
+    sleep 1
+    for proc in "$WATCHDOG_NAME" "$DAEMON_NAME" "$SPLASH_NAME"; do
+        pids=$(pidof "$proc" 2>/dev/null || true)
+        [ -n "$pids" ] || continue
+        # shellcheck disable=SC2086
+        kill -9 $pids 2>/dev/null || true
+    done
 
     # Platform-specific post-stop cleanup (e.g., remove flag files)
     # Runs after daemon is fully stopped so platform can safely reclaim resources

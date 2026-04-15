@@ -497,7 +497,7 @@ stop_service() {
             done
             # Also try to kill by name (watchdog first to prevent crash dialog flash)
             # shellcheck disable=SC2086
-            kill_process_by_name $HELIX_PROCESSES
+            kill_process_by_name $HELIX_PROCESSES || true
         fi
     fi
 }
@@ -516,5 +516,5 @@ stop_service_snapmaker_u1() {
     fi
     # Also kill by name in case init script stop didn't clean up
     # shellcheck disable=SC2086
-    kill_process_by_name $HELIX_PROCESSES
+    kill_process_by_name $HELIX_PROCESSES || true
 }
