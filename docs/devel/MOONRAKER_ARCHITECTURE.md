@@ -99,6 +99,43 @@ void method_name(
 );
 ```
 
+### HTTP Work Execution (HttpExecutor)
+
+**Location:** `include/http_executor.h`, `src/system/http_executor.cpp`
+
+HTTP requests from the Moonraker REST sub-APIs run on one of two process-wide `HttpExecutor` singletons, not on per-request threads.
+
+**Lanes:**
+
+| Lane | Workers | Used by |
+|------|---------|---------|
+| `HttpExecutor::fast()` | 4 | REST (`MoonrakerRestAPI`), extras (`MoonrakerAPI` extras endpoints), timelapse (`MoonrakerTimelapseAPI`), thumbnail downloads, memory-buffer uploads (config edits, PRINT_START shim, macro writes) |
+| `HttpExecutor::slow()` | 1 | Streaming gcode downloads, large file-from-path uploads |
+
+**Why two lanes:** A long upload on the slow lane cannot head-of-line block thumbnail fetches or status polls on the fast lane. The fast lane's 4 workers preserve burst parallelism when the file browser scrolls (~20 concurrent thumbnail requests) without reintroducing unbounded thread spawning.
+
+**Why bounded:** Per-request `std::thread` spawning crashed under thread exhaustion (EAGAIN from `pthread_create`) on systems where multiple services share the user's `RLIMIT_NPROC` — e.g. RatOS 2.1 where klipper+moonraker+nginx+helixscreen all run as `pi`. Total HTTP thread cap is now 5 across the whole process.
+
+**Submitting work:**
+
+```cpp
+helix::http::HttpExecutor::fast().submit([url, on_success, on_error]() {
+    auto resp = requests::get(url.c_str());
+    if (resp) on_success(resp->body);
+    else on_error(...);
+});
+```
+
+The submitted lambda runs on a worker thread — callbacks invoked from it are on a background thread and must use `ui_queue_update()` or `tok.defer()` to touch UI. This matches the pre-HttpExecutor threading contract; no caller changes were required during migration.
+
+**Lifecycle:** `HttpExecutor::start_all()` is called just before `init_moonraker()` in `Application::run()`. `HttpExecutor::stop_all()` is called in `Application::shutdown()` after `m_moonraker.reset()` so no submitter outlives the workers. Soft restart (`switch_printer`) destroys and recreates `MoonrakerManager` but leaves the executors running.
+
+**When to use which lane (rule of thumb):**
+- **Fast:** small request (≤ ~1 MB response/body), frequent, short-latency expected, or called in bursts. Safe default.
+- **Slow:** response/body measured in tens of MB, transfer duration measured in seconds-to-minutes, or the call path explicitly streams to/from disk. Anything that would noticeably stall the user if head-of-line blocked behind it.
+
+**Do NOT:** spawn a raw `std::thread` for HTTP work. If `HttpExecutor::fast()/slow()` don't fit the shape you need, discuss — adding a new lane is preferable to reintroducing unbounded spawning.
+
 ### Event System
 
 **Location:** `include/moonraker_events.h`

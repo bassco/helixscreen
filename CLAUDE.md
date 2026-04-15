@@ -146,6 +146,14 @@ Do **NOT** use `shared_ptr<bool> alive_`, `callback_guard_`, `alive_guard_`, `we
 or `shared_ptr<atomic<bool>>` for callback safety. These are deprecated patterns replaced by
 `AsyncLifetimeGuard`. See `include/async_lifetime_guard.h` and `docs/devel/ARCHITECTURE.md`.
 
+**HTTP work runs on HttpExecutor, NOT raw `std::thread`.** Two process-wide lanes:
+`HttpExecutor::fast()` (4 workers) for REST/API/timelapse/thumbnails/small uploads,
+`HttpExecutor::slow()` (1 worker) for large file transfers. Submitted lambdas run on a
+worker thread — callbacks still need `ui_queue_update()` / `tok.defer()` for UI work.
+Never spawn a raw `std::thread` for HTTP — unbounded spawning crashed with EAGAIN under
+thread exhaustion on RatOS (#811-adjacent). See `docs/devel/MOONRAKER_ARCHITECTURE.md`
+§ "HTTP Work Execution (HttpExecutor)".
+
 **No `safe_delete()` in queued callbacks:** `safe_delete()` is synchronous — never call it inside `queue_update()`/`async_call()` lambdas. Multiple synchronous deletions in the same `process_pending()` batch corrupt LVGL's event linked list (SIGSEGV). Use `safe_delete_deferred()` or hide + `lv_async_call()` pattern instead. See `ARCHITECTURE.md` § "No safe_delete() Inside UpdateQueue Callbacks".
 
 **Subject shutdown safety (MANDATORY):** Any class that creates LVGL subjects MUST self-register its cleanup inside `init_subjects()`. This prevents shutdown crashes (observer removal on freed subjects during `lv_deinit`). See `static_subject_registry.h` for full docs.
