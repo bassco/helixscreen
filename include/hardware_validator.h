@@ -342,6 +342,15 @@ class HardwareValidator {
                                   helix::Config* config, HardwareValidationResult& result);
 
     /**
+     * @brief Log the list of user-silenced (ignored) hardware at INFO level
+     *
+     * Called once per validation run so debug bundles capture which hardware
+     * the user has silenced. The ignore list itself has no timestamp/version
+     * metadata, so this log is the only visible record.
+     */
+    static void log_ignored_hardware(helix::Config* config);
+
+    /**
      * @brief Check if a name is in a vector (case-insensitive)
      */
     static bool contains_name(const std::vector<std::string>& vec, const std::string& name);

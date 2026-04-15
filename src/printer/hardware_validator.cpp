@@ -117,6 +117,11 @@ HardwareValidationResult HardwareValidator::validate(Config* config,
 
     spdlog::debug("[HardwareValidator] Starting hardware validation...");
 
+    // Surface user-silenced hardware so debug bundles capture what's been
+    // ignored. Today's ignore list has no timestamp/version metadata, so this
+    // log is the only visible signal that warnings are being suppressed.
+    log_ignored_hardware(config);
+
     // Step 1: Check critical hardware exists
     validate_critical_hardware(hardware, result);
 
@@ -782,4 +787,40 @@ HardwareType HardwareValidator::guess_hardware_type(const std::string& name) {
     }
 
     return HardwareType::OTHER;
+}
+
+void HardwareValidator::log_ignored_hardware(Config* config) {
+    if (!config) {
+        return;
+    }
+
+    try {
+        json& optional_list = config->get_json(config->df() + "hardware/optional");
+        if (optional_list.is_null() || !optional_list.is_array() || optional_list.empty()) {
+            return;
+        }
+
+        std::vector<std::string> names;
+        names.reserve(optional_list.size());
+        for (const auto& item : optional_list) {
+            if (item.is_string()) {
+                names.push_back(item.get<std::string>());
+            }
+        }
+        if (names.empty()) {
+            return;
+        }
+
+        std::stringstream joined;
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (i > 0) {
+                joined << ", ";
+            }
+            joined << names[i];
+        }
+        spdlog::info("[HardwareValidator] {} hardware item(s) silenced (ignored): {}",
+                     names.size(), joined.str());
+    } catch (const std::exception& e) {
+        spdlog::trace("[HardwareValidator] Error reading optional list: {}", e.what());
+    }
 }
