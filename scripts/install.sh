@@ -2166,6 +2166,37 @@ stop_cc1_competing_uis() {
         log_info "Updating /etc/klipper/config/cosmos.conf directly..."
         $SUDO sed -i "s|^screen_ui[[:space:]]*=.*|screen_ui = helixscreen|" /etc/klipper/config/cosmos.conf 2>/dev/null || true
     fi
+
+    # COSMOS gui-switcher (S96 init) reads `config-manager ui screen_ui` and
+    # launches /etc/init.d/<value>. config-manager hardcodes an allowlist of
+    # ['grumpyscreen','guppyscreen','atomscreen'] in /usr/bin/config-manager —
+    # rejecting 'helixscreen' as invalid and falling back to grumpyscreen.
+    # /usr/bin is on read-only squashfs so we can't patch the validator.
+    # /etc is on a writable overlay, so we substitute /etc/init.d/grumpyscreen
+    # with a wrapper that delegates to /etc/init.d/helixscreen. Net effect:
+    # gui-switcher → grumpyscreen wrapper → helixscreen. Original is preserved
+    # at /etc/init.d/grumpyscreen.helix-bak and restored on uninstall.
+    # Upstream fix tracked at OpenCentauri/cosmos#145.
+    if [ -x /etc/init.d/grumpyscreen ] && \
+       ! grep -q "HELIXSCREEN_WRAPPER" /etc/init.d/grumpyscreen 2>/dev/null; then
+        log_info "Substituting /etc/init.d/grumpyscreen with helixscreen wrapper"
+        if ! $SUDO cp -p /etc/init.d/grumpyscreen /etc/init.d/grumpyscreen.helix-bak; then
+            log_warn "Could not back up grumpyscreen — skipping wrapper install"
+        else
+            $SUDO tee /etc/init.d/grumpyscreen >/dev/null <<'WRAPPER_EOF' || \
+                log_warn "Failed to install grumpyscreen wrapper — gui-switcher will not launch HelixScreen at boot"
+#!/bin/sh
+# HELIXSCREEN_WRAPPER (do not remove this marker — used for idempotency)
+# Workaround for OpenCentauri config-manager allowlist (cosmos#145):
+# config-manager refuses to return 'helixscreen' as screen_ui, so
+# gui-switcher always asks /etc/init.d/grumpyscreen to start. We delegate
+# to HelixScreen's init script. Original grumpyscreen preserved at
+# grumpyscreen.helix-bak and restored by HelixScreen's uninstaller.
+exec /etc/init.d/helixscreen "$@"
+WRAPPER_EOF
+            $SUDO chmod +x /etc/init.d/grumpyscreen 2>/dev/null || true
+        fi
+    fi
 }
 
 # Stop competing screen UIs (GuppyScreen, KlipperScreen, Xorg, etc.)
@@ -4314,6 +4345,31 @@ uninstall() {
     # ForgeX - restore GuppyScreen and stock UI settings
     if [ -z "$restored_ui" ] && [ "$AD5M_FIRMWARE" = "forge_x" ]; then
         uninstall_forgex
+    fi
+
+    # COSMOS (Centauri Carbon): restore /etc/init.d/grumpyscreen from the
+    # backup the installer made when it substituted in the helixscreen-wrapper
+    # init script (see competing_uis.sh stop_cc1_competing_uis). Also revert
+    # cosmos.conf in case the upstream config-manager allowlist fix lands and
+    # actually starts honoring 'helixscreen' values — we want to be a clean
+    # citizen on uninstall regardless.
+    if [ -z "$restored_ui" ] && [ -x "/usr/bin/update-cosmos" ]; then
+        if [ -f /etc/init.d/grumpyscreen.helix-bak ]; then
+            log_info "Restoring original /etc/init.d/grumpyscreen"
+            $SUDO mv /etc/init.d/grumpyscreen.helix-bak /etc/init.d/grumpyscreen \
+                || log_warn "Could not restore /etc/init.d/grumpyscreen — gui-switcher may not launch a UI on next boot"
+        fi
+        if [ -f /etc/klipper/config/cosmos.conf ] && \
+           grep -q "^screen_ui[[:space:]]*=[[:space:]]*helixscreen" /etc/klipper/config/cosmos.conf 2>/dev/null; then
+            log_info "Reverting cosmos.conf screen_ui to grumpyscreen"
+            $SUDO sed -i "s|^screen_ui[[:space:]]*=.*|screen_ui = grumpyscreen|" \
+                /etc/klipper/config/cosmos.conf 2>/dev/null || true
+        fi
+        if [ -x /etc/init.d/grumpyscreen ]; then
+            log_info "Starting grumpyscreen"
+            $SUDO /etc/init.d/grumpyscreen start 2>/dev/null || true
+            restored_ui="grumpyscreen (COSMOS stock UI)"
+        fi
     fi
 
     # Clean up helixscreen cache directories

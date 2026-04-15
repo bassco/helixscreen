@@ -97,7 +97,7 @@ run_check_requirements_with_path() {
 
 @test "check_requirements: succeeds with curl but no wget" {
     local rbin
-    rbin=$(make_restricted_path curl tar gunzip)
+    rbin=$(make_restricted_path curl tar gunzip unzip)
 
     run_check_requirements_with_path "$rbin"
     [ "$status" -eq 0 ]
@@ -105,7 +105,7 @@ run_check_requirements_with_path() {
 
 @test "check_requirements: succeeds with wget but no curl" {
     local rbin
-    rbin=$(make_restricted_path tar gunzip)
+    rbin=$(make_restricted_path tar gunzip unzip)
     # wget may not exist on macOS; create a stub
     printf '#!/bin/sh\nexit 0\n' > "$rbin/wget"
     chmod +x "$rbin/wget"

@@ -261,11 +261,20 @@ KLIPPER_USER=""
 KLIPPER_HOME=""
 
 # Detect platform
-# Returns: "ad5m", "ad5x", "k1", "k2", "pi", "pi32", "x86", or "unsupported"
+# Returns: "ad5m", "ad5x", "cc1", "k1", "k2", "pi", "pi32", "snapmaker-u1", "x86", or "unsupported"
 detect_platform() {
     local arch kernel
     arch=$(uname -m)
     kernel=$(uname -r)
+
+    # Check for Elegoo Centauri Carbon running OpenCentauri COSMOS firmware.
+    # MUST come before AD5M check — both are armv7l with kernel 5.4.61.
+    # COSMOS replaces the stock Tina/OpenWrt userland with a Yocto-based rootfs
+    # that ships Klipper, Moonraker, and its own update tool.
+    if [ "$arch" = "armv7l" ] && [ -x "/usr/bin/update-cosmos" ]; then
+        echo "cc1"
+        return
+    fi
 
     # Check for Creality K2 series (armv7l, OpenWrt/Tina Linux, /mnt/UDISK)
     # MUST come before AD5M check — both are armv7l with kernel 5.4.61
@@ -710,6 +719,20 @@ set_install_paths() {
         KLIPPER_HOME="/root"
         log_info "Platform: Creality K2 series"
         log_info "Install directory: ${INSTALL_DIR}"
+    elif [ "$platform" = "cc1" ]; then
+        # Elegoo Centauri Carbon running OpenCentauri COSMOS.
+        # - / is read-only squashfs; /etc is an overlay on /data (writable).
+        # - /user-resource is the 6.3 GB ext4 partition where user installs go.
+        # - COSMOS provides gui-switcher: drop /etc/init.d/<name>, then
+        #   `config-manager ui screen_ui <name>` + restart gui-switcher.
+        INSTALL_DIR="/user-resource/helixscreen"
+        INIT_SCRIPT_DEST="/etc/init.d/helixscreen"
+        PREVIOUS_UI_SCRIPT=""
+        KLIPPER_USER="root"
+        KLIPPER_HOME="/root"
+        INIT_SYSTEM="sysv"
+        log_info "Platform: Elegoo Centauri Carbon (COSMOS)"
+        log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "snapmaker-u1" ]; then
         INSTALL_DIR="/userdata/helixscreen"
         KLIPPER_USER="root"
@@ -1134,31 +1157,43 @@ PKLA_EOF
 #
 # Initialize INIT_SYSTEM (will be set by detect_init_system)
 INIT_SYSTEM=""
-# Check required commands exist
-# Requires: curl or wget, tar, gunzip
+# Run `apt-get update` at most once per installer run. The first call updates
+# the package index; subsequent calls become no-ops. Avoids 5-15s of redundant
+# index refreshes when both check_requirements and install_runtime_deps need apt.
+_HELIX_APT_UPDATED=""
+_apt_update_once() {
+    [ -n "$_HELIX_APT_UPDATED" ] && return 0
+    $SUDO apt-get update -qq 2>/dev/null || true
+    _HELIX_APT_UPDATED=1
+}
+
+# Append a name to the global $missing list, comma-separated.
+_helix_add_missing() { missing="${missing:+$missing, }$1"; }
+
+# Check required commands exist. unzip is mandatory because release archives
+# ship as .zip (Moonraker Update Manager contract); tar/gunzip remain required
+# for bridge-release tar.gz fallback until 1.0 retires the format.
 check_requirements() {
     local missing=""
 
     # Need either curl or wget
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        missing="curl or wget"
+        _helix_add_missing "curl or wget"
     fi
+    command -v tar >/dev/null 2>&1 || _helix_add_missing "tar"
+    # gunzip needed for AD5M BusyBox tar which doesn't support -z
+    command -v gunzip >/dev/null 2>&1 || _helix_add_missing "gunzip"
 
-    # Need tar
-    if ! command -v tar >/dev/null 2>&1; then
-        if [ -n "$missing" ]; then
-            missing="$missing, tar"
+    # Try transparent apt-install of unzip when missing — many minimal
+    # Debian/Ubuntu images (notably Snapmaker U1 extended firmware) ship without it.
+    if ! command -v unzip >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1 && ! _has_no_new_privs; then
+            log_info "Installing missing dependency: unzip"
+            _apt_update_once
+            $SUDO apt-get install -y --no-install-recommends unzip >/dev/null 2>&1 \
+                || _helix_add_missing "unzip"
         else
-            missing="tar"
-        fi
-    fi
-
-    # Need gunzip (for AD5M BusyBox tar which doesn't support -z)
-    if ! command -v gunzip >/dev/null 2>&1; then
-        if [ -n "$missing" ]; then
-            missing="$missing, gunzip"
-        else
-            missing="gunzip"
+            _helix_add_missing "unzip"
         fi
     fi
 
@@ -1229,7 +1264,7 @@ install_runtime_deps() {
             return 0
         fi
         log_info "Installing missing libraries: $missing"
-        $SUDO apt-get update -qq 2>/dev/null || true
+        _apt_update_once
         # shellcheck disable=SC2086
         if ! $SUDO apt-get install -y --no-install-recommends $missing; then
             log_warn "Failed to install some runtime libraries: $missing"
@@ -2391,6 +2426,31 @@ uninstall() {
     # ForgeX - restore GuppyScreen and stock UI settings
     if [ -z "$restored_ui" ] && [ "$AD5M_FIRMWARE" = "forge_x" ]; then
         uninstall_forgex
+    fi
+
+    # COSMOS (Centauri Carbon): restore /etc/init.d/grumpyscreen from the
+    # backup the installer made when it substituted in the helixscreen-wrapper
+    # init script (see competing_uis.sh stop_cc1_competing_uis). Also revert
+    # cosmos.conf in case the upstream config-manager allowlist fix lands and
+    # actually starts honoring 'helixscreen' values — we want to be a clean
+    # citizen on uninstall regardless.
+    if [ -z "$restored_ui" ] && [ -x "/usr/bin/update-cosmos" ]; then
+        if [ -f /etc/init.d/grumpyscreen.helix-bak ]; then
+            log_info "Restoring original /etc/init.d/grumpyscreen"
+            $SUDO mv /etc/init.d/grumpyscreen.helix-bak /etc/init.d/grumpyscreen \
+                || log_warn "Could not restore /etc/init.d/grumpyscreen — gui-switcher may not launch a UI on next boot"
+        fi
+        if [ -f /etc/klipper/config/cosmos.conf ] && \
+           grep -q "^screen_ui[[:space:]]*=[[:space:]]*helixscreen" /etc/klipper/config/cosmos.conf 2>/dev/null; then
+            log_info "Reverting cosmos.conf screen_ui to grumpyscreen"
+            $SUDO sed -i "s|^screen_ui[[:space:]]*=.*|screen_ui = grumpyscreen|" \
+                /etc/klipper/config/cosmos.conf 2>/dev/null || true
+        fi
+        if [ -x /etc/init.d/grumpyscreen ]; then
+            log_info "Starting grumpyscreen"
+            $SUDO /etc/init.d/grumpyscreen start 2>/dev/null || true
+            restored_ui="grumpyscreen (COSMOS stock UI)"
+        fi
     fi
 
     # Clean up helixscreen cache directories
