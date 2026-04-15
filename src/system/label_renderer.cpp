@@ -280,8 +280,11 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
     int margin = 20;
     int label_width = size.width_px;
 
-    // QR data: Spoolman URI
-    std::string qr_data = "web+spoolman:s-" + std::to_string(spool.id);
+    // QR data: Spoolman URI. Negative IDs are reserved for preview/test
+    // labels — emit a payload the decoder rejects so an accidental scan of
+    // the printed test label doesn't swap the active spool.
+    std::string qr_data = (spool.id < 0) ? std::string{"web+spoolman:test"}
+                                         : "web+spoolman:s-" + std::to_string(spool.id);
 
     // --- MINIMAL (QR Only): moderate-sized QR, centered, white space around ---
     if (preset == LabelPreset::MINIMAL) {
@@ -367,7 +370,7 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
         // Line 3: Weight + Spool ID
         std::string weight_str =
             std::to_string(static_cast<int>(spool.remaining_weight_g)) + "G";
-        std::string line3 = weight_str + " #" + std::to_string(spool.id);
+        std::string line3 = weight_str + (spool.id < 0 ? std::string{" TEST"} : " #" + std::to_string(spool.id));
         draw_text(label, truncate_to_fit(line3, text_area_width, scale),
                   text_x, text_y, scale);
         text_y += line_h;
@@ -486,7 +489,7 @@ LabelBitmap LabelRenderer::render(const SpoolInfo& spool, LabelPreset preset,
         if (spool.remaining_length_m > 0) {
             weight_str += " / " + std::to_string(static_cast<int>(spool.remaining_length_m)) + "M";
         }
-        std::string line3 = weight_str + "  #" + std::to_string(spool.id);
+        std::string line3 = weight_str + (spool.id < 0 ? std::string{"  TEST"} : "  #" + std::to_string(spool.id));
         draw_text(label, truncate_to_fit(line3, text_area_width, scale_sm),
                   text_x, text_y, scale_sm);
         text_y += line_h_sm;
