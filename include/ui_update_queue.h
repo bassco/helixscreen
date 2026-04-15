@@ -155,6 +155,30 @@ class UpdateQueue {
         if (tag) spdlog::trace("[UpdateQueue] Enqueued: {} (pending={})", tag, pending_.size());
     }
 
+    // BYPASSES scoped_freeze(). Reserve for one-shot startup handshakes that the
+    // rest of the app permanently strands itself waiting for — Moonraker
+    // discovery completion is the canonical case: if it lands during the splash→
+    // home freeze and gets dropped, gate subjects never flip and home widgets
+    // stay disabled forever even though Moonraker is up.
+    //
+    // DO NOT use for routine UI updates, observer fan-out, or anything that
+    // could fire during widget destruction. The freeze exists for a reason
+    // (it stops BG threads from enqueueing callbacks against widgets being
+    // torn down). Bypassing it is only safe when the callback's effects are
+    // bounded to subjects/state that survive the drain+destroy window.
+    //
+    // Still honors shut_down_.
+    void queue_critical(const char* tag, UpdateCallback callback) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (shut_down_) {
+            if (tag) spdlog::warn("[UpdateQueue] DROPPED (shutdown): {}", tag);
+            return;
+        }
+        pending_.push({tag, std::move(callback)});
+        if (tag) spdlog::trace("[UpdateQueue] Enqueued (critical): {} (pending={})",
+                               tag, pending_.size());
+    }
+
     /**
      * @brief Shutdown and cleanup
      *
@@ -356,6 +380,14 @@ inline void queue_update(UpdateCallback callback) {
  */
 inline void queue_update(const char* tag, UpdateCallback callback) {
     UpdateQueue::instance().queue(tag, std::move(callback));
+}
+
+// BYPASSES scoped_freeze. Reserve for one-shot startup handshakes the app
+// strands itself waiting for (discovery completion, etc.). See
+// UpdateQueue::queue_critical for the full warning. Regular UI updates and
+// observer fan-out MUST use queue_update().
+inline void queue_critical(const char* tag, UpdateCallback callback) {
+    UpdateQueue::instance().queue_critical(tag, std::move(callback));
 }
 
 /**

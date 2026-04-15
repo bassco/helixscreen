@@ -1986,8 +1986,8 @@ void Application::setup_discovery_callbacks() {
                       initial_status.is_object() ? initial_status.size() : 0);
         auto snapshot = std::make_shared<helix::PrinterDiscovery>(hardware);
         auto status_snapshot = std::make_shared<const nlohmann::json>(initial_status);
-        helix::ui::queue_update("Application::on_discovery_complete",
-                                [api, client, app, snapshot, status_snapshot]() {
+        helix::ui::queue_critical("Application::on_discovery_complete",
+                                  [api, client, app, snapshot, status_snapshot]() {
             spdlog::debug("[Application] on_discovery_complete UI-thread entry (shutdown={})",
                           app->m_shutdown_complete);
             // Safety check: if Application is shutting down, skip all processing

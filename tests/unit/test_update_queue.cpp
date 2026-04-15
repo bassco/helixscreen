@@ -43,6 +43,24 @@ TEST_CASE_METHOD(LVGLTestFixture, "drain works before freeze", "[update_queue]")
     REQUIRE_FALSE(second_ran);
 }
 
+TEST_CASE_METHOD(LVGLTestFixture, "queue_critical bypasses ScopedFreeze", "[update_queue]") {
+    auto& q = UpdateQueue::instance();
+    bool dropped = false;
+    bool delivered = false;
+
+    {
+        auto freeze = q.scoped_freeze();
+        q.queue("normal-should-drop", [&dropped]() { dropped = true; });
+        q.queue_critical("critical-should-survive", [&delivered]() { delivered = true; });
+        // Drain inside freeze: only the critical one is in pending_, but
+        // process_pending runs callbacks regardless of freeze state.
+        UpdateQueueTestAccess::drain(q);
+    }
+
+    REQUIRE_FALSE(dropped);
+    REQUIRE(delivered);
+}
+
 TEST_CASE_METHOD(LVGLTestFixture, "ScopedFreeze is RAII — thaw on scope exit", "[update_queue]") {
     auto& q = UpdateQueue::instance();
     bool ran = false;
