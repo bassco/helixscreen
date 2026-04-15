@@ -28,6 +28,9 @@
 #include "static_panel_registry.h"
 #include "theme_manager.h"
 
+// TEMPORARY — removed in Task 6
+#include "first_run_tour.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -693,6 +696,9 @@ void HomePanel::on_activate() {
 
     // Start Spoolman polling for AMS mini status updates
     SpoolmanManager::instance().start_spoolman_polling();
+
+    // First-run tour — respects gate (wizard complete + tour not yet completed at version).
+    helix::tour::FirstRunTour::instance().maybe_start();
 }
 
 void HomePanel::on_deactivate() {
