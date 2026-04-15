@@ -6,6 +6,7 @@
 #include "config.h"
 #include "observer_factory.h"
 #include "static_panel_registry.h"
+#include "theme_manager.h"
 #include "tour_overlay.h"
 #include "tour_steps.h"
 #include "ui_nav_manager.h"
@@ -103,6 +104,29 @@ void FirstRunTour::start_impl() {
                     self->skip();
                 }
             });
+
+        // Re-resolve the current step's target widget when the responsive
+        // breakpoint changes. The breakpoint swap rebuilds panel widgets, so
+        // the highlight_'s cached target pointer becomes stale. Defer one
+        // tick via lv_async_call so the new widget tree is built before we
+        // look up the target by name.
+        if (auto* bp_subj = theme_manager_get_breakpoint_subject()) {
+            breakpoint_observer_ = helix::ui::observe_int_sync(
+                bp_subj, this, [](FirstRunTour* self, int /*bp*/) {
+                    if (!self->running_ || !self->overlay_) return;
+                    // Defer: panel rebuild on breakpoint change is async; the
+                    // new widget tree isn't ready synchronously. Raw
+                    // lv_async_call with `this` is safe — FirstRunTour is a
+                    // function-local static (immortal lifetime).
+                    lv_async_call(
+                        [](void* s) {
+                            auto* tour = static_cast<FirstRunTour*>(s);
+                            if (!tour->running_ || !tour->overlay_) return;
+                            tour->render_current_step();
+                        },
+                        self);
+                });
+        }
     }
 
     spdlog::debug("[FirstRunTour] Started ({} steps)", steps_.size());
@@ -124,6 +148,7 @@ void FirstRunTour::skip() {
     mark_completed();
     running_ = false;
     nav_observer_.reset();
+    breakpoint_observer_.reset();
     overlay_.reset();
 }
 
@@ -132,6 +157,7 @@ void FirstRunTour::finish() {
     mark_completed();
     running_ = false;
     nav_observer_.reset();
+    breakpoint_observer_.reset();
     overlay_.reset();
 }
 
@@ -140,6 +166,7 @@ void FirstRunTour::reset_for_test() {
     current_index_ = 0;
     steps_.clear();
     nav_observer_.reset();
+    breakpoint_observer_.reset();
     overlay_.reset();
 }
 

@@ -62,6 +62,10 @@ class FirstRunTour {
     // tour would otherwise be orphaned on top of a different panel with a stale
     // target rect.
     ObserverGuard nav_observer_;
+    // Re-resolves the current step's highlight target when the responsive
+    // breakpoint changes. Panel rebuilds destroy/recreate widgets, so the
+    // cached highlight pointer would otherwise dangle until the user taps Next.
+    ObserverGuard breakpoint_observer_;
 };
 
 } // namespace helix::tour
