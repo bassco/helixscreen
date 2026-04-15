@@ -60,6 +60,7 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac) {
                 sd_bus_error_free(&error);
                 trust_device(bus, path.c_str());
                 fprintf(stderr, "[bt] paired successfully with %s\n", mac);
+                r = 0;
                 return;
             }
 
@@ -87,6 +88,7 @@ extern "C" int helix_bt_pair(helix_bt_context* ctx, const char* mac) {
                 sd_bus_error_free(&error2);
                 trust_device(bus, path.c_str());
                 fprintf(stderr, "[bt] connected (BLE) successfully with %s\n", mac);
+                r = 0;
                 return;
             }
 

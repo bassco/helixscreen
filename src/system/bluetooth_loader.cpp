@@ -129,6 +129,8 @@ bool BluetoothLoader::try_load() {
     discover = reinterpret_cast<helix_bt_discover_fn>(resolve(HELIX_BT_SYM_DISCOVER));
     stop_discovery =
         reinterpret_cast<helix_bt_stop_discovery_fn>(resolve(HELIX_BT_SYM_STOP_DISCOVERY));
+    enumerate_known =
+        reinterpret_cast<helix_bt_enumerate_known_fn>(resolve(HELIX_BT_SYM_ENUMERATE_KNOWN));
     pair = reinterpret_cast<helix_bt_pair_fn>(resolve(HELIX_BT_SYM_PAIR));
     is_paired = reinterpret_cast<helix_bt_is_paired_fn>(resolve(HELIX_BT_SYM_IS_PAIRED));
     is_connected = reinterpret_cast<helix_bt_is_connected_fn>(resolve(HELIX_BT_SYM_IS_CONNECTED));

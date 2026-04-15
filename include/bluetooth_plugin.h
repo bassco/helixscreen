@@ -68,6 +68,12 @@ typedef int (*helix_bt_discover_fn)(helix_bt_context*, int timeout_ms, helix_bt_
 /// Stop an in-progress discovery early.
 typedef void (*helix_bt_stop_discovery_fn)(helix_bt_context*);
 
+/// Enumerate devices BlueZ already knows about (paired or previously seen) without
+/// starting an active radio scan. Calls cb once per matching device, then returns.
+/// Returns 0 on success, negative on error.
+typedef int (*helix_bt_enumerate_known_fn)(helix_bt_context*, helix_bt_discover_cb cb,
+                                           void* user_data);
+
 /// Pair with a device. Blocks until pairing completes or fails.
 /// Returns 0 on success, negative on error.
 typedef int (*helix_bt_pair_fn)(helix_bt_context*, const char* mac);
@@ -119,6 +125,7 @@ typedef int (*helix_bt_sdp_find_rfcomm_channel_fn)(helix_bt_context* ctx, const 
 #define HELIX_BT_SYM_DEINIT "helix_bt_deinit"
 #define HELIX_BT_SYM_DISCOVER "helix_bt_discover"
 #define HELIX_BT_SYM_STOP_DISCOVERY "helix_bt_stop_discovery"
+#define HELIX_BT_SYM_ENUMERATE_KNOWN "helix_bt_enumerate_known"
 #define HELIX_BT_SYM_PAIR "helix_bt_pair"
 #define HELIX_BT_SYM_IS_PAIRED "helix_bt_is_paired"
 #define HELIX_BT_SYM_IS_CONNECTED "helix_bt_is_connected"

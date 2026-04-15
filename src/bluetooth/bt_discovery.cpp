@@ -439,3 +439,21 @@ extern "C" void helix_bt_stop_discovery(helix_bt_context* ctx) {
         return;
     ctx->discovering.store(false);
 }
+
+extern "C" int helix_bt_enumerate_known(helix_bt_context* ctx, helix_bt_discover_cb cb,
+                                        void* user_data) {
+    if (!ctx || !ctx->bus_thread)
+        return -EINVAL;
+
+    discover_ctx dctx{ctx, cb, user_data};
+
+    try {
+        ctx->bus_thread->run_sync([&](sd_bus* bus) {
+            enumerate_known_devices(bus, &dctx);
+        });
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[bt] enumerate_known failed: %s\n", e.what());
+        return -EIO;
+    }
+    return 0;
+}
