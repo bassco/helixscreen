@@ -832,7 +832,7 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                 ToastSeverity::WARNING,
                                 lv_tr("Paired, but scanner is not usable. BlueZ refused the HID "
                                       "connection (non-bonded device). Try BLE mode on the "
-                                      "scanner, or set ClassicBondable=false in "
+                                      "scanner, or set ClassicBondedOnly=false in "
                                       "/etc/bluetooth/input.conf."),
                                 8000);
                         }

@@ -62,6 +62,9 @@ Enable Bluetooth on Raspberry Pi or BTT Pi when it's disabled for UART, or add a
 ### [Label Printing](guide/label-printing.md)
 Print spool labels to Brother QL, Phomemo, Niimbot, or MakeID thermal printers via Network, USB, or Bluetooth. Setup, label sizes, and troubleshooting.
 
+### [Barcode Scanner](guide/barcode-scanner.md)
+Set up a USB or Bluetooth barcode scanner to read Spoolman QR codes. Includes the `ClassicBondedOnly=false` fix for Bluetooth HID scanners that fail the "bonded device" check.
+
 ### [Calibration & Tuning](guide/calibration.md)
 Bed mesh visualization, screws tilt adjust, input shaper resonance testing, Z-offset calibration, and PID tuning.
 
