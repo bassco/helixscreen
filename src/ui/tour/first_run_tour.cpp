@@ -4,7 +4,10 @@
 #include "first_run_tour.h"
 
 #include "config.h"
+#include "tour_overlay.h"
+#include "tour_steps.h"
 
+#include <lvgl.h>
 #include <spdlog/spdlog.h>
 
 namespace helix::tour {
@@ -49,10 +52,61 @@ void FirstRunTour::mark_completed() {
     spdlog::info("[FirstRunTour] Marked completed (version={})", kTourVersion);
 }
 
-// Runtime methods implemented in Task 5.
-void FirstRunTour::maybe_start() {}
-void FirstRunTour::start() {}
-void FirstRunTour::advance() {}
-void FirstRunTour::skip() {}
+void FirstRunTour::maybe_start() {
+    if (running_) return;
+    if (!should_auto_start()) return;
+    // Defer one tick so the caller (e.g., HomePanel::on_activate) completes first.
+    lv_async_call(
+        [](void* self) { static_cast<FirstRunTour*>(self)->start_impl(); }, this);
+}
+
+void FirstRunTour::start() {
+    if (running_) return;
+    start_impl();
+}
+
+void FirstRunTour::start_impl() {
+    running_ = true;
+    current_index_ = 0;
+    steps_ = build_tour_steps(hardware_has_ams());
+
+    // Overlay requires an active LVGL screen; unit tests run headless.
+    if (lv_screen_active()) {
+        overlay_ = std::make_unique<TourOverlay>(
+            steps_, [this] { this->advance(); }, [this] { this->skip(); });
+        render_current_step();
+    }
+
+    spdlog::info("[FirstRunTour] Started ({} steps)", steps_.size());
+}
+
+void FirstRunTour::advance() {
+    if (!running_) return;
+    current_index_++;
+    if (current_index_ >= steps_.size()) {
+        finish();
+        return;
+    }
+    render_current_step();
+}
+
+void FirstRunTour::skip() {
+    if (!running_) return;
+    spdlog::info("[FirstRunTour] Skipped at step {}/{}", current_index_ + 1, steps_.size());
+    mark_completed();
+    running_ = false;
+    overlay_.reset();
+}
+
+void FirstRunTour::finish() {
+    spdlog::info("[FirstRunTour] Finished");
+    mark_completed();
+    running_ = false;
+    overlay_.reset();
+}
+
+void FirstRunTour::render_current_step() {
+    if (overlay_) overlay_->show_step(current_index_);
+}
 
 } // namespace helix::tour

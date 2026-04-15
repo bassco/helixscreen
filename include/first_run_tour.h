@@ -3,34 +3,54 @@
 
 #pragma once
 
+#include "tour_steps.h"
+
+#include <cstddef>
+#include <memory>
+#include <vector>
+
 namespace helix::tour {
+
+class TourOverlay; // fwd-declare (defined in tour_overlay.h)
 
 /// Current tour version. Bump when tour content materially changes.
 constexpr int kTourVersion = 1;
 
+/// Singleton used by runtime methods (start, advance, skip); gate helpers below are static.
 class FirstRunTour {
   public:
-    // Singleton used by runtime methods (Task 5); gate helpers below are static.
     static FirstRunTour& instance();
 
     /// Gate check: true iff tour should auto-start on home activate.
-    /// Checks: tour not already completed at current version, wizards complete.
     static bool should_auto_start();
 
     /// Writes tour.completed=true and tour.last_seen_version=kTourVersion.
-    /// Persists via Config::save(). Called on both skip and finish.
     static void mark_completed();
 
-    // Runtime API (implemented in later tasks):
-    void maybe_start(); // Auto-trigger entry point
-    void start();       // Replay entry point (bypasses gate)
-    void advance();     // Next step
-    void skip();        // Skip button
+    /// Auto-trigger entry point — checks gate, schedules start on next LVGL tick.
+    void maybe_start();
+
+    /// Replay entry point — bypasses gate, starts immediately.
+    void start();
+
+    /// Advance to next step; finishes if last.
+    void advance();
+
+    /// Skip button — marks completed and tears down overlay.
+    void skip();
+
     bool is_running() const { return running_; }
 
   private:
     FirstRunTour() = default;
+    void start_impl();
+    void finish();
+    void render_current_step();
+
     bool running_ = false;
+    std::size_t current_index_ = 0;
+    std::vector<TourStep> steps_;
+    std::unique_ptr<TourOverlay> overlay_;
 };
 
 } // namespace helix::tour

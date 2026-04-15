@@ -88,3 +88,30 @@ TEST_CASE("Tour steps: welcome and customize steps have correct targets", "[tour
     REQUIRE(steps[0].target_name.empty());              // Welcome is centered
     REQUIRE(steps[2].target_name == "carousel_host");   // Long-press step
 }
+
+TEST_CASE("FirstRunTour: start() sets is_running", "[tour]") {
+    reset_tour_settings();
+    auto& t = FirstRunTour::instance();
+    REQUIRE(!t.is_running());
+    t.start();
+    REQUIRE(t.is_running());
+    t.skip();
+    REQUIRE(!t.is_running());
+}
+
+TEST_CASE("FirstRunTour: skip writes tour.completed", "[tour]") {
+    reset_tour_settings();
+    auto& t = FirstRunTour::instance();
+    t.start();
+    t.skip();
+    REQUIRE(Config::get_instance()->get<bool>("/tour/completed", false) == true);
+}
+
+TEST_CASE("FirstRunTour: advance past last step finishes", "[tour]") {
+    reset_tour_settings();
+    auto& t = FirstRunTour::instance();
+    t.start();
+    for (int i = 0; i < 8; ++i) t.advance();
+    REQUIRE(!t.is_running());
+    REQUIRE(Config::get_instance()->get<bool>("/tour/completed", false) == true);
+}
