@@ -441,6 +441,8 @@ void register_xml_components() {
     // Scanner Device Picker Modal (USB HID device selection for barcode scanner)
     register_xml("scanner_picker_modal.xml");
     register_xml("components/barcode_scanner_device_row.xml");
+    // Barcode Scanner Settings Overlay (persistent device selection + keymap)
+    register_xml("barcode_scanner_settings.xml");
 
     // Feature parity panels
     register_xml("macro_card.xml");
