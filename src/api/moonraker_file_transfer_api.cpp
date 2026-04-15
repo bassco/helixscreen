@@ -62,12 +62,24 @@ MoonrakerFileTransferAPI::~MoonrakerFileTransferAPI() {
         // allow capturing structured bindings in lambdas per C++17 rules)
         auto& thread_ref = t;
 
-        // Launch helper thread to do the join
+        // Launch helper thread to do the join. Under thread exhaustion this
+        // constructor can throw std::system_error(EAGAIN) — catching it here
+        // is critical because we're on a destructor path and throws must not
+        // escape. Detach the original thread as a fallback.
         std::atomic<bool> joined{false};
-        std::thread join_helper([&thread_ref, &joined]() {
-            thread_ref.join();
-            joined.store(true);
-        });
+        std::thread join_helper;
+        try {
+            join_helper = std::thread([&thread_ref, &joined]() {
+                thread_ref.join();
+                joined.store(true);
+            });
+        } catch (const std::system_error& e) {
+            spdlog::warn("[FileTransferAPI] Failed to spawn join_helper ({}) — "
+                         "detaching HTTP thread",
+                         e.what());
+            t.detach();
+            continue;
+        }
 
         // Poll for completion with timeout
         auto start = std::chrono::steady_clock::now();

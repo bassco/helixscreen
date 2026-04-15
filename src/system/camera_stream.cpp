@@ -158,10 +158,26 @@ void CameraStream::stop() {
     bool thread_joined = true;
     if (stream_thread_.joinable()) {
         auto joined = std::make_shared<std::atomic<bool>>(false);
-        std::thread join_helper([this, joined]() {
-            stream_thread_.join();
-            joined->store(true);
-        });
+        // Under thread exhaustion this constructor can throw
+        // std::system_error(EAGAIN). Destructor paths must not let it
+        // escape — detach the stream thread and skip the timed join.
+        std::thread join_helper;
+        bool helper_spawned = false;
+        try {
+            join_helper = std::thread([this, joined]() {
+                stream_thread_.join();
+                joined->store(true);
+            });
+            helper_spawned = true;
+        } catch (const std::system_error& e) {
+            spdlog::warn("[CameraStream] Failed to spawn join_helper ({}) — "
+                         "detaching stream thread",
+                         e.what());
+            stream_thread_.detach();
+            thread_joined = false;
+            thread_detached_ = true;
+        }
+        if (helper_spawned) {
 
         constexpr auto kJoinTimeout = std::chrono::seconds(5);
         constexpr auto kCancelInterval = std::chrono::milliseconds(200);
@@ -191,6 +207,7 @@ void CameraStream::stop() {
         if (join_helper.joinable()) {
             join_helper.join();
         }
+        }  // end if (helper_spawned)
     }
 
     if (was_running) {

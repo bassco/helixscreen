@@ -91,11 +91,23 @@ MoonrakerRestAPI::~MoonrakerRestAPI() {
             continue;
         }
 
+        // Under thread exhaustion this constructor can throw
+        // std::system_error(EAGAIN) — catching it here is critical because
+        // we're on a destructor path and throws must not escape.
         std::atomic<bool> joined{false};
-        std::thread join_helper([&t, &joined]() {
-            t.join();
-            joined.store(true);
-        });
+        std::thread join_helper;
+        try {
+            join_helper = std::thread([&t, &joined]() {
+                t.join();
+                joined.store(true);
+            });
+        } catch (const std::system_error& e) {
+            spdlog::warn("[MoonrakerRestAPI] Failed to spawn join_helper ({}) — "
+                         "detaching HTTP thread",
+                         e.what());
+            t.detach();
+            continue;
+        }
 
         auto start = std::chrono::steady_clock::now();
         while (!joined.load()) {
