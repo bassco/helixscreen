@@ -29,7 +29,7 @@
 
 set -euo pipefail
 
-YOCTO_COSMOS="${YOCTO_COSMOS:-$HOME/yocto-cosmos}"
+YOCTO_COSMOS="${YOCTO_COSMOS:-$HOME/Code/Printing/yocto-cosmos}"
 HELIX_SRC="${HELIX_SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 if [[ ! -d "$YOCTO_COSMOS/poky" ]]; then
