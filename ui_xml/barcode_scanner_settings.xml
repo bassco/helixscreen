@@ -26,7 +26,7 @@
 
       <!-- Keyboard Layout -->
       <setting_section_header title="KEYBOARD LAYOUT" title_tag="KEYBOARD LAYOUT"
-                              icon="translate"/>
+                              icon="keyboard"/>
       <lv_obj width="100%" height="content" flex_flow="row"
               style_flex_cross_place="center" style_pad_left="#space_lg"
               style_pad_right="#space_lg" style_pad_top="#space_sm"

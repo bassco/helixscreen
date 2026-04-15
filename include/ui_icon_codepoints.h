@@ -156,6 +156,9 @@ static const IconMapping ICON_MAP[] = {
     {"inputshaper",        "\xF3\xB0\xA5\x9B"},  // F095B sine-wave
     {"inventory",          "\xF3\xB0\x8F\x96"},  // F03D6 package-variant
 
+    // Keyboard
+    {"keyboard",           "\xF3\xB0\x8C\x8C"},  // F030C keyboard
+
     // LAN/Network
     {"lan",                "\xF3\xB0\x8C\x97"},  // F0317 lan
     {"layers",             "\xF3\xB0\x8C\xA8"},  // F0328 layers

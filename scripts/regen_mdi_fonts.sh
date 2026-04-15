@@ -313,6 +313,7 @@ MDI_ICONS+=",0xF0E79"    # arrow-up-down (bidirectional vertical)
 MDI_ICONS+=",0xF04FE"    # target (touch calibration target)
 
 # Keyboard icons (for on-screen keyboard special keys)
+MDI_ICONS+=",0xF030C"    # keyboard (keyboard layout settings)
 MDI_ICONS+=",0xF030F"    # keyboard-close (dismiss keyboard)
 MDI_ICONS+=",0xF0311"    # keyboard-return (enter key)
 MDI_ICONS+=",0xF0632"    # apple-keyboard-caps (caps lock indicator)
