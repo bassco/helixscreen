@@ -41,9 +41,9 @@
 #include <ucontext.h>
 #endif
 
-// backtrace() is available on glibc (Linux) and macOS.
-// __has_include catches MIPS-gnu toolchains where __GLIBC__ may not be defined.
-#if (defined(__GLIBC__) || defined(__APPLE__) || __has_include(<execinfo.h>)) && !defined(__ANDROID__)
+// backtrace() is available on glibc Linux and macOS. Missing on Android NDK
+// (bionic) and musl libc (Creality K1/K2 MIPS).
+#if defined(__APPLE__) || (defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__))
 #include <execinfo.h>
 #define HAVE_BACKTRACE 1
 #elif defined(__ANDROID__)
@@ -51,8 +51,10 @@
 #define HAVE_ANDROID_LOG 1
 #endif
 
-// dl_iterate_phdr() for discovering ELF load base (ASLR offset)
-#if defined(__linux__)
+// dl_iterate_phdr() for discovering ELF load base (ASLR offset).
+// glibc Linux only — macOS SDK doesn't ship link.h, Android NDK and musl
+// libc don't provide dl_iterate_phdr.
+#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
 #include <link.h>
 #define HAVE_DL_ITERATE_PHDR 1
 #endif
@@ -888,7 +890,16 @@ void crash_handler::refresh_heap_snapshot() noexcept {
 }
 
 // -----------------------------------------------------------------------------
-// Breadcrumb producers (signal-safe)
+// Breadcrumb producers (single-producer: LVGL/UI thread only)
+//
+// note() is lock-free and signal-reader-safe (the signal handler dumping the
+// ring observes consistent per-slot state via the ts_ms release-store), but
+// it is NOT multi-producer safe: two concurrent writers that hash to the
+// same slot (possible on ring wrap) would interleave byte-level writes into
+// category/subject. All real producers today run on the LVGL thread —
+// navigation, modals, the per-frame tick, and boot initialization — so the
+// single-producer contract holds. Do not call from background threads or
+// signal handlers.
 // -----------------------------------------------------------------------------
 
 namespace {

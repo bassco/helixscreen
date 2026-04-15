@@ -151,17 +151,22 @@ namespace breadcrumb {
  * @param subject  Object/panel/component name (<= 59 chars). Truncated.
  *
  * Both pointers may be nullptr (treated as empty). Lock-free, no heap, no
- * syscalls — but do NOT call from signal handlers: a signal interrupting
- * its own producer could race the handler's own ring reader. Call only
- * from normal thread contexts (UI thread or background threads).
+ * syscalls.
+ *
+ * THREADING CONTRACT: single-producer (LVGL/UI thread only). Do NOT call
+ * from signal handlers or from background threads. Two concurrent producers
+ * that hash to the same slot (possible on ring wrap) would interleave
+ * byte-level writes into `category`/`subject`; readers would see a
+ * consistent `ts_ms` but garbled text. All real producers today run on
+ * the LVGL thread (navigation, modals, frame tick, boot).
  */
 void note(const char* category, const char* subject) noexcept;
 
 /**
  * @brief Record an activity breadcrumb with a numeric detail
  *
- * Appends " <detail>" to the subject. Same signal-handler caveat as the
- * two-arg overload — do not call from signal handlers.
+ * Appends " <detail>" to the subject. Same single-producer / LVGL-thread
+ * contract as the two-arg overload.
  */
 void note(const char* category, const char* subject, long detail) noexcept;
 
