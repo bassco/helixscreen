@@ -252,6 +252,7 @@ void MoonrakerRequestTracker::check_timeouts(
     struct TimeoutInfo {
         std::string method_name;
         uint32_t timeout_ms;
+        bool silent;
         std::function<void()> error_callback;
     };
     std::vector<TimeoutInfo> timed_out;
@@ -269,6 +270,7 @@ void MoonrakerRequestTracker::check_timeouts(
                 TimeoutInfo info;
                 info.method_name = request.method;
                 info.timeout_ms = request.timeout_ms;
+                info.silent = request.silent;
 
                 // Capture error callback in lambda if present
                 if (request.error_callback) {
@@ -304,10 +306,15 @@ void MoonrakerRequestTracker::check_timeouts(
     // Phase 2: Emit events and invoke callbacks outside lock
     // (safe - event handlers and callbacks can call send without deadlock)
     for (auto& info : timed_out) {
-        emit_event(MoonrakerEventType::REQUEST_TIMEOUT,
-                   fmt::format("Printer command '{}' timed out after {}ms", info.method_name,
-                               info.timeout_ms),
-                   false, info.method_name);
+        // Silent requests suppress the user-facing REQUEST_TIMEOUT event — callers that opt
+        // into silent mode (e.g. EXCLUDE_OBJECT, which can legitimately sit queued for
+        // minutes during pre-print heating) handle their own error UX via the error callback.
+        if (!info.silent) {
+            emit_event(MoonrakerEventType::REQUEST_TIMEOUT,
+                       fmt::format("Printer command '{}' timed out after {}ms", info.method_name,
+                                   info.timeout_ms),
+                       false, info.method_name);
+        }
 
         if (info.error_callback) {
             info.error_callback();
