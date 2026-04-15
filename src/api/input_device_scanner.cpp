@@ -419,6 +419,68 @@ std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base
     return find_hid_keyboard_devices(dev_base, sysfs_base);
 }
 
+static std::string normalize_mac(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        if (c == ':' || c == '-' || c == ' ')
+            continue;
+        out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    return out;
+}
+
+std::optional<ScannedDevice> find_bt_hid_device_by_mac(const std::string& dev_base,
+                                                       const std::string& sysfs_base,
+                                                       const std::string& mac) {
+    if (mac.empty())
+        return std::nullopt;
+
+    std::string mac_norm = normalize_mac(mac);
+
+    auto dir = std::unique_ptr<DIR, decltype(&closedir)>(opendir(dev_base.c_str()), closedir);
+    if (!dir)
+        return std::nullopt;
+
+    struct dirent* entry;
+    while ((entry = readdir(dir.get())) != nullptr) {
+        if (strncmp(entry->d_name, "event", 5) != 0)
+            continue;
+
+        int event_num = -1;
+        if (sscanf(entry->d_name, "event%d", &event_num) != 1 || event_num < 0)
+            continue;
+
+        std::string device_path = dev_base + "/" + entry->d_name;
+        if (access(device_path.c_str(), R_OK) != 0)
+            continue;
+
+        if (read_bus_type(sysfs_base, event_num) != BUS_BLUETOOTH)
+            continue;
+
+        std::string uniq = helix::input::read_sysfs_line(
+            sysfs_base + "/event" + std::to_string(event_num) + "/device/uniq");
+        if (normalize_mac(uniq) != mac_norm)
+            continue;
+
+        std::string key_caps = read_sysfs_capability(sysfs_base, event_num, "key");
+        if (!check_capability_bit(key_caps, 30))
+            continue;
+
+        std::string name = read_device_name(sysfs_base, event_num);
+        spdlog::info("[InputScanner] Found paired BT HID scanner: {} ({}) mac={}", device_path,
+                     name, mac);
+        return ScannedDevice{device_path, name, event_num};
+    }
+
+    spdlog::debug("[InputScanner] No BT HID evdev found for mac={}", mac);
+    return std::nullopt;
+}
+
+std::optional<ScannedDevice> find_bt_hid_device_by_mac(const std::string& mac) {
+    return find_bt_hid_device_by_mac("/dev/input", "/sys/class/input", mac);
+}
+
 std::string read_sysfs_line(const std::string& path) {
     std::ifstream file(path);
     if (!file.is_open())

@@ -39,7 +39,10 @@ bool write_backup_file(const std::string& src_path, const std::string& backup_pa
         return true;
     } catch (const std::exception& e) {
         std::remove(tmp_path.c_str());
-        spdlog::warn("[Config] Backup to {} failed: {}", backup_path, e.what());
+        // Demoted to debug — write_rolling_backup() warns once if BOTH primary
+        // and fallback fail. A primary-only failure (typical in dev: /var/lib
+        // not writable, $HOME fallback succeeds) is not noteworthy.
+        spdlog::debug("[Config] Backup to {} failed: {}", backup_path, e.what());
         return false;
     }
 }
@@ -48,10 +51,15 @@ void write_rolling_backup(const std::string& src_path, const std::string& primar
                           const std::string& fallback) {
     if (write_backup_file(src_path, primary)) {
         spdlog::trace("[Config] Backup written: {}", primary);
-    } else if (write_backup_file(src_path, fallback)) {
-        spdlog::trace("[Config] Backup written (fallback): {}", fallback);
+        return;
     }
-    // Both failed — non-fatal, already logged
+    if (write_backup_file(src_path, fallback)) {
+        spdlog::trace("[Config] Backup written (fallback): {}", fallback);
+        return;
+    }
+    // Both failed — non-fatal, but worth knowing about.
+    spdlog::warn("[Config] Backup of {} failed at both primary ({}) and fallback ({})", src_path,
+                 primary, fallback);
 }
 
 std::string find_backup(const std::vector<std::string>& paths) {

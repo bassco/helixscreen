@@ -73,7 +73,12 @@ class UsbScannerMonitor {
 
   private:
     void monitor_thread_func();
-    std::vector<std::string> find_scanner_devices();
+    struct ScannerSource {
+        std::string path;
+        bool grab; ///< true = EVIOCGRAB exclusively (BT scanner paired here);
+                   ///< false = passive read (USB; preserves caps-lock LED workflow).
+    };
+    std::vector<ScannerSource> find_scanner_devices();
 
     std::thread monitor_thread_;
     std::atomic<bool> running_{false};

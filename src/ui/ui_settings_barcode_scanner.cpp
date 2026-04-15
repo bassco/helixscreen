@@ -710,6 +710,25 @@ void BarcodeScannerSettingsOverlay::on_bs_bt_scanner_selected(lv_event_t*) {
     LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_bt_scanner_selected");
     if (!s_active_instance_) return;
     s_active_instance_->update_bt_action_buttons();
+
+    // Persist the selection if the chosen device is already paired — that's
+    // the user's "use this scanner" choice. Unpaired entries are skipped here;
+    // they get persisted in the post-pair callback instead.
+    const int idx = s_active_instance_->selected_bt_index();
+    if (idx >= 0 && idx < static_cast<int>(s_active_instance_->bt_devices_.size())) {
+        const auto& dev = s_active_instance_->bt_devices_[idx];
+        if (dev.paired && !dev.mac.empty()) {
+            auto& s = helix::SettingsManager::instance();
+            if (s.get_scanner_bt_address() != dev.mac) {
+                spdlog::info("[BarcodeScannerSettings] Active BT scanner -> {} ({})", dev.name,
+                             dev.mac);
+                s.set_scanner_device_id("");  // BT path supersedes USB VID:PID match
+                s.set_scanner_device_name(dev.name);
+                s.set_scanner_bt_address(dev.mac);
+                s_active_instance_->refresh_current_selection_label();
+            }
+        }
+    }
     LVGL_SAFE_EVENT_CB_END();
 }
 

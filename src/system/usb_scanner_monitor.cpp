@@ -207,17 +207,33 @@ int UsbScannerMonitor::check_spoolman_pattern(const std::string& input) {
 
 #ifdef __linux__
 
-std::vector<std::string> UsbScannerMonitor::find_scanner_devices() {
-    // Check if user has manually configured a specific scanner device
-    std::string configured_id = helix::SettingsManager::instance().get_scanner_device_id();
+std::vector<UsbScannerMonitor::ScannerSource> UsbScannerMonitor::find_scanner_devices() {
+    // Prefer a paired Bluetooth HID scanner if one is configured. BT HID
+    // scanners don't have the caps-lock LED handshake quirk that some USB
+    // scanners do, so we can grab them exclusively to prevent keystrokes from
+    // leaking into focused UI widgets.
+    std::string bt_mac = helix::SettingsManager::instance().get_scanner_bt_address();
+    if (!bt_mac.empty()) {
+        auto bt_dev = helix::input::find_bt_hid_device_by_mac(bt_mac);
+        if (bt_dev) {
+            spdlog::info("UsbScannerMonitor: using BT HID scanner: {} ({}) [exclusive grab]",
+                         bt_dev->path, bt_dev->name);
+            return {ScannerSource{bt_dev->path, true}};
+        }
+        spdlog::debug("UsbScannerMonitor: paired BT scanner {} not present, falling back to USB",
+                      bt_mac);
+    }
 
+    // USB fallback. Caller-configured VID:PID disambiguates from regular keyboards.
+    std::string configured_id = helix::SettingsManager::instance().get_scanner_device_id();
     auto devices =
         helix::input::find_hid_keyboard_devices("/dev/input", "/sys/class/input", configured_id);
     if (devices.empty())
         return {};
 
-    spdlog::info("UsbScannerMonitor: using HID device: {} ({})", devices[0].path, devices[0].name);
-    return {devices[0].path};
+    spdlog::info("UsbScannerMonitor: using HID device: {} ({}) [passive read]", devices[0].path,
+                 devices[0].name);
+    return {ScannerSource{devices[0].path, false}};
 }
 
 void UsbScannerMonitor::start(ScanCallback on_scan) {
@@ -299,18 +315,29 @@ void UsbScannerMonitor::monitor_thread_func() {
         shift_held = false;
         accumulator.clear();
 
-        auto paths = find_scanner_devices();
-        for (const auto& path : paths) {
-            int fd = open(path.c_str(), O_RDONLY | O_NONBLOCK);
+        auto sources = find_scanner_devices();
+        for (const auto& src : sources) {
+            int fd = open(src.path.c_str(), O_RDONLY | O_NONBLOCK);
             if (fd < 0) {
-                spdlog::warn("UsbScannerMonitor: failed to open {}: {}", path, strerror(errno));
+                spdlog::warn("UsbScannerMonitor: failed to open {}: {}", src.path,
+                             strerror(errno));
                 continue;
             }
-            // NOTE: Do NOT use EVIOCGRAB! Many barcode scanners toggle Caps Lock
-            // before/after typing characters. The kernel's `leds` handler must
-            // receive the Caps Lock event to send the LED state update back to
-            // the scanner. Without it, the scanner waits forever for LED
-            // confirmation and retries Caps Lock indefinitely.
+            // EVIOCGRAB only on BT HID scanners. USB scanners may rely on the
+            // kernel's `leds` handler responding to scanner-emitted Caps Lock
+            // toggles (a few quirky USB scanners stall waiting for the LED
+            // ack); BT HID scanners don't do that handshake, so grabbing them
+            // is safe and prevents keystrokes from leaking into focused
+            // widgets.
+            if (src.grab) {
+                if (ioctl(fd, EVIOCGRAB, 1) != 0) {
+                    spdlog::warn("UsbScannerMonitor: EVIOCGRAB failed on {}: {} "
+                                 "(keystrokes will leak)",
+                                 src.path, strerror(errno));
+                } else {
+                    spdlog::info("UsbScannerMonitor: exclusive grab on {}", src.path);
+                }
+            }
             device_fds.push_back(fd);
         }
     };

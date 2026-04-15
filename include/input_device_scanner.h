@@ -64,6 +64,14 @@ std::vector<ScannedDevice> find_hid_keyboard_devices(const std::string& dev_base
                                                      const std::string& sysfs_base,
                                                      const std::string& configured_vendor_product);
 
+/// Find the evdev node for a paired Bluetooth HID device by MAC address.
+/// Matches /sys/class/input/eventN/device/uniq (case-insensitive) on a
+/// BUS_BLUETOOTH device with KEY_A capability. Returns nullopt if not found.
+std::optional<ScannedDevice> find_bt_hid_device_by_mac(const std::string& mac);
+std::optional<ScannedDevice> find_bt_hid_device_by_mac(const std::string& dev_base,
+                                                       const std::string& sysfs_base,
+                                                       const std::string& mac);
+
 /// Enumerate all USB HID keyboard-capable devices with vendor/product IDs.
 /// Used by the scanner picker UI. Returns all matching devices (no prioritization).
 std::vector<UsbHidDevice> enumerate_usb_hid_devices();
