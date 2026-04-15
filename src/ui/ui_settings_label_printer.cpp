@@ -990,9 +990,12 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
     // Disable test print button via subject binding
     lv_subject_set_int(&test_printing_subject_, 1);
 
-    // Create a mock spool for the test label
+    // Create a mock spool for the test label. Use a negative ID so the
+    // embedded QR code never decodes to a real Spoolman spool — if a user
+    // accidentally scans the test label, the decoder rejects it instead of
+    // silently switching the active spool to whatever "42" happens to be.
     SpoolInfo mock_spool;
-    mock_spool.id = 42;
+    mock_spool.id = -1;
     mock_spool.vendor = "Hatchbox";
     mock_spool.material = "PLA";
     mock_spool.color_name = "Red";
