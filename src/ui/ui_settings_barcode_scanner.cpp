@@ -61,6 +61,12 @@ BarcodeScannerSettingsOverlay::BarcodeScannerSettingsOverlay() {
 }
 
 BarcodeScannerSettingsOverlay::~BarcodeScannerSettingsOverlay() {
+    // Singleton lifetime: this runs only at app shutdown via StaticPanelRegistry.
+    // stop_bt_discovery() signals the detached discovery thread to exit; the
+    // thread may still be inside loader.discover(bt_ctx_) when we reach
+    // loader.deinit(bt_ctx_) below. At process exit this is acceptable
+    // (kernel tears down); for any future path that destroys the singleton
+    // while the process continues, promote the discovery thread to joinable.
     stop_bt_discovery();
 
     if (subjects_initialized_) {
@@ -123,7 +129,6 @@ void BarcodeScannerSettingsOverlay::register_callbacks() {
         {"on_bs_keymap_changed", on_bs_keymap_changed},
         {"on_bs_row_clicked", on_bs_row_clicked},
         {"on_bs_row_forget", on_bs_row_forget},
-        {"on_bs_auto_detect_clicked", on_bs_auto_detect_clicked},
         {"on_bs_pair_confirm", on_bs_pair_confirm},
         {"on_bs_pair_cancel", on_bs_pair_cancel},
     });
@@ -345,8 +350,7 @@ void BarcodeScannerSettingsOverlay::populate_device_list() {
         }
     }
 
-    // bt_devices_ (discovery) is populated in Task 7; we still iterate so the
-    // body is complete and Task 7 just needs to uncomment or leave as-is.
+    // Append discovered-but-unpaired BT devices (populated by start_bt_discovery).
     for (const auto& bt_dev : bt_devices_) {
         // Skip if already represented by a sysfs (connected) BT device above
         bool already_shown = false;
@@ -379,7 +383,7 @@ void BarcodeScannerSettingsOverlay::handle_device_selected(const std::string& ve
             if (d.mac == bt_mac && d.paired) { already_paired = true; break; }
         }
         if (!already_paired) {
-            pair_bt_device(bt_mac, device_name);  // stub until Task 7
+            pair_bt_device(bt_mac, device_name);
             return;
         }
     }
@@ -555,7 +559,16 @@ void BarcodeScannerSettingsOverlay::pair_bt_device(const std::string& mac,
     if (!dialog) {
         delete pair_data;
         spdlog::warn("[{}] Failed to show pairing confirmation modal", get_name());
+        return;
     }
+
+    // Safety net: attach a DELETE handler on the dialog so PairData is freed
+    // regardless of how the modal is dismissed (Ok, Cancel, backdrop click, ESC).
+    // The Ok/Cancel handlers below read pair_data but do NOT delete — this
+    // handler owns the cleanup.
+    lv_obj_add_event_cb(dialog, [](lv_event_t* e) {
+        delete static_cast<PairData*>(lv_event_get_user_data(e));
+    }, LV_EVENT_DELETE, pair_data);
 }
 
 void BarcodeScannerSettingsOverlay::handle_bt_forget(const std::string& mac) {
@@ -563,6 +576,9 @@ void BarcodeScannerSettingsOverlay::handle_bt_forget(const std::string& mac) {
 
     auto tok = lifetime_.token();
     // Wrap spawn in try/catch per feedback_no_bare_threads_arm.md (#724).
+    // `this` is captured so the inner tok.defer lambda can access member state;
+    // it is never dereferenced on the BG thread, and tok.defer silently drops
+    // if the overlay has been destroyed (singleton lifetime + token guard).
     try {
         std::thread([this, tok, mac]() {
             auto& loader = helix::bluetooth::BluetoothLoader::instance();
@@ -670,8 +686,6 @@ void BarcodeScannerSettingsOverlay::on_bs_row_forget(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void BarcodeScannerSettingsOverlay::on_bs_auto_detect_clicked(lv_event_t*) {}
-
 void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_pair_confirm");
 
@@ -681,7 +695,7 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
     } else {
         std::string mac  = pair_data->mac;
         std::string name = pair_data->name;
-        delete pair_data;
+        // PairData is freed by the dialog's LV_EVENT_DELETE handler (see pair_bt_device).
 
         // Close the confirmation modal
         auto* top = Modal::get_top();
@@ -757,8 +771,8 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
 void BarcodeScannerSettingsOverlay::on_bs_pair_cancel(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_pair_cancel");
 
-    auto* pair_data = static_cast<PairData*>(lv_event_get_user_data(e));
-    delete pair_data;
+    // PairData is freed by the dialog's LV_EVENT_DELETE handler (see pair_bt_device).
+    (void)e;
 
     auto* top = Modal::get_top();
     if (top)
