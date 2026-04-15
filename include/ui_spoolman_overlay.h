@@ -107,6 +107,15 @@ class SpoolmanOverlay : public OverlayBase {
      */
     void on_ui_destroyed() override;
 
+    /**
+     * @brief Refresh UI state when overlay becomes visible
+     *
+     * Re-syncs the Barcode Scanner row description subject from SettingsManager
+     * so that changes made in the scanner settings sub-overlay are reflected
+     * when the user returns here.
+     */
+    void on_activate() override;
+
     //
     // === Public API ===
     //

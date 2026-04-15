@@ -399,6 +399,12 @@ void SpoolmanOverlay::on_ui_destroyed() {
     status_card_ = nullptr;
 }
 
+void SpoolmanOverlay::on_activate() {
+    OverlayBase::on_activate();
+    // Scanner selection may have changed in the child overlay; re-sync the row.
+    update_scanner_status_text();
+}
+
 // ============================================================================
 // STATIC CALLBACKS
 // ============================================================================
