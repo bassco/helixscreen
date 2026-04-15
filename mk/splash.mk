@@ -15,6 +15,11 @@ SPLASH_CXXFLAGS := $(CXXFLAGS) -I$(INC_DIR) $(LVGL_INC) $(SPDLOG_INC) $(LIBHV_IN
 # Note: LVGL is compiled as objects, not a library - link directly against LVGL_OBJS
 # Include TARGET_LDFLAGS to inherit -static flag for AD5M (glibc 2.25 compatibility)
 SPLASH_LDFLAGS := $(TARGET_LDFLAGS) -lm -lpthread
+# Yocto/bitbake supplies --hash-style=gnu, relro, etc. via env LDFLAGS —
+# preserve them or do_package_qa [ldflags] fails on the splash binary.
+ifeq ($(YOCTO_BUILD),yes)
+    SPLASH_LDFLAGS := $(LDFLAGS) $(SPLASH_LDFLAGS)
+endif
 
 # Strip binary for embedded targets (matches main binary behavior)
 ifeq ($(STRIP_BINARY),yes)

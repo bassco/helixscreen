@@ -17,6 +17,11 @@ WATCHDOG_CXXFLAGS := $(CXXFLAGS) -I$(INC_DIR) -isystem lib $(LVGL_INC) $(SPDLOG_
 # Note: LVGL is compiled as objects, not a library - link directly against LVGL_OBJS
 # Include TARGET_LDFLAGS to inherit -static flag for AD5M (glibc 2.25 compatibility)
 WATCHDOG_LDFLAGS := $(TARGET_LDFLAGS) -lm -lpthread
+# Yocto: preserve bitbake's env LDFLAGS (--hash-style=gnu, relro, etc.) so
+# do_package_qa [ldflags] passes on the watchdog binary.
+ifeq ($(YOCTO_BUILD),yes)
+    WATCHDOG_LDFLAGS := $(LDFLAGS) $(WATCHDOG_LDFLAGS)
+endif
 # GCC 7.5 (K1 dynamic) needs -lstdc++fs for <experimental/filesystem>
 ifeq ($(PLATFORM_TARGET),k1-dynamic)
     WATCHDOG_LDFLAGS += -lstdc++fs
