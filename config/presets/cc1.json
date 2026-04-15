@@ -6,7 +6,7 @@
     "hardware_blank": 0,
     "sleep_backlight_off": false,
     "animations_enabled": false,
-    "gamma": 2.0,
+    "gamma": 1.0,
     "r_gain": 1.0,
     "g_gain": 0.851,
     "b_gain": 0.608
