@@ -12,6 +12,9 @@
 #include <systemd/sd-bus.h>
 
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -46,7 +49,17 @@ struct helix_bt_context {
         int notify_fd = -1;
         uint16_t mtu = 20;
         bool active = false;
+
+        // PropertiesChanged signal match for GATT notifications (used when
+        // AcquireNotify failed and we fell back to StartNotify — values then
+        // arrive as PropertiesChanged signals on the characteristic).
+        sd_bus_slot* notify_slot = nullptr;
+        std::mutex rx_mu;
+        std::condition_variable rx_cv;
+        std::deque<std::vector<uint8_t>> rx_queue;
     };
     std::mutex ble_mutex;
-    std::vector<BleConnection> ble_connections;
+    // unique_ptr because BleConnection holds mutex/condition_variable which
+    // are non-movable — the vector must store pointers, not the objects.
+    std::vector<std::unique_ptr<BleConnection>> ble_connections;
 };
