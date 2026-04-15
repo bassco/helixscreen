@@ -529,19 +529,21 @@ void PrinterState::set_print_in_progress(bool in_progress) {
 
 // Note: set_tracked_led() is now delegated to led_state_component_ in the header
 
-void PrinterState::set_hardware(const helix::PrinterDiscovery& hardware) {
+void PrinterState::set_hardware(helix::PrinterDiscovery hardware) {
     // Called directly from the main LVGL thread (hardware discovery callback).
     // No deferral needed — the caller is already inside a queue_update callback.
+    // Taken by value so we own a stable copy — the caller's source may alias
+    // api->hardware_ which can be written by other queued callbacks (#799).
     spdlog::debug("[PrinterState] set_hardware: has_probe={}", hardware.has_probe());
 
     // Store for later access by UI (e.g., chamber assignment dropdowns)
-    discovery_ = hardware;
+    discovery_ = std::move(hardware);
 
     // Pass auto-detected hardware to the override layer
-    capability_overrides_.set_hardware(hardware);
+    capability_overrides_.set_hardware(discovery_);
 
     // Delegate capability subject updates to capabilities_state_ component
-    capabilities_state_.set_hardware(hardware, capability_overrides_);
+    capabilities_state_.set_hardware(discovery_, capability_overrides_);
 
     // Set kinematics from hardware discovery (configfile.config.printer.kinematics)
     // This is more reliable than toolhead status, which returns null on some printers

@@ -1996,8 +1996,11 @@ void Application::setup_discovery_callbacks() {
                 return;
             }
 
-            // Update API's hardware data — use move to avoid hash table iteration (#789)
-            api->hardware() = std::move(*snapshot);
+            // Copy snapshot into API's hardware data. Copy (not move) so we can
+            // move the snapshot into set_hardware below — the snapshot is the
+            // only reference we own and nobody else aliases it, so this copy is
+            // race-free (#789, #799).
+            api->hardware() = *snapshot;
 
             // Mark discovery complete so splash can exit
             app->m_splash_manager.on_discovery_complete();
@@ -2018,8 +2021,11 @@ void Application::setup_discovery_callbacks() {
                 fs::remove("/tmp/helixscreen_self_restart", ec);
             }
 
+            // Move snapshot into set_hardware (by-value param) so no hash-table
+            // copy iterates against a live, potentially-mutated api->hardware_ (#799).
+            // After this point *snapshot is empty — use api->hardware() for reads.
             const auto& hw = api->hardware();
-            get_printer_state().set_hardware(hw);
+            get_printer_state().set_hardware(std::move(*snapshot));
             get_printer_state().init_fans(
                 hw.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
 

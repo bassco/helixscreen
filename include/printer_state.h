@@ -1138,7 +1138,7 @@ class PrinterState {
      *
      * @param hardware PrinterDiscovery populated from printer.objects.list
      */
-    void set_hardware(const helix::PrinterDiscovery& hardware);
+    void set_hardware(helix::PrinterDiscovery hardware);
 
     /**
      * @brief Set Klipper software version from printer.info
