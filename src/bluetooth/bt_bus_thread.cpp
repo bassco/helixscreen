@@ -29,10 +29,10 @@ void BusThread::start() {
     if (!running_.compare_exchange_strong(expected, true))
         return;
     stopping_.store(false);
-    thread_ = std::thread([this]{
-        thread_id_ = std::this_thread::get_id();
-        loop();
-    });
+    thread_ = std::thread([this]{ loop(); });
+    thread_id_ = thread_.get_id();  // Assigned by the calling thread before start() returns —
+                                    // happens-before any later call to on_thread() via the caller's
+                                    // subsequent actions on this object.
 }
 
 void BusThread::stop() {
@@ -43,7 +43,10 @@ void BusThread::stop() {
     if (thread_.joinable())
         thread_.join();
 
-    // Break any promises for work that never ran.
+    // Drain remaining queue AFTER join: the worker has exited, so no new items
+    // can enter the queue from the worker side, and submit() callers either
+    // (a) saw running_ == false and got an immediately-broken-promise future,
+    // or (b) pushed before our running_.exchange and we catch them here.
     std::lock_guard<std::mutex> lk(mu_);
     while (!queue_.empty()) {
         queue_.front().second.set_exception(
@@ -78,7 +81,6 @@ void BusThread::run_sync(BusWork work) {
 }
 
 void BusThread::notify() {
-    cv_.notify_all();
     if (wakeup_fds_[1] >= 0) {
         uint8_t b = 1;
         ssize_t n = write(wakeup_fds_[1], &b, 1);
@@ -114,6 +116,8 @@ void BusThread::loop() {
         int r = sd_bus_process(bus_, nullptr);
         if (r < 0) {
             fprintf(stderr, "[bt] BusThread sd_bus_process error: %s\n", strerror(-r));
+            running_.store(false);
+            stopping_.store(true);
             break;
         }
         if (r > 0)

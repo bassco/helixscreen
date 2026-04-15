@@ -4,7 +4,6 @@
 #include <systemd/sd-bus.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <future>
@@ -70,7 +69,6 @@ private:
     sd_bus* bus_;
     std::thread thread_;
     std::mutex mu_;
-    std::condition_variable cv_;
     std::deque<std::pair<BusWork, std::promise<void>>> queue_;
     std::atomic<bool> running_{false};
     std::atomic<bool> stopping_{false};
