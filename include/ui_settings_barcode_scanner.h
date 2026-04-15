@@ -69,7 +69,7 @@ class BarcodeScannerSettingsOverlay : public OverlayBase {
     static void on_bs_pair_confirm(lv_event_t* e);
     static void on_bs_pair_cancel(lv_event_t* e);
 
-    // Subjects (component-scoped via lv_xml_component_get_scope)
+    // Subjects (global scope — single-instance overlay)
     lv_subject_t bt_available_subject_{};
     lv_subject_t bt_discovering_subject_{};
     lv_subject_t keymap_index_subject_{};
