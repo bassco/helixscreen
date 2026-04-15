@@ -93,6 +93,11 @@ define test_cxx_stdlib
 $(shell printf '$(HASH)include <cstdlib>\n' | $(1) -x c++ -std=c++17 -fsyntax-only - 2>/dev/null && echo ok)
 endef
 
+# Yocto mode: bitbake passes CC/CXX/AR/LD/STRIP/RANLIB on the make command line
+# with full paths and machine flags baked in. Skip host-toolchain autodetect
+# and ccache wrapping — bitbake manages its own caching upstream.
+ifneq ($(PLATFORM_TARGET),yocto)
+
 ifeq ($(origin CC),default)
     ifneq ($(shell command -v clang 2>/dev/null),)
         CC := clang
@@ -142,6 +147,8 @@ ifneq ($(CCACHE),)
     endif
 endif
 
+endif # PLATFORM_TARGET != yocto
+
 # Dependency generation flags for proper header tracking
 # -MMD: Generate .d dependency files for user headers (not system headers)
 # -MP: Add phony targets for headers (prevents errors when headers are deleted)
@@ -157,11 +164,21 @@ OPT ?= 2
 # -D_FORTIFY_SOURCE=2: compile-time + runtime bounds checking for memcpy/sprintf/etc
 # -fstack-protector-strong: stack canaries on functions with local arrays/alloca
 # Note: _FORTIFY_SOURCE requires optimization (-O1+), so disable it at -O0
-CFLAGS := -std=c11 -Wall -Wextra -O$(OPT) -g -D_GNU_SOURCE -fno-omit-frame-pointer -fstack-protector-strong
-CXXFLAGS := -std=c++17 -Wall -Wextra -O$(OPT) -g -fno-omit-frame-pointer -fstack-protector-strong
-ifneq ($(OPT),0)
-    CFLAGS += -D_FORTIFY_SOURCE=2
-    CXXFLAGS += -D_FORTIFY_SOURCE=2
+#
+# Yocto mode: bitbake's CFLAGS/CXXFLAGS already include --sysroot, -march,
+# optimization, and security flags. Append our project flags with += instead
+# of clobbering. -Wno-psabi silences the ARM parameter-passing ABI-change
+# notes that appear on cortex-a7 hard-float cross builds.
+ifeq ($(PLATFORM_TARGET),yocto)
+    CFLAGS += -std=c11 -Wall -Wextra -D_GNU_SOURCE -Wno-psabi
+    CXXFLAGS += -std=c++17 -Wall -Wextra -Wno-psabi
+else
+    CFLAGS := -std=c11 -Wall -Wextra -O$(OPT) -g -D_GNU_SOURCE -fno-omit-frame-pointer -fstack-protector-strong
+    CXXFLAGS := -std=c++17 -Wall -Wextra -O$(OPT) -g -fno-omit-frame-pointer -fstack-protector-strong
+    ifneq ($(OPT),0)
+        CFLAGS += -D_FORTIFY_SOURCE=2
+        CXXFLAGS += -D_FORTIFY_SOURCE=2
+    endif
 endif
 
 # Version information (read from VERSION.txt file)

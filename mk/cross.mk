@@ -551,6 +551,41 @@ else ifeq ($(PLATFORM_TARGET),x86-both)
     FONT_TIERS := all
     PI_DUAL_LINK := yes
 
+else ifeq ($(PLATFORM_TARGET),yocto)
+    # -------------------------------------------------------------------------
+    # Yocto / BitBake cross-build (OpenCentauri COSMOS → Centauri Carbon 1 today;
+    # generic enough for any future Yocto machine/BSP).
+    #
+    # Bitbake's EXTRA_OEMAKE passes CC/CXX/AR/LD/STRIP/RANLIB as full paths and
+    # populates CFLAGS/CXXFLAGS/LDFLAGS/PKG_CONFIG env with the target sysroot,
+    # --march, security, and optimization flags. We add nothing that could
+    # conflict — the recipe's DEPENDS supplies every vendored library we'd
+    # otherwise build from submodule (libhv, spdlog, fmt, alsa-lib, libdrm,
+    # libusb, libnl, wpa-supplicant, etc.). See docs/devel/YOCTO_BUILD.md.
+    # -------------------------------------------------------------------------
+    # Bitbake passes CROSS_COMPILE=yocto- as a sentinel; clear it so the
+    # prefix-based CC/CXX override below does not run (bitbake's CC already
+    # has the full path + machine flags baked in).
+    override CROSS_COMPILE :=
+    TARGET_ARCH := yocto
+    TARGET_TRIPLE := yocto
+    # Bitbake drives CFLAGS/LDFLAGS via env; don't add platform flags here.
+    TARGET_CFLAGS :=
+    TARGET_LDFLAGS :=
+    ENABLE_SSL := yes
+    DISPLAY_BACKEND := fbdev
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
+    ENABLE_EVDEV := yes
+    BUILD_SUBDIR := yocto
+    # Don't strip — bitbake's package split handles debug/strip via FILES:${PN}-dbg.
+    STRIP_BINARY := no
+    # CC1 has 112MB RAM; trim fonts like the existing cc1 target.
+    FONT_TIERS := micro tiny
+    # Skip all in-tree submodule dep builds — Yocto recipe provides via DEPENDS.
+    YOCTO_BUILD := yes
+
 else ifeq ($(PLATFORM_TARGET),native)
     # -------------------------------------------------------------------------
     # Native desktop build (macOS / Linux)
@@ -566,7 +601,7 @@ else ifeq ($(PLATFORM_TARGET),native)
     BUILD_SUBDIR :=
 
 else
-    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, x86, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1)
+    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, x86, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1, yocto)
 endif
 
 # =============================================================================

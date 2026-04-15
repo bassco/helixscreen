@@ -44,6 +44,21 @@ if [[ ! -f "$YOCTO_COSMOS/build/conf/auto.conf" ]]; then
     exit 1
 fi
 
+# Worktrees share lib/ dirs with the main tree via symlinks (see
+# scripts/setup-worktree.sh). If HELIX_SRC is a worktree, those symlinks
+# point at the main tree's absolute host path — which is invisible inside
+# the container unless we also mount it at the same path.
+MAIN_MOUNT_ARGS=()
+if [[ -f "$HELIX_SRC/.git" ]]; then
+    # `.git` file format: "gitdir: /abs/path/.git/worktrees/NAME"
+    GITDIR=$(awk '{print $2}' "$HELIX_SRC/.git")
+    # gitdir is /abs/repo/.git/worktrees/NAME — three levels up to repo root.
+    MAIN_TREE=$(cd "$GITDIR/../../.." && pwd)
+    if [[ -d "$MAIN_TREE" && "$MAIN_TREE" != "$HELIX_SRC" ]]; then
+        MAIN_MOUNT_ARGS=(-v "$MAIN_TREE:$MAIN_TREE")
+    fi
+fi
+
 # Default: bitbake helixscreen. Caller can override.
 if [[ $# -eq 0 ]]; then
     set -- helixscreen
@@ -54,6 +69,7 @@ if [[ "${1:-}" == "bash" ]]; then
     exec docker run --rm -it \
         -v "$YOCTO_COSMOS:/workdir" \
         -v "$HELIX_SRC:/workdir/helixscreen" \
+        "${MAIN_MOUNT_ARGS[@]}" \
         crops/poky:ubuntu-22.04 \
         --workdir=/workdir
 fi
@@ -62,6 +78,7 @@ fi
 exec docker run --rm \
     -v "$YOCTO_COSMOS:/workdir" \
     -v "$HELIX_SRC:/workdir/helixscreen" \
+    "${MAIN_MOUNT_ARGS[@]}" \
     crops/poky:ubuntu-22.04 \
     --workdir=/workdir \
     -- bash -c "source poky/oe-init-build-env build >/dev/null && bitbake $*"

@@ -92,8 +92,12 @@ ifndef _PARALLEL_CHECKED
 	fi
 	@echo "$(CURRENT_TARGET)" > "$(ARCH_MARKER)"
 	@# Check dependencies BEFORE parallel build starts (prevents confusing errors)
-	@# Only run if marker is missing or older than check script
-	@# SKIP_OPTIONAL_DEPS=1 passes --minimal for cross-compilation builds (Docker)
+	@# Only run if marker is missing or older than check script.
+	@# SKIP_OPTIONAL_DEPS=1 passes --minimal for cross-compilation builds (Docker).
+	@# Yocto: bitbake already validates the toolchain + DEPENDS. check-deps.sh
+	@# invokes `command -v "$$CXX"` which fails when CXX has flags baked in,
+	@# and it probes host-tooling assumptions irrelevant to the target build.
+ifneq ($(YOCTO_BUILD),yes)
 	@if [ ! -f "$(DEPS_CHECKED_MARKER)" ] || [ "scripts/check-deps.sh" -nt "$(DEPS_CHECKED_MARKER)" ]; then \
 		CC="$(CC)" CXX="$(CXX)" ENABLE_SSL="$(ENABLE_SSL)" \
 			LVGL_DIR="$(LVGL_DIR)" SPDLOG_DIR="$(SPDLOG_DIR)" \
@@ -101,6 +105,7 @@ ifndef _PARALLEL_CHECKED
 			./scripts/check-deps.sh $(if $(filter 1,$(SKIP_OPTIONAL_DEPS)),--minimal,) || exit 1; \
 		touch "$(DEPS_CHECKED_MARKER)"; \
 	fi
+endif
 	@# Auto-parallelize: add -j$(NPROC) unless bounded -jN already set
 	@if echo "$(MAKEFLAGS)" | grep -q 'jobserver'; then \
 		exec $(MAKE) _PARALLEL_CHECKED=1 $(MAKECMDGOALS); \
