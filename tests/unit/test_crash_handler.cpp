@@ -18,6 +18,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <unistd.h>
+#include <vector>
 
 #include "../catch_amalgamated.hpp"
 #include "hv/json.hpp"
@@ -592,4 +594,166 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: TelemetryManager crash event includes
 
     fs::remove(tm_crash_path);
     tm.shutdown();
+}
+
+// ============================================================================
+// Breadcrumb ring + extended parser coverage [telemetry][crash]
+// ============================================================================
+//
+// Protects the signal-handler-adjacent code paths that a future refactor
+// could silently break: ring wraparound math, string truncation in
+// copy_truncated, and parser coverage for the post-v0.99.31 fields
+// (breadcrumbs, event_target / event_original_target / event_code, and the
+// heap_* / lv_heap_* snapshot fields).
+
+namespace {
+
+/// Call breadcrumb::dump_to_fd into a pipe and return every line emitted.
+/// The dump uses write() directly (signal-safe), so a pipe is the simplest
+/// readable sink from a normal test context.
+std::vector<std::string> capture_breadcrumb_dump() {
+    int pipe_fds[2];
+    REQUIRE(::pipe(pipe_fds) == 0);
+    crash_handler::breadcrumb::dump_to_fd(pipe_fds[1]);
+    ::close(pipe_fds[1]);
+
+    std::string buf;
+    char chunk[256];
+    ssize_t n;
+    while ((n = ::read(pipe_fds[0], chunk, sizeof(chunk))) > 0) {
+        buf.append(chunk, static_cast<size_t>(n));
+    }
+    ::close(pipe_fds[0]);
+
+    std::vector<std::string> lines;
+    size_t start = 0;
+    for (size_t i = 0; i < buf.size(); ++i) {
+        if (buf[i] == '\n') {
+            lines.emplace_back(buf.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+    return lines;
+}
+
+} // namespace
+
+TEST_CASE("Crash: breadcrumb ring keeps the newest 64 entries on wraparound",
+          "[telemetry][crash]") {
+    // Drain the ring first — static state leaks across test cases. Writing
+    // 64 drain entries pushes any residual application breadcrumbs out.
+    for (int i = 0; i < 64; ++i) {
+        crash_handler::breadcrumb::note("drain", "drain");
+    }
+
+    // Write 70 distinguishable entries; the ring holds 64, so entries 0..5
+    // should be overwritten. Encode the index as the detail suffix so we
+    // can extract it from the dumped subject string.
+    for (int i = 0; i < 70; ++i) {
+        crash_handler::breadcrumb::note("t", "entry", i);
+    }
+
+    auto lines = capture_breadcrumb_dump();
+    REQUIRE(lines.size() == 64);
+
+    auto extract_index = [](const std::string& line) -> int {
+        auto pos = line.rfind(' ');
+        if (pos == std::string::npos) return -1;
+        return std::stoi(line.substr(pos + 1));
+    };
+
+    REQUIRE(extract_index(lines.front()) == 6);
+    REQUIRE(extract_index(lines.back()) == 69);
+
+    // Indices must be strictly monotonic — order preservation matters for
+    // correlating with the crash location further down the log.
+    for (size_t i = 1; i < lines.size(); ++i) {
+        REQUIRE(extract_index(lines[i]) == extract_index(lines[i - 1]) + 1);
+    }
+}
+
+TEST_CASE("Crash: breadcrumb category/subject are truncated with null terminator",
+          "[telemetry][crash]") {
+    for (int i = 0; i < 64; ++i) {
+        crash_handler::breadcrumb::note("drain", "drain");
+    }
+
+    // category longer than 7 chars, subject longer than 59 chars. If
+    // copy_truncated failed to null-terminate, the dump would walk into
+    // neighboring slot bytes and produce visible garbage.
+    const std::string long_category(32, 'C');
+    const std::string long_subject(200, 'S');
+    crash_handler::breadcrumb::note(long_category.c_str(), long_subject.c_str());
+
+    auto lines = capture_breadcrumb_dump();
+    REQUIRE_FALSE(lines.empty());
+    const std::string& last = lines.back();
+
+    // Format: "crumb:<ms> <cat> <subj>"
+    auto subj_start = last.rfind(' ');
+    REQUIRE(subj_start != std::string::npos);
+    auto cat_start = last.rfind(' ', subj_start - 1);
+    REQUIRE(cat_start != std::string::npos);
+
+    std::string category = last.substr(cat_start + 1, subj_start - cat_start - 1);
+    std::string subject = last.substr(subj_start + 1);
+
+    REQUIRE(category.size() <= 7);
+    REQUIRE(category == std::string(category.size(), 'C'));
+    REQUIRE(subject.size() <= 59);
+    REQUIRE(subject == std::string(subject.size(), 'S'));
+}
+
+TEST_CASE_METHOD(CrashTestFixture,
+                 "Crash: parser surfaces breadcrumbs, event target, and heap snapshot",
+                 "[telemetry][crash]") {
+    // Synthesize a crash file exercising every post-v0.99.31 field. This is
+    // the contract that telemetry ingestion, crash_reporter rendering, and
+    // offline analysis all depend on — a silent parser regression shows up
+    // as missing fields on the dashboard, not a build break.
+    write_crash_file("signal:11\n"
+                     "name:SIGSEGV\n"
+                     "version:0.99.99\n"
+                     "timestamp:1707350400\n"
+                     "uptime:42\n"
+                     "bt:0x400abc\n"
+                     "event_target:0x7fc0d2a8\n"
+                     "event_original_target:0x7fc0d300\n"
+                     "event_code:29\n"
+                     "heap_snapshot_age_ms:8217\n"
+                     "heap_rss_kb:38400\n"
+                     "heap_vsz_kb:102400\n"
+                     "heap_arena_kb:40960\n"
+                     "heap_used_kb:38912\n"
+                     "heap_free_kb:2048\n"
+                     "heap_mmap_kb:512\n"
+                     "lv_heap_total_kb:512\n"
+                     "lv_heap_used_pct:88\n"
+                     "lv_heap_frag_pct:31\n"
+                     "lv_heap_free_biggest_kb:14\n"
+                     "crumb:1000 boot v0.99.99\n"
+                     "crumb:5200 nav home\n"
+                     "crumb:5210 xml home_card\n");
+
+    auto result = crash_handler::read_crash_file(crash_path());
+    REQUIRE_FALSE(result.is_null());
+
+    REQUIRE(result["event_target"] == "0x7fc0d2a8");
+    REQUIRE(result["event_original_target"] == "0x7fc0d300");
+    REQUIRE(result["event_code"] == 29);
+
+    REQUIRE(result["heap_snapshot_age_ms"] == 8217);
+    REQUIRE(result["heap_rss_kb"] == 38400);
+    REQUIRE(result["heap_arena_kb"] == 40960);
+    REQUIRE(result["heap_used_kb"] == 38912);
+    REQUIRE(result["lv_heap_used_pct"] == 88);
+    REQUIRE(result["lv_heap_frag_pct"] == 31);
+    REQUIRE(result["lv_heap_free_biggest_kb"] == 14);
+
+    REQUIRE(result.contains("breadcrumbs"));
+    REQUIRE(result["breadcrumbs"].is_array());
+    REQUIRE(result["breadcrumbs"].size() == 3);
+    REQUIRE(result["breadcrumbs"][0] == "1000 boot v0.99.99");
+    REQUIRE(result["breadcrumbs"][1] == "5200 nav home");
+    REQUIRE(result["breadcrumbs"][2] == "5210 xml home_card");
 }

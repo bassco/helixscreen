@@ -612,26 +612,9 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
 
     // Dump breadcrumb ring (oldest → newest). Torn writes are tolerated:
     // slot.ts_ms is stored last with release semantics, so a zero ts means the
-    // slot is either empty or mid-write. In both cases we skip.
-    {
-        uint32_t end = s_breadcrumb_idx.load(std::memory_order_acquire);
-        uint32_t start = (end > kBreadcrumbRingSize) ? end - kBreadcrumbRingSize : 0;
-        for (uint32_t i = start; i < end; ++i) {
-            const BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
-            uint32_t ts = __atomic_load_n(&slot.ts_ms, __ATOMIC_ACQUIRE);
-            if (ts == 0) continue;
-            safe_write(fd, "crumb:");
-            safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(ts)));
-            safe_write(fd, " ");
-            // category and subject are always null-terminated by copy_truncated.
-            // An empty category is still written as an empty field between spaces
-            // so the parser can split on whitespace deterministically.
-            safe_write(fd, slot.category[0] ? slot.category : "-");
-            safe_write(fd, " ");
-            safe_write(fd, slot.subject[0] ? slot.subject : "-");
-            safe_write(fd, "\n");
-        }
-    }
+    // slot is either empty or mid-write. In both cases we skip. Shared with
+    // test code via the public dump_to_fd() entry point.
+    crash_handler::breadcrumb::dump_to_fd(fd);
 
     // Inject ucontext PC and LR as the first backtrace entries.
     // On ARM32 (static binary), backtrace() cannot unwind past the signal
@@ -940,6 +923,27 @@ void crash_handler::breadcrumb::note(const char* category, const char* subject) 
 
     // Publish with release so readers (signal handler) see a complete slot.
     __atomic_store_n(&slot.ts_ms, breadcrumb_now_ms(), __ATOMIC_RELEASE);
+}
+
+void crash_handler::breadcrumb::dump_to_fd(int fd) noexcept {
+    char num_buf[32];
+    uint32_t end = s_breadcrumb_idx.load(std::memory_order_acquire);
+    uint32_t start = (end > kBreadcrumbRingSize) ? end - kBreadcrumbRingSize : 0;
+    for (uint32_t i = start; i < end; ++i) {
+        const BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
+        uint32_t ts = __atomic_load_n(&slot.ts_ms, __ATOMIC_ACQUIRE);
+        if (ts == 0) continue;
+        safe_write(fd, "crumb:");
+        safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(ts)));
+        safe_write(fd, " ");
+        // category and subject are always null-terminated by copy_truncated.
+        // An empty category is still written as an empty field between spaces
+        // so the parser can split on whitespace deterministically.
+        safe_write(fd, slot.category[0] ? slot.category : "-");
+        safe_write(fd, " ");
+        safe_write(fd, slot.subject[0] ? slot.subject : "-");
+        safe_write(fd, "\n");
+    }
 }
 
 void crash_handler::breadcrumb::note(const char* category, const char* subject,

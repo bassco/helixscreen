@@ -165,6 +165,16 @@ void note(const char* category, const char* subject) noexcept;
  */
 void note(const char* category, const char* subject, long detail) noexcept;
 
+/**
+ * @brief Dump the ring buffer to a file descriptor as crumb: lines
+ *
+ * Writes the oldest-to-newest breadcrumbs as `crumb:<ms> <cat> <subj>\n`
+ * lines using only async-signal-safe primitives. Used by the crash signal
+ * handler; exposed here so tests can verify ring state by dumping to a
+ * pipe and parsing the output.
+ */
+void dump_to_fd(int fd) noexcept;
+
 } // namespace breadcrumb
 
 } // namespace crash_handler
