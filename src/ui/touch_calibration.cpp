@@ -124,6 +124,19 @@ Point transform_point(const TouchCalibration& cal, Point raw, int max_x, int max
     return result;
 }
 
+bool invert_transform_point(const TouchCalibration& cal, Point screen, Point& out_raw) {
+    if (!cal.valid) return false;
+    float det = cal.a * cal.e - cal.b * cal.d;
+    if (std::abs(det) < 1e-6f) return false;
+    float sx = static_cast<float>(screen.x) - cal.c;
+    float sy = static_cast<float>(screen.y) - cal.f;
+    float rx = (cal.e * sx - cal.b * sy) / det;
+    float ry = (-cal.d * sx + cal.a * sy) / det;
+    out_raw.x = static_cast<int>(std::round(rx));
+    out_raw.y = static_cast<int>(std::round(ry));
+    return true;
+}
+
 bool is_calibration_valid(const TouchCalibration& cal) {
     if (!cal.valid) {
         return false;

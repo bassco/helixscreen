@@ -82,17 +82,9 @@ TouchCalibrationOverlay::TouchCalibrationOverlay() {
     // Create the calibration panel
     panel_ = std::make_unique<helix::TouchCalibrationPanel>();
 
-    // Set screen size from DisplayManager
-    DisplayManager* display_mgr = DisplayManager::instance();
-    if (display_mgr && display_mgr->is_initialized()) {
-        panel_->set_screen_size(display_mgr->width(), display_mgr->height());
-        spdlog::debug("[{}] Screen size set to {}x{}", get_name(), display_mgr->width(),
-                      display_mgr->height());
-    } else {
-        // Fallback to defaults
-        panel_->set_screen_size(800, 480);
-        spdlog::warn("[{}] DisplayManager not available, using default 800x480", get_name());
-    }
+    // Screen size is (re)sampled from DisplayManager in show() — the overlay
+    // is a singleton constructed early in startup before the display has
+    // finished rotating/sizing, so constructor-time dimensions can be stale.
 
     // Set completion callback
     panel_->set_completion_callback(
@@ -256,7 +248,8 @@ lv_obj_t* TouchCalibrationOverlay::create(lv_obj_t* parent) {
         return nullptr;
     }
 
-    // Find crosshair widget for positioning
+    // Find crosshair and touch capture widgets. Reparenting to screen root
+    // is deferred to show() so z-order lands above the pushed overlay panel.
     crosshair_ = lv_obj_find_by_name(overlay_root_, "crosshair");
     if (!crosshair_) {
         spdlog::warn("[{}] Crosshair widget not found in XML", get_name());
@@ -285,6 +278,23 @@ void TouchCalibrationOverlay::show(CompletionCallback callback) {
     completion_callback_ = std::move(callback);
     callback_invoked_ = false;
 
+    // Re-sample screen dimensions every time the overlay opens. The display
+    // may have rotated/resized since construction (singleton is built early
+    // in startup). Stale dimensions cause crosshairs to land at wrong screen
+    // ratios and produce a systematically biased Y affine — the bottom 22%
+    // of the screen is pure extrapolation from the (50%, 78%) target.
+    if (panel_) {
+        DisplayManager* display_mgr = DisplayManager::instance();
+        if (display_mgr && display_mgr->is_initialized()) {
+            panel_->set_screen_size(display_mgr->width(), display_mgr->height());
+            spdlog::debug("[{}] Screen size set to {}x{}", get_name(), display_mgr->width(),
+                          display_mgr->height());
+        } else {
+            panel_->set_screen_size(800, 480);
+            spdlog::warn("[{}] DisplayManager not available, using default 800x480", get_name());
+        }
+    }
+
     // Start in IDLE — first tap anywhere begins calibration
     if (panel_) {
         panel_->cancel(); // Reset to IDLE
@@ -304,6 +314,10 @@ void TouchCalibrationOverlay::show(CompletionCallback callback) {
     NavigationManager::instance().register_overlay_instance(overlay_root_, this);
 
     // Push onto navigation stack - on_activate() will be called by NavigationManager
+    // (which is where we reparent crosshair + capture layer to screen root, see
+    // on_activate() below). Reparenting MUST happen after push_overlay's queued
+    // lambda runs and calls lv_obj_move_foreground(overlay_root_) — otherwise
+    // the reparented widgets land below the overlay in z-order.
     NavigationManager::instance().push_overlay(overlay_root_);
 
     spdlog::info("[{}] Overlay shown", get_name());
@@ -331,6 +345,26 @@ void TouchCalibrationOverlay::on_activate() {
     OverlayBase::on_activate();
 
     spdlog::debug("[{}] on_activate()", get_name());
+
+    // Reparent ONLY the crosshair to screen root, AFTER push_overlay moves
+    // overlay_root_ to foreground. Rationale:
+    //   - The crosshair's visual position must match the screen_points the
+    //     calibration solver uses. If it stays inside calibration_content,
+    //     it's offset by the overlay's title bar — producing a Y-biased
+    //     calibration that shifts every tap after the cal is accepted.
+    //   - The touch_capture_overlay does NOT need reparenting. LVGL dispatches
+    //     touch events using the indev-reported coord, not the widget's
+    //     physical screen rect. Leaving the capture layer in its XML location
+    //     avoids z-order gotchas (reparenting it put it under the overlay
+    //     panel's foreground-moved backdrop and broke touch capture entirely).
+    if (crosshair_) {
+        if (!crosshair_orig_parent_) {
+            crosshair_orig_parent_ = lv_obj_get_parent(crosshair_);
+        }
+        lv_obj_set_parent(crosshair_, lv_screen_active());
+        lv_obj_add_flag(crosshair_, LV_OBJ_FLAG_FLOATING);
+        lv_obj_move_foreground(crosshair_);
+    }
 
     // Initialize crosshair position if calibrating
     update_crosshair_position();
@@ -368,6 +402,17 @@ void TouchCalibrationOverlay::cleanup() {
         panel_->set_completion_callback(nullptr);
         panel_->cancel();
     }
+
+    // Restore crosshair to its original XML parent so the overlay can be
+    // re-shown cleanly and the widget doesn't linger on screen when hidden.
+    // Also clear the FLOATING flag we added in on_activate() so layout
+    // behavior matches the XML default on next show.
+    if (crosshair_ && crosshair_orig_parent_) {
+        lv_obj_set_parent(crosshair_, crosshair_orig_parent_);
+        lv_obj_remove_flag(crosshair_, LV_OBJ_FLAG_FLOATING);
+        lv_obj_add_flag(crosshair_, LV_OBJ_FLAG_HIDDEN);
+    }
+    crosshair_orig_parent_ = nullptr;
 
     // Clear widget pointers
     crosshair_ = nullptr;
@@ -495,18 +540,41 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
 
     auto state_before = panel_->get_state();
 
-    // Handle VERIFY state - show calibration accuracy visualization with ripple
+    // Handle VERIFY state - show calibration accuracy visualization with ripple.
+    //
+    // The OLD calibration is active in the touch wrapper (for safe button
+    // dispatch — see VERIFY-entry block below). That means `point` is the
+    // finger's position under OLD cal. To give the user honest feedback about
+    // the NEW cal they just captured, we must show the ripple where the NEW
+    // cal would place the same physical finger: reverse OLD cal to recover
+    // raw coords, then forward through NEW cal.
     if (state_before == helix::TouchCalibrationPanel::State::VERIFY) {
         spdlog::debug("[{}] Verify touch at ({}, {})", get_name(), point.x, point.y);
 
-        lv_obj_t* content = lv_obj_find_by_name(overlay_root_, "calibration_content");
-        if (content) {
-            create_ripple(content, point.x, point.y);
+        DisplayManager* dm = DisplayManager::instance();
+        helix::Point ripple_pt{point.x, point.y};
+
+        const TouchCalibration* new_cal = panel_->get_calibration();
+        if (dm && new_cal && new_cal->valid) {
+            TouchCalibration old_cal = dm->get_current_calibration();
+            helix::Point raw;
+            if (helix::invert_transform_point(old_cal, {point.x, point.y}, raw)) {
+                ripple_pt = helix::transform_point(*new_cal, raw, dm->width() - 1,
+                                                   dm->height() - 1);
+                if (helix::is_touch_debug_enabled()) {
+                    spdlog::warn("[TouchDebug] verify ripple: lvgl=({},{}) -> raw=({},{}) "
+                                 "-> new_cal=({},{})",
+                                 point.x, point.y, raw.x, raw.y, ripple_pt.x, ripple_pt.y);
+                }
+            }
         }
 
-        DisplayManager* dm = DisplayManager::instance();
+        // Draw ripple on the top layer so coordinates are SCREEN-ABSOLUTE.
+        create_ripple(lv_layer_top(), ripple_pt.x, ripple_pt.y);
+
         bool on_screen =
-            dm && point.x >= 0 && point.x < dm->width() && point.y >= 0 && point.y < dm->height();
+            dm && ripple_pt.x >= 0 && ripple_pt.x < dm->width() && ripple_pt.y >= 0 &&
+            ripple_pt.y < dm->height();
         panel_->report_verify_touch(on_screen);
         return;
     }
@@ -526,18 +594,26 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
         flash_object(crosshair_, 200, true);
     }
 
-    // If we just entered VERIFY, temporarily apply new calibration so accept/retry buttons
-    // are tappable even if the previous calibration was bad
+    // On entering VERIFY, re-enable the ORIGINAL calibration so Accept/Retry
+    // buttons require a physical press on their actual screen location.
+    //
+    // Prior behavior: temporarily applied the new (untested) calibration here.
+    // That was unsafe — a bad matrix could map any random raw touch onto the
+    // Accept button's logical rect, causing the garbage cal to save itself
+    // the moment the user tapped anywhere on the overlay. Once saved, the
+    // device became un-touchable until reboot + config reset.
+    //
+    // With the original cal active, Accept only fires when the user physically
+    // taps the button. The ripple below visualizes finger position under the
+    // known-good cal, so the user can still sanity-check responsiveness.
     if (panel_->get_state() == helix::TouchCalibrationPanel::State::VERIFY) {
-        const TouchCalibration* cal = panel_->get_calibration();
         DisplayManager* dm = DisplayManager::instance();
-        if (cal && cal->valid && dm) {
-            backup_calibration_ = dm->get_current_calibration();
-            has_backup_ = true;
-            if (dm->apply_touch_calibration(*cal)) {
-                spdlog::info("[{}] New calibration applied for verification", get_name());
-            }
+        if (dm) {
+            dm->enable_affine_calibration();
+            spdlog::info("[{}] Re-enabled original calibration for VERIFY (new cal NOT applied until accept)",
+                         get_name());
         }
+        has_backup_ = false;
     }
 
     // Map panel state to subject state

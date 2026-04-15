@@ -880,6 +880,32 @@ static int run_watchdog(const WatchdogArgs& args) {
             continue;
         }
 
+        // The app's signal handler catches SIGSEGV/SIGABRT/SIGBUS etc., writes
+        // the crash report, then calls exit(128+signum). From waitpid()'s view
+        // that's WIFEXITED with a non-zero code, not WIFSIGNALED — but it IS a
+        // crash. Exit codes in [128, 159] follow the POSIX shell convention of
+        // encoding signal N as exit 128+N. Translate back so the recovery
+        // dialog reflects the real signal.
+        if (!crash.was_signaled && crash.exit_code > 128 && crash.exit_code < 160) {
+            int signum = crash.exit_code - 128;
+            spdlog::warn("[Watchdog] Child exited with code {} (signal {} via crash handler)",
+                         crash.exit_code, signum);
+            crash.was_signaled = true;
+            crash.signal_num = signum;
+            crash.signal_name = strsignal(signum);
+            crash.exit_code = 0;
+            // fall through to crash-handling path below
+        } else if (!crash.was_signaled) {
+            // Genuine non-zero exit (no crash): deliberate exit() with a
+            // failure code — "another instance running", config validation,
+            // CLI arg error, etc. Log and restart with backoff to avoid
+            // busy-looping when the condition persists.
+            spdlog::warn("[Watchdog] Child exited with code {} (not a crash), restarting in 3s",
+                         crash.exit_code);
+            sleep(3);
+            continue;
+        }
+
         // Graceful shutdown signals (SIGTERM, SIGINT) - exit watchdog, don't treat as crash
         // These are intentional termination requests (systemctl stop, kill, Ctrl+C)
         if (crash.was_signaled && (crash.signal_num == SIGTERM || crash.signal_num == SIGINT)) {

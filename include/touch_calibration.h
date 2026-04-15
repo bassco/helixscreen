@@ -151,6 +151,20 @@ bool compute_calibration(const Point screen_points[3], const Point touch_points[
 Point transform_point(const TouchCalibration& cal, Point raw, int max_x = 0, int max_y = 0);
 
 /**
+ * @brief Inverse affine transform: screen coordinates back to raw touch coords
+ *
+ * Given a point in logical screen space and the calibration that produced it,
+ * recovers the raw touch coordinate. Used during VERIFY to show ripples under
+ * the NEW calibration while the OLD calibration drives normal button dispatch.
+ *
+ * @param cal Calibration coefficients (must be valid)
+ * @param screen Screen-space point
+ * @param[out] out_raw Recovered raw touch coordinate
+ * @return true if cal is valid and non-degenerate; false otherwise
+ */
+bool invert_transform_point(const TouchCalibration& cal, Point screen, Point& out_raw);
+
+/**
  * @brief Validate calibration coefficients are finite and within reasonable bounds
  *
  * @param cal Calibration to validate

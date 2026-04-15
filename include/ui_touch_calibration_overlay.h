@@ -240,6 +240,12 @@ class TouchCalibrationOverlay : public OverlayBase {
 
     lv_obj_t* crosshair_ = nullptr;
 
+    // Original parent for crosshair. The widget is reparented to screen root
+    // on activation so its coordinates are screen-absolute (required for
+    // calibration accuracy — the overlay's title bar offsets the default XML
+    // nesting). Restored on cleanup().
+    lv_obj_t* crosshair_orig_parent_ = nullptr;
+
     //
     // === State Constants ===
     //
