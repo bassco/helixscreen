@@ -3,10 +3,26 @@
 
 #include "data_root_resolver.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
 
 namespace helix {
+
+namespace {
+
+std::string strip_trailing_slash(const std::string& s) {
+    if (s.size() > 1 && s.back() == '/')
+        return s.substr(0, s.size() - 1);
+    return s;
+}
+
+bool path_exists(const std::string& p) {
+    struct stat st;
+    return stat(p.c_str(), &st) == 0;
+}
+
+} // namespace
 
 bool is_valid_data_root(const std::string& dir) {
     if (dir.empty()) {
@@ -46,6 +62,34 @@ std::string resolve_data_root_from_exe(const std::string& exe_path) {
     }
 
     return {};
+}
+
+std::string get_user_config_dir() {
+    const char* env = std::getenv("HELIX_CONFIG_DIR");
+    if (env != nullptr && env[0] != '\0')
+        return env;
+    return "config";
+}
+
+std::string get_data_dir() {
+    const char* env = std::getenv("HELIX_DATA_DIR");
+    if (env != nullptr && env[0] != '\0')
+        return env;
+    return ".";
+}
+
+std::string writable_path(const std::string& relpath) {
+    return strip_trailing_slash(get_user_config_dir()) + "/" + relpath;
+}
+
+std::string find_readable(const std::string& relpath) {
+    std::string user = writable_path(relpath);
+    if (path_exists(user))
+        return user;
+    std::string seed = strip_trailing_slash(get_data_dir()) + "/assets/config/" + relpath;
+    if (path_exists(seed))
+        return seed;
+    return user;
 }
 
 } // namespace helix
