@@ -526,76 +526,88 @@ void ScannerPickerModal::start_bt_discovery() {
     auto disc_ctx = bt_discovery_ctx_; // shared_ptr copy for thread
     auto* ctx = bt_ctx_;
 
-    // Run discovery on a detached thread
-    std::thread([ctx, disc_ctx]() {
-        auto& ldr = helix::bluetooth::BluetoothLoader::instance();
-        ldr.discover(
-            ctx, 15000,
-            [](const helix_bt_device* dev, void* user_data) {
-                auto* dctx = static_cast<BtDiscoveryContext*>(user_data);
-                if (!dctx->alive.load())
-                    return;
-
-                // Filter: only include devices that look like HID scanners
-                bool looks_like_scanner =
-                    helix::bluetooth::is_hid_scanner_uuid(dev->service_uuid) ||
-                    helix::bluetooth::is_likely_bt_scanner(dev->name);
-
-                if (!looks_like_scanner) {
-                    spdlog::trace("[ScannerPickerModal] Skipping non-scanner BT device: {}",
-                                  dev->name ? dev->name : "(null)");
-                    return;
-                }
-
-                // Copy device info to avoid dangling pointers
-                BtDeviceInfo info;
-                info.mac = dev->mac ? dev->mac : "";
-                info.name = dev->name ? dev->name : "Unknown";
-                info.paired = dev->paired;
-                info.is_ble = dev->is_ble;
-
-                // Use tok.defer() for safe deferred callback — the token holds its own
-                // shared_ptr, preventing use-after-free if the modal is destroyed
-                dctx->token->defer([dctx, info]() {
+    // Run discovery on a detached thread. Wrap spawn in try/catch per
+    // feedback_no_bare_threads_arm.md (#724) — thread creation can fail on
+    // memory-constrained ARM targets.
+    try {
+        std::thread([ctx, disc_ctx]() {
+            auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+            ldr.discover(
+                ctx, 15000,
+                [](const helix_bt_device* dev, void* user_data) {
+                    auto* dctx = static_cast<BtDiscoveryContext*>(user_data);
                     if (!dctx->alive.load())
                         return;
-                    auto* modal = dctx->modal;
 
-                    // Add to device list (avoid duplicates by MAC)
-                    bool found = false;
-                    for (const auto& existing : modal->bt_devices_) {
-                        if (existing.mac == info.mac) {
-                            found = true;
-                            break;
+                    // Filter: only include devices that look like HID scanners
+                    bool looks_like_scanner =
+                        helix::bluetooth::is_hid_scanner_uuid(dev->service_uuid) ||
+                        helix::bluetooth::is_likely_bt_scanner(dev->name);
+
+                    if (!looks_like_scanner) {
+                        spdlog::trace("[ScannerPickerModal] Skipping non-scanner BT device: {}",
+                                      dev->name ? dev->name : "(null)");
+                        return;
+                    }
+
+                    // Copy device info to avoid dangling pointers
+                    BtDeviceInfo info;
+                    info.mac = dev->mac ? dev->mac : "";
+                    info.name = dev->name ? dev->name : "Unknown";
+                    info.paired = dev->paired;
+                    info.is_ble = dev->is_ble;
+
+                    // Use tok.defer() for safe deferred callback — the token holds its own
+                    // shared_ptr, preventing use-after-free if the modal is destroyed
+                    dctx->token->defer([dctx, info]() {
+                        if (!dctx->alive.load())
+                            return;
+                        auto* modal = dctx->modal;
+
+                        // Add to device list (avoid duplicates by MAC)
+                        bool found = false;
+                        for (const auto& existing : modal->bt_devices_) {
+                            if (existing.mac == info.mac) {
+                                found = true;
+                                break;
+                            }
                         }
-                    }
 
-                    if (!found) {
-                        modal->bt_devices_.push_back(info);
-                        spdlog::debug("[ScannerPickerModal] BT discovered: {} ({})", info.name,
-                                      info.mac);
-                        modal->populate_device_list();
-                    }
-                });
-            },
-            disc_ctx.get());
+                        if (!found) {
+                            modal->bt_devices_.push_back(info);
+                            spdlog::debug("[ScannerPickerModal] BT discovered: {} ({})", info.name,
+                                          info.mac);
+                            modal->populate_device_list();
+                        }
+                    });
+                },
+                disc_ctx.get());
 
-        // Discovery completed (timeout or stopped)
-        disc_ctx->token->defer([disc_ctx]() {
-            if (!disc_ctx->alive.load())
-                return;
+            // Discovery completed (timeout or stopped)
+            disc_ctx->token->defer([disc_ctx]() {
+                if (!disc_ctx->alive.load())
+                    return;
 
-            auto* modal = disc_ctx->modal;
-            modal->bt_discovering_ = false;
-            lv_subject_set_int(&modal->bt_discovering_subject_, 0);
+                auto* modal = disc_ctx->modal;
+                modal->bt_discovering_ = false;
+                lv_subject_set_int(&modal->bt_discovering_subject_, 0);
 
-            spdlog::info("[ScannerPickerModal] BT discovery finished, {} scanner devices found",
-                         modal->bt_devices_.size());
+                spdlog::info("[ScannerPickerModal] BT discovery finished, {} scanner devices found",
+                             modal->bt_devices_.size());
 
-            // Final refresh to ensure list is up to date
-            modal->populate_device_list();
-        });
-    }).detach();
+                // Final refresh to ensure list is up to date
+                modal->populate_device_list();
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[ScannerPickerModal] Failed to spawn BT discovery thread: {}", e.what());
+        bt_discovery_ctx_->alive.store(false);
+        bt_discovering_ = false;
+        lv_subject_set_int(&bt_discovering_subject_, 0);
+        ToastManager::instance().show(ToastSeverity::ERROR,
+                                      lv_tr("Could not start Bluetooth discovery"), 3000);
+        return;
+    }
 
     spdlog::info("[{}] Started Bluetooth scanner discovery", get_name());
 }
@@ -732,61 +744,68 @@ void ScannerPickerModal::on_pair_confirm(lv_event_t* e) {
             auto* bt_ctx = s_active_instance_->bt_ctx_;
             auto token = s_active_instance_->lifetime_.token();
 
-            std::thread([mac, name, bt_ctx, token]() {
-                auto& ldr = helix::bluetooth::BluetoothLoader::instance();
-                int ret = ldr.pair(bt_ctx, mac.c_str());
+            // Wrap std::thread spawn in try/catch per feedback_no_bare_threads_arm.md
+            // (#724) — thread creation can fail on memory-constrained ARM targets.
+            try {
+                std::thread([mac, name, bt_ctx, token]() {
+                    auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+                    int ret = ldr.pair(bt_ctx, mac.c_str());
 
-                int paired_r = -1;
-                if (ret == 0) {
-                    paired_r = ldr.is_paired ? ldr.is_paired(bt_ctx, mac.c_str()) : -1;
-                    spdlog::info("[ScannerPickerModal] Post-pair: is_paired={}", paired_r);
-                }
-
-                helix::ui::queue_update([ret, mac, name, token, bt_ctx, paired_r]() {
-                    if (token.expired())
-                        return;
-
+                    int paired_r = -1;
                     if (ret == 0) {
-                        ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                                      lv_tr("Paired successfully"), 2000);
-
-                        if (s_active_instance_) {
-                            // Update device paired state
-                            for (auto& dev : s_active_instance_->bt_devices_) {
-                                if (dev.mac == mac) {
-                                    dev.paired = (paired_r == 1);
-                                    break;
-                                }
-                            }
-
-                            // Persist the pairing
-                            helix::SettingsManager::instance().set_scanner_bt_address(mac);
-                            helix::SettingsManager::instance().set_scanner_device_name(name);
-
-                            // Fire selection callback and close modal
-                            if (s_active_instance_->on_select_) {
-                                s_active_instance_->on_select_("", name);
-                            }
-                            s_active_instance_ = nullptr;
-                            // Defer modal hide to avoid safe_delete() inside queue_update batch
-                            lv_async_call(
-                                [](void*) {
-                                    auto* picker = Modal::get_top();
-                                    if (picker)
-                                        Modal::hide(picker);
-                                },
-                                nullptr);
-                        }
-                    } else {
-                        auto& ldr2 = helix::bluetooth::BluetoothLoader::instance();
-                        const char* err =
-                            ldr2.last_error ? ldr2.last_error(bt_ctx) : "Unknown error";
-                        spdlog::error("[ScannerPickerModal] Pairing failed: {}", err);
-                        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"),
-                                                      3000);
+                        paired_r = ldr.is_paired ? ldr.is_paired(bt_ctx, mac.c_str()) : -1;
+                        spdlog::info("[ScannerPickerModal] Post-pair: is_paired={}", paired_r);
                     }
-                });
-            }).detach();
+
+                    helix::ui::queue_update([ret, mac, name, token, bt_ctx, paired_r]() {
+                        if (token.expired())
+                            return;
+
+                        if (ret == 0) {
+                            ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                                          lv_tr("Paired successfully"), 2000);
+
+                            if (s_active_instance_) {
+                                // Update device paired state
+                                for (auto& dev : s_active_instance_->bt_devices_) {
+                                    if (dev.mac == mac) {
+                                        dev.paired = (paired_r == 1);
+                                        break;
+                                    }
+                                }
+
+                                // Persist the pairing
+                                helix::SettingsManager::instance().set_scanner_bt_address(mac);
+                                helix::SettingsManager::instance().set_scanner_device_name(name);
+
+                                // Fire selection callback and close modal
+                                if (s_active_instance_->on_select_) {
+                                    s_active_instance_->on_select_("", name);
+                                }
+                                s_active_instance_ = nullptr;
+                                // Defer modal hide to avoid safe_delete() inside queue_update batch
+                                lv_async_call(
+                                    [](void*) {
+                                        auto* picker = Modal::get_top();
+                                        if (picker)
+                                            Modal::hide(picker);
+                                    },
+                                    nullptr);
+                            }
+                        } else {
+                            auto& ldr2 = helix::bluetooth::BluetoothLoader::instance();
+                            const char* err =
+                                ldr2.last_error ? ldr2.last_error(bt_ctx) : "Unknown error";
+                            spdlog::error("[ScannerPickerModal] Pairing failed: {}", err);
+                            ToastManager::instance().show(ToastSeverity::ERROR,
+                                                          lv_tr("Pairing failed"), 3000);
+                        }
+                    });
+                }).detach();
+            } catch (const std::system_error& e) {
+                spdlog::error("[ScannerPickerModal] Failed to spawn BT pair thread: {}", e.what());
+                ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 3000);
+            }
         } // else (BT available and context valid)
     } // else (pair_data valid)
 
