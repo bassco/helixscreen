@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "async_lifetime_guard.h"
 #include "tour_steps.h"
 
 #include <lvgl.h>
@@ -50,8 +49,6 @@ class TourOverlay {
     lv_obj_t* dim_ = nullptr;
     lv_obj_t* highlight_ = nullptr;
     lv_obj_t* tooltip_ = nullptr; // instantiated from tour_overlay.xml
-
-    helix::AsyncLifetimeGuard lifetime_;
 };
 
 }  // namespace helix::tour

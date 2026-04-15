@@ -4,6 +4,7 @@
 #include "first_run_tour.h"
 
 #include "config.h"
+#include "static_panel_registry.h"
 #include "tour_overlay.h"
 #include "tour_steps.h"
 
@@ -14,6 +15,16 @@ namespace helix::tour {
 
 FirstRunTour& FirstRunTour::instance() {
     static FirstRunTour s;
+    static bool registered = []() {
+        // Tear the overlay down before LVGL deinits — otherwise the unique_ptr's
+        // destructor runs during C++ static teardown, after lv_deinit(), and
+        // ~TourOverlay's lv_obj_delete() touches freed LVGL state.
+        StaticPanelRegistry::instance().register_destroy("FirstRunTour", []() {
+            FirstRunTour::instance().overlay_.reset();
+        });
+        return true;
+    }();
+    (void)registered;
     return s;
 }
 
@@ -49,7 +60,7 @@ void FirstRunTour::mark_completed() {
     cfg->set<bool>("/tour/completed", true);
     cfg->set<int>("/tour/last_seen_version", kTourVersion);
     cfg->save();
-    spdlog::info("[FirstRunTour] Marked completed (version={})", kTourVersion);
+    spdlog::debug("[FirstRunTour] Marked completed (version={})", kTourVersion);
 }
 
 void FirstRunTour::maybe_start() {
@@ -77,7 +88,7 @@ void FirstRunTour::start_impl() {
         render_current_step();
     }
 
-    spdlog::info("[FirstRunTour] Started ({} steps)", steps_.size());
+    spdlog::debug("[FirstRunTour] Started ({} steps)", steps_.size());
 }
 
 void FirstRunTour::advance() {
@@ -92,14 +103,14 @@ void FirstRunTour::advance() {
 
 void FirstRunTour::skip() {
     if (!running_) return;
-    spdlog::info("[FirstRunTour] Skipped at step {}/{}", current_index_ + 1, steps_.size());
+    spdlog::debug("[FirstRunTour] Skipped at step {}/{}", current_index_ + 1, steps_.size());
     mark_completed();
     running_ = false;
     overlay_.reset();
 }
 
 void FirstRunTour::finish() {
-    spdlog::info("[FirstRunTour] Finished");
+    spdlog::debug("[FirstRunTour] Finished");
     mark_completed();
     running_ = false;
     overlay_.reset();

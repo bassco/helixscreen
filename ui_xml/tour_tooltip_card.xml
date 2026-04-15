@@ -25,14 +25,13 @@
               width="content" height="content"
               style_bg_opa="0" style_border_width="0" style_pad_all="0"
               flex_flow="row" style_pad_gap="#space_sm">
+        <!-- Buttons wired programmatically from TourOverlay::build_tree — the -->
+        <!-- click handlers need the per-instance `this` pointer, which XML    -->
+        <!-- event_cb registration doesn't support. -->
         <ui_button name="tour_skip_btn" variant="ghost"
-                   text="Skip" translation_tag="Skip">
-          <event_cb trigger="clicked" callback="on_tour_skip_clicked"/>
-        </ui_button>
+                   text="Skip" translation_tag="Skip"/>
         <ui_button name="tour_next_btn" variant="primary"
-                   text="Next" translation_tag="Next">
-          <event_cb trigger="clicked" callback="on_tour_next_clicked"/>
-        </ui_button>
+                   text="Next" translation_tag="Next"/>
       </lv_obj>
     </lv_obj>
   </view>

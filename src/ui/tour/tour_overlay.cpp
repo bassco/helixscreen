@@ -29,7 +29,6 @@ TourOverlay::TourOverlay(std::vector<TourStep> steps, AdvanceCb on_next, SkipCb 
 }
 
 TourOverlay::~TourOverlay() {
-    lifetime_.invalidate();
     if (root_) {
         lv_obj_delete(root_); // full-screen overlay, not owned by any panel
         root_ = nullptr;
@@ -53,8 +52,6 @@ void TourOverlay::build_tree() {
     lv_obj_set_style_radius(root_, 0, 0);
     lv_obj_clear_flag(root_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(root_, LV_OBJ_FLAG_CLICK_FOCUSABLE);
-    spdlog::debug("[TourOverlay] root size = {}x{} (screen {}x{})",
-                  lv_obj_get_width(root_), lv_obj_get_height(root_), screen_w, screen_h);
 
     // Dim layer — click-blocking, absorbs all touches that miss the tooltip.
     dim_ = lv_obj_create(root_);
@@ -92,10 +89,6 @@ void TourOverlay::build_tree() {
     const int tooltip_w = std::clamp(screen_w * 55 / 100, 220, 480);
     lv_obj_set_width(tooltip_, tooltip_w);
     lv_obj_update_layout(tooltip_);
-    spdlog::debug("[TourOverlay] tooltip created: {}x{} at ({},{}) children={}",
-                  lv_obj_get_width(tooltip_), lv_obj_get_height(tooltip_),
-                  lv_obj_get_x(tooltip_), lv_obj_get_y(tooltip_),
-                  lv_obj_get_child_count(tooltip_));
 
     // Find the skip/next buttons and attach static callbacks.
     // Exception: per-instance closure — XML event_cb can't pass `this` captures.
@@ -218,8 +211,6 @@ void TourOverlay::place_tooltip(const lv_area_t& target_rect, bool has_target,
     x = clamp(x, 8, screen_w - tw - 8);
     y = clamp(y, 8, screen_h - th - 8);
     lv_obj_set_pos(tooltip_, x, y);
-    spdlog::debug("[TourOverlay] tooltip placed at ({},{}) size {}x{} (screen {}x{})",
-                  x, y, tw, th, screen_w, screen_h);
 }
 
 void TourOverlay::update_tooltip_text(const TourStep& step, size_t index, size_t total) {

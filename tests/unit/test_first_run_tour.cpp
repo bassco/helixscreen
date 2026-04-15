@@ -74,9 +74,9 @@ TEST_CASE("Tour steps: step 2 targets AMS widget when present, nozzle otherwise"
     REQUIRE(without[1].target_name == "nozzle_temps");
 }
 
-TEST_CASE("Tour steps: navbar steps 4-8 target nav buttons", "[tour]") {
+TEST_CASE("Tour steps: step 4 is print_status widget, steps 5-8 are nav buttons", "[tour]") {
     auto steps = build_tour_steps(true);
-    REQUIRE(steps[3].target_name == "nav_btn_print_select");
+    REQUIRE(steps[3].target_name == "print_status");
     REQUIRE(steps[4].target_name == "nav_btn_controls");
     REQUIRE(steps[5].target_name == "nav_btn_filament");
     REQUIRE(steps[6].target_name == "nav_btn_advanced");
