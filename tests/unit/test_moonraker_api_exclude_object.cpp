@@ -286,20 +286,22 @@ TEST_CASE_METHOD(ExcludeObjectTestFixture,
         REQUIRE(captured_error.type == MoonrakerErrorType::VALIDATION_ERROR);
     }
 
-    SECTION("Hyphen not allowed") {
+    SECTION("Whitespace in middle of name rejected") {
         reset_callbacks();
+        // The exclude_object-specific allowlist forbids whitespace to prevent smuggling
+        // extra gcode parameters. Slicer-generated names don't contain spaces in practice.
         api->exclude_object(
-            "Part-1", [this]() { this->success_callback(); },
+            "Part 1", [this]() { this->success_callback(); },
             [this](const MoonrakerError& err) { this->error_callback(err); });
 
         REQUIRE(error_called);
         REQUIRE(captured_error.type == MoonrakerErrorType::VALIDATION_ERROR);
     }
 
-    SECTION("Period not allowed") {
+    SECTION("Tab character rejected") {
         reset_callbacks();
         api->exclude_object(
-            "model.stl", [this]() { this->success_callback(); },
+            "Part\t1", [this]() { this->success_callback(); },
             [this](const MoonrakerError& err) { this->error_callback(err); });
 
         REQUIRE(error_called);
@@ -339,8 +341,39 @@ TEST_CASE_METHOD(ExcludeObjectTestFixture, "exclude_object accepts valid object 
         }
     }
 
-    // Note: Hyphens and periods are NOT allowed by is_safe_identifier() for security.
-    // These are tested as rejected characters below.
+    SECTION("Hyphen allowed (slicer-generated names)") {
+        reset_callbacks();
+        // OrcaSlicer and Cura emit hyphens in object names; allowlist permits them.
+        api->exclude_object(
+            "Part-1", [this]() { this->success_callback(); },
+            [this](const MoonrakerError& err) { this->error_callback(err); });
+
+        if (error_called) {
+            REQUIRE(captured_error.type != MoonrakerErrorType::VALIDATION_ERROR);
+        }
+    }
+
+    SECTION("Period allowed (slicer-generated names with file extensions)") {
+        reset_callbacks();
+        api->exclude_object(
+            "model.stl", [this]() { this->success_callback(); },
+            [this](const MoonrakerError& err) { this->error_callback(err); });
+
+        if (error_called) {
+            REQUIRE(captured_error.type != MoonrakerErrorType::VALIDATION_ERROR);
+        }
+    }
+
+    SECTION("Parentheses and brackets allowed") {
+        reset_callbacks();
+        api->exclude_object(
+            "Part(1)[copy]", [this]() { this->success_callback(); },
+            [this](const MoonrakerError& err) { this->error_callback(err); });
+
+        if (error_called) {
+            REQUIRE(captured_error.type != MoonrakerErrorType::VALIDATION_ERROR);
+        }
+    }
 
     SECTION("Object name with underscores and numbers") {
         reset_callbacks();
@@ -354,17 +387,6 @@ TEST_CASE_METHOD(ExcludeObjectTestFixture, "exclude_object accepts valid object 
         }
     }
 
-    SECTION("Name with spaces (valid in some slicers)") {
-        reset_callbacks();
-        api->exclude_object(
-            "My Part 1", [this]() { this->success_callback(); },
-            [this](const MoonrakerError& err) { this->error_callback(err); });
-
-        // Spaces are allowed in identifiers per is_safe_identifier()
-        if (error_called) {
-            REQUIRE(captured_error.type != MoonrakerErrorType::VALIDATION_ERROR);
-        }
-    }
 }
 
 // ============================================================================
