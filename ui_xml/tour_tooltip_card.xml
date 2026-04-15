@@ -9,7 +9,8 @@
   <!-- Heavier shadow than ui_card for floating-tooltip feel -->
   <view name="tour_tooltip_card"
         extends="ui_card"
-        style_max_width="#tour_tooltip_max_width"
+        width="#tour_tooltip_max_width"
+        height="content"
         style_shadow_width="16"
         style_shadow_opa="120"
         flex_flow="column"

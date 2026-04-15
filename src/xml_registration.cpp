@@ -497,7 +497,7 @@ void register_xml_components() {
     register_xml("settings_safety_overlay.xml");
     register_xml("settings_system_overlay.xml");
     register_xml("settings_help_overlay.xml");
-    register_xml("tour_overlay.xml");
+    register_xml("tour_tooltip_card.xml");
     register_xml("security_settings_overlay.xml");
 #if HELIX_HAS_LABEL_PRINTER
     register_xml("label_printer_settings.xml");
