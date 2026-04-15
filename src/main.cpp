@@ -23,6 +23,11 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#if !defined(HELIX_PLATFORM_ANDROID)
+#include <execinfo.h>
+#include <link.h>
+#endif
+
 // SDL2 redefines main → SDL_main via this header.
 // On Android, the SDL Java activity loads libmain.so and calls SDL_main().
 // Without this include, the symbol is missing and the app crashes on launch.
@@ -37,6 +42,16 @@ static void log_fatal(const char* msg) {
     fflush(stderr);
 }
 
+#if !defined(HELIX_PLATFORM_ANDROID)
+static int find_load_base_cb(struct dl_phdr_info* info, size_t /*size*/, void* data) {
+    if (info->dlpi_name == nullptr || info->dlpi_name[0] == '\0') {
+        *static_cast<uintptr_t*>(data) = static_cast<uintptr_t>(info->dlpi_addr);
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 // Write a minimal crash.txt for telemetry when an exception is caught.
 // Uses the same key:value format as crash_handler's signal handler so
 // CrashReporter can parse it on next startup.
@@ -47,8 +62,7 @@ static void write_exception_crash_file(const char* what) {
         return;
     }
 
-    // Build a minimal crash record. Use dprintf for simplicity since
-    // we are NOT in a signal handler — heap/stdio are safe here.
+    // Build a crash record. Not a signal handler — heap/stdio/backtrace safe.
     time_t now = time(nullptr);
     dprintf(fd, "signal:0\n");
     dprintf(fd, "name:EXCEPTION\n");
@@ -58,6 +72,19 @@ static void write_exception_crash_file(const char* what) {
     if (what) {
         dprintf(fd, "exception:%s\n", what);
     }
+
+#if !defined(HELIX_PLATFORM_ANDROID)
+    uintptr_t load_base = 0;
+    dl_iterate_phdr(find_load_base_cb, &load_base);
+    dprintf(fd, "load_base:0x%lx\n", static_cast<unsigned long>(load_base));
+
+    void* frames[64];
+    int n = backtrace(frames, 64);
+    for (int i = 0; i < n; ++i) {
+        dprintf(fd, "bt:0x%lx\n", reinterpret_cast<unsigned long>(frames[i]));
+    }
+#endif
+
     close(fd);
 }
 
