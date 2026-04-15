@@ -1280,10 +1280,18 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     // that backup lives in a volatile mount that's cleaned up on service restart.
     // These backups supplement the rolling backups in /var/lib/helixscreen/ maintained
     // by Config::save(). Config::init() auto-restores from either location.
+    //
+    // Prefer HELIX_CONFIG_DIR when set (Yocto-packaged baselines, where settings
+    // live outside the RO install tree) — otherwise fall back to install_root.
     {
         if (!install_root.empty()) {
-            std::string config_src = install_root + "/config/settings.json";
-            std::string env_src = install_root + "/config/helixscreen.env";
+            std::string config_src_dir = install_root + "/config";
+            if (const char* env_dir = std::getenv("HELIX_CONFIG_DIR");
+                env_dir != nullptr && env_dir[0] != '\0') {
+                config_src_dir = env_dir;
+            }
+            std::string config_src = config_src_dir + "/settings.json";
+            std::string env_src = config_src_dir + "/helixscreen.env";
             const std::string cp_bin = resolve_tool("cp");
             const std::string mkdir_bin = resolve_tool("mkdir");
             const std::string config_bak = config_backup_fallback();
