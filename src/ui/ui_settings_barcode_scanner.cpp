@@ -872,7 +872,17 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
             } catch (const std::system_error& ex) {
                 spdlog::error("[BarcodeScannerSettings] Failed to spawn BT pair thread: {}",
                               ex.what());
+                // Dismiss the "Pairing..." progress toast shown above so the user
+                // doesn't see a stale "in progress" message alongside the error.
+                ToastManager::instance().hide();
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 3000);
+                // Re-sync Pair/Forget button enable state. Selection + paired
+                // flags are unchanged by the spawn failure, but call this so
+                // any ambient state (e.g. selection updated while the modal
+                // was open) is reflected — matches what the normal failure
+                // path achieves implicitly via populate_bt_dropdown().
+                if (s_active_instance_)
+                    s_active_instance_->update_bt_action_buttons();
             }
         }
     }
