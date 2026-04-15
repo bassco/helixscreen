@@ -1895,21 +1895,21 @@
   <translation tag="set to" de="gesetzt auf" en="set to" es="establecido en" fr="réglé à" it="impostato a" ja="に設定" pt="definido para" ru="установлено на" zh="设置为"/>
   <translation tag="started" de="gestartet" en="started" es="iniciado" fr="lancé" it="avviato" ja="開始" pt="iniciado" ru="запущено" zh="已启动"/>
   <translation tag="tall" de="hoch" en="tall" es="de alto" fr="de haut" it="di altezza" ja="高さ" pt="de altura" ru="высотой" zh="高"/>
-  <translation tag="tour.step.advanced.body" en="Macros, console, calibration, and updates."/>
+  <translation tag="tour.step.advanced.body" en="Macros, G-code console, calibration tools (PID, input shaper, z-offset), firmware updates, and developer utilities."/>
   <translation tag="tour.step.advanced.title" en="Advanced"/>
-  <translation tag="tour.step.controls.body" en="Move axes, home, level. Adjust temps and fans."/>
+  <translation tag="tour.step.controls.body" en="Move the toolhead, home axes, level the bed, and fine-tune temperatures, fans, and other motion settings."/>
   <translation tag="tour.step.controls.title" en="Controls"/>
-  <translation tag="tour.step.customize.body" en="Long-press any tile to enter edit mode — rearrange, remove, or add widgets, and add pages."/>
+  <translation tag="tour.step.customize.body" en="Long-press any tile to enter edit mode — rearrange, resize, remove, or add widgets, and add extra pages for your preferred layout."/>
   <translation tag="tour.step.customize.title" en="Customize your home screen"/>
-  <translation tag="tour.step.filament.body" en="Load, unload, and swap spools. AMS and AFC live here."/>
+  <translation tag="tour.step.filament.body" en="Load, unload, and swap spools. View your multi-filament system at a glance, map colors to slots, and monitor runout sensors."/>
   <translation tag="tour.step.filament.title" en="Filament"/>
-  <translation tag="tour.step.home_grid.body" en="Tiles like this show live status. Tap any tile to open its full controls."/>
+  <translation tag="tour.step.home_grid.body" en="Tap any tile to open its full controls or toggle its state."/>
   <translation tag="tour.step.home_grid.title" en="Your printer at a glance"/>
-  <translation tag="tour.step.print.body" en="Browse and start prints from SD, uploads, or network shares."/>
-  <translation tag="tour.step.print.title" en="Print"/>
-  <translation tag="tour.step.settings.body" en="Network, display, and you can replay this tour here anytime."/>
+  <translation tag="tour.step.print.body" en="Monitor prints in progress — time remaining, current layer, and progress. Tap to pause, resume, or cancel the active job."/>
+  <translation tag="tour.step.print.title" en="Print status"/>
+  <translation tag="tour.step.settings.body" en="Network, display, sound, printer setup, and more. You can replay this tour anytime from Help &amp; About."/>
   <translation tag="tour.step.settings.title" en="Settings"/>
-  <translation tag="tour.step.welcome.body" en="Let&apos;s take a quick tour."/>
+  <translation tag="tour.step.welcome.body" en="Let&apos;s take a quick tour so you can find things fast."/>
   <translation tag="tour.step.welcome.title" en="Welcome to HelixScreen"/>
   <translation tag="used" de="verbraucht" en="used" es="usado" fr="utilisé" it="usato" ja="使用" pt="usado" ru="использ." zh="已使用"/>
   <translation tag="v{} is available. Tap to update." de="v{} ist verfügbar. Tippen zum Aktualisieren." en="v{} is available. Tap to update." es="v{} disponible. Toque para actualizar." fr="v{} est disponible. Appuyez pour mettre à jour." it="v{} disponibile. Tocca per aggiornare." ja="v{} が利用可能です。タップして更新してください。" pt="v{} disponível. Toque para atualizar." ru="v{} доступна. Нажмите для обновления." zh="v{} 可用。点击以更新。"/>

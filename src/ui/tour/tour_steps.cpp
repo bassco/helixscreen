@@ -31,9 +31,12 @@ std::vector<TourStep> build_tour_steps(bool has_ams) {
     steps.push_back({"fan_stack", "tour.step.customize.title",
                      "tour.step.customize.body", TooltipAnchor::PreferBelow, {}});
 
-    // 4-8. Navbar tour
-    steps.push_back({"nav_btn_print_select", "tour.step.print.title",
-                     "tour.step.print.body", TooltipAnchor::PreferRight, {}});
+    // 4. Print status widget on home (navbar Print button lacks a highlightable
+    //    name, and the print-status tile on home is more informative anyway).
+    steps.push_back({"print_status", "tour.step.print.title",
+                     "tour.step.print.body", TooltipAnchor::PreferBelow, {}});
+
+    // 5-8. Navbar tour
     steps.push_back({"nav_btn_controls", "tour.step.controls.title",
                      "tour.step.controls.body", TooltipAnchor::PreferRight, {}});
     steps.push_back({"nav_btn_filament", "tour.step.filament.title",

@@ -150,10 +150,13 @@ void HelpSettingsOverlay::on_deactivate() {
 void HelpSettingsOverlay::on_replay_tour_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[HelpSettingsOverlay] on_replay_tour_clicked");
     spdlog::info("[HelpSettingsOverlay] Replay Welcome Tour clicked");
-    // Close the help overlay so the tour has a clean home panel underneath.
+    // Dismiss the Help overlay, then switch to the Home panel so the tour's
+    // navbar highlights (and the widget tiles) are actually on screen.
     NavigationManager::instance().go_back();
-    // Start bypasses the first-run gate (replay entry point).
-    helix::tour::FirstRunTour::instance().start();
+    NavigationManager::instance().set_active(helix::PanelId::Home);
+    // Defer start so panel activation + layout settle before the overlay
+    // resolves target coordinates.
+    lv_async_call([](void*) { helix::tour::FirstRunTour::instance().start(); }, nullptr);
     LVGL_SAFE_EVENT_CB_END();
 }
 
