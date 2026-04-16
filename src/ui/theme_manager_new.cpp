@@ -197,6 +197,10 @@ void ThemeManager::set_palettes(const ThemePalette& light, const ThemePalette& d
     // Update current palette if already initialized
     if (initialized_) {
         apply_palette(dark_mode_ ? dark_palette_ : light_palette_);
+        // Invalidate LVGL style caches so widgets re-read updated shared styles.
+        // Without this, cached radius from LVGL default theme's btn style can
+        // persist after our shared Button style is reset+reconfigured.
+        lv_obj_report_style_change(nullptr);
     }
 }
 

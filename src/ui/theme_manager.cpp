@@ -504,7 +504,7 @@ static bool is_on_elevated_surface(lv_obj_t* obj);
 static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
     (void)theme;
 
-    // First apply LVGL default theme
+    // First apply LVGL default theme (provides base padding, switch tracks, etc.)
     if (default_theme_backup && default_theme_backup->apply_cb) {
         default_theme_backup->apply_cb(default_theme_backup, obj);
     }
