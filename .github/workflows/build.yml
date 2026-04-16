@@ -43,6 +43,8 @@ jobs:
             libnl-genl-3-dev \
             libxml2-utils \
             libusb-1.0-0-dev \
+            libsystemd-dev \
+            libbluetooth-dev \
             ccache
 
     - name: Cache compiled dependencies

@@ -14,8 +14,14 @@
 // Source inclusion: we compile bt_bus_thread.cpp directly into this translation
 // unit (same pattern as test_ui_switch.cpp) because src/bluetooth/*.cpp is
 // excluded from APP_SRCS (built into the libhelix-bluetooth.so plugin instead).
+//
+// Platform guard: the Bluetooth plugin only builds on Linux with libsystemd-dev
+// installed (see mk/bluetooth.mk). On macOS and Linux hosts without libsystemd,
+// this test compiles to an empty translation unit so `make test` still succeeds.
 
 #include "../catch_amalgamated.hpp"
+
+#if defined(__has_include) && __has_include(<systemd/sd-bus.h>)
 
 #include <systemd/sd-bus.h>
 
@@ -325,3 +331,5 @@ TEST_CASE("BusThread run_sync inside a work item runs inline (no deadlock)", "[b
     REQUIRE(inner_tid_seen.load() == 1);
     t.stop();
 }
+
+#endif // __has_include(<systemd/sd-bus.h>)
