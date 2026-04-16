@@ -18,7 +18,7 @@
     "danger": "#E33B57",
     "focus": "#718CDC"
   },
-  "border_radius": 12,
+  "border_radius_size": 3,
   "border_width": 1,
   "border_opacity": 40,
   "shadow_intensity": 0,
