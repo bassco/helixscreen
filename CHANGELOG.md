@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.33] - 2026-04-15
+
+Major Bluetooth reliability overhaul, new barcode scanner settings UI, first-run guided tour, HttpExecutor for bounded HTTP threading, and a broad config refactor splitting read-only seed data from writable state.
+
+### Added
+- First-run guided tour with coach-mark overlay, responsive tooltips, AMS-conditional steps, and replay from Settings > Help
+- Barcode scanner settings overlay with BT device discovery, pairing, MAC binding, and USB device list
+- HttpExecutor — bounded-worker HTTP executor (fast lane: 4 workers, slow lane: 1) replacing unbounded thread spawns
+- Bluetooth HID scanner binding by MAC address with exclusive grab
+- BT HID link verification after pairing with bond-refusal warning
+- Bluetooth `enumerate_known` API for paired device listing
+- `HELIX_CONFIG_DIR` and `HELIX_DATA_DIR` env vars for Yocto/read-only rootfs deployments
+- Config path resolver helpers (`find_readable`, `writable_path`, `get_data_dir`)
+- Crash diagnostics: activity breadcrumb ring, cached heap snapshot, LVGL event dispatch hook
+- Silenced hardware items logged at startup for easier debugging
+- Moonraker silent request mode — suppresses `REQUEST_TIMEOUT` events for background queries
+- Responsive keyboard sizing with elevated keycaps and smart contrast text
+- KIAUH extension shipped and registered on release installs
+
+### Fixed
+- Bluetooth: serialize all D-Bus operations (discovery, pairing, GATT, notifications) through BusThread, eliminating race conditions and thread-safety issues (#811)
+- Bluetooth: `thread_id_` race, submit TOCTOU, slot unref routing, `StartNotify` fallback guard
+- Network: async backend init eliminates UI-thread blocking; self-join deadlock and ethernet thread pool fixes
+- Exclude object: sync removals from Klipper status, drop stuck optimistic visuals on print end, silence spurious pre-print RPC timeouts
+- Moonraker API callbacks guarded with lifetime tokens to prevent use-after-free
+- Watchdog: bail out of restart loop on persistent failure instead of infinite retries
+- Tour: re-target highlight on breakpoint change; cancel on navigation away from Home
+- AMS: unlink external spool updates UI when previous filament color was black
+- Scanner: dismiss progress toast on pair failure; wrap BT thread spawns in try/catch
+- Label renderer: render negative spool IDs as 'TEST'
+- Tool state: atomic write for `tool_spools.json` prevents corruption on crash
+- API/camera: catch EAGAIN on `join_helper` thread spawn in destructors
+- Print status idle card: micro breakpoint polish, subject-driven visibility
+- Installer: prefer `/user-resource` for temp dir on CC1
+- Help icon: resolve via responsive theme token
+
+### Changed
+- Config layout: read-only seed configs moved to `assets/config/`, writable state stays in `config/`
+- Bluetooth: D-Bus operations serialized through dedicated BusThread instead of ad-hoc thread spawns
+- Power-device API calls migrated to HttpExecutor with tok.defer lifecycle safety
+- Bluez detection uses pkg-config instead of compile-probe
+- Yocto build support: `PLATFORM_TARGET=yocto` mode, bitbake LDFLAGS, Docker dev loop
+
 ## [0.99.32] - 2026-04-15
 
 Adds COSMOS firmware support for the Elegoo Centauri Carbon (CC1) and new per-channel display color correction (gamma, warmth, tint). Also includes a motion home widget, extensive crash/observer telemetry, and numerous discovery, installer, and widget fixes.
@@ -2957,6 +3000,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.33]: https://github.com/prestonbrown/helixscreen/compare/v0.99.32...v0.99.33
 [0.99.32]: https://github.com/prestonbrown/helixscreen/compare/v0.99.31...v0.99.32
 [0.99.31]: https://github.com/prestonbrown/helixscreen/compare/v0.99.30...v0.99.31
 [0.99.30]: https://github.com/prestonbrown/helixscreen/compare/v0.99.29...v0.99.30

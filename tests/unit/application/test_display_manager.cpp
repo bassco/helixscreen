@@ -19,6 +19,7 @@
 #include <fstream>
 
 #include "../../catch_amalgamated.hpp"
+#include "data_root_resolver.h"
 #include "hv/json.hpp"
 
 // ============================================================================
@@ -334,21 +335,27 @@ TEST_CASE("DisplayManager restore_display_on_shutdown is safe when not sleeping"
 // AD5X Preset Validation Tests
 // ============================================================================
 
-// Resolve project root from __FILE__ (tests/unit/application/test_display_manager.cpp)
+// Point HELIX_DATA_DIR at the project root so find_readable() locates seed configs
 static std::string get_project_root() {
     namespace fs = std::filesystem;
     fs::path src(__FILE__);
     if (src.is_relative()) {
         src = fs::current_path() / src;
     }
-    // Go up 3 levels: application/ -> unit/ -> tests/ -> project root
     return src.parent_path().parent_path().parent_path().parent_path().string();
 }
 
+static void ensure_data_dir() {
+    static bool done = false;
+    if (!done) {
+        setenv("HELIX_DATA_DIR", get_project_root().c_str(), 0);
+        done = true;
+    }
+}
+
 TEST_CASE("AD5X preset has required display sleep config", "[application][display][ad5x]") {
-    // Verify the AD5X preset JSON has the keys needed to prevent wake-on-touch
-    // failure (issue #235)
-    std::string preset_path = get_project_root() + "/config/presets/ad5x.json";
+    ensure_data_dir();
+    std::string preset_path = helix::find_readable("presets/ad5x.json");
 
     std::ifstream f(preset_path);
     REQUIRE(f.is_open());
@@ -369,7 +376,8 @@ TEST_CASE("AD5X preset has required display sleep config", "[application][displa
 }
 
 TEST_CASE("CC1 preset has required display sleep config", "[application][display][cc1]") {
-    std::string preset_path = get_project_root() + "/config/presets/cc1.json";
+    ensure_data_dir();
+    std::string preset_path = helix::find_readable("presets/cc1.json");
 
     std::ifstream f(preset_path);
     REQUIRE(f.is_open());
@@ -385,9 +393,8 @@ TEST_CASE("CC1 preset has required display sleep config", "[application][display
 }
 
 TEST_CASE("AD5M preset does NOT disable backlight during sleep", "[application][display][ad5m]") {
-    // Verify the AD5M preset does NOT set sleep_backlight_off=false
-    // (AD5M sleep/wake works correctly with current hardware blank path)
-    std::string preset_path = get_project_root() + "/config/presets/ad5m.json";
+    ensure_data_dir();
+    std::string preset_path = helix::find_readable("presets/ad5m.json");
 
     std::ifstream f(preset_path);
     REQUIRE(f.is_open());
