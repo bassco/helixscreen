@@ -1405,7 +1405,6 @@ static void theme_manager_register_theme_properties(lv_xml_component_scope_t* sc
         theme.properties.border_radius_size, suffix);
     snprintf(buf, sizeof(buf), "%d", radius_px);
     lv_xml_register_const(scope, "border_radius", buf);
-    lv_xml_register_const(scope, "button_radius", buf);
 
     // Register border_width
     snprintf(buf, sizeof(buf), "%d", theme.properties.border_width);
@@ -1833,7 +1832,6 @@ void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
         char radius_buf[16];
         snprintf(radius_buf, sizeof(radius_buf), "%d", radius_px);
         lv_xml_update_const(nullptr, "border_radius", radius_buf);
-        lv_xml_update_const(nullptr, "button_radius", radius_buf);
     }
 
     theme_manager_register_color_pairs(nullptr, effective_dark);
