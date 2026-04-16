@@ -1821,6 +1821,54 @@ TEST_CASE_METHOD(TelemetryTestFixture, "Frame time: worst panel is identified by
     REQUIRE(event["worst_panel"] == "temperature");
 }
 
+TEST_CASE_METHOD(TelemetryTestFixture, "Frame time: idle frames below threshold are not recorded",
+                 "[telemetry][frame]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("status");
+    tm.record_frame_time(100);   // 0.1ms - idle, should be filtered
+    tm.record_frame_time(300);   // 0.3ms - idle, should be filtered
+    tm.record_frame_time(8000);  // 8ms - real render, should be recorded
+
+    tm.record_performance_snapshot();
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+    REQUIRE(event["total_frame_count"] == 1);  // Only the 8ms frame
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture, "Frame time: frames at idle threshold boundary are recorded",
+                 "[telemetry][frame]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("status");
+    tm.record_frame_time(499);   // Just below 500us threshold - filtered
+    tm.record_frame_time(500);   // Exactly at threshold - recorded
+    tm.record_frame_time(501);   // Just above threshold - recorded
+
+    tm.record_performance_snapshot();
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+    REQUIRE(event["total_frame_count"] == 2);  // 500 and 501 only
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Frame time: snapshot with no active frames produces no event",
+                 "[telemetry][frame]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Record only idle frames (below threshold) — ring buffer stays empty
+    tm.notify_panel_changed("status");
+    tm.record_frame_time(100);
+    tm.record_frame_time(200);
+
+    tm.record_performance_snapshot();
+    // No active frames → no event queued
+    REQUIRE(tm.queue_size() == 0);
+}
+
 // ============================================================================
 // Periodic Snapshots [telemetry][snapshot]
 // ============================================================================
@@ -1953,4 +2001,82 @@ TEST_CASE_METHOD(TelemetryTestFixture, "Settings changes: no event if no changes
 
     tm.flush_settings_changes();
     REQUIRE(tm.queue_size() == 0);
+}
+
+// ============================================================================
+// Per-Panel Breakdown [telemetry][frame]
+// ============================================================================
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Frame time: snapshot includes per-panel breakdown in panels object",
+                 "[telemetry][frame]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    tm.notify_panel_changed("print_select_panel");
+    for (int i = 0; i < 20; ++i) {
+        tm.record_frame_time(15000); // 15ms
+    }
+    // Add one jank frame
+    tm.record_frame_time(45000); // 45ms - over budget
+
+    tm.notify_panel_changed("settings_panel");
+    for (int i = 0; i < 10; ++i) {
+        tm.record_frame_time(5000); // 5ms - fast
+    }
+
+    tm.record_performance_snapshot();
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    // Top-level fields still present (backward compat)
+    REQUIRE(event.contains("worst_panel"));
+    REQUIRE(event.contains("worst_panel_p95_ms"));
+
+    // New panels object
+    REQUIRE(event.contains("panels"));
+    auto& panels = event["panels"];
+    REQUIRE(panels.contains("print_select_panel"));
+    REQUIRE(panels.contains("settings_panel"));
+
+    // print_select_panel had the jank
+    auto& ps = panels["print_select_panel"];
+    REQUIRE(ps.contains("p50_ms"));
+    REQUIRE(ps.contains("p95_ms"));
+    REQUIRE(ps.contains("p99_ms"));
+    REQUIRE(ps.contains("max_ms"));
+    REQUIRE(ps.contains("frames"));
+    REQUIRE(ps.contains("over_budget_pct"));
+    REQUIRE(ps["frames"] == 21);
+    REQUIRE(ps["max_ms"] == 45);
+    CHECK(ps["over_budget_pct"] > 0.0);
+
+    // settings_panel was clean
+    auto& sp = panels["settings_panel"];
+    REQUIRE(sp["frames"] == 10);
+    REQUIRE(sp["max_ms"] == 5);
+    CHECK(sp["over_budget_pct"] == 0.0);
+}
+
+TEST_CASE_METHOD(TelemetryTestFixture,
+                 "Frame time: panels with unknown panel_id are excluded from breakdown",
+                 "[telemetry][frame]") {
+    auto& tm = TelemetryManager::instance();
+    tm.set_enabled(true);
+
+    // Record frames WITHOUT calling notify_panel_changed first.
+    // current_panel_id_ is 0 but panel_names_ is empty, so pid >= panel_names_.size().
+    tm.record_frame_time(8000);
+    tm.record_frame_time(8000);
+
+    tm.record_performance_snapshot();
+    auto snapshot = tm.get_queue_snapshot();
+    auto event = snapshot[0];
+
+    // Top-level percentiles should still be computed from all frames
+    REQUIRE(event["total_frame_count"] == 2);
+
+    // But the panels object should be empty (no valid panel name)
+    REQUIRE(event.contains("panels"));
+    REQUIRE(event["panels"].empty());
 }

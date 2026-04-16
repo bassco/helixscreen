@@ -990,6 +990,7 @@ void TelemetryManager::start_auto_send() {
                  INITIAL_SEND_DELAY_MS / 1000, AUTO_SEND_INTERVAL_MS / 1000);
 
     start_snapshot_timer();
+    start_frame_perf_timer();
     start_feature_adoption_timer();
 }
 
@@ -1000,6 +1001,7 @@ void TelemetryManager::stop_auto_send() {
         spdlog::info("[TelemetryManager] Auto-send timer stopped");
     }
     stop_snapshot_timer();
+    stop_frame_perf_timer();
     stop_feature_adoption_timer();
     stop_settings_debounce_timer();
 }
@@ -2289,7 +2291,13 @@ std::string TelemetryManager::get_device_id_path() const {
 // =============================================================================
 
 void TelemetryManager::record_frame_time(uint32_t frame_time_us) {
-    // Always record (even when telemetry disabled) to keep buffer warm.
+    // Skip idle frames where LVGL did no rendering work.
+    // Real renders on Pi are 2ms+ even for trivial dirty regions.
+    // Threshold must be validated on real hardware before shipping.
+    if (frame_time_us < IDLE_FRAME_THRESHOLD_US) return;
+
+    // Always record even when telemetry is disabled to keep the buffer warm —
+    // if telemetry is re-enabled mid-session the first snapshot has real data.
     // No mutex needed — LVGL thread only.
     auto& sample = frame_ring_[frame_ring_idx_ % FRAME_RING_SIZE];
     sample.frame_time_us = frame_time_us;
@@ -2350,19 +2358,50 @@ nlohmann::json TelemetryManager::build_performance_snapshot_event() const {
     event["dropped_frame_count"] = dropped;
     event["total_frame_count"] = static_cast<int64_t>(frame_ring_count_);
 
+    // Per-panel breakdown
+    json panels_obj = json::object();
     std::string worst_panel;
     int worst_p95 = 0;
+
     for (auto& [pid, ptimes] : per_panel) {
+        if (pid >= panel_names_.size())
+            continue;
+
         std::sort(ptimes.begin(), ptimes.end());
-        size_t p95_idx = static_cast<size_t>(0.95 * static_cast<double>(ptimes.size() - 1));
-        int p95_ms = static_cast<int>(ptimes[p95_idx] / 1000);
-        if (p95_ms > worst_p95 && pid < panel_names_.size()) {
+        size_t n = ptimes.size();
+
+        auto panel_pct = [&](double p) -> int {
+            size_t idx = static_cast<size_t>(p * static_cast<double>(n - 1));
+            return static_cast<int>(ptimes[idx] / 1000);
+        };
+
+        int p95_ms = panel_pct(0.95);
+        if (p95_ms > worst_p95) {
             worst_p95 = p95_ms;
             worst_panel = panel_names_[pid];
         }
+
+        int over_budget = 0;
+        for (auto ft : ptimes) {
+            if (ft > DROPPED_FRAME_THRESHOLD_US)
+                over_budget++;
+        }
+
+        json panel_stats;
+        panel_stats["p50_ms"] = panel_pct(0.50);
+        panel_stats["p95_ms"] = p95_ms;
+        panel_stats["p99_ms"] = panel_pct(0.99);
+        panel_stats["max_ms"] = static_cast<int>(ptimes.back() / 1000);
+        panel_stats["frames"] = static_cast<int>(n);
+        panel_stats["over_budget_pct"] =
+            std::round(static_cast<double>(over_budget) / static_cast<double>(n) * 1000.0) / 10.0;
+
+        panels_obj[panel_names_[pid]] = panel_stats;
     }
+
     event["worst_panel"] = worst_panel;
     event["worst_panel_p95_ms"] = worst_p95;
+    event["panels"] = panels_obj;
     event["task_handler_max_ms"] = 0;
 
     return event;
@@ -2371,6 +2410,12 @@ nlohmann::json TelemetryManager::build_performance_snapshot_event() const {
 void TelemetryManager::record_performance_snapshot() {
     if (shutting_down_.load() || !initialized_.load() || !enabled_.load())
         return;
+
+    // Skip if no active frames were recorded since last snapshot
+    if (frame_ring_count_ == 0) {
+        spdlog::debug("[TelemetryManager] Skipping frame perf snapshot — no active frames");
+        return;
+    }
 
     spdlog::debug("[TelemetryManager] Recording performance snapshot (seq={})", snapshot_seq_);
     auto event = build_performance_snapshot_event();
@@ -2542,7 +2587,6 @@ void TelemetryManager::fire_periodic_snapshot() {
 
     record_panel_usage();
     record_connection_stability();
-    record_performance_snapshot();
 
     snapshot_seq_++;
     save_snapshot_state();
@@ -2569,6 +2613,30 @@ void TelemetryManager::stop_snapshot_timer() {
     if (snapshot_timer_) {
         lv_timer_delete(snapshot_timer_);
         snapshot_timer_ = nullptr;
+    }
+}
+
+void TelemetryManager::start_frame_perf_timer() {
+    if (frame_perf_timer_)
+        return;
+
+    spdlog::debug("[TelemetryManager] Starting frame perf timer (interval={}ms)",
+                  FRAME_PERF_INTERVAL_MS);
+
+    frame_perf_timer_ = lv_timer_create(
+        [](lv_timer_t* timer) {
+            auto* self = static_cast<TelemetryManager*>(lv_timer_get_user_data(timer));
+            if (self && !self->shutting_down_.load()) {
+                self->record_performance_snapshot();
+            }
+        },
+        FRAME_PERF_INTERVAL_MS, this);
+}
+
+void TelemetryManager::stop_frame_perf_timer() {
+    if (frame_perf_timer_) {
+        lv_timer_delete(frame_perf_timer_);
+        frame_perf_timer_ = nullptr;
     }
 }
 

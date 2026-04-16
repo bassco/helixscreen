@@ -707,6 +707,12 @@ class TelemetryManager {
     /** @brief Frame time threshold above which a frame is considered dropped (33ms = ~30fps) */
     static constexpr uint32_t DROPPED_FRAME_THRESHOLD_US = 33000;
 
+    /** @brief Frame time floor below which a frame is considered idle (no rendering work) */
+    static constexpr uint32_t IDLE_FRAME_THRESHOLD_US = 500;
+
+    /** @brief Interval between frame performance snapshots (5 minutes) */
+    static constexpr uint32_t FRAME_PERF_INTERVAL_MS = 5 * 60 * 1000;
+
     /** @brief Delay after session start before recording feature adoption */
     static constexpr uint32_t FEATURE_ADOPTION_DELAY_MS = 5 * 60 * 1000;
 
@@ -845,6 +851,12 @@ class TelemetryManager {
 
     /// Delete the periodic snapshot LVGL timer (safe if nullptr)
     void stop_snapshot_timer();
+
+    /** @brief Start the 5-minute frame performance snapshot timer */
+    void start_frame_perf_timer();
+
+    /** @brief Stop the frame performance snapshot timer */
+    void stop_frame_perf_timer();
 
     /// Persist snapshot sequence counter to disk so it survives restarts
     void save_snapshot_state() const;
@@ -1052,6 +1064,9 @@ class TelemetryManager {
 
     /// LVGL timer that fires every SNAPSHOT_INTERVAL_MS
     lv_timer_t* snapshot_timer_{nullptr};
+
+    /// LVGL timer that fires every FRAME_PERF_INTERVAL_MS for frame performance snapshots
+    lv_timer_t* frame_perf_timer_{nullptr};
 
     /// Monotonically increasing sequence number for snapshot events (persisted)
     int snapshot_seq_{0};
