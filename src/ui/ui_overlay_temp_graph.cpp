@@ -296,6 +296,11 @@ void TempGraphOverlay::discover_series() {
         // Skip sensors with chamber role (already handled above)
         if (sensor.role == helix::sensors::TemperatureSensorRole::CHAMBER)
             continue;
+        // Skip diagnostic sensors — not user-facing for the default graph
+        if (sensor.role == helix::sensors::TemperatureSensorRole::MCU ||
+            sensor.role == helix::sensors::TemperatureSensorRole::HOST ||
+            sensor.role == helix::sensors::TemperatureSensorRole::STEPPER_DRIVER)
+            continue;
         // Skip disabled sensors
         if (!sensor.enabled)
             continue;

@@ -2647,3 +2647,88 @@ TEST_CASE("Config: v10→v11 migration handles missing calibration data graceful
 
     std::filesystem::remove_all(temp_dir);
 }
+
+TEST_CASE("Config: v11→v12 migration consolidates chamber keys for all printers",
+          "[core][config][migration][v12]") {
+    std::string temp_dir = "/tmp/helix_test_v11_to_v12_" + std::to_string(rand());
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v11_config = {
+        {"config_version", 11},
+        {"active_printer_id", "k1c"},
+        {"printers",
+         {{"k1c",
+           {{"printer",
+             {{"chamber_sensor", "temperature_sensor chamber_temp"},
+              {"chamber_heater", "temperature_fan chamber_fan"}}}}},
+          {"voron",
+           {{"printer",
+             {{"chamber_sensor", "temperature_sensor chamber"}}}}},
+          {"bare", {{"heaters", {{"bed", "heater_bed"}}}}}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v11_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+
+    // k1c: both keys moved to canonical paths
+    REQUIRE(test_config.get<std::string>("/printers/k1c/temp_sensors/chamber") ==
+            "temperature_sensor chamber_temp");
+    REQUIRE(test_config.get<std::string>("/printers/k1c/heaters/chamber") ==
+            "temperature_fan chamber_fan");
+    REQUIRE_FALSE(test_config.exists("/printers/k1c/printer/chamber_sensor"));
+    REQUIRE_FALSE(test_config.exists("/printers/k1c/printer/chamber_heater"));
+    // Empty /printer subkey removed after migration
+    REQUIRE_FALSE(test_config.exists("/printers/k1c/printer"));
+
+    // voron: sensor-only migration still works
+    REQUIRE(test_config.get<std::string>("/printers/voron/temp_sensors/chamber") ==
+            "temperature_sensor chamber");
+    REQUIRE_FALSE(test_config.exists("/printers/voron/printer/chamber_sensor"));
+    REQUIRE_FALSE(test_config.exists("/printers/voron/printer"));
+
+    // bare: no chamber keys to migrate, untouched
+    REQUIRE(test_config.get<std::string>("/printers/bare/heaters/bed") == "heater_bed");
+    REQUIRE_FALSE(test_config.exists("/printers/bare/temp_sensors/chamber"));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v11→v12 migration does not overwrite canonical keys already set",
+          "[core][config][migration][v12]") {
+    std::string temp_dir = "/tmp/helix_test_v11_to_v12_existing_" + std::to_string(rand());
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v11_config = {
+        {"config_version", 11},
+        {"printers",
+         {{"k1c",
+           {{"temp_sensors", {{"chamber", "temperature_sensor new_chamber"}}},
+            {"printer", {{"chamber_sensor", "temperature_sensor old_chamber"}}}}}}}};
+
+    {
+        std::ofstream o(temp_path);
+        o << v11_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    // Canonical value preserved; legacy value discarded (migrate_config_keys behavior)
+    REQUIRE(test_config.get<std::string>("/printers/k1c/temp_sensors/chamber") ==
+            "temperature_sensor new_chamber");
+    REQUIRE_FALSE(test_config.exists("/printers/k1c/printer/chamber_sensor"));
+
+    std::filesystem::remove_all(temp_dir);
+}

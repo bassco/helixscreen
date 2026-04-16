@@ -530,6 +530,32 @@ static void migrate_v10_to_v11(json& config) {
     }
 }
 
+/// Consolidate chamber assignment keys: move `printer/chamber_sensor` → `temp_sensors/chamber`
+/// and `printer/chamber_heater` → `heaters/chamber` under each printer, matching the flat
+/// per-hardware-type convention used everywhere else (heaters/bed, fans/chamber, etc.).
+static void migrate_v11_to_v12(json& config) {
+    if (!config.contains("printers") || !config["printers"].is_object())
+        return;
+
+    for (auto& [printer_id, printer] : config["printers"].items()) {
+        if (!printer.is_object())
+            continue;
+        const std::vector<std::pair<std::string, std::string>> migrations = {
+            {"/printer/chamber_sensor", "/temp_sensors/chamber"},
+            {"/printer/chamber_heater", "/heaters/chamber"},
+        };
+        if (migrate_config_keys(printer, migrations)) {
+            spdlog::info("[Config] Migration v12: consolidated chamber keys for printer '{}'",
+                         printer_id);
+        }
+        // If the now-empty /printer subkey remains, drop it.
+        if (printer.contains("printer") && printer["printer"].is_object() &&
+            printer["printer"].empty()) {
+            printer.erase("printer");
+        }
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config) {
     int version = 0;
@@ -559,6 +585,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v9_to_v10(config);
     if (version < 11)
         migrate_v10_to_v11(config);
+    if (version < 12)
+        migrate_v11_to_v12(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }

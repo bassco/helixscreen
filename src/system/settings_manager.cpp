@@ -146,11 +146,13 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0, "auto_color_map",
                            subjects_);
 
-    // Chamber assignment (default: "auto" = use name heuristics)
+    // Chamber assignment (default: "auto" = use name heuristics).
+    // Legacy paths (printer/chamber_{sensor,heater}) moved to the canonical flat paths
+    // by config migration v11→v12.
     chamber_heater_assignment_ =
-        config->get<std::string>(config->df() + "printer/chamber_heater", "auto");
+        config->get<std::string>(config->df() + wizard::CHAMBER_HEATER, "auto");
     chamber_sensor_assignment_ =
-        config->get<std::string>(config->df() + "printer/chamber_sensor", "auto");
+        config->get<std::string>(config->df() + wizard::CHAMBER_SENSOR, "auto");
 
     // Load scanner device selection
     scanner_device_id_ = config->get<std::string>(config->df() + "scanner/usb_vendor_product", "");
@@ -497,7 +499,7 @@ void SettingsManager::set_chamber_heater_assignment(const std::string& value) {
     chamber_heater_assignment_ = value;
     spdlog::info("[SettingsManager] set_chamber_heater_assignment({})", value);
     Config* config = Config::get_instance();
-    config->set<std::string>(config->df() + "printer/chamber_heater", value);
+    config->set<std::string>(config->df() + wizard::CHAMBER_HEATER, value);
     config->save();
 }
 
@@ -509,7 +511,7 @@ void SettingsManager::set_chamber_sensor_assignment(const std::string& value) {
     chamber_sensor_assignment_ = value;
     spdlog::info("[SettingsManager] set_chamber_sensor_assignment({})", value);
     Config* config = Config::get_instance();
-    config->set<std::string>(config->df() + "printer/chamber_sensor", value);
+    config->set<std::string>(config->df() + wizard::CHAMBER_SENSOR, value);
     config->save();
 }
 

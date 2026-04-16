@@ -45,6 +45,10 @@ constexpr const char* PART_FAN = "fans/part";
 constexpr const char* CHAMBER_FAN = "fans/chamber";
 constexpr const char* EXHAUST_FAN = "fans/exhaust";
 
+// Chamber hardware (sensor and heater — distinct from chamber_fan above)
+constexpr const char* CHAMBER_SENSOR = "temp_sensors/chamber";
+constexpr const char* CHAMBER_HEATER = "heaters/chamber";
+
 // LED hardware (legacy — used for migration only in LedController::load_config()
 // and hardware_validator.cpp. New code should use LedController::selected_strips())
 constexpr const char* LED_STRIP = "leds/strip";

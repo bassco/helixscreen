@@ -1129,7 +1129,7 @@
       "toolhead_style": "creality_k1",
       "image": "creality-k1c.png",
       "probe_type": "prtouch_v2",
-      "preset": "k1",
+      "preset": "k1c",
       "print_start_profile": "creality_k1",
       "print_start_capabilities": {
         "macro_name": "START_PRINT",
