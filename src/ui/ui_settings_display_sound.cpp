@@ -856,7 +856,7 @@ void DisplaySoundSettingsOverlay::apply_preview_palette_to_screen_popups() {
 
     lv_obj_t* modal_dialog = lv_obj_find_by_name(lv_screen_active(), "modal_dialog");
     if (modal_dialog) {
-        lv_obj_set_style_radius(modal_dialog, theme.properties.border_radius, LV_PART_MAIN);
+        lv_obj_set_style_radius(modal_dialog, theme.properties.border_radius_size, LV_PART_MAIN);
     }
 }
 
