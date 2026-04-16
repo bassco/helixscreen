@@ -113,14 +113,30 @@
 
 ## Optimization Targets (Priority Order)
 
-### 1. Settings Overlay Opacity — **HIGH IMPACT, LOW EFFORT**
+### 1. Settings Overlay Opacity — **HIGH IMPACT, MEDIUM EFFORT**
 
-67% of Settings CPU is `blend_with_opa`. The settings overlays likely have a semi-transparent background or container. Audit:
-- `ui_xml/settings_*.xml` for `style_opa`, `style_bg_opa` values < 255
-- The overlay container or backdrop that sits behind settings content
-- Any `bind_style` that sets opacity dynamically
+67% of Settings CPU is `blend_with_opa`. Root cause identified:
 
-**Fix:** Make overlay backgrounds fully opaque (`opa=255`). This shifts rendering from the expensive `with_opa` NEON path to the fast direct blend path. Expected improvement: ~60% reduction in Settings rendering cost.
+**`ui_xml/overlay_backdrop.xml`** — a full-screen (800x480) black rectangle with `style_bg_opa="40"` that sits behind every navigation overlay. LVGL blends all 384,000 pixels through the expensive `with_opa` NEON path on every frame.
+
+This is **separate** from the modal blur backdrop system (`create_blurred_backdrop` in `backdrop_blur.cpp`). The modal system already solves this correctly: it takes a screenshot, blurs/darkens it once, and displays it as a fully opaque image (zero per-frame blending cost). But the navigation overlay system uses the XML backdrop instead.
+
+On RGB565 (fbdev) platforms, `create_blurred_backdrop` also falls back to a dim overlay with opacity — same expensive per-frame blending problem there too.
+
+**Fix:** Replace the per-frame opacity backdrop with a snapshot-and-darken approach:
+1. When an overlay is pushed, take an `lv_snapshot_take()` of the current screen
+2. Darken the snapshot pixels once (simple loop: multiply RGB by a dim factor)
+3. Display the darkened snapshot as a fully opaque `lv_image` backdrop
+4. On overlay pop, destroy the snapshot
+
+This works on all platforms (DRM and fbdev), uses the same `lv_snapshot_take` API the blur system already uses, and eliminates 100% of the per-frame opacity blending. The one-time snapshot + darken cost is amortized over thousands of frames.
+
+**Files to modify:**
+- `src/ui/ui_nav_manager.cpp` — replace XML backdrop creation with snapshot-darken approach
+- `ui_xml/overlay_backdrop.xml` — may be removable entirely
+- Consider extracting the snapshot-darken logic from `backdrop_blur.cpp` into a shared utility
+
+Expected improvement: ~60% reduction in Settings rendering cost on Pi, similar gains on all platforms.
 
 ### 2. Print Select Thumbnail Caching — **HIGH IMPACT, MEDIUM EFFORT**
 
