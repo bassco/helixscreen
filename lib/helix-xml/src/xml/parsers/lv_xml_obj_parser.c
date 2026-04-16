@@ -104,6 +104,38 @@ void lv_xml_obj_apply(lv_xml_parser_state_t * state, const char ** attrs)
         else if(lv_streq("scrollbar_mode", name)) lv_obj_set_scrollbar_mode(item, lv_xml_scrollbar_mode_to_enum(value));
 
         else if(lv_streq("hidden", name))               lv_obj_set_flag(item, LV_OBJ_FLAG_HIDDEN, lv_xml_to_bool(value));
+        else if(lv_streq("hidden_if_prop_eq", name)) {
+            /* Format: "resolved_value|ref_value" — hide if resolved_value == ref_value.
+             * By this point $prop references are already resolved by resolve_params(),
+             * so value contains the final strings separated by pipe. */
+            const char * sep = lv_strchr(value, '|');
+            if(sep) {
+                size_t val_len = (size_t)(sep - value);
+                const char * ref = sep + 1;
+                size_t ref_len = lv_strlen(ref);
+                if(val_len == ref_len && (val_len == 0 || lv_memcmp(value, ref, val_len) == 0)) {
+                    lv_obj_add_flag(item, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        }
+        else if(lv_streq("hidden_if_prop_not_eq", name)) {
+            const char * sep = lv_strchr(value, '|');
+            if(sep) {
+                size_t val_len = (size_t)(sep - value);
+                const char * ref = sep + 1;
+                size_t ref_len = lv_strlen(ref);
+                bool eq = (val_len == ref_len && (val_len == 0 || lv_memcmp(value, ref, val_len) == 0));
+                if(!eq) {
+                    lv_obj_add_flag(item, LV_OBJ_FLAG_HIDDEN);
+                }
+            }
+        }
+        else if(lv_streq("hidden_if_empty", name)) {
+            /* Shortcut for hidden_if_prop_eq="$prop|" — hide if resolved value is empty */
+            if(value[0] == '\0') {
+                lv_obj_add_flag(item, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
         else if(lv_streq("clickable", name))            lv_obj_set_flag(item, LV_OBJ_FLAG_CLICKABLE, lv_xml_to_bool(value));
         else if(lv_streq("click_focusable", name))      lv_obj_set_flag(item, LV_OBJ_FLAG_CLICK_FOCUSABLE,
                                                                             lv_xml_to_bool(value));
@@ -498,6 +530,119 @@ void lv_obj_xml_bind_style_apply(lv_xml_parser_state_t * state, const char ** at
     lv_obj_bind_style(item, &xml_style->style, selector, subject, ref_value);
 }
 
+/* Comparison operators for bind_style_if_* */
+typedef enum {
+    BIND_STYLE_CMP_EQ,
+    BIND_STYLE_CMP_NOT_EQ,
+    BIND_STYLE_CMP_GT,
+    BIND_STYLE_CMP_GE,
+    BIND_STYLE_CMP_LT,
+    BIND_STYLE_CMP_LE,
+} bind_style_cmp_t;
+
+typedef struct {
+    const lv_style_t * style;
+    lv_style_selector_t selector;
+    int32_t value;
+    bind_style_cmp_t cmp;
+} bind_style_cmp_data_t;
+
+static void bind_style_cmp_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    bind_style_cmp_data_t * p = observer->user_data;
+    int32_t v = lv_subject_get_int(subject);
+    bool match = false;
+    switch(p->cmp) {
+        case BIND_STYLE_CMP_EQ:     match = (v == p->value); break;
+        case BIND_STYLE_CMP_NOT_EQ: match = (v != p->value); break;
+        case BIND_STYLE_CMP_GT:     match = (v >  p->value); break;
+        case BIND_STYLE_CMP_GE:     match = (v >= p->value); break;
+        case BIND_STYLE_CMP_LT:     match = (v <  p->value); break;
+        case BIND_STYLE_CMP_LE:     match = (v <= p->value); break;
+    }
+    /* Style is disabled when comparison does NOT match */
+    lv_obj_style_set_disabled(observer->target, p->style, p->selector, !match);
+}
+
+void * lv_obj_xml_bind_style_cmp_create(lv_xml_parser_state_t * state, const char ** attrs)
+{
+    LV_UNUSED(attrs);
+    void * item = lv_xml_state_get_parent(state);
+    return item;
+}
+
+void lv_obj_xml_bind_style_cmp_apply(lv_xml_parser_state_t * state, const char ** attrs)
+{
+    const char * op = state->tag_name;
+
+    /*If starts with "lv_obj-" skip that part*/
+    if(op[0] == 'l') op += 7;
+
+    bind_style_cmp_t cmp;
+    if(lv_streq(op, "bind_style_if_eq")) cmp = BIND_STYLE_CMP_EQ;
+    else if(lv_streq(op, "bind_style_if_not_eq")) cmp = BIND_STYLE_CMP_NOT_EQ;
+    else if(lv_streq(op, "bind_style_if_gt")) cmp = BIND_STYLE_CMP_GT;
+    else if(lv_streq(op, "bind_style_if_ge")) cmp = BIND_STYLE_CMP_GE;
+    else if(lv_streq(op, "bind_style_if_lt")) cmp = BIND_STYLE_CMP_LT;
+    else if(lv_streq(op, "bind_style_if_le")) cmp = BIND_STYLE_CMP_LE;
+    else {
+        LV_LOG_WARN("`%s` is not a known bind_style comparison", op);
+        return;
+    }
+
+    const char * name = lv_xml_get_value_of(attrs, "name");
+    if(name == NULL) {
+        /*Silently ignore this issue.
+         *The name set to NULL if there there was no default value when resolving params*/
+        return;
+    }
+
+    lv_xml_style_t * xml_style = lv_xml_get_style_by_name(&state->scope, name);
+    if(xml_style == NULL) {
+        LV_LOG_WARN("`%s` style is not found", name);
+        return;
+    }
+
+    const char * subject_str = lv_xml_get_value_of(attrs, "subject");
+    if(subject_str == NULL) {
+        LV_LOG_WARN("`subject` is missing in bind_style_if_*");
+        return;
+    }
+
+    lv_subject_t * subject = lv_xml_get_subject(&state->scope, subject_str);
+    if(subject == NULL) {
+        LV_LOG_WARN("Subject `%s` doesn't exist in bind_style_if_*", subject_str);
+        return;
+    }
+
+    const char * ref_value_str = lv_xml_get_value_of(attrs, "ref_value");
+    if(ref_value_str == NULL) {
+        LV_LOG_WARN("`ref_value` is missing in bind_style_if_*");
+        return;
+    }
+
+    int32_t ref_value = lv_xml_atoi(ref_value_str);
+
+    const char * selector_str = lv_xml_get_value_of(attrs, "selector");
+    lv_style_selector_t selector = lv_xml_style_selector_text_to_enum(selector_str);
+
+    void * item = lv_xml_state_get_parent(state);
+
+    /* Add the style (starts enabled, observer will immediately set correct state) */
+    lv_obj_add_style(item, &xml_style->style, selector);
+
+    bind_style_cmp_data_t * p = lv_malloc(sizeof(bind_style_cmp_data_t));
+    LV_ASSERT_MALLOC(p);
+    if(p == NULL) return;
+
+    p->style = &xml_style->style;
+    p->selector = selector;
+    p->value = ref_value;
+    p->cmp = cmp;
+
+    lv_observer_t * obs = lv_subject_add_observer_obj(subject, bind_style_cmp_observer_cb, item, p);
+    obs->auto_free_user_data = 1;
+}
 
 void * lv_obj_xml_bind_style_prop_create(lv_xml_parser_state_t * state, const char ** attrs)
 {
