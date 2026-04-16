@@ -19,6 +19,14 @@ namespace helix::ui {
 /// @return Image widget with blurred backdrop, or nullptr (caller should fall back)
 lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity);
 
+/// Returns a fully opaque lv_image widget containing a darkened snapshot of the
+/// current screen.  The snapshot is taken once and darkened in-place — no
+/// per-frame opacity blending cost.  Returns nullptr on failure.
+///
+/// @param parent  Parent object for the image widget
+/// @param dim_opacity  Dimming amount (same scale as bg_opa: 0=no dim, 255=black)
+lv_obj_t* create_darkened_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity);
+
 /// Free cached GPU resources (shaders, FBOs, textures).
 /// Also resets the circuit breaker, allowing blur to be retried.
 /// Call on shutdown or display resize.
@@ -43,6 +51,12 @@ void box_blur_argb8888(uint8_t* data, int width, int height, int iterations = 3)
 /// @param src_height Source height (must be even)
 void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int src_height,
                            int src_stride);
+
+/// Darken ARGB8888 pixels in-place.  Each RGB channel is multiplied by
+/// (255 - dim_opacity) / 255.  Alpha channel is set to 255 (fully opaque).
+/// This replicates the visual effect of a black overlay with the given opacity
+/// but costs zero per-frame blending.
+void darken_argb8888_inplace(uint8_t* data, int width, int height, int stride, lv_opa_t dim_opacity);
 
 /// Reset the circuit breaker (for testing only).
 void reset_circuit_breaker();

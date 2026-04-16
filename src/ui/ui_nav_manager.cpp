@@ -3,6 +3,7 @@
 
 #include "ui_nav_manager.h"
 
+#include "backdrop_blur.h"
 #include "ui_emergency_stop.h"
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
@@ -140,9 +141,10 @@ void NavigationManager::clear_overlay_stack() {
     // Clear zoom source rects for any cleared overlays
     zoom_source_rects_.clear();
 
-    // Hide primary backdrop
+    // Destroy primary backdrop snapshot
     if (overlay_backdrop_) {
-        set_backdrop_visible(false);
+        helix::ui::safe_delete_deferred(overlay_backdrop_);
+        overlay_backdrop_ = nullptr;
     }
 
     spdlog::trace("[NavigationManager] Overlay stack cleared (connection gating)");
@@ -879,9 +881,10 @@ void NavigationManager::switch_to_panel_impl(int panel_id) {
     overlay_backdrops_.clear();
     spdlog::trace("[NavigationManager] Panel stack and overlay maps cleared (nav button clicked)");
 
-    // Hide primary backdrop since all overlays are being cleared
+    // Destroy primary backdrop snapshot since all overlays are being cleared
     if (overlay_backdrop_) {
-        set_backdrop_visible(false);
+        helix::ui::safe_delete_deferred(overlay_backdrop_);
+        overlay_backdrop_ = nullptr;
     }
 
     // Show the clicked panel
@@ -934,26 +937,10 @@ void NavigationManager::init() {
 }
 
 void NavigationManager::init_overlay_backdrop(lv_obj_t* screen) {
-    if (!screen) {
-        spdlog::error("[NavigationManager] NULL screen provided to init_overlay_backdrop");
-        return;
-    }
-
-    if (overlay_backdrop_) {
-        spdlog::warn("[NavigationManager] Overlay backdrop already initialized");
-        return;
-    }
-
-    overlay_backdrop_ = static_cast<lv_obj_t*>(lv_xml_create(screen, "overlay_backdrop", nullptr));
-    if (!overlay_backdrop_) {
-        spdlog::error("[NavigationManager] Failed to create overlay_backdrop from XML");
-        return;
-    }
-
-    // Wire up click handler to close topmost overlay when backdrop is clicked
-    lv_obj_add_event_cb(overlay_backdrop_, backdrop_click_event_cb, LV_EVENT_CLICKED, nullptr);
-
-    spdlog::trace("[NavigationManager] Overlay backdrop created from XML successfully");
+    // Backdrop is now created dynamically as a darkened snapshot when the first
+    // overlay is pushed.  Nothing to pre-create.
+    (void)screen;
+    spdlog::trace("[NavigationManager] Overlay backdrop init (dynamic snapshot mode)");
 }
 
 void NavigationManager::set_app_layout(lv_obj_t* app_layout) {
@@ -1325,23 +1312,22 @@ void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous
             }
         }
 
-        // Optionally hide current top panel
+        // Create snapshot-darkened backdrop BEFORE hiding — snapshot must capture
+        // the visible content, not a blank screen.
+        lv_obj_t* screen = lv_obj_get_screen(overlay_panel);
+        if (screen && is_first_overlay) {
+            mgr.overlay_backdrop_ = helix::ui::create_darkened_backdrop(screen, 40);
+            if (mgr.overlay_backdrop_) {
+                lv_obj_move_foreground(mgr.overlay_backdrop_);
+                lv_obj_add_event_cb(mgr.overlay_backdrop_, backdrop_click_event_cb,
+                                    LV_EVENT_CLICKED, nullptr);
+            }
+        }
+
+        // Optionally hide current top panel (after snapshot)
         if (hide_previous && !mgr.panel_stack_.empty()) {
             lv_obj_t* current_top = mgr.panel_stack_.back();
             lv_obj_add_flag(current_top, LV_OBJ_FLAG_HIDDEN);
-        }
-
-        // Create backdrop
-        lv_obj_t* screen = lv_obj_get_screen(overlay_panel);
-        if (screen) {
-            if (is_first_overlay && mgr.overlay_backdrop_) {
-                mgr.set_backdrop_visible(true);
-                lv_obj_move_foreground(mgr.overlay_backdrop_);
-            }
-            // Nested overlays do NOT get their own backdrop — the primary
-            // backdrop already provides dimming for the entire overlay stack.
-            // Secondary/deeper settings panels (e.g. theme editor inside
-            // display settings) should not add additional darkening layers.
         }
 
         // Show overlay
@@ -1414,29 +1400,22 @@ void NavigationManager::push_overlay_zoom_from(lv_obj_t* overlay_panel, lv_area_
             }
         }
 
-        // Hide current top panel
+        // Create backdrop BEFORE hiding previous panel — snapshot must capture
+        // the visible content, not a blank screen.
+        lv_obj_t* screen = lv_obj_get_screen(overlay_panel);
+        if (screen && is_first_overlay) {
+            mgr.overlay_backdrop_ = helix::ui::create_darkened_backdrop(screen, 40);
+            if (mgr.overlay_backdrop_) {
+                lv_obj_move_foreground(mgr.overlay_backdrop_);
+                lv_obj_add_event_cb(mgr.overlay_backdrop_, backdrop_click_event_cb,
+                                    LV_EVENT_CLICKED, nullptr);
+            }
+        }
+
+        // Hide current top panel (after snapshot)
         if (!mgr.panel_stack_.empty()) {
             lv_obj_t* current_top = mgr.panel_stack_.back();
             lv_obj_add_flag(current_top, LV_OBJ_FLAG_HIDDEN);
-        }
-
-        // Create backdrop
-        lv_obj_t* screen = lv_obj_get_screen(overlay_panel);
-        if (screen) {
-            if (is_first_overlay && mgr.overlay_backdrop_) {
-                mgr.set_backdrop_visible(true);
-                lv_obj_move_foreground(mgr.overlay_backdrop_);
-            } else if (!is_first_overlay) {
-                lv_obj_t* backdrop =
-                    static_cast<lv_obj_t*>(lv_xml_create(screen, "overlay_backdrop", nullptr));
-                if (backdrop) {
-                    mgr.overlay_backdrops_[overlay_panel] = backdrop;
-                    lv_obj_remove_flag(backdrop, LV_OBJ_FLAG_HIDDEN);
-                    lv_obj_move_foreground(backdrop);
-                    lv_obj_add_event_cb(backdrop, backdrop_click_event_cb, LV_EVENT_CLICKED,
-                                        nullptr);
-                }
-            }
         }
 
         // Show overlay with zoom animation instead of slide
@@ -1595,9 +1574,10 @@ bool NavigationManager::go_back() {
             }
         }
 
-        // Hide backdrop if no more overlays
+        // Destroy backdrop if no more overlays
         if (mgr.panel_stack_.size() <= 1 && mgr.overlay_backdrop_) {
-            mgr.set_backdrop_visible(false);
+            helix::ui::safe_delete_deferred(mgr.overlay_backdrop_);
+            mgr.overlay_backdrop_ = nullptr;
         }
 
         // Fallback to home if empty

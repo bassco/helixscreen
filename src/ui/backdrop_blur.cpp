@@ -138,6 +138,29 @@ void downscale_2x_argb8888(const uint8_t* src, uint8_t* dst, int src_width, int 
     }
 }
 
+void darken_argb8888_inplace(uint8_t* data, int width, int height, int stride, lv_opa_t dim_opacity) {
+    if (!data || width < 1 || height < 1) {
+        return;
+    }
+
+    // Scale factor: (255 - dim_opacity). We multiply each RGB channel by this
+    // and divide by 255 to darken the image as if a black overlay with
+    // dim_opacity were composited on top.
+    const uint32_t scale = 255 - dim_opacity;
+
+    for (int y = 0; y < height; y++) {
+        uint8_t* row = data + y * stride;
+        for (int x = 0; x < width; x++) {
+            uint8_t* pixel = row + x * 4;
+            // LVGL ARGB8888 byte order: B=0, G=1, R=2, A=3
+            pixel[0] = static_cast<uint8_t>((pixel[0] * scale) / 255);
+            pixel[1] = static_cast<uint8_t>((pixel[1] * scale) / 255);
+            pixel[2] = static_cast<uint8_t>((pixel[2] * scale) / 255);
+            pixel[3] = 255; // Fully opaque
+        }
+    }
+}
+
 } // namespace detail
 
 // ============================================================================
@@ -570,22 +593,9 @@ lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
     }
 
 #if LV_COLOR_DEPTH == 16
-    // RGB565 devices: skip blur entirely — just use dark overlay to save ~1.5MB
-    {
-        lv_obj_t* overlay = lv_obj_create(parent);
-        lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
-        lv_obj_align(overlay, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_bg_color(overlay, lv_color_black(), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(overlay, dim_opacity, LV_PART_MAIN);
-        lv_obj_set_style_border_width(overlay, 0, LV_PART_MAIN);
-        lv_obj_set_style_radius(overlay, 0, LV_PART_MAIN);
-        lv_obj_set_style_pad_all(overlay, 0, LV_PART_MAIN);
-        lv_obj_add_flag(overlay, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_remove_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
-        spdlog::debug("[Backdrop Blur] RGB565 mode — dark overlay only (dim_opacity={})",
-                      dim_opacity);
-        return overlay;
-    }
+    // RGB565 devices: skip blur — use darkened snapshot instead.
+    // lv_snapshot_take with ARGB8888 works on all color depths.
+    return create_darkened_backdrop(parent, dim_opacity);
 #endif
 
     // Step 1: Snapshot current screen
@@ -658,6 +668,9 @@ lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
         detail::box_blur_argb8888(blur_data, blur_w, blur_h, 3);
     }
 
+    // Apply dimming directly to blur pixels (eliminates per-frame opacity overlay)
+    detail::darken_argb8888_inplace(blur_data, blur_w, blur_h, blur_w * 4, dim_opacity);
+
     // Step 4: Create lv_draw_buf for the blurred result at display resolution.
     // LVGL's lv_image will scale the smaller buffer up automatically when we
     // set it as source on a full-screen image widget.
@@ -701,20 +714,81 @@ lv_obj_t* create_blurred_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
     // Free draw buffer when image is deleted
     lv_obj_add_event_cb(img, on_backdrop_image_deleted, LV_EVENT_DELETE, result_buf);
 
-    // Step 6: Dark tint overlay on top of the image
-    lv_obj_t* tint = lv_obj_create(img);
-    lv_obj_set_size(tint, LV_PCT(100), LV_PCT(100));
-    lv_obj_align(tint, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(tint, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(tint, dim_opacity, LV_PART_MAIN);
-    lv_obj_set_style_border_width(tint, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(tint, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(tint, 0, LV_PART_MAIN);
-    lv_obj_remove_flag(tint, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(tint, LV_OBJ_FLAG_SCROLLABLE);
-
     spdlog::debug("[Backdrop Blur] Created blurred backdrop ({}x{} blur, dim_opacity={})", blur_w,
                   blur_h, dim_opacity);
+    return img;
+}
+
+lv_obj_t* create_darkened_backdrop(lv_obj_t* parent, lv_opa_t dim_opacity) {
+    if (!parent) {
+        spdlog::warn("[Backdrop Darken] Null parent");
+        return nullptr;
+    }
+
+    // Step 1: Snapshot current screen
+    lv_obj_t* screen = lv_screen_active();
+    if (!screen) {
+        spdlog::warn("[Backdrop Darken] No active screen");
+        return nullptr;
+    }
+
+    lv_draw_buf_t* snapshot = lv_snapshot_take(screen, LV_COLOR_FORMAT_ARGB8888);
+    if (!snapshot) {
+        spdlog::warn("[Backdrop Darken] Snapshot failed");
+        return nullptr;
+    }
+
+    int snap_w = static_cast<int>(snapshot->header.w);
+    int snap_h = static_cast<int>(snapshot->header.h);
+    auto* snap_data = static_cast<uint8_t*>(snapshot->data);
+    int snap_stride = static_cast<int>(snapshot->header.stride);
+
+    spdlog::debug("[Backdrop Darken] Snapshot {}x{} (stride={})", snap_w, snap_h, snap_stride);
+
+    // Step 2: Darken the snapshot pixels in-place
+    detail::darken_argb8888_inplace(snap_data, snap_w, snap_h, snap_stride, dim_opacity);
+
+    // Step 3: Create lv_draw_buf and copy (row-by-row for stride alignment)
+    lv_draw_buf_t* result_buf = lv_draw_buf_create(
+        static_cast<uint32_t>(snap_w), static_cast<uint32_t>(snap_h), LV_COLOR_FORMAT_ARGB8888, 0);
+    if (!result_buf) {
+        spdlog::warn("[Backdrop Darken] Failed to allocate result buffer");
+        lv_draw_buf_destroy(snapshot);
+        return nullptr;
+    }
+
+    {
+        uint32_t src_stride = static_cast<uint32_t>(snap_stride);
+        uint32_t dst_stride = result_buf->header.stride;
+        uint32_t row_bytes = static_cast<uint32_t>(snap_w) * 4;
+        auto* dst = static_cast<uint8_t*>(result_buf->data);
+
+        if (src_stride == dst_stride) {
+            std::memcpy(dst, snap_data, static_cast<size_t>(dst_stride) * snap_h);
+        } else {
+            for (int y = 0; y < snap_h; y++) {
+                std::memcpy(dst + y * dst_stride, snap_data + y * src_stride, row_bytes);
+            }
+        }
+    }
+
+    // Done with snapshot
+    lv_draw_buf_destroy(snapshot);
+
+    // Step 4: Create image widget
+    lv_obj_t* img = lv_image_create(parent);
+    lv_obj_set_size(img, LV_PCT(100), LV_PCT(100));
+    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+    lv_image_set_src(img, result_buf);
+    lv_image_set_inner_align(img, LV_IMAGE_ALIGN_STRETCH);
+    lv_obj_add_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(img, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Free draw buffer when image is deleted
+    lv_obj_add_event_cb(img, on_backdrop_image_deleted, LV_EVENT_DELETE, result_buf);
+
+    spdlog::debug("[Backdrop Darken] Created darkened backdrop ({}x{}, dim_opacity={})",
+                  snap_w, snap_h, dim_opacity);
     return img;
 }
 
