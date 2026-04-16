@@ -230,7 +230,7 @@ class Config {
     /**
      * @brief Load a preset file and merge hardware config into active printer
      *
-     * Loads config/presets/{preset_name}.json relative to the config file path.
+     * Loads assets/config/presets/{preset_name}.json relative to the data root.
      * Merges the preset's "printer" section (fans, heaters, temp_sensors, leds,
      * hardware, filament_sensors, default_macros) into the active printer config.
      * Only applies when wizard_completed is false for the active printer.

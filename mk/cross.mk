@@ -2269,7 +2269,7 @@ release-ad5m: | build/ad5m/bin/helix-screen build/ad5m/bin/helix-splash
 	@cp scripts/helix-launcher.sh $(RELEASE_DIR)/helixscreen/bin/
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Copy AD5M Pro default config as config/settings.json (skips wizard on first run)
-	@cp config/presets/ad5m.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/ad5m.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for AD5M Pro$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
@@ -2314,7 +2314,7 @@ release-ad5x: | build/ad5x/bin/helix-screen build/ad5x/bin/helix-splash
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Install AD5X preset as default config (skips hardware wizard on first run)
 	@rm -f $(RELEASE_DIR)/helixscreen/config/settings-test.json $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
-	@cp config/presets/ad5x.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/ad5x.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for AD5X$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
@@ -2359,7 +2359,7 @@ release-cc1: | build/cc1/bin/helix-screen build/cc1/bin/helix-splash
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Install CC1 preset as default config (skips hardware wizard on first run)
 	@rm -f $(RELEASE_DIR)/helixscreen/config/settings-test.json $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
-	@cp config/presets/cc1.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/cc1.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for CC1$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
@@ -2404,7 +2404,7 @@ release-k1: | build/mips/bin/helix-screen build/mips/bin/helix-splash
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Install K1 preset as default config (skips hardware wizard on first run)
 	@rm -f $(RELEASE_DIR)/helixscreen/config/settings-test.json $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
-	@cp config/presets/k1.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/k1.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for K1$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
@@ -2485,7 +2485,7 @@ release-k2: | build/k2/bin/helix-screen build/k2/bin/helix-splash
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Install K2 preset as default config (skips hardware wizard on first run)
 	@rm -f $(RELEASE_DIR)/helixscreen/config/settings-test.json $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
-	@cp config/presets/k2.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/k2.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for K2$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME)
@@ -2523,7 +2523,7 @@ release-snapmaker-u1: | build/snapmaker-u1/bin/helix-screen
 	@cp -r ui_xml config $(RELEASE_DIR)/helixscreen/
 	@# Install Snapmaker U1 preset as default config (skips hardware wizard on first run)
 	@rm -f $(RELEASE_DIR)/helixscreen/config/settings-test.json $(RELEASE_DIR)/helixscreen/config/helixconfig.json $(RELEASE_DIR)/helixscreen/config/helixconfig-test.json
-	@cp config/presets/snapmaker-u1.json $(RELEASE_DIR)/helixscreen/config/settings.json
+	@cp assets/config/presets/snapmaker-u1.json $(RELEASE_DIR)/helixscreen/config/settings.json
 	@echo "  $(DIM)Included pre-configured config/settings.json for Snapmaker U1$(RESET)"
 	@cp scripts/$(INSTALLER_FILENAME) $(RELEASE_DIR)/helixscreen/ 2>/dev/null || true
 	@chmod +x $(RELEASE_DIR)/helixscreen/$(INSTALLER_FILENAME) 2>/dev/null || true
