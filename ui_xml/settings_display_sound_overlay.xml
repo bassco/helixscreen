@@ -5,11 +5,25 @@
 <!-- Merges Appearance, Display, and Sound settings into a single sub-panel -->
 <!-- Uses setting_* components for consistency with main settings panel -->
 <component>
+  <styles>
+    <style name="content_standard" pad_top="0" pad_left="#space_lg" pad_right="#space_lg"
+           pad_bottom="#space_lg"/>
+    <style name="content_micro" pad_top="0" pad_left="#space_md" pad_right="#space_md"
+           pad_bottom="#space_sm"/>
+    <style name="brightness_standard" pad_left="#space_lg" pad_right="#space_lg"
+           pad_top="#space_md" pad_bottom="#space_md" pad_gap="#space_xs"/>
+    <style name="brightness_micro" pad_left="#space_md" pad_right="#space_md"
+           pad_top="#space_xs" pad_bottom="#space_xs" pad_gap="#space_xs"/>
+    <style name="spacer_standard" height="#space_lg"/>
+    <style name="spacer_micro" height="#space_md"/>
+  </styles>
   <view name="settings_display_sound_overlay"
         extends="overlay_panel" width="#overlay_panel_width_full" title="Display &amp; Sound" title_tag="Display &amp; Sound"
         bg_color="#screen_bg">
     <!-- Content Area - no padding, rows handle their own -->
-    <lv_obj name="overlay_content" width="100%" flex_grow="1" style_pad_top="0" style_pad_left="#space_lg" style_pad_right="#space_lg" style_pad_bottom="#space_lg" scrollable="true" flex_flow="column">
+    <lv_obj name="overlay_content" width="100%" flex_grow="1" scrollable="true" flex_flow="column">
+      <bind_style_if_eq name="content_micro" subject="ui_breakpoint" ref_value="0"/>
+      <bind_style_if_ge name="content_standard" subject="ui_breakpoint" ref_value="1"/>
       <!-- ================================================================== -->
       <!-- APPEARANCE SECTION -->
       <!-- ================================================================== -->
@@ -76,9 +90,10 @@
                           callback="on_theme_settings_clicked"/>
       <!-- Brightness (conditional - hidden when no hardware backlight) -->
       <lv_obj name="brightness_section"
-              width="100%" height="content" scrollable="false" style_pad_left="#space_lg" style_pad_right="#space_lg"
-              style_pad_top="#space_md" style_pad_bottom="#space_md" flex_flow="column" style_pad_gap="#space_xs">
+              width="100%" height="content" scrollable="false" flex_flow="column">
         <bind_flag_if_eq subject="settings_has_dimming" flag="hidden" ref_value="0"/>
+        <bind_style_if_eq name="brightness_micro" subject="ui_breakpoint" ref_value="0"/>
+        <bind_style_if_ge name="brightness_standard" subject="ui_breakpoint" ref_value="1"/>
         <!-- Label row with value display -->
         <lv_obj width="100%"
                 height="content" flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
@@ -190,7 +205,10 @@
                             description_tag="Play / stop Crockett's Theme" callback="on_test_tracker"/>
       </lv_obj>
       <!-- Bottom padding for scroll -->
-      <lv_obj width="100%" height="#space_lg" scrollable="false"/>
+      <lv_obj width="100%" scrollable="false">
+        <bind_style_if_eq name="spacer_micro" subject="ui_breakpoint" ref_value="0"/>
+        <bind_style_if_ge name="spacer_standard" subject="ui_breakpoint" ref_value="1"/>
+      </lv_obj>
     </lv_obj>
   </view>
 </component>

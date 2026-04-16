@@ -34,6 +34,7 @@
 #include "layout_manager.h"
 #include "static_subject_registry.h"
 #include "theme_manager.h"
+#include "ui_event_safety.h"
 
 #include <spdlog/spdlog.h>
 
@@ -182,6 +183,33 @@ static void on_toggle_password_visibility(lv_event_t* e) {
     }
 }
 
+/**
+ * Toggle visibility of a "description" label in setting rows.
+ * Used on compact breakpoints where descriptions are hidden by default —
+ * tapping the info icon reveals/hides the description text.
+ * Walks up the parent chain to handle varying nesting depths across row types.
+ */
+static void on_setting_info_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[Settings] on_setting_info_clicked");
+    auto* info_btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    if (!info_btn) return;
+    // Walk up parent chain to find a level that contains "description" child
+    auto* parent = lv_obj_get_parent(info_btn);
+    lv_obj_t* desc = nullptr;
+    while (parent) {
+        desc = lv_obj_find_by_name(parent, "description");
+        if (desc) break;
+        parent = lv_obj_get_parent(parent);
+    }
+    if (!desc) return;
+    if (lv_obj_has_flag(desc, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_remove_flag(desc, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(desc, LV_OBJ_FLAG_HIDDEN);
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 static void register_xml(const char* filename) {
     auto& lm = helix::LayoutManager::instance();
     std::string path = "A:" + lm.resolve_xml_path(filename);
@@ -216,6 +244,8 @@ void register_xml_components() {
     // Global utility callbacks used by multiple components
     lv_xml_register_event_cb(nullptr, "on_toggle_password_visibility",
                              on_toggle_password_visibility);
+    lv_xml_register_event_cb(nullptr, "on_setting_info_clicked",
+                             on_setting_info_clicked);
     lv_xml_register_event_cb(nullptr, "on_edit_done_clicked",
                              [](lv_event_t*) { get_global_home_panel().exit_grid_edit_mode(); });
     lv_xml_register_event_cb(nullptr, "on_edit_add_widget_clicked",
