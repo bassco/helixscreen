@@ -151,6 +151,7 @@ void TemperatureSensorManager::discover(const std::vector<std::string>& klipper_
             spdlog::trace("[TemperatureSensorManager] Expiring lifetime token for orphaned "
                           "sensor: {}",
                           name);
+            if (subj->lifetime) *subj->lifetime = false; // Signal death (#816)
             subj->lifetime.reset(); // Phase 1: expire before deinit
         }
     }
@@ -340,7 +341,12 @@ void TemperatureSensorManager::deinit_subjects() {
         sensors_.clear();
         states_.clear();
 
-        // Clear dynamic subjects (their destructors handle lv_subject_deinit)
+        // Signal subject death before clearing — sets bool to false so ALL
+        // ObserverGuards detect dead subjects even with outstanding shared_ptr
+        // copies held by other services. (#816)
+        for (auto& [name, subj] : temp_subjects_) {
+            if (subj && subj->lifetime) *subj->lifetime = false;
+        }
         temp_subjects_.clear();
 
         subjects_.deinit_all();

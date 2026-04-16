@@ -92,6 +92,7 @@ void SensorState::set_sensors(const std::vector<SensorInfo>& sensors) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         for (auto& [id, entry] : sensors_) {
             for (auto& [key, subj] : entry.value_subjects) {
+                if (subj->lifetime) *subj->lifetime = false; // Signal death (#816)
                 subj->lifetime.reset();
             }
         }
@@ -299,9 +300,10 @@ void SensorState::deinit_subjects() {
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
 
-    // Phase 1: expire lifetime tokens to invalidate ObserverGuard weak_ptrs
+    // Phase 1: signal death then expire lifetime tokens (#816)
     for (auto& [id, entry] : sensors_) {
         for (auto& [key, subj] : entry.value_subjects) {
+            if (subj->lifetime) *subj->lifetime = false;
             subj->lifetime.reset();
         }
     }

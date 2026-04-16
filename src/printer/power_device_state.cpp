@@ -39,8 +39,9 @@ void PowerDeviceState::set_devices(const std::vector<PowerDevice>& devices) {
     // Tear down existing subjects (expire lifetime tokens first)
     if (subjects_initialized_) {
         lifetime_.invalidate();
-        // Destroy lifetime tokens FIRST to expire weak_ptrs in ObserverGuards
+        // Signal death then expire lifetime tokens (#816)
         for (auto& [name, info] : devices_) {
+            if (info.lifetime) *info.lifetime = false;
             info.lifetime.reset();
         }
         for (auto& [name, info] : devices_) {
@@ -275,8 +276,9 @@ void PowerDeviceState::deinit_subjects() {
     // The zombie observer is harmless: callback hits empty devices_ map.
     print_state_observer_.release();
 
-    // Destroy lifetime tokens FIRST to expire weak_ptrs in ObserverGuards
+    // Signal death then expire lifetime tokens (#816)
     for (auto& [name, info] : devices_) {
+        if (info.lifetime) *info.lifetime = false;
         info.lifetime.reset();
     }
 

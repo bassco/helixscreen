@@ -28,9 +28,12 @@
  *
  * Dynamic subject owners (PrinterFanState, TemperatureSensorManager,
  * PrinterTemperatureState) create a SubjectLifetime per dynamic subject.
- * When the subject is deinited, the shared_ptr is destroyed, expiring
- * all weak_ptr copies held by ObserverGuards. This prevents the guard
- * from calling lv_observer_remove() on an already-freed observer.
+ * The bool value signals subject liveness: true = alive, false = dead.
+ *
+ * Before destroying a subject, owners MUST set *lifetime = false, then
+ * reset(). Multiple services may hold shared_ptr copies of the same
+ * lifetime — setting the bool ensures ALL ObserverGuards detect subject
+ * death, even when the shared_ptr refcount hasn't reached zero. (#816)
  *
  * Static subjects (singleton lifetime) don't need this — pass empty token.
  */
@@ -101,10 +104,22 @@ class ObserverGuard {
 
     void reset() {
         if (observer_) {
-            // If we have a lifetime token and it expired, the subject (and our
-            // observer) was already destroyed by lv_subject_deinit(). Calling
-            // lv_observer_remove() here would be a use-after-free crash.
-            bool subject_dead = has_alive_token_ && alive_token_.expired();
+            // If we have a lifetime token and either (a) it expired (all shared_ptrs
+            // gone), or (b) the pointed-to bool was set to false (source signaled
+            // subject death), the subject's observers were already freed by
+            // lv_subject_deinit(). Calling lv_observer_remove() would crash.
+            //
+            // Check (b) is critical: multiple services may hold shared_ptr copies of
+            // the same SubjectLifetime. When the source resets its copy and deinits
+            // the subject, other holders keep the shared_ptr alive (refcount > 0),
+            // so expired() returns false. But the bool value was set to false by the
+            // source before destruction, allowing us to detect the dead subject.
+            // (#816, #673)
+            bool subject_dead = false;
+            if (has_alive_token_) {
+                auto locked = alive_token_.lock();
+                subject_dead = !locked || !*locked;
+            }
             if (!subject_dead && s_subjects_valid.load(std::memory_order_acquire) &&
                 lv_is_initialized()) {
                 lv_observer_remove(observer_);

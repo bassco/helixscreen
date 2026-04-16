@@ -54,8 +54,11 @@ void PrinterFanState::deinit_subjects() {
 
     spdlog::debug("[PrinterFanState] Deinitializing subjects");
 
-    // Destroy lifetime tokens FIRST — this expires all weak_ptrs in ObserverGuards,
-    // so they won't attempt lv_observer_remove() on the observers we're about to free.
+    // Signal subject death FIRST — sets bool to false so ALL ObserverGuards detect
+    // dead subjects, then clear the map to release shared_ptr references. (#816)
+    for (auto& [name, lifetime] : fan_speed_lifetimes_) {
+        if (lifetime) *lifetime = false;
+    }
     fan_speed_lifetimes_.clear();
 
     // Now safe to deinit subjects (lv_subject_deinit frees attached observers)
@@ -277,11 +280,14 @@ void PrinterFanState::init_fans(const std::vector<std::string>& fan_objects,
         }
     }
 
-    // Destroy lifetime tokens for orphaned fans FIRST — expires ObserverGuard weak_ptrs
+    // Signal subject death for orphaned fans — sets bool to false so ALL
+    // ObserverGuards detect the dead subject, even if other services still hold
+    // shared_ptr copies. Then reset to release our reference. (#816)
     for (auto& [name, lifetime] : fan_speed_lifetimes_) {
         if (new_lifetimes.find(name) == new_lifetimes.end()) {
             spdlog::trace("[PrinterFanState] Expiring lifetime token for orphaned fan: {}", name);
-            lifetime.reset(); // Expire all weak_ptrs before we free the observers
+            if (lifetime) *lifetime = false;
+            lifetime.reset();
         }
     }
 

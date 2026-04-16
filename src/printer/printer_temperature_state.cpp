@@ -64,14 +64,21 @@ void PrinterTemperatureState::deinit_subjects() {
 
     spdlog::debug("[PrinterTemperatureState] Deinitializing subjects");
 
-    // Destroy lifetime tokens FIRST — expires ObserverGuard weak_ptrs so they
-    // won't call lv_observer_remove() on observers freed by lv_subject_deinit().
+    // Signal subject death FIRST — sets the pointed-to bool to false so that
+    // ALL ObserverGuards detect the subject as dead and skip lv_observer_remove()
+    // on the about-to-be-freed observers. Then reset the shared_ptr. (#816)
+    if (bed_temp_lifetime_) *bed_temp_lifetime_ = false;
     bed_temp_lifetime_.reset();
+    if (bed_target_lifetime_) *bed_target_lifetime_ = false;
     bed_target_lifetime_.reset();
+    if (chamber_temp_lifetime_) *chamber_temp_lifetime_ = false;
     chamber_temp_lifetime_.reset();
+    if (chamber_target_lifetime_) *chamber_target_lifetime_ = false;
     chamber_target_lifetime_.reset();
     for (auto& [name, info] : extruders_) {
+        if (info.temp_lifetime) *info.temp_lifetime = false;
         info.temp_lifetime.reset();
+        if (info.target_lifetime) *info.target_lifetime = false;
         info.target_lifetime.reset();
     }
 
@@ -110,9 +117,14 @@ void PrinterTemperatureState::register_xml_subjects() {
 }
 
 void PrinterTemperatureState::init_extruders(const std::vector<std::string>& heaters) {
-    // Expire lifetime tokens FIRST — invalidates ObserverGuard weak_ptrs
+    // Signal subject death FIRST — sets the pointed-to bool to false so that
+    // ALL ObserverGuards (including those in other services that still hold
+    // shared_ptr copies) detect the subject as dead and skip lv_observer_remove()
+    // on the about-to-be-freed observers. (#816)
     for (auto& [name, info] : extruders_) {
+        if (info.temp_lifetime) *info.temp_lifetime = false;
         info.temp_lifetime.reset();
+        if (info.target_lifetime) *info.target_lifetime = false;
         info.target_lifetime.reset();
     }
 

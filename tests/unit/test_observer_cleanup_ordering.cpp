@@ -932,3 +932,86 @@ TEST_CASE_METHOD(LVGLTestFixture, "AmsEditModal pattern: async callback defers v
     drain();
     REQUIRE(completion_count == 1); // Still 1, not 2
 }
+
+// ============================================================================
+// #816: Multiple holders of SubjectLifetime — ObserverGuard must detect dead
+// subject via bool value, not just shared_ptr expiration.
+//
+// When a dynamic subject is destroyed, the source sets *lifetime = false then
+// resets its shared_ptr. But other services may still hold copies (refcount > 0).
+// ObserverGuard must check the bool value, not just weak_ptr::expired().
+// ============================================================================
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "SubjectLifetime: guard skips remove when bool is false but refcount > 0",
+                 "[observer_cleanup][crash_hardening][subject_lifetime]") {
+    // Simulate: source creates a dynamic subject with lifetime token
+    lv_subject_t subject;
+    lv_subject_init_int(&subject, 0);
+    SubjectLifetime source_lifetime = std::make_shared<bool>(true);
+
+    // Two services observe the same subject and hold lifetime copies
+    SubjectLifetime service_a_lifetime = source_lifetime;
+    SubjectLifetime service_b_lifetime = source_lifetime;
+
+    // Service A creates an observer (like NozzleTempsWidget)
+    struct DummyPanel {
+        int count = 0;
+    } panel;
+    ObserverGuard guard_a = observe_int_sync<DummyPanel>(
+        &subject, &panel,
+        [](DummyPanel* self, int) { self->count++; },
+        service_a_lifetime);
+    drain();
+
+    // Verify observer works
+    panel.count = 0;
+    lv_subject_set_int(&subject, 42);
+    drain();
+    REQUIRE(panel.count == 1);
+
+    // Source signals death and destroys the subject (like init_extruders)
+    *source_lifetime = false;
+    source_lifetime.reset();
+    lv_subject_deinit(&subject); // Frees observer struct!
+
+    // Service A tries to clean up its observer (like clear_rows)
+    // The weak_ptr is NOT expired because service_b still holds a copy.
+    // But the bool was set to false, so the guard should skip lv_observer_remove.
+    REQUIRE_FALSE(service_b_lifetime.use_count() == 0); // Still alive
+    service_a_lifetime.reset();
+    guard_a.reset(); // Must NOT crash — observer struct was freed by deinit
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "SubjectLifetime: guard still removes when subject is alive",
+                 "[observer_cleanup][crash_hardening][subject_lifetime]") {
+    // When the subject IS alive (bool = true), guard must call lv_observer_remove
+    lv_subject_t subject;
+    lv_subject_init_int(&subject, 0);
+    SubjectLifetime lifetime = std::make_shared<bool>(true);
+
+    SubjectLifetime observer_lifetime = lifetime;
+
+    struct DummyPanel {
+        int count = 0;
+    } panel;
+    ObserverGuard guard = observe_int_sync<DummyPanel>(
+        &subject, &panel,
+        [](DummyPanel* self, int) { self->count++; },
+        observer_lifetime);
+    drain();
+
+    // Subject is alive — guard should properly remove the observer
+    observer_lifetime.reset();
+    guard.reset(); // Should call lv_observer_remove (subject alive, bool = true)
+
+    // After removal, setting subject should not fire any callbacks
+    panel.count = 0;
+    lv_subject_set_int(&subject, 99);
+    drain();
+    REQUIRE(panel.count == 0);
+
+    lifetime.reset();
+    lv_subject_deinit(&subject);
+}
