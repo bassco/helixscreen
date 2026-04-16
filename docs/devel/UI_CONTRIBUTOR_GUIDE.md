@@ -66,17 +66,20 @@ This requires ImageMagick. You can also press **S** while the app is running for
 
 Breakpoints are based on screen **height**, because vertical space is always the constraint. Width varies wildly (480 to 1920+), but it's running out of vertical room that causes clipping, overlapping, and broken layouts.
 
-### The 5-tier system
+### The 6-tier system
 
-| Tier | Suffix | Height Range | Target Devices | Fallback |
-|------|--------|-------------|----------------|----------|
-| TINY | `_tiny` | <= 390px | 480x320 | Falls back to `_small` |
-| SMALL | `_small` | 391 -- 460px | 480x400, 1920x440 | **Required** (core tier) |
-| MEDIUM | `_medium` | 461 -- 550px | 800x480 | **Required** (core tier) |
-| LARGE | `_large` | 551 -- 700px | 1024x600 | **Required** (core tier) |
-| XLARGE | `_xlarge` | > 700px | 1280x720+ | Falls back to `_large` |
+| Tier | Index | Suffix | Height Range | Target Devices | Fallback |
+|------|-------|--------|-------------|----------------|----------|
+| MICRO | 0 | `_micro` | <= 272px | 480x272 | Falls back to `_tiny` |
+| TINY | 1 | `_tiny` | 273 -- 390px | 480x320 | Falls back to `_small` |
+| SMALL | 2 | `_small` | 391 -- 460px | 480x400, 1920x440 | **Required** (core tier) |
+| MEDIUM | 3 | `_medium` | 461 -- 550px | 800x480 | **Required** (core tier) |
+| LARGE | 4 | `_large` | 551 -- 700px | 1024x600 | **Required** (core tier) |
+| XLARGE | 5 | `_xlarge` | > 700px | 1280x720+ | Falls back to `_large` |
 
-Every responsive value needs three core variants: `_small`, `_medium`, and `_large`. The `_tiny` and `_xlarge` tiers are optional -- define them only when values actually need to differ from `_small` or `_large` respectively.
+Every responsive value needs three core variants: `_small`, `_medium`, and `_large`. The `_tiny`, `_micro`, and `_xlarge` tiers are optional -- define them only when values actually need to differ from their fallback tier.
+
+The **index** column matters for XML reactive bindings. The `ui_breakpoint` subject holds the current breakpoint as an integer, and you can use `bind_flag_if_*` or `bind_style_if_*` with these values. For example, `ref_value="0"` means Micro, `ref_value="2"` means Small.
 
 ### How it works
 
@@ -610,6 +613,49 @@ Start with the panels that matter most:
 | Medium | `print_status_panel.xml` | Important during active prints |
 | Medium | `settings_panel.xml` | Compact 6-row category menu; sub-panels may benefit from multi-column |
 | Low | Overlays | Usually modal dialogs that adapt reasonably well |
+
+### Responsive Setting Rows (no micro/ overrides)
+
+The setting row components (`setting_toggle_row`, `setting_slider_row`, `setting_dropdown_row`, `setting_action_row`, `setting_section_header`) handle the Micro breakpoint responsively within a single XML file. There are no `micro/` directory overrides for settings -- do not create them.
+
+The pattern used by all setting rows:
+
+1. **Two `bind_style_if_*` for padding** -- compact padding on Micro (breakpoint 0), standard padding on Tiny and above (breakpoint >= 1):
+
+```xml
+<styles>
+  <style name="pad_standard" pad_left="#space_lg" pad_right="#space_lg"
+         pad_top="#space_lg" pad_bottom="#space_lg" pad_gap="#space_sm"/>
+  <style name="pad_micro" pad_left="#space_md" pad_right="#space_md"
+         pad_top="#space_lg" pad_bottom="#space_lg" pad_gap="#space_sm"/>
+</styles>
+
+<view ...>
+  <bind_style_if_eq name="pad_micro" subject="ui_breakpoint" ref_value="0"/>
+  <bind_style_if_ge name="pad_standard" subject="ui_breakpoint" ref_value="1"/>
+```
+
+2. **Description text hidden on small screens** -- the description label is hidden on Micro and Tiny (breakpoint < 2) via `bind_flag_if_lt`:
+
+```xml
+<text_small name="description" text="$description">
+  <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+</text_small>
+```
+
+3. **Info icon for small screens** -- an info icon appears on Micro/Tiny when a description prop is non-empty. Uses the parse-time `hidden_if_empty` attribute so it never renders when there is no description, and `bind_flag_if_gt` to hide it on Medium and above:
+
+```xml
+<lv_obj name="info_btn" clickable="true" hidden_if_empty="$description">
+  <bind_flag_if_gt subject="ui_breakpoint" flag="hidden" ref_value="1"/>
+  <icon src="info_outline" size="sm" variant="muted"/>
+  <event_cb trigger="clicked" callback="on_setting_info_clicked"/>
+</lv_obj>
+```
+
+Tapping the info icon toggles the description label's visibility inline.
+
+This same responsive pattern should be used for any new setting row components. The convention is: **make the component responsive internally rather than creating a `micro/` override file**.
 
 ---
 

@@ -331,6 +331,71 @@ Inline style attributes (e.g., `style_bg_color="#card_bg"`) have **higher priori
 
 **Rule:** When using `bind_style` for reactive visual changes, do NOT set inline style attributes for the properties you want to change reactively.
 
+#### Conditional Style Bindings with Comparison Operators
+
+`bind_style_if_*` elements apply a style only when the subject value matches a comparison condition. Unlike `bind_style` (which only does exact match), these support all six comparison operators:
+
+| Element | Condition |
+|---------|-----------|
+| `<bind_style_if_eq>` | `subject == ref_value` |
+| `<bind_style_if_not_eq>` | `subject != ref_value` |
+| `<bind_style_if_gt>` | `subject > ref_value` |
+| `<bind_style_if_ge>` | `subject >= ref_value` |
+| `<bind_style_if_lt>` | `subject < ref_value` |
+| `<bind_style_if_le>` | `subject <= ref_value` |
+
+Attributes are the same as `bind_style`: `name` (style name), `subject` (subject name), `ref_value` (comparison value), and optional `selector` (part selector).
+
+```xml
+<styles>
+  <style name="pad_micro" pad_left="8" pad_right="8"/>
+  <style name="pad_standard" pad_left="16" pad_right="16"/>
+</styles>
+
+<lv_obj>
+  <!-- Compact padding on Micro breakpoint (index 0) -->
+  <bind_style_if_eq name="pad_micro" subject="ui_breakpoint" ref_value="0"/>
+  <!-- Standard padding on Tiny and above (index >= 1) -->
+  <bind_style_if_ge name="pad_standard" subject="ui_breakpoint" ref_value="1"/>
+</lv_obj>
+```
+
+**Why use `bind_style_if_*` instead of `bind_style`?** The `bind_style` element only matches exact values, so you need one `bind_style` per possible value. With `bind_style_if_ge`, a single element covers all breakpoints above a threshold. This is essential for responsive styling where you have 6 breakpoint tiers.
+
+**CRITICAL: Remove inline styles when using `bind_style_if_*`.** The same priority rule applies as with `bind_style` -- inline `style_*` attributes always win over added styles. When switching padding responsively, do NOT set `style_pad_left` on the element; use two `bind_style_if_*` elements instead.
+
+#### Parse-Time Conditional Hidden Attributes
+
+These attributes hide an element at parse time based on a resolved prop value. Unlike `bind_flag_if_*` (which is reactive and requires a subject), these evaluate once when the XML is parsed and are useful for component props.
+
+| Attribute | Behavior |
+|-----------|----------|
+| `hidden_if_empty="$prop"` | Hides the element if the resolved prop value is an empty string |
+| `hidden_if_prop_eq="$prop\|ref_value"` | Hides the element if the resolved prop equals ref_value (pipe-delimited) |
+| `hidden_if_prop_not_eq="$prop\|ref_value"` | Hides the element if the resolved prop does NOT equal ref_value |
+
+```xml
+<api>
+  <prop name="description" type="string" default=""/>
+  <prop name="mode" type="string" default="basic"/>
+</api>
+
+<!-- Hidden when no description is provided -->
+<icon src="info_outline" hidden_if_empty="$description"/>
+
+<!-- Hidden when mode is "advanced" -->
+<lv_obj hidden_if_prop_eq="$mode|advanced">
+  <text_body text="Basic mode content"/>
+</lv_obj>
+
+<!-- Hidden when mode is NOT "advanced" -->
+<lv_obj hidden_if_prop_not_eq="$mode|advanced">
+  <text_body text="Advanced mode content"/>
+</lv_obj>
+```
+
+These are parse-time only -- the hidden state does not change after creation. For reactive visibility that responds to subject changes at runtime, use `bind_flag_if_*` instead.
+
 #### Binding Limitations
 
 **❌ No `bind_text_if_eq`** - use multiple labels with `bind_flag_if_*` for conditional text.
