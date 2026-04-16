@@ -14,13 +14,9 @@
     <px name="nav_padding" value="16"/>
     <!-- Modal backdrop opacity (0-255) -->
     <px name="modal_backdrop_opacity" value="120"/>
-    <!-- border_radius is responsive: _small/_medium/_large registered as border_radius based on screen size -->
+    <!-- border_radius is now resolved from BorderRadiusSizes table per breakpoint in C++ -->
+    <!-- Fixed small radius for swatches/badges that always want 4px regardless of theme -->
     <px name="border_radius_small" value="4"/>
-    <px name="border_radius_medium" value="9"/>
-    <px name="border_radius_large" value="12"/>
-    <px name="border_radius_xlarge" value="14"/>
-    <px name="border_radius_xxlarge" value="16"/>
-    <!-- Static small radius for elements that always want 4px regardless of screen size -->
     <px name="border_radius_sm" value="4"/>
 
     <!-- Unified Responsive Spacing System (space_*)                         -->
