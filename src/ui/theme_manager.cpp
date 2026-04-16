@@ -15,6 +15,8 @@
 #include "settings_manager.h"
 #include "theme_loader.h"
 
+#include "border_radius_sizes.h"
+
 #include <spdlog/spdlog.h>
 
 #ifndef HELIX_MAX_FONT_TIER
@@ -630,6 +632,17 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
 }
 
 /**
+ * @brief Resolve border radius pixels from size index + current display breakpoint.
+ */
+static int resolve_border_radius(const helix::ThemeProperties& props) {
+    int32_t ver_res = theme_display
+        ? lv_display_get_vertical_resolution(theme_display)
+        : 600; // safe fallback
+    const char* suffix = theme_manager_get_breakpoint_suffix(ver_res);
+    return helix::BorderRadiusSizes::pixels(props.border_radius_size, suffix);
+}
+
+/**
  * @brief Convert theme_palette_t to ThemePalette for ThemeManager
  */
 static ThemePalette convert_to_theme_palette(const theme_palette_t* p,
@@ -651,7 +664,7 @@ static ThemePalette convert_to_theme_palette(const theme_palette_t* p,
     palette.warning = p->warning;
     palette.danger = p->danger;
     palette.focus = p->focus;
-    palette.border_radius = props.border_radius;
+    palette.border_radius = resolve_border_radius(props);
     palette.border_width = props.border_width;
     palette.border_opacity = props.border_opacity;
     palette.shadow_width = props.shadow_intensity;
@@ -688,7 +701,7 @@ static lv_theme_t* theme_init_lvgl(lv_display_t* display, const theme_palette_t*
     tm.set_dark_mode(is_dark);
 
     // Initialize widget-specific styles not in StyleRole enum
-    init_extra_styles(palette, props.border_radius);
+    init_extra_styles(palette, resolve_border_radius(props));
 
     // Create LVGL default theme as base (we'll layer on top)
     default_theme_backup =
@@ -730,7 +743,7 @@ static void theme_update_colors(bool is_dark) {
 
     // Update handle/knob styles from new theme properties and palette
     const theme_palette_t& current_pal = is_dark ? dark_theme_pal : light_theme_pal;
-    update_handle_styles(&current_pal, props.border_radius);
+    update_handle_styles(&current_pal, resolve_border_radius(props));
 
     spdlog::debug("[Theme] Updated colors, dark_mode={}", is_dark);
 }
@@ -1383,8 +1396,14 @@ static void theme_manager_register_theme_properties(lv_xml_component_scope_t* sc
                                                     const helix::ThemeData& theme) {
     char buf[32];
 
-    // Register border_radius and button_radius as XML constants from theme
-    snprintf(buf, sizeof(buf), "%d", theme.properties.border_radius);
+    // Register border_radius and button_radius from size table + current breakpoint
+    int32_t ver_res = theme_display
+        ? lv_display_get_vertical_resolution(theme_display)
+        : 600; // safe fallback
+    const char* suffix = theme_manager_get_breakpoint_suffix(ver_res);
+    int radius_px = helix::BorderRadiusSizes::pixels(
+        theme.properties.border_radius_size, suffix);
+    snprintf(buf, sizeof(buf), "%d", radius_px);
     lv_xml_register_const(scope, "border_radius", buf);
     lv_xml_register_const(scope, "button_radius", buf);
 
@@ -1406,11 +1425,13 @@ static void theme_manager_register_theme_properties(lv_xml_component_scope_t* sc
     snprintf(buf, sizeof(buf), "%d", theme.properties.shadow_offset_y);
     lv_xml_register_const(scope, "shadow_offset_y", buf);
 
-    spdlog::debug("[Theme] Registered properties: border_radius={}, border_width={}, "
-                  "border_opacity={}, shadow=({},{},{})",
-                  theme.properties.border_radius, theme.properties.border_width,
-                  theme.properties.border_opacity, theme.properties.shadow_intensity,
-                  theme.properties.shadow_opa, theme.properties.shadow_offset_y);
+    spdlog::debug("[Theme] Registered properties: border_radius={}px (size={}, {}), "
+                  "border_width={}, border_opacity={}, shadow=({},{},{})",
+                  radius_px, theme.properties.border_radius_size,
+                  helix::BorderRadiusSizes::name(theme.properties.border_radius_size),
+                  theme.properties.border_width, theme.properties.border_opacity,
+                  theme.properties.shadow_intensity, theme.properties.shadow_opa,
+                  theme.properties.shadow_offset_y);
 }
 
 /**
@@ -1801,6 +1822,20 @@ void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
     // Re-register XML constants: semantic colors, theme properties, and color pairs
     theme_manager_register_semantic_colors(nullptr, active_theme, effective_dark);
     theme_manager_register_theme_properties(nullptr, active_theme);
+
+    // Update border_radius constant for live preview (register_const is first-wins,
+    // so we need update_const for subsequent changes)
+    {
+        const char* bp_suffix = theme_manager_get_breakpoint_suffix(
+            lv_display_get_vertical_resolution(theme_display));
+        int radius_px = helix::BorderRadiusSizes::pixels(
+            active_theme.properties.border_radius_size, bp_suffix);
+        char radius_buf[16];
+        snprintf(radius_buf, sizeof(radius_buf), "%d", radius_px);
+        lv_xml_update_const(nullptr, "border_radius", radius_buf);
+        lv_xml_update_const(nullptr, "button_radius", radius_buf);
+    }
+
     theme_manager_register_color_pairs(nullptr, effective_dark);
 
     // Update screen background directly (XML inline styles are baked at parse time)

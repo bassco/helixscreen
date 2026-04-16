@@ -90,7 +90,7 @@ TEST_CASE("parse_theme_json parses valid dual-palette theme", "[theme]") {
     REQUIRE(theme.name == "Test Theme");
     REQUIRE(theme.dark.screen_bg == "#2e3440");
     REQUIRE(theme.dark.focus == "#8fbcbb");
-    REQUIRE(theme.properties.border_radius == 8);
+    REQUIRE(theme.properties.border_radius_size == 2); // 8px -> Subtle
     REQUIRE(theme.properties.shadow_intensity == 10);
     REQUIRE(theme.is_valid());
 }
@@ -127,7 +127,7 @@ TEST_CASE("parse_theme_json returns Nord when missing palettes", "[theme]") {
 TEST_CASE("save_theme_to_file and load_theme_from_file roundtrip", "[theme]") {
     auto original = helix::get_default_nord_theme();
     original.name = "Roundtrip Test";
-    original.properties.border_radius = 20;
+    original.properties.border_radius_size = 5; // Bold
 
     std::string path = "/tmp/test_theme_roundtrip_" + std::to_string(getpid()) + ".json";
     REQUIRE(helix::save_theme_to_file(original, path));
@@ -135,7 +135,7 @@ TEST_CASE("save_theme_to_file and load_theme_from_file roundtrip", "[theme]") {
     auto loaded = helix::load_theme_from_file(path);
 
     REQUIRE(loaded.name == "Roundtrip Test");
-    REQUIRE(loaded.properties.border_radius == 20);
+    REQUIRE(loaded.properties.border_radius_size == 5);
     REQUIRE(loaded.dark.screen_bg == original.dark.screen_bg);
     REQUIRE(loaded.light.screen_bg == original.light.screen_bg);
     REQUIRE(loaded.is_valid());

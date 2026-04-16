@@ -206,7 +206,7 @@ TEST_CASE("parse_theme_json - new format dual mode", "[theme][dual-palette]") {
     REQUIRE(theme.supports_light());
     REQUIRE(theme.dark.screen_bg == "#2E3440");
     REQUIRE(theme.light.screen_bg == "#ECEFF4");
-    REQUIRE(theme.properties.border_radius == 12);
+    REQUIRE(theme.properties.border_radius_size == 3); // 12px -> Soft
 }
 
 TEST_CASE("parse_theme_json - new format dark only", "[theme][dual-palette]") {

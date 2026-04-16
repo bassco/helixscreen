@@ -268,7 +268,7 @@ void ThemeEditorOverlay::update_property_sliders() {
     lv_obj_t* radius_row = lv_obj_find_by_name(overlay_root_, "row_border_radius");
     lv_obj_t* radius_slider = radius_row ? lv_obj_find_by_name(radius_row, "slider") : nullptr;
     if (radius_slider) {
-        lv_slider_set_value(radius_slider, editing_theme_.properties.border_radius, LV_ANIM_OFF);
+        lv_slider_set_value(radius_slider, editing_theme_.properties.border_radius_size, LV_ANIM_OFF);
     }
 
     // Update border width slider
@@ -294,7 +294,7 @@ void ThemeEditorOverlay::update_property_sliders() {
 
     spdlog::debug("[{}] Property sliders updated: border_radius={}, border_width={}, "
                   "border_opacity={}, shadow_intensity={}",
-                  get_name(), editing_theme_.properties.border_radius,
+                  get_name(), editing_theme_.properties.border_radius_size,
                   editing_theme_.properties.border_width, editing_theme_.properties.border_opacity,
                   editing_theme_.properties.shadow_intensity);
 }
@@ -506,7 +506,7 @@ void ThemeEditorOverlay::handle_back_clicked() {
 // ============================================================================
 
 void ThemeEditorOverlay::handle_border_radius_changed(int value) {
-    editing_theme_.properties.border_radius = value;
+    editing_theme_.properties.border_radius_size = value;
     mark_dirty();
     theme_manager_preview(editing_theme_);
     update_slider_value_label("row_border_radius", value);

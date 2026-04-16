@@ -1,6 +1,6 @@
 {
   "border_opacity": 40,
-  "border_radius": 12,
+  "border_radius_size": 3,
   "border_width": 1,
   "dark": {
     "border": "#616e88",

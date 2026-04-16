@@ -3,6 +3,7 @@
 
 #include "theme_loader.h"
 
+#include "border_radius_sizes.h"
 #include "data_root_resolver.h"
 
 #include <spdlog/spdlog.h>
@@ -157,7 +158,7 @@ ThemeData get_default_nord_theme() {
     theme.light.danger = "#b23a48";    // adjusted red for light bg
     theme.light.focus = "#8fbcbb";     // nord7 - frost teal
 
-    theme.properties.border_radius = 12;
+    theme.properties.border_radius_size = 3; // "Soft"
     theme.properties.border_width = 1;
     theme.properties.border_opacity = 40;
     theme.properties.shadow_intensity = 0;
@@ -219,7 +220,20 @@ ThemeData parse_theme_json(const std::string& json_str, const std::string& filen
         }
 
         // Parse properties with defaults
-        theme.properties.border_radius = json.value("border_radius", 12);
+        // New format: border_radius_size (0-7 index)
+        // Old format: border_radius (raw pixels) — auto-migrate
+        if (json.contains("border_radius_size")) {
+            theme.properties.border_radius_size =
+                std::clamp(json.value("border_radius_size", 3), 0,
+                           helix::BorderRadiusSizes::count() - 1);
+        } else {
+            int raw = json.value("border_radius", 12);
+            theme.properties.border_radius_size =
+                helix::BorderRadiusSizes::nearest_size_index(raw);
+            spdlog::info("[ThemeLoader] Migrated border_radius={} -> border_radius_size={} ({})",
+                         raw, theme.properties.border_radius_size,
+                         helix::BorderRadiusSizes::name(theme.properties.border_radius_size));
+        }
         theme.properties.border_width = json.value("border_width", 1);
         theme.properties.border_opacity = json.value("border_opacity", 40);
         theme.properties.shadow_intensity = json.value("shadow_intensity", 0);
@@ -317,7 +331,7 @@ bool save_theme_to_file(const ThemeData& theme, const std::string& filepath) {
     }
 
     // Properties
-    json["border_radius"] = theme.properties.border_radius;
+    json["border_radius_size"] = theme.properties.border_radius_size;
     json["border_width"] = theme.properties.border_width;
     json["border_opacity"] = theme.properties.border_opacity;
     json["shadow_intensity"] = theme.properties.shadow_intensity;

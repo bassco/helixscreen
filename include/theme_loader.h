@@ -68,7 +68,7 @@ struct ModePalette {
  * @brief Non-color theme properties
  */
 struct ThemeProperties {
-    int border_radius = 12;          // Corner roundness (0 = sharp, 12 = soft)
+    int border_radius_size = 3;       // Size index (0-7) into BorderRadiusSizes table
     int border_width = 1;            // Default border width
     int border_opacity = 40;         // Border opacity (0-255)
     int shadow_intensity = 0;        // Shadow blur radius in px (0 = disabled)
