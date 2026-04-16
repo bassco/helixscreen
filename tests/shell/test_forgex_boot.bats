@@ -66,23 +66,23 @@ setup() {
 # --- hooks-ad5m-forgex.sh boot complete implementation ---
 
 @test "ForgeX hooks implement platform_wait_for_boot_complete" {
-    grep -q 'platform_wait_for_boot_complete()' "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh"
+    grep -q 'platform_wait_for_boot_complete()' "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh"
 }
 
 @test "ForgeX boot complete checks for S99root process" {
-    grep -q 'S99root' "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh"
+    grep -q 'S99root' "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh"
 }
 
 @test "ForgeX boot complete has timeout" {
     # Must not hang forever waiting for S99root
-    grep -A20 'platform_wait_for_boot_complete()' "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh" | grep -q 'timeout'
+    grep -A20 'platform_wait_for_boot_complete()' "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh" | grep -q 'timeout'
 }
 
 # --- ForgeX boot complete functional tests ---
 
 @test "platform_wait_for_boot_complete returns immediately when S99root missing" {
     # Source the hooks file
-    . "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh"
+    . "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh"
 
     # No S99root file exists in the test env → should return 0 immediately
     run platform_wait_for_boot_complete
@@ -200,11 +200,11 @@ EOF
 # --- helixscreen_active flag coordination ---
 
 @test "ForgeX hooks create helixscreen_active flag in pre_start" {
-    grep -A3 'platform_pre_start()' "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh" | grep -q 'helixscreen_active'
+    grep -A3 'platform_pre_start()' "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh" | grep -q 'helixscreen_active'
 }
 
 @test "ForgeX hooks remove helixscreen_active flag in post_stop" {
-    grep -A3 'platform_post_stop()' "$WORKTREE_ROOT/config/platform/hooks-ad5m-forgex.sh" | grep -q 'helixscreen_active'
+    grep -A3 'platform_post_stop()' "$WORKTREE_ROOT/assets/config/platform/hooks-ad5m-forgex.sh" | grep -q 'helixscreen_active'
 }
 
 @test "all screen.sh patches check helixscreen_active flag" {
