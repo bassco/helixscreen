@@ -136,7 +136,9 @@ This works on all platforms (DRM and fbdev), uses the same `lv_snapshot_take` AP
 - `ui_xml/overlay_backdrop.xml` — may be removable entirely
 - Consider extracting the snapshot-darken logic from `backdrop_blur.cpp` into a shared utility
 
-Expected improvement: ~60% reduction in Settings rendering cost on Pi, similar gains on all platforms.
+**Confirmed by experiment:** Setting `style_bg_opa="255"` on the backdrop dropped `blend_with_opa` from 66.8% → 27.2% (a 40pp reduction). Scrolling was noticeably smoother but not transformative — the remaining 27% opacity comes from other sources (card pressed/disabled states, `setting_detail_panel.xml` bg_opa=20, theme border/shadow opacity). A full audit of secondary opacity sources is warranted after the backdrop fix ships.
+
+Expected improvement from snapshot-darken: ~40% reduction in Settings rendering cost on Pi, similar gains on all platforms. Addressing secondary opacity sources could yield another 10-20%.
 
 ### 2. Print Select Thumbnail Caching — **HIGH IMPACT, MEDIUM EFFORT**
 
