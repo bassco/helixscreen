@@ -53,7 +53,7 @@ platform_post_stop() { :; }
 platform_wait_for_boot_complete() { :; }
 
 # Source platform hooks if available
-PLATFORM_HOOKS="${DAEMON_DIR}/platform/hooks.sh"
+PLATFORM_HOOKS="${DAEMON_DIR}/assets/config/platform/hooks.sh"
 if [ -f "$PLATFORM_HOOKS" ]; then
     # shellcheck disable=SC1090  # path depends on DAEMON_DIR set by installer
     . "$PLATFORM_HOOKS"

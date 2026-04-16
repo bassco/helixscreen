@@ -5,7 +5,7 @@
 # Verifies the hook contract (all required functions defined),
 # shellcheck compliance, and basic syntax validity.
 
-HOOKS_DIR="config/platform"
+HOOKS_DIR="assets/config/platform"
 HOOK_FILES="hooks-ad5m-forgex.sh hooks-ad5m-kmod.sh hooks-ad5m-zmod.sh hooks-pi.sh hooks-k1.sh"
 REQUIRED_FUNCTIONS="platform_stop_competing_uis platform_enable_backlight platform_wait_for_services platform_pre_start platform_post_stop"
 

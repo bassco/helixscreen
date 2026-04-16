@@ -168,43 +168,33 @@ package_platform() {
     # ~/kiauh/kiauh/extensions/helixscreen when KIAUH is detected)
     cp -r "${PROJECT_DIR}/scripts/kiauh" "$pkg_dir/scripts/"
 
-    # Copy config files
+    # Copy installer-shipped config files (systemd units, init script, env,
+    # udev/polkit rules — these get copied OUT of $pkg_dir/config/ to /etc/* at
+    # install time; helix-screen never reads them at runtime).
     cp "${PROJECT_DIR}/config/helixscreen.init" "$pkg_dir/config/"
     cp "${PROJECT_DIR}/config/helixscreen.service" "$pkg_dir/config/"
     cp "${PROJECT_DIR}/config/helixscreen-update.service" "$pkg_dir/config/"
     cp "${PROJECT_DIR}/config/helixscreen-update.path" "$pkg_dir/config/"
     cp "${PROJECT_DIR}/config/refresh-service-units.sh" "$pkg_dir/config/"
     chmod +x "$pkg_dir/config/refresh-service-units.sh"
-    cp "${PROJECT_DIR}/config/printer_database.json" "$pkg_dir/config/" 2>/dev/null || true
-    cp "${PROJECT_DIR}/config/printing_tips.json" "$pkg_dir/config/" 2>/dev/null || true
 
-    # Copy platform hook files (init script sources the appropriate one at runtime)
-    if [ -d "${PROJECT_DIR}/config/platform" ]; then
-        cp -r "${PROJECT_DIR}/config/platform" "$pkg_dir/config/"
-    fi
-
-    # Ship built-in theme defaults so the "helixscreen" theme and other named
-    # presets resolve on first launch. Without this, ThemeLoader silently falls
-    # back to auto-creating nord.json.
-    if [ -d "${PROJECT_DIR}/config/themes/defaults" ]; then
-        mkdir -p "$pkg_dir/config/themes"
-        cp -r "${PROJECT_DIR}/config/themes/defaults" "$pkg_dir/config/themes/"
-        log_info "  Included $(ls -1 "${PROJECT_DIR}/config/themes/defaults"/*.json 2>/dev/null | wc -l | tr -d ' ') theme files"
-    fi
-
-    # Ship all presets for runtime detection-based loading
-    # (auto_detect_and_save applies the matching preset after identifying the printer)
-    if [ -d "${PROJECT_DIR}/config/presets" ]; then
-        cp -r "${PROJECT_DIR}/config/presets" "$pkg_dir/config/"
-        log_info "  Included $(ls -1 "${PROJECT_DIR}/config/presets"/*.json 2>/dev/null | wc -l | tr -d ' ') preset files"
+    # Ship the read-only seed bundle under assets/config/ so it lives separately
+    # from the writable user-config dir at runtime (find_readable falls back to
+    # $HELIX_DATA_DIR/assets/config/<file> when not present in the user dir).
+    if [ -d "${PROJECT_DIR}/assets/config" ]; then
+        mkdir -p "$pkg_dir/assets/config"
+        cp -r "${PROJECT_DIR}/assets/config/." "$pkg_dir/assets/config/"
+        local theme_count=$(find "$pkg_dir/assets/config/themes/defaults" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+        local preset_count=$(find "$pkg_dir/assets/config/presets" -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+        log_info "  Shipped seed bundle: $theme_count themes, $preset_count presets"
     fi
 
     # Platform-specific default config: convention-based preset lookup
-    # If config/presets/<platform>.json exists, use it as the default settings.json.
+    # If assets/config/presets/<platform>.json exists, use it as the default settings.json.
     # Presets contain pre-configured hardware mappings, touch calibration, and wizard_completed=false
     # so the abbreviated wizard runs on first boot. Printer type is auto-detected at runtime.
     # The installer preserves existing configs on upgrade (backup/restore in release.sh).
-    local preset_file="${PROJECT_DIR}/config/presets/${platform}.json"
+    local preset_file="${PROJECT_DIR}/assets/config/presets/${platform}.json"
     if [ -f "$preset_file" ]; then
         cp "$preset_file" "$pkg_dir/config/settings.json"
         log_info "  Using ${platform} preset as default config"

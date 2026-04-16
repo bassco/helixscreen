@@ -689,13 +689,13 @@ def main():
     )
     parser.add_argument(
         "--db",
-        default="config/printer_database.json",
-        help="Path to printer_database.json (default: config/printer_database.json)",
+        default="assets/config/printer_database.json",
+        help="Path to printer_database.json (default: assets/config/printer_database.json)",
     )
     parser.add_argument(
         "--presets-dir",
-        default="config/presets/",
-        help="Path to presets directory (default: config/presets/)",
+        default="assets/config/presets/",
+        help="Path to presets directory (default: assets/config/presets/)",
     )
     parser.add_argument(
         "--dry-run",

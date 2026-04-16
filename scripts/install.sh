@@ -3297,9 +3297,27 @@ extract_release() {
         _restore_config_file "${INSTALL_BACKUP}/config/helixscreen.env" "$_env_dest" "helixscreen.env from .old backup"
     fi
 
+    # Prune legacy seed files from the .old backup before the restore loop.
+    # Older releases shipped these inside config/; current releases ship them
+    # under assets/config/ instead. Without this prune, the loop below would
+    # restore the *old* shipped versions on top of the new ones — users would
+    # be stuck on stale printer_database.json / themes / presets forever.
+    # User-state files (settings.json, telemetry_*.json, custom_images/,
+    # printer_database.d/, themes/<user-themes>.json) are untouched.
+    if [ -n "${INSTALL_BACKUP:-}" ] && [ -d "${INSTALL_BACKUP}/config" ]; then
+        for _legacy_seed in printer_database.json printing_tips.json default_layout.json helix_macros.cfg; do
+            $(file_sudo "${INSTALL_BACKUP}/config") rm -f "${INSTALL_BACKUP}/config/${_legacy_seed}" 2>/dev/null || true
+        done
+        for _legacy_seed_dir in presets print_start_profiles sounds platform; do
+            $(file_sudo "${INSTALL_BACKUP}/config") rm -rf "${INSTALL_BACKUP}/config/${_legacy_seed_dir}" 2>/dev/null || true
+        done
+        # themes/defaults moved out of themes/; keep user themes (sibling files).
+        $(file_sudo "${INSTALL_BACKUP}/config/themes") rm -rf "${INSTALL_BACKUP}/config/themes/defaults" 2>/dev/null || true
+    fi
+
     # Restore any remaining user data from previous config/ (custom_images/,
-    # printer_database.d/, etc.).  Only copies items that don't already exist in
-    # the new install so bundled files are never overwritten.
+    # printer_database.d/, user themes, etc.).  Only copies items that don't
+    # already exist in the new install so bundled files are never overwritten.
     # Uses [ ! -e ] instead of cp -n for BusyBox compatibility.
     # For directories that exist in both old and new installs (e.g. printer_database.d/),
     # merge at the file level so user additions are preserved alongside new bundled files.

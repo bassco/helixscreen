@@ -622,8 +622,8 @@ def main():
     )
     parser.add_argument(
         "--db",
-        default="config/printer_database.json",
-        help="Path to printer_database.json (default: config/printer_database.json)",
+        default="assets/config/printer_database.json",
+        help="Path to printer_database.json (default: assets/config/printer_database.json)",
     )
     parser.add_argument("--since", help="Filter events after YYYY-MM-DD")
     parser.add_argument("--until", help="Filter events before YYYY-MM-DD")
