@@ -641,9 +641,11 @@ void PrinterState::set_spoolman_available(bool available) {
 }
 
 void PrinterState::set_webcam_available(bool available, const std::string& stream_url,
-                                        const std::string& snapshot_url, bool flip_h, bool flip_v) {
+                                        const std::string& snapshot_url, bool flip_h, bool flip_v,
+                                        int target_fps) {
     // Delegate to capabilities_state_ component (handles thread-safety)
-    capabilities_state_.set_webcam_available(available, stream_url, snapshot_url, flip_h, flip_v);
+    capabilities_state_.set_webcam_available(available, stream_url, snapshot_url, flip_h, flip_v,
+                                             target_fps);
 }
 
 void PrinterState::set_timelapse_available(bool available) {
