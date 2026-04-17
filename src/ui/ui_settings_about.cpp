@@ -342,6 +342,11 @@ void AboutSettingsOverlay::show_update_download_modal() {
     }
 
     if (!update_download_modal_) {
+        // Clear any stale Error/Complete status carried over from a prior
+        // download attempt — otherwise the modal briefly flashes that
+        // content before the Confirming update below takes effect.
+        UpdateChecker::instance().report_download_status(UpdateChecker::DownloadStatus::Idle, 0,
+                                                         "");
         update_download_modal_ = helix::ui::modal_show("update_download_modal");
     }
 
