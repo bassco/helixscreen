@@ -588,11 +588,7 @@ void BarcodeScannerSettingsOverlay::pair_bt_device(const std::string& mac,
                                                     const std::string& name) {
     auto* pair_data = new PairData{mac, name};
 
-    auto msg = fmt::format(
-        "{}\n\n{}",
-        name,
-        lv_tr("Put the scanner in pairing mode first (usually a button hold or "
-              "setup barcode), then tap Pair."));
+    auto msg = fmt::format("{} {}?", lv_tr("Pair with"), name);
     auto* dialog =
         helix::ui::modal_show_confirmation(lv_tr("Pair Bluetooth Scanner"), msg.c_str(),
                                            ModalSeverity::Info, lv_tr("Pair"),
@@ -864,9 +860,8 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                          "scanner needs to be in pairing mode");
                             ToastManager::instance().show(
                                 ToastSeverity::WARNING,
-                                lv_tr("Pairing failed — scanner was not in pairing mode. "
-                                      "Put it in pairing mode first (usually a button hold "
-                                      "or setup barcode), then try again."),
+                                lv_tr("Pairing did not complete — the scanner did not bond. "
+                                      "Try turning it off and on, then tap Pair again."),
                                 10000);
                         } else if (ret >= 0) {
                             // Bonded but HID profile still never came up.
