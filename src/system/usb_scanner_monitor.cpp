@@ -168,11 +168,21 @@ char UsbScannerMonitor::keycode_to_char(int keycode, bool shift, ScannerKeymap l
     if (letter != 0)
         return letter;
 
-    // Punctuation. AZERTY remaps 39 -> 'm' (handled above) and 50 -> ','.
-    // Everything else mirrors QWERTY punctuation positions.
+    // Punctuation. AZERTY remaps several keys vs QWERTY:
+    //   39 -> 'm' (handled in kAzertyLetters above)
+    //   50 -> ','
+    //   51 -> ';' unshifted, '.' shifted (QWERTY: ',' / '<')
+    //   52 -> ':' unshifted, '/' shifted (QWERTY: '.' / '>')
+    //   53 -> '!' unshifted               (QWERTY: '/' / '?')
     if (layout == ScannerKeymap::Azerty) {
         if (keycode == 50)
             return shift ? '?' : ',';
+        if (keycode == 51)
+            return shift ? '.' : ';';
+        if (keycode == 52)
+            return shift ? '/' : ':';
+        if (keycode == 53)
+            return shift ? 0 : '!'; // '§' shifted — non-ASCII, dropped
         // Keycode 39 on AZERTY is 'm' (handled in kAzertyLetters above).
     } else {
         if (keycode == 39)
@@ -189,12 +199,14 @@ char UsbScannerMonitor::keycode_to_char(int keycode, bool shift, ScannerKeymap l
         return shift ? '{' : '[';
     if (keycode == 27)
         return shift ? '}' : ']';
-    if (keycode == 51)
-        return shift ? '<' : ',';
-    if (keycode == 52)
-        return shift ? '>' : '.';
-    if (keycode == 53)
-        return shift ? '?' : '/';
+    if (layout != ScannerKeymap::Azerty) {
+        if (keycode == 51)
+            return shift ? '<' : ',';
+        if (keycode == 52)
+            return shift ? '>' : '.';
+        if (keycode == 53)
+            return shift ? '?' : '/';
+    }
     if (keycode == 57)
         return ' '; // KEY_SPACE
 
