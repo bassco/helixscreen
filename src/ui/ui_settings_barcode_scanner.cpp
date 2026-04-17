@@ -128,6 +128,7 @@ void BarcodeScannerSettingsOverlay::register_callbacks() {
         {"on_bs_refresh_usb", on_bs_refresh_usb},
         {"on_bs_keymap_changed", on_bs_keymap_changed},
         {"on_bs_row_clicked", on_bs_row_clicked},
+        {"on_bs_row_forget", on_bs_row_forget},
         {"on_bs_bt_scanner_selected", on_bs_bt_scanner_selected},
         {"on_bs_bt_pair", on_bs_bt_pair},
         {"on_bs_bt_forget", on_bs_bt_forget},
@@ -587,7 +588,11 @@ void BarcodeScannerSettingsOverlay::pair_bt_device(const std::string& mac,
                                                     const std::string& name) {
     auto* pair_data = new PairData{mac, name};
 
-    auto msg = fmt::format("{} {}?", lv_tr("Pair with"), name);
+    auto msg = fmt::format(
+        "{}\n\n{}",
+        name,
+        lv_tr("Put the scanner in pairing mode first (usually a button hold or "
+              "setup barcode), then tap Pair."));
     auto* dialog =
         helix::ui::modal_show_confirmation(lv_tr("Pair Bluetooth Scanner"), msg.c_str(),
                                            ModalSeverity::Info, lv_tr("Pair"),
@@ -706,6 +711,18 @@ void BarcodeScannerSettingsOverlay::on_bs_row_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
+void BarcodeScannerSettingsOverlay::on_bs_row_forget(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_row_forget");
+    if (!s_active_instance_) return;
+    // The forget button is a child of the row; walk up to find the RowData.
+    auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    auto* row = btn ? lv_obj_get_parent(btn) : nullptr;
+    auto* data = row ? static_cast<RowData*>(lv_obj_get_user_data(row)) : nullptr;
+    if (!data || data->bt_mac.empty()) return;
+    s_active_instance_->handle_bt_forget(data->bt_mac);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 void BarcodeScannerSettingsOverlay::on_bs_bt_scanner_selected(lv_event_t*) {
     LVGL_SAFE_EVENT_CB_BEGIN("[BarcodeScannerSettings] on_bs_bt_scanner_selected");
     if (!s_active_instance_) return;
@@ -818,6 +835,18 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                      hid_ok);
                     }
 
+                    // Clean up broken pairing: if we paired but didn't bond,
+                    // the device is stuck in a "paired" state that will cause
+                    // AlreadyExists on the next attempt and still won't work.
+                    // Remove it so the user gets a clean slate on retry.
+                    if (ret >= 0 && !hid_ok && bonded_r != 1) {
+                        spdlog::info("[BarcodeScannerSettings] Removing unbonded device {} "
+                                     "to allow clean re-pair", mac);
+                        if (ldr.remove_device) {
+                            ldr.remove_device(bt_ctx, mac.c_str());
+                        }
+                    }
+
                     helix::ui::queue_update(
                         [ret, mac, name, token, bt_ctx, paired_r, bonded_r, hid_ok]() {
                         if (token.expired())
@@ -835,9 +864,9 @@ void BarcodeScannerSettingsOverlay::on_bs_pair_confirm(lv_event_t* e) {
                                          "scanner needs to be in pairing mode");
                             ToastManager::instance().show(
                                 ToastSeverity::WARNING,
-                                lv_tr("Scanner paired but can't receive input. Put the scanner in "
-                                      "pairing mode (see its manual — usually a setup barcode or a "
-                                      "button hold) and tap Pair again."),
+                                lv_tr("Pairing failed — scanner was not in pairing mode. "
+                                      "Put it in pairing mode first (usually a button hold "
+                                      "or setup barcode), then try again."),
                                 10000);
                         } else if (ret >= 0) {
                             // Bonded but HID profile still never came up.
