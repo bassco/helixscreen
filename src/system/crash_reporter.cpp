@@ -125,6 +125,8 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
         report.reg_sp = crash_data["reg_sp"];
     if (crash_data.contains("reg_lr"))
         report.reg_lr = crash_data["reg_lr"];
+    else if (crash_data.contains("reg_ra"))
+        report.reg_lr = crash_data["reg_ra"]; // MIPS spells link register "ra"
     if (crash_data.contains("reg_bp"))
         report.reg_bp = crash_data["reg_bp"];
 
