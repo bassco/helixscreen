@@ -391,6 +391,23 @@ inline float weight_to_length_m(float weight_g, float density, float diameter_mm
     return length_cm / 100.0f;
 }
 
+/**
+ * @brief Calculate filament weight in grams from length
+ * @param length_mm Length in millimeters
+ * @param density Material density in g/cm³
+ * @param diameter_mm Filament diameter in mm (default 1.75)
+ * @return Mass in grams, or 0 if density or length is not positive
+ */
+inline float length_to_weight_g(float length_mm, float density, float diameter_mm = 1.75f) {
+    if (density <= 0.0f || length_mm <= 0.0f) {
+        return 0.0f;
+    }
+    float radius_mm = diameter_mm / 2.0f;
+    float area_mm2 = static_cast<float>(M_PI) * radius_mm * radius_mm;
+    float volume_mm3 = length_mm * area_mm2;
+    return (volume_mm3 / 1000.0f) * density;
+}
+
 // ============================================================================
 // Material Comfort Ranges (humidity thresholds for storage quality indicators)
 // ============================================================================
