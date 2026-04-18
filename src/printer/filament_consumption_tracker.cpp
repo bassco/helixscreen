@@ -82,8 +82,17 @@ void FilamentConsumptionTracker::on_filament_used_changed(int filament_mm) {
     }
     SlotInfo info = *info_opt;
 
-    // External-write detection lands in Task 7. For now, proceed with the
-    // current info assuming the tracker owns remaining_weight_g.
+    // External-write detection: someone other than us updated remaining_weight_g.
+    // Treat as authoritative and rebase our snapshot from it.
+    if (std::abs(info.remaining_weight_g - last_written_weight_g_) > 0.5f) {
+        spdlog::info(
+            "[FilamentTracker] External write detected (was {} g, now {} g); re-snapshotting",
+            last_written_weight_g_, info.remaining_weight_g);
+        snapshot_mm_ = static_cast<float>(filament_mm);
+        snapshot_weight_g_ = info.remaining_weight_g;
+        last_written_weight_g_ = info.remaining_weight_g;
+        return;
+    }
 
     float current_mm = static_cast<float>(filament_mm);
     float consumed_mm = current_mm - snapshot_mm_;

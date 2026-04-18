@@ -282,3 +282,54 @@ TEST_CASE("tracker persists final weight on print completion",
     tracker.stop();
     ams.clear_external_spool_info();
 }
+
+TEST_CASE("external weight edit during print triggers re-snapshot",
+          "[filament][tracker]") {
+    LVGLTestFixture fx;
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+
+    SlotInfo info;
+    info.material = "PLA";
+    info.remaining_weight_g = 1000.0f;
+    info.total_weight_g = 1000.0f;
+    ams.set_external_spool_info_in_memory(info);
+
+    tracker.start();
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 0);
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::PRINTING));
+    helix::ui::UpdateQueue::instance().drain();
+    REQUIRE(tracker.is_active());
+
+    // Consume ~3g.
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 1000);
+    helix::ui::UpdateQueue::instance().drain();
+    auto snap1 = ams.get_external_spool_info();
+    REQUIRE(snap1->remaining_weight_g == Catch::Approx(997.018f).margin(0.05));
+
+    // Simulate an external writer (user edit, future Spoolman sync, etc.)
+    // replacing the spool weight.
+    SlotInfo edited = *snap1;
+    edited.remaining_weight_g = 500.0f;
+    ams.set_external_spool_info_in_memory(edited);
+
+    // The 1100mm tick detects the external write and re-snapshots (returns early).
+    // The 1200mm tick then computes delta = (1200 - 1100) * ~0.00298 ≈ 0.298g.
+    // Without re-snapshot we'd see 500 - full_1200mm_delta ≈ 496.4g (broken).
+    // With re-snapshot we see 500 - 0.298 ≈ 499.7g.
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 1100);
+    helix::ui::UpdateQueue::instance().drain();
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 1200);
+    helix::ui::UpdateQueue::instance().drain();
+
+    auto snap2 = ams.get_external_spool_info();
+    REQUIRE(snap2->remaining_weight_g == Catch::Approx(499.7f).margin(0.1));
+
+    tracker.stop();
+    ams.clear_external_spool_info();
+}
