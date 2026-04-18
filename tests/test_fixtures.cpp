@@ -74,13 +74,19 @@ FullMoonrakerTestFixture::~FullMoonrakerTestFixture() {
 // ============================================================================
 // XMLTestFixture Implementation
 // ============================================================================
+//
+// Per-instance PrinterState / MoonrakerClient / MoonrakerAPI. Subjects stay in
+// the global LVGL XML scope: each test's init_subjects(true) overwrites the
+// previous test's entries with valid pointers. The destructor tears down the
+// test screen (and all its observers) BEFORE destroying the state, so no UI
+// component outlives the subjects it references.
+//
+// One-time setup (XML widget classes, fonts, globals.xml, theme, event-cb
+// no-ops) happens in setup_global_xml_registrations_once() behind a static
+// guard — it's a process-wide side effect that only needs to run the first
+// time a fixture is constructed.
 
-// Static member definitions for XMLTestFixture
-// These persist across test instances to ensure LVGL XML bindings remain valid
-PrinterState* XMLTestFixture::s_state = nullptr;
-std::unique_ptr<MoonrakerClient> XMLTestFixture::s_client;
-std::unique_ptr<MoonrakerAPI> XMLTestFixture::s_api;
-bool XMLTestFixture::s_initialized = false;
+bool XMLTestFixture::s_global_registered = false;
 
 /**
  * No-op callback for optional event handlers in XML components.
@@ -93,96 +99,105 @@ static void xml_test_noop_event_callback(lv_event_t* /*e*/) {
 }
 
 XMLTestFixture::XMLTestFixture() : LVGLTestFixture() {
-    // The parent constructor created a test_screen, but we need to initialize
-    // the theme BEFORE any screens exist to avoid hanging. Delete it temporarily.
+    // The parent constructor created a test_screen, but theme initialization
+    // (inside the one-time setup) wants no screens present to avoid hanging.
+    // Delete it; we recreate a fresh screen below.
     if (m_test_screen != nullptr) {
         lv_obj_delete(m_test_screen);
         m_test_screen = nullptr;
     }
 
-    // One-time initialization of static state (shared across all XMLTestFixture instances)
-    // This ensures LVGL XML subject bindings point to stable memory addresses
-    if (!s_initialized) {
-        spdlog::debug("[XMLTestFixture] First-time initialization of static state");
+    setup_global_xml_registrations_once();
 
-        // Create static PrinterState (persists for all tests)
-        s_state = new PrinterState();
-        s_state->init_subjects(true); // Enable XML registration
+    // Fresh per-instance state. init_subjects(true) registers subjects into the
+    // global LVGL XML scope, overwriting any prior test's entries with valid
+    // pointers for the duration of this test.
+    m_state.init_subjects(true);
 
-        // Create disconnected client and API
-        s_client = std::make_unique<MoonrakerClient>();
-        s_api = std::make_unique<MoonrakerAPI>(*s_client, *s_state);
+    m_client = std::make_unique<MoonrakerClient>();
+    m_api = std::make_unique<MoonrakerAPI>(*m_client, m_state);
 
-        // 1. Register fonts (required before theme)
-        AssetManager::register_all();
-
-        // 2. Register globals.xml (required for constants - must come before theme)
-        lv_xml_register_component_from_file("A:ui_xml/globals.xml");
-
-        // 3. Initialize theme (uses globals constants, registers responsive values)
-        theme_manager_init(lv_display_get_default(), false); // light mode for tests
-
-        // 4. Register custom widgets (must be done before loading components that use them)
-        ui_icon_register_widget(); // icon component
-        ui_text_init();            // text_heading, text_body, text_small, text_xs
-        ui_text_input_init();      // text_input (textarea with bind_text support)
-        ui_button_init();          // ui_button with bind_icon support
-        ui_card_register();        // ui_card
-        ui_temp_display_init();    // temp_display
-
-        // 5. Register no-op callbacks for event handlers in XML components
-        lv_xml_register_event_cb(nullptr, "", xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_header_back_clicked", xml_test_noop_event_callback);
-        // Nozzle temp panel callbacks
-        lv_xml_register_event_cb(nullptr, "on_nozzle_preset_off_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_nozzle_preset_pla_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_nozzle_preset_petg_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_nozzle_preset_abs_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_nozzle_custom_clicked", xml_test_noop_event_callback);
-        // Bed temp panel callbacks
-        lv_xml_register_event_cb(nullptr, "on_bed_preset_off_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_bed_preset_pla_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_bed_preset_petg_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_bed_preset_abs_clicked",
-                                 xml_test_noop_event_callback);
-        lv_xml_register_event_cb(nullptr, "on_bed_custom_clicked", xml_test_noop_event_callback);
-
-        s_initialized = true;
-    }
-
-    // CRITICAL: Re-register subjects with LVGL XML system
-    // Other tests may have called init_subjects(true) on their own PrinterState,
-    // overwriting the global XML registry. We must re-register our static subjects
-    // to ensure temp_display and other XML components bind to the correct subjects.
-    s_state->register_temperature_xml_subjects();
-
-    // Reset subject VALUES to defaults for test isolation
-    // IMPORTANT: Do NOT call reset_for_testing() here! It deinitializes subjects,
-    // which invalidates the pointers cached in LVGL's XML registry. Instead, we
-    // reset the VALUES while keeping subjects initialized at stable addresses.
-    reset_subject_values();
-
-    m_theme_initialized = true;
     m_subjects_registered = true;
 
-    // NOW recreate the test screen (with theme already applied)
+    // Recreate the test screen (theme is already applied from the one-time setup).
     m_test_screen = lv_obj_create(nullptr);
     lv_screen_load(m_test_screen);
 
-    spdlog::debug("[XMLTestFixture] Initialized with fonts, theme, widgets, and subjects");
+    spdlog::debug("[XMLTestFixture] Initialized with per-instance state");
 }
 
 XMLTestFixture::~XMLTestFixture() {
-    // Static state persists - don't clean up s_state, s_client, s_api
-    // They will be cleaned up at program exit
+    // ORDER MATTERS: destroy screen/components FIRST so no observers or XML
+    // bindings hold pointers into m_state's subjects when we tear them down.
+    //
+    // We handle screen deletion here rather than letting ~LVGLTestFixture do it
+    // because (a) state cleanup must come after, and (b) we want to nullify
+    // m_test_screen so the base dtor's screen-delete becomes a no-op.
+    if (m_test_screen != nullptr) {
+        // Mirror ~LVGLTestFixture: if our screen is active, swap to a temp
+        // screen before deleting to avoid "deleting active screen" warnings.
+        lv_obj_t* active = lv_screen_active();
+        if (active == m_test_screen) {
+            lv_obj_t* temp = lv_obj_create(nullptr);
+            lv_screen_load(temp);
+        }
+        lv_obj_delete(m_test_screen);
+        m_test_screen = nullptr;
+    }
+
+    // Reverse-construction-order teardown. API holds a reference to client and
+    // state; client is standalone. Deinit subjects last — m_state's implicit
+    // member destructor runs after this function body completes.
+    m_api.reset();
+    m_client.reset();
+    m_state.deinit_subjects();
+
     spdlog::debug("[XMLTestFixture] Cleaned up");
+}
+
+void XMLTestFixture::setup_global_xml_registrations_once() {
+    if (s_global_registered) return;
+
+    spdlog::debug("[XMLTestFixture] First-time initialization of global XML registrations");
+
+    // 1. Register fonts (required before theme)
+    AssetManager::register_all();
+
+    // 2. Register globals.xml (required for constants - must come before theme)
+    lv_xml_register_component_from_file("A:ui_xml/globals.xml");
+
+    // 3. Initialize theme (uses globals constants, registers responsive values)
+    theme_manager_init(lv_display_get_default(), false); // light mode for tests
+
+    // 4. Register custom widgets (must be done before loading components that use them)
+    ui_icon_register_widget(); // icon component
+    ui_text_init();            // text_heading, text_body, text_small, text_xs
+    ui_text_input_init();      // text_input (textarea with bind_text support)
+    ui_button_init();          // ui_button with bind_icon support
+    ui_card_register();        // ui_card
+    ui_temp_display_init();    // temp_display
+
+    // 5. Register no-op callbacks for event handlers in XML components
+    lv_xml_register_event_cb(nullptr, "", xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_header_back_clicked", xml_test_noop_event_callback);
+    // Nozzle temp panel callbacks
+    lv_xml_register_event_cb(nullptr, "on_nozzle_preset_off_clicked",
+                             xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_nozzle_preset_pla_clicked",
+                             xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_nozzle_preset_petg_clicked",
+                             xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_nozzle_preset_abs_clicked",
+                             xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_nozzle_custom_clicked", xml_test_noop_event_callback);
+    // Bed temp panel callbacks
+    lv_xml_register_event_cb(nullptr, "on_bed_preset_off_clicked", xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_bed_preset_pla_clicked", xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_bed_preset_petg_clicked", xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_bed_preset_abs_clicked", xml_test_noop_event_callback);
+    lv_xml_register_event_cb(nullptr, "on_bed_custom_clicked", xml_test_noop_event_callback);
+
+    s_global_registered = true;
 }
 
 bool XMLTestFixture::register_component(const char* component_name) {
@@ -227,34 +242,6 @@ void XMLTestFixture::register_subjects() {
     spdlog::debug("[XMLTestFixture] register_subjects() called - subjects already registered in "
                   "constructor");
     m_subjects_registered = true;
-}
-
-void XMLTestFixture::reset_subject_values() {
-    // Reset temperature subjects to default values (0)
-    // CRITICAL: Use lv_xml_get_subject to get the ACTUALLY registered subjects,
-    // not s_state's subjects. Other tests may have called init_subjects(true)
-    // on their own PrinterState, overwriting the global XML registry. Even though
-    // we re-register in the constructor, lv_xml_register_subject might not replace
-    // existing entries in all LVGL versions. By using lv_xml_get_subject, we set
-    // the values on whatever subjects are ACTUALLY in the registry - which is what
-    // temp_display and other XML components will read.
-
-    auto reset_xml_subject = [](const char* name) {
-        lv_subject_t* subject = lv_xml_get_subject(NULL, name);
-        if (subject) {
-            lv_subject_set_int(subject, 0);
-        } else {
-            spdlog::warn("[XMLTestFixture] XML subject '{}' not found during reset", name);
-        }
-    };
-
-    reset_xml_subject("extruder_temp");
-    reset_xml_subject("extruder_target");
-    reset_xml_subject("bed_temp");
-    reset_xml_subject("bed_target");
-    reset_xml_subject("chamber_temp");
-
-    spdlog::debug("[XMLTestFixture] Reset XML-registered temperature subject values to 0");
 }
 
 // ============================================================================
