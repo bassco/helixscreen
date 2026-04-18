@@ -47,6 +47,16 @@ void ui_spool_canvas_redraw(lv_obj_t* canvas);
 float ui_spool_canvas_get_fill_level(lv_obj_t* canvas);
 lv_color_t ui_spool_canvas_get_color(lv_obj_t* canvas);
 
+/**
+ * @brief Clear the internal render cache.
+ *
+ * Rendered pixel buffers are cached keyed on (color, fill_bucket, size). The
+ * cache uses theme-derived colors (flange, hub) captured at render time; if
+ * the theme changes, cached entries would be stale. Call this on theme
+ * changes to force re-render.
+ */
+void ui_spool_canvas_invalidate_cache(void);
+
 #ifdef __cplusplus
 }
 #endif

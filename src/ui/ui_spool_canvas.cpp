@@ -15,10 +15,14 @@
 
 #include <spdlog/spdlog.h>
 
+#include <array>
 #include <cmath>
 #include <cstring>
+#include <list>
 #include <memory>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 // Geometry constants for Bambu-style 3D spool (SIDE VIEW)
 // Spool axis is HORIZONTAL - we view from an angle
@@ -36,12 +40,119 @@ static constexpr uint32_t DEFAULT_COLOR = 0xE0E0E0; // Default white/light filam
 // - spool_body_shade: Back flange color (darker shade)
 // - spool_hub_top, spool_hub_bottom: Center hub gradient
 
+// ----------------------------------------------------------------------------
+// sqrt LUT (idea #4)
+// ----------------------------------------------------------------------------
+// draw_gradient_ellipse / draw_gradient_rect / draw_ellipse_left_edge all call
+// sqrtf() on values in [0,1] in their per-scanline inner loops. A 1024-entry
+// table fits comfortably in L1 and collapses those to a single load + branch.
+static constexpr int SQRT_LUT_SIZE = 1024;
+
+static const std::array<float, SQRT_LUT_SIZE>& get_sqrt_lut() {
+    static const std::array<float, SQRT_LUT_SIZE> table = []() {
+        std::array<float, SQRT_LUT_SIZE> t{};
+        for (int i = 0; i < SQRT_LUT_SIZE; ++i) {
+            t[i] = sqrtf(static_cast<float>(i) / static_cast<float>(SQRT_LUT_SIZE - 1));
+        }
+        return t;
+    }();
+    return table;
+}
+
+static inline float fast_sqrt_01(float x) {
+    if (x <= 0.0f)
+        return 0.0f;
+    if (x >= 1.0f)
+        return 1.0f;
+    int idx = static_cast<int>(x * static_cast<float>(SQRT_LUT_SIZE - 1));
+    return get_sqrt_lut()[idx];
+}
+
+// ----------------------------------------------------------------------------
+// Render cache (idea #2)
+// ----------------------------------------------------------------------------
+// Bucketed LRU of rendered ARGB pixel buffers keyed on (color, fill_bucket,
+// size). Rendering a 64x64 spool costs ~10 gradient-fill scanline loops; a
+// cache hit collapses that to a single memcpy (~16KB). Fill level is bucketed
+// into 10% steps — visually indistinguishable at this scale, and it keeps the
+// working set small while scrolling a list of many spools.
+static constexpr size_t CACHE_MAX_ENTRIES = 128;
+static constexpr int FILL_BUCKETS = 10;
+
+struct SpoolCacheKey {
+    uint32_t color_rgb; // 0x00RRGGBB
+    uint16_t size;
+    uint8_t fill_bucket; // 0..FILL_BUCKETS
+
+    bool operator==(const SpoolCacheKey& o) const {
+        return color_rgb == o.color_rgb && size == o.size && fill_bucket == o.fill_bucket;
+    }
+};
+
+struct SpoolCacheKeyHash {
+    size_t operator()(const SpoolCacheKey& k) const {
+        // Mix: color is the high-cardinality field, so weight it.
+        return (static_cast<size_t>(k.color_rgb) * 0x9E3779B1u) ^
+               (static_cast<size_t>(k.size) << 17) ^ static_cast<size_t>(k.fill_bucket);
+    }
+};
+
+struct SpoolCacheEntry {
+    SpoolCacheKey key;
+    std::vector<uint8_t> pixels;
+};
+
+using SpoolCacheList = std::list<SpoolCacheEntry>;
+using SpoolCacheIndex =
+    std::unordered_map<SpoolCacheKey, SpoolCacheList::iterator, SpoolCacheKeyHash>;
+
+static SpoolCacheList s_cache_list;
+static SpoolCacheIndex s_cache_index;
+
+static uint8_t compute_fill_bucket(float fill) {
+    float clamped = fill < 0.0f ? 0.0f : (fill > 1.0f ? 1.0f : fill);
+    return static_cast<uint8_t>(clamped * static_cast<float>(FILL_BUCKETS) + 0.5f);
+}
+
+static uint32_t color_to_rgb24(lv_color_t c) {
+    return (static_cast<uint32_t>(c.red) << 16) | (static_cast<uint32_t>(c.green) << 8) |
+           static_cast<uint32_t>(c.blue);
+}
+
+static const SpoolCacheEntry* cache_get(const SpoolCacheKey& key) {
+    auto it = s_cache_index.find(key);
+    if (it == s_cache_index.end())
+        return nullptr;
+    // Promote to MRU.
+    s_cache_list.splice(s_cache_list.begin(), s_cache_list, it->second);
+    return &(*it->second);
+}
+
+static void cache_put(const SpoolCacheKey& key, std::vector<uint8_t>&& pixels) {
+    auto idx_it = s_cache_index.find(key);
+    if (idx_it != s_cache_index.end()) {
+        idx_it->second->pixels = std::move(pixels);
+        s_cache_list.splice(s_cache_list.begin(), s_cache_list, idx_it->second);
+        return;
+    }
+    if (s_cache_list.size() >= CACHE_MAX_ENTRIES) {
+        s_cache_index.erase(s_cache_list.back().key);
+        s_cache_list.pop_back();
+    }
+    s_cache_list.push_front({key, std::move(pixels)});
+    s_cache_index[key] = s_cache_list.begin();
+}
+
 struct SpoolCanvasData {
     lv_obj_t* canvas = nullptr;
     lv_draw_buf_t* draw_buf = nullptr;
     int32_t size = DEFAULT_SIZE;
     lv_color_t color = lv_color_hex(DEFAULT_COLOR);
     float fill_level = 1.0f;
+
+    // Last-rendered key, for dedup (idea #1). Valid only when has_rendered.
+    SpoolCacheKey last_key{0, 0, 0};
+    bool has_rendered = false;
 };
 
 static std::unordered_map<lv_obj_t*, SpoolCanvasData*> s_registry;
@@ -60,11 +171,11 @@ static void draw_gradient_ellipse(lv_layer_t* layer, int32_t cx, int32_t cy, int
 
     for (int32_t y = -ry; y <= ry; y++) {
         float y_norm = (float)y / (float)ry;
-        float x_extent = rx * sqrtf(1.0f - y_norm * y_norm);
+        float x_extent = rx * fast_sqrt_01(1.0f - y_norm * y_norm);
 
         // Gradient factor: 0.0 at top (-ry), 1.0 at bottom (+ry)
         float gradient_factor = (float)(y + ry) / (float)(2 * ry);
-        gradient_factor = sqrtf(gradient_factor); // Quick transition from light to dark
+        gradient_factor = fast_sqrt_01(gradient_factor); // Quick transition from light to dark
         fill_dsc.color = ams_draw::blend_color(top_color, bottom_color, gradient_factor);
 
         // Handle pole pixels (very narrow scanlines near top/bottom)
@@ -113,7 +224,7 @@ static void draw_gradient_rect(lv_layer_t* layer, int32_t x1, int32_t y1, int32_
     // Draw scanline by scanline with gradient
     for (int32_t y = y1; y <= y2; y++) {
         float gradient_factor = (float)(y - y1) / (float)height;
-        gradient_factor = sqrtf(gradient_factor); // Quick transition from light to dark
+        gradient_factor = fast_sqrt_01(gradient_factor); // Quick transition from light to dark
         fill_dsc.color = ams_draw::blend_color(top_color, bottom_color, gradient_factor);
 
         lv_area_t line = {x1, y, x2, y};
@@ -132,13 +243,13 @@ static void draw_ellipse_left_edge(lv_layer_t* layer, int32_t cx, int32_t cy, in
     // Draw left edge highlight following ellipse curvature
     for (int32_t y = -ry; y <= ry; y++) {
         float y_norm = (float)y / (float)ry;
-        float x_extent = rx * sqrtf(1.0f - y_norm * y_norm);
+        float x_extent = rx * fast_sqrt_01(1.0f - y_norm * y_norm);
         if (x_extent < 0.5f)
             continue;
 
         // Gradient factor for vertical shading (same curve as main ellipse)
         float gradient_factor = (float)(y + ry) / (float)(2 * ry);
-        gradient_factor = sqrtf(gradient_factor); // Quick transition from light to dark
+        gradient_factor = fast_sqrt_01(gradient_factor); // Quick transition from light to dark
         fill_dsc.color = ams_draw::blend_color(top_color, bottom_color, gradient_factor);
         fill_dsc.opa = LV_OPA_COVER;
 
@@ -154,10 +265,9 @@ static void draw_ellipse_left_edge(lv_layer_t* layer, int32_t cx, int32_t cy, in
     }
 }
 
-static void redraw_spool(SpoolCanvasData* data) {
-    if (!data || !data->canvas || !data->draw_buf)
-        return;
-
+// Actual pixel drawing. Callers should prefer redraw_spool(), which handles
+// dedup and cache. This function unconditionally draws into data->draw_buf.
+static void render_spool_pixels(SpoolCanvasData* data) {
     int32_t size = data->size;
     int32_t cy = size / 2; // Vertical center
 
@@ -262,6 +372,48 @@ static void redraw_spool(SpoolCanvasData* data) {
     spdlog::trace("[SpoolCanvas] Redrawn: size={}, fill={:.0f}%", size, fill * 100.0f);
 }
 
+// Cache-aware redraw entry point. Handles:
+//   - dedup (idea #1): same state as last render → no-op
+//   - cache hit (idea #2): memcpy cached pixels into draw_buf
+//   - cache miss: full render + capture into cache
+static void redraw_spool(SpoolCanvasData* data) {
+    if (!data || !data->canvas || !data->draw_buf)
+        return;
+
+    SpoolCacheKey key{color_to_rgb24(data->color), static_cast<uint16_t>(data->size),
+                      compute_fill_bucket(data->fill_level)};
+
+    // Dedup: already rendered this bucketed state, nothing to do.
+    if (data->has_rendered && data->last_key == key) {
+        return;
+    }
+
+    // Cache hit: copy rendered pixels into the canvas buffer.
+    if (const SpoolCacheEntry* entry = cache_get(key); entry != nullptr) {
+        if (data->draw_buf->data && entry->pixels.size() == data->draw_buf->data_size) {
+            memcpy(data->draw_buf->data, entry->pixels.data(), entry->pixels.size());
+            lv_obj_invalidate(data->canvas);
+            data->last_key = key;
+            data->has_rendered = true;
+            spdlog::trace("[SpoolCanvas] cache hit (size={} bucket={} color=0x{:06X})", key.size,
+                          key.fill_bucket, key.color_rgb);
+            return;
+        }
+    }
+
+    // Cache miss: render and capture.
+    render_spool_pixels(data);
+
+    if (data->draw_buf->data && data->draw_buf->data_size > 0) {
+        std::vector<uint8_t> snapshot(data->draw_buf->data,
+                                      data->draw_buf->data + data->draw_buf->data_size);
+        cache_put(key, std::move(snapshot));
+    }
+
+    data->last_key = key;
+    data->has_rendered = true;
+}
+
 static void spool_canvas_event_cb(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_DELETE) {
         lv_obj_t* obj = lv_event_get_target_obj(e);
@@ -333,11 +485,11 @@ static void spool_canvas_xml_apply(lv_xml_parser_state_t* state, const char** at
             uint32_t hex = strtoul(value, nullptr, 0);
             data->color = lv_color_hex(hex);
             needs_redraw = true;
-            spdlog::trace("[SpoolCanvas] Set color=0x{:06X}", hex);
+            spdlog::debug("[SpoolCanvas] Set color=0x{:06X}", hex);
         } else if (strcmp(name, "fill_level") == 0) {
             data->fill_level = strtof(value, nullptr);
             needs_redraw = true;
-            spdlog::trace("[SpoolCanvas] Set fill_level={:.2f}", data->fill_level);
+            spdlog::debug("[SpoolCanvas] Set fill_level={:.2f}", data->fill_level);
         } else if (strcmp(name, "size") == 0) {
             int32_t new_size = atoi(value);
             if (new_size != data->size && new_size > 0) {
@@ -353,8 +505,10 @@ static void spool_canvas_xml_apply(lv_xml_parser_state_t* state, const char** at
                     lv_canvas_set_draw_buf(data->canvas, data->draw_buf);
                 }
                 lv_obj_set_size(data->canvas, new_size, new_size);
+                // Draw buffer was recreated; previous render state no longer applies.
+                data->has_rendered = false;
                 needs_redraw = true;
-                spdlog::trace("[SpoolCanvas] Set size={}", new_size);
+                spdlog::debug("[SpoolCanvas] Set size={}", new_size);
             }
         }
     }
@@ -416,25 +570,28 @@ lv_obj_t* ui_spool_canvas_create(lv_obj_t* parent, int32_t size) {
 
 void ui_spool_canvas_set_color(lv_obj_t* canvas, lv_color_t color) {
     auto* data = get_data(canvas);
-    if (data) {
-        if (lv_color_eq(data->color, color)) {
-            return;
-        }
-        data->color = color;
-        redraw_spool(data);
+    if (!data)
+        return;
+    // Short-circuit: same color → no state change, skip the redraw pipeline
+    // entirely (the cache-aware redraw would dedup, but this saves the hash
+    // + lookup on the common scroll-recycle-same-color path).
+    if (data->has_rendered && data->color.red == color.red && data->color.green == color.green &&
+        data->color.blue == color.blue) {
+        return;
     }
+    data->color = color;
+    redraw_spool(data);
 }
 
 void ui_spool_canvas_set_fill_level(lv_obj_t* canvas, float fill_level) {
     auto* data = get_data(canvas);
-    if (data) {
-        float clamped = LV_CLAMP(fill_level, 0.0f, 1.0f);
-        if (fabsf(data->fill_level - clamped) < 0.001f) {
-            return;
-        }
-        data->fill_level = clamped;
-        redraw_spool(data);
-    }
+    if (!data)
+        return;
+    float clamped = LV_CLAMP(fill_level, 0.0f, 1.0f);
+    data->fill_level = clamped;
+    // redraw_spool() will dedup on bucket; no need to skip here since the
+    // bucket comparison is the only thing that actually matters visually.
+    redraw_spool(data);
 }
 
 void ui_spool_canvas_set_size(lv_obj_t* canvas, int32_t size) {
@@ -476,4 +633,15 @@ float ui_spool_canvas_get_fill_level(lv_obj_t* canvas) {
 lv_color_t ui_spool_canvas_get_color(lv_obj_t* canvas) {
     auto* data = get_data(canvas);
     return data ? data->color : lv_color_hex(DEFAULT_COLOR);
+}
+
+void ui_spool_canvas_invalidate_cache(void) {
+    s_cache_list.clear();
+    s_cache_index.clear();
+    for (auto& [canvas, data] : s_registry) {
+        if (data) {
+            data->has_rendered = false;
+        }
+    }
+    spdlog::debug("[SpoolCanvas] Render cache invalidated");
 }
