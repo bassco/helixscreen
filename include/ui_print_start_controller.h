@@ -181,6 +181,10 @@ class PrintStartController {
     /// Continue the initiate() flow after the unresolved-tools check passes
     void continue_after_unresolved_check();
 
+    /// Show warning when the assigned external spool doesn't have enough
+    /// filament for the predicted print weight.
+    void show_insufficient_filament_warning(float needed_g, float remaining_g);
+
     // Static callbacks for LVGL modal
     static void on_filament_warning_proceed_static(lv_event_t* e);
     static void on_filament_warning_cancel_static(lv_event_t* e);
@@ -188,6 +192,8 @@ class PrintStartController {
     static void on_color_mismatch_cancel_static(lv_event_t* e);
     static void on_material_mismatch_proceed_static(lv_event_t* e);
     static void on_material_mismatch_cancel_static(lv_event_t* e);
+    static void on_insufficient_filament_proceed_static(lv_event_t* e);
+    static void on_insufficient_filament_cancel_static(lv_event_t* e);
 
     // === Dependencies ===
     PrinterState& printer_state_;
@@ -205,6 +211,7 @@ class PrintStartController {
     lv_obj_t* filament_warning_modal_ = nullptr;
     lv_obj_t* color_mismatch_modal_ = nullptr;
     lv_obj_t* material_mismatch_modal_ = nullptr;
+    lv_obj_t* insufficient_filament_modal_ = nullptr;
 
     // === Callbacks ===
     PrintStartedCallback on_print_started_;

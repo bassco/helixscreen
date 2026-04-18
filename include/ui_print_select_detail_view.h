@@ -6,6 +6,7 @@
 #include "ui_filament_mapping_card.h"
 #include "ui_print_preparation_manager.h"
 
+#include "moonraker_types.h"
 #include "overlay_base.h"
 #include "print_file_data.h" // For FileHistoryStatus
 #include "subject_managed_panel.h"
@@ -13,6 +14,7 @@
 #include <functional>
 #include <lvgl.h>
 #include <memory>
+#include <optional>
 #include <string>
 
 // Forward declarations
@@ -248,6 +250,16 @@ class PrintSelectDetailView : public OverlayBase {
         return filament_mapping_card_.get_available_slots();
     }
 
+    /**
+     * @brief Get cached file metadata from the most recent async fetch
+     *
+     * Populated after the metadata fetch completes. Returns nullopt if the
+     * user opened the detail view before the fetch finished.
+     */
+    [[nodiscard]] std::optional<FileMetadata> get_file_metadata() const {
+        return cached_file_metadata_;
+    }
+
     // === Checkbox Access (for prep manager setup) ===
 
     [[nodiscard]] lv_obj_t* get_bed_mesh_checkbox() const {
@@ -382,6 +394,9 @@ class PrintSelectDetailView : public OverlayBase {
     std::vector<std::string> current_filament_colors_;
     std::vector<std::string> current_filament_materials_;
     size_t current_file_size_bytes_ = 0;
+
+    // Cached metadata from the async fetch (nullopt until fetch completes or when file changes)
+    std::optional<FileMetadata> cached_file_metadata_;
 
     // === Callbacks ===
     DeleteConfirmedCallback on_delete_confirmed_;

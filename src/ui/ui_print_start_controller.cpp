@@ -78,6 +78,10 @@ PrintStartController::~PrintStartController() {
             helix::ui::modal_hide(material_mismatch_modal_);
             material_mismatch_modal_ = nullptr;
         }
+        if (insufficient_filament_modal_) {
+            helix::ui::modal_hide(insufficient_filament_modal_);
+            insufficient_filament_modal_ = nullptr;
+        }
     }
     spdlog::trace("[PrintStartController] Destroyed");
 }
@@ -145,6 +149,31 @@ void PrintStartController::initiate() {
             update_print_button_(); // Re-enable button on early failure
         }
         return;
+    }
+
+    // Check if assigned external spool has enough filament for the print.
+    if (auto spool = AmsState::instance().get_external_spool_info();
+        spool.has_value() && spool->remaining_weight_g > 0.0f) {
+        auto metadata = detail_view_ ? detail_view_->get_file_metadata() : std::nullopt;
+        if (metadata.has_value()) {
+            float needed_g = static_cast<float>(metadata->filament_weight_total);
+            if (needed_g <= 0.0f && metadata->filament_total > 0.0) {
+                // Fall back to length-based estimate using the spool's material.
+                auto mat = filament::find_material(spool->material);
+                if (mat.has_value() && mat->density_g_cm3 > 0.0f) {
+                    needed_g = filament::length_to_weight_g(
+                        static_cast<float>(metadata->filament_total),
+                        mat->density_g_cm3, 1.75f);
+                }
+            }
+            if (needed_g > 0.0f && needed_g > spool->remaining_weight_g) {
+                spdlog::info(
+                    "[PrintStartController] Pre-print warning: needs {} g, spool has {} g",
+                    needed_g, spool->remaining_weight_g);
+                show_insufficient_filament_warning(needed_g, spool->remaining_weight_g);
+                return;
+            }
+        }
     }
 
     // Check if runout sensor shows no filament (pre-print warning)
@@ -366,6 +395,82 @@ void PrintStartController::on_filament_warning_cancel_static(lv_event_t* e) {
             self->on_print_cancelled_();
         }
         spdlog::debug("[PrintStartController] Print cancelled by user (no filament warning)");
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// ============================================================================
+// Insufficient Filament Warning Dialog
+// ============================================================================
+
+void PrintStartController::show_insufficient_filament_warning(float needed_g, float remaining_g) {
+    if (insufficient_filament_modal_) {
+        helix::ui::modal_hide(insufficient_filament_modal_);
+        insufficient_filament_modal_ = nullptr;
+    }
+
+    char body[256];
+    std::snprintf(body, sizeof(body),
+                  lv_tr("This print needs about %.0fg but the spool has about %.0fg "
+                        "remaining. Start anyway?"),
+                  needed_g, remaining_g);
+
+    insufficient_filament_modal_ = helix::ui::modal_show_confirmation(
+        lv_tr("Not Enough Filament"), body, ModalSeverity::Warning, lv_tr("Start Anyway"),
+        on_insufficient_filament_proceed_static, on_insufficient_filament_cancel_static, this);
+
+    if (!insufficient_filament_modal_) {
+        spdlog::error("[PrintStartController] Failed to create insufficient-filament dialog");
+        if (update_print_button_) {
+            update_print_button_();
+        }
+    }
+}
+
+void PrintStartController::on_insufficient_filament_proceed_static(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStartController] on_insufficient_filament_proceed_static");
+    auto* self = static_cast<PrintStartController*>(lv_event_get_user_data(e));
+    if (!self) {
+        return;
+    }
+    if (self->insufficient_filament_modal_) {
+        helix::ui::modal_hide(self->insufficient_filament_modal_);
+        self->insufficient_filament_modal_ = nullptr;
+    }
+
+    // Continue the existing pre-print chain: runout sensor check next.
+    auto& sensor_mgr = helix::FilamentSensorManager::instance();
+    if (sensor_mgr.is_master_enabled() &&
+        sensor_mgr.is_sensor_available(helix::FilamentSensorRole::RUNOUT) &&
+        !sensor_mgr.is_filament_detected(helix::FilamentSensorRole::RUNOUT)) {
+        self->show_filament_warning();
+        return;
+    }
+    auto unresolved = self->find_unresolved_tools();
+    if (!unresolved.empty()) {
+        auto tool_info = self->detail_view_->get_filament_tool_info();
+        self->show_color_mismatch_warning(unresolved, tool_info);
+        return;
+    }
+    self->continue_after_unresolved_check();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void PrintStartController::on_insufficient_filament_cancel_static(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[PrintStartController] on_insufficient_filament_cancel_static");
+    auto* self = static_cast<PrintStartController*>(lv_event_get_user_data(e));
+    if (!self) {
+        return;
+    }
+    if (self->insufficient_filament_modal_) {
+        helix::ui::modal_hide(self->insufficient_filament_modal_);
+        self->insufficient_filament_modal_ = nullptr;
+    }
+    if (self->update_print_button_) {
+        self->update_print_button_();
+    }
+    if (self->on_print_cancelled_) {
+        self->on_print_cancelled_();
     }
     LVGL_SAFE_EVENT_CB_END();
 }

@@ -334,6 +334,9 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     current_filament_materials_ = filament_materials;
     current_file_size_bytes_ = file_size_bytes;
 
+    // Clear cached metadata when file selection changes — the new async fetch will repopulate it
+    cached_file_metadata_.reset();
+
     // Update filament mapping card (shown when AMS is available)
     filament_mapping_card_.update(filament_colors, filament_materials);
 
@@ -916,6 +919,9 @@ void PrintSelectDetailView::load_gcode_for_preview() {
             if (tok.expired()) {
                 return;
             }
+
+            // Cache for PrintStartController's pre-print checks (e.g., filament weight)
+            cached_file_metadata_ = metadata;
 
             // Check if file is safe to render given available RAM
             if (!helix::is_gcode_2d_streaming_safe(metadata.size)) {
