@@ -21,8 +21,9 @@ void reset_tour_settings() {
     // In the singleton-without-init test environment, active_printer_id_ is empty,
     // so the root-level key is the one that's read.
     cfg->set<bool>("/wizard_completed", true);
-    // Clear any leftover in-memory state from previous tests (singleton).
-    FirstRunTour::instance().reset_for_test();
+    // In-memory singleton state is left clean by the public API used in these
+    // tests: start()/skip() always pair, and advance() past the last step calls
+    // finish() which resets running_. No explicit reset needed.
 }
 } // namespace
 

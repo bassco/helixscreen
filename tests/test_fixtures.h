@@ -286,14 +286,16 @@ class XMLTestFixture : public LVGLTestFixture {
 
     /**
      * @brief Get the printer state for this test
-     * @return Reference to static PrinterState shared across all XMLTestFixture tests
+     * @return Reference to per-instance PrinterState
      *
-     * @note Uses static PrinterState to ensure XML subject bindings remain valid
-     * across test instances. The LVGL XML registry caches subject pointers globally,
-     * so using instance members would cause stale pointer issues between tests.
+     * Each XMLTestFixture owns its own PrinterState. Subjects are registered into
+     * the global LVGL XML scope during construction — this overwrites the prior
+     * test's entries with valid pointers for the duration of this test. The
+     * destructor tears down all UI components BEFORE destroying the state, so no
+     * observers or XML bindings outlive the subjects they reference.
      */
     PrinterState& state() {
-        return *s_state;
+        return m_state;
     }
 
     /**
@@ -301,7 +303,7 @@ class XMLTestFixture : public LVGLTestFixture {
      * @return Reference to MoonrakerClient
      */
     MoonrakerClient& client() {
-        return *s_client;
+        return *m_client;
     }
 
     /**
@@ -309,7 +311,7 @@ class XMLTestFixture : public LVGLTestFixture {
      * @return Reference to MoonrakerAPI
      */
     MoonrakerAPI& api() {
-        return *s_api;
+        return *m_api;
     }
 
     /**
@@ -347,32 +349,18 @@ class XMLTestFixture : public LVGLTestFixture {
      */
     lv_obj_t* create_component(const char* component_name, const char** attrs);
 
+  private:
     /**
-     * @brief Register all subjects from PrinterState for XML binding
+     * @brief One-time global XML registrations shared across all XMLTestFixture tests
      *
-     * Call this after state() modifications but before create_component()
-     * if you need explicit control over when subjects are registered.
-     * Normally called automatically by create_component().
+     * Registers XML widget classes, fonts, globals.xml, event-cb no-ops, and
+     * initializes the theme. These are process-wide side effects on the LVGL XML
+     * registry that only need to happen once. Guarded by s_global_registered.
      */
-    void register_subjects();
+    void setup_global_xml_registrations_once();
+    static bool s_global_registered;
 
-  protected:
-    /**
-     * @brief Reset subject VALUES to defaults without deinitializing
-     *
-     * This is critical for test isolation: we reset values but keep subjects
-     * initialized at stable memory addresses. LVGL XML registry caches subject
-     * pointers globally, so deinitializing would leave stale pointers.
-     */
-    void reset_subject_values();
-
-    // Static state shared across all XMLTestFixture instances
-    // This ensures LVGL XML subject bindings remain valid across tests
-    static PrinterState* s_state;
-    static std::unique_ptr<MoonrakerClient> s_client;
-    static std::unique_ptr<MoonrakerAPI> s_api;
-    static bool s_initialized;
-
-    bool m_theme_initialized = false;
-    bool m_subjects_registered = false;
+    PrinterState m_state;
+    std::unique_ptr<MoonrakerClient> m_client;
+    std::unique_ptr<MoonrakerAPI> m_api;
 };

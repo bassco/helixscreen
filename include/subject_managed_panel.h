@@ -63,6 +63,7 @@
 
 #pragma once
 
+#include "helix/xml/scoped_subject_registry.h"
 #include "lvgl/lvgl.h"
 #include "subject_debug_registry.h"
 
@@ -255,7 +256,7 @@ class SubjectManager {
 #define UI_MANAGED_SUBJECT_INT(subject, initial_value, xml_name, manager)                          \
     do {                                                                                           \
         lv_subject_init_int(&(subject), (initial_value));                                          \
-        lv_xml_register_subject(nullptr, (xml_name), &(subject));                                  \
+        helix::xml::register_subject_in_current_scope((xml_name), &(subject));                     \
         (manager).register_subject(&(subject));                                                    \
         SubjectDebugRegistry::instance().register_subject(                                         \
             &(subject), (xml_name), LV_SUBJECT_TYPE_INT, __FILE__, __LINE__);                      \
@@ -275,7 +276,7 @@ class SubjectManager {
 #define UI_MANAGED_SUBJECT_STRING(subject, buffer, initial_value, xml_name, manager)               \
     do {                                                                                           \
         lv_subject_init_string(&(subject), (buffer), nullptr, sizeof(buffer), (initial_value));    \
-        lv_xml_register_subject(nullptr, (xml_name), &(subject));                                  \
+        helix::xml::register_subject_in_current_scope((xml_name), &(subject));                     \
         (manager).register_subject(&(subject));                                                    \
         SubjectDebugRegistry::instance().register_subject(                                         \
             &(subject), (xml_name), LV_SUBJECT_TYPE_STRING, __FILE__, __LINE__);                   \
@@ -298,7 +299,7 @@ class SubjectManager {
     do {                                                                                           \
         snprintf((buffer), (size), "%s", (initial_value));                                         \
         lv_subject_init_string(&(subject), (buffer), nullptr, (size), (buffer));                   \
-        lv_xml_register_subject(nullptr, (xml_name), &(subject));                                  \
+        helix::xml::register_subject_in_current_scope((xml_name), &(subject));                     \
         (manager).register_subject(&(subject));                                                    \
         SubjectDebugRegistry::instance().register_subject(                                         \
             &(subject), (xml_name), LV_SUBJECT_TYPE_STRING, __FILE__, __LINE__);                   \
@@ -317,7 +318,7 @@ class SubjectManager {
 #define UI_MANAGED_SUBJECT_POINTER(subject, initial_value, xml_name, manager)                      \
     do {                                                                                           \
         lv_subject_init_pointer(&(subject), (initial_value));                                      \
-        lv_xml_register_subject(nullptr, (xml_name), &(subject));                                  \
+        helix::xml::register_subject_in_current_scope((xml_name), &(subject));                     \
         (manager).register_subject(&(subject));                                                    \
         SubjectDebugRegistry::instance().register_subject(                                         \
             &(subject), (xml_name), LV_SUBJECT_TYPE_POINTER, __FILE__, __LINE__);                  \
@@ -336,7 +337,7 @@ class SubjectManager {
 #define UI_MANAGED_SUBJECT_COLOR(subject, initial_value, xml_name, manager)                        \
     do {                                                                                           \
         lv_subject_init_color(&(subject), (initial_value));                                        \
-        lv_xml_register_subject(nullptr, (xml_name), &(subject));                                  \
+        helix::xml::register_subject_in_current_scope((xml_name), &(subject));                     \
         (manager).register_subject(&(subject));                                                    \
         SubjectDebugRegistry::instance().register_subject(                                         \
             &(subject), (xml_name), LV_SUBJECT_TYPE_COLOR, __FILE__, __LINE__);                    \

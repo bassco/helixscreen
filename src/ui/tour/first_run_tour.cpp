@@ -161,15 +161,6 @@ void FirstRunTour::finish() {
     overlay_.reset();
 }
 
-void FirstRunTour::reset_for_test() {
-    running_ = false;
-    current_index_ = 0;
-    steps_.clear();
-    nav_observer_.reset();
-    breakpoint_observer_.reset();
-    overlay_.reset();
-}
-
 void FirstRunTour::render_current_step() {
     if (overlay_) overlay_->show_step(current_index_);
 }

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "helix_test_fixture.h"
 #include "ui_update_queue.h"
 
 #include "lvgl/lvgl.h"
@@ -35,7 +36,7 @@ constexpr int TEST_DISPLAY_HEIGHT = 480;
  * - Helper methods for LVGL timer processing
  * - Test screen creation with automatic cleanup
  */
-class LVGLTestFixture {
+class LVGLTestFixture : public HelixTestFixture {
     static bool s_queue_initialized;
 
   public:
