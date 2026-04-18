@@ -11,7 +11,8 @@ namespace helix::xml {
 // When active, register_subject_in_current_scope() registers into the
 // overridden scope; otherwise registration goes to the global scope.
 //
-// Not thread-safe. Tests run single-threaded; production does not use this.
+// Thread-local: each thread has its own active scope. Push/pop must happen
+// on the same thread; do not share the RAII guard across threads.
 class ScopedSubjectRegistryOverride {
   public:
     explicit ScopedSubjectRegistryOverride(lv_xml_component_scope_t* scope);

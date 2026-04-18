@@ -6,7 +6,10 @@
 namespace helix::xml {
 
 namespace {
-lv_xml_component_scope_t* g_active_scope = nullptr;
+// Per-thread: each thread maintains its own active scope. Tests may spin up
+// libhv event loops / WebSocket workers; keeping this thread-local prevents
+// cross-thread races if a scoped registration ever escapes the test thread.
+thread_local lv_xml_component_scope_t* g_active_scope = nullptr;
 }
 
 ScopedSubjectRegistryOverride::ScopedSubjectRegistryOverride(lv_xml_component_scope_t* scope)
@@ -19,6 +22,9 @@ ScopedSubjectRegistryOverride::~ScopedSubjectRegistryOverride() {
 }
 
 lv_result_t register_subject_in_current_scope(const char* name, lv_subject_t* subject) {
+    if (name == nullptr || subject == nullptr) {
+        return LV_RESULT_INVALID;
+    }
     return lv_xml_register_subject(g_active_scope, name, subject);
 }
 
