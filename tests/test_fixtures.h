@@ -349,15 +349,6 @@ class XMLTestFixture : public LVGLTestFixture {
      */
     lv_obj_t* create_component(const char* component_name, const char** attrs);
 
-    /**
-     * @brief Register all subjects from PrinterState for XML binding
-     *
-     * Call this after state() modifications but before create_component()
-     * if you need explicit control over when subjects are registered.
-     * Normally called automatically by create_component().
-     */
-    void register_subjects();
-
   private:
     /**
      * @brief One-time global XML registrations shared across all XMLTestFixture tests
@@ -372,5 +363,4 @@ class XMLTestFixture : public LVGLTestFixture {
     PrinterState m_state;
     std::unique_ptr<MoonrakerClient> m_client;
     std::unique_ptr<MoonrakerAPI> m_api;
-    bool m_subjects_registered = false;
 };

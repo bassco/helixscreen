@@ -117,8 +117,6 @@ XMLTestFixture::XMLTestFixture() : LVGLTestFixture() {
     m_client = std::make_unique<MoonrakerClient>();
     m_api = std::make_unique<MoonrakerAPI>(*m_client, m_state);
 
-    m_subjects_registered = true;
-
     // Recreate the test screen (theme is already applied from the one-time setup).
     m_test_screen = lv_obj_create(nullptr);
     lv_screen_load(m_test_screen);
@@ -150,12 +148,19 @@ XMLTestFixture::~XMLTestFixture() {
     // member destructor runs after this function body completes.
     m_api.reset();
     m_client.reset();
+    // TODO: PrinterState::init_subjects(true) appends a `[this]{ deinit_subjects(); }`
+    // lambda to StaticSubjectRegistry that dangles after this dtor. Not called today,
+    // but would segfault if someone adds a process-exit deinit_all() path. Needs an
+    // unregister() API on StaticSubjectRegistry.
     m_state.deinit_subjects();
 
     spdlog::debug("[XMLTestFixture] Cleaned up");
 }
 
 void XMLTestFixture::setup_global_xml_registrations_once() {
+    // Add new widget registrations, XML components, event-cb no-ops, or theme
+    // setup calls here when introducing new test-only XML primitives. Everything
+    // in this helper runs exactly once per process.
     if (s_global_registered) return;
 
     spdlog::debug("[XMLTestFixture] First-time initialization of global XML registrations");
@@ -218,9 +223,6 @@ lv_obj_t* XMLTestFixture::create_component(const char* component_name) {
 }
 
 lv_obj_t* XMLTestFixture::create_component(const char* component_name, const char** attrs) {
-    if (!m_subjects_registered) {
-        register_subjects();
-    }
     lv_obj_t* obj = static_cast<lv_obj_t*>(lv_xml_create(test_screen(), component_name, attrs));
     if (obj == nullptr) {
         spdlog::warn("[XMLTestFixture] Failed to create component '{}'", component_name);
@@ -228,20 +230,6 @@ lv_obj_t* XMLTestFixture::create_component(const char* component_name, const cha
         spdlog::debug("[XMLTestFixture] Created component '{}'", component_name);
     }
     return obj;
-}
-
-void XMLTestFixture::register_subjects() {
-    if (m_subjects_registered) {
-        spdlog::debug("[XMLTestFixture] Subjects already registered");
-        return;
-    }
-
-    // PrinterState subjects are already registered via init_subjects(true) in constructor.
-    // This method exists for manual control if tests need to modify state() before
-    // subjects are registered, but normally that's not needed.
-    spdlog::debug("[XMLTestFixture] register_subjects() called - subjects already registered in "
-                  "constructor");
-    m_subjects_registered = true;
 }
 
 // ============================================================================
