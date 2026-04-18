@@ -299,6 +299,22 @@ class PrinterDetector {
     static std::string get_probe_type(const std::string& printer_name);
 
     /**
+     * @brief Printer-specific bed-mesh calibration gcode template
+     *
+     * Some printers need pre-probe housekeeping that helixscreen can't express
+     * with a single macro slot — notably the Elegoo Centauri Carbon whose
+     * mainline-Klipper `[load_cell_probe]` requires `LOAD_CELL_SAVE_TARE` and
+     * a nozzle-wipe wrapper before `BED_MESH_CALIBRATE`. The database entry
+     * may supply a multi-line template under `calibration.bed_mesh_gcode`;
+     * the Bed Mesh panel substitutes `{profile}` with the temporary profile
+     * name and sends the whole block as a single gcode script.
+     *
+     * @return Template with `{profile}` placeholder, or empty string if the
+     *         printer has no override (callers fall back to `StandardMacros`).
+     */
+    static std::string get_bed_mesh_calibrate_gcode(const std::string& printer_name);
+
+    /**
      * @brief Get print start profile name for a printer
      *
      * Looks up the print_start_profile field from the printer database JSON
@@ -416,4 +432,27 @@ class PrinterDetector {
      * @return true if printer type contains both "creality" and "k2"
      */
     static bool is_creality_k2();
+
+    /**
+     * @brief Declared physical tightening direction for bed screws
+     *
+     * Printer database entries may set `"screws_tilt_direction": "cw"` or
+     * `"ccw"` to declare which rotation, from the user's physical viewpoint,
+     * tightens a bed screw on that printer. This is an explicit override —
+     * independent of whatever Klipper's `screw_thread` is set to — that
+     * describes the printer's own geometry.
+     *
+     * Klipper's own output direction (CW/CCW) is computed using its
+     * configured `screw_thread`. When the DB override disagrees with
+     * Klipper's default CW-M* semantics (value "ccw"), HelixScreen flips
+     * CW↔CCW in the displayed direction so the UI matches the printer's
+     * physical reality.
+     *
+     * Used to override vendors whose shipped `screw_thread` config disagrees
+     * with the physical screw response (e.g. FlashForge Adventurer 5M family:
+     * ships CW-M4 but the physical response requires CCW-M4 semantics).
+     *
+     * @return "cw", "ccw", or empty string if not declared (treat as "cw")
+     */
+    static std::string screws_tilt_direction_override();
 };

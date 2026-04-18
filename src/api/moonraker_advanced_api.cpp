@@ -10,6 +10,7 @@
 #include "bed_mesh_probe_parser.h"
 #include "json_utils.h"
 #include "moonraker_api.h"
+#include "printer_detector.h"
 #include "shaper_csv_parser.h"
 #include "spdlog/spdlog.h"
 
@@ -865,6 +866,19 @@ class ScrewsTiltCollector : public std::enable_shared_from_this<ScrewsTiltCollec
                 while (!result.adjustment.empty() &&
                        std::isspace(static_cast<unsigned char>(result.adjustment.back()))) {
                     result.adjustment.pop_back();
+                }
+
+                // The printer database may declare the correct physical
+                // tightening direction via `"screws_tilt_direction": "cw"` or
+                // `"ccw"`. When set to "ccw", it disagrees with Klipper's
+                // default CW-M* semantics, so flip CW↔CCW here to match
+                // the printer's physical reality. Used for vendors whose
+                // shipped screw_thread config disagrees with the actual
+                // screw response (e.g. FlashForge Adventurer 5M family).
+                // Raw Klipper output still appears in the klippy log; only
+                // the stored/display string is corrected.
+                if (PrinterDetector::screws_tilt_direction_override() == "ccw") {
+                    flip_screws_tilt_direction(result.adjustment);
                 }
             }
         }

@@ -26,6 +26,7 @@
       "preset": "ad5m",
       "print_start_profile": "ad5m",
       "probe_type": "loadcell",
+      "screws_tilt_direction": "ccw",
       "heuristics": [
         {
           "type": "macro_exclude",
@@ -99,6 +100,7 @@
       "print_start_profile": "forge_x",
       "probe_type": "loadcell",
       "z_offset_calibration_strategy": "firmware_managed",
+      "screws_tilt_direction": "ccw",
       "heuristics": [
         {
           "type": "macro_match",
@@ -185,6 +187,7 @@
       "preset": "ad5m_pro",
       "print_start_profile": "ad5m",
       "probe_type": "loadcell",
+      "screws_tilt_direction": "ccw",
       "heuristics": [
         {
           "type": "macro_exclude",
@@ -279,6 +282,7 @@
       "print_start_profile": "forge_x",
       "probe_type": "loadcell",
       "z_offset_calibration_strategy": "firmware_managed",
+      "screws_tilt_direction": "ccw",
       "heuristics": [
         {
           "type": "led_match",
@@ -1645,6 +1649,9 @@
       "name": "Elegoo Centauri Carbon",
       "manufacturer": "Elegoo",
       "image": "elegoo-centauri-carbon.png",
+      "calibration": {
+        "bed_mesh_gcode": "LOAD_CELL_SAVE_TARE\nG4 P2000\nBED_MESH_CALIBRATE_WITH_WIPE\nBED_MESH_PROFILE SAVE={profile}"
+      },
       "heuristics": [
         {
           "type": "kinematics_match",

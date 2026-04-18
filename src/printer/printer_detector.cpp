@@ -1326,6 +1326,44 @@ std::string PrinterDetector::get_probe_type(const std::string& printer_name) {
     return "";
 }
 
+std::string PrinterDetector::get_bed_mesh_calibrate_gcode(const std::string& printer_name) {
+    if (!g_database.load()) {
+        return "";
+    }
+
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return "";
+    }
+
+    std::string name_lower = printer_name;
+    std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    for (const auto& printer : g_database.data["printers"]) {
+        std::string db_name = printer.value("name", "");
+        std::string db_name_lower = db_name;
+        std::transform(db_name_lower.begin(), db_name_lower.end(), db_name_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (db_name_lower != name_lower) {
+            continue;
+        }
+
+        if (!printer.contains("calibration") || !printer["calibration"].is_object()) {
+            return "";
+        }
+        const auto& cal = printer["calibration"];
+        std::string gcode = cal.value("bed_mesh_gcode", "");
+        if (!gcode.empty()) {
+            spdlog::debug("[PrinterDetector] Found bed_mesh_gcode override for printer '{}'",
+                          printer_name);
+        }
+        return gcode;
+    }
+
+    return "";
+}
+
 // ============================================================================
 // Print Start Profile Lookup
 // ============================================================================
@@ -1585,4 +1623,44 @@ bool PrinterDetector::is_creality_k1() {
 
 bool PrinterDetector::is_creality_k2() {
     return printer_type_contains("creality") && printer_type_contains("k2");
+}
+
+std::string PrinterDetector::screws_tilt_direction_override() {
+    Config* config = Config::get_instance();
+    if (!config) {
+        return "";
+    }
+    std::string printer_name =
+        config->get<std::string>(config->df() + helix::wizard::PRINTER_TYPE, "");
+    if (printer_name.empty()) {
+        return "";
+    }
+
+    if (!g_database.load()) {
+        return "";
+    }
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return "";
+    }
+
+    std::string name_lower = printer_name;
+    std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    for (const auto& printer : g_database.data["printers"]) {
+        std::string db_name = printer.value("name", "");
+        std::string db_name_lower = db_name;
+        std::transform(db_name_lower.begin(), db_name_lower.end(), db_name_lower.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        if (db_name_lower == name_lower) {
+            std::string value = printer.value("screws_tilt_direction", "");
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            if (value == "cw" || value == "ccw") {
+                return value;
+            }
+            return "";
+        }
+    }
+    return "";
 }

@@ -314,6 +314,7 @@ The printer database (`config/printer_database.json`) is the source of truth for
 | `z_offset_calibration_strategy` | Z-offset approach (`gcode_offset`, etc.) |
 | `heuristics` | Array of detection rules with confidence scores |
 | `print_start_capabilities` | PRINT_START macro parameters |
+| `screws_tilt_direction` | `"cw"` or `"ccw"` — override for the physical tightening direction of bed screws. Use when the vendor-shipped Klipper `screw_thread` disagrees with the actual screw geometry, causing `SCREWS_TILT_CALCULATE` directions to un-level the bed. When set to `"ccw"` (disagreeing with Klipper's default CW-M\* semantics), HelixScreen flips CW↔CCW in the displayed direction. Omit the field (or set `"cw"`) for printers whose Klipper config matches reality. Known use: FlashForge Adventurer 5M family. |
 
 ### Heuristic Types
 

@@ -3,9 +3,29 @@
 
 #pragma once
 
+#include <cstdio>
 #include <functional>
 #include <string>
 #include <vector>
+
+/// Minutes of arc under which a screw is considered in-spec and shown as level.
+constexpr int SCREW_LEVEL_TOLERANCE_MINUTES = 5;
+
+/**
+ * @brief Flip the leading CW↔CCW direction token in an adjustment string
+ *
+ * Rewrites `"CW 01:15"` → `"CCW 01:15"` and `"CCW 00:30"` → `"CW 00:30"`
+ * in place. No-op if the string doesn't begin with a direction token (e.g.
+ * already stripped, empty, or malformed). Used by the screws-tilt parser
+ * to apply the printer-database `screws_tilt_direction` override.
+ */
+inline void flip_screws_tilt_direction(std::string& adjustment) {
+    if (adjustment.rfind("CCW", 0) == 0) {
+        adjustment.replace(0, 3, "CW");
+    } else if (adjustment.rfind("CW", 0) == 0) {
+        adjustment.replace(0, 2, "CCW");
+    }
+}
 
 /**
  * @file calibration_types.h
@@ -43,6 +63,35 @@ struct ScrewTiltResult {
     }
 
     /**
+     * @brief Parsed arc-minute magnitude of this screw's adjustment
+     *
+     * Parses "CW 01:30" / "CCW 00:15" into total minutes (turns*60 + minutes).
+     * Returns 0 for reference screws or unparseable strings.
+     */
+    [[nodiscard]] int adjustment_minutes() const {
+        if (is_reference || adjustment.empty()) {
+            return 0;
+        }
+        int turns = 0;
+        int minutes = 0;
+        if (std::sscanf(adjustment.c_str(), "%*s %d:%d", &turns, &minutes) == 2) {
+            return turns * 60 + minutes;
+        }
+        return 0;
+    }
+
+    /**
+     * @brief True if this screw is within the level tolerance (≤5 min or base)
+     *
+     * Use this — not `!needs_adjustment()` — when deciding whether to show
+     * a "done" affordance: a screw reporting `CW 00:03` still has a non-empty
+     * adjustment but is effectively level.
+     */
+    [[nodiscard]] bool is_within_tolerance() const {
+        return is_reference || adjustment_minutes() <= SCREW_LEVEL_TOLERANCE_MINUTES;
+    }
+
+    /**
      * @brief Get prettified screw name for display
      *
      * Converts snake_case to Title Case (e.g., "front_left" -> "Front Left")
@@ -68,43 +117,27 @@ struct ScrewTiltResult {
     /**
      * @brief Get user-friendly adjustment description
      *
-     * Converts "CW 00:18" to "Tighten ¼ turn" or "Loosen ½ turn" etc.
-     * Relies on Klipper's screw_thread config being correct — CW=tighten
-     * for CW-M* configs, inverted for CCW-M* configs. If directions seem
-     * wrong, the printer's screw_thread setting needs fixing (e.g.
-     * Flashforge AD5M ships with CW-M4 but should be CCW-M4).
+     * Converts "CW 00:18" to "Tighten 1/4 turn", "CCW 01:30" to "Loosen 1 turn", etc.
+     * Mapping is CW→Tighten, CCW→Loosen. This assumes the adjustment string
+     * already reflects what the user should physically do — printer-specific
+     * corrections (e.g. Flashforge AD5M's inverted SCREWS_TILT output) are
+     * applied at parse time in moonraker_advanced_api.cpp, not here.
      * @return Human-friendly adjustment string
      */
     [[nodiscard]] std::string friendly_adjustment() const {
         if (is_reference) {
-            return "Reference"; // This screw is the baseline - no adjustment needed
+            return "Reference";
         }
-        if (adjustment.empty() || adjustment == "00:00") {
+        if (is_within_tolerance()) {
             return "Level";
         }
 
-        // Parse "CW 00:18" or "CCW 01:30" format
         bool is_clockwise = adjustment.find("CW") == 0 && adjustment.find("CCW") != 0;
         bool is_counter = adjustment.find("CCW") == 0;
+        int total_minutes = adjustment_minutes();
 
-        // Extract minutes from format "XX:MM" (after the space)
-        int total_minutes = 0;
-        size_t space_pos = adjustment.find(' ');
-        if (space_pos != std::string::npos) {
-            std::string time_part = adjustment.substr(space_pos + 1);
-            size_t colon_pos = time_part.find(':');
-            if (colon_pos != std::string::npos) {
-                int turns = std::atoi(time_part.substr(0, colon_pos).c_str());
-                int mins = std::atoi(time_part.substr(colon_pos + 1).c_str());
-                total_minutes = turns * 60 + mins;
-            }
-        }
-
-        // Determine specific magnitude description
         std::string amount;
-        if (total_minutes <= 5) {
-            return "Level"; // Within tolerance
-        } else if (total_minutes <= 10) {
+        if (total_minutes <= 10) {
             amount = "1/8 turn";
         } else if (total_minutes <= 20) {
             amount = "1/4 turn";
@@ -115,18 +148,16 @@ struct ScrewTiltResult {
         } else if (total_minutes <= 70) {
             amount = "1 turn";
         } else {
-            // Multiple turns - show approximate count
             int approx_turns = (total_minutes + 30) / 60;
             amount = std::to_string(approx_turns) + " turn" + (approx_turns > 1 ? "s" : "");
         }
 
-        // CW=Tighten, CCW=Loosen assumes correct Klipper screw_thread config
         if (is_clockwise) {
             return "Tighten " + amount;
         } else if (is_counter) {
             return "Loosen " + amount;
         }
-        return adjustment; // Fallback to raw format
+        return adjustment;
     }
 };
 
