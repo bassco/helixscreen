@@ -588,6 +588,26 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
         result.push_back({def.id, def.default_enabled, {}, -1, -1, def.colspan, def.rowspan});
     }
 
+    bool ams_present = false;
+    {
+        lv_subject_t* ams_subj = lv_xml_get_subject(nullptr, "ams_slot_count");
+        if (ams_subj && lv_subject_get_int(ams_subj) > 0)
+            ams_present = true;
+    }
+
+    // Filament/AMS swap: the AMS widget subsumes the role of the filament sensor
+    // widget on printers with multi-material hardware, so enable one or the other.
+    if (ams_present) {
+        auto fil_it = std::find_if(result.begin(), result.end(),
+                                   [](const PanelWidgetEntry& e) { return e.id == "filament"; });
+        auto ams_it = std::find_if(result.begin(), result.end(),
+                                   [](const PanelWidgetEntry& e) { return e.id == "ams"; });
+        if (fil_it != result.end())
+            fil_it->enabled = false;
+        if (ams_it != result.end())
+            ams_it->enabled = true;
+    }
+
     // Bed temperature: always last, enabled conditionally.
     // Large/xlarge: always enabled. Small/medium: only when no AMS present (no room).
     {
@@ -595,11 +615,6 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
                                [](const PanelWidgetEntry& e) { return e.id == "bed_temperature"; });
         if (it != result.end()) {
             bool is_large = (to_int(breakpoint) >= to_int(UiBreakpoint::Large));
-            bool ams_present = false;
-            lv_subject_t* ams_subj = lv_xml_get_subject(nullptr, "ams_slot_count");
-            if (ams_subj && lv_subject_get_int(ams_subj) > 0)
-                ams_present = true;
-
             it->enabled = is_large || !ams_present;
             // Move to end so it's the last widget placed
             auto entry = std::move(*it);
