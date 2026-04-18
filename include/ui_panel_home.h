@@ -31,6 +31,11 @@ class HomePanel : public PanelBase {
     void init_subjects() override;
     void deinit_subjects();
     void setup(lv_obj_t* panel, lv_obj_t* parent_screen) override;
+    /// Complete the parts of setup that depend on the widget config / AMS
+    /// detection state. Called after the first-run wizard finishes (so Moonraker
+    /// has had a chance to report ams_slot_count), or immediately after setup
+    /// when no wizard will run. Idempotent.
+    void finalize_setup();
     void on_activate() override;
     void on_deactivate() override;
     const char* get_name() const override {
@@ -68,6 +73,7 @@ class HomePanel : public PanelBase {
     SubjectManager subjects_;
     bool populating_widgets_ = false; // Reentrancy guard for populate_widgets()
     bool panel_active_ = false;        // Whether on_activate() has been called
+    bool finalized_ = false;           // Whether finalize_setup() has run
 
     // Cached image path for skipping redundant refresh_printer_image() calls
     std::string last_printer_image_path_;

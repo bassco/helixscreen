@@ -641,7 +641,26 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
         return;
     }
 
-    spdlog::debug("[{}] Setting up...", get_name());
+    // Deliberately minimal: the carousel and widget-config-dependent wiring
+    // are deferred to finalize_setup() so they run after the first-run wizard
+    // completes. On a fresh install the user configures Moonraker inside the
+    // wizard, so AMS (and other hardware) hasn't been detected yet when
+    // panels are first set up — building the default layout now would persist
+    // a non-AMS grid even on AMS-equipped printers.
+    spdlog::debug("[{}] Setup (awaiting finalize)", get_name());
+}
+
+void HomePanel::finalize_setup() {
+    if (finalized_) {
+        return;
+    }
+    if (!panel_) {
+        spdlog::warn("[{}] finalize_setup called before setup", get_name());
+        return;
+    }
+    finalized_ = true;
+
+    spdlog::debug("[{}] Finalizing setup (carousel + widgets)", get_name());
 
     // Build carousel with pages from config
     build_carousel();
@@ -680,7 +699,7 @@ void HomePanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
             nullptr, nullptr);
     });
 
-    spdlog::debug("[{}] Setup complete!", get_name());
+    spdlog::debug("[{}] Finalize complete", get_name());
 }
 
 void HomePanel::on_activate() {

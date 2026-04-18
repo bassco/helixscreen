@@ -584,6 +584,10 @@ int Application::run(int argc, char** argv) {
             m_wizard_previous_printer_id.clear();
         }
         m_wizard_active = false;
+        // The home panel's carousel + default layout were deferred so the
+        // build could see ams_slot_count from Moonraker discovery. Finalize
+        // now that the wizard (and thus the initial connect) is done.
+        get_global_home_panel().finalize_setup();
     });
 
     // Cancel callback registered by add_printer_via_wizard() when recovery state exists.
@@ -628,6 +632,9 @@ int Application::run(int argc, char** argv) {
     // Phase 13: Create overlay panels (if not in wizard)
     if (!m_wizard_active) {
         create_overlays();
+        // No wizard will run — finalize the home panel immediately so its
+        // default layout reflects currently-connected hardware.
+        get_global_home_panel().finalize_setup();
     }
 
     // Phase 14: Initialize and load plugins

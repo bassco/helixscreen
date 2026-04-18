@@ -589,10 +589,16 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
     }
 
     bool ams_present = false;
+    int ams_slot_count = 0;
     {
         lv_subject_t* ams_subj = lv_xml_get_subject(nullptr, "ams_slot_count");
-        if (ams_subj && lv_subject_get_int(ams_subj) > 0)
-            ams_present = true;
+        if (ams_subj) {
+            ams_slot_count = lv_subject_get_int(ams_subj);
+            if (ams_slot_count > 0)
+                ams_present = true;
+        }
+        spdlog::debug("[PanelWidgetConfig] build_default_grid: ams_slot_count={} ({})",
+                      ams_slot_count, ams_present ? "AMS widget" : "filament widget");
     }
 
     // Filament/AMS swap: the AMS widget subsumes the role of the filament sensor
