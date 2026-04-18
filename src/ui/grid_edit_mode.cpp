@@ -407,8 +407,45 @@ void GridEditMode::create_selection_chrome(lv_obj_t* widget) {
     // Trash removal button — positioned on the container (not the overlay) so it
     // isn't clipped by the overlay or widget bounds. Uses FLOATING positioning
     // relative to the container's content area.
-    constexpr int BTN_SIZE = 36;
-    constexpr int BTN_OVERHANG = BTN_SIZE / 4; // 25% shift outside widget bounds
+    // Chrome button size/icon scale responsively — a fixed 36/24 pair dominates
+    // the 480x272 micro viewport.
+    lv_subject_t* chrome_bp_subj = theme_manager_get_breakpoint_subject();
+    const UiBreakpoint chrome_bp = chrome_bp_subj
+                                       ? as_breakpoint(lv_subject_get_int(chrome_bp_subj))
+                                       : UiBreakpoint::Medium;
+    int BTN_SIZE = 36;
+    const lv_font_t* chrome_icon_font = &mdi_icons_24;
+    switch (chrome_bp) {
+    case UiBreakpoint::Micro:
+        BTN_SIZE = 24;
+        chrome_icon_font = &mdi_icons_16;
+        break;
+    case UiBreakpoint::Tiny:
+        BTN_SIZE = 28;
+        chrome_icon_font = &mdi_icons_16;
+        break;
+    case UiBreakpoint::Small:
+        BTN_SIZE = 32;
+        chrome_icon_font = &mdi_icons_24;
+        break;
+    case UiBreakpoint::Medium:
+        BTN_SIZE = 36;
+        chrome_icon_font = &mdi_icons_24;
+        break;
+    case UiBreakpoint::Large:
+        BTN_SIZE = 40;
+        chrome_icon_font = &mdi_icons_24;
+        break;
+    case UiBreakpoint::XLarge:
+        BTN_SIZE = 48;
+        chrome_icon_font = &mdi_icons_32;
+        break;
+    case UiBreakpoint::XXLarge:
+        BTN_SIZE = 56;
+        chrome_icon_font = &mdi_icons_32;
+        break;
+    }
+    const int BTN_OVERHANG = BTN_SIZE / 4; // 25% shift outside widget bounds
     remove_btn_ = lv_obj_create(container_);
     lv_obj_t* x_btn = remove_btn_;
     lv_obj_add_flag(x_btn, LV_OBJ_FLAG_FLOATING);
@@ -426,7 +463,7 @@ void GridEditMode::create_selection_chrome(lv_obj_t* widget) {
     // Trash icon with contrast color for readability on the text-colored bg
     lv_obj_t* x_label = lv_label_create(x_btn);
     lv_label_set_text(x_label, ICON_TRASH);
-    lv_obj_set_style_text_font(x_label, &mdi_icons_24, 0);
+    lv_obj_set_style_text_font(x_label, chrome_icon_font, 0);
     lv_obj_set_style_text_color(x_label, theme_manager_get_contrast_color(btn_bg), 0);
     lv_obj_center(x_label);
 
@@ -460,7 +497,7 @@ void GridEditMode::create_selection_chrome(lv_obj_t* widget) {
 
             lv_obj_t* cfg_label = lv_label_create(cfg_btn);
             lv_label_set_text(cfg_label, ICON_SETTINGS);
-            lv_obj_set_style_text_font(cfg_label, &mdi_icons_24, 0);
+            lv_obj_set_style_text_font(cfg_label, chrome_icon_font, 0);
             lv_obj_set_style_text_color(cfg_label, theme_manager_get_contrast_color(btn_bg), 0);
             lv_obj_center(cfg_label);
 
