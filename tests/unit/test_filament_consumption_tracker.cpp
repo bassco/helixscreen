@@ -241,3 +241,44 @@ TEST_CASE("tracker clamps remaining weight at zero", "[filament][tracker]") {
     tracker.stop();
     ams.clear_external_spool_info();
 }
+
+TEST_CASE("tracker persists final weight on print completion",
+          "[filament][tracker]") {
+    LVGLTestFixture fx;
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& settings = SettingsManager::instance();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+
+    SlotInfo info;
+    info.material = "PLA";
+    info.remaining_weight_g = 1000.0f;
+    info.total_weight_g = 1000.0f;
+    ams.set_external_spool_info(info); // Start by persisting the initial value.
+
+    tracker.start();
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 0);
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::PRINTING));
+    helix::ui::UpdateQueue::instance().drain();
+
+    // Consume 1000 mm of 1.75mm PLA at 1.24 g/cm^3 ≈ 2.982 g.
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 1000);
+    helix::ui::UpdateQueue::instance().drain();
+
+    // Finish the print.
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::COMPLETE));
+    helix::ui::UpdateQueue::instance().drain();
+
+    auto persisted = settings.get_external_spool_info();
+    REQUIRE(persisted.has_value());
+    REQUIRE(persisted->remaining_weight_g == Catch::Approx(997.018f).margin(0.05));
+    REQUIRE_FALSE(tracker.is_active());
+
+    tracker.stop();
+    ams.clear_external_spool_info();
+}

@@ -53,8 +53,18 @@ void FilamentConsumptionTracker::on_print_state_changed(int job_state) {
         case PrintJobState::COMPLETE:
         case PrintJobState::CANCELLED:
         case PrintJobState::ERROR:
-            // Task 6 will add a final persist here.
+            if (active_) {
+                persist();
+                spdlog::info(
+                    "[FilamentTracker] Print ended in state {}; persisted final weight",
+                    job_state);
+            }
             active_ = false;
+            break;
+        case PrintJobState::PAUSED:
+            if (active_) {
+                persist(); // crash-safety snapshot
+            }
             break;
         default:
             break;
@@ -141,7 +151,14 @@ void FilamentConsumptionTracker::snapshot() {
 }
 
 void FilamentConsumptionTracker::persist() {
-    // Implemented in Task 6.
+    auto info_opt = AmsState::instance().get_external_spool_info();
+    if (!info_opt.has_value()) {
+        return;
+    }
+    // Full write updates settings.json via SettingsManager and re-fires the subject.
+    AmsState::instance().set_external_spool_info(*info_opt);
+    last_written_weight_g_ = info_opt->remaining_weight_g;
+    last_persist_tick_ms_ = lv_tick_get();
 }
 
 } // namespace helix
