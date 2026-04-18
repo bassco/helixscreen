@@ -39,6 +39,7 @@
 
 #include "hv/Event.h" // TimerID
 #include "hv/WebSocketClient.h"
+#include "i_moonraker_client.h"
 #include "json_fwd.h"
 #include "moonraker_discovery_sequence.h"
 #include "moonraker_error.h"
@@ -97,7 +98,7 @@ enum class ConnectionState {
  * Delegates request tracking to MoonrakerRequestTracker and discovery to
  * MoonrakerDiscoverySequence.
  */
-class MoonrakerClient : public hv::WebSocketClient {
+class MoonrakerClient : public hv::WebSocketClient, public IMoonrakerClient {
   public:
     MoonrakerClient(hv::EventLoopPtr loop = nullptr);
     ~MoonrakerClient();
@@ -122,8 +123,8 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param on_disconnected Callback invoked when connection closes
      * @return 0 on success, non-zero on error
      */
-    virtual int connect(const char* url, std::function<void()> on_connected,
-                        std::function<void()> on_disconnected);
+    int connect(const char* url, std::function<void()> on_connected,
+                std::function<void()> on_disconnected) override;
 
     /**
      * @brief Disconnect from Moonraker WebSocket server
@@ -135,7 +136,7 @@ class MoonrakerClient : public hv::WebSocketClient {
      * to prevent stale data when reconnecting to a different printer.
      * Safe to call multiple times (idempotent).
      */
-    virtual void disconnect();
+    void disconnect() override;
 
     /**
      * @brief Clear all cached discovery data
@@ -227,7 +228,7 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param method RPC method name (e.g., "printer.info")
      * @return 0 on success, non-zero on error
      */
-    virtual int send_jsonrpc(const std::string& method);
+    int send_jsonrpc(const std::string& method) override;
 
     /**
      * @brief Send JSON-RPC request with parameters
@@ -238,7 +239,7 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param params JSON parameters object
      * @return 0 on success, non-zero on error
      */
-    virtual int send_jsonrpc(const std::string& method, const json& params);
+    int send_jsonrpc(const std::string& method, const json& params) override;
 
     /**
      * @brief Send JSON-RPC request with one-time response callback
@@ -252,8 +253,8 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param cb Callback function receiving response JSON
      * @return Request ID for cancellation, or INVALID_REQUEST_ID on error
      */
-    virtual RequestId send_jsonrpc(const std::string& method, const json& params,
-                                   std::function<void(const json&)> cb);
+    RequestId send_jsonrpc(const std::string& method, const json& params,
+                           std::function<void(const json&)> cb) override;
 
     /**
      * @brief Send JSON-RPC request with success and error callbacks
@@ -268,10 +269,10 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param silent If true, don't emit RPC_ERROR events (for internal probes)
      * @return Request ID for cancellation, or INVALID_REQUEST_ID on error
      */
-    virtual RequestId send_jsonrpc(const std::string& method, const json& params,
-                                   std::function<void(const json&)> success_cb,
-                                   std::function<void(const MoonrakerError&)> error_cb,
-                                   uint32_t timeout_ms = 0, bool silent = false);
+    RequestId send_jsonrpc(const std::string& method, const json& params,
+                           std::function<void(const json&)> success_cb,
+                           std::function<void(const MoonrakerError&)> error_cb,
+                           uint32_t timeout_ms = 0, bool silent = false) override;
 
     /**
      * @brief Cancel a pending JSON-RPC request
@@ -298,7 +299,7 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param gcode G-code string (e.g., "G28", "M104 S210")
      * @return 0 on success, non-zero on error
      */
-    virtual int gcode_script(const std::string& gcode);
+    int gcode_script(const std::string& gcode) override;
 
     /**
      * @brief Fetch G-code command history from Moonraker
@@ -310,9 +311,9 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param on_success Callback with vector of GcodeStoreEntry (oldest first)
      * @param on_error Callback for errors
      */
-    virtual void
+    void
     get_gcode_store(int count, std::function<void(const std::vector<GcodeStoreEntry>&)> on_success,
-                    std::function<void(const MoonrakerError&)> on_error);
+                    std::function<void(const MoonrakerError&)> on_error) override;
 
     // ========== Discovery (delegates to MoonrakerDiscoverySequence) ==========
 
@@ -327,9 +328,9 @@ class MoonrakerClient : public hv::WebSocketClient {
      * @param on_complete Callback invoked when discovery completes successfully
      * @param on_error Optional callback invoked if discovery fails (e.g., Klippy not connected)
      */
-    virtual void
+    void
     discover_printer(std::function<void()> on_complete,
-                     std::function<void(const std::string& reason)> on_error = nullptr);
+                     std::function<void(const std::string& reason)> on_error = nullptr) override;
 
     /**
      * @brief Parse object list from printer.objects.list response
@@ -555,7 +556,7 @@ class MoonrakerClient : public hv::WebSocketClient {
      * This abstraction allows Application to call through the base class
      * without needing to know about or cast to MoonrakerClientMock.
      */
-    virtual void toggle_filament_runout_simulation() {
+    void toggle_filament_runout_simulation() override {
         // No-op in real client - only mock client implements
     }
 
