@@ -622,10 +622,11 @@ void GridEditMode::schedule_deferred_rebuild(std::function<void()> post_rebuild)
     // destroyed before the async call fires (e.g., switch_printer teardown).
     struct Ctx {
         helix::LifetimeToken tok;
+        GridEditMode* self;
         RebuildCallback rebuild;
         std::function<void()> post;
     };
-    auto* ctx = new Ctx{lifetime_.token(), rebuild_cb_, std::move(post_rebuild)};
+    auto* ctx = new Ctx{lifetime_.token(), this, rebuild_cb_, std::move(post_rebuild)};
     lv_async_call(
         [](void* data) {
             auto* c = static_cast<Ctx*>(data);
@@ -634,6 +635,17 @@ void GridEditMode::schedule_deferred_rebuild(std::function<void()> post_rebuild)
                 return;
             }
             c->rebuild();
+            // rebuild_cb_ calls lv_obj_clean(container_), destroying all container
+            // children. If a user tap between schedule and firing re-created chrome
+            // via select_widget(), those chrome objects were just freed — null the
+            // cached pointers so the post callback's select_widget() sees a clean
+            // slate and doesn't run destroy_selection_chrome() on freed memory.
+            c->self->selected_ = nullptr;
+            c->self->selection_overlay_ = nullptr;
+            c->self->remove_btn_ = nullptr;
+            c->self->configure_btn_ = nullptr;
+            c->self->delete_page_btn_ = nullptr;
+            c->self->dots_overlay_ = nullptr;
             lv_indev_t* indev = lv_indev_active();
             if (indev) {
                 lv_indev_reset(indev, nullptr);
