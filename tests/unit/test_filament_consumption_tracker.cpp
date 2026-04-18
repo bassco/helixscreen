@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ams_state.h"
+#include "filament_consumption_tracker.h"
 #include "app_constants.h"
 #include "config.h"
 #include "filament_database.h"
@@ -78,4 +79,9 @@ TEST_CASE("set_external_spool_info_in_memory does not write settings",
 
     ams.clear_external_spool_info();
     std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("FilamentConsumptionTracker singleton exists", "[filament][tracker]") {
+    auto& tracker = FilamentConsumptionTracker::instance();
+    REQUIRE_FALSE(tracker.is_active());
 }
