@@ -1142,9 +1142,10 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     auto grid = PanelWidgetConfig::build_default_grid();
     REQUIRE(grid.size() == default_grid_widget_count());
 
-    // Anchor widgets (printer_image, print_status, tips) get explicit grid positions.
-    // All other widgets get col=-1, row=-1 (auto-place).
-    const std::set<std::string> anchors = {"printer_image", "print_status", "tips"};
+    // Anchor widgets (printer_image, print_status, tips, temperature, bed_temperature)
+    // get explicit grid positions. All other widgets get col=-1, row=-1 (auto-place).
+    const std::set<std::string> anchors = {"printer_image", "print_status", "tips", "temperature",
+                                           "bed_temperature"};
     for (const auto& entry : grid) {
         INFO("Widget " << entry.id << " enabled=" << entry.enabled << " col=" << entry.col
                        << " row=" << entry.row);
@@ -1218,13 +1219,25 @@ TEST_CASE("PanelWidgetConfig: build_default_grid produces correct layout",
     REQUIRE(tips->rowspan == 2);
 
     // Non-anchor enabled widgets should NOT have grid positions (auto-placed at populate time)
-    const std::set<std::string> anchors = {"printer_image", "print_status", "tips"};
+    const std::set<std::string> anchors = {"printer_image", "print_status", "tips", "temperature",
+                                           "bed_temperature"};
     for (const auto& e : entries) {
         if (anchors.count(e.id))
             continue;
         INFO("Widget " << e.id << " at (" << e.col << "," << e.row << ")");
         REQUIRE_FALSE(e.has_grid_position());
     }
+
+    // New temperature anchors: nozzle at (2,2), bed stacked below at (2,3) on tiny.
+    auto* nozzle = find_entry("temperature");
+    REQUIRE(nozzle);
+    REQUIRE(nozzle->enabled);
+    REQUIRE(nozzle->col == 2);
+    REQUIRE(nozzle->row == 2);
+    auto* bed_anchor = find_entry("bed_temperature");
+    REQUIRE(bed_anchor);
+    REQUIRE(bed_anchor->col == 2);
+    REQUIRE(bed_anchor->row == 3);
 
     // Disabled widgets should have no grid position
     for (const auto& e : disabled) {
