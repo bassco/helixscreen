@@ -1,0 +1,16 @@
+// Copyright (C) 2025-2026 356C LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Compile-only drift protection for AmsBackend.
+
+#include "../catch_amalgamated.hpp"
+#include "ams_backend.h"
+
+#ifdef HELIX_ENABLE_MOCKS
+#include "ams_backend_mock.h"
+
+TEST_CASE("AmsBackendMock satisfies AmsBackend interface", "[compile][drift]") {
+    std::unique_ptr<AmsBackend> p = std::make_unique<AmsBackendMock>();
+    REQUIRE(p != nullptr);
+}
+#endif
