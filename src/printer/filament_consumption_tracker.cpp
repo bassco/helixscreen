@@ -3,6 +3,14 @@
 
 #include "filament_consumption_tracker.h"
 
+#include "ams_state.h"
+#include "app_globals.h"
+#include "filament_database.h"
+#include "observer_factory.h"
+#include "printer_state.h"
+
+#include <spdlog/spdlog.h>
+
 namespace helix {
 
 FilamentConsumptionTracker& FilamentConsumptionTracker::instance() {
@@ -11,7 +19,20 @@ FilamentConsumptionTracker& FilamentConsumptionTracker::instance() {
 }
 
 void FilamentConsumptionTracker::start() {
-    // Observer registration lands in Task 4.
+    PrinterState& printer = get_printer_state();
+
+    print_state_obs_ = helix::ui::observe_int_sync<FilamentConsumptionTracker>(
+        printer.get_print_state_enum_subject(), this,
+        [](FilamentConsumptionTracker* self, int state) {
+            self->on_print_state_changed(state);
+        });
+
+    // filament_used observer wired up here for Tasks 5-8; still a stub this task.
+    filament_used_obs_ = helix::ui::observe_int_sync<FilamentConsumptionTracker>(
+        printer.get_print_filament_used_subject(), this,
+        [](FilamentConsumptionTracker* self, int mm) {
+            self->on_filament_used_changed(mm);
+        });
 }
 
 void FilamentConsumptionTracker::stop() {
@@ -20,8 +41,23 @@ void FilamentConsumptionTracker::stop() {
     active_ = false;
 }
 
-void FilamentConsumptionTracker::on_print_state_changed(int /*job_state*/) {
-    // Implemented in Task 4.
+void FilamentConsumptionTracker::on_print_state_changed(int job_state) {
+    auto state = static_cast<PrintJobState>(job_state);
+    switch (state) {
+        case PrintJobState::PRINTING:
+            if (!active_) {
+                snapshot();
+            }
+            break;
+        case PrintJobState::COMPLETE:
+        case PrintJobState::CANCELLED:
+        case PrintJobState::ERROR:
+            // Task 6 will add a final persist here.
+            active_ = false;
+            break;
+        default:
+            break;
+    }
 }
 
 void FilamentConsumptionTracker::on_filament_used_changed(int /*filament_mm*/) {
@@ -29,7 +65,42 @@ void FilamentConsumptionTracker::on_filament_used_changed(int /*filament_mm*/) {
 }
 
 void FilamentConsumptionTracker::snapshot() {
-    // Implemented in Task 4.
+    active_ = false;
+    auto info_opt = AmsState::instance().get_external_spool_info();
+    if (!info_opt.has_value()) {
+        spdlog::debug(
+            "[FilamentTracker] No external spool assigned; consumption tracking disabled");
+        return;
+    }
+    const auto& info = *info_opt;
+    if (info.remaining_weight_g <= 0.0f) {
+        spdlog::debug(
+            "[FilamentTracker] External spool has no known remaining weight; skipping");
+        return;
+    }
+
+    auto material = filament::find_material(info.material);
+    if (!material.has_value() || material->density_g_cm3 <= 0.0f) {
+        spdlog::warn(
+            "[FilamentTracker] Cannot resolve density for material '{}'; "
+            "consumption tracking disabled for this print. Set a known material on the "
+            "external spool to enable tracking.",
+            info.material);
+        return;
+    }
+
+    density_g_cm3_ = material->density_g_cm3;
+    diameter_mm_ = 1.75f;
+    snapshot_mm_ = static_cast<float>(
+        lv_subject_get_int(get_printer_state().get_print_filament_used_subject()));
+    snapshot_weight_g_ = info.remaining_weight_g;
+    last_written_weight_g_ = info.remaining_weight_g;
+    last_persist_tick_ms_ = lv_tick_get();
+    active_ = true;
+    spdlog::info(
+        "[FilamentTracker] Snapshot: material={}, density={} g/cm3, weight={} g, "
+        "filament_used_mm={}",
+        info.material, density_g_cm3_, snapshot_weight_g_, snapshot_mm_);
 }
 
 void FilamentConsumptionTracker::persist() {

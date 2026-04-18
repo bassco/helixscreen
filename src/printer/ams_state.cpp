@@ -2028,16 +2028,22 @@ void AmsState::set_modal_preset(int temp_c, int duration_min) {
 // ============================================================================
 
 std::optional<SlotInfo> AmsState::get_external_spool_info() const {
+    // In-memory override takes priority when set (e.g. live tracker updates).
+    if (in_memory_external_spool_.has_value()) {
+        return in_memory_external_spool_;
+    }
     return helix::SettingsManager::instance().get_external_spool_info();
 }
 
 void AmsState::set_external_spool_info_in_memory(const SlotInfo& info) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    in_memory_external_spool_ = info;
     notify_external_spool_changed(info);
 }
 
 void AmsState::set_external_spool_info(const SlotInfo& info) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    in_memory_external_spool_.reset(); // Persistent write wins; let SettingsManager be the source.
     helix::SettingsManager::instance().set_external_spool_info(info);
     notify_external_spool_changed(info);
 }
@@ -2056,6 +2062,7 @@ void AmsState::notify_external_spool_changed(const SlotInfo& info) {
 
 void AmsState::clear_external_spool_info() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    in_memory_external_spool_.reset();
     helix::SettingsManager::instance().clear_external_spool_info();
     // Force notification even when color was already 0 (e.g. previous spool was
     // black, RGB=0x000000) — observers read full spool info, not just the color.

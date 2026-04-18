@@ -1043,6 +1043,11 @@ class AmsState {
     lv_subject_t tool_map_version_;
     std::vector<int> last_tool_map_; ///< Cached for change detection in sync_from_backend
 
+    /// In-memory override for external spool info. Set by set_external_spool_info_in_memory()
+    /// to allow live tracker updates without touching settings.json. When set, takes priority
+    /// over SettingsManager in get_external_spool_info(). Cleared by clear_external_spool_info().
+    std::optional<SlotInfo> in_memory_external_spool_;
+
     // String subjects (need buffers)
     lv_subject_t ams_action_detail_;
     char action_detail_buf_[64];

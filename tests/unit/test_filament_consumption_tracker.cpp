@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ams_state.h"
+#include "app_globals.h"
 #include "filament_consumption_tracker.h"
 #include "app_constants.h"
 #include "config.h"
 #include "filament_database.h"
+#include "printer_state.h"
 #include "settings_manager.h"
+#include "ui_update_queue.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -84,4 +87,88 @@ TEST_CASE("set_external_spool_info_in_memory does not write settings",
 TEST_CASE("FilamentConsumptionTracker singleton exists", "[filament][tracker]") {
     auto& tracker = FilamentConsumptionTracker::instance();
     REQUIRE_FALSE(tracker.is_active());
+}
+
+TEST_CASE("tracker snapshots on transition to PRINTING with a valid PLA spool",
+          "[filament][tracker]") {
+    LVGLTestFixture fx;
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+
+    SlotInfo info;
+    info.material = "PLA";
+    info.remaining_weight_g = 1000.0f;
+    info.total_weight_g = 1000.0f;
+    ams.set_external_spool_info_in_memory(info);
+
+    tracker.start();
+
+    // Prime: printer starts in STANDBY, filament_used at 0.
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::STANDBY));
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 0);
+    REQUIRE_FALSE(tracker.is_active());
+
+    // Transition to PRINTING: tracker should snapshot and activate.
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::PRINTING));
+
+    // Flush deferred queue so the observer callback runs.
+    helix::ui::UpdateQueue::instance().drain();
+
+    REQUIRE(tracker.is_active());
+
+    tracker.stop();
+    ams.clear_external_spool_info();
+}
+
+TEST_CASE("tracker stays inactive with no external spool",
+          "[filament][tracker]") {
+    LVGLTestFixture fx;
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+
+    ams.clear_external_spool_info();
+    tracker.start();
+
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::PRINTING));
+    helix::ui::UpdateQueue::instance().drain();
+
+    REQUIRE_FALSE(tracker.is_active());
+    tracker.stop();
+}
+
+TEST_CASE("tracker stays inactive when material cannot be resolved",
+          "[filament][tracker]") {
+    LVGLTestFixture fx;
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+
+    SlotInfo info;
+    info.material = "UnknownNovelMaterial9000";
+    info.remaining_weight_g = 1000.0f;
+    info.total_weight_g = 1000.0f;
+    ams.set_external_spool_info_in_memory(info);
+
+    tracker.start();
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(PrintJobState::PRINTING));
+    helix::ui::UpdateQueue::instance().drain();
+
+    REQUIRE_FALSE(tracker.is_active());
+    tracker.stop();
+    ams.clear_external_spool_info();
 }
