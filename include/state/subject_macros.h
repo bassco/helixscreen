@@ -32,6 +32,8 @@
 
 #include "lvgl/lvgl.h"
 
+#include "helix/xml/scoped_subject_registry.h"
+
 /**
  * @brief Initialize an integer subject with optional XML registration
  *
@@ -58,7 +60,7 @@
         lv_subject_init_int(&name##_, (default_val));                                              \
         (subjects).register_subject(&name##_);                                                     \
         if (register_xml) {                                                                        \
-            lv_xml_register_subject(nullptr, #name, &name##_);                                     \
+            helix::xml::register_subject_in_current_scope(#name, &name##_);                        \
         }                                                                                          \
     } while (0)
 
@@ -91,6 +93,6 @@
                                (default_val));                                                     \
         (subjects).register_subject(&name##_);                                                     \
         if (register_xml) {                                                                        \
-            lv_xml_register_subject(nullptr, #name, &name##_);                                     \
+            helix::xml::register_subject_in_current_scope(#name, &name##_);                        \
         }                                                                                          \
     } while (0)
