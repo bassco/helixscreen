@@ -12,6 +12,7 @@
 #include "panel_widget.h"
 #include "panel_widget_config.h"
 #include "panel_widget_registry.h"
+#include "system/crash_handler.h"
 #include "system/telemetry_manager.h"
 #include "theme_manager.h"
 
@@ -812,6 +813,7 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
             subject, this,
             [rebuild_cb, name](PanelWidgetManager* /*self*/, int value) {
                 spdlog::debug("[PanelWidgetManager] gate '{}' -> {} (rebuild)", name, value);
+                crash_handler::breadcrumb::note("gate", name, value);
                 rebuild_cb();
             }));
         spdlog::trace("[PanelWidgetManager] Observing gate subject '{}' for panel '{}'", name,
