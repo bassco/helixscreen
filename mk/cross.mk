@@ -1380,13 +1380,21 @@ help-cross:
 
 # Rsync flags for asset sync: delete stale files, checksum-based skip, exclude junk
 DEPLOY_RSYNC_FLAGS := -avzz --delete --checksum
+# Runtime state files: generated at runtime (crash dumps, telemetry queues, tool
+# mappings). Shipping these from a dev machine to a target overwrites the
+# target's real state with dev-machine state — or worse, leaves a stale
+# crash_report.txt on a healthy device that triggers the "previously crashed"
+# modal on next boot. These are gitignored but gitignore doesn't affect rsync.
+DEPLOY_RUNTIME_EXCLUDES := --exclude='crash_report.txt' --exclude='telemetry_*.json' --exclude='tool_spools.json'
 DEPLOY_ASSET_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='assets/fonts/*.ttf' --exclude='assets/fonts/*.otf' --exclude='assets/fonts/.clang-format' \
-	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
+	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests' \
+	$(DEPLOY_RUNTIME_EXCLUDES)
 # Tar-compatible excludes (same patterns, different syntax)
 DEPLOY_TAR_EXCLUDES := --exclude='test_gcodes' --exclude='gcode' --exclude='.DS_Store' --exclude='*.pyc' --exclude='settings*.json' --exclude='helixconfig*.json' --exclude='helixscreen.env' --exclude='.claude-recall' --exclude='._*' \
 	--exclude='assets/fonts/*.c' --exclude='assets/fonts/*.ttf' --exclude='assets/fonts/*.otf' --exclude='assets/fonts/.clang-format' \
-	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests'
+	--exclude='*.icns' --exclude='mdi-icon-metadata.json.gz' --exclude='moonraker-plugin/tests' \
+	$(DEPLOY_RUNTIME_EXCLUDES)
 # Exclude tracker files (MOD/MED) on platforms without HELIX_HAS_TRACKER
 # rsync syntax:
 DEPLOY_NO_TRACKER := --exclude='*.mod' --exclude='*.med'
@@ -1479,13 +1487,18 @@ deploy-pi:
 	$(call deploy-common,$(PI_SSH_TARGET),$(PI_DEPLOY_DIR),build/pi/bin)
 	@echo "$(GREEN)✓ Deployed to $(PI_HOST):$(PI_DEPLOY_DIR)$(RESET)"
 	@echo "$(CYAN)Restarting helix-screen on $(PI_HOST)...$(RESET)"
-	@# Prefer systemd restart (picks up Environment= vars like HELIX_DISPLAY_BACKEND)
-	@ssh $(PI_SSH_TARGET) "sudo systemctl start helixscreen 2>/dev/null" \
-		|| ssh $(PI_SSH_TARGET) "cd $(PI_DEPLOY_DIR) && setsid ./bin/helix-launcher.sh </dev/null >/dev/null 2>&1 &"
+	@# Prefer systemd restart (picks up Environment= vars and keeps logs in journal).
+	@# Use -n (non-interactive sudo) to fail fast rather than hang on a password prompt.
+	@# Fallback uses ssh -f which forks into background AFTER authentication; without -f,
+	@# ssh keeps the connection open as long as the remote child has stdout attached,
+	@# even with </dev/null >/dev/null and a trailing &, and the make target hangs.
+	@ssh $(PI_SSH_TARGET) "sudo -n systemctl start helixscreen" 2>/dev/null \
+		|| ssh -f $(PI_SSH_TARGET) "cd $(PI_DEPLOY_DIR) && setsid ./bin/helix-launcher.sh </dev/null >/dev/null 2>&1" \
+		|| echo "$(YELLOW)⚠ Failed to restart helix-screen (set up passwordless sudo for systemctl or install the systemd unit)$(RESET)"
 	@# Re-arm update watcher (stopped by deploy-common to prevent double restart)
-	@ssh $(PI_SSH_TARGET) "sudo systemctl start helixscreen-update.path 2>/dev/null" || true
+	@ssh $(PI_SSH_TARGET) "sudo -n systemctl start helixscreen-update.path" 2>/dev/null || true
 	@echo "$(GREEN)✓ helix-screen restarted$(RESET)"
-	@echo "$(DIM)Logs: ssh $(PI_SSH_TARGET) 'journalctl -u helixscreen -f'$(RESET)"
+	@echo "$(DIM)Logs: ssh $(PI_SSH_TARGET) 'sudo journalctl -u helixscreen -f'$(RESET)"
 
 # Deploy and run in foreground with debug logging (for interactive debugging)
 deploy-pi-fg:
