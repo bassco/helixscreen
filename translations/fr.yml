@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Température de la bobine
   Collect logs and system info for support: Collecter les journaux et infos système pour le support
   Collecting data...: Collecte des données...
+  Collecting debug info...: Collecte des infos de débogage...
   Color: Couleur
   Color Mismatch: Couleur incompatible
   Compact: Compact
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Connecté à '
   Connected! Discovering printer...: Connecté ! Découverte de l'imprimante...
   Connected, discovering...: Connecté, découverte...
+  Connecting Camera...: Connexion à la caméra...
   'Connecting to ': 'Connexion à '
   Connecting to %s...: Connexion à %s...
   Connecting to network...: Connexion au réseau...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: Aucun système AMS connecté
   No AMS system connected.: Aucun système AMS connecté.
   No Bluetooth printers found: Aucune imprimante Bluetooth trouvée
+  No Camera: Aucune caméra
   No Filament Detected: Aucun filament détecté
   No History: Pas d'historique
   No LED macros detected on your printer.: Aucune macro LED détectée sur votre imprimante.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: Aucun périphérique USB HID détecté.
   No USB printers found: Aucune imprimante USB trouvée
   No buffer data available: Aucune donnée de tampon disponible
+  No camera — use USB barcode scanner: Aucune caméra — utilisez un scanner de code-barres USB
   No changes selected.\n\nClick Cancel to close.: Aucune modification sélectionnée.\n\nCliquez sur Annuler pour fermer.
   No changes to revert: Aucune modification à annuler
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: Aucun fournisseur trouvé
   No webcam detected.\nA webcam is required for timelapse.: Aucune webcam détectée.\nUne webcam est requise pour le timelapse.
   None: Aucun
+  Not Enough Filament: Filament insuffisant
   Not Now: Pas maintenant
   Not calibrated: Non calibré
   Not configured: Non configuré
@@ -1166,6 +1171,7 @@ translations:
   Paired: Appairé
   Paired successfully: Appairage réussi
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: L'appairage n'a pas abouti — le scanner ne s'est pas associé. Essayez de l'éteindre puis de le rallumer, puis appuyez à nouveau sur Appairer.
   Pairing failed: Échec de l'appairage
   Pairing...: Appairage...
   Paper Test Calibration: Calibration par test papier
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Le plugin ne répond pas après le redémarrage.\nIl peut avoir besoin de plus de temps.
   Plugins: Plugins
   Plugins are discovered on application startup: Les plugins sont découverts au démarrage de l'application
+  Point camera at QR code on spool: Pointez la caméra vers le QR code sur la bobine
   Polymaker: Polymaker
   Poor Accuracy: Faible précision
   Port: Port
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Cela peut prendre jusqu'à 30 secondes
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Ce plugin permet à HelixScreen de contrôler les options de démarrage d'impression comme le maillage du plateau et QGL. Une fois installé, utilisez Configurer PRINT_START ci-dessous pour activer les étapes optionnelles.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Cette impression nécessite environ %.0fg mais il reste environ %.0fg sur la bobine. Démarrer quand même ?
   This tool probes each bed screw and tells you how much to adjust.: Cet outil palpe chaque vis du plateau et vous indique combien ajuster.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Cela appliquera le Z-offset à votre butée et redémarrera Klipper pour enregistrer la configuration. L'imprimante se déconnectera brièvement.

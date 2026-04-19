@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Температура катушки
   Collect logs and system info for support: Собрать логи и информацию о системе для поддержки
   Collecting data...: Сбор данных...
+  Collecting debug info...: Сбор отладочной информации...
   Color: Цвет
   Color Mismatch: Несоответствие цвета
   Compact: Компактный
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Подключен к '
   Connected! Discovering printer...: Подключен! Обнаружение принтера...
   Connected, discovering...: Подключен, обнаружение...
+  Connecting Camera...: Подключение камеры...
   'Connecting to ': 'Подключение к '
   Connecting to %s...: Подключение к %s...
   Connecting to network...: Подключение к сети...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: AMS-система не подключена
   No AMS system connected.: AMS-система не подключена.
   No Bluetooth printers found: Bluetooth-принтеры не найдены
+  No Camera: Нет камеры
   No Filament Detected: Филамент не обнаружен
   No History: Нет истории
   No LED macros detected on your printer.: На вашем принтере не обнаружены LED-макросы.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: USB HID устройства не обнаружены.
   No USB printers found: USB-принтеры не найдены
   No buffer data available: Данные буфера недоступны
+  No camera — use USB barcode scanner: Нет камеры — используйте USB сканер штрих-кодов
   No changes selected.\n\nClick Cancel to close.: Изменения не выбраны.\n\nНажмите «Отмена», чтобы закрыть.
   No changes to revert: Нет изменений для отката
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: Производители не найдены
   No webcam detected.\nA webcam is required for timelapse.: Веб-камера не обнаружена.\nДля таймлапса необходима веб-камера.
   None: Нет
+  Not Enough Filament: Недостаточно филамента
   Not Now: Не сейчас
   Not calibrated: Не откалиброван
   Not configured: Не настроено
@@ -1166,6 +1171,7 @@ translations:
   Paired: Сопряжено
   Paired successfully: Сопряжение выполнено
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: Сопряжение не завершено — сканер не привязан. Попробуйте выключить и снова включить его, затем нажмите «Сопряжение» ещё раз.
   Pairing failed: Ошибка сопряжения
   Pairing...: Сопряжение...
   Paper Test Calibration: Калибровка бумажным тестом
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Плагин не отвечает после перезапуска.\nВозможно, ему нужно больше времени для загрузки.
   Plugins: Плагины
   Plugins are discovered on application startup: Плагины обнаруживаются при запуске приложения
+  Point camera at QR code on spool: Наведите камеру на QR-код на катушке
   Polymaker: Polymaker
   Poor Accuracy: Низкая точность
   Port: Порт
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Это может занять до 30 секунд
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Этот плагин позволяет HelixScreen управлять опциями начала печати, такими как сетка стола и QGL. После установки используйте «Настроить PRINT_START» ниже для включения опциональных шагов.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Для этой печати нужно около %.0fг, но на катушке осталось около %.0fг. Всё равно начать?
   This tool probes each bed screw and tells you how much to adjust.: Этот инструмент проверяет каждый винт стола и показывает, насколько его нужно отрегулировать.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Z-offset будет применён к вашему концевику, и Klipper перезапустится для сохранения конфигурации. Принтер ненадолго отключится.

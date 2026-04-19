@@ -33,7 +33,7 @@ static void camera_widget_init_subjects() {
     }
 
     lv_subject_init_string(&s_camera_status_subject, s_camera_status_buffer, nullptr,
-                           sizeof(s_camera_status_buffer), "No Camera");
+                           sizeof(s_camera_status_buffer), lv_tr("No Camera"));
     lv_xml_register_subject(nullptr, "camera_status_text", &s_camera_status_subject);
     SubjectDebugRegistry::instance().register_subject(
         &s_camera_status_subject, "camera_status_text", LV_SUBJECT_TYPE_STRING, __FILE__, __LINE__);
@@ -117,7 +117,7 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                     if (self->compact_) {
                         // Compact mode: icon only, status text already hidden
                     } else {
-                        self->set_status_text("Connecting Camera...");
+                        self->set_status_text(lv_tr("Connecting Camera..."));
                         if (self->active_) {
                             self->start_stream();
                         }
@@ -130,7 +130,7 @@ void CameraWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
                     // open — the stream must keep running for the fullscreen view.
                     if (!self->active_ && !self->fullscreen_overlay_) {
                         self->stop_stream();
-                        self->set_status_text("No Camera");
+                        self->set_status_text(lv_tr("No Camera"));
                     }
                 }
             });
@@ -298,7 +298,7 @@ void CameraWidget::start_stream() {
     if (target_fps_ <= 0) target_fps_ = 15;
     update_stream_fps();
 
-    set_status_text("Connecting Camera...");
+    set_status_text(lv_tr("Connecting Camera..."));
 
     // Unhide the overlay so the user sees "Connecting Camera..." instead of
     // a bare gray rectangle. The overlay was hidden when the previous stream's

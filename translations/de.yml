@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Spulentemperatur
   Collect logs and system info for support: Protokolle und Systemdaten für Support sammeln
   Collecting data...: Daten werden gesammelt...
+  Collecting debug info...: Debug-Informationen werden gesammelt...
   Color: Farbe
   Color Mismatch: Farbabweichung
   Compact: Kompakt
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Verbunden mit '
   Connected! Discovering printer...: Verbunden! Drucker wird erkannt...
   Connected, discovering...: Verbunden, Erkennung...
+  Connecting Camera...: Kamera wird verbunden...
   'Connecting to ': 'Verbinde mit '
   Connecting to %s...: Verbinde mit %s...
   Connecting to network...: Verbinde mit Netzwerk...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: Kein AMS-System verbunden
   No AMS system connected.: Kein AMS-System verbunden.
   No Bluetooth printers found: Keine Bluetooth-Drucker gefunden
+  No Camera: Keine Kamera
   No Filament Detected: Kein Filament erkannt
   No History: Kein Verlauf
   No LED macros detected on your printer.: Keine LED-Makros auf Ihrem Drucker erkannt.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: Keine USB-HID-Geräte erkannt.
   No USB printers found: Keine USB-Drucker gefunden
   No buffer data available: Keine Pufferdaten verfügbar
+  No camera — use USB barcode scanner: Keine Kamera — USB-Barcode-Scanner verwenden
   No changes selected.\n\nClick Cancel to close.: Keine Änderungen ausgewählt.\n\nKlicken Sie auf Abbrechen, um zu schließen.
   No changes to revert: Keine Änderungen zum Zurücksetzen
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: Keine Hersteller gefunden
   No webcam detected.\nA webcam is required for timelapse.: Keine Webcam erkannt.\nEine Webcam wird für Zeitraffer benötigt.
   None: Keine
+  Not Enough Filament: Nicht genug Filament
   Not Now: Nicht jetzt
   Not calibrated: Nicht kalibriert
   Not configured: Nicht konfiguriert
@@ -1166,6 +1171,7 @@ translations:
   Paired: Gekoppelt
   Paired successfully: Erfolgreich gekoppelt
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: Kopplung nicht abgeschlossen — der Scanner wurde nicht gebunden. Schalten Sie ihn aus und wieder ein, und tippen Sie dann erneut auf Koppeln.
   Pairing failed: Kopplung fehlgeschlagen
   Pairing...: Kopplung...
   Paper Test Calibration: Papiertest-Kalibrierung
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Plugin antwortet nicht nach Neustart.\nBenötigt möglicherweise mehr Ladezeit.
   Plugins: Plugins
   Plugins are discovered on application startup: Plugins werden beim Anwendungsstart erkannt
+  Point camera at QR code on spool: Kamera auf QR-Code an Spule richten
   Polymaker: Polymaker
   Poor Accuracy: Schlechte Genauigkeit
   Port: Port
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Dies kann bis zu 30 Sekunden dauern
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Dieses Plugin ermöglicht HelixScreen die Steuerung von Druckstartoptionen wie Bettnetz und QGL. Nach der Installation verwenden Sie PRINT_START konfigurieren unten, um optionale Schritte zu aktivieren.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Dieser Druck benötigt etwa %.0fg, aber die Spule hat noch etwa %.0fg übrig. Trotzdem starten?
   This tool probes each bed screw and tells you how much to adjust.: Dieses Werkzeug tastet jede Bettschraube ab und zeigt Ihnen, wie viel Sie einstellen müssen.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Dies wendet den Z-offset auf Ihren Endschalter an und startet Klipper neu, um die Konfiguration zu speichern. Der Drucker wird kurz getrennt.

@@ -257,7 +257,7 @@ void QrScannerOverlay::start_scanning() {
     scan_active_ = true;
     last_decoded_id_ = -1;
     lv_subject_set_int(&success_subject_, 0);
-    update_status("Point camera at QR code on spool");
+    update_status(lv_tr("Point camera at QR code on spool"));
 
     // On moving-bed printers, lower the bed to give room for QR scanning
     auto& state = get_printer_state();
@@ -331,7 +331,7 @@ void QrScannerOverlay::start_scanning() {
             spdlog::info("[{}] Snapshot QR scanner started (no stream): {}", get_name(),
                          snapshot_url);
         } else {
-            update_status("No camera \xe2\x80\x94 use USB barcode scanner");
+            update_status(lv_tr("No camera — use USB barcode scanner"));
             spdlog::info("[{}] No webcam URL, USB scanner only", get_name());
         }
     }
@@ -367,7 +367,7 @@ void QrScannerOverlay::start_scanning() {
                 });
             spdlog::info("[{}] Snapshot QR scanner started: {}", get_name(), snapshot_url);
         } else {
-            update_status("No camera \xe2\x80\x94 use USB barcode scanner");
+            update_status(lv_tr("No camera — use USB barcode scanner"));
             spdlog::info("[{}] No webcam URL available, USB scanner only", get_name());
         }
     }

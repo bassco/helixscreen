@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Temperatura de Bobina
   Collect logs and system info for support: Recopilar registros e info del sistema para soporte
   Collecting data...: Recopilando datos...
+  Collecting debug info...: Recopilando información de depuración...
   Color: Color
   Color Mismatch: Color No Coincide
   Compact: Compacto
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Conectado a '
   Connected! Discovering printer...: ¡Conectado! Descubriendo impresora...
   Connected, discovering...: Conectado, descubriendo...
+  Connecting Camera...: Conectando Cámara...
   'Connecting to ': 'Conectando a '
   Connecting to %s...: Conectando a %s...
   Connecting to network...: Conectando a la red...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: Ningún sistema AMS conectado
   No AMS system connected.: No hay sistema AMS conectado.
   No Bluetooth printers found: No se encontraron impresoras Bluetooth
+  No Camera: Sin Cámara
   No Filament Detected: No se Detectó Filamento
   No History: Sin Historial
   No LED macros detected on your printer.: No se detectaron macros de LED en su impresora.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: No se detectaron dispositivos USB HID.
   No USB printers found: No se encontraron impresoras USB
   No buffer data available: Sin datos de búfer disponibles
+  No camera — use USB barcode scanner: Sin cámara — use un escáner de código de barras USB
   No changes selected.\n\nClick Cancel to close.: No se seleccionaron cambios.\n\nHaga clic en Cancelar para cerrar.
   No changes to revert: No hay cambios para revertir
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: No se encontraron proveedores
   No webcam detected.\nA webcam is required for timelapse.: No se detectó webcam.\nSe necesita webcam para timelapse.
   None: Ninguno
+  Not Enough Filament: Filamento Insuficiente
   Not Now: Ahora No
   Not calibrated: No calibrado
   Not configured: No configurado
@@ -1166,6 +1171,7 @@ translations:
   Paired: Emparejado
   Paired successfully: Emparejado exitosamente
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: El emparejamiento no se completó — el escáner no se vinculó. Intente apagarlo y encenderlo, y luego toque Emparejar de nuevo.
   Pairing failed: Error al emparejar
   Pairing...: Emparejando...
   Paper Test Calibration: Calibración con Prueba de Papel
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: El plugin no responde tras reiniciar.\nPuede necesitar más tiempo.
   Plugins: Plugins
   Plugins are discovered on application startup: Los plugins se descubren al iniciar la aplicación
+  Point camera at QR code on spool: Apunte la cámara al código QR de la bobina
   Polymaker: Polymaker
   Poor Accuracy: Precisión Baja
   Port: Puerto
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Esto puede tardar hasta 30 segundos
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Este plugin permite que HelixScreen controle opciones de inicio de impresión como malla de cama y QGL. Una vez instalado, use Configurar PRINT_START abajo para habilitar pasos opcionales.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Esta impresión necesita aproximadamente %.0fg pero la bobina tiene aproximadamente %.0fg restantes. ¿Iniciar de todos modos?
   This tool probes each bed screw and tells you how much to adjust.: Esta herramienta sondea cada tornillo de cama y le indica cuánto ajustar.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Esto aplicará el Z-offset a su endstop y reiniciará Klipper para guardar la configuración. La impresora se desconectará brevemente.

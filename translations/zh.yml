@@ -341,6 +341,7 @@ translations:
   Coil Temperature: 线圈温度
   Collect logs and system info for support: 收集日志和系统信息以供支持
   Collecting data...: 正在收集数据...
+  Collecting debug info...: 正在收集调试信息...
   Color: 颜色
   Color Mismatch: 颜色不匹配
   Compact: 紧凑
@@ -379,6 +380,7 @@ translations:
   'Connected to ': '已连接到 '
   Connected! Discovering printer...: 已连接！正在发现打印机...
   Connected, discovering...: 已连接，正在发现...
+  Connecting Camera...: 正在连接摄像头...
   'Connecting to ': '正在连接 '
   Connecting to %s...: 正在连接 %s...
   Connecting to network...: 正在连接网络...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: 未连接 AMS 系统
   No AMS system connected.: 未连接 AMS 系统。
   No Bluetooth printers found: 未找到蓝牙打印机
+  No Camera: 无摄像头
   No Filament Detected: 未检测到耗材
   No History: 无历史记录
   No LED macros detected on your printer.: 未在打印机上检测到 LED 宏。
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: 未检测到 USB HID 设备。
   No USB printers found: 未找到 USB 打印机
   No buffer data available: 无可用缓冲区数据
+  No camera — use USB barcode scanner: 无摄像头 — 请使用 USB 条码扫描器
   No changes selected.\n\nClick Cancel to close.: 未选择任何更改。\n\n点击取消以关闭。
   No changes to revert: 没有可撤销的更改
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: 未找到供应商
   No webcam detected.\nA webcam is required for timelapse.: 未检测到摄像头。\n延时摄影需要摄像头。
   None: 无
+  Not Enough Filament: 耗材不足
   Not Now: 暂不
   Not calibrated: 未校准
   Not configured: 未配置
@@ -1166,6 +1171,7 @@ translations:
   Paired: 已配对
   Paired successfully: 配对成功
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: 配对未完成 — 扫描器未绑定。请尝试关闭再开启扫描器，然后再次点击 Pair。
   Pairing failed: 配对失败
   Pairing...: 正在配对...
   Paper Test Calibration: 纸张测试校准
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: 重启后插件无响应。\n可能需要更多时间加载。
   Plugins: 插件
   Plugins are discovered on application startup: 插件在应用程序启动时被发现
+  Point camera at QR code on spool: 将摄像头对准料盘上的 QR 码
   Polymaker: Polymaker
   Poor Accuracy: 精度较差
   Port: 端口
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: 这可能需要 30 秒
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : 此插件让 HelixScreen 控制打印启动选项，如热床网格和 QGL。安装后，使用下面的配置 PRINT_START 启用可选步骤。
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: 本次打印需要约 %.0fg，但料盘仅剩约 %.0fg。仍要开始吗？
   This tool probes each bed screw and tells you how much to adjust.: 此工具探测每个热床螺丝并告诉您需要调整多少。
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : 这将把 Z-offset 应用到限位开关并重启 Klipper 以保存配置。打印机将短暂断开连接。

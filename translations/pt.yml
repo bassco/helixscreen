@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Temperatura da Bobina
   Collect logs and system info for support: Coletar logs e informações do sistema para suporte
   Collecting data...: Coletando dados...
+  Collecting debug info...: Coletando informações de depuração...
   Color: Cor
   Color Mismatch: Cor Incompatível
   Compact: Compacto
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Conectado a '
   Connected! Discovering printer...: Conectado! Descobrindo impressora...
   Connected, discovering...: Conectado, descobrindo...
+  Connecting Camera...: Conectando câmera...
   'Connecting to ': 'Conectando a '
   Connecting to %s...: Conectando a %s...
   Connecting to network...: Conectando à rede...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: Nenhum sistema AMS conectado
   No AMS system connected.: Nenhum sistema AMS conectado.
   No Bluetooth printers found: Nenhuma impressora Bluetooth encontrada
+  No Camera: Sem câmera
   No Filament Detected: Filamento Não Detectado
   No History: Sem Histórico
   No LED macros detected on your printer.: Nenhuma macro de LED detectada na sua impressora.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: Nenhum dispositivo USB HID detectado.
   No USB printers found: Nenhuma impressora USB encontrada
   No buffer data available: Nenhum dado de buffer disponível
+  No camera — use USB barcode scanner: Sem câmera — use leitor de código de barras USB
   No changes selected.\n\nClick Cancel to close.: Nenhuma alteração selecionada.\n\nClique em Cancelar para fechar.
   No changes to revert: Nenhuma alteração para reverter
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: Nenhum fornecedor encontrado
   No webcam detected.\nA webcam is required for timelapse.: Nenhuma webcam detectada.\nUma webcam é necessária para timelapse.
   None: Nenhum
+  Not Enough Filament: Filamento Insuficiente
   Not Now: Agora Não
   Not calibrated: Não calibrado
   Not configured: Não configurado
@@ -1166,6 +1171,7 @@ translations:
   Paired: Emparelhado
   Paired successfully: Pareado com sucesso
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: O emparelhamento não foi concluído — o scanner não se vinculou. Tente desligá-lo e ligá-lo novamente, depois toque em Pair novamente.
   Pairing failed: Falha ao parear
   Pairing...: Pareando...
   Paper Test Calibration: Calibração por Teste de Papel
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Plugin não responde após reinício.\nPode precisar de mais tempo para carregar.
   Plugins: Plugins
   Plugins are discovered on application startup: Plugins são descobertos na inicialização do aplicativo
+  Point camera at QR code on spool: Aponte a câmera para o código QR no carretel
   Polymaker: Polymaker
   Poor Accuracy: Precisão Baixa
   Port: Porta
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Isso pode levar até 30 segundos
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Este plugin permite que o HelixScreen controle opções de início de impressão como malha da mesa e QGL. Após instalado, use Configurar PRINT_START abaixo para habilitar etapas opcionais.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Esta impressão precisa de cerca de %.0fg, mas o carretel tem cerca de %.0fg restantes. Iniciar mesmo assim?
   This tool probes each bed screw and tells you how much to adjust.: Esta ferramenta sonda cada parafuso da mesa e informa quanto ajustar.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Isso aplicará o Z-offset ao seu endstop e reiniciará o Klipper para salvar a configuração. A impressora será brevemente desconectada.

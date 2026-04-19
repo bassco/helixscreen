@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Temperatura bobina
   Collect logs and system info for support: Raccogli log e info di sistema per il supporto
   Collecting data...: Raccolta dati...
+  Collecting debug info...: Raccolta info di debug...
   Color: Colore
   Color Mismatch: Colore non corrispondente
   Compact: Compatto
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Connesso a '
   Connected! Discovering printer...: Connesso! Rilevamento stampante...
   Connected, discovering...: Connesso, rilevamento...
+  Connecting Camera...: Connessione telecamera...
   'Connecting to ': 'Connessione a '
   Connecting to %s...: Connessione a %s...
   Connecting to network...: Connessione alla rete...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: Nessun sistema AMS connesso
   No AMS system connected.: Nessun sistema AMS connesso.
   No Bluetooth printers found: Nessuna stampante Bluetooth trovata
+  No Camera: Nessuna telecamera
   No Filament Detected: Nessun filamento rilevato
   No History: Nessuna cronologia
   No LED macros detected on your printer.: Nessuna macro LED rilevata sulla stampante.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: Nessun dispositivo USB HID rilevato.
   No USB printers found: Nessuna stampante USB trovata
   No buffer data available: Nessun dato buffer disponibile
+  No camera — use USB barcode scanner: Nessuna telecamera — usa scanner USB per codici a barre
   No changes selected.\n\nClick Cancel to close.: Nessuna modifica selezionata.\n\nClicca Annulla per chiudere.
   No changes to revert: Nessuna modifica da annullare
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: Nessun fornitore trovato
   No webcam detected.\nA webcam is required for timelapse.: Nessuna webcam rilevata.\nUna webcam è necessaria per il timelapse.
   None: Nessuno
+  Not Enough Filament: Filamento insufficiente
   Not Now: Non ora
   Not calibrated: Non calibrato
   Not configured: Non configurato
@@ -1166,6 +1171,7 @@ translations:
   Paired: Accoppiato
   Paired successfully: Associazione riuscita
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: 'Associazione non completata — lo scanner non si è agganciato. Prova a spegnerlo e riaccenderlo, poi tocca di nuovo Associa.'
   Pairing failed: Associazione fallita
   Pairing...: Associazione...
   Paper Test Calibration: Calibrazione test carta
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Plugin non risponde dopo il riavvio.\nPotrebbe necessitare più tempo per il caricamento.
   Plugins: Plugin
   Plugins are discovered on application startup: I plugin vengono rilevati all'avvio dell'applicazione
+  Point camera at QR code on spool: Punta la telecamera sul codice QR della bobina
   Polymaker: Polymaker
   Poor Accuracy: Precisione scarsa
   Port: Porta
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: Questo potrebbe richiedere fino a 30 secondi
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : Questo plugin permette a HelixScreen di controllare opzioni avvio stampa come mesh piano e QGL. Una volta installato, usa Configura PRINT_START sotto per abilitare i passaggi opzionali.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: Questa stampa richiede circa %.0fg ma la bobina ne ha circa %.0fg rimanenti. Avviare comunque?
   This tool probes each bed screw and tells you how much to adjust.: Questo strumento sonda ogni vite del piano e indica quanto regolare.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Questo applicherà lo Z-offset al tuo endstop e riavvierà Klipper per salvare la configurazione. La stampante si disconnetterà brevemente.

@@ -45,7 +45,7 @@ static void print_stats_init_subjects() {
     lv_subject_init_int(&s_show_title, 1);
     lv_subject_init_int(&s_view_mode, 0);
     lv_subject_init_string(&s_title, s_title_buf, nullptr, sizeof(s_title_buf),
-                           "Lifetime Print Stats");
+                           lv_tr("Lifetime Print Stats"));
     lv_subject_init_string(&s_total_prints, s_total_prints_buf, nullptr, sizeof(s_total_prints_buf),
                            "--");
     lv_subject_init_string(&s_total_time, s_total_time_buf, nullptr, sizeof(s_total_time_buf),

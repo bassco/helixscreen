@@ -341,6 +341,7 @@ translations:
   Coil Temperature: Coil Temperature
   Collect logs and system info for support: Collect logs and system info for support
   Collecting data...: Collecting data...
+  Collecting debug info...: Collecting debug info...
   Color: Color
   Color Mismatch: Color Mismatch
   Compact: Compact
@@ -379,6 +380,7 @@ translations:
   'Connected to ': 'Connected to '
   Connected! Discovering printer...: Connected! Discovering printer...
   Connected, discovering...: Connected, discovering...
+  Connecting Camera...: Connecting Camera...
   'Connecting to ': 'Connecting to '
   Connecting to %s...: Connecting to %s...
   Connecting to network...: Connecting to network...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: No AMS system connected
   No AMS system connected.: No AMS system connected.
   No Bluetooth printers found: No Bluetooth printers found
+  No Camera: No Camera
   No Filament Detected: No Filament Detected
   No History: No History
   No LED macros detected on your printer.: No LED macros detected on your printer.
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: No USB HID devices detected.
   No USB printers found: No USB printers found
   No buffer data available: No buffer data available
+  No camera — use USB barcode scanner: No camera — use USB barcode scanner
   No changes selected.\n\nClick Cancel to close.: No changes selected.\n\nClick Cancel to close.
   No changes to revert: No changes to revert
   No devices detected.: No devices detected.
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: No vendors found
   No webcam detected.\nA webcam is required for timelapse.: No webcam detected.\nA webcam is required for timelapse.
   None: None
+  Not Enough Filament: Not Enough Filament
   Not Now: Not Now
   Not calibrated: Not calibrated
   Not configured: Not configured
@@ -1166,6 +1171,7 @@ translations:
   Paired: Paired
   Paired successfully: Paired successfully
   'Paired, but scanner is not usable. BlueZ refused the HID ': 'Paired, but scanner is not usable. BlueZ refused the HID '
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.
   Pairing failed: Pairing failed
   Pairing...: Pairing...
   Paper Test Calibration: Paper Test Calibration
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: Plugin not responding after restart.\nIt may need more time to load.
   Plugins: Plugins
   Plugins are discovered on application startup: Plugins are discovered on application startup
+  Point camera at QR code on spool: Point camera at QR code on spool
   Polymaker: Polymaker
   Poor Accuracy: Poor Accuracy
   Port: Port
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: This may take up to 30 seconds
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?
   This tool probes each bed screw and tells you how much to adjust.: This tool probes each bed screw and tells you how much to adjust.
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.

@@ -341,6 +341,7 @@ translations:
   Coil Temperature: コイル温度
   Collect logs and system info for support: サポート用にログとシステム情報を収集
   Collecting data...: データを収集中...
+  Collecting debug info...: デバッグ情報を収集中...
   Color: 色
   Color Mismatch: 色の不一致
   Compact: コンパクト
@@ -379,6 +380,7 @@ translations:
   'Connected to ': '接続先: '
   Connected! Discovering printer...: 接続完了！プリンターを検出中...
   Connected, discovering...: 接続済み、検出中...
+  Connecting Camera...: カメラに接続中...
   'Connecting to ': '接続中: '
   Connecting to %s...: '%sに接続中...'
   Connecting to network...: ネットワークに接続中...
@@ -1039,6 +1041,7 @@ translations:
   No AMS system connected: AMSシステム未接続
   No AMS system connected.: AMS システムが接続されていません。
   No Bluetooth printers found: Bluetooth プリンターが見つかりません
+  No Camera: カメラなし
   No Filament Detected: フィラメント未検出
   No History: 履歴なし
   No LED macros detected on your printer.: プリンターで LED マクロが検出されませんでした。
@@ -1051,6 +1054,7 @@ translations:
   No USB HID devices detected.: USB HIDデバイスが検出されませんでした。
   No USB printers found: USBプリンターが見つかりません
   No buffer data available: バッファーデータがありません
+  No camera — use USB barcode scanner: カメラなし — USB バーコードスキャナーを使用してください
   No changes selected.\n\nClick Cancel to close.: 変更が選択されていません。\n\n「キャンセル」をクリックして閉じてください。
   No changes to revert: 元に戻す変更はありません
   No devices detected.: ''
@@ -1092,6 +1096,7 @@ translations:
   No vendors found: ベンダーが見つかりません
   No webcam detected.\nA webcam is required for timelapse.: ウェブカメラが検出されませんでした。\nタイムラプスにはウェブカメラが必要です。
   None: なし
+  Not Enough Filament: フィラメントが不足しています
   Not Now: 今はしない
   Not calibrated: キャリブレーション未実施
   Not configured: 未設定
@@ -1166,6 +1171,7 @@ translations:
   Paired: ペアリング済み
   Paired successfully: ペアリング成功
   'Paired, but scanner is not usable. BlueZ refused the HID ': ''
+  Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: ペアリングが完了しませんでした — スキャナーがボンディングされませんでした。スキャナーの電源を入れ直してから、もう一度 Pair をタップしてください。
   Pairing failed: ペアリング失敗
   Pairing...: ペアリング中...
   Paper Test Calibration: 紙テストキャリブレーション
@@ -1214,6 +1220,7 @@ translations:
   Plugin not responding after restart.\nIt may need more time to load.: 再起動後にプラグインが応答しません。\n読み込みに時間がかかる場合があります。
   Plugins: プラグイン
   Plugins are discovered on application startup: プラグインはアプリケーション起動時に検出されます
+  Point camera at QR code on spool: スプールの QR コードにカメラを向けてください
   Polymaker: Polymaker
   Poor Accuracy: 精度不良
   Port: ポート
@@ -1706,6 +1713,7 @@ translations:
   This may take up to 30 seconds: 最大30秒かかる場合があります
   ? This plugin lets HelixScreen control print start options like bed mesh and QGL. Once installed, use Configure PRINT_START below to enable optional steps.
   : このプラグインにより、HelixScreen がベッドメッシュや QGL などの印刷開始オプションを制御できます。インストール後、以下の「PRINT_START を設定」を使用してオプションの手順を有効にしてください。
+  This print needs about %.0fg but the spool has about %.0fg remaining. Start anyway?: この印刷には約 %.0fg 必要ですが、スプールの残量は約 %.0fg です。それでも開始しますか？
   This tool probes each bed screw and tells you how much to adjust.: このツールは各ベッドネジをプローブし、どのくらい調整が必要かを教えます。
   ? This will apply the Z-offset to your endstop and restart Klipper to save the configuration. The printer will briefly disconnect.
   : Z-offset をエンドストップに適用し、設定を保存するために Klipper を再起動します。プリンターは一時的に切断されます。
