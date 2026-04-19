@@ -200,8 +200,12 @@ class CrashReporter {
      * @brief Read the last N lines from the log file
      * @param num_lines Number of lines to read from end of file
      * @return Last N lines as a string, empty if log not found
+     *
+     * @note The caller typically requests a generous buffer (e.g., 500) so the
+     *       report can filter out post-crash lines written by the reporting
+     *       session and still retain pre-crash context (see crash report #827).
      */
-    std::string get_log_tail(int num_lines = 50);
+    std::string get_log_tail(int num_lines = 500);
 
     /// Worker endpoint for auto-send
     static constexpr const char* CRASH_WORKER_URL = "https://crash.helixscreen.org/v1/report";

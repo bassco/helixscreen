@@ -144,7 +144,7 @@ Data collected at startup:
 | `platform` | `UpdateChecker::get_platform_key()` | `"pi4"` |
 | `ram_total_mb` | `PlatformCapabilities::detect()` | `4096` |
 | `cpu_cores` | `PlatformCapabilities::detect()` | `4` |
-| `log_tail` | Last 50 lines of log file | `"[2026-02-12 ...] ..."` |
+| `log_tail` | Pre-crash log lines (up to ~500; post-crash lines filtered out) | `"[2026-02-12 ...] ..."` |
 | `printer_model` | Empty (Moonraker not connected yet) | `""` |
 | `klipper_version` | Empty (Moonraker not connected yet) | `""` |
 | `display_info` | Empty (populated later if needed) | `""` |

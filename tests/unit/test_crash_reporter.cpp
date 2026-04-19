@@ -226,6 +226,56 @@ TEST_CASE_METHOD(CrashReporterTestFixture,
 // contract lives in test_log_collector.cpp; this layer can't meaningfully
 // assert empty when syslog/journal are real system sources.
 
+// Crash report #827: the new session that reports a crash writes its own boot
+// lines to syslog/journal before collecting the log tail. A small tail (50
+// lines) ended up showing only post-crash startup noise, with the pre-crash
+// context pushed off the top. The fix: collect a larger buffer and filter
+// lines whose timestamp is after the crash time. These tests pin the
+// filter's contract — pre-crash kept, post-crash dropped, unparseable kept.
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: collect_report filters post-crash lines from log tail",
+                 "[crash_reporter][log_tail]") {
+    // Crash file uses unix epoch 1707350400 → ISO 2024-02-08T00:00:00Z
+    write_crash_file();
+    // File-log format: "[YYYY-MM-DD HH:MM:SS..." — parsed via mktime (local time)
+    // but 2020 vs 2030 is unambiguous regardless of timezone.
+    std::string content;
+    content += "[2020-01-01 00:00:00.000] [info] pre_crash_early\n";
+    content += "[2024-02-07 12:00:00.000] [info] pre_crash_recent\n";
+    content += "a log line without any parseable timestamp\n";
+    content += "[2030-12-31 00:00:00.000] [info] post_crash_noise\n";
+    content += "[2030-12-31 00:00:01.000] [info] post_crash_more_noise\n";
+    write_log_file(content);
+
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+
+    REQUIRE(report.log_tail.find("pre_crash_early") != std::string::npos);
+    REQUIRE(report.log_tail.find("pre_crash_recent") != std::string::npos);
+    REQUIRE(report.log_tail.find("without any parseable timestamp") != std::string::npos);
+    REQUIRE(report.log_tail.find("post_crash_noise") == std::string::npos);
+    REQUIRE(report.log_tail.find("post_crash_more_noise") == std::string::npos);
+}
+
+TEST_CASE_METHOD(CrashReporterTestFixture,
+                 "CrashReporter: collect_report keeps full tail when filter would drop everything",
+                 "[crash_reporter][log_tail]") {
+    // Crash time is 2024-02-08, but all log lines are stamped AFTER. Rather
+    // than return empty, the collector falls back to the unfiltered tail so
+    // triage always sees something.
+    write_crash_file();
+    std::string content;
+    content += "[2030-12-31 00:00:00.000] [info] only_post_crash_1\n";
+    content += "[2030-12-31 00:00:01.000] [info] only_post_crash_2\n";
+    write_log_file(content);
+
+    auto& cr = CrashReporter::instance();
+    auto report = cr.collect_report();
+
+    REQUIRE(report.log_tail.find("only_post_crash_1") != std::string::npos);
+    REQUIRE(report.log_tail.find("only_post_crash_2") != std::string::npos);
+}
+
 // ============================================================================
 // Report Formatting [crash_reporter]
 // ============================================================================

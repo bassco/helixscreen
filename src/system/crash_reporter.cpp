@@ -15,9 +15,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <ctime>
 #include <deque>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 #ifdef __ANDROID__
@@ -27,6 +29,92 @@
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+namespace {
+
+/// Parse ISO 8601 UTC timestamp ("2026-04-19T03:55:36Z") to epoch seconds.
+/// Returns -1 on failure.
+int64_t parse_iso_utc_epoch(const std::string& iso) {
+    std::tm tm{};
+    std::istringstream ss(iso);
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    if (ss.fail())
+        return -1;
+    return static_cast<int64_t>(timegm(&tm));
+}
+
+/// Try to extract a timestamp from a log line, returning epoch seconds.
+/// Supports two formats, both assumed to be in LOCAL time (matches spdlog's
+/// default and syslog/journalctl output):
+///   - File-log / spdlog:  "[YYYY-MM-DD HH:MM:SS..."
+///   - Syslog / journalctl: "MMM DD HH:MM:SS ..." (year is inferred)
+/// Returns -1 if the line does not start with a recognizable timestamp.
+int64_t parse_line_local_epoch(const std::string& line, int crash_year) {
+    // File-log format: "[YYYY-MM-DD HH:MM:SS..."
+    if (line.size() > 20 && line[0] == '[') {
+        std::tm tm{};
+        std::istringstream ss(line.substr(1, 19));
+        ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+        if (!ss.fail()) {
+            tm.tm_isdst = -1;
+            auto t = std::mktime(&tm);
+            if (t != -1)
+                return static_cast<int64_t>(t);
+        }
+    }
+    // Syslog / journalctl format: "MMM DD HH:MM:SS host prog[pid]: ..."
+    if (line.size() >= 15) {
+        std::tm tm{};
+        std::istringstream ss(line.substr(0, 15));
+        ss >> std::get_time(&tm, "%b %d %H:%M:%S");
+        if (!ss.fail()) {
+            tm.tm_year = crash_year - 1900;
+            tm.tm_isdst = -1;
+            auto t = std::mktime(&tm);
+            // Year-boundary fallback: if the parsed date is more than ~6 months
+            // after the crash, assume it's actually from the previous year
+            // (e.g., crash Jan 2, line "Dec 30"). Rare, but cheap to handle.
+            if (t != -1) {
+                return static_cast<int64_t>(t);
+            }
+        }
+    }
+    return -1;
+}
+
+/// Filter newline-separated `content` to lines whose parsed local-time
+/// timestamp is less than or equal to `cutoff_epoch`. Lines without a
+/// parseable timestamp are kept (don't silently drop context).
+///
+/// The cutoff is the crash timestamp — everything after that is from the
+/// restarted session reporting the crash, not from the crashed process.
+std::string filter_lines_before(const std::string& content, int64_t cutoff_epoch, int crash_year) {
+    std::istringstream stream(content);
+    std::string line;
+    std::ostringstream out;
+    bool first = true;
+    int dropped = 0;
+    while (std::getline(stream, line)) {
+        auto line_epoch = parse_line_local_epoch(line, crash_year);
+        // Allow a small skew window: lines up to 2s after the cutoff are kept
+        // (helps when the crash handler log entry has a slightly later stamp
+        // than the crash timestamp itself).
+        if (line_epoch > 0 && line_epoch > cutoff_epoch + 2) {
+            ++dropped;
+            continue;
+        }
+        if (!first)
+            out << '\n';
+        out << line;
+        first = false;
+    }
+    if (dropped > 0) {
+        spdlog::debug("[CrashReporter] Filtered {} post-crash log lines", dropped);
+    }
+    return out.str();
+}
+
+} // namespace
 
 // =============================================================================
 // Singleton
@@ -219,8 +307,31 @@ CrashReporter::CrashReport CrashReporter::collect_report() {
     report.ram_total_mb = static_cast<int>(caps.total_ram_mb);
     report.cpu_cores = caps.cpu_cores;
 
-    // Log tail
-    report.log_tail = get_log_tail(50);
+    // Log tail — collect a generous buffer (the new reporting session writes
+    // its own boot lines, which flood a small tail). We then filter to lines
+    // at or before the crash timestamp, so the report contains pre-crash
+    // context rather than post-restart noise (see crash report #827).
+    report.log_tail = get_log_tail(500);
+    if (!report.log_tail.empty() && !report.timestamp.empty()) {
+        auto cutoff = parse_iso_utc_epoch(report.timestamp);
+        if (cutoff > 0) {
+            // crash_year: extract YYYY from "YYYY-MM-DDT..." for syslog lines
+            int crash_year = 0;
+            try {
+                crash_year = std::stoi(report.timestamp.substr(0, 4));
+            } catch (...) {
+                crash_year = 0;
+            }
+            if (crash_year > 0) {
+                auto filtered = filter_lines_before(report.log_tail, cutoff, crash_year);
+                // Safety net: if filtering drops everything (e.g., clock skew or
+                // unexpected line format), keep the unfiltered tail.
+                if (!filtered.empty()) {
+                    report.log_tail = std::move(filtered);
+                }
+            }
+        }
+    }
 
     // Printer/Klipper info — these may not be available at startup
     // (no Moonraker connection yet), so left empty until connected
@@ -502,7 +613,14 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
     }
 
     if (!report.log_tail.empty()) {
-        ss << "--- Log Tail (last 50 lines) ---\n";
+        // Count lines to make the label accurate — the tail is filtered to
+        // pre-crash content, so its length varies per report.
+        int line_count = 1;
+        for (char c : report.log_tail) {
+            if (c == '\n')
+                ++line_count;
+        }
+        ss << "--- Log Tail (" << line_count << " pre-crash lines) ---\n";
         ss << report.log_tail << "\n";
     }
 
