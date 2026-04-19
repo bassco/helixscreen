@@ -321,9 +321,9 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     // Find temp graph for dynamic sizing when bottom card changes
     temp_graph_card_ = lv_obj_find_by_name(panel_, "temp_graph_card");
 
-    // Find multi-filament card widgets
-    ams_status_card_ = lv_obj_find_by_name(panel_, "ams_status_card");
-    ams_card_header_row_ = lv_obj_find_by_name(panel_, "ams_card_header_row");
+    // Find spool card widgets (serves both Multi-Filament and External Spool modes)
+    spool_card_ = lv_obj_find_by_name(panel_, "spool_card");
+    spool_card_header_row_ = lv_obj_find_by_name(panel_, "spool_card_header_row");
     extruder_selector_group_ = lv_obj_find_by_name(panel_, "extruder_selector_group");
     extruder_dropdown_ = lv_obj_find_by_name(panel_, "extruder_dropdown");
     btn_manage_slots_ = lv_obj_find_by_name(panel_, "btn_manage_slots");
@@ -359,26 +359,14 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                                             self->update_multi_filament_card_visibility();
                                         });
 
-    // Subscribe to AMS type to adjust graph sizing and card visibility
+    // Subscribe to AMS type to update card row visibility. Graph sizing is
+    // driven entirely by the XML responsive constant #filament_graph_h — do
+    // NOT override height/flex_grow here (it was fighting the XML layout and
+    // causing the graph to overflow on MICRO).
     ams_type_observer_ = observe_int_sync<FilamentPanel>(
-        AmsState::instance().get_ams_type_subject(), this, [](FilamentPanel* self, int ams_type) {
-            bool has_ams = (ams_type != 0);
-            bool multi_tool = helix::ToolState::instance().is_multi_tool();
-            bool card_has_ams_row = has_ams || multi_tool;
-
-            // Adjust temp graph sizing based on whether bottom card shows the taller AMS row
-            if (self->temp_graph_card_) {
-                if (card_has_ams_row) {
-                    // AMS/multi-tool row is taller: standard 120px graph
-                    lv_obj_set_height(self->temp_graph_card_, 120);
-                    lv_obj_set_flex_grow(self->temp_graph_card_, 0);
-                } else {
-                    // External spool row is compact: expand graph to fill space
-                    lv_obj_set_flex_grow(self->temp_graph_card_, 1);
-                }
-            }
-
-            // Update card row visibility (AMS state changed)
+        AmsState::instance().get_ams_type_subject(),
+        this,
+        [](FilamentPanel* self, int /*ams_type*/) {
             self->update_multi_filament_card_visibility();
         });
 
@@ -1155,14 +1143,14 @@ void FilamentPanel::execute_retract() {
 // ============================================================================
 
 void FilamentPanel::update_multi_filament_card_visibility() {
-    if (!ams_status_card_)
+    if (!spool_card_)
         return;
 
     bool has_ams = (lv_subject_get_int(AmsState::instance().get_ams_type_subject()) != 0);
     bool multi_tool = helix::ToolState::instance().is_multi_tool();
 
     // Card is ALWAYS visible
-    lv_obj_remove_flag(ams_status_card_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_remove_flag(spool_card_, LV_OBJ_FLAG_HIDDEN);
 
     // AMS manage row visible when AMS or multi-tool
     if (ams_manage_row_) {
@@ -1185,21 +1173,21 @@ void FilamentPanel::update_multi_filament_card_visibility() {
     }
 
     // Header row (icon + title) hidden in external spool mode
-    if (ams_card_header_row_) {
+    if (spool_card_header_row_) {
         if (external_spool_mode) {
-            lv_obj_add_flag(ams_card_header_row_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(spool_card_header_row_, LV_OBJ_FLAG_HIDDEN);
         } else {
-            lv_obj_remove_flag(ams_card_header_row_, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(spool_card_header_row_, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
     // Center the external spool row within the card when in external spool mode
     if (external_spool_mode) {
-        lv_obj_set_style_flex_main_place(ams_status_card_, LV_FLEX_ALIGN_CENTER, 0);
-        lv_obj_set_style_flex_cross_place(ams_status_card_, LV_FLEX_ALIGN_CENTER, 0);
+        lv_obj_set_style_flex_main_place(spool_card_, LV_FLEX_ALIGN_CENTER, 0);
+        lv_obj_set_style_flex_cross_place(spool_card_, LV_FLEX_ALIGN_CENTER, 0);
     } else {
-        lv_obj_set_style_flex_main_place(ams_status_card_, LV_FLEX_ALIGN_START, 0);
-        lv_obj_set_style_flex_cross_place(ams_status_card_, LV_FLEX_ALIGN_START, 0);
+        lv_obj_set_style_flex_main_place(spool_card_, LV_FLEX_ALIGN_START, 0);
+        lv_obj_set_style_flex_cross_place(spool_card_, LV_FLEX_ALIGN_START, 0);
     }
 
     // Update card title dynamically (for AMS/multi-tool modes)

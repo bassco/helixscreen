@@ -23,6 +23,7 @@
 #include "printer_state.h"
 #include "temperature_history_manager.h"
 #include "theme_manager.h"
+#include "ui_breakpoint.h"
 #include "tool_state.h"
 
 #include <spdlog/spdlog.h>
@@ -1283,9 +1284,19 @@ void TemperatureService::setup_mini_combined_graph(lv_obj_t* container) {
     helix::TempGraphControllerConfig config;
     config.point_count = MINI_GRAPH_POINTS;
     config.axis_size = "xs";
-    config.initial_features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES |
-                              TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS |
-                              TEMP_GRAPH_FEATURE_GRADIENTS;
+    uint32_t features = TEMP_GRAPH_FEATURE_LINES | TEMP_GRAPH_FEATURE_TARGET_LINES |
+                        TEMP_GRAPH_FEATURE_Y_AXIS | TEMP_GRAPH_FEATURE_X_AXIS |
+                        TEMP_GRAPH_FEATURE_GRADIENTS;
+    // At MICRO/TINY the graph is pinned to ~100px — the X-axis time labels eat
+    // roughly a fifth of that for minimal value, so drop them to give the data
+    // lines more room to breathe.
+    if (auto* bp_subj = theme_manager_get_breakpoint_subject()) {
+        UiBreakpoint bp = as_breakpoint(lv_subject_get_int(bp_subj));
+        if (bp == UiBreakpoint::Micro || bp == UiBreakpoint::Tiny) {
+            features &= ~TEMP_GRAPH_FEATURE_X_AXIS;
+        }
+    }
+    config.initial_features = features;
     config.series = {
         {active_extruder_name_, heaters_[idx(HeaterType::Nozzle)].config.color, true},
         {"heater_bed", heaters_[idx(HeaterType::Bed)].config.color, true},

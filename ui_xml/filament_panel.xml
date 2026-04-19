@@ -19,6 +19,15 @@
     <px name="temp_preset_btn_spacing_small" value="6"/>
     <px name="temp_preset_btn_spacing_medium" value="7"/>
     <px name="temp_preset_btn_spacing_large" value="8"/>
+
+    <!-- Temperature graph fixed height. Pinned so flex_grow on the spool card
+         below takes the remaining vertical space (previously both siblings
+         shared flex_grow=1 and starved each other at MICRO). -->
+    <px name="filament_graph_h_micro" value="100"/>
+    <px name="filament_graph_h_tiny" value="80"/>
+    <px name="filament_graph_h_small" value="140"/>
+    <px name="filament_graph_h_medium" value="180"/>
+    <px name="filament_graph_h_large" value="220"/>
   </consts>
   <!-- Filament Management Panel -->
   <!-- Two-column layout: left (temp status + AMS), right (material + operations) -->
@@ -115,20 +124,23 @@
               </lv_obj>
             </lv_obj>
           </lv_obj>
-          <!-- Status Indicator (icon + text row) -->
+          <!-- Status Indicator (icon + text row). Hidden at MICRO and TINY
+               where vertical space is needed for the graph and filament card. -->
           <lv_obj width="100%"
                   height="content" style_pad_all="0" scrollable="false"
                   flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center"
                   style_pad_gap="#space_xs">
-            <bind_flag_if_eq subject="ui_breakpoint" flag="hidden" ref_value="1"/>
+            <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
             <icon name="status_icon" src="info" size="xs" variant="secondary"/>
             <text_small name="status_text" bind_text="filament_status"/>
           </lv_obj>
         </ui_card> <!-- temp card -->
 
-        <!-- Temperature Graph (combined nozzle + bed) -->
+        <!-- Temperature Graph (combined nozzle + bed). Uses a responsive fixed
+             height (not flex_grow) so the spool_card below gets the remaining
+             space — at MICRO the graph would otherwise starve the spool card. -->
         <lv_obj name="temp_graph_card"
-                 width="100%" flex_grow="1" style_pad_all="0" scrollable="false"
+                 width="100%" height="#filament_graph_h" style_pad_all="0" scrollable="false"
                  style_bg_opa="255" style_bg_color="#card_bg">
           <!-- Graph container - populated by C++ via TempControlPanel -->
           <lv_obj name="temp_graph_container"
@@ -136,12 +148,14 @@
                   clickable="false" event_bubble="true"/>
         </lv_obj>
 
-      <!-- BOTTOM: Multi-Filament Card (visible when AMS or multi-tool, managed by C++) -->
-      <ui_card name="ams_status_card"
-               width="100%" height="0" flex_grow="1" style_radius="#border_radius" style_pad_ver="#space_xs" style_pad_hor="#space_md" style_pad_gap="#space_xxs"
+      <!-- BOTTOM: Spool card — relevant with or without AMS. C++ swaps between
+           Multi-Filament (AMS/multi-tool rows) and External Spool presentations. -->
+      <ui_card name="spool_card"
+               width="100%" height="0" flex_grow="1"
+               style_radius="#border_radius" style_pad_ver="#space_xs" style_pad_hor="#space_md" style_pad_gap="#space_xxs"
                flex_flow="column" style_flex_main_place="start" style_flex_cross_place="start">
         <!-- Header row with icon (hidden when external spool mode — no AMS) -->
-        <lv_obj name="ams_card_header_row" width="100%"
+        <lv_obj name="spool_card_header_row" width="100%"
                 height="content" style_pad_all="0" scrollable="false"
                 flex_flow="row" style_flex_main_place="start" style_flex_cross_place="center" style_pad_gap="#space_sm">
           <icon src="filament" size="sm" variant="secondary"/>

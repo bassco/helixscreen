@@ -287,9 +287,10 @@ class FilamentPanel : public PanelBase {
     // Temperature graph (for dynamic sizing when bottom card changes)
     lv_obj_t* temp_graph_card_ = nullptr;
 
-    // Multi-filament card widgets (extruder dropdown + AMS row)
-    lv_obj_t* ams_status_card_ = nullptr;
-    lv_obj_t* ams_card_header_row_ = nullptr;
+    // Spool card widgets — serves both Multi-Filament (AMS/multi-tool) and
+    // External Spool presentations; C++ swaps the visible rows.
+    lv_obj_t* spool_card_ = nullptr;
+    lv_obj_t* spool_card_header_row_ = nullptr;
     lv_obj_t* extruder_selector_group_ = nullptr;
     lv_obj_t* extruder_dropdown_ = nullptr;
     lv_obj_t* btn_manage_slots_ = nullptr;
