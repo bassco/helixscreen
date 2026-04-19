@@ -75,6 +75,10 @@ class Ad5xIfsTestAccess {
         std::lock_guard<std::mutex> lock(b.mutex_);
         b.has_ifs_vars_ = val;
     }
+    static void set_ifs_macro_confirmed_missing(AmsBackendAd5xIfs& b, bool val) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.ifs_macro_confirmed_missing_ = val;
+    }
     static void parse_adventurer_json(AmsBackendAd5xIfs& b, const std::string& content) {
         b.parse_adventurer_json(content);
     }
@@ -918,6 +922,31 @@ TEST_CASE("AD5X IFS has_ifs_vars reset when macro missing", "[ams][ad5x_ifs]") {
         REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
     }
 
+    SECTION(
+        "later save_variables notify cannot re-enable has_ifs_vars once macro confirmed missing") {
+        // Regression: without the ifs_macro_confirmed_missing_ latch, every subsequent
+        // notify_status_update carrying less_waste_* data re-set has_ifs_vars_ = true,
+        // producing "Unknown command: _IFS_VARS" when users then edited slots.
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+        REQUIRE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+
+        // Simulate on_started() discovering the macro is absent.
+        Ad5xIfsTestAccess::set_has_ifs_vars(backend, false);
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, true);
+
+        // A later subscription update carrying lessWaste save_variables arrives.
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+
+        // Same for bambufy prefix.
+        json bambufy_vars;
+        bambufy_vars["bambufy_colors"] = json::array({"FF0000", "00FF00", "0000FF", "FFFFFF"});
+        bambufy_vars["bambufy_tools"] =
+            json::array({1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(bambufy_vars));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+    }
+
     SECTION("set_slot_info uses native ZMOD path when has_ifs_vars is false") {
         // Pre-populate slot data via save_variables
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
@@ -1635,7 +1664,7 @@ TEST_CASE("AD5X IFS parse_zcolor_silent malformed lines skipped", "[ams][ad5x_if
         "// Extruder: None (1) | IFS: True",
         "// 1: PLA/FFFFFF",
         "// random gcode echo",
-        "// 99: nonsense",  // slot number out of range
+        "// 99: nonsense", // slot number out of range
         "// 2: PETG/00FF00",
         "echo: hotend temp 205",
     };
@@ -1707,8 +1736,7 @@ TEST_CASE("AD5X IFS apply_zcolor_result skips when response has no valid content
     REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
 }
 
-TEST_CASE("AD5X IFS apply_zcolor_result updates colors and materials",
-          "[ams][ad5x_ifs]") {
+TEST_CASE("AD5X IFS apply_zcolor_result updates colors and materials", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
     AmsBackendAd5xIfs::ZColorSilentResult r;
@@ -1728,8 +1756,7 @@ TEST_CASE("AD5X IFS apply_zcolor_result updates colors and materials",
     REQUIRE(types.find("PETG") != std::string::npos);
 }
 
-TEST_CASE("AD5X IFS apply_zcolor_result skips color write on dirty slot",
-          "[ams][ad5x_ifs]") {
+TEST_CASE("AD5X IFS apply_zcolor_result skips color write on dirty slot", "[ams][ad5x_ifs]") {
     // Dirty slot means an unsaved user edit is pending — we must NOT overwrite
     // the local color with zmod's view, or we'd clobber the user's edit.
     AmsBackendAd5xIfs backend(nullptr, nullptr);
@@ -1753,8 +1780,7 @@ TEST_CASE("AD5X IFS apply_zcolor_result skips color write on dirty slot",
     REQUIRE(Ad5xIfsTestAccess::build_colors(backend).find("0000FF") == std::string::npos);
 }
 
-TEST_CASE("AD5X IFS apply_zcolor_result old-format preserves colors",
-          "[ams][ad5x_ifs]") {
+TEST_CASE("AD5X IFS apply_zcolor_result old-format preserves colors", "[ams][ad5x_ifs]") {
     // Pre-ad2802ab zmod: slot lines carry no /HEX. Presence should still
     // update, but existing colors must NOT be overwritten with empty strings.
     AmsBackendAd5xIfs backend(nullptr, nullptr);
@@ -1806,8 +1832,7 @@ TEST_CASE("AD5X IFS parse_zcolor_silent sets saw_valid_response", "[ams][ad5x_if
 // Material whitelist + normalization
 // ==========================================================================
 
-TEST_CASE("AD5X IFS get_supported_materials returns firmware whitelist",
-          "[ams][ad5x_ifs]") {
+TEST_CASE("AD5X IFS get_supported_materials returns firmware whitelist", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
     auto supported = backend.get_supported_materials();

@@ -122,8 +122,7 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // and rejects anything outside it with "Invalid material type: X. Valid: ...".
     // The UI dropdown is filtered to this list and outgoing values are normalized
     // via normalize_material() before being sent to firmware.
-    [[nodiscard]] std::optional<std::vector<std::string>>
-    get_supported_materials() const override;
+    [[nodiscard]] std::optional<std::vector<std::string>> get_supported_materials() const override;
 
     // Firmware-specific aliases for the shared normalize_material() pipeline.
     // AD5X treats SILK as distinct from PLA, but the shared filament DB
@@ -199,8 +198,7 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // on native ZMOD setups whose IFS state disagrees with our color-latched
     // presence. IFS_REMOVE_PRUTOK targets the currently loaded filament and
     // matches both the user's intent and firmware state.
-    static std::string select_unload_command(int slot_index, int current_slot,
-                                             bool head_filament);
+    static std::string select_unload_command(int slot_index, int current_slot, bool head_filament);
 
   private:
     bool validate_slot_index(int slot_index) const;
@@ -229,6 +227,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // False for native ZMOD, which stores color/type in Adventurer5M.json
     // (read/written via Moonraker HTTP file API).
     bool has_ifs_vars_ = false;
+
+    // Latch: set true in on_started when the gcode_macro _ifs_vars query
+    // confirms the macro is not registered. save_variables can contain stale
+    // less_waste_* / bambufy_* entries (partial install, plugin removed) —
+    // without this latch, every subsequent save_variables notify re-enables
+    // has_ifs_vars_, producing "Unknown command: _IFS_VARS" errors.
+    bool ifs_macro_confirmed_missing_ = false;
     std::atomic<bool> reread_pending_{false};
 
     // GET_ZCOLOR SILENT=1 query state.

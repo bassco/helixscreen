@@ -104,14 +104,19 @@ void AmsBackendAd5xIfs::on_started() {
             // If parse_save_variables set has_ifs_vars_ but the macro doesn't exist,
             // fall back to native ZMOD. This happens when lessWaste/bambufy plugins
             // are partially installed (save_variables data exists but macros aren't loaded).
+            // Latch ifs_macro_confirmed_missing_ so subsequent save_variables notifies
+            // can't silently re-enable has_ifs_vars_.
             bool need_zcolor = false;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (has_ifs_vars_ && !macro_exists) {
-                    spdlog::warn("{} save_variables contain {}_ data but _IFS_VARS macro "
-                                 "not found — falling back to native ZMOD",
-                                 backend_log_tag(), var_prefix_);
-                    has_ifs_vars_ = false;
+                if (!macro_exists) {
+                    if (has_ifs_vars_) {
+                        spdlog::warn("{} save_variables contain {}_ data but _IFS_VARS macro "
+                                     "not found — falling back to native ZMOD",
+                                     backend_log_tag(), var_prefix_);
+                        has_ifs_vars_ = false;
+                    }
+                    ifs_macro_confirmed_missing_ = true;
                 }
                 need_zcolor = !has_ifs_vars_;
             }
@@ -260,13 +265,17 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
             var_prefix_ = "bambufy";
             spdlog::info("{} Detected bambufy variable prefix", backend_log_tag());
         }
-        has_ifs_vars_ = true;
+        if (!ifs_macro_confirmed_missing_) {
+            has_ifs_vars_ = true;
+        }
     } else if (vars.contains("less_waste_colors") || vars.contains("less_waste_tools")) {
         if (var_prefix_ != "less_waste") {
             var_prefix_ = "less_waste";
             spdlog::info("{} Detected lessWaste variable prefix", backend_log_tag());
         }
-        has_ifs_vars_ = true;
+        if (!ifs_macro_confirmed_missing_) {
+            has_ifs_vars_ = true;
+        }
     }
 
     const std::string p = var_prefix_;
@@ -579,9 +588,8 @@ AmsError AmsBackendAd5xIfs::unload_filament(int slot_index) {
 }
 
 std::string AmsBackendAd5xIfs::select_unload_command(int slot_index, int current_slot,
-                                                    bool head_filament) {
-    const bool unload_active = (slot_index < 0) ||
-                               (slot_index == current_slot && head_filament);
+                                                     bool head_filament) {
+    const bool unload_active = (slot_index < 0) || (slot_index == current_slot && head_filament);
     if (unload_active) {
         return "IFS_REMOVE_PRUTOK";
     }
@@ -670,17 +678,14 @@ AmsError AmsBackendAd5xIfs::cancel() {
 
 // --- Configuration ---
 
-std::optional<std::vector<std::string>>
-AmsBackendAd5xIfs::get_supported_materials() const {
+std::optional<std::vector<std::string>> AmsBackendAd5xIfs::get_supported_materials() const {
     // Valid material types accepted by AD5X IFS firmware (ZMOD).
     // Sending anything else causes firmware to reject with
     // "Invalid material type: X. Valid: PLA, PLA-CF, SILK, TPU, ABS, PETG, PETG-CF".
-    return std::vector<std::string>{
-        "PLA", "PLA-CF", "SILK", "TPU", "ABS", "PETG", "PETG-CF"};
+    return std::vector<std::string>{"PLA", "PLA-CF", "SILK", "TPU", "ABS", "PETG", "PETG-CF"};
 }
 
-std::vector<std::pair<std::string, std::string>>
-AmsBackendAd5xIfs::get_material_aliases() const {
+std::vector<std::pair<std::string, std::string>> AmsBackendAd5xIfs::get_material_aliases() const {
     // Names that mean "silk PLA" in the 3D printing world but map to AD5X's
     // distinct SILK slot type. Without these, the compat_group fallback
     // routes them to "PLA" (because silk PLA IS chemically PLA) and users
@@ -1062,10 +1067,9 @@ void AmsBackendAd5xIfs::register_zcolor_listener() {
 
             if (line.find("RUN_ZCOLOR") != std::string::npos ||
                 line.find("CHANGE_ZCOLOR") != std::string::npos) {
-                spdlog::debug(
-                    "{} Detected external color change in gcode stream, "
-                    "scheduling re-read + zcolor query",
-                    backend_log_tag());
+                spdlog::debug("{} Detected external color change in gcode stream, "
+                              "scheduling re-read + zcolor query",
+                              backend_log_tag());
                 schedule_json_reread();
                 schedule_zcolor_query();
             }
@@ -1285,8 +1289,7 @@ AmsBackendAd5xIfs::parse_zcolor_silent(const std::vector<std::string>& lines) {
     // Regexes compiled once per call; parsing is off the hot path.
     // Summary: "// Extruder: None (N) | IFS: True"
     //   or:    "// Extruder: N: MATERIAL/HEX | IFS: True"
-    static const std::regex summary_re(
-        R"(^//\s*Extruder:\s*(.+?)\s*\|\s*IFS:\s*(True|False)\s*$)");
+    static const std::regex summary_re(R"(^//\s*Extruder:\s*(.+?)\s*\|\s*IFS:\s*(True|False)\s*$)");
     // Slot: "// N: MATERIAL/HEX" or "// N: MATERIAL/NAME/HEX" or old "// N: MATERIAL"
     static const std::regex slot_re(R"(^//\s*([1-9])\s*:\s*(.+?)\s*$)");
     // Extruder detail inside summary text: "N: MATERIAL/..."
