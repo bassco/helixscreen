@@ -12,7 +12,6 @@
 
 #include "ams_backend_ace.h"
 
-#include "data_root_resolver.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "post_op_cooldown_manager.h"
@@ -21,18 +20,12 @@
 #include "spdlog/spdlog.h"
 
 #include <chrono>
-#include <filesystem>
-#include <fstream>
 
 using json = nlohmann::json;
 using namespace helix;
 
 /// Max consecutive /server/ace/info failures before giving up on REST fallback
 static constexpr int MAX_INFO_FETCH_FAILURES = 3;
-
-static constexpr const char* SLOT_OVERRIDES_JSON = "ace_slot_overrides.json";
-static constexpr const char* MOONRAKER_DB_KEY_SLOTS = "ace_slot_overrides";
-static constexpr const char* MOONRAKER_DB_NAMESPACE = "helix-screen";
 
 // ============================================================================
 // Construction / Destruction
@@ -67,8 +60,28 @@ AmsBackendAce::~AmsBackendAce() {
 void AmsBackendAce::on_started() {
     spdlog::info("[ACE] Backend started — querying initial ace state via WebSocket");
 
-    // Restore persisted slot overrides (Moonraker DB → local JSON fallback)
-    load_slot_overrides();
+    // Load persisted per-slot overrides from the shared FilamentSlotOverrideStore
+    // BEFORE issuing the initial status query — otherwise the first status
+    // callback (libhv background thread) could fire and parse slots before
+    // overrides_ is populated, so the first EVENT_STATE_CHANGED frame would
+    // miss override data. load_blocking runs on this (main) thread; the
+    // Moonraker DB callback fires on the libhv event loop, so the two threads
+    // don't interfere. Migration from helix-screen:ace_slot_overrides to
+    // lane_data happens automatically inside load_blocking the first time
+    // lane_data is empty (Task 8).
+    if (api_) {
+        override_store_ = std::make_unique<helix::ams::FilamentSlotOverrideStore>(api_, "ace");
+        // Do the (potentially 5s) MR DB round-trip OUTSIDE the lock, then swap
+        // in under mutex_. Holding mutex_ during the swap ensures the parse
+        // path sees a coherent map rather than a torn write.
+        auto loaded = override_store_->load_blocking();
+        const auto loaded_count = loaded.size();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            overrides_ = std::move(loaded);
+        }
+        spdlog::info("[ACE] Loaded {} slot overrides from filament_slot store", loaded_count);
+    }
 
     auto token = lifetime_.token();
 
@@ -396,7 +409,7 @@ AmsError AmsBackendAce::cancel() {
 // Configuration
 // ============================================================================
 
-AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool /*persist*/) {
+AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool persist) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -407,7 +420,10 @@ AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool
             return AmsErrorHelper::invalid_slot(slot_index, 0);
         }
 
-        // Update in-memory slot state
+        // Update in-memory slot state so get_slot_info returns the edit
+        // immediately — covers every SlotInfo field the caller may have set,
+        // including persist=false previews that must survive until the next
+        // firmware parse.
         auto& slot = system_info_.units[0].slots[slot_index];
         slot.color_rgb = info.color_rgb;
         slot.color_name = info.color_name;
@@ -415,26 +431,58 @@ AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool
         slot.brand = info.brand;
         slot.spool_name = info.spool_name;
         slot.spoolman_id = info.spoolman_id;
+        slot.spoolman_vendor_id = info.spoolman_vendor_id;
         slot.remaining_weight_g = info.remaining_weight_g;
         slot.total_weight_g = info.total_weight_g;
 
-        // Store override so parse doesn't clobber user edits
-        SlotOverride& ovr = slot_overrides_[slot_index];
-        ovr.color_rgb = info.color_rgb;
-        ovr.color_name = info.color_name;
-        ovr.material = info.material;
-        ovr.brand = info.brand;
-        ovr.spool_name = info.spool_name;
-        ovr.spoolman_id = info.spoolman_id;
-        ovr.remaining_weight_g = info.remaining_weight_g;
-        ovr.total_weight_g = info.total_weight_g;
+        // For persist=true, stage the override into overrides_ so
+        // apply_overrides re-applies the new values on every subsequent parse.
+        // For persist=false we explicitly do NOT touch overrides_ — preview
+        // edits are in-memory only and will be overwritten by the next
+        // firmware parse (expected preview contract).
+        if (persist) {
+            helix::ams::FilamentSlotOverride ovr;
+            ovr.brand = info.brand;
+            ovr.spool_name = info.spool_name;
+            ovr.spoolman_id = info.spoolman_id;
+            ovr.spoolman_vendor_id = info.spoolman_vendor_id;
+            ovr.remaining_weight_g = info.remaining_weight_g;
+            ovr.total_weight_g = info.total_weight_g;
+            ovr.color_rgb = info.color_rgb;
+            ovr.color_name = info.color_name;
+            ovr.material = info.material;
+            // updated_at left default — save_async stamps a fresh value.
+            overrides_[slot_index] = ovr;
+        }
     }
 
-    spdlog::info("[ACE] Updated slot {} info (local override): {} {}",
-                 slot_index, info.material, info.color_name);
+    spdlog::info("[ACE] Updated slot {} info (persist={}): {} {}",
+                 slot_index, persist, info.material, info.color_name);
 
-    // Persist overrides to Moonraker DB + local JSON
-    save_slot_overrides();
+    if (persist && override_store_) {
+        // Re-read from overrides_ under the lock to pick up the staged copy.
+        helix::ams::FilamentSlotOverride ovr_to_save;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = overrides_.find(slot_index);
+            if (it != overrides_.end()) {
+                ovr_to_save = it->second;
+            }
+        }
+        // Capture by value — save_async's MR callback may fire long after
+        // this returns (MR tracker ~60s timeout). Do NOT capture `this`:
+        // the backend may outlive its store, but the store will outlive
+        // the scheduled save by design.
+        const std::string tag = backend_log_tag();
+        override_store_->save_async(
+            slot_index, ovr_to_save,
+            [tag, slot_index](bool success, const std::string& err) {
+                if (!success) {
+                    spdlog::warn("{} Override persist failed for slot {}: {}", tag, slot_index,
+                                 err);
+                }
+            });
+    }
 
     emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
     return AmsErrorHelper::success();
@@ -658,29 +706,30 @@ void AmsBackendAce::parse_ace_object(const json& data) {
                     // SKU is available but not mapped to SlotInfo currently
                 }
 
-                // Clear user override if slot status changed (spool physically swapped)
+                // Hardware-event override clear. ACE has no RFID UID to track;
+                // "user swapped the spool" is inferred from a status transition
+                // EMPTY -> present. Must run BEFORE apply_overrides so the
+                // clear sees firmware-truth (not the override-masked view) and
+                // the reset of override-exclusive fields is visible in the
+                // SlotInfo apply_overrides returns unchanged for cleared slots.
+                //
+                // First observation (no prev_slot_status_ entry) is a
+                // BASELINE and must never fire a clear — matches IFS/Snapmaker
+                // baseline semantics. Only call the helper when a prior status
+                // was already recorded for this slot.
                 int idx = static_cast<int>(i);
                 auto prev_it = prev_slot_status_.find(idx);
-                if (prev_it != prev_slot_status_.end() && prev_it->second != slot.status) {
-                    if (slot_overrides_.erase(idx) > 0) {
-                        spdlog::info("[ACE] Slot {} status changed, clearing user override", idx);
-                    }
+                if (prev_it != prev_slot_status_.end()) {
+                    check_hardware_event_clear(slot, idx, prev_it->second, slot.status);
                 }
                 prev_slot_status_[idx] = slot.status;
 
-                // Apply user overrides (from set_slot_info) over hardware data
-                auto ovr_it = slot_overrides_.find(idx);
-                if (ovr_it != slot_overrides_.end()) {
-                    const auto& ovr = ovr_it->second;
-                    slot.color_rgb = ovr.color_rgb;
-                    slot.color_name = ovr.color_name;
-                    slot.material = ovr.material;
-                    slot.brand = ovr.brand;
-                    slot.spool_name = ovr.spool_name;
-                    slot.spoolman_id = ovr.spoolman_id;
-                    slot.remaining_weight_g = ovr.remaining_weight_g;
-                    slot.total_weight_g = ovr.total_weight_g;
-                }
+                // Layer user-configured overrides on top of firmware-reported
+                // data. Override wins for any non-default field — for ACE
+                // that includes color and material, since ACE hardware
+                // doesn't carry brand/spool_name/weights at all and the user
+                // edit is the authoritative source for color/material too.
+                apply_overrides(slot, idx);
             }
         }
     }
@@ -1275,176 +1324,93 @@ AmsError AmsBackendAce::execute_device_action(const std::string& action_id,
 }
 
 // ============================================================================
-// Slot Override Persistence
+// Slot Override Layering (shared FilamentSlotOverrideStore)
 // ============================================================================
 
-json AmsBackendAce::slot_overrides_to_json() const {
-    json result = json::object();
-
-    for (const auto& [idx, ovr] : slot_overrides_) {
-        json entry;
-        entry["color_rgb"] = ovr.color_rgb;
-        entry["material"] = ovr.material;
-        entry["color_name"] = ovr.color_name;
-        entry["brand"] = ovr.brand;
-        entry["spool_name"] = ovr.spool_name;
-        entry["spoolman_id"] = ovr.spoolman_id;
-        if (std::isfinite(ovr.remaining_weight_g) && ovr.remaining_weight_g >= 0)
-            entry["remaining_weight_g"] = ovr.remaining_weight_g;
-        if (std::isfinite(ovr.total_weight_g) && ovr.total_weight_g >= 0)
-            entry["total_weight_g"] = ovr.total_weight_g;
-
-        result[std::to_string(idx)] = entry;
-    }
-
-    return result;
+void AmsBackendAce::apply_overrides(SlotInfo& slot, int slot_index) {
+    // overrides_ writers (on_started initial load, set_slot_info persist path)
+    // hold mutex_, and every caller of apply_overrides runs under mutex_ via
+    // parse_ace_object — so the map read here is implicitly lock-protected.
+    auto it = overrides_.find(slot_index);
+    if (it == overrides_.end())
+        return;
+    const auto& o = it->second;
+    // Merge policy matches AD5X IFS / Snapmaker: override wins only when the
+    // override field carries a real value; default sentinels (empty string,
+    // spoolman_id == 0, weights == -1.0, color_rgb == 0) fall through to the
+    // firmware-reported data. For ACE this covers color/material too — ACE
+    // can't set those via gcode, so user edits live exclusively in the
+    // override record.
+    if (!o.brand.empty())
+        slot.brand = o.brand;
+    if (!o.spool_name.empty())
+        slot.spool_name = o.spool_name;
+    if (o.spoolman_id > 0)
+        slot.spoolman_id = o.spoolman_id;
+    if (o.spoolman_vendor_id > 0)
+        slot.spoolman_vendor_id = o.spoolman_vendor_id;
+    if (o.remaining_weight_g >= 0.0f)
+        slot.remaining_weight_g = o.remaining_weight_g;
+    if (o.total_weight_g >= 0.0f)
+        slot.total_weight_g = o.total_weight_g;
+    if (o.color_rgb != 0)
+        slot.color_rgb = o.color_rgb;
+    if (!o.color_name.empty())
+        slot.color_name = o.color_name;
+    if (!o.material.empty())
+        slot.material = o.material;
 }
 
-void AmsBackendAce::apply_slot_overrides_json(const json& data) {
-    if (!data.is_object()) {
-        spdlog::warn("[ACE] apply_slot_overrides_json: expected JSON object");
+void AmsBackendAce::check_hardware_event_clear(SlotInfo& slot, int slot_index,
+                                               SlotStatus prev, SlotStatus curr) {
+    // ACE has no RFID UID to track. Detect "new spool inserted" as a status
+    // transition from EMPTY -> present (AVAILABLE / LOADED). A LOADED ->
+    // EMPTY transition is NOT a swap — the user may reinsert the same spool.
+    // UNKNOWN is treated as "no signal" on either side and never fires the
+    // check; callers must only invoke this helper AFTER a valid prior
+    // observation has been recorded (caller handles the baseline skip).
+    const bool was_empty = (prev == SlotStatus::EMPTY);
+    const bool is_present = (curr == SlotStatus::AVAILABLE || curr == SlotStatus::LOADED);
+    if (!was_empty || !is_present)
+        return;
+
+    auto ovr_it = overrides_.find(slot_index);
+    if (ovr_it == overrides_.end()) {
+        spdlog::debug("[ACE] Slot {} insertion detected (prev={}, curr={}); "
+                      "no override to clear",
+                      slot_index, slot_status_to_string(prev), slot_status_to_string(curr));
         return;
     }
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    slot_overrides_.clear();
+    spdlog::info("[ACE] Slot {} insertion detected (prev={}, curr={}); clearing override",
+                 slot_index, slot_status_to_string(prev), slot_status_to_string(curr));
+    overrides_.erase(ovr_it);
 
-    for (auto& [key, entry] : data.items()) {
-        if (!entry.is_object()) continue;
+    // Zero override-exclusive fields on the live SlotInfo so the cleared
+    // state is visible in the very next get_slot_info() read. For ACE,
+    // brand / spool_name / spoolman_* / weights are override-only (ACE
+    // firmware doesn't populate them). Color/material and color_name also
+    // come from the override for ACE — but the parse has just written the
+    // firmware-sourced color/material onto `slot`, so leaving those fields
+    // alone lets the new spool's firmware data surface immediately.
+    slot.brand.clear();
+    slot.spool_name.clear();
+    slot.spoolman_id = 0;
+    slot.spoolman_vendor_id = 0;
+    slot.remaining_weight_g = -1.0f;
+    slot.total_weight_g = -1.0f;
+    slot.color_name.clear();
 
-        int idx = 0;
-        try {
-            idx = std::stoi(key);
-        } catch (const std::exception&) {
-            spdlog::warn("[ACE] Skipping invalid slot override key: {}", key);
-            continue;
-        }
-
-        SlotOverride ovr;
-        ovr.color_rgb = entry.value("color_rgb", static_cast<uint32_t>(0));
-        ovr.material = entry.value("material", std::string{});
-        ovr.color_name = entry.value("color_name", std::string{});
-        ovr.brand = entry.value("brand", std::string{});
-        ovr.spool_name = entry.value("spool_name", std::string{});
-        ovr.spoolman_id = entry.value("spoolman_id", 0);
-        ovr.remaining_weight_g = entry.value("remaining_weight_g", -1.0f);
-        ovr.total_weight_g = entry.value("total_weight_g", -1.0f);
-
-        slot_overrides_[idx] = std::move(ovr);
-
-        spdlog::debug("[ACE] Loaded slot override for slot {}: {} {}",
-                      idx, slot_overrides_[idx].material, slot_overrides_[idx].color_name);
-    }
-
-    spdlog::info("[ACE] Applied {} slot override(s) from persistent storage",
-                 slot_overrides_.size());
-}
-
-void AmsBackendAce::save_slot_overrides_json() const {
-    namespace fs = std::filesystem;
-
-    json json_data;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        json_data = slot_overrides_to_json();
-    }
-
-    auto path = fs::path(helix::get_user_config_dir()) / SLOT_OVERRIDES_JSON;
-
-    try {
-        fs::create_directories(path.parent_path());
-
-        std::ofstream ofs(path);
-        if (!ofs.is_open()) {
-            spdlog::warn("[ACE] Failed to open {} for writing", path.string());
-            return;
-        }
-        ofs << json_data.dump(2);
-        spdlog::debug("[ACE] Saved slot overrides to {}", path.string());
-    } catch (const std::exception& e) {
-        spdlog::warn("[ACE] Error saving slot overrides JSON: {}", e.what());
-    }
-}
-
-bool AmsBackendAce::load_slot_overrides_json() {
-    namespace fs = std::filesystem;
-
-    auto path = fs::path(helix::get_user_config_dir()) / SLOT_OVERRIDES_JSON;
-
-    if (!fs::exists(path)) {
-        spdlog::debug("[ACE] No slot overrides JSON file at {}", path.string());
-        return false;
-    }
-
-    try {
-        std::ifstream ifs(path);
-        if (!ifs.is_open()) {
-            spdlog::warn("[ACE] Failed to open {}", path.string());
-            return false;
-        }
-
-        auto data = json::parse(ifs);
-        apply_slot_overrides_json(data);
-        spdlog::info("[ACE] Loaded slot overrides from {}", path.string());
-        return true;
-    } catch (const std::exception& e) {
-        spdlog::warn("[ACE] Error loading slot overrides JSON: {}", e.what());
-        return false;
-    }
-}
-
-void AmsBackendAce::save_slot_overrides() {
-    // Always save to local JSON (fast, reliable)
-    save_slot_overrides_json();
-
-    // Fire-and-forget to Moonraker DB (async, best-effort)
-    if (api_) {
-        json json_data;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            json_data = slot_overrides_to_json();
-        }
-        api_->database_post_item(
-            MOONRAKER_DB_NAMESPACE, MOONRAKER_DB_KEY_SLOTS, json_data,
-            []() { spdlog::debug("[ACE] Slot overrides saved to Moonraker DB"); },
-            [](const MoonrakerError& err) {
-                spdlog::warn("[ACE] Failed to save slot overrides to Moonraker DB: {}",
-                             err.user_message());
+    if (override_store_) {
+        // Capture by value — clear_async's Moonraker callback can fire after
+        // this returns (MR tracker ~60s) and potentially after the backend
+        // itself is gone. Same rationale as save_async.
+        const std::string tag = backend_log_tag();
+        override_store_->clear_async(slot_index,
+            [tag, slot_index](bool ok, std::string err) {
+                if (!ok) {
+                    spdlog::warn("{} clear_async failed for slot {}: {}", tag, slot_index, err);
+                }
             });
     }
-}
-
-void AmsBackendAce::load_slot_overrides() {
-    if (!api_) {
-        // No API — try local JSON only
-        load_slot_overrides_json();
-        return;
-    }
-
-    // Try Moonraker DB first. Callbacks fire from WebSocket thread,
-    // so we marshal back to UI thread via queue_update().
-    auto token = lifetime_.token();
-
-    api_->database_get_item(
-        MOONRAKER_DB_NAMESPACE, MOONRAKER_DB_KEY_SLOTS,
-        [this, token](const json& data) {
-            if (token.expired()) return;
-            auto data_copy = std::make_unique<json>(data);
-            helix::ui::queue_update<json>(
-                std::move(data_copy), [this](json* d) {
-                    apply_slot_overrides_json(*d);
-                    save_slot_overrides_json();
-                    emit_event(EVENT_SLOT_CHANGED);
-                    spdlog::info("[ACE] Loaded slot overrides from Moonraker DB");
-                });
-        },
-        [this, token](const MoonrakerError& err) {
-            if (token.expired()) return;
-            spdlog::debug("[ACE] Moonraker DB load failed ({}), trying local JSON",
-                          err.user_message());
-            helix::ui::queue_update<int>(std::make_unique<int>(0), [this](int*) {
-                load_slot_overrides_json();
-                emit_event(EVENT_SLOT_CHANGED);
-            });
-        });
 }

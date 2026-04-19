@@ -3,12 +3,102 @@
 
 #include "ams_backend_ace.h"
 #include "ams_types.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
+#include "moonraker_api_mock.h"
+#include "moonraker_client_mock.h"
+#include "printer_state.h"
+
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unistd.h>
 
 #include <json.hpp> // nlohmann/json from libhv
 
 #include "../catch_amalgamated.hpp"
 
 using json = nlohmann::json;
+
+// Friend-class shim for FilamentSlotOverrideStore. Same idiom as IFS/Snapmaker
+// tests — redirects the store's on-disk read-cache to a per-test tmp dir so
+// save_async doesn't pollute the developer's real helixscreen config.
+class FilamentSlotOverrideStoreTestAccess {
+  public:
+    static void set_cache_directory(helix::ams::FilamentSlotOverrideStore& store,
+                                    std::filesystem::path dir) {
+        store.cache_dir_ = std::move(dir);
+    }
+};
+
+// Friend-class shim for AmsBackendAce — declared as friend in the backend
+// header. Gives tests narrow accessors for override state without going
+// through public get_slot_info (which layers apply_overrides on top).
+class AceTestAccess {
+  public:
+    static void seed_override(AmsBackendAce& b, int slot_index,
+                              const helix::ams::FilamentSlotOverride& ovr) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.overrides_[slot_index] = ovr;
+    }
+    static std::optional<helix::ams::FilamentSlotOverride>
+    get_override(const AmsBackendAce& b, int slot_index) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        auto it = b.overrides_.find(slot_index);
+        if (it == b.overrides_.end())
+            return std::nullopt;
+        return it->second;
+    }
+    static void inject_override_store(AmsBackendAce& b,
+                                      std::unique_ptr<helix::ams::FilamentSlotOverrideStore> s) {
+        b.override_store_ = std::move(s);
+    }
+    // Drive parse_ace_object directly (public-ish parse entry point on the
+    // production class) — saves every test from rebuilding a full status
+    // notify envelope.
+    static void parse_ace(AmsBackendAce& b, const json& data) {
+        b.parse_ace_object(data);
+    }
+};
+
+namespace {
+// Per-test tmp cache dir — same idiom as IFS/Snapmaker tests.
+struct AceTmpCacheDir {
+    std::filesystem::path path;
+    explicit AceTmpCacheDir(const std::string& suffix) {
+        path = std::filesystem::temp_directory_path() /
+               ("ace_cache_" + suffix + "_" + std::to_string(::getpid()));
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~AceTmpCacheDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+
+// Build a single-slot ace object payload. `status_str` is one of "empty",
+// "available", "loaded", "ready". `color_rgb` is packed as a [r,g,b] array
+// (ValgACE's native format). `material_str` goes into "type".
+json make_ace_slot_payload(const std::string& status_str, uint32_t color_rgb,
+                           const std::string& material_str) {
+    uint8_t r = (color_rgb >> 16) & 0xFF;
+    uint8_t g = (color_rgb >> 8) & 0xFF;
+    uint8_t b = color_rgb & 0xFF;
+    return json{
+        {"model", "ACE Pro"},
+        {"firmware", "1.2.3"},
+        {"status", "ready"},
+        {"slots", json::array({
+            json{{"status", status_str},
+                 {"color", json::array({r, g, b})},
+                 {"type", material_str}}
+        })},
+    };
+}
+
+} // namespace
 
 /**
  * @brief Test helper class providing access to AmsBackendAce internals
@@ -450,4 +540,331 @@ TEST_CASE("ACE operations require API", "[ams][ace][preconditions]") {
 
     err = helper.start_drying(45.0f, 240);
     REQUIRE(!err.success());
+}
+
+// ============================================================================
+// Task 13: FilamentSlotOverrideStore integration.
+//
+// ACE's legacy per-backend override plumbing (slot_overrides_ map,
+// save/load_slot_overrides*, apply_slot_overrides_json, slot_overrides_to_json)
+// has been replaced by the shared FilamentSlotOverrideStore. The tests below
+// lock the behavior commitments the migration preserves:
+//   1. An override loaded at init is applied over firmware data on parse.
+//   2. Migration from helix-screen:ace_slot_overrides to lane_data happens
+//      automatically on the first load_blocking() call (Task 8 logic).
+//   3. set_slot_info(persist=true) writes through to the store.
+//   4. Slot status transition empty/unknown -> present clears the override
+//      (ACE's analogue to RFID UID change on Snapmaker).
+//   5. Slot status transition loaded -> empty does NOT clear the override.
+// ============================================================================
+
+TEST_CASE("ACE override loaded at init is applied over firmware data",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task13_override_applied");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed an override (brand="Polymaker", color=FF5500, material=PLA). ACE is
+    // override-wins-for-everything — color and material must come from the
+    // override even though firmware reports different values below.
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.color_rgb = 0xFF5500;
+    ovr.material = "PLA";
+    AceTestAccess::seed_override(backend, 0, ovr);
+
+    // Firmware reports slot 0 with DIFFERENT color (green) and material (ABS).
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("available", 0x00FF00, "ABS"));
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Polymaker");
+    CHECK(info.spool_name == "PolyLite Orange");
+    CHECK(info.spoolman_id == 42);
+    // Override wins for color and material on ACE.
+    CHECK(info.color_rgb == 0xFF5500u);
+    CHECK(info.material == "PLA");
+}
+
+TEST_CASE("ACE migrates from helix-screen:ace_slot_overrides on first startup",
+          "[ams][ace][filament_slot_override][migration][slow]") {
+    // Pre-Task-8 ACE wrote per-slot overrides to
+    // helix-screen:ace_slot_overrides. On first startup post-upgrade, the
+    // store's load_blocking() migrates that data into lane_data and deletes
+    // the legacy namespace. Tests through the store + MoonrakerAPIMock
+    // directly so we don't need to drive on_started() (which requires a
+    // started subscription backend).
+    AceTmpCacheDir tmp("task13_migration");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Seed legacy namespace with a PLA Orange override on slot 0.
+    // lane_data is untouched -> forces migration.
+    json legacy = {
+        {"0", {
+            {"brand", "Polymaker"},
+            {"material", "PLA"},
+            {"color_rgb", 0xFF5500},
+            {"spoolman_id", 42},
+            {"spool_name", "PolyLite Orange"},
+        }},
+    };
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides", legacy);
+
+    helix::ams::FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    auto loaded = store.load_blocking();
+
+    // Migrated slot is returned from load_blocking as if it came from lane_data.
+    REQUIRE(loaded.count(0) == 1);
+    CHECK(loaded[0].brand == "Polymaker");
+    CHECK(loaded[0].material == "PLA");
+    CHECK(loaded[0].color_rgb == 0xFF5500u);
+    CHECK(loaded[0].spoolman_id == 42);
+    CHECK(loaded[0].spool_name == "PolyLite Orange");
+
+    // lane_data now holds the AFC-shaped record (1-based key on disk, 0-based
+    // "lane" field inside — see to_lane_data_record's invariant).
+    auto lane1 = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!lane1.is_null());
+    CHECK(lane1["vendor"] == "Polymaker");
+    CHECK(lane1["lane"] == "0");
+
+    // Legacy namespace deleted post-migration — second startup sees lane_data
+    // populated and skips the migration codepath entirely.
+    CHECK(api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
+TEST_CASE("ACE set_slot_info(persist=true) writes to store",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task13_persist_true");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    // Prime the backend with 4 slots so set_slot_info's index check passes.
+    AceTestAccess::parse_ace(backend,
+        json{{"model", "ACE Pro"},
+             {"slots", json::array({
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+             })}});
+
+    SlotInfo edit;
+    edit.brand = "Polymaker";
+    edit.spool_name = "PolyLite PLA Orange";
+    edit.spoolman_id = 42;
+    edit.remaining_weight_g = 850.0f;
+    edit.material = "PLA";
+    edit.color_rgb = 0xFF5500;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/true);
+    REQUIRE(err.success());
+
+    // In-memory map carries the override.
+    auto staged = AceTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->spoolman_id == 42);
+    CHECK(staged->color_rgb == 0xFF5500u);
+
+    // Moonraker DB received the AFC-shaped record via save_async (dispatched
+    // synchronously in-call by MoonrakerAPIMock).
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK(stored["vendor"] == "Polymaker");
+    CHECK(stored["spool_id"] == 42);
+    CHECK(stored["material"] == "PLA");
+    CHECK(stored["color"] == "#FF5500");
+
+    // Legacy namespace NOT touched — ACE no longer writes there.
+    CHECK(api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
+TEST_CASE("ACE set_slot_info(persist=false) does NOT write to store",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task13_persist_false");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    AceTestAccess::parse_ace(backend,
+        json{{"model", "ACE Pro"},
+             {"slots", json::array({
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+                 json{{"status", "empty"}},
+             })}});
+
+    SlotInfo edit;
+    edit.brand = "Draft";
+    edit.material = "PLA";
+    edit.color_rgb = 0x123456;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/false);
+    REQUIRE(err.success());
+
+    // No override staged, no DB write.
+    CHECK_FALSE(AceTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Preview edit still visible via get_slot_info (in-memory only).
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Draft");
+    CHECK(info.material == "PLA");
+    CHECK(info.color_rgb == 0x123456u);
+}
+
+TEST_CASE("ACE slot transition empty -> present clears override",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task13_empty_to_present_clears");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed override AND lane_data entry so we can verify clear_async really
+    // deletes it from the mock Moonraker DB.
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"vendor", "Polymaker"},
+                               {"spool_id", 42},
+                               {"material", "PLA"},
+                               {"color", "#FF5500"}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    AceTestAccess::seed_override(backend, 0, ovr);
+
+    // First parse: slot is EMPTY. prev_slot_status_ is unset (baseline UNKNOWN);
+    // UNKNOWN -> EMPTY is NOT a swap (curr is not "present"), so no clear.
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("empty", 0x000000, ""));
+    REQUIRE(AceTestAccess::get_override(backend, 0).has_value());
+    REQUIRE(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Second parse: slot becomes AVAILABLE with a different color — EMPTY ->
+    // AVAILABLE is the swap signal. Override MUST be cleared (in-memory and
+    // in MR DB).
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("available", 0x0055FF, "PETG"));
+
+    CHECK_FALSE(AceTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Firmware data for the new spool is visible; override-exclusive fields
+    // were reset.
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand.empty());
+    CHECK(info.spool_name.empty());
+    CHECK(info.spoolman_id == 0);
+    CHECK(info.color_rgb == 0x0055FFu);  // new firmware color flows through
+    CHECK(info.material == "PETG");      // new firmware material
+}
+
+TEST_CASE("ACE slot transition loaded -> empty does NOT clear override",
+          "[ams][ace][filament_slot_override][slow]") {
+    // User unloaded the current spool but hasn't swapped yet. The override
+    // must survive — they may reinsert the same spool. Only the inverse
+    // transition (empty -> present) is a swap signal.
+    AceTmpCacheDir tmp("task13_loaded_to_empty_preserves");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    AceTestAccess::seed_override(backend, 0, ovr);
+
+    // First parse: slot LOADED. First observation is a BASELINE and never
+    // fires a clear (caller skips the helper when prev_slot_status_ has no
+    // entry). Override survives intact.
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("loaded", 0xFF5500, "PLA"));
+    REQUIRE(AceTestAccess::get_override(backend, 0).has_value());
+
+    // Second parse: LOADED -> EMPTY (user unloaded). Must NOT clear — user
+    // may still reinsert the same spool.
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("empty", 0x000000, ""));
+    CHECK(AceTestAccess::get_override(backend, 0).has_value());
+
+    // Third parse: EMPTY -> LOADED (user reinserts SAME spool). This IS a
+    // "present" transition, so the override IS cleared — the status-based
+    // heuristic can't distinguish "reinsert same spool" from "insert new
+    // spool." Documented limitation: ACE users who unload and reload the
+    // same spool will lose their override. Acceptable tradeoff — far less
+    // common than the new-spool path the heuristic is built for.
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("loaded", 0xFF5500, "PLA"));
+    CHECK_FALSE(AceTestAccess::get_override(backend, 0).has_value());
+}
+
+TEST_CASE("ACE partial override only replaces specified fields",
+          "[ams][ace][filament_slot_override]") {
+    AmsBackendAce backend(nullptr, nullptr);
+
+    // Override with only `brand` set — every other field must fall through
+    // to firmware data (or SlotInfo default). Seed override AFTER an initial
+    // baseline parse (first observation is the baseline and would otherwise
+    // trigger the EMPTY-not-yet-seen path cleanly, but a saved override
+    // should already be in place before the parse that establishes the
+    // baseline. In production the load_blocking() call precedes any parse
+    // entirely; here the seed-then-parse ordering matches that contract).
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    AceTestAccess::seed_override(backend, 0, ovr);
+
+    AceTestAccess::parse_ace(backend,
+        make_ace_slot_payload("available", 0xFF5500, "PLA"));
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Polymaker");        // override wins
+    CHECK(info.color_rgb == 0xFF5500u);      // firmware untouched
+    CHECK(info.material == "PLA");           // firmware untouched
+    CHECK(info.spool_name.empty());          // default
+    CHECK(info.spoolman_id == 0);            // default
+    CHECK(info.remaining_weight_g == -1.0f); // default
 }

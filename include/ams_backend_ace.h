@@ -5,10 +5,13 @@
 
 #include "ams_subscription_backend.h"
 #include "async_lifetime_guard.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
 #include "moonraker_types.h"
 
 #include <atomic>
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -38,6 +41,8 @@
  * - Fallback: REST polling thread at ~500ms interval
  * - State is cached under mutex protection (inherited from AmsSubscriptionBackend)
  */
+class AceTestAccess;
+
 class AmsBackendAce : public AmsSubscriptionBackend {
   public:
     AmsBackendAce(MoonrakerAPI* api, helix::MoonrakerClient* client);
@@ -169,6 +174,8 @@ class AmsBackendAce : public AmsSubscriptionBackend {
     void parse_ace_object(const nlohmann::json& data);
 
   private:
+    friend class ::AceTestAccess;
+
     // ========================================================================
     // REST Fallback (for BunnyACE/DuckACE without get_status())
     // ========================================================================
@@ -218,28 +225,47 @@ class AmsBackendAce : public AmsSubscriptionBackend {
     // Configuration
     static constexpr int POLL_INTERVAL_MS = 500;
 
-    // User slot overrides: ACE hardware doesn't support set_slot_info via gcode,
-    // so user edits (color, material, weight) are stored in-memory and merged
-    // over hardware-reported values during parse. Cleared when slot status changes
-    // (e.g., spool physically swapped).
-    struct SlotOverride {
-        uint32_t color_rgb = 0;
-        std::string material;
-        std::string color_name;
-        std::string brand;
-        std::string spool_name;
-        int spoolman_id = 0;
-        float remaining_weight_g = -1;
-        float total_weight_g = -1;
-    };
-    std::unordered_map<int, SlotOverride> slot_overrides_;
-    std::unordered_map<int, SlotStatus> prev_slot_status_;
+    // Layer any configured FilamentSlotOverride for `slot_index` over `slot`,
+    // mutating `slot` in place. Override wins for every non-default field;
+    // default values (empty string, 0, -1.0 weights) fall through to the
+    // firmware-reported data untouched. Called from parse_ace_object so every
+    // parse path picks up the override before the SlotInfo is exposed via
+    // events. ACE hardware doesn't carry brand/spool/weights, so the override
+    // is the only source for those fields; color/material come from both the
+    // firmware and user edits and the override wins per the merge policy.
+    void apply_overrides(SlotInfo& slot, int slot_index);
 
-    // Slot override persistence (Moonraker DB + local JSON fallback)
-    void save_slot_overrides();
-    void load_slot_overrides();
-    void save_slot_overrides_json() const;
-    bool load_slot_overrides_json();
-    nlohmann::json slot_overrides_to_json() const;
-    void apply_slot_overrides_json(const nlohmann::json& data);
+    // Hardware-event detection: ACE has no RFID UID, so "user physically
+    // swapped the spool" is inferred from a status transition EMPTY -> present
+    // (AVAILABLE / LOADED). When detected, the stored override for the slot
+    // is cleared so stale brand/spool_name/spoolman_id from the previous
+    // spool don't bleed onto the new one. Override-exclusive fields on `slot`
+    // are zeroed in place so the cleared state is visible in the very next
+    // get_slot_info() read (apply_overrides then no-ops for that slot).
+    //
+    // Called from parse_ace_object BEFORE apply_overrides, so the check
+    // decides based on parsed firmware status (not override-masked data). The
+    // caller is responsible for skipping the very first observation (no prior
+    // prev_slot_status_ entry) — first-observation is a baseline and never
+    // fires. Limitation: a LOADED -> EMPTY -> LOADED sequence (user unloaded
+    // and reinserted the same spool) looks identical to a swap under this
+    // status-based heuristic and clears the override. Documented tradeoff —
+    // ACE's single signal is too coarse to distinguish the two cases.
+    void check_hardware_event_clear(SlotInfo& slot, int slot_index,
+                                    SlotStatus previous_status, SlotStatus current_status);
+
+    // User-provided per-slot metadata (brand, spool name, spoolman IDs,
+    // remaining weight, etc.) layered over firmware-reported state.
+    // Both writers (on_started initial load, set_slot_info persist path) hold
+    // mutex_; apply_overrides reads inside the parse path under mutex_.
+    std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
+    std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
+
+    // Previous slot status per slot index. Used as the swap-detection signal:
+    // an EMPTY -> present transition fires the clear-override path. Map
+    // presence also acts as the baseline guard: absent entry means "no prior
+    // observation" and the check is skipped (first observation never clears).
+    // Access is always under mutex_ (parse_ace_object is the only
+    // writer/reader).
+    std::unordered_map<int, SlotStatus> prev_slot_status_;
 };
