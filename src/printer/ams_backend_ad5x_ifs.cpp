@@ -514,13 +514,20 @@ void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
         slot.material = o.material;
 }
 
-void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t firmware_color,
+void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t observed_color,
                                                    SlotInfo& slot) {
-    // firmware_color == 0 is "no reading" (empty slot, unread, transient JSON
+    // observed_color is whatever color this parse (or caller) believes is
+    // currently in the slot — typically firmware-truth from the parse path,
+    // but set_slot_info() also pre-updates the baseline with the user's
+    // chosen color before calling update_slot_from_state(), so this helper
+    // can be fed a user-provided color too. Either way, the "did it change
+    // from what we last saw?" contract is the same.
+    //
+    // observed_color == 0 is "no reading" (empty slot, unread, transient JSON
     // parse race). Treat as non-signal: don't update the baseline, don't clear.
     // Otherwise every empty-slot poll would overwrite a real prior color and
     // mask a genuine hardware swap on the next non-empty poll.
-    if (firmware_color == 0)
+    if (observed_color == 0)
         return;
 
     auto it = last_firmware_color_.find(slot_index);
@@ -529,29 +536,31 @@ void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t firm
         // override's color_rgb differs from firmware, the initial startup
         // observation is NEVER a "swap" signal. apply_overrides will still
         // run after us and the override wins.
-        last_firmware_color_[slot_index] = firmware_color;
+        last_firmware_color_[slot_index] = observed_color;
+        spdlog::debug("{} Slot {} baseline color: #{:06X}", backend_log_tag(), slot_index,
+                      observed_color);
         return;
     }
-    if (it->second == firmware_color)
+    if (it->second == observed_color)
         return; // unchanged — no swap signal
 
-    // Firmware color changed. Record the new color as the baseline before
+    // Observed color changed. Record the new color as the baseline before
     // doing anything else so a failed clear_async doesn't make us re-fire
     // every poll.
     const uint32_t old_color = it->second;
-    it->second = firmware_color;
+    it->second = observed_color;
 
     auto ovr_it = overrides_.find(slot_index);
     if (ovr_it == overrides_.end()) {
         spdlog::debug("{} Slot {} firmware color changed #{:06X} -> #{:06X} "
                       "(no override to clear)",
-                      backend_log_tag(), slot_index, old_color, firmware_color);
+                      backend_log_tag(), slot_index, old_color, observed_color);
         return;
     }
 
     spdlog::info("{} Slot {} firmware color changed #{:06X} -> #{:06X}, "
                  "clearing override (physical spool swap detected)",
-                 backend_log_tag(), slot_index, old_color, firmware_color);
+                 backend_log_tag(), slot_index, old_color, observed_color);
     overrides_.erase(ovr_it);
 
     // Reset override-exclusive fields on the live SlotInfo so the cleared
@@ -933,6 +942,24 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
             // updated_at left default — save_async stamps a fresh value so
             // the on-disk record's scan_time wins over any local clock skew.
             overrides_[slot_index] = ovr;
+        }
+
+        // Treat the user's chosen color as the new "firmware truth" baseline
+        // so check_hardware_event_clear() doesn't interpret the upcoming
+        // update_slot_from_state() call as a physical spool swap and wipe
+        // the override we just staged. The semantics match user intent:
+        // "I'm telling the system this IS the current color." The next
+        // *real* firmware swap will then be detected against the user's
+        // chosen color.
+        //
+        // Applies to both persist=true (override just staged above) and
+        // persist=false (preview must not wipe a PREVIOUSLY saved override
+        // when the preview color differs from last_firmware_color_). Guard
+        // on color_rgb != 0 — 0 means "no color change" here and must not
+        // overwrite the baseline (same contract as check_hardware_event_clear
+        // treats a 0 reading as "no signal").
+        if (info.color_rgb != 0) {
+            last_firmware_color_[slot_index] = info.color_rgb;
         }
 
         // Recalculate slot status now that port_presence may have changed.

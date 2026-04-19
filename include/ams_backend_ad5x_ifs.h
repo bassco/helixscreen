@@ -191,9 +191,15 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // sees firmware-truth (not the override-masked value). First observation
     // on a given slot is a baseline and NEVER triggers a clear.
     //
-    // `firmware_color == 0` is treated as "no color reading" (empty slot,
+    // `observed_color` is the color observed on this parse, whatever its
+    // source: firmware-truth from the Adventurer5M.json parse path OR a
+    // user-chosen color pre-staged by set_slot_info() before its
+    // update_slot_from_state() call. Both feed the same "did it change from
+    // the last-observed value?" check.
+    //
+    // `observed_color == 0` is treated as "no color reading" (empty slot,
     // unread, transient) and is ignored — it must not update the baseline.
-    void check_hardware_event_clear(int slot_index, uint32_t firmware_color, SlotInfo& slot);
+    void check_hardware_event_clear(int slot_index, uint32_t observed_color, SlotInfo& slot);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
     void register_zcolor_listener();
@@ -300,12 +306,19 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // Used to detect hardware-event "user swapped physical spool" and clear
     // the override so stale brand/spool_name/spoolman_id from the previous
     // physical spool don't bleed onto the new one. Empty = first observation
-    // (baseline, never triggers a clear). firmware_color == 0 is ignored as
+    // (baseline, never triggers a clear). observed_color == 0 is ignored as
     // "no reading" and does not update the baseline.
     //
-    // Access is always under mutex_ (only written/read from
-    // update_slot_from_state -> check_hardware_event_clear, whose callers
-    // hold the lock).
+    // Startup safety: on_started() loads overrides_ from Moonraker DB BEFORE
+    // any firmware parse runs, and last_firmware_color_ stays empty until the
+    // first parse — so the startup window can't flag the initial observation
+    // as a swap. set_slot_info() also pre-updates this map with the user's
+    // chosen color before calling update_slot_from_state() so a color edit
+    // isn't misread as a physical swap on the same call.
+    //
+    // Access is always under mutex_ (written/read from update_slot_from_state
+    // -> check_hardware_event_clear and from set_slot_info's pre-update, all
+    // of which run under the lock).
     std::unordered_map<int, uint32_t> last_firmware_color_;
 
     // Note: uses inherited lifetime_ from AmsSubscriptionBackend (not shadowed).
