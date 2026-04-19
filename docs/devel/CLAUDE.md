@@ -37,6 +37,7 @@ All developer documentation lives here. When working on features, look up the re
 |-----|-------------|
 | `LABEL_PRINTER_SYSTEM.md` | Label printing: Brother QL, Phomemo, Niimbot, MakeID protocols; USB/TCP/Bluetooth transports |
 | `FILAMENT_MANAGEMENT.md` | AMS, AFC (Box Turtle), Happy Hare, ACE (Anycubic ACE Pro), AD5X IFS, CFS, Tool Changer, multi-backend |
+| `FILAMENT_SLOT_METADATA.md` | Internal notes on `FilamentSlotOverrideStore`: per-backend integration, hardware-event clearing, lifetime discipline, local cache, legacy migration. Pair with `../specs/filament_slots.md` for the public wire format. |
 | `plans/2026-02-15-spool-wizard-status.md` | Spool creation wizard: 3-step flow, API methods, visual test plan |
 | `MULTI_EXTRUDER_TEMPERATURE.md` | Multi-extruder temperature tracking, ExtruderInfo, dynamic subjects |
 | `TOOL_ABSTRACTION.md` | ToolState singleton, ToolInfo, tool-to-backend mapping, DetectState |

@@ -10,6 +10,8 @@ docs/
 │   └── CLAUDE.md      # Style guide for user-facing docs
 ├── devel/             # Developer docs (architecture, features, platforms, plans)
 │   └── CLAUDE.md      # Full developer doc index by topic
+├── specs/             # Public, vendor-neutral convention specs (third-party adopters)
+│   └── CLAUDE.md      # Specs subtree routing
 ├── audits/            # Security reviews, memory analysis, test coverage
 ├── archive/           # Historical implementation plans
 └── images/            # Screenshots and diagrams
@@ -22,6 +24,7 @@ Each subdirectory has its own `CLAUDE.md` with context-specific guidance.
 | I need to... | Go to |
 |--------------|-------|
 | Look up how a system works | `devel/CLAUDE.md` — find the feature doc |
+| Understand a shared convention spec | `specs/CLAUDE.md` — public, vendor-neutral specs |
 | Write/update user-facing docs | `user/CLAUDE.md` — style rules for end users |
 | Find XML widget docs | `devel/LVGL9_XML_GUIDE.md` |
 | Understand modal patterns | `devel/MODAL_SYSTEM.md` |

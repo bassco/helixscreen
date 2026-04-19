@@ -215,6 +215,23 @@ struct ToolInfo {
 
 ---
 
+## Persistence of slot metadata
+
+HelixScreen writes user-edited slot metadata (brand, spool name, Spoolman
+link, weights, color/material) to the Moonraker `lane_data` namespace,
+following the AFC-originated convention. This is the same namespace
+OrcaSlicer 2.3.2+ reads for filament sync, so user edits automatically
+flow to the slicer on Moonraker-based printers.
+
+- **Wire-format spec (public):** [`../specs/filament_slots.md`](../specs/filament_slots.md)
+- **Implementation notes (internal):** [`FILAMENT_SLOT_METADATA.md`](FILAMENT_SLOT_METADATA.md)
+
+Backends: IFS, Snapmaker, ACE, CFS share the `FilamentSlotOverrideStore`
+infrastructure. AFC and Happy Hare manage their own `lane_data` via
+their respective Klipper plugins; HelixScreen does not touch those.
+
+---
+
 ## UI Panels
 
 ### AMS Panel (`ui_panel_ams`)

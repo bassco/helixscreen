@@ -58,6 +58,8 @@ Welcome to the HelixScreen documentation. Choose your path:
 |----------|-------------|
 | [**Label Printer System**](devel/LABEL_PRINTER_SYSTEM.md) | Brother QL, Phomemo, Niimbot, MakeID; USB/TCP/Bluetooth |
 | [**Filament Management**](devel/FILAMENT_MANAGEMENT.md) | AMS, AFC, Happy Hare, ACE, Tool Changer |
+| [**Filament Slot Metadata (internal)**](devel/FILAMENT_SLOT_METADATA.md) | `FilamentSlotOverrideStore` implementation: per-backend hooks, hardware-event clearing, cache, migration |
+| [**Filament Slots Spec (public)**](specs/filament_slots.md) | Wire-format convention for the `lane_data` Moonraker DB namespace — readable by any third party |
 | [**Spoolman Spool Wizard**](devel/plans/2026-02-15-spool-wizard-status.md) | 3-step spool creation wizard, API methods, visual test plan |
 | [**Input Shaper & PID**](devel/INPUT_SHAPER.md) | Calibration, frequency response charts, CSV parser |
 | [**Preprint Prediction**](devel/PREPRINT_PREDICTION.md) | ETA prediction engine, phase timing, history |
@@ -134,12 +136,17 @@ docs/
 │   ├── LVGL9_XML_GUIDE.md    # XML reference
 │   ├── MODAL_SYSTEM.md       # Modal architecture
 │   ├── FILAMENT_MANAGEMENT.md # AMS, AFC, Happy Hare, TC
+│   ├── FILAMENT_SLOT_METADATA.md # Slot override store: internal impl notes
 │   ├── INPUT_SHAPER.md       # Calibration, freq charts
 │   ├── LED_CONTROL.md        # LED system, 4 backends
 │   ├── UPDATE_SYSTEM.md      # Update channels, downloads
 │   ├── ROADMAP.md            # Feature timeline
 │   ├── plans/                # Active implementation plans
 │   └── ...                   # 40+ more dev docs
+│
+├── specs/                    # PUBLIC, VENDOR-NEUTRAL CONVENTION SPECS
+│   ├── CLAUDE.md             # Specs subtree routing
+│   └── filament_slots.md     # lane_data Moonraker DB convention
 │
 ├── audits/                   # Security & quality
 ├── archive/                  # Historical implementation plans
