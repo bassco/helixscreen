@@ -515,7 +515,13 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
                     auto brand = !rfid.manufacturer.empty() ? rfid.manufacturer : rfid.vendor;
                     if (brand != "NONE") slot->brand = brand;
                     slot->color_rgb = rfid.color_rgb;
-                    if (rfid.sub_type != "NONE") slot->color_name = rfid.sub_type;
+                    // SUB_TYPE is Snapmaker's filament product-line name (e.g.
+                    // "SnapSpeed" for their PLA line — akin to Polymaker's
+                    // "PolyLite"). Maps to spool_name, NOT color_name. The
+                    // Snapmaker RFID doesn't expose a dedicated color-name
+                    // field — color_name stays unset here and is user-editable
+                    // via the edit modal's color picker.
+                    if (rfid.sub_type != "NONE") slot->spool_name = rfid.sub_type;
                     slot->nozzle_temp_min = rfid.hotend_min_temp;
                     slot->nozzle_temp_max = rfid.hotend_max_temp;
                     slot->bed_temp = rfid.bed_temp;
@@ -793,16 +799,18 @@ void AmsBackendSnapmaker::clear_override_locked(int slot_index, SlotInfo& slot) 
     // visible in the very next get_slot_info() read (apply_overrides is a
     // no-op for this slot afterwards).
     //
-    // Snapmaker field policy: brand / color_name / total_weight_g come from
+    // Snapmaker field policy: brand / spool_name / total_weight_g come from
     // the RFID tag in handle_status_update — we must NOT zero those here or
     // we'd wipe newly-parsed firmware metadata. The override's copies of
     // those fields disappear with the erase; firmware's copies stay.
+    // (color_name is not firmware-populated for Snapmaker — RFID has no
+    // color-name field — so it's override-exclusive and gets cleared.)
     overrides_.erase(slot_index);
 
-    slot.spool_name.clear();
     slot.spoolman_id = 0;
     slot.spoolman_vendor_id = 0;
     slot.remaining_weight_g = -1.0f;
+    slot.color_name.clear();
 
     if (override_store_) {
         // Capture by value only — clear_async's Moonraker callback can fire

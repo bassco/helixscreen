@@ -567,12 +567,15 @@ TEST_CASE("Snapmaker RFID UID change clears override (hardware swap detected)",
     // Baseline advanced to the new UID.
     CHECK(SnapmakerTestAccess::last_rfid_uid(backend, 0) == "5,6,7,8");
 
-    // Override-exclusive fields reset on the live slot.
+    // Override-exclusive fields reset on the live slot. spool_name is NOT
+    // override-exclusive for Snapmaker — RFID's SUB_TYPE populates it (the
+    // helper hard-codes "Basic"), and the clear preserves firmware writes
+    // the same way it preserves brand / total_weight_g.
     auto info = backend.get_slot_info(0);
-    CHECK(info.brand == "Generic");   // firmware's new brand flows through
-    CHECK(info.spool_name.empty());
+    CHECK(info.brand == "Generic");      // firmware's new brand flows through
+    CHECK(info.spool_name == "Basic");   // firmware's SUB_TYPE flows through
     CHECK(info.spoolman_id == 0);
-    CHECK(info.material == "PETG");   // firmware's new material
+    CHECK(info.material == "PETG");      // firmware's new material
 }
 
 TEST_CASE("Snapmaker first RFID UID observation does NOT clear override",

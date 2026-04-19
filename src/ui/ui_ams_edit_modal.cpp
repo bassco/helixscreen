@@ -254,6 +254,11 @@ void AmsEditModal::on_show() {
         color_name_observer_ = lv_label_bind_text(color_name_label, &color_name_subject_, nullptr);
     }
 
+    lv_obj_t* spool_name_label = find_widget("spool_name_label");
+    if (spool_name_label) {
+        spool_name_observer_ = lv_label_bind_text(spool_name_label, &spool_name_subject_, nullptr);
+    }
+
     lv_obj_t* temp_nozzle_label = find_widget("temp_nozzle_label");
     if (temp_nozzle_label) {
         temp_nozzle_observer_ =
@@ -333,6 +338,7 @@ void AmsEditModal::init_subjects() {
     slot_indicator_buf_[1] = '-';
     slot_indicator_buf_[2] = '\0';
     color_name_buf_[0] = '\0';
+    spool_name_buf_[0] = '\0';
     snprintf(temp_nozzle_buf_, sizeof(temp_nozzle_buf_), "200-230°C");
     snprintf(temp_bed_buf_, sizeof(temp_bed_buf_), "60°C");
     snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "100%%");
@@ -344,6 +350,10 @@ void AmsEditModal::init_subjects() {
     lv_subject_init_string(&color_name_subject_, color_name_buf_, nullptr, sizeof(color_name_buf_),
                            "");
     subjects_.register_subject(&color_name_subject_);
+
+    lv_subject_init_string(&spool_name_subject_, spool_name_buf_, nullptr, sizeof(spool_name_buf_),
+                           "");
+    subjects_.register_subject(&spool_name_subject_);
 
     lv_subject_init_string(&temp_nozzle_subject_, temp_nozzle_buf_, nullptr,
                            sizeof(temp_nozzle_buf_), "200-230°C");
@@ -1153,6 +1163,19 @@ void AmsEditModal::update_ui() {
         color_name_buf_[0] = '\0';
     }
     lv_subject_copy_string(&color_name_subject_, color_name_buf_);
+
+    // Update filament/spool product-line label. Hidden when empty so it
+    // doesn't leave a blank row on backends/slots that don't populate it.
+    lv_obj_t* spool_name_label = find_widget("spool_name_label");
+    if (!working_info_.spool_name.empty()) {
+        snprintf(spool_name_buf_, sizeof(spool_name_buf_), "%s",
+                 working_info_.spool_name.c_str());
+        if (spool_name_label) lv_obj_remove_flag(spool_name_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        spool_name_buf_[0] = '\0';
+        if (spool_name_label) lv_obj_add_flag(spool_name_label, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_subject_copy_string(&spool_name_subject_, spool_name_buf_);
 
     // Update remaining slider and label
     // Use synthetic 1000g total if no weight data (manual spool without Spoolman)

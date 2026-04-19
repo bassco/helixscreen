@@ -104,6 +104,10 @@
           </lv_obj>
           <!-- Color name label below swatch -->
           <text_small name="color_name_label" text="Gray" translation_tag="Gray" width="100%" long_mode="wrap" style_text_align="center"/>
+          <!-- Filament product-line name (e.g. "SnapSpeed", "PolyLite PLA") —
+               hidden when empty. Populated from firmware on backends that
+               expose it (Snapmaker RFID sub_type) or from user overrides. -->
+          <text_small name="spool_name_label" text="" width="100%" long_mode="wrap" style_text_align="center" style_text_color="#text_muted" hidden="true"/>
         </lv_obj>
         <!-- RIGHT COLUMN: Form fields -->
         <lv_obj flex_grow="1"

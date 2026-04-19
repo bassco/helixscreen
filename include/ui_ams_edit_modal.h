@@ -116,6 +116,7 @@ class AmsEditModal : public Modal {
     SubjectManager subjects_;
     lv_subject_t slot_indicator_subject_;
     lv_subject_t color_name_subject_;
+    lv_subject_t spool_name_subject_;
     lv_subject_t temp_nozzle_subject_;
     lv_subject_t temp_bed_subject_;
     lv_subject_t remaining_pct_subject_;
@@ -126,6 +127,7 @@ class AmsEditModal : public Modal {
 
     char slot_indicator_buf_[32] = {0};
     char color_name_buf_[32] = {0};
+    char spool_name_buf_[64] = {0};
     char temp_nozzle_buf_[16] = {0};
     char temp_bed_buf_[16] = {0};
     char remaining_pct_buf_[48] = {0}; // "1000g / 1000g (100%)" needs ~22 chars
@@ -135,6 +137,7 @@ class AmsEditModal : public Modal {
     // === Observer tracking for cleanup [L020] ===
     lv_observer_t* slot_indicator_observer_ = nullptr;
     lv_observer_t* color_name_observer_ = nullptr;
+    lv_observer_t* spool_name_observer_ = nullptr;
     lv_observer_t* temp_nozzle_observer_ = nullptr;
     lv_observer_t* temp_bed_observer_ = nullptr;
     lv_observer_t* remaining_pct_observer_ = nullptr;
