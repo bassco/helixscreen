@@ -154,7 +154,19 @@ Never spawn a raw `std::thread` for HTTP — unbounded spawning crashed with EAG
 thread exhaustion on RatOS (#811-adjacent). See `docs/devel/MOONRAKER_ARCHITECTURE.md`
 § "HTTP Work Execution (HttpExecutor)".
 
-**No `safe_delete()` in queued callbacks:** `safe_delete()` is synchronous — never call it inside `queue_update()`/`async_call()` lambdas. Multiple synchronous deletions in the same `process_pending()` batch corrupt LVGL's event linked list (SIGSEGV). Use `safe_delete_deferred()` or hide + `lv_async_call()` pattern instead. See `ARCHITECTURE.md` § "No safe_delete() Inside UpdateQueue Callbacks".
+**No sync widget deletion in queued callbacks (MANDATORY):** Never call these synchronous deletion APIs from inside `queue_update()` / `async_call()` / `lifetime_.defer()` / `tok.defer()` / observer callbacks (`observe_int_sync`, `observe_string` — also deferred via queue_update since #82):
+
+| ❌ BANNED inside queued callbacks | ✅ USE INSTEAD |
+|-----------------------------------|-----------------|
+| `safe_delete(ptr)` | `safe_delete_deferred(ptr)` |
+| `lv_obj_delete(obj)` | `lv_obj_delete_async(obj)` |
+| `lv_obj_clean(container)` | `helix::ui::safe_clean_children(container)` |
+
+Multiple sync deletions in the same `UpdateQueue::process_pending()` batch corrupt LVGL's global event linked list → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80).
+
+**`lifetime_.defer` / `tok.defer` do NOT escape the batch.** They are thin wrappers around `queue_update` — the callback fires in the *next* `process_pending` tick, which is still a UpdateQueue batch that may contain other sync deletions. The generation guard protects against use-after-free of `this`, NOT against event-list corruption. If you see a comment claiming `lifetime_.defer` "runs outside process_pending", it's wrong — fix it.
+
+**Safe escape routes (truly outside UpdateQueue batches):** `safe_delete_deferred()`, `safe_delete_deferred_raw()`, `helix::ui::safe_clean_children()`, `lv_obj_delete_async()`, and raw `lv_async_call(cb, ud)`. Note: our wrapper `helix::ui::async_call` does NOT escape — it routes through `queue_update`. See `include/ui_utils.h` and `ARCHITECTURE.md` § "No safe_delete() Inside UpdateQueue Callbacks".
 
 **Subject shutdown safety (MANDATORY):** Any class that creates LVGL subjects MUST self-register its cleanup inside `init_subjects()`. This prevents shutdown crashes (observer removal on freed subjects during `lv_deinit`). See `static_subject_registry.h` for full docs.
 

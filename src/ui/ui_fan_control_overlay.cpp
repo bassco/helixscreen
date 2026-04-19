@@ -10,6 +10,7 @@
 #include "ui_nav_manager.h"
 #include "ui_notification.h"
 #include "ui_settings_fans.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "config.h"
@@ -147,9 +148,10 @@ void FanControlOverlay::on_activate() {
             fans_ver, this, [](FanControlOverlay* self, int /* version */) {
                 if (!self->is_visible())
                     return;
-                // Use lifetime_.defer to defer the rebuild outside process_pending(),
-                // preventing lv_obj_clean() from corrupting the LVGL event linked
-                // list (issue #190).
+                // Defer rebuild (#80) AND use safe_clean_children (#776): lifetime_.defer
+                // moves the rebuild off the observer callback's stack, and
+                // safe_clean_children escapes UpdateQueue::process_pending() so the
+                // sync clean can't corrupt LVGL's event linked list.
                 if (!self->fans_rebuild_pending_) {
                     self->fans_rebuild_pending_ = true;
                     self->lifetime_.defer("FanControlOverlay::rebuild_fans", [self]() {
@@ -242,8 +244,10 @@ void FanControlOverlay::populate_fans() {
     }
     auto_fan_cards_.clear();
 
-    // Now safe to destroy the LVGL widget tree
-    lv_obj_clean(fans_container_);
+    // Now safe to destroy the LVGL widget tree. safe_clean_children reparents each
+    // child to lv_layer_top() + schedules lv_obj_delete_async — escaping the
+    // UpdateQueue batch that this observer-deferred rebuild runs inside (#776).
+    helix::ui::safe_clean_children(fans_container_);
 
     const auto& fans = printer_state_.get_fans();
 

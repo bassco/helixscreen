@@ -5,6 +5,7 @@
 #include "ui_gcode_viewer.h"
 #include "ui_nav_manager.h"
 #include "ui_print_exclude_object_manager.h"
+#include "ui_utils.h"
 
 #include "gcode_object_thumbnail_renderer.h"
 #include "observer_factory.h"
@@ -220,11 +221,10 @@ void ExcludeObjectsListOverlay::start_thumbnail_render() {
                 return;
             }
 
-            // Defer the widget tree rebuild to avoid lv_obj_clean() inside a
-            // queue_update callback, which can corrupt LVGL's event linked list
-            // during layout refresh (issue #555).
-            // Use token.defer() (not lifetime_.defer()) — render_async callback
-            // runs on a worker thread, TOCTOU race (#707).
+            // Marshal off the worker thread via tok.defer (not lifetime_.defer — TOCTOU
+            // race, #707). safe_clean_children inside the main-thread lambda schedules
+            // child deletion via lv_obj_delete_async, which runs OUTSIDE
+            // UpdateQueue::process_pending() — prevents event-list corruption (#776).
             auto tok = lifetime_.token();
             auto shared_result =
                 std::shared_ptr<helix::gcode::ObjectThumbnailSet>(std::move(result));
@@ -240,7 +240,7 @@ void ExcludeObjectsListOverlay::start_thumbnail_render() {
                 // buffers, then free the old buffers before creating new ones
                 if (objects_list_) {
                     lv_obj_update_layout(objects_list_);
-                    lv_obj_clean(objects_list_);
+                    helix::ui::safe_clean_children(objects_list_);
                 }
                 for (auto& [name, buf] : object_thumbnails_) {
                     if (buf) {
@@ -310,9 +310,12 @@ void ExcludeObjectsListOverlay::populate_list() {
     }
 
     // Flush pending layout before cleaning children — deferred observer callbacks
-    // can run between layout passes, causing use-after-free (#711).
+    // can run between layout passes, causing use-after-free (#711). populate_list
+    // runs from observe_int_sync callbacks (excluded/defined version subjects), so
+    // safe_clean_children is required to schedule deletion outside the UpdateQueue
+    // batch — prevents event-list corruption (#776).
     lv_obj_update_layout(objects_list_);
-    lv_obj_clean(objects_list_);
+    helix::ui::safe_clean_children(objects_list_);
 
     const auto& defined = printer_state_->get_defined_objects();
     const auto& excluded = printer_state_->get_excluded_objects();

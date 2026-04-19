@@ -10,6 +10,7 @@
 #include "static_subject_registry.h"
 #include "subject_debug_registry.h"
 #include "theme_manager.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -93,8 +94,11 @@ void JobQueueWidget::attach(lv_obj_t* widget_obj, lv_obj_t* parent_screen) {
     if (count_subj) {
         count_observer_ = helix::ui::observe_int_sync<JobQueueWidget>(
             count_subj, this, [](JobQueueWidget* self, int /*count*/) {
-                // Use lv_async_call to defer the rebuild outside process_pending(), preventing
-                // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
+                // Defer rebuild (#80) AND use safe_clean_children inside
+                // rebuild_job_list (#776): lv_async_call moves the rebuild off
+                // the observer callback's stack, and safe_clean_children schedules
+                // child deletion via lv_obj_delete_async so sync lv_obj_clean()
+                // can't corrupt LVGL's event linked list.
                 if (!self->list_rebuild_pending_) {
                     self->list_rebuild_pending_ = true;
                     struct RebuildCtx {
@@ -180,8 +184,11 @@ void JobQueueWidget::rebuild_job_list() {
 
     // Flush pending layout before cleaning — deferred observer callbacks can run
     // between layout passes, causing use-after-free in layout_update_core (#711).
+    // safe_clean_children schedules child deletion via lv_obj_delete_async, so it
+    // runs outside any UpdateQueue::process_pending() batch — prevents event-list
+    // corruption (#776).
     lv_obj_update_layout(job_list_container_);
-    lv_obj_clean(job_list_container_);
+    helix::ui::safe_clean_children(job_list_container_);
 
     auto* jqs = get_job_queue_state();
 

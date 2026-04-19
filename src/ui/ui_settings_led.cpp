@@ -14,6 +14,7 @@
 #include "ui_nav_manager.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "device_display_name.h"
 #include "led/led_auto_state.h"
@@ -235,7 +236,7 @@ void LedSettingsOverlay::populate_macro_devices_impl() {
     if (!container)
         return;
 
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& led_ctrl = helix::led::LedController::instance();
     const auto& macros = led_ctrl.configured_macros();
@@ -1020,7 +1021,7 @@ void LedSettingsOverlay::populate_led_chips_impl() {
         return;
     }
 
-    lv_obj_clean(chip_container);
+    helix::ui::safe_clean_children(chip_container);
 
     // Source LED list from all backends (native + WLED + macros)
     auto& led_ctrl = helix::led::LedController::instance();
@@ -1269,7 +1270,7 @@ void LedSettingsOverlay::rebuild_contextual_controls(const std::string& state_ke
     if (!container)
         return;
 
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& auto_state = helix::led::LedAutoState::instance();
     const auto* mapping = auto_state.get_mapping(state_key);

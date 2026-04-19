@@ -1157,7 +1157,7 @@ void TemperatureService::rebuild_extruder_segments_impl() {
     }
 
     lv_obj_remove_flag(selector, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clean(selector);
+    helix::ui::safe_clean_children(selector);
 
     // Build sorted extruder list for deterministic button order
     const auto& extruders = printer_state_.temperature_state().extruders();

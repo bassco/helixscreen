@@ -117,10 +117,12 @@ void AmsOverviewPanel::init_subjects() {
                     self->refresh_detail_if_needed();
                     return;
                 }
-                // Use lv_async_call to defer the rebuild
-                // outside process_pending(), preventing
-                // lv_obj_clean() from corrupting the LVGL
-                // event linked list (issue #190).
+                // Defer rebuild (#80) AND use safe_clean_children
+                // in refresh_units callees (#776): lifetime_.defer
+                // moves work off the observer callback's stack, and
+                // safe_clean_children schedules child deletion via
+                // lv_obj_delete_async so sync lv_obj_clean() can't
+                // corrupt LVGL's event linked list.
                 if (!self->units_rebuild_pending_) {
                     self->units_rebuild_pending_ = true;
                     self->lifetime_.defer("AmsOverviewPanel::refresh_units", [self]() {
@@ -285,9 +287,12 @@ void AmsOverviewPanel::create_unit_cards(const AmsSystemInfo& info) {
     }
 
     // Flush pending layout so LVGL doesn't reference children we're about to
-    // destroy (use-after-free in layout_update_core, issue #711).
+    // destroy (use-after-free in layout_update_core, issue #711). Called from
+    // refresh_units under the slots_version observer — safe_clean_children
+    // escapes UpdateQueue::process_pending() so sync deletion can't corrupt
+    // LVGL's event linked list (#776).
     lv_obj_update_layout(cards_row_);
-    lv_obj_clean(cards_row_);
+    helix::ui::safe_clean_children(cards_row_);
     unit_cards_.clear();
 
     int current_slot = lv_subject_get_int(AmsState::instance().get_current_slot_subject());
@@ -365,10 +370,13 @@ void AmsOverviewPanel::update_unit_card(UnitCard& card, const AmsUnit& unit, int
     // Rebuild mini bars (slot colors/status may have changed).
     // Flush pending layout first — deferred callbacks can run between layout
     // passes, and cleaning children while LVGL still references them causes
-    // use-after-free in layout_update_core (issue #711).
+    // use-after-free in layout_update_core (issue #711). Called from refresh_units
+    // under the slots_version observer — safe_clean_children escapes
+    // UpdateQueue::process_pending() so sync deletion can't corrupt LVGL's
+    // event linked list (#776).
     if (card.bars_container) {
         lv_obj_update_layout(card.bars_container);
-        lv_obj_clean(card.bars_container);
+        helix::ui::safe_clean_children(card.bars_container);
         create_mini_bars(card, unit, current_slot);
     }
 

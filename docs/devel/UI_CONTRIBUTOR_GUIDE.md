@@ -753,27 +753,47 @@ Replace `home` with any panel or overlay name: `controls`, `filament`, `settings
 
 ### Widget destruction safety
 
-**Never call `lv_obj_clean()` or `lv_obj_del()` on a container from inside an event callback on a child of that container.** This destroys the widget whose callback is still on the call stack, causing a use-after-free crash (see [issue #80](https://github.com/356C-LLC/helixscreen/issues/80)).
+Two rules, both required — they address different crashes.
 
-If your event callback needs to rebuild or destroy its own parent container:
-- For `lv_obj_clean()`: wrap the rebuild in `ui_queue_update()` to defer it to the next tick
-- For `lv_obj_del()`: use `lv_obj_del_async()` instead
+**Rule 1 — never destroy a container from inside an event callback on its own child** (issue #80). The child widget is still on the call stack; deleting its parent synchronously causes use-after-free. Defer the rebuild to the next tick.
+
+**Rule 2 — never call synchronous widget deletion inside a deferred callback** (issue #776). `lv_obj_clean()`, `lv_obj_del()`, and `helix::ui::safe_delete()` all run synchronously. Multiple sync deletions in the same `UpdateQueue::process_pending()` batch corrupt LVGL's event linked list → SIGSEGV in `lv_event_mark_deleted`. `ui_queue_update`, `lifetime_.defer`, `tok.defer`, and observer callbacks all share that batch — the deferral alone is not enough.
+
+**Use the safe replacement** — it reparents children to `lv_layer_top()` and schedules them for `lv_obj_delete_async()`, which runs outside our UpdateQueue batch:
 
 ```cpp
-// BAD: swatch click handler destroys its own parent
+// ❌ BAD (#80): swatch click handler destroys its own parent synchronously
 void handle_color_selected(...) {
-    lv_obj_clean(container);  // container is parent of the clicked swatch!
+    lv_obj_clean(container);
     rebuild(container);
 }
 
-// GOOD: defer the destruction
+// ❌ STILL BAD (#776): deferred, but lv_obj_clean is still a sync batch deletion
 void handle_color_selected(...) {
     ui_queue_update([this]() {
-        lv_obj_clean(container);
+        lv_obj_clean(container);      // Corrupts event list under load
+        rebuild(container);
+    });
+}
+
+// ✅ CORRECT: defer the rebuild AND use safe_clean_children
+void handle_color_selected(...) {
+    lifetime_.defer([this]() {
+        helix::ui::safe_clean_children(container);
         rebuild(container);
     });
 }
 ```
+
+Replacements table:
+
+| ❌ Banned in deferred callbacks | ✅ Use instead |
+|---------------------------------|----------------|
+| `safe_delete(ptr)` | `safe_delete_deferred(ptr)` |
+| `lv_obj_delete(obj)` / `lv_obj_del(obj)` | `lv_obj_delete_async(obj)` |
+| `lv_obj_clean(container)` | `helix::ui::safe_clean_children(container)` |
+
+See `include/ui_utils.h` and `ARCHITECTURE.md` § "No Sync Widget Deletion Inside UpdateQueue Callbacks" for the full rationale.
 
 ### Verification checklist
 

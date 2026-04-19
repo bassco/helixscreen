@@ -411,8 +411,10 @@ void PowerPanel::populate_device_chips() {
     if (!chip_container_)
         return;
 
-    // Use lv_async_call to defer outside process_pending(), preventing lv_obj_clean()
-    // from corrupting the LVGL event linked list during chip rebuild (issue #190).
+    // Defer rebuild (#80) AND use safe_clean_children (#776): lifetime_.defer moves
+    // the rebuild off the click handler stack (avoids deleting the clicked chip during
+    // its own event), and safe_clean_children escapes UpdateQueue::process_pending()
+    // so sync lv_obj_clean() can't corrupt LVGL's event linked list.
     if (!chips_rebuild_pending_) {
         chips_rebuild_pending_ = true;
         lifetime_.defer("PowerPanel::populate_device_chips", [this]() {
@@ -427,7 +429,7 @@ void PowerPanel::populate_device_chips_impl() {
     if (!chip_container_)
         return;
 
-    lv_obj_clean(chip_container_);
+    helix::ui::safe_clean_children(chip_container_);
 
     std::set<std::string> selected_set(selected_devices_.begin(), selected_devices_.end());
 

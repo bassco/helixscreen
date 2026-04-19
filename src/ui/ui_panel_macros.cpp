@@ -128,10 +128,12 @@ void MacrosPanel::on_activate() {
 
     spdlog::debug("[{}] on_activate()", get_name());
 
-    // Defer list rebuild to the next LVGL tick — on_activate() fires inside
+    // Defer list rebuild (#80) — on_activate() fires inside
     // overlay_slide_out_complete_cb() while LVGL is still processing the
-    // animation tick.  Synchronous lv_obj_clean() here would delete children
-    // whose events LVGL still references → SIGSEGV in lv_event_mark_deleted.
+    // animation tick. clear_macro_list uses safe_clean_children (#776) so the
+    // deferred rebuild escapes UpdateQueue::process_pending() before deleting
+    // children whose events LVGL might still reference (SIGSEGV in
+    // lv_event_mark_deleted).
     lifetime_.defer("MacrosPanel::populate", [this]() { populate_macro_list(); });
 }
 
@@ -149,7 +151,11 @@ void MacrosPanel::on_deactivate() {
 void MacrosPanel::clear_macro_list() {
     if (macro_list_container_) {
         lv_obj_update_layout(macro_list_container_);
-        lv_obj_clean(macro_list_container_);
+        // safe_clean_children reparents each child to lv_layer_top() and
+        // schedules lv_obj_delete_async — escapes UpdateQueue::process_pending()
+        // so the deferred populate doesn't corrupt LVGL's event linked list
+        // (#776).
+        helix::ui::safe_clean_children(macro_list_container_);
     }
     macro_entries_.clear();
 }

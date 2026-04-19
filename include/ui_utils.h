@@ -235,6 +235,31 @@ inline void safe_delete_deferred_raw(lv_obj_t* obj) {
     lv_obj_delete_async(obj);
 }
 
+/**
+ * @brief Safe replacement for lv_obj_clean() inside UpdateQueue callbacks
+ *
+ * lv_obj_clean() synchronously deletes every child. Called from inside a
+ * queue_update()/lifetime_.defer() lambda, those sync deletions share the
+ * same UpdateQueue::process_pending() batch — and multiple sync deletions
+ * in one batch corrupt LVGL's event linked list (SIGSEGV in
+ * lv_event_mark_deleted, #776).
+ *
+ * This helper reparents each child to lv_layer_top() and schedules it for
+ * lv_obj_delete_async(), which runs on LVGL's own async list OUTSIDE our
+ * UpdateQueue batch. The container appears empty immediately, so callers
+ * can add new children right after.
+ *
+ * @param container Parent whose children will be detached + async-deleted
+ */
+inline void safe_clean_children(lv_obj_t* container) {
+    if (!container)
+        return;
+    lv_obj_update_layout(container);
+    while (lv_obj_get_child_count(container) > 0) {
+        safe_delete_deferred_raw(lv_obj_get_child(container, 0));
+    }
+}
+
 // ============================================================================
 // Recursive Widget Flag Utilities
 // ============================================================================

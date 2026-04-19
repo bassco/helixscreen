@@ -668,8 +668,12 @@ void TempGraphOverlay::rebuild_extruder_selector() {
     if (!extruder_selector_row_ || !printer_state_)
         return;
 
+    // Called from lifetime_.defer in on_extruder_selected (#80). Use
+    // safe_clean_children so the deletion is scheduled via lv_obj_delete_async
+    // outside UpdateQueue::process_pending() — prevents event-list corruption
+    // (#776).
     lv_obj_update_layout(extruder_selector_row_);
-    lv_obj_clean(extruder_selector_row_);
+    helix::ui::safe_clean_children(extruder_selector_row_);
 
     auto& temp_state = printer_state_->temperature_state();
     const auto& extruders = temp_state.extruders();
@@ -725,8 +729,11 @@ void TempGraphOverlay::on_extruder_selected(lv_event_t* e) {
     self->active_extruder_name_ = name;
     self->printer_state_->set_active_extruder(name);
 
-    // Defer rebuild — synchronous lv_obj_clean() from inside a click event callback
-    // can corrupt flex layout if layout_update_core() is mid-traversal (crash #de4ad08f)
+    // Defer rebuild (#80) AND use safe_clean_children in rebuild_extruder_selector
+    // (#776): lifetime_.defer moves work off the click stack so we don't delete
+    // the clicked chip mid-event; rebuild_extruder_selector's safe_clean_children
+    // then escapes UpdateQueue::process_pending() so sync deletion can't corrupt
+    // LVGL's event linked list.
     self->lifetime_.defer("rebuild_extruder_selector",
                           [self]() { self->rebuild_extruder_selector(); });
 

@@ -22,6 +22,7 @@
 #include "ui_subject_registry.h"
 #include "ui_temperature_utils.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "format_utils.h"
@@ -567,8 +568,10 @@ void ControlsPanel::register_observers() {
         [](ControlsPanel* self, int /* version */) {
             if (!self->active_)
                 return;
-            // Use lv_async_call to defer the rebuild outside process_pending(), preventing
-            // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
+            // Defer rebuild (#80) AND use safe_clean_children (#776): lifetime_.defer
+            // moves the rebuild off the observer callback's stack, and
+            // safe_clean_children escapes UpdateQueue::process_pending() so sync
+            // lv_obj_clean() can't corrupt LVGL's event linked list.
             if (!self->fans_rebuild_pending_) {
                 self->fans_rebuild_pending_ = true;
                 self->lifetime_.defer("ControlsPanel::populate_secondary_fans", [self]() {
@@ -595,8 +598,10 @@ void ControlsPanel::register_observers() {
         [](ControlsPanel* self, int /* count */) {
             if (!self->active_)
                 return;
-            // Use lv_async_call to defer the rebuild outside process_pending(), preventing
-            // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
+            // Defer rebuild (#80) AND use safe_clean_children (#776): lifetime_.defer
+            // moves the rebuild off the observer callback's stack, and
+            // safe_clean_children escapes UpdateQueue::process_pending() so sync
+            // lv_obj_clean() can't corrupt LVGL's event linked list.
             if (!self->temps_rebuild_pending_) {
                 self->temps_rebuild_pending_ = true;
                 self->lifetime_.defer("ControlsPanel::populate_secondary_temps", [self]() {
@@ -810,7 +815,7 @@ void ControlsPanel::populate_secondary_fans() {
     secondary_fan_rows_.clear();
     lv_obj_add_flag(secondary_fans_list_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_update_layout(secondary_fans_list_);
-    lv_obj_clean(secondary_fans_list_);
+    helix::ui::safe_clean_children(secondary_fans_list_);
 
     // Collect non-part-cooling fans and sort by display priority
     const auto& fans = printer_state_.get_fans();
@@ -1826,7 +1831,7 @@ void ControlsPanel::populate_secondary_temps() {
     secondary_temp_rows_.clear();
     lv_obj_add_flag(secondary_temps_list_, LV_OBJ_FLAG_HIDDEN);
     lv_obj_update_layout(secondary_temps_list_);
-    lv_obj_clean(secondary_temps_list_);
+    helix::ui::safe_clean_children(secondary_temps_list_);
 
     auto& tsm = helix::sensors::TemperatureSensorManager::instance();
     auto sensors = tsm.get_sensors_sorted();

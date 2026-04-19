@@ -11,6 +11,7 @@
 #include "ui_led_chip_factory.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "helix-xml/src/xml/lv_xml.h"
@@ -1039,17 +1040,18 @@ void LedControlOverlay::handle_strip_selected(const std::string& strip_id) {
         }
     }
 
-    // SAFETY: Defer strip selector rebuild — the clicked chip is a child of
-    // strip_selector_section_ being cleaned. Destroying it mid-callback causes
-    // use-after-free (issue #80). Use lv_async_call to defer outside process_pending(),
-    // preventing lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
+    // Defer rebuild (#80) AND use safe_clean_children (#776): the clicked chip is
+    // a child of strip_selector_section_; deleting it mid-callback is the #80 crash.
+    // lifetime_.defer moves the rebuild off the click stack; safe_clean_children
+    // escapes UpdateQueue::process_pending() so the sync clean can't corrupt LVGL's
+    // event linked list.
     if (!strips_rebuild_pending_) {
         strips_rebuild_pending_ = true;
         lifetime_.defer("LedControlOverlay::rebuild_strips", [this]() {
             strips_rebuild_pending_ = false;
             if (strip_selector_section_) {
                 lv_obj_update_layout(strip_selector_section_);
-                lv_obj_clean(strip_selector_section_);
+                helix::ui::safe_clean_children(strip_selector_section_);
                 populate_strip_selector();
             }
             update_section_visibility();
@@ -1166,16 +1168,17 @@ void LedControlOverlay::refresh_wled_status() {
     controller.wled().poll_status([this, tok]() {
         if (tok.expired())
             return;
-        // poll_status fires on the BG thread — defer to main thread, then
-        // defer again via lv_async_call so lv_obj_clean() runs outside
-        // UpdateQueue::process_pending() (prevents lv_event_mark_deleted
-        // corruption, #776).
+        // poll_status fires on the BG thread — tok.defer marshals to the main
+        // thread (#80) and safe_clean_children schedules child deletion via
+        // lv_obj_delete_async, which runs on LVGL's own async list OUTSIDE
+        // UpdateQueue::process_pending() — preventing lv_event_mark_deleted
+        // corruption (#776).
         tok.defer([this]() {
             if (cleanup_called())
                 return;
             if (wled_presets_container_) {
                 lv_obj_update_layout(wled_presets_container_);
-                lv_obj_clean(wled_presets_container_);
+                helix::ui::safe_clean_children(wled_presets_container_);
                 populate_wled();
             }
             update_wled_toggle_button();

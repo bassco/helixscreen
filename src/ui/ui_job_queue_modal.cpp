@@ -6,6 +6,7 @@
 #include "ui_button.h"
 #include "ui_fonts.h"
 #include "ui_icon_codepoints.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "job_queue_state.h"
@@ -97,8 +98,11 @@ void JobQueueModal::on_show() {
     if (count_subj) {
         count_observer_ = helix::ui::observe_int_sync<JobQueueModal>(
             count_subj, this, [](JobQueueModal* self, int /*count*/) {
-                // Defer the rebuild outside process_pending(), preventing
-                // lv_obj_clean() from corrupting the LVGL event linked list (issue #190).
+                // Defer rebuild (#80) AND use safe_clean_children inside
+                // populate_job_list (#776): lifetime_.defer moves the rebuild
+                // off the observer callback's stack, and safe_clean_children
+                // escapes UpdateQueue::process_pending() so sync lv_obj_clean()
+                // can't corrupt LVGL's event linked list.
                 if (!self->list_rebuild_pending_) {
                     self->list_rebuild_pending_ = true;
                     self->lifetime_.defer("JobQueueModal::rebuild", [self]() {
@@ -155,7 +159,7 @@ void JobQueueModal::populate_job_list() {
         return;
 
     lv_obj_update_layout(list);
-    lv_obj_clean(list);
+    helix::ui::safe_clean_children(list);
 
     auto* jqs = get_job_queue_state();
     if (!jqs || !jqs->is_loaded() || jqs->get_jobs().empty()) {
