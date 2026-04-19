@@ -76,6 +76,14 @@ class SpoolmanSlotSaver {
     static ChangeSet detect_changes(const SlotInfo& original, const SlotInfo& edited);
 
     /**
+     * @brief Check whether a slot has enough metadata to identify a Spoolman filament.
+     *
+     * Complete = non-empty brand, non-empty material, and a non-default color
+     * (AMS_DEFAULT_SLOT_COLOR gray means "color not set").
+     */
+    static bool is_filament_complete(const SlotInfo& slot);
+
+    /**
      * @brief Save slot edits to Spoolman via the API
      *
      * Handles the full async orchestration:

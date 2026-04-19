@@ -15,6 +15,11 @@ namespace helix {
 
 SpoolmanSlotSaver::SpoolmanSlotSaver(MoonrakerAPI* api) : api_(api) {}
 
+bool SpoolmanSlotSaver::is_filament_complete(const SlotInfo& slot) {
+    return !slot.brand.empty() && !slot.material.empty() &&
+           slot.color_rgb != AMS_DEFAULT_SLOT_COLOR;
+}
+
 ChangeSet SpoolmanSlotSaver::detect_changes(const SlotInfo& original, const SlotInfo& edited) {
     ChangeSet changes;
 

@@ -676,3 +676,43 @@ TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix",
     REQUIRE(hex == "ABCDEF");
     REQUIRE(hex[0] != '#');
 }
+
+// ============================================================================
+// is_filament_complete() Tests
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver is_filament_complete: all fields set returns true",
+          "[spoolman][slot_saver]") {
+    SlotInfo slot;
+    slot.brand = "Polymaker";
+    slot.material = "PLA";
+    slot.color_rgb = 0xFF0000;
+    REQUIRE(SpoolmanSlotSaver::is_filament_complete(slot));
+}
+
+TEST_CASE("SpoolmanSlotSaver is_filament_complete: empty brand returns false",
+          "[spoolman][slot_saver]") {
+    SlotInfo slot;
+    slot.brand = "";
+    slot.material = "PLA";
+    slot.color_rgb = 0xFF0000;
+    REQUIRE_FALSE(SpoolmanSlotSaver::is_filament_complete(slot));
+}
+
+TEST_CASE("SpoolmanSlotSaver is_filament_complete: empty material returns false",
+          "[spoolman][slot_saver]") {
+    SlotInfo slot;
+    slot.brand = "Polymaker";
+    slot.material = "";
+    slot.color_rgb = 0xFF0000;
+    REQUIRE_FALSE(SpoolmanSlotSaver::is_filament_complete(slot));
+}
+
+TEST_CASE("SpoolmanSlotSaver is_filament_complete: default gray color returns false",
+          "[spoolman][slot_saver]") {
+    SlotInfo slot;
+    slot.brand = "Polymaker";
+    slot.material = "PLA";
+    slot.color_rgb = AMS_DEFAULT_SLOT_COLOR; // 0x808080
+    REQUIRE_FALSE(SpoolmanSlotSaver::is_filament_complete(slot));
+}
