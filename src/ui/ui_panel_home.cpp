@@ -373,12 +373,16 @@ void HomePanel::rebuild_carousel() {
     // Disconnect page observer before deiniting subject
     page_observer_.reset();
 
-    // Freeze queue, drain, delete carousel
+    // Freeze queue, drain deferred callbacks, then async-clean the carousel.
+    // safe_clean_children schedules child deletion via lv_obj_delete_async
+    // (reparented to lv_layer_top) instead of deleting synchronously inside
+    // the outer UpdateQueue batch — which would corrupt LVGL's event list
+    // when populate_page runs via the gate observer path (#776 / #834).
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
         if (carousel_host_) {
-            lv_obj_clean(carousel_host_);
+            helix::ui::safe_clean_children(carousel_host_);
         }
     }
 
@@ -458,12 +462,16 @@ void HomePanel::populate_page(int page_index, bool force) {
             page_widgets_[idx].end());
     }
 
-    // Flush deferred callbacks and clean LVGL tree
+    // Flush deferred callbacks, then async-clean the LVGL tree. Gate observers
+    // call this via queue_update, so sync lv_obj_clean here would corrupt
+    // LVGL's event list when it's batched with sibling deletes (#776 / #834).
+    // safe_clean_children reparents each child to lv_layer_top and schedules
+    // lv_obj_delete_async, escaping the UpdateQueue batch.
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
         lv_obj_update_layout(container);
-        lv_obj_clean(container);
+        helix::ui::safe_clean_children(container);
     }
 
     if (idx < page_widgets_.size()) {
