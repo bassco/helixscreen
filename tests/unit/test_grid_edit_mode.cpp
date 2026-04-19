@@ -213,6 +213,8 @@ TEST_CASE("build_default_grid only sets positions for anchor widgets", "[grid]")
     const PanelWidgetEntry* printer_image = nullptr;
     const PanelWidgetEntry* print_status = nullptr;
     const PanelWidgetEntry* tips = nullptr;
+    const PanelWidgetEntry* temperature = nullptr;
+    const PanelWidgetEntry* bed_temperature = nullptr;
 
     for (const auto& e : entries) {
         if (e.id == "printer_image")
@@ -221,6 +223,10 @@ TEST_CASE("build_default_grid only sets positions for anchor widgets", "[grid]")
             print_status = &e;
         if (e.id == "tips")
             tips = &e;
+        if (e.id == "temperature")
+            temperature = &e;
+        if (e.id == "bed_temperature")
+            bed_temperature = &e;
     }
 
     REQUIRE(printer_image != nullptr);
@@ -244,9 +250,16 @@ TEST_CASE("build_default_grid only sets positions for anchor widgets", "[grid]")
     CHECK(tips->rowspan >= 1);
     CHECK(tips->has_grid_position());
 
+    REQUIRE(temperature != nullptr);
+    CHECK(temperature->has_grid_position());
+
+    REQUIRE(bed_temperature != nullptr);
+    CHECK(bed_temperature->has_grid_position());
+
     // All non-anchor entries must have col=-1, row=-1 (auto-place)
     for (const auto& e : entries) {
-        if (e.id == "printer_image" || e.id == "print_status" || e.id == "tips") {
+        if (e.id == "printer_image" || e.id == "print_status" || e.id == "tips" ||
+            e.id == "temperature" || e.id == "bed_temperature") {
             continue;
         }
         INFO("Widget '" << e.id << "' should be auto-place (col=-1, row=-1)");

@@ -221,23 +221,10 @@ TEST_CASE_METHOD(CrashReporterTestFixture,
     REQUIRE(tail.find("short line 10") != std::string::npos);
 }
 
-TEST_CASE_METHOD(CrashReporterTestFixture,
-                 "CrashReporter: get_log_tail returns empty string for missing log file",
-                 "[crash_reporter]") {
-    // No log file written
-    auto& cr = CrashReporter::instance();
-    std::string tail = cr.get_log_tail(50);
-    REQUIRE(tail.empty());
-}
-
-TEST_CASE_METHOD(CrashReporterTestFixture, "CrashReporter: get_log_tail handles empty log file",
-                 "[crash_reporter]") {
-    write_log_file("");
-
-    auto& cr = CrashReporter::instance();
-    std::string tail = cr.get_log_tail(50);
-    REQUIRE(tail.empty());
-}
+// Missing-file / empty-file fallback is now handled by helix::logs::tail_best,
+// which cascades file → syslog → journal. Hermetic coverage of the file-source
+// contract lives in test_log_collector.cpp; this layer can't meaningfully
+// assert empty when syslog/journal are real system sources.
 
 // ============================================================================
 // Report Formatting [crash_reporter]
@@ -280,15 +267,9 @@ TEST_CASE_METHOD(CrashReporterTestFixture,
     REQUIRE(j["log_tail"][2] == "line three");
 }
 
-TEST_CASE_METHOD(CrashReporterTestFixture,
-                 "CrashReporter: report_to_json omits log_tail when empty", "[crash_reporter]") {
-    write_crash_file();
-    auto& cr = CrashReporter::instance();
-    auto report = cr.collect_report();
-    json j = cr.report_to_json(report);
-
-    REQUIRE_FALSE(j.contains("log_tail"));
-}
+// Empty-log_tail omission is now dependent on helix::logs::tail_best — when
+// syslog/journal are real system sources they may supply content. File-source
+// contract is covered by test_log_collector.cpp.
 
 TEST_CASE_METHOD(CrashReporterTestFixture,
                  "CrashReporter: report_to_json round-trips debug_bundle_share_code",
