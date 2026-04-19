@@ -130,6 +130,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
         return false;
     }
 
+    // IFS retracts filament from the extruder at end-of-print by default, so
+    // the toolhead is expected to be empty at the next print-start. Suppresses
+    // the pre-print runout warning modal.
+    [[nodiscard]] bool auto_unloads_after_print() const override {
+        return true;
+    }
+
     // AD5X IFS firmware (ZMOD) validates material against a fixed whitelist
     // and rejects anything outside it with "Invalid material type: X. Valid: ...".
     // The UI dropdown is filtered to this list and outgoing values are normalized

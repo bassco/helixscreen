@@ -818,6 +818,22 @@ class AmsBackend {
     }
 
     /**
+     * @brief Whether this backend unloads the toolhead automatically after a print
+     *
+     * Some filament systems (e.g. AD5X IFS) retract filament out of the extruder
+     * at end-of-print by default, so an empty toolhead between jobs is the normal
+     * resting state. For these backends, a runout-sensor reading "no filament" at
+     * print-start is expected, not a warning condition, and the pre-print
+     * filament-missing modal should be suppressed.
+     *
+     * @return true if the backend is expected to leave the toolhead empty between
+     *         prints, false otherwise
+     */
+    [[nodiscard]] virtual bool auto_unloads_after_print() const {
+        return false;
+    }
+
+    /**
      * @brief Check if backend provides per-unit environment sensors (temp/humidity)
      *
      * CFS units have built-in temperature and humidity sensors. Other backends

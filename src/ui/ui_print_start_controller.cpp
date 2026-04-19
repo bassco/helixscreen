@@ -176,9 +176,21 @@ void PrintStartController::initiate() {
         }
     }
 
-    // Check if runout sensor shows no filament (pre-print warning)
+    // Check if runout sensor shows no filament (pre-print warning).
+    // Backends that auto-unload the toolhead after each print (e.g. AD5X IFS)
+    // leave the extruder empty by design, so the runout sensor reading
+    // "no filament" at print-start is expected and the warning is noise.
     auto& sensor_mgr = helix::FilamentSensorManager::instance();
-    if (sensor_mgr.is_master_enabled() &&
+    bool suppress_runout_warning = false;
+    auto& ams_state = AmsState::instance();
+    for (int i = 0; i < ams_state.backend_count(); ++i) {
+        if (auto* backend = ams_state.get_backend(i);
+            backend && backend->auto_unloads_after_print()) {
+            suppress_runout_warning = true;
+            break;
+        }
+    }
+    if (!suppress_runout_warning && sensor_mgr.is_master_enabled() &&
         sensor_mgr.is_sensor_available(helix::FilamentSensorRole::RUNOUT) &&
         !sensor_mgr.is_filament_detected(helix::FilamentSensorRole::RUNOUT)) {
         // No filament detected - show warning dialog
