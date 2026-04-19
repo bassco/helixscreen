@@ -17,6 +17,7 @@
 #include "helix_version.h"
 
 #include <cerrno>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -133,7 +134,14 @@ static void terminate_handler() {
     // Write crash file BEFORE abort — abort triggers the signal handler which
     // would overwrite it without the exception message.
     write_exception_crash_file(what);
-    _exit(1);
+
+    // Encode signal death via POSIX 128+signum convention so the watchdog's
+    // exit-code translation (helix_watchdog.cpp: "exited with code N (signal N
+    // via crash handler)") classifies this as a crash and shows the recovery
+    // dialog. _exit(1) used to be here but the watchdog treated it as a clean
+    // non-zero exit ("not a crash") and restarted silently — crash.txt was
+    // written but the user never saw the dialog.
+    _exit(128 + SIGABRT);
 }
 
 int main(int argc, char** argv) {
@@ -147,11 +155,11 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[FATAL] Unhandled exception in Application: %s\n", e.what());
         fflush(stderr);
         write_exception_crash_file(e.what());
-        return 1;
+        _exit(128 + SIGABRT);
     } catch (...) {
         log_fatal("Unhandled non-std::exception in Application");
         write_exception_crash_file("non-std::exception");
-        return 1;
+        _exit(128 + SIGABRT);
     }
 
     // In-place restart: if the UI asked for a restart, replace this process
