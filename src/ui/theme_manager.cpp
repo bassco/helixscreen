@@ -545,6 +545,12 @@ static void helix_theme_apply(lv_theme_t* theme, lv_obj_t* obj) {
         lv_obj_add_style(obj, &dropdown_indicator_style, LV_PART_INDICATOR);
         lv_obj_add_style(obj, tm.get_style(StyleRole::Focused), LV_STATE_FOCUSED);
 
+        // Force local radius to theme value — LVGL's default theme can set
+        // a larger radius on dropdown buttons that survives our added styles.
+        // Local styles always win over added styles, so this guarantees
+        // dropdowns render at the theme's border_radius.
+        lv_obj_set_style_radius(obj, tm.current_palette().border_radius, LV_PART_MAIN);
+
         // On elevated surfaces (dialogs, raised cards), override to overlay_bg for contrast
         if (is_on_elevated_surface(obj)) {
             lv_obj_set_style_bg_color(obj, tm.current_palette().overlay_bg, LV_PART_MAIN);
