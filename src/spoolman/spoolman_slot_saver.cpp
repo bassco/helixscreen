@@ -195,4 +195,68 @@ void SpoolmanSlotSaver::find_or_create_vendor(const std::string& vendor_name,
         on_error);
 }
 
+std::string SpoolmanSlotSaver::normalize_color_hex(const std::string& in) {
+    std::string s = in;
+    if (!s.empty() && s[0] == '#')
+        s.erase(0, 1);
+    if (s.size() != 6)
+        return "";
+    for (char& c : s) {
+        if (!std::isxdigit(static_cast<unsigned char>(c)))
+            return "";
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+void SpoolmanSlotSaver::find_or_create_filament(int vendor_id, const std::string& material,
+                                                const std::string& color_hex,
+                                                FilamentCallback on_found,
+                                                ErrorCallback on_error) {
+    const std::string needle_color = normalize_color_hex(color_hex);
+    if (needle_color.empty()) {
+        spdlog::warn("[SpoolmanSlotSaver] Invalid color hex '{}', aborting find_or_create_filament",
+                     color_hex);
+        if (on_error) {
+            MoonrakerError err;
+            err.type = MoonrakerErrorType::VALIDATION_ERROR;
+            err.message = "Invalid color hex: " + color_hex;
+            on_error(err);
+        }
+        return;
+    }
+    api_->spoolman().get_spoolman_filaments(
+        vendor_id,
+        [this, vendor_id, material, needle_color,
+         on_found, on_error](const std::vector<FilamentInfo>& filaments) {
+            for (const auto& f : filaments) {
+                if (f.material == material &&
+                    normalize_color_hex(f.color_hex) == needle_color) {
+                    spdlog::debug("[SpoolmanSlotSaver] Reusing filament id={} "
+                                  "(vendor={}, material={}, color={})",
+                                  f.id, vendor_id, material, needle_color);
+                    if (on_found)
+                        on_found(f.id);
+                    return;
+                }
+            }
+            nlohmann::json payload;
+            payload["vendor_id"] = vendor_id;
+            payload["material"] = material;
+            payload["color_hex"] = needle_color;
+            payload["name"] = material;
+            spdlog::info("[SpoolmanSlotSaver] Creating filament "
+                         "(vendor={}, material={}, color={})",
+                         vendor_id, material, needle_color);
+            api_->spoolman().create_spoolman_filament(
+                payload,
+                [on_found](const FilamentInfo& info) {
+                    if (on_found)
+                        on_found(info.id);
+                },
+                on_error);
+        },
+        on_error);
+}
+
 } // namespace helix

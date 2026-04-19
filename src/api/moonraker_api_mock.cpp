@@ -1860,8 +1860,11 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_filament(const nlohmann::json& fi
     spdlog::info("[MoonrakerAPIMock] create_spoolman_filament({} {})",
                  filament_data.value("material", "?"), filament_data.value("name", "?"));
 
+    // Capture the POST payload for test inspection.
+    created_filaments.push_back(filament_data);
+
     FilamentInfo filament;
-    filament.id = next_filament_id_++;
+    filament.id = next_created_filament_id > 0 ? next_created_filament_id : next_filament_id_++;
     filament.material = filament_data.value("material", "");
     filament.color_name = filament_data.value("name", "");
     filament.color_hex = filament_data.value("color_hex", "");
@@ -2026,11 +2029,18 @@ void MoonrakerSpoolmanAPIMock::get_spoolman_filaments(int vendor_id,
                                                       ErrorCallback /*on_error*/) {
     spdlog::debug("[MoonrakerAPIMock] get_spoolman_filaments(vendor_id={})", vendor_id);
 
-    // Return mock filaments — SpoolInfo doesn't have vendor_id so we can't
-    // filter here. The wizard applies client-side vendor filtering after merge.
     std::vector<FilamentInfo> filaments;
-    int next_id = 1;
 
+    // Include explicitly-seeded filaments whose vendor_id matches.
+    for (const auto& mf : mock_filaments_) {
+        if (mf.vendor_id == vendor_id) {
+            filaments.push_back(mf);
+        }
+    }
+
+    // SpoolInfo doesn't have vendor_id so we can't filter spool-synthesized
+    // filaments here. The wizard applies client-side vendor filtering after merge.
+    int next_id = 1;
     for (const auto& spool : mock_spools_) {
         FilamentInfo f;
         f.id = next_id++;

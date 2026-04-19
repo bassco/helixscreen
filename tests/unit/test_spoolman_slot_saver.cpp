@@ -768,3 +768,111 @@ TEST_CASE("SpoolmanSlotSaver find_or_create_vendor: creates new vendor when name
     REQUIRE(api.spoolman_mock().created_vendors[0].contains("name"));
     REQUIRE(api.spoolman_mock().created_vendors[0]["name"] == "eSUN");
 }
+
+// ============================================================================
+// find_or_create_filament() Tests
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_filament: matches on vendor+material+color_hex "
+          "(case-insensitive hex)",
+          "[spoolman][slot_saver][filament]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear(); // avoid synthesized-vendor noise
+    api.spoolman_mock().add_filament(100, /*vendor_id*/ 7, "PLA", "ff0000");
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    bool error_called = false;
+    saver.find_or_create_filament(
+        7, "PLA", "FF0000", // upper-case input vs lower-case seed
+        [&](int id) { got_id = id; }, [&](const MoonrakerError&) { error_called = true; });
+
+    REQUIRE(got_id == 100);
+    REQUIRE_FALSE(error_called);
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+}
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_filament: mismatched material -> creates new",
+          "[spoolman][slot_saver][filament]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+    api.spoolman_mock().add_filament(100, 7, "PLA", "FF0000");
+    api.spoolman_mock().next_created_filament_id = 101;
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    saver.find_or_create_filament(
+        7, "PETG", "FF0000", [&](int id) { got_id = id; },
+        [&](const MoonrakerError&) { got_id = -99; });
+
+    REQUIRE(got_id == 101);
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    auto& payload = api.spoolman_mock().created_filaments[0];
+    REQUIRE(payload["vendor_id"] == 7);
+    REQUIRE(payload["material"] == "PETG");
+    REQUIRE(payload["color_hex"] == "FF0000");
+    REQUIRE(payload["name"] == "PETG");
+}
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_filament: mismatched color -> creates new",
+          "[spoolman][slot_saver][filament]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+    api.spoolman_mock().add_filament(100, 7, "PLA", "FF0000");
+    api.spoolman_mock().next_created_filament_id = 101;
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    saver.find_or_create_filament(
+        7, "PLA", "00FF00", [&](int id) { got_id = id; },
+        [&](const MoonrakerError&) { got_id = -99; });
+
+    REQUIRE(got_id == 101);
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    auto& payload = api.spoolman_mock().created_filaments[0];
+    REQUIRE(payload["color_hex"] == "00FF00");
+}
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_filament: invalid color hex triggers on_error",
+          "[spoolman][slot_saver][filament]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    bool error_called = false;
+    saver.find_or_create_filament(
+        7, "PLA", "XYZ", // invalid
+        [&](int id) { got_id = id; }, [&](const MoonrakerError&) { error_called = true; });
+
+    REQUIRE(got_id == -1);
+    REQUIRE(error_called);
+    // No API calls should have been made.
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+}
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_filament: accepts leading # and strips it",
+          "[spoolman][slot_saver][filament]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+    api.spoolman_mock().add_filament(100, 7, "PLA", "FF0000");
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    saver.find_or_create_filament(
+        7, "PLA", "#ff0000", [&](int id) { got_id = id; },
+        [&](const MoonrakerError&) { got_id = -99; });
+
+    REQUIRE(got_id == 100);
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+}

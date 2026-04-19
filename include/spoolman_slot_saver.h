@@ -59,6 +59,7 @@ class SpoolmanSlotSaver {
   public:
     using CompletionCallback = std::function<void(const SaveResult&)>;
     using VendorCallback = std::function<void(int vendor_id)>;
+    using FilamentCallback = std::function<void(int filament_id)>;
     using ErrorCallback = std::function<void(const MoonrakerError&)>;
 
     /// Weight comparison threshold for float equality
@@ -116,6 +117,27 @@ class SpoolmanSlotSaver {
      */
     void find_or_create_vendor(const std::string& vendor_name, VendorCallback on_found,
                                ErrorCallback on_error);
+
+    /**
+     * @brief Normalize a hex color string for case-insensitive comparison.
+     *        Strips leading "#", upper-cases, returns empty string on invalid input
+     *        (not exactly 6 hex chars).
+     */
+    static std::string normalize_color_hex(const std::string& in);
+
+    /**
+     * @brief Resolve a (vendor_id, material, color_hex) triple to a Spoolman filament_id,
+     *        creating a new filament if none matches.
+     *
+     * Match is: vendor_id exact; material exact (case-sensitive);
+     * color_hex case-insensitive via normalize_color_hex() on both sides.
+     *
+     * On create, POSTs `{vendor_id, material, color_hex, name=material}`.
+     * On invalid color_hex, calls on_error immediately without API calls.
+     */
+    void find_or_create_filament(int vendor_id, const std::string& material,
+                                 const std::string& color_hex, FilamentCallback on_found,
+                                 ErrorCallback on_error);
 
   private:
     MoonrakerAPI* api_;

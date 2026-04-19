@@ -204,6 +204,13 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     /// If 0, the mock falls back to an auto-assigned ID.
     int next_created_vendor_id = 0;
 
+    /// Captured POST payloads from create_spoolman_filament() calls (for test assertions).
+    std::vector<nlohmann::json> created_filaments;
+
+    /// ID to assign to the next filament created via create_spoolman_filament().
+    /// If 0, the mock falls back to the internal auto-increment counter.
+    int next_created_filament_id = 0;
+
     /**
      * @brief Pre-seed a vendor with a known ID and name.
      *
@@ -216,6 +223,22 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
         v.id = id;
         v.name = std::move(name);
         mock_vendors_.push_back(v);
+    }
+
+    /**
+     * @brief Pre-seed a filament with a known ID, vendor, material, and color hex.
+     *
+     * Added filaments are returned by both get_spoolman_filaments() overloads.
+     * The vendor_id-filtered overload returns only matching entries. Use to test
+     * filament-lookup code with predictable IDs.
+     */
+    void add_filament(int id, int vendor_id, std::string material, std::string color_hex) {
+        FilamentInfo f;
+        f.id = id;
+        f.vendor_id = vendor_id;
+        f.material = std::move(material);
+        f.color_hex = std::move(color_hex);
+        mock_filaments_.push_back(std::move(f));
     }
 
     /**
