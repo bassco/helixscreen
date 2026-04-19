@@ -102,16 +102,16 @@ static volatile const char* const* s_callback_tag_ptr = nullptr;
 
 struct HeapSnapshot {
     uint32_t ts_ms;            // monotonic ms when captured (0 = never)
-    size_t   rss_kb;           // /proc/self/statm resident pages * pagesize
-    size_t   vsz_kb;           // virtual size
-    size_t   arena_kb;         // glibc: total heap arena
-    size_t   uordblks_kb;      // glibc: in-use bytes
-    size_t   fordblks_kb;      // glibc: free bytes in arena
-    size_t   hblkhd_kb;        // glibc: mmap'd bytes
-    uint8_t  lv_used_pct;      // LVGL: internal heap usage %
-    uint8_t  lv_frag_pct;      // LVGL: internal fragmentation %
-    size_t   lv_total_kb;      // LVGL: total heap size
-    size_t   lv_free_biggest_kb; // LVGL: largest free block
+    size_t rss_kb;             // /proc/self/statm resident pages * pagesize
+    size_t vsz_kb;             // virtual size
+    size_t arena_kb;           // glibc: total heap arena
+    size_t uordblks_kb;        // glibc: in-use bytes
+    size_t fordblks_kb;        // glibc: free bytes in arena
+    size_t hblkhd_kb;          // glibc: mmap'd bytes
+    uint8_t lv_used_pct;       // LVGL: internal heap usage %
+    uint8_t lv_frag_pct;       // LVGL: internal fragmentation %
+    size_t lv_total_kb;        // LVGL: total heap size
+    size_t lv_free_biggest_kb; // LVGL: largest free block
 };
 static HeapSnapshot s_heap_snapshot = {};
 
@@ -123,9 +123,9 @@ static HeapSnapshot s_heap_snapshot = {};
 /// code from write N-1). In practice events come in bursts of the same code
 /// so this is rarely meaningful, and we'd rather avoid synchronization
 /// overhead on every LVGL dispatch than eliminate a rare noise case.
-static volatile uintptr_t    s_current_event_target          = 0;
-static volatile uintptr_t    s_current_event_original_target = 0;
-static volatile unsigned int s_current_event_code            = 0;
+static volatile uintptr_t s_current_event_target = 0;
+static volatile uintptr_t s_current_event_original_target = 0;
+static volatile unsigned int s_current_event_code = 0;
 
 // =============================================================================
 // Breadcrumb ring buffer (activity context for crash diagnosis)
@@ -136,13 +136,13 @@ struct BreadcrumbSlot {
     /// Monotonic ms since s_start_time. 0 means empty/uninitialized.
     /// Stored last with release semantics so readers see a complete slot.
     uint32_t ts_ms;
-    char     category[8];  // null-terminated, truncated
-    char     subject[60];  // null-terminated, truncated
+    char category[8]; // null-terminated, truncated
+    char subject[60]; // null-terminated, truncated
 };
 
 /// Ring size: 64 slots × 72 bytes = 4608 bytes static.
 static constexpr size_t kBreadcrumbRingSize = 64;
-static BreadcrumbSlot   s_breadcrumb_ring[kBreadcrumbRingSize] = {};
+static BreadcrumbSlot s_breadcrumb_ring[kBreadcrumbRingSize] = {};
 
 /// Monotonically-incrementing write index. Modulo ring size gives slot.
 /// Wraps at 2^32 — at 100 crumbs/sec that's ~500 days, acceptable.
@@ -151,8 +151,12 @@ static std::atomic<uint32_t> s_breadcrumb_idx{0};
 /// Copy a C string into a fixed-size buffer, always null-terminating.
 /// Returns number of bytes written (excluding terminator).
 static size_t copy_truncated(char* dst, size_t dst_size, const char* src) noexcept {
-    if (dst_size == 0) return 0;
-    if (!src) { dst[0] = '\0'; return 0; }
+    if (dst_size == 0)
+        return 0;
+    if (!src) {
+        dst[0] = '\0';
+        return 0;
+    }
     size_t i = 0;
     while (i + 1 < dst_size && src[i] != '\0') {
         dst[i] = src[i];
@@ -333,11 +337,72 @@ static const char* get_fault_code_name(int sig, int code) {
 /// Async-signal-safe: write a "key:<decimal>\n" line using the caller-provided
 /// scratch buffer. Consolidates the common `safe_write` + `int_to_str` dance
 /// used by the heap snapshot and event sections.
-static void write_kv_long(int fd, const char* key, long value,
-                          char* num_buf, size_t num_buf_size) {
+static void write_kv_long(int fd, const char* key, long value, char* num_buf, size_t num_buf_size) {
     safe_write(fd, key);
     safe_write(fd, int_to_str(num_buf, num_buf_size, value));
     safe_write(fd, "\n");
+}
+
+/// Async-signal-safe frame-pointer chain walker.
+///
+/// Fallback for the case where libgcc's DWARF-based `backtrace()` bails after
+/// 0-2 frames on SIGABRT (signal trampoline has no CFI; glibc's `backtrace()`
+/// can also itself crash when the heap is corrupted — we've seen this on Pi
+/// v0.99.36). The AArch64 / x86_64 ABI both use the same 2-word frame layout:
+///   [fp]      = saved_fp   (caller's frame pointer)
+///   [fp + 8]  = saved_lr   (return address into caller)
+///
+/// Bounds checks: fp must be word-aligned, monotonically increasing up the
+/// stack, and inside [sp, sp + kMaxStackSize). If any check fails we stop
+/// walking — a corrupted chain is common in the crashes this is meant to help.
+///
+/// Skipped on ARM32 (EABI+-O2 often omits FP) and MIPS (no standard FP ABI).
+static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp) {
+#if defined(__aarch64__) || defined(__x86_64__)
+    constexpr uintptr_t kWordSize = 8;
+    constexpr uintptr_t kMaxStackSize = 16 * 1024 * 1024;
+    constexpr int kMaxFrames = 48;
+
+    if (initial_fp == 0 || sp == 0)
+        return 0;
+
+    char hex_buf[32];
+    int frames_emitted = 0;
+    uintptr_t stack_hi = sp + kMaxStackSize;
+    uintptr_t fp = initial_fp;
+    uintptr_t prev_fp = 0;
+
+    for (int i = 0; i < kMaxFrames; ++i) {
+        if ((fp & (kWordSize - 1)) != 0)
+            break;
+        if (fp < sp || fp + 2 * kWordSize > stack_hi)
+            break;
+        if (fp <= prev_fp && prev_fp != 0)
+            break;
+
+        uintptr_t saved_fp = *reinterpret_cast<const volatile uintptr_t*>(fp);
+        uintptr_t saved_lr = *reinterpret_cast<const volatile uintptr_t*>(fp + kWordSize);
+
+        if (saved_lr != 0) {
+            safe_write(fd, "bt:");
+            safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), saved_lr));
+            safe_write(fd, "\n");
+            ++frames_emitted;
+        }
+
+        if (saved_fp == 0)
+            break;
+        prev_fp = fp;
+        fp = saved_fp;
+    }
+
+    return frames_emitted;
+#else
+    (void)fd;
+    (void)initial_fp;
+    (void)sp;
+    return 0;
+#endif
 }
 
 /// The signal handler itself -- async-signal-safe ONLY
@@ -577,26 +642,35 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     // Acquire pairs with the release-store of ts_ms in refresh_heap_snapshot().
     if (__atomic_load_n(&s_heap_snapshot.ts_ms, __ATOMIC_ACQUIRE) != 0) {
         const HeapSnapshot& h = s_heap_snapshot;
-        write_kv_long(fd, "heap_snapshot_age_ms:", static_cast<long>(h.ts_ms),  num_buf, sizeof(num_buf));
-        write_kv_long(fd, "heap_rss_kb:",          static_cast<long>(h.rss_kb), num_buf, sizeof(num_buf));
-        write_kv_long(fd, "heap_vsz_kb:",          static_cast<long>(h.vsz_kb), num_buf, sizeof(num_buf));
+        write_kv_long(fd, "heap_snapshot_age_ms:", static_cast<long>(h.ts_ms), num_buf,
+                      sizeof(num_buf));
+        write_kv_long(fd, "heap_rss_kb:", static_cast<long>(h.rss_kb), num_buf, sizeof(num_buf));
+        write_kv_long(fd, "heap_vsz_kb:", static_cast<long>(h.vsz_kb), num_buf, sizeof(num_buf));
         if (h.arena_kb != 0) {
-            write_kv_long(fd, "heap_arena_kb:", static_cast<long>(h.arena_kb),    num_buf, sizeof(num_buf));
-            write_kv_long(fd, "heap_used_kb:",  static_cast<long>(h.uordblks_kb), num_buf, sizeof(num_buf));
-            write_kv_long(fd, "heap_free_kb:",  static_cast<long>(h.fordblks_kb), num_buf, sizeof(num_buf));
-            write_kv_long(fd, "heap_mmap_kb:",  static_cast<long>(h.hblkhd_kb),   num_buf, sizeof(num_buf));
+            write_kv_long(fd, "heap_arena_kb:", static_cast<long>(h.arena_kb), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "heap_used_kb:", static_cast<long>(h.uordblks_kb), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "heap_free_kb:", static_cast<long>(h.fordblks_kb), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "heap_mmap_kb:", static_cast<long>(h.hblkhd_kb), num_buf,
+                          sizeof(num_buf));
         }
         if (h.lv_total_kb != 0) {
-            write_kv_long(fd, "lv_heap_total_kb:",        static_cast<long>(h.lv_total_kb),        num_buf, sizeof(num_buf));
-            write_kv_long(fd, "lv_heap_used_pct:",        static_cast<long>(h.lv_used_pct),        num_buf, sizeof(num_buf));
-            write_kv_long(fd, "lv_heap_frag_pct:",        static_cast<long>(h.lv_frag_pct),        num_buf, sizeof(num_buf));
-            write_kv_long(fd, "lv_heap_free_biggest_kb:", static_cast<long>(h.lv_free_biggest_kb), num_buf, sizeof(num_buf));
+            write_kv_long(fd, "lv_heap_total_kb:", static_cast<long>(h.lv_total_kb), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "lv_heap_used_pct:", static_cast<long>(h.lv_used_pct), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "lv_heap_frag_pct:", static_cast<long>(h.lv_frag_pct), num_buf,
+                          sizeof(num_buf));
+            write_kv_long(fd, "lv_heap_free_biggest_kb:", static_cast<long>(h.lv_free_biggest_kb),
+                          num_buf, sizeof(num_buf));
         }
     }
 
     // Current LVGL event under dispatch (updated by event_send_core hook)
     {
-        uintptr_t tgt  = s_current_event_target;
+        uintptr_t tgt = s_current_event_target;
         uintptr_t orig = s_current_event_original_target;
         if (tgt != 0) {
             safe_write(fd, "event_target:");
@@ -607,8 +681,8 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
                 safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), orig));
                 safe_write(fd, "\n");
             }
-            write_kv_long(fd, "event_code:", static_cast<long>(s_current_event_code),
-                          num_buf, sizeof(num_buf));
+            write_kv_long(fd, "event_code:", static_cast<long>(s_current_event_code), num_buf,
+                          sizeof(num_buf));
         }
     }
 
@@ -667,20 +741,31 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
 #endif
     }
 
-    // Write backtrace from unwinder (may duplicate ucontext frames above,
-    // but provides additional frames when unwinding succeeds)
-#ifdef HAVE_BACKTRACE
-    void* frames[64];
-    int frame_count = backtrace(frames, 64);
-    for (int i = 0; i < frame_count; ++i) {
-        safe_write(fd, "bt:");
-        safe_write(fd,
-                   ptr_to_hex(hex_buf, sizeof(hex_buf), reinterpret_cast<uintptr_t>(frames[i])));
-        safe_write(fd, "\n");
-    }
-#elif defined(HAVE_ANDROID_LOG)
-    __android_log_print(ANDROID_LOG_FATAL, "HelixScreen", "CRASH: signal %d", sig);
+    // Frame-pointer chain walk (AArch64 / x86_64). Runs BEFORE backtrace() and
+    // the stack dump because it's the most reliable fallback when libgcc's
+    // DWARF unwinder bails at the signal trampoline. Bounds-checked; if the
+    // chain is corrupt it stops early rather than wandering into bad memory.
+    if (ucontext) {
+        const auto* uctx = static_cast<const ucontext_t*>(ucontext);
+        uintptr_t fp_reg = 0;
+        uintptr_t sp_reg = 0;
+#if defined(__APPLE__) && defined(__aarch64__)
+        fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__fp);
+        sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__sp);
+#elif defined(__APPLE__) && defined(__x86_64__)
+        fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__rbp);
+        sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__rsp);
+#elif defined(__aarch64__)
+        fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.regs[29]);
+        sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.sp);
+#elif defined(__x86_64__)
+        fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[REG_RBP]);
+        sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[REG_RSP]);
 #endif
+        if (fp_reg != 0 && sp_reg != 0) {
+            fp_walk_backtrace(fd, fp_reg, sp_reg);
+        }
+    }
 
     // Dump stack memory around SP and emit any words that fall within our .text
     // as synthetic backtrace entries. Essential fallback when backtrace() can't
@@ -787,6 +872,27 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     }
 #endif
 
+    // backtrace() runs LAST because libgcc's DWARF unwinder can itself crash
+    // when the heap is corrupted (we've seen signal handlers truncated at this
+    // point on Pi v0.99.36 — bundle 7FYYQLVM / #827). Stack dump, maps, and
+    // FP-walk frames above are written first so a nested crash here doesn't
+    // lose them. Frames here may duplicate the FP-walk entries, which is fine —
+    // downstream symbolization deduplicates.
+#ifdef HAVE_BACKTRACE
+    {
+        void* frames[64];
+        int frame_count = backtrace(frames, 64);
+        for (int i = 0; i < frame_count; ++i) {
+            safe_write(fd, "bt:");
+            safe_write(
+                fd, ptr_to_hex(hex_buf, sizeof(hex_buf), reinterpret_cast<uintptr_t>(frames[i])));
+            safe_write(fd, "\n");
+        }
+    }
+#elif defined(HAVE_ANDROID_LOG)
+    __android_log_print(ANDROID_LOG_FATAL, "HelixScreen", "CRASH: signal %d", sig);
+#endif
+
     close(fd);
 
     // Re-raise with default handler so the process exits with the correct status
@@ -811,10 +917,10 @@ void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_pt
 }
 
 void crash_handler::set_current_event(const void* target, const void* original_target,
-                                       unsigned int code) noexcept {
-    s_current_event_target          = reinterpret_cast<uintptr_t>(target);
+                                      unsigned int code) noexcept {
+    s_current_event_target = reinterpret_cast<uintptr_t>(target);
     s_current_event_original_target = reinterpret_cast<uintptr_t>(original_target);
-    s_current_event_code            = code;
+    s_current_event_code = code;
 }
 
 // C-ABI bridge for LVGL — see include/system/crash_handler.h
@@ -850,33 +956,34 @@ void crash_handler::refresh_heap_snapshot() noexcept {
     // older systems (AD5M runs bullseye with glibc 2.31).
 #if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33))
     struct mallinfo2 mi = mallinfo2();
-    snap.arena_kb    = mi.arena    / 1024;
+    snap.arena_kb = mi.arena / 1024;
     snap.uordblks_kb = mi.uordblks / 1024;
     snap.fordblks_kb = mi.fordblks / 1024;
-    snap.hblkhd_kb   = mi.hblkhd   / 1024;
+    snap.hblkhd_kb = mi.hblkhd / 1024;
 #elif defined(__GLIBC__)
     // mallinfo() uses int fields — truncates past 2 GiB, fine for our targets
     struct mallinfo mi = mallinfo();
-    snap.arena_kb    = static_cast<unsigned>(mi.arena)    / 1024;
+    snap.arena_kb = static_cast<unsigned>(mi.arena) / 1024;
     snap.uordblks_kb = static_cast<unsigned>(mi.uordblks) / 1024;
     snap.fordblks_kb = static_cast<unsigned>(mi.fordblks) / 1024;
-    snap.hblkhd_kb   = static_cast<unsigned>(mi.hblkhd)   / 1024;
+    snap.hblkhd_kb = static_cast<unsigned>(mi.hblkhd) / 1024;
 #endif
 #endif
 
     lv_mem_monitor_t mon = {};
     lv_mem_monitor(&mon);
-    snap.lv_total_kb        = mon.total_size / 1024;
-    snap.lv_used_pct        = mon.used_pct;
-    snap.lv_frag_pct        = mon.frag_pct;
+    snap.lv_total_kb = mon.total_size / 1024;
+    snap.lv_used_pct = mon.used_pct;
+    snap.lv_frag_pct = mon.frag_pct;
     snap.lv_free_biggest_kb = mon.free_biggest_size / 1024;
 
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    uint64_t ms = static_cast<uint64_t>(ts.tv_sec) * 1000 +
-                  static_cast<uint64_t>(ts.tv_nsec) / 1000000;
+    uint64_t ms =
+        static_cast<uint64_t>(ts.tv_sec) * 1000 + static_cast<uint64_t>(ts.tv_nsec) / 1000000;
     uint32_t publish_ts = static_cast<uint32_t>(ms);
-    if (publish_ts == 0) publish_ts = 1;
+    if (publish_ts == 0)
+        publish_ts = 1;
 
     // Publish in two phases. The signal handler gates on ts_ms != 0, and
     // ts_ms is the leading field of HeapSnapshot — a naive `s_heap_snapshot =
@@ -909,12 +1016,13 @@ namespace {
 /// Returns 1+ms (never zero — zero is reserved for "empty slot").
 static uint32_t breadcrumb_now_ms() noexcept {
     struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 1;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return 1;
     // Use raw monotonic — s_start_time is wall-clock, they're not comparable.
     // Low 32 bits of ms-since-boot: wraps every ~49 days but deltas within a
     // crash bundle are always meaningful.
-    uint64_t ms = static_cast<uint64_t>(ts.tv_sec) * 1000 +
-                  static_cast<uint64_t>(ts.tv_nsec) / 1000000;
+    uint64_t ms =
+        static_cast<uint64_t>(ts.tv_sec) * 1000 + static_cast<uint64_t>(ts.tv_nsec) / 1000000;
     uint32_t v = static_cast<uint32_t>(ms);
     return v == 0 ? 1 : v;
 }
@@ -930,7 +1038,7 @@ void crash_handler::breadcrumb::note(const char* category, const char* subject) 
     __atomic_store_n(&slot.ts_ms, 0u, __ATOMIC_RELAXED);
 
     copy_truncated(slot.category, sizeof(slot.category), category);
-    copy_truncated(slot.subject,  sizeof(slot.subject),  subject);
+    copy_truncated(slot.subject, sizeof(slot.subject), subject);
 
     // Publish with release so readers (signal handler) see a complete slot.
     __atomic_store_n(&slot.ts_ms, breadcrumb_now_ms(), __ATOMIC_RELEASE);
@@ -943,7 +1051,8 @@ void crash_handler::breadcrumb::dump_to_fd(int fd) noexcept {
     for (uint32_t i = start; i < end; ++i) {
         const BreadcrumbSlot& slot = s_breadcrumb_ring[i % kBreadcrumbRingSize];
         uint32_t ts = __atomic_load_n(&slot.ts_ms, __ATOMIC_ACQUIRE);
-        if (ts == 0) continue;
+        if (ts == 0)
+            continue;
         safe_write(fd, "crumb:");
         safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(ts)));
         safe_write(fd, " ");
