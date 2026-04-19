@@ -827,17 +827,38 @@ class AmsBackend {
     }
 
     /**
+     * @brief Firmware-specific name aliases layered between exact match and
+     *        compat_group fallback inside normalize_material().
+     *
+     * Each entry maps an alternate spelling (case-insensitive) to a whitelist
+     * entry. Use when the shared filament database groups variants differently
+     * than the firmware does. Example: AD5X IFS treats SILK as distinct from
+     * PLA, but "Silk PLA" has compat_group "PLA" in the shared DB, so without
+     * an alias it would normalize to "PLA" instead of "SILK".
+     *
+     * Returned pairs: {alias, whitelist_target}. Targets should themselves be
+     * present in get_supported_materials(); if not, normalize_material() will
+     * still return them (caller beware).
+     *
+     * @return Vector of (alias -> target) pairs. Empty by default.
+     */
+    [[nodiscard]] virtual std::vector<std::pair<std::string, std::string>>
+    get_material_aliases() const {
+        return {};
+    }
+
+    /**
      * @brief Normalize an arbitrary material string to one the firmware will accept.
      *
-     * Called before sending material to firmware. Default implementation:
+     * Called before sending material to firmware. Pipeline:
      *   1. If get_supported_materials() returns nullopt/empty -> return input unchanged.
      *   2. Case-insensitive exact match against whitelist -> return whitelist entry.
-     *   3. Look up input via filament::find_material() -> get compat_group -> find
+     *   3. Case-insensitive match against get_material_aliases() -> return mapped target.
+     *   4. Look up input via filament::find_material() -> get compat_group -> find
      *      first whitelist entry whose compat_group matches -> return it.
-     *   4. Fallback: return first whitelist entry (safest default, usually PLA).
+     *   5. Fallback: return first whitelist entry (safest default, usually PLA).
      *
-     * Backends can override for firmware-specific quirks (e.g., AD5X distinguishes
-     * SILK from PLA but both share compat_group "PLA" in the DB).
+     * Backends that need more than alias mapping can override this method.
      *
      * @param material Input material string (may be empty)
      * @return Normalized string safe to send to firmware

@@ -52,7 +52,16 @@ std::string AmsBackend::normalize_material(const std::string& material) const {
         }
     }
 
-    // (3) compat_group match via the filament database.
+    // (3) Firmware-specific aliases (backends override get_material_aliases()
+    //     to handle names the shared filament DB groups differently than
+    //     firmware does — e.g., "Silk PLA" -> "SILK" on AD5X).
+    for (const auto& [alias, target] : get_material_aliases()) {
+        if (lower(alias) == input_lc) {
+            return target;
+        }
+    }
+
+    // (4) compat_group match via the filament database.
     auto info = filament::find_material(material);
     if (info.has_value() && info->compat_group != nullptr) {
         std::string_view group(info->compat_group);
@@ -65,7 +74,7 @@ std::string AmsBackend::normalize_material(const std::string& material) const {
         }
     }
 
-    // (4) Fallback: first whitelist entry (typically the safest / most common).
+    // (5) Fallback: first whitelist entry (typically the safest / most common).
     return list.front();
 }
 

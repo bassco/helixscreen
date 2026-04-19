@@ -679,6 +679,19 @@ AmsBackendAd5xIfs::get_supported_materials() const {
         "PLA", "PLA-CF", "SILK", "TPU", "ABS", "PETG", "PETG-CF"};
 }
 
+std::vector<std::pair<std::string, std::string>>
+AmsBackendAd5xIfs::get_material_aliases() const {
+    // Names that mean "silk PLA" in the 3D printing world but map to AD5X's
+    // distinct SILK slot type. Without these, the compat_group fallback
+    // routes them to "PLA" (because silk PLA IS chemically PLA) and users
+    // lose the silk distinction on slot edits / Orca imports.
+    return {
+        {"Silk", "SILK"},
+        {"Silk PLA", "SILK"},
+        {"PLA Silk", "SILK"},
+    };
+}
+
 AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, bool persist) {
     if (!validate_slot_index(slot_index)) {
         return AmsErrorHelper::invalid_slot(slot_index, NUM_PORTS - 1);

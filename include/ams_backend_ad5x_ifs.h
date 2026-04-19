@@ -125,6 +125,14 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     [[nodiscard]] std::optional<std::vector<std::string>>
     get_supported_materials() const override;
 
+    // Firmware-specific aliases for the shared normalize_material() pipeline.
+    // AD5X treats SILK as distinct from PLA, but the shared filament DB
+    // groups silk variants under compat_group "PLA" (most printers don't
+    // make that distinction), so without these aliases "Silk PLA" would
+    // collapse to "PLA" instead of "SILK".
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>>
+    get_material_aliases() const override;
+
     // Result of parsing a GET_ZCOLOR SILENT=1 response. Public so tests can
     // construct instances via Ad5xIfsTestAccess.
     struct ZColorSlot {

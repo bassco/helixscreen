@@ -1864,11 +1864,16 @@ TEST_CASE("AD5X IFS normalize_material coerces input to whitelist", "[ams][ad5x_
         REQUIRE(backend.normalize_material("Nonsense") == "PLA");
     }
 
-    SECTION("Silk PLA collapses to PLA via compat_group (known limitation)") {
-        // "Silk PLA" has compat_group "PLA" in the DB, so it maps to PLA
-        // rather than SILK. Documented quirk: if user feedback prefers SILK,
-        // AD5X backend can add an explicit override of normalize_material().
-        REQUIRE(backend.normalize_material("Silk PLA") == "PLA");
+    SECTION("silk variants map to SILK via AD5X-specific override") {
+        // AD5X treats SILK as distinct from PLA. The shared filament DB
+        // groups silk variants under compat_group "PLA" because most
+        // printers don't make that distinction, so the default fallback
+        // would route them to "PLA". The AD5X normalize_material()
+        // override catches common silk names before delegating.
+        REQUIRE(backend.normalize_material("Silk PLA") == "SILK");
+        REQUIRE(backend.normalize_material("PLA Silk") == "SILK");
+        REQUIRE(backend.normalize_material("Silk") == "SILK");
+        REQUIRE(backend.normalize_material("silk pla") == "SILK");
     }
 }
 
