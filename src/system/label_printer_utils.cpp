@@ -13,6 +13,7 @@
 #include "brother_ql_protocol.h"
 #include "bt_discovery_utils.h"
 #include "bt_print_utils.h"
+#include "http_executor.h"
 #include "ipp_printer.h"
 #include "label_printer_settings.h"
 #include "label_renderer.h"
@@ -28,7 +29,6 @@
 #include "usb_printer_detector.h"
 
 #include <algorithm>
-#include <thread>
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -204,10 +204,14 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
             printer.print(bitmap, label_size, callback);
         }
     } else {
-        // Brother QL network: detect loaded media on worker thread, then render + print
+        // Brother QL network: detect loaded media on worker thread, then render + print.
+        // Route through HttpExecutor::fast() instead of spawning a detached std::thread
+        // per click — raw thread creation crashed on thread-constrained ARM devices
+        // (CC1 / AD5M, see #724) and the inner chain's joinable-thread destruction
+        // hit std::terminate when a rapid click cancelled a partial send.
         auto host = settings.get_printer_address();
         auto port = settings.get_printer_port();
-        std::thread([spool, preset, sizes, host, port, callback]() {
+        helix::http::HttpExecutor::fast().submit([spool, preset, sizes, host, port, callback]() {
             // Query printer for loaded media
             auto media = query_brother_media_tcp(host, port);
             LabelSize actual_size;
@@ -251,7 +255,7 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
 
             static BrotherQLPrinter net_printer;
             net_printer.print_label(host, port, bitmap, actual_size, callback);
-        }).detach();
+        });
     }
 }
 

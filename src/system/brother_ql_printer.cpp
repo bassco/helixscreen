@@ -5,6 +5,7 @@
 
 #include "brother_ql_printer.h"
 #include "brother_ql_protocol.h"
+#include "http_executor.h"
 #include "safe_resolve.h"
 #include "ui_update_queue.h"
 
@@ -15,7 +16,6 @@
 
 #include <cerrno>
 #include <cstring>
-#include <thread>
 
 namespace helix {
 
@@ -68,7 +68,12 @@ void BrotherQLPrinter::print_label(const std::string& host, int port,
     auto commands = build_raster_commands(bitmap, size);
     spdlog::info("Brother QL: sending {} bytes to {}:{}", commands.size(), host, port);
 
-    std::thread([host, port, commands = std::move(commands), callback]() {
+    // Route TCP send through HttpExecutor::fast() — raw detached std::thread
+    // spawned per print was the second half of the nested-thread chain that
+    // crashed the Test Print flow on CC1 (the outer thread lives in
+    // label_printer_utils.cpp). See #724 for ARM thread exhaustion context.
+    helix::http::HttpExecutor::fast().submit([host, port, commands = std::move(commands),
+                                               callback]() {
         bool success = false;
         std::string error;
 
@@ -121,7 +126,7 @@ void BrotherQLPrinter::print_label(const std::string& host, int port,
         helix::ui::queue_update([callback, success, error]() {
             callback(success, error);
         });
-    }).detach();
+    });
 }
 
 } // namespace helix
