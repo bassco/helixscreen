@@ -1061,3 +1061,70 @@ TEST_CASE("SpoolmanSlotSaver save: no linked spool + complete fields + zero weig
     REQUIRE(payload["filament_id"] == 101);
     REQUIRE_FALSE(payload.contains("remaining_weight"));
 }
+
+// ============================================================================
+// save(): combined filament + weight change against an existing target filament
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver save: linked spool + filament resolves to existing filament + weight "
+          "change -> repoint PATCH and weight write both fire",
+          "[spoolman][slot_saver][combined]") {
+    // Covers the Trigger-table row "Linked spool; both filament and weight changed"
+    // specifically in the find-path (no vendor/filament creation). Distinguishes
+    // from existing combined tests which exercise the create-path.
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    // Seed the spool so update_spoolman_spool_weight() has a target to mutate.
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "FF0000";
+    test_spool.remaining_weight_g = 800.0;
+    test_spool.initial_weight_g = 1000.0;
+    api.spoolman_mock().get_mock_spools().push_back(test_spool);
+
+    // Seed the original vendor/filament AND the target PETG filament so the
+    // save path resolves to an existing id (200) without creating anything.
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+    api.spoolman_mock().add_filament(100, 7, "PLA", "FF0000");
+    api.spoolman_mock().add_filament(200, 7, "PETG", "FF0000");
+
+    SlotInfo original = make_test_slot();
+    original.spoolman_filament_id = 100;
+    SlotInfo edited = original;
+    edited.material = "PETG";            // resolves to existing filament 200
+    edited.remaining_weight_g = 600.0f;  // weight also changed
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 7);
+    REQUIRE(got.new_filament_id == 200);
+
+    // Nothing was created — we used existing vendor/filament.
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+
+    // The repoint PATCH fired (captured in spool_updates — separate path from weight).
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 200);
+
+    // The weight update also landed (dedicated path — update_spoolman_spool_weight
+    // mutates the mock spool directly; it does not populate spool_updates).
+    for (const auto& spool : api.spoolman_mock().get_mock_spools()) {
+        if (spool.id == 42) {
+            REQUIRE(spool.remaining_weight_g == Catch::Approx(600.0));
+            break;
+        }
+    }
+}
