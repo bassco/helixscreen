@@ -221,8 +221,14 @@ void MoonrakerAPI::database_get_item(const std::string& namespace_name, const st
     // Callers handle errors via their error callback — no need for a toast.
     client_.send_jsonrpc(
         "server.database.get_item", params,
-        [on_success](const json& result) {
+        [on_success](const json& response) {
+            // send_jsonrpc passes the full JSON-RPC message (see
+            // moonraker_request_tracker.cpp:217). Unwrap response["result"]
+            // before extracting the "value" field — the shape is
+            // {"jsonrpc","id","result":{"namespace","key","value": <payload>}}.
             if (on_success) {
+                const json& result = response.contains("result") ? response.at("result")
+                                                                 : json::object();
                 on_success(result.value("value", json{}));
             }
         },
@@ -258,8 +264,11 @@ void MoonrakerAPI::database_get_namespace(const std::string& namespace_name,
     json params = {{"namespace", namespace_name}};
     client_.send_jsonrpc(
         "server.database.get_item", params,
-        [on_success](const json& result) {
+        [on_success](const json& response) {
+            // See database_get_item above: unwrap response["result"] first.
             if (on_success) {
+                const json& result = response.contains("result") ? response.at("result")
+                                                                 : json::object();
                 on_success(result.value("value", json::object()));
             }
         },

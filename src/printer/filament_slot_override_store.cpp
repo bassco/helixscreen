@@ -610,13 +610,24 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
     // need, release. The shared_ptr keeps the state alive for any late
     // callback — it just writes to the copy-source without racing us.
     bool got_copy;
+    bool done_copy;
     nlohmann::json received_copy;
     {
         std::unique_lock<std::mutex> lk(state->m);
         state->cv.wait_for(lk, load_timeout_, [state] { return state->done; });
         got_copy = state->got;
+        done_copy = state->done;
         if (got_copy) received_copy = state->received;
     }
+
+    spdlog::debug("[FilamentSlotOverrideStore:{}] load_blocking: got={} done={} "
+                  "received_type={} received_size={}",
+                  backend_id_, got_copy, done_copy,
+                  got_copy ? (received_copy.is_object() ? "object"
+                              : received_copy.is_null() ? "null"
+                              : received_copy.is_array() ? "array" : "other")
+                           : "n/a",
+                  got_copy && received_copy.is_object() ? received_copy.size() : 0u);
 
     // Fall back to local cache ONLY when the MR DB round-trip didn't yield a
     // value — either because the error callback fired (got==false, done==true)
@@ -624,7 +635,11 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
     // successful MR DB response with an empty namespace is authoritative ("no
     // overrides configured") and must NOT be replaced by stale cache data.
     if (!got_copy) {
-        return read_cache(cache_path(), backend_id_);
+        auto cached = read_cache(cache_path(), backend_id_);
+        spdlog::debug("[FilamentSlotOverrideStore:{}] load_blocking: cache fallback "
+                      "returned {} entries",
+                      backend_id_, cached.size());
+        return cached;
     }
     if (!received_copy.is_object()) return result;
 
@@ -632,9 +647,17 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
         const std::string& key = it.key();
         // Only consider lane-prefixed keys (AFC convention). Ignore any
         // unrelated data that may live in the lane_data namespace.
-        if (key.rfind("lane", 0) != 0) continue;
+        if (key.rfind("lane", 0) != 0) {
+            spdlog::debug("[FilamentSlotOverrideStore:{}] skipping non-lane key: {}",
+                          backend_id_, key);
+            continue;
+        }
         auto parsed = from_lane_data_record(it.value());
-        if (!parsed) continue;
+        if (!parsed) {
+            spdlog::debug("[FilamentSlotOverrideStore:{}] from_lane_data_record failed for {}",
+                          backend_id_, key);
+            continue;
+        }
         result[parsed->first] = parsed->second;
     }
 
