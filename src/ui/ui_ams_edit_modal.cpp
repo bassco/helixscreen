@@ -1589,22 +1589,24 @@ void AmsEditModal::handle_save() {
         if (changes.any()) {
             auto token = lifetime_.token();
             auto saver = std::make_shared<helix::SpoolmanSlotSaver>(api_);
-            saver->save(original_info_, working_info_, [this, token, saver](bool success) {
-                if (token.expired()) {
-                    return;
-                }
-                // Spoolman callback arrives on a background thread — defer
-                // to the UI thread before touching LVGL subjects/widgets.
-                token.defer([this, success]() {
-                    if (!success) {
-                        spdlog::error("[AmsEditModal] Spoolman save failed, saving locally");
-                        ToastManager::instance().show(ToastSeverity::ERROR,
-                                                      lv_tr("Failed to save changes to Spoolman"),
-                                                      3000);
-                    }
-                    fire_completion(true);
-                });
-            });
+            saver->save(original_info_, working_info_,
+                        [this, token, saver](const helix::SaveResult& result) {
+                            if (token.expired()) {
+                                return;
+                            }
+                            // Spoolman callback arrives on a background thread — defer
+                            // to the UI thread before touching LVGL subjects/widgets.
+                            token.defer([this, result]() {
+                                if (!result.success) {
+                                    spdlog::error(
+                                        "[AmsEditModal] Spoolman save failed, saving locally");
+                                    ToastManager::instance().show(
+                                        ToastSeverity::ERROR,
+                                        lv_tr("Failed to save changes to Spoolman"), 3000);
+                                }
+                                fire_completion(true);
+                            });
+                        });
             return; // Async path - fire_completion called from callback
         }
     }

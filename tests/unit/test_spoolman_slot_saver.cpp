@@ -169,9 +169,9 @@ TEST_CASE("SpoolmanSlotSaver save does nothing for non-spoolman slots", "[spoolm
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -192,9 +192,9 @@ TEST_CASE("SpoolmanSlotSaver save does nothing when no changes detected",
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -228,9 +228,9 @@ TEST_CASE("SpoolmanSlotSaver save only updates weight when no filament-level cha
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -295,9 +295,9 @@ TEST_CASE("SpoolmanSlotSaver save re-links spool to existing filament when vendo
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -334,9 +334,9 @@ TEST_CASE("SpoolmanSlotSaver save creates new filament when no match exists",
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -371,9 +371,9 @@ TEST_CASE("SpoolmanSlotSaver save chains filament relink then weight update when
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -419,9 +419,9 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes existing filament when material change
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -461,9 +461,9 @@ TEST_CASE("SpoolmanSlotSaver save includes vendor_id in filament PATCH when avai
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -502,9 +502,9 @@ TEST_CASE("SpoolmanSlotSaver save omits vendor_id from PATCH when zero",
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -542,9 +542,9 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes filament with correct color_hex format
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -584,9 +584,9 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes filament then updates weight when both
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -623,9 +623,9 @@ TEST_CASE("SpoolmanSlotSaver save fails gracefully when no filament_id available
     bool callback_called = false;
     bool callback_success = false;
 
-    saver.save(original, edited, [&](bool success) {
+    saver.save(original, edited, [&](const SaveResult& r) {
         callback_called = true;
-        callback_success = success;
+        callback_success = r.success;
     });
 
     REQUIRE(callback_called);
@@ -666,7 +666,7 @@ TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix",
     edited.color_rgb = 0xABCDEF;
 
     bool done = false;
-    saver.save(original, edited, [&](bool) { done = true; });
+    saver.save(original, edited, [&](const SaveResult&) { done = true; });
 
     REQUIRE(done);
     auto& updates = api.spoolman_mock().filament_updates;

@@ -45,7 +45,7 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
     if (!edited.spoolman_id) {
         spdlog::debug("[SpoolmanSlotSaver] No spoolman_id, skipping save");
         if (on_complete)
-            on_complete(true);
+            on_complete(SaveResult{.success = true});
         return;
     }
 
@@ -55,7 +55,7 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
     if (!changes.any()) {
         spdlog::debug("[SpoolmanSlotSaver] No changes detected for spool {}", edited.spoolman_id);
         if (on_complete)
-            on_complete(true);
+            on_complete(SaveResult{.success = true});
         return;
     }
 
@@ -86,7 +86,7 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
             spdlog::error("[SpoolmanSlotSaver] No filament_id for spool {}, cannot update",
                           spool_id);
             if (on_complete)
-                on_complete(false);
+                on_complete(SaveResult{.success = false});
             return;
         }
 
@@ -94,10 +94,10 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
             // Chain: update filament first, then update weight
             auto weight = edited.remaining_weight_g;
             update_filament(filament_id, edited,
-                            [this, spool_id, weight, on_complete](bool success) {
-                                if (!success) {
+                            [this, spool_id, weight, on_complete](const SaveResult& result) {
+                                if (!result.success) {
                                     if (on_complete)
-                                        on_complete(false);
+                                        on_complete(SaveResult{.success = false});
                                     return;
                                 }
                                 update_weight(spool_id, weight, on_complete);
@@ -116,12 +116,12 @@ void SpoolmanSlotSaver::update_weight(int spool_id, float weight_g,
         [on_complete]() {
             spdlog::debug("[SpoolmanSlotSaver] Weight update succeeded");
             if (on_complete)
-                on_complete(true);
+                on_complete(SaveResult{.success = true});
         },
         [on_complete](const MoonrakerError& err) {
             spdlog::error("[SpoolmanSlotSaver] Weight update failed: {}", err.message);
             if (on_complete)
-                on_complete(false);
+                on_complete(SaveResult{.success = false});
         });
 }
 
@@ -143,12 +143,12 @@ void SpoolmanSlotSaver::update_filament(int filament_id, const SlotInfo& edited,
         [on_complete, filament_id]() {
             spdlog::debug("[SpoolmanSlotSaver] Filament {} updated", filament_id);
             if (on_complete)
-                on_complete(true);
+                on_complete(SaveResult{.success = true});
         },
         [on_complete](const MoonrakerError& err) {
             spdlog::error("[SpoolmanSlotSaver] Filament update failed: {}", err.message);
             if (on_complete)
-                on_complete(false);
+                on_complete(SaveResult{.success = false});
         });
 }
 
