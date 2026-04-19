@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Filament slot metadata now persists across restarts and reconnects on AD5X IFS, Snapmaker U1, ACE, and CFS — brand, spool name, Spoolman link, and weights survive Klipper reloads and printer reboots.
+- OrcaSlicer 2.3.2+ automatic filament sync: HelixScreen writes the AFC-originated `lane_data` Moonraker DB convention, so Orca's filament panel picks up your slot metadata with zero configuration.
+- "Clear slot metadata" button in the AMS edit modal — visible only when a slot has user-set override data. Clearing falls the slot back to firmware-reported state.
+- Empty-but-overridden slots now ghost-render (20% opacity) across all backends, matching the previous AFC-only behavior — lets you see what spool profile is assigned to an empty slot.
+- Automatic override clearing on detected physical spool swap: color change for IFS, RFID UID change for Snapmaker, material+color fingerprint change for CFS, status transition (empty→loaded) for ACE.
+- Public specification at `docs/specs/filament_slots.md` documenting the shared `lane_data` convention for third-party adopters.
+
+### Fixed
+- Snapmaker U1: `set_slot_info` now honors the `persist` parameter — user edits to brand / spool name / weights were previously discarded on the next Klipper status poll. Edits now persist as intended.
+
+### Changed
+- ACE: user override fields now merge with firmware-reported data field-by-field (empty override fields fall through to firmware). Previously the override replaced the entire slot record.
+- Pre-existing `helix-screen:ace_slot_overrides` and `helix-screen:cfs_slot_overrides` Moonraker DB entries automatically migrate to the `lane_data` namespace on first launch. Local `ace_slot_overrides.json` / `cfs_slot_overrides.json` cache files are removed after migration.
+
 ## [0.99.36] - 2026-04-18
 
 ### Added

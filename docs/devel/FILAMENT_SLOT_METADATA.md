@@ -50,11 +50,14 @@ the local cache file can round-trip all four without collision.
 ### Load behavior
 
 `load_blocking` is a sync-over-async bridge. It fires a Moonraker DB request
-and waits up to ~60s on a `std::condition_variable` backed by a
-`shared_ptr<SyncState>`. If the request completes with data, we take it. If it
-errors or times out, we fall back to `read_cache()` for this backend's entries.
-The cache is the offline-fallback view, never authoritative — a successful MR
-fetch always supersedes it.
+and waits up to 5s (tunable via `load_timeout_`) on a `std::condition_variable`
+backed by a `shared_ptr<SyncState>`. Moonraker's request tracker can still
+fire the response callback up to ~60s later, which is why the rendezvous
+state is kept alive via `shared_ptr` — a late callback harmlessly flips flags
+on the still-living state. If the request completes with data, we take it.
+If it errors or times out, we fall back to `read_cache()` for this backend's
+entries. The cache is the offline-fallback view, never authoritative — a
+successful MR fetch always supersedes it.
 
 ### Lifetime safety
 
@@ -224,9 +227,15 @@ Trigger conditions (all must hold):
   so their migration path short-circuits)
 
 The migration is idempotent: once records exist under `lane_data`, the
-"`lane_data` empty" guard fails and the legacy path is skipped. The legacy
-namespace is not deleted by the migration — users downgrading to a pre-migration
-build still find their data. Legacy cleanup can happen later (or never).
+"`lane_data` empty" guard fails and the legacy path is skipped. After a
+successful migration, the legacy MR DB entry is best-effort deleted via
+`database_delete_item`, and the pre-Task-6 per-backend JSON cache file
+(`ace_slot_overrides.json` / `cfs_slot_overrides.json`) is also removed from
+the user config dir. Delete failures are logged at warn but do not break the
+migrated result — a lingering legacy blob is harmless because the idempotence
+guard would short-circuit on the next startup anyway. Migration also deletes
+the legacy entry in the all-malformed-entries case so subsequent startups
+don't re-scan unsalvageable data on every boot.
 
 Migration runs inline inside `load_blocking`, before the method returns, so
 the backend sees the migrated records immediately without a second round-trip.
