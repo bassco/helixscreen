@@ -60,6 +60,7 @@ class SpoolmanSlotSaver {
     using CompletionCallback = std::function<void(const SaveResult&)>;
     using VendorCallback = std::function<void(int vendor_id)>;
     using FilamentCallback = std::function<void(int filament_id)>;
+    using VoidCallback = std::function<void()>;
     using ErrorCallback = std::function<void(const MoonrakerError&)>;
 
     /// Weight comparison threshold for float equality
@@ -138,6 +139,18 @@ class SpoolmanSlotSaver {
     void find_or_create_filament(int vendor_id, const std::string& material,
                                  const std::string& color_hex, FilamentCallback on_found,
                                  ErrorCallback on_error);
+
+    /**
+     * @brief PATCH the spool's filament_id. Used for repointing a linked spool
+     *        at a different filament record without mutating the filament itself.
+     *
+     * @param spool_id Spoolman spool ID to repoint
+     * @param new_filament_id Target filament_id to set on the spool
+     * @param on_success Called when the PATCH succeeds
+     * @param on_error Called with the MoonrakerError if the PATCH fails
+     */
+    void repoint_spool(int spool_id, int new_filament_id, VoidCallback on_success,
+                       ErrorCallback on_error);
 
   private:
     MoonrakerAPI* api_;

@@ -1672,6 +1672,7 @@ void MoonrakerSpoolmanAPIMock::update_spoolman_spool(int spool_id, const nlohman
                                                      ErrorCallback /*on_error*/) {
     spdlog::info("[MoonrakerAPIMock] update_spoolman_spool({}, {} fields)", spool_id,
                  spool_data.size());
+    spool_updates.push_back({spool_id, spool_data});
 
     for (auto& spool : mock_spools_) {
         if (spool.id == spool_id) {

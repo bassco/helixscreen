@@ -259,4 +259,13 @@ void SpoolmanSlotSaver::find_or_create_filament(int vendor_id, const std::string
         on_error);
 }
 
+void SpoolmanSlotSaver::repoint_spool(int spool_id, int new_filament_id,
+                                      VoidCallback on_success, ErrorCallback on_error) {
+    nlohmann::json patch;
+    patch["filament_id"] = new_filament_id;
+    spdlog::info("[SpoolmanSlotSaver] Repointing spool {} -> filament {}", spool_id,
+                 new_filament_id);
+    api_->spoolman().update_spoolman_spool(spool_id, patch, on_success, on_error);
+}
+
 } // namespace helix

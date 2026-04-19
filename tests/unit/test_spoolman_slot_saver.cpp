@@ -876,3 +876,29 @@ TEST_CASE("SpoolmanSlotSaver find_or_create_filament: accepts leading # and stri
     REQUIRE(got_id == 100);
     REQUIRE(api.spoolman_mock().created_filaments.empty());
 }
+
+// ============================================================================
+// repoint_spool() Tests
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver repoint_spool: PATCHes spool with new filament_id",
+          "[spoolman][slot_saver][repoint]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    SpoolmanSlotSaver saver(&api);
+
+    bool success = false;
+    bool error_called = false;
+    saver.repoint_spool(/*spool_id*/ 42, /*new_filament_id*/ 101,
+                        [&]() { success = true; },
+                        [&](const MoonrakerError&) { error_called = true; });
+
+    REQUIRE(success);
+    REQUIRE_FALSE(error_called);
+
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 101);
+}

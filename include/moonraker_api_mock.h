@@ -197,6 +197,15 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     };
     std::vector<FilamentUpdateRecord> filament_updates;
 
+    /// Captured PATCH payloads from update_spoolman_spool() calls (for test
+    /// assertions). Separate from update_spoolman_spool_weight(), which has its
+    /// own dedicated path and does not populate this vector.
+    struct SpoolUpdateRecord {
+        int spool_id = 0;
+        nlohmann::json patch;
+    };
+    std::vector<SpoolUpdateRecord> spool_updates;
+
     /// Captured POST payloads from create_spoolman_vendor() calls (for test assertions).
     std::vector<nlohmann::json> created_vendors;
 
