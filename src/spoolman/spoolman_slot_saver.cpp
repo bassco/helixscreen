@@ -87,41 +87,110 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
 
     // Filament-level change (possibly also weight)
     if (changes.filament_level) {
-        const int filament_id = edited.spoolman_filament_id;
         spdlog::info("[SpoolmanSlotSaver] Filament-level change for spool {} "
-                     "(filament_id={}, brand={}, material={}, color={:#08x})",
-                     spool_id, filament_id, edited.brand, edited.material, edited.color_rgb);
+                     "(brand={}, material={}, color={:#08x})",
+                     spool_id, edited.brand, edited.material, edited.color_rgb);
 
-        if (original.brand != edited.brand && edited.spoolman_vendor_id == 0) {
-            spdlog::warn("[SpoolmanSlotSaver] Vendor changed to '{}' but no vendor_id available, "
-                         "vendor will not be updated in Spoolman",
-                         edited.brand);
-        }
-
-        if (!filament_id) {
-            spdlog::error("[SpoolmanSlotSaver] No filament_id for spool {}, cannot update",
-                          spool_id);
+        if (!is_filament_complete(edited)) {
+            spdlog::info("[SpoolmanSlotSaver] Filament fields incomplete for spool {} — "
+                         "skipping Spoolman filament write",
+                         spool_id);
+            if (changes.spool_level) {
+                update_weight(spool_id, edited.remaining_weight_g, on_complete);
+                return;
+            }
             if (on_complete)
-                on_complete(SaveResult{.success = false});
+                on_complete(SaveResult{.success = true});
             return;
         }
 
-        if (changes.spool_level) {
-            // Chain: update filament first, then update weight
-            auto weight = edited.remaining_weight_g;
-            update_filament(filament_id, edited,
-                            [this, spool_id, weight, on_complete](const SaveResult& result) {
-                                if (!result.success) {
-                                    if (on_complete)
-                                        on_complete(SaveResult{.success = false});
+        const std::string color_hex = color_to_hex(edited.color_rgb);
+        const float weight = edited.remaining_weight_g;
+        const int original_filament_id = original.spoolman_filament_id;
+        const bool weight_changed = changes.spool_level;
+
+        find_or_create_vendor(
+            edited.brand,
+            [this, edited, color_hex, spool_id, weight, original_filament_id, weight_changed,
+             on_complete](int vendor_id) {
+                find_or_create_filament(
+                    vendor_id, edited.material, color_hex,
+                    [this, spool_id, weight, vendor_id, original_filament_id, weight_changed,
+                     on_complete](int filament_id) {
+                        // If we resolved to the SAME filament, skip repoint
+                        // (but still do weight if that also changed).
+                        if (filament_id == original_filament_id) {
+                            spdlog::debug("[SpoolmanSlotSaver] Resolved to same filament_id={}, "
+                                          "skipping repoint",
+                                          filament_id);
+                            if (weight_changed) {
+                                update_weight(
+                                    spool_id, weight,
+                                    [vendor_id, filament_id, on_complete](const SaveResult& r) {
+                                        SaveResult out = r;
+                                        out.new_vendor_id = vendor_id;
+                                        out.new_filament_id = filament_id;
+                                        if (on_complete)
+                                            on_complete(out);
+                                    });
+                                return;
+                            }
+                            SaveResult out;
+                            out.success = true;
+                            out.new_vendor_id = vendor_id;
+                            out.new_filament_id = filament_id;
+                            if (on_complete)
+                                on_complete(out);
+                            return;
+                        }
+
+                        // Different filament — repoint the spool at it.
+                        repoint_spool(
+                            spool_id, filament_id,
+                            [this, spool_id, weight, vendor_id, filament_id, weight_changed,
+                             on_complete]() {
+                                if (weight_changed) {
+                                    update_weight(
+                                        spool_id, weight,
+                                        [vendor_id, filament_id,
+                                         on_complete](const SaveResult& r) {
+                                            SaveResult out = r;
+                                            out.repointed_filament = true;
+                                            out.new_vendor_id = vendor_id;
+                                            out.new_filament_id = filament_id;
+                                            if (on_complete)
+                                                on_complete(out);
+                                        });
                                     return;
                                 }
-                                update_weight(spool_id, weight, on_complete);
+                                SaveResult out;
+                                out.success = true;
+                                out.repointed_filament = true;
+                                out.new_vendor_id = vendor_id;
+                                out.new_filament_id = filament_id;
+                                if (on_complete)
+                                    on_complete(out);
+                            },
+                            [on_complete](const MoonrakerError& err) {
+                                spdlog::error("[SpoolmanSlotSaver] repoint_spool failed: {}",
+                                              err.message);
+                                if (on_complete)
+                                    on_complete(SaveResult{.success = false});
                             });
-        } else {
-            // Only filament update
-            update_filament(filament_id, edited, on_complete);
-        }
+                    },
+                    [on_complete](const MoonrakerError& err) {
+                        spdlog::error("[SpoolmanSlotSaver] find_or_create_filament failed: {}",
+                                      err.message);
+                        if (on_complete)
+                            on_complete(SaveResult{.success = false});
+                    });
+            },
+            [on_complete](const MoonrakerError& err) {
+                spdlog::error("[SpoolmanSlotSaver] find_or_create_vendor failed: {}", err.message);
+                if (on_complete)
+                    on_complete(SaveResult{.success = false});
+            });
+        return;
     }
 }
 
@@ -136,33 +205,6 @@ void SpoolmanSlotSaver::update_weight(int spool_id, float weight_g,
         },
         [on_complete](const MoonrakerError& err) {
             spdlog::error("[SpoolmanSlotSaver] Weight update failed: {}", err.message);
-            if (on_complete)
-                on_complete(SaveResult{.success = false});
-        });
-}
-
-void SpoolmanSlotSaver::update_filament(int filament_id, const SlotInfo& edited,
-                                        CompletionCallback on_complete) {
-    nlohmann::json filament_data;
-    filament_data["material"] = edited.material;
-    filament_data["color_hex"] = color_to_hex(edited.color_rgb);
-    if (edited.spoolman_vendor_id > 0) {
-        filament_data["vendor_id"] = edited.spoolman_vendor_id;
-    }
-
-    spdlog::info("[SpoolmanSlotSaver] PATCHing filament {} (material={}, color={}, vendor_id={})",
-                 filament_id, edited.material, filament_data["color_hex"].get<std::string>(),
-                 edited.spoolman_vendor_id);
-
-    api_->spoolman().update_spoolman_filament(
-        filament_id, filament_data,
-        [on_complete, filament_id]() {
-            spdlog::debug("[SpoolmanSlotSaver] Filament {} updated", filament_id);
-            if (on_complete)
-                on_complete(SaveResult{.success = true});
-        },
-        [on_complete](const MoonrakerError& err) {
-            spdlog::error("[SpoolmanSlotSaver] Filament update failed: {}", err.message);
             if (on_complete)
                 on_complete(SaveResult{.success = false});
         });

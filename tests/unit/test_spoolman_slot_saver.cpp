@@ -245,111 +245,103 @@ TEST_CASE("SpoolmanSlotSaver save only updates weight when no filament-level cha
     }
 }
 
-TEST_CASE("SpoolmanSlotSaver save re-links spool to existing filament when vendor changes",
+TEST_CASE("SpoolmanSlotSaver save repoints spool to existing filament when vendor changes",
           "[spoolman][slot_saver]") {
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
 
-    // Set up mock spool for id=42
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "#FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    test_spool.initial_weight_g = 1000.0;
-    spools.push_back(test_spool);
+    // Seed the original vendor + filament (id=100, referenced by make_test_slot).
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
 
-    // Pre-create the target filament in mock (eSUN PLA Red should exist)
-    nlohmann::json target_filament_json;
-    target_filament_json["name"] = "eSUN PLA Red";
-    target_filament_json["material"] = "PLA";
-    target_filament_json["color_hex"] = "#FF0000";
-    target_filament_json["vendor_id"] = 1;
-
-    // Create the target filament via mock API so get_spoolman_filaments returns it
-    bool filament_created = false;
-    int target_filament_id = 0;
-    api.spoolman().create_spoolman_filament(
-        target_filament_json,
-        [&](const FilamentInfo& info) {
-            target_filament_id = info.id;
-            filament_created = true;
-        },
-        [](const MoonrakerError&) {});
-    REQUIRE(filament_created);
-
-    // Now update that filament's vendor_name for matching purposes
-    // The mock stores filaments in mock_filaments_ - we need to set vendor_name
-    // The mock's create returns a FilamentInfo but we need to verify the match logic
+    // Seed the target vendor + matching filament (eSUN PLA red = id 200).
+    api.spoolman_mock().add_vendor(2, "eSUN");
+    api.spoolman_mock().add_filament(200, 2, "PLA", "FF0000");
 
     SpoolmanSlotSaver saver(&api);
 
-    SlotInfo original = make_test_slot(); // Polymaker PLA 0xFF0000
+    SlotInfo original = make_test_slot(); // Polymaker PLA 0xFF0000, filament_id=100
     SlotInfo edited = original;
-    edited.brand = "eSUN"; // Changed vendor
+    edited.brand = "eSUN"; // Changed vendor — should resolve to filament 200
 
-    bool callback_called = false;
-    bool callback_success = false;
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
 
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 2);
+    REQUIRE(got.new_filament_id == 200);
 
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
+    // Verify spool was PATCHed with new filament_id (not mutating filament 100).
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 200);
+
+    // And the target vendor already existed, so nothing was created.
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
 }
 
-TEST_CASE("SpoolmanSlotSaver save creates new filament when no match exists",
+TEST_CASE("SpoolmanSlotSaver save creates new vendor + filament and repoints spool when no match",
           "[spoolman][slot_saver]") {
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
 
-    // Set up mock spool for id=42
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "#FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    test_spool.initial_weight_g = 1000.0;
-    spools.push_back(test_spool);
+    // Seed original vendor/filament so resolution can find them.
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
+
+    // Configure mock IDs assigned on create.
+    api.spoolman_mock().next_created_vendor_id = 50;
+    api.spoolman_mock().next_created_filament_id = 500;
 
     SpoolmanSlotSaver saver(&api);
 
     SlotInfo original = make_test_slot();
     SlotInfo edited = original;
-    // Change to something that won't match any existing filament
+    // Change to something that won't match any existing vendor/filament.
     edited.brand = "UniqueTestBrand";
     edited.material = "Nylon";
     edited.color_rgb = 0x123456;
 
-    bool callback_called = false;
-    bool callback_success = false;
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
 
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 50);
+    REQUIRE(got.new_filament_id == 500);
 
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
+    // New vendor was POSTed with the brand name.
+    REQUIRE(api.spoolman_mock().created_vendors.size() == 1);
+    REQUIRE(api.spoolman_mock().created_vendors[0]["name"] == "UniqueTestBrand");
+
+    // New filament was POSTed with the right triple.
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    auto& fp = api.spoolman_mock().created_filaments[0];
+    REQUIRE(fp["vendor_id"] == 50);
+    REQUIRE(fp["material"] == "Nylon");
+    REQUIRE(fp["color_hex"] == "123456");
+
+    // Spool was PATCHed to point at the new filament.
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 500);
 }
 
-TEST_CASE("SpoolmanSlotSaver save chains filament relink then weight update when both changed",
+TEST_CASE("SpoolmanSlotSaver save chains filament repoint then weight update when both changed",
           "[spoolman][slot_saver]") {
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
 
-    // Set up mock spool
+    // Need a mock spool for update_spoolman_spool_weight() to find and update.
     auto& spools = api.spoolman_mock().get_mock_spools();
     SpoolInfo test_spool;
     test_spool.id = 42;
@@ -361,25 +353,36 @@ TEST_CASE("SpoolmanSlotSaver save chains filament relink then weight update when
     test_spool.initial_weight_g = 1000.0;
     spools.push_back(test_spool);
 
+    // Configure IDs for the new vendor + filament we expect to be created.
+    api.spoolman_mock().next_created_vendor_id = 51;
+    api.spoolman_mock().next_created_filament_id = 501;
+
     SpoolmanSlotSaver saver(&api);
 
     SlotInfo original = make_test_slot();
     SlotInfo edited = original;
+    // Pick a triple that can't match the spool-synthesized filament entry
+    // (which has material=PLA color=FF0000) so find_or_create_filament creates.
     edited.brand = "NewBrandXYZ";
+    edited.material = "ABS";
+    edited.color_rgb = 0x334455;
     edited.remaining_weight_g = 500.0f;
 
-    bool callback_called = false;
-    bool callback_success = false;
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
 
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 51);
+    REQUIRE(got.new_filament_id == 501);
 
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
+    // Spool was PATCHed to point at the new filament.
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 501);
 
-    // Verify weight was updated
+    // And the weight update also went through.
     for (const auto& spool : api.spoolman_mock().get_mock_spools()) {
         if (spool.id == 42) {
             REQUIRE(spool.remaining_weight_g == Catch::Approx(500.0));
@@ -389,16 +392,125 @@ TEST_CASE("SpoolmanSlotSaver save chains filament relink then weight update when
 }
 
 // ============================================================================
-// Filament PATCH tests (update existing filament instead of create)
+// Filament repoint tests (save() resolves via find-or-create then PATCHes the
+// spool's filament_id — it never mutates the existing filament record)
 // ============================================================================
 
-TEST_CASE("SpoolmanSlotSaver save PATCHes existing filament when material changes",
+TEST_CASE("SpoolmanSlotSaver save creates new filament and repoints spool when material changes",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
+    api.spoolman_mock().next_created_filament_id = 101;
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.material = "PETG"; // Changed material — no existing PETG/red filament
+
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 1);    // existing Polymaker
+    REQUIRE(got.new_filament_id == 101); // newly-created PETG
+
+    // Verify a new filament was POSTed (not a PATCH of filament 100).
+    REQUIRE(api.spoolman_mock().filament_updates.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    REQUIRE(api.spoolman_mock().created_filaments[0]["material"] == "PETG");
+
+    // Verify the spool was PATCHed to point at the new filament.
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 101);
+}
+
+TEST_CASE("SpoolmanSlotSaver save creates vendor when brand is new",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    // Seed the original vendor/filament only.
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
+    api.spoolman_mock().next_created_vendor_id = 52;
+    api.spoolman_mock().next_created_filament_id = 502;
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.brand = "eSUN"; // unknown vendor
+
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 52);
+    REQUIRE(got.new_filament_id == 502);
+
+    // Vendor created with new brand name.
+    REQUIRE(api.spoolman_mock().created_vendors.size() == 1);
+    REQUIRE(api.spoolman_mock().created_vendors[0]["name"] == "eSUN");
+
+    // Filament created with the new vendor_id.
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    REQUIRE(api.spoolman_mock().created_filaments[0]["vendor_id"] == 52);
+    REQUIRE(api.spoolman_mock().created_filaments[0]["material"] == "PLA");
+
+    // Spool repoint.
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].patch["filament_id"] == 502);
+}
+
+TEST_CASE("SpoolmanSlotSaver save sends color_hex without leading # when creating filament",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
+    api.spoolman_mock().next_created_filament_id = 103;
+
+    SpoolmanSlotSaver saver(&api);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.color_rgb = 0x00FF00; // No matching filament — new one gets created
+
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    const std::string hex = api.spoolman_mock().created_filaments[0]["color_hex"];
+    REQUIRE(hex == "00FF00");
+    REQUIRE(hex[0] != '#');
+}
+
+TEST_CASE("SpoolmanSlotSaver save repoints then updates weight when both change",
           "[spoolman][slot_saver]") {
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
 
-    // Set up mock spool
+    // Need a mock spool for update_spoolman_spool_weight() to find.
     auto& spools = api.spoolman_mock().get_mock_spools();
     SpoolInfo test_spool;
     test_spool.id = 42;
@@ -410,169 +522,9 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes existing filament when material change
     test_spool.initial_weight_g = 1000.0;
     spools.push_back(test_spool);
 
-    SpoolmanSlotSaver saver(&api);
-
-    SlotInfo original = make_test_slot();
-    SlotInfo edited = original;
-    edited.material = "PETG"; // Changed material
-
-    bool callback_called = false;
-    bool callback_success = false;
-
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
-
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
-
-    // Verify filament was PATCHed (not created)
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.size() == 1);
-    REQUIRE(updates[0].filament_id == 100); // PATCHed the right filament
-    REQUIRE(updates[0].data.contains("material"));
-    REQUIRE(updates[0].data["material"] == "PETG");
-}
-
-TEST_CASE("SpoolmanSlotSaver save includes vendor_id in filament PATCH when available",
-          "[spoolman][slot_saver]") {
-    PrinterState state;
-    MoonrakerClientMock client;
-    MoonrakerAPIMock api(client, state);
-
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    spools.push_back(test_spool);
-
-    SpoolmanSlotSaver saver(&api);
-
-    SlotInfo original = make_test_slot();
-    SlotInfo edited = original;
-    edited.brand = "eSUN";
-    edited.spoolman_vendor_id = 7; // Vendor ID from Spoolman
-
-    bool callback_called = false;
-    bool callback_success = false;
-
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
-
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
-
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.size() == 1);
-    REQUIRE(updates[0].data.contains("vendor_id"));
-    REQUIRE(updates[0].data["vendor_id"] == 7);
-    REQUIRE(updates[0].data["material"] == "PLA"); // Other fields still present
-}
-
-TEST_CASE("SpoolmanSlotSaver save omits vendor_id from PATCH when zero",
-          "[spoolman][slot_saver]") {
-    PrinterState state;
-    MoonrakerClientMock client;
-    MoonrakerAPIMock api(client, state);
-
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    spools.push_back(test_spool);
-
-    SpoolmanSlotSaver saver(&api);
-
-    SlotInfo original = make_test_slot();
-    SlotInfo edited = original;
-    edited.brand = "eSUN";
-    // spoolman_vendor_id remains 0
-
-    bool callback_called = false;
-    bool callback_success = false;
-
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
-
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
-
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.size() == 1);
-    REQUIRE_FALSE(updates[0].data.contains("vendor_id")); // Not sent when 0
-    REQUIRE(updates[0].data.contains("material"));        // Other fields still present
-    REQUIRE(updates[0].data.contains("color_hex"));
-}
-
-TEST_CASE("SpoolmanSlotSaver save PATCHes filament with correct color_hex format",
-          "[spoolman][slot_saver]") {
-    PrinterState state;
-    MoonrakerClientMock client;
-    MoonrakerAPIMock api(client, state);
-
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    spools.push_back(test_spool);
-
-    SpoolmanSlotSaver saver(&api);
-
-    SlotInfo original = make_test_slot();
-    SlotInfo edited = original;
-    edited.color_rgb = 0x00FF00; // Changed to green
-
-    bool callback_called = false;
-    bool callback_success = false;
-
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
-
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
-
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.size() == 1);
-    // color_hex should NOT have # prefix
-    REQUIRE(updates[0].data.contains("color_hex"));
-    REQUIRE(updates[0].data["color_hex"] == "00FF00");
-}
-
-TEST_CASE("SpoolmanSlotSaver save PATCHes filament then updates weight when both change",
-          "[spoolman][slot_saver]") {
-    PrinterState state;
-    MoonrakerClientMock client;
-    MoonrakerAPIMock api(client, state);
-
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "FF0000";
-    test_spool.remaining_weight_g = 800.0;
-    test_spool.initial_weight_g = 1000.0;
-    spools.push_back(test_spool);
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().add_filament(100, 1, "PLA", "FF0000");
+    api.spoolman_mock().next_created_filament_id = 104;
 
     SpoolmanSlotSaver saver(&api);
 
@@ -581,24 +533,20 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes filament then updates weight when both
     edited.material = "ABS";
     edited.remaining_weight_g = 500.0f;
 
-    bool callback_called = false;
-    bool callback_success = false;
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
 
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_filament_id == 104);
 
-    REQUIRE(callback_called);
-    REQUIRE(callback_success);
-
-    // Verify filament was PATCHed
-    auto& updates = api.spoolman_mock().filament_updates;
+    // Verify spool was PATCHed.
+    auto& updates = api.spoolman_mock().spool_updates;
     REQUIRE(updates.size() == 1);
-    REQUIRE(updates[0].filament_id == 100);
-    REQUIRE(updates[0].data["material"] == "ABS");
+    REQUIRE(updates[0].spool_id == 42);
+    REQUIRE(updates[0].patch["filament_id"] == 104);
 
-    // Verify weight was also updated
+    // And weight was also updated.
     for (const auto& spool : api.spoolman_mock().get_mock_spools()) {
         if (spool.id == 42) {
             REQUIRE(spool.remaining_weight_g == Catch::Approx(500.0));
@@ -607,56 +555,56 @@ TEST_CASE("SpoolmanSlotSaver save PATCHes filament then updates weight when both
     }
 }
 
-TEST_CASE("SpoolmanSlotSaver save fails gracefully when no filament_id available",
+TEST_CASE("SpoolmanSlotSaver save succeeds even when original has no filament_id",
           "[spoolman][slot_saver]") {
+    // With the repoint model, the original's spoolman_filament_id does not gate
+    // saving — we resolve the edited triple and PATCH the spool to point there.
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().next_created_filament_id = 105;
 
     SpoolmanSlotSaver saver(&api);
 
     SlotInfo original = make_test_slot();
-    original.spoolman_filament_id = 0; // No filament ID
+    original.spoolman_filament_id = 0; // Originally unlinked at the filament level
     SlotInfo edited = original;
-    edited.material = "PETG"; // Filament-level change but no filament_id
+    edited.material = "PETG";
 
-    bool callback_called = false;
-    bool callback_success = false;
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
 
-    saver.save(original, edited, [&](const SaveResult& r) {
-        callback_called = true;
-        callback_success = r.success;
-    });
+    REQUIRE(got.success);
+    REQUIRE(got.repointed_filament);
+    REQUIRE(got.new_filament_id == 105);
 
-    REQUIRE(callback_called);
-    REQUIRE_FALSE(callback_success); // Should fail, not crash
+    // Spool PATCH should still go out.
+    auto& updates = api.spoolman_mock().spool_updates;
+    REQUIRE(updates.size() == 1);
+    REQUIRE(updates[0].patch["filament_id"] == 105);
 
-    // Verify no filament update was attempted
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.empty());
+    // And the filament PATCH endpoint was NOT touched.
+    REQUIRE(api.spoolman_mock().filament_updates.empty());
 }
 
 // ============================================================================
 // color_to_hex format tests
 // ============================================================================
 
-TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix",
+TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix (observed via create)",
           "[spoolman][slot_saver]") {
-    // color_to_hex is private, but we can test via the PATCH payload
-    // This test verifies the format indirectly through the filament update
+    // color_to_hex is private; verify the format indirectly via the newly-created
+    // filament payload (since no existing filament matches 0xABCDEF).
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
 
-    auto& spools = api.spoolman_mock().get_mock_spools();
-    SpoolInfo test_spool;
-    test_spool.id = 42;
-    test_spool.filament_id = 100;
-    test_spool.vendor = "Polymaker";
-    test_spool.material = "PLA";
-    test_spool.color_hex = "000000";
-    test_spool.remaining_weight_g = 800.0;
-    spools.push_back(test_spool);
+    api.spoolman_mock().add_vendor(1, "Polymaker");
+    api.spoolman_mock().next_created_filament_id = 999;
 
     SpoolmanSlotSaver saver(&api);
 
@@ -669,10 +617,8 @@ TEST_CASE("SpoolmanSlotSaver color_to_hex produces hex without # prefix",
     saver.save(original, edited, [&](const SaveResult&) { done = true; });
 
     REQUIRE(done);
-    auto& updates = api.spoolman_mock().filament_updates;
-    REQUIRE(updates.size() == 1);
-    // Must NOT start with #
-    std::string hex = updates[0].data["color_hex"];
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    const std::string hex = api.spoolman_mock().created_filaments[0]["color_hex"];
     REQUIRE(hex == "ABCDEF");
     REQUIRE(hex[0] != '#');
 }
@@ -901,4 +847,114 @@ TEST_CASE("SpoolmanSlotSaver repoint_spool: PATCHes spool with new filament_id",
     REQUIRE(updates.size() == 1);
     REQUIRE(updates[0].spool_id == 42);
     REQUIRE(updates[0].patch["filament_id"] == 101);
+}
+
+// ============================================================================
+// Incompleteness + skip-on-match paths (save() behavior)
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver save: linked spool + incomplete filament fields + no weight change "
+          "-> silent success, no API calls",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.brand = ""; // force incomplete
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE_FALSE(got.repointed_filament);
+    REQUIRE(api.spoolman_mock().spool_updates.empty());
+    REQUIRE(api.spoolman_mock().filament_updates.empty());
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+}
+
+TEST_CASE("SpoolmanSlotSaver save: linked spool + incomplete filament fields + weight change "
+          "-> weight is still written",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    // Need the spool to exist for the weight update to land.
+    auto& spools = api.spoolman_mock().get_mock_spools();
+    SpoolInfo test_spool;
+    test_spool.id = 42;
+    test_spool.filament_id = 100;
+    test_spool.vendor = "Polymaker";
+    test_spool.material = "PLA";
+    test_spool.color_hex = "FF0000";
+    test_spool.remaining_weight_g = 800.0;
+    test_spool.initial_weight_g = 1000.0;
+    spools.push_back(test_spool);
+
+    SlotInfo original = make_test_slot();
+    SlotInfo edited = original;
+    edited.brand = "";            // incomplete
+    edited.remaining_weight_g = 600.0f; // weight change
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE_FALSE(got.repointed_filament);
+
+    // Filament side skipped entirely.
+    REQUIRE(api.spoolman_mock().filament_updates.empty());
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+
+    // But the weight update landed.
+    for (const auto& spool : api.spoolman_mock().get_mock_spools()) {
+        if (spool.id == 42) {
+            REQUIRE(spool.remaining_weight_g == Catch::Approx(600.0));
+            break;
+        }
+    }
+}
+
+TEST_CASE("SpoolmanSlotSaver save: linked spool + filament resolves to same filament_id "
+          "-> no repoint",
+          "[spoolman][slot_saver]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    // Seed vendor + filament that will be matched exactly.
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+    api.spoolman_mock().add_filament(100, 7, "PLA", "FF0000");
+
+    SlotInfo original = make_test_slot();
+    original.spoolman_filament_id = 100; // match the seeded filament
+
+    // Change brand capitalization — detect_changes() sees a filament-level change
+    // (string equality), but find_or_create_vendor matches case-insensitively to
+    // id=7, and find_or_create_filament returns id=100 → same as original →
+    // repoint is skipped.
+    SlotInfo edited = original;
+    edited.brand = "polymaker";
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE_FALSE(got.repointed_filament);
+    REQUIRE(got.new_vendor_id == 7);
+    REQUIRE(got.new_filament_id == 100);
+
+    // No repoint call was issued.
+    REQUIRE(api.spoolman_mock().spool_updates.empty());
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
 }

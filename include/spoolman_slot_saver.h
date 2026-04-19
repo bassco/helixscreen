@@ -52,7 +52,10 @@ struct SaveResult {
  *
  * Orchestrates filament and spool updates:
  * 1. Detects what changed between original and edited SlotInfo
- * 2. For filament-level changes: PATCHes the existing filament definition
+ * 2. For filament-level changes: resolves (vendor, material, color) to a
+ *    Spoolman filament record (creating it if needed), then repoints the
+ *    linked spool to that filament. The filament record itself is never
+ *    mutated, since it may be shared by other spools.
  * 3. Updates spool weight if changed
  */
 class SpoolmanSlotSaver {
@@ -95,12 +98,15 @@ class SpoolmanSlotSaver {
      * Handles the full async orchestration:
      * - No spoolman_id or no changes: immediate success callback
      * - Only weight changed: update spool weight
-     * - Filament changed: PATCH existing filament definition
-     * - Both changed: PATCH filament first, then update weight
+     * - Filament changed: find-or-create vendor, find-or-create filament,
+     *   then repoint the linked spool to that filament_id. If the resolved
+     *   filament_id matches the original, the repoint is skipped.
+     * - Both changed: repoint (or skip) first, then update weight
      *
      * @param original The slot state before editing
      * @param edited The slot state after editing
-     * @param on_complete Called with true on success, false on failure
+     * @param on_complete Called with the SaveResult (success flag and any
+     *                    new vendor/filament IDs assigned along the way)
      */
     void save(const SlotInfo& original, const SlotInfo& edited, CompletionCallback on_complete);
 
@@ -164,11 +170,6 @@ class SpoolmanSlotSaver {
      * @brief Update spool weight via API
      */
     void update_weight(int spool_id, float weight_g, CompletionCallback on_complete);
-
-    /**
-     * @brief PATCH existing filament definition with changed fields
-     */
-    void update_filament(int filament_id, const SlotInfo& edited, CompletionCallback on_complete);
 };
 
 } // namespace helix
