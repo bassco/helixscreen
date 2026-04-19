@@ -181,6 +181,9 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
         nlohmann::json received;
     };
     auto state = std::make_shared<SyncState>();
+    // Copy strings into the error lambda: the store may be destroyed before
+    // Moonraker's request tracker fires its ~60s error timeout, so the lambda
+    // can't rely on backend_id_/namespace_ still being alive.
     const std::string backend_id_copy = backend_id_;
     const std::string namespace_copy = namespace_;
 
@@ -203,7 +206,7 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
 
     {
         std::unique_lock<std::mutex> lk(state->m);
-        state->cv.wait_for(lk, std::chrono::seconds(5), [&] { return state->done; });
+        state->cv.wait_for(lk, std::chrono::seconds(5), [state] { return state->done; });
     }
 
     if (!state->got || !state->received.is_object()) return result;
