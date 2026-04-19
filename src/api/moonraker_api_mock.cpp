@@ -1890,12 +1890,19 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_spool(const nlohmann::json& spool
                                                      ErrorCallback /*on_error*/) {
     spdlog::info("[MoonrakerAPIMock] create_spoolman_spool()");
 
+    // Capture the POST payload for test inspection.
+    created_spools.push_back(spool_data);
+
     // Create a new spool and add to the mock list
     SpoolInfo spool;
-    spool.id = static_cast<int>(mock_spools_.size()) + 1;
+    spool.id = next_created_spool_id > 0 ? next_created_spool_id
+                                         : static_cast<int>(mock_spools_.size()) + 1;
     spool.initial_weight_g = spool_data.value("initial_weight", 1000.0);
-    spool.remaining_weight_g = spool.initial_weight_g;
+    spool.remaining_weight_g = spool_data.value("remaining_weight", spool.initial_weight_g);
     spool.spool_weight_g = spool_data.value("spool_weight", 0.0);
+    if (spool_data.contains("filament_id")) {
+        spool.filament_id = spool_data.value("filament_id", 0);
+    }
 
     // In real Spoolman, filament_id links to an existing filament definition
     if (spool_data.contains("filament_id")) {

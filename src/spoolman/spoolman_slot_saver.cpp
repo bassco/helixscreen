@@ -57,11 +57,65 @@ std::string SpoolmanSlotSaver::color_to_hex(uint32_t rgb) {
 
 void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
                              CompletionCallback on_complete) {
-    // No-op for non-Spoolman slots
+    // New-spool-on-save path — user entered manual filament info on an unlinked slot.
     if (!edited.spoolman_id) {
-        spdlog::debug("[SpoolmanSlotSaver] No spoolman_id, skipping save");
-        if (on_complete)
-            on_complete(SaveResult{.success = true});
+        if (!is_filament_complete(edited)) {
+            spdlog::debug(
+                "[SpoolmanSlotSaver] No spoolman_id and incomplete fields — nothing to send");
+            if (on_complete)
+                on_complete(SaveResult{.success = true});
+            return;
+        }
+
+        const std::string color_hex = color_to_hex(edited.color_rgb);
+        const float weight = edited.remaining_weight_g;
+
+        find_or_create_vendor(
+            edited.brand,
+            [this, edited, color_hex, weight, on_complete](int vendor_id) {
+                find_or_create_filament(
+                    vendor_id, edited.material, color_hex,
+                    [this, vendor_id, weight, on_complete](int filament_id) {
+                        nlohmann::json payload;
+                        payload["filament_id"] = filament_id;
+                        if (weight > 0.0f) {
+                            payload["remaining_weight"] = static_cast<double>(weight);
+                        }
+                        spdlog::info("[SpoolmanSlotSaver] Creating new spool "
+                                     "(filament_id={}, weight={:.1f})",
+                                     filament_id, weight);
+                        api_->spoolman().create_spoolman_spool(
+                            payload,
+                            [vendor_id, filament_id, on_complete](const SpoolInfo& info) {
+                                SaveResult out;
+                                out.success = true;
+                                out.created_new_spool = true;
+                                out.new_spool_id = info.id;
+                                out.new_filament_id = filament_id;
+                                out.new_vendor_id = vendor_id;
+                                if (on_complete)
+                                    on_complete(out);
+                            },
+                            [on_complete](const MoonrakerError& err) {
+                                spdlog::error(
+                                    "[SpoolmanSlotSaver] create_spoolman_spool failed: {}",
+                                    err.message);
+                                if (on_complete)
+                                    on_complete(SaveResult{.success = false});
+                            });
+                    },
+                    [on_complete](const MoonrakerError& err) {
+                        spdlog::error("[SpoolmanSlotSaver] create filament failed: {}",
+                                      err.message);
+                        if (on_complete)
+                            on_complete(SaveResult{.success = false});
+                    });
+            },
+            [on_complete](const MoonrakerError& err) {
+                spdlog::error("[SpoolmanSlotSaver] create vendor failed: {}", err.message);
+                if (on_complete)
+                    on_complete(SaveResult{.success = false});
+            });
         return;
     }
 

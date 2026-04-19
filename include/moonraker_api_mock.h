@@ -220,6 +220,13 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     /// If 0, the mock falls back to the internal auto-increment counter.
     int next_created_filament_id = 0;
 
+    /// Captured POST payloads from create_spoolman_spool() calls (for test assertions).
+    std::vector<nlohmann::json> created_spools;
+
+    /// ID to assign to the next spool created via create_spoolman_spool().
+    /// If 0, the mock falls back to an auto-assigned ID based on list size.
+    int next_created_spool_id = 0;
+
     /**
      * @brief Pre-seed a vendor with a known ID and name.
      *

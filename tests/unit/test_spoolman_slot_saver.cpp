@@ -958,3 +958,106 @@ TEST_CASE("SpoolmanSlotSaver save: linked spool + filament resolves to same fila
     REQUIRE(api.spoolman_mock().created_vendors.empty());
     REQUIRE(api.spoolman_mock().created_filaments.empty());
 }
+
+// ============================================================================
+// save(): no linked spool -> create-new-spool path
+// ============================================================================
+
+TEST_CASE("SpoolmanSlotSaver save: no linked spool + complete fields -> creates spool and returns "
+          "IDs",
+          "[spoolman][slot_saver][create]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear(); // isolate from synthesized vendors
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+    api.spoolman_mock().next_created_filament_id = 101;
+    api.spoolman_mock().next_created_spool_id = 500;
+
+    SlotInfo original;
+    original.slot_index = 0;
+    original.spoolman_id = 0; // no linked spool
+
+    SlotInfo edited = original;
+    edited.brand = "Polymaker";
+    edited.material = "PLA";
+    edited.color_rgb = 0xFF0000;
+    edited.remaining_weight_g = 750.0f;
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.created_new_spool);
+    REQUIRE_FALSE(got.repointed_filament);
+    REQUIRE(got.new_spool_id == 500);
+    REQUIRE(got.new_filament_id == 101);
+    REQUIRE(got.new_vendor_id == 7); // reused existing vendor
+
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.size() == 1);
+    REQUIRE(api.spoolman_mock().created_spools.size() == 1);
+
+    auto& spool_payload = api.spoolman_mock().created_spools[0];
+    REQUIRE(spool_payload["filament_id"] == 101);
+    REQUIRE(spool_payload["remaining_weight"] == 750.0);
+}
+
+TEST_CASE("SpoolmanSlotSaver save: no linked spool + incomplete fields -> no Spoolman calls",
+          "[spoolman][slot_saver][create]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+
+    SlotInfo original;
+    original.spoolman_id = 0;
+
+    SlotInfo edited = original;
+    edited.brand = "Polymaker";
+    edited.material = ""; // incomplete
+    edited.color_rgb = 0xFF0000;
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE_FALSE(got.created_new_spool);
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+    REQUIRE(api.spoolman_mock().created_filaments.empty());
+    REQUIRE(api.spoolman_mock().created_spools.empty());
+}
+
+TEST_CASE("SpoolmanSlotSaver save: no linked spool + complete fields + zero weight -> creates "
+          "spool without weight field",
+          "[spoolman][slot_saver][create]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+    api.spoolman_mock().get_mock_spools().clear();
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+    api.spoolman_mock().next_created_filament_id = 101;
+    api.spoolman_mock().next_created_spool_id = 500;
+
+    SlotInfo original;
+    original.spoolman_id = 0;
+
+    SlotInfo edited = original;
+    edited.brand = "Polymaker";
+    edited.material = "PLA";
+    edited.color_rgb = 0xFF0000;
+    edited.remaining_weight_g = 0.0f; // not entered
+
+    SpoolmanSlotSaver saver(&api);
+    SaveResult got{};
+    saver.save(original, edited, [&](const SaveResult& r) { got = r; });
+
+    REQUIRE(got.success);
+    REQUIRE(got.created_new_spool);
+    REQUIRE(api.spoolman_mock().created_spools.size() == 1);
+    auto& payload = api.spoolman_mock().created_spools[0];
+    REQUIRE(payload["filament_id"] == 101);
+    REQUIRE_FALSE(payload.contains("remaining_weight"));
+}
