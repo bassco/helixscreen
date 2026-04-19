@@ -282,7 +282,7 @@ void MoonrakerAPI::database_delete_item(const std::string& namespace_name, const
             if (on_success)
                 on_success();
         },
-        [on_success, on_error](const MoonrakerError& err) {
+        [namespace_name, key, on_success, on_error](const MoonrakerError& err) {
             // Moonraker returns JSON-RPC error code 404 with message
             // "Key '<k>' in namespace '<n>' not found" when deleting a
             // missing key. clear_async treats that as success (idempotency).
@@ -293,6 +293,9 @@ void MoonrakerAPI::database_delete_item(const std::string& namespace_name, const
                 err.code == 404 ||
                 err.message.find("not found") != std::string::npos;
             if (missing_key) {
+                spdlog::debug("[MoonrakerAPI] database_delete_item({}/{}): missing-key "
+                              "error treated as success (code={}, msg=\"{}\")",
+                              namespace_name, key, err.code, err.message);
                 if (on_success)
                     on_success();
                 return;

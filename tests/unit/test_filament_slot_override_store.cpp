@@ -315,3 +315,75 @@ TEST_CASE("FilamentSlotOverrideStore clear_async handles null callback gracefull
     // Verify delete still happened.
     CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
 }
+
+TEST_CASE("FilamentSlotOverrideStore clear_async maps 404 error to success",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    MoonrakerError err;
+    err.code = 404;
+    err.message = "Key 'lane1' not found";
+    api.mock_reject_next_db_delete(err);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    bool cb_done = false;
+    bool cb_ok = false;
+    store.clear_async(0, [&](bool ok, std::string) {
+        cb_ok = ok;
+        cb_done = true;
+    });
+    REQUIRE(cb_done);
+    CHECK(cb_ok); // 404 → treated as success
+}
+
+TEST_CASE("FilamentSlotOverrideStore clear_async propagates non-missing-key errors",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    MoonrakerError err;
+    err.code = 500;
+    err.message = "internal server error";
+    api.mock_reject_next_db_delete(err);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    bool cb_done = false;
+    bool cb_ok = true;
+    std::string cb_err;
+    store.clear_async(0, [&](bool ok, std::string e) {
+        cb_ok = ok;
+        cb_err = std::move(e);
+        cb_done = true;
+    });
+    REQUIRE(cb_done);
+    CHECK(!cb_ok);
+    CHECK(cb_err.find("internal server error") != std::string::npos);
+}
+
+TEST_CASE("FilamentSlotOverrideStore clear_async maps message-based missing-key error to success",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    MoonrakerError err;
+    err.code = 0; // no code, only message
+    err.message = "Key 'lane1' in namespace 'lane_data' not found";
+    api.mock_reject_next_db_delete(err);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    bool cb_done = false;
+    bool cb_ok = false;
+    store.clear_async(0, [&](bool ok, std::string) {
+        cb_ok = ok;
+        cb_done = true;
+    });
+    REQUIRE(cb_done);
+    CHECK(cb_ok); // "not found" substring → treated as success
+}

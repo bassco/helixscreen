@@ -188,6 +188,17 @@ void MoonrakerAPIMock::mock_reject_next_db_post(MoonrakerError err) {
     next_db_post_rejection_ = std::move(err);
 }
 
+void MoonrakerAPIMock::mock_reject_next_db_delete() {
+    MoonrakerError err;
+    err.type = MoonrakerErrorType::UNKNOWN;
+    err.message = "Mock: database_delete_item rejected";
+    next_db_delete_rejection_ = std::move(err);
+}
+
+void MoonrakerAPIMock::mock_reject_next_db_delete(MoonrakerError err) {
+    next_db_delete_rejection_ = std::move(err);
+}
+
 void MoonrakerAPIMock::set_database_empty(const std::string& namespace_name,
                                           const std::string& key) {
     mock_db_.erase(namespace_name + ":" + key);
@@ -230,7 +241,28 @@ void MoonrakerAPIMock::database_get_namespace(const std::string& namespace_name,
 void MoonrakerAPIMock::database_delete_item(const std::string& namespace_name,
                                             const std::string& key,
                                             std::function<void()> on_success,
-                                            ErrorCallback /*on_error*/) {
+                                            ErrorCallback on_error) {
+    if (next_db_delete_rejection_.has_value()) {
+        MoonrakerError err = std::move(*next_db_delete_rejection_);
+        next_db_delete_rejection_.reset();
+        // Mirror MoonrakerAPI::database_delete_item's missing-key normalization
+        // so the mock faithfully simulates the real API's contract. Tests that
+        // inject a 404 or "not found" error through mock_reject_next_db_delete
+        // verify callers see on_success — exactly as they would against a real
+        // Moonraker instance.
+        const bool missing_key =
+            err.code == 404 || err.message.find("not found") != std::string::npos;
+        if (missing_key) {
+            if (on_success) {
+                on_success();
+            }
+            return;
+        }
+        if (on_error) {
+            on_error(err);
+        }
+        return;
+    }
     // Absent keys are a silent success (matches Moonraker's semantics after the
     // real impl maps its "key not found" error to success).
     mock_db_.erase(namespace_name + ":" + key);

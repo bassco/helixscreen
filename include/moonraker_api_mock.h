@@ -621,6 +621,23 @@ class MoonrakerAPIMock : public MoonrakerAPI {
     void mock_reject_next_db_post();
     void mock_reject_next_db_post(MoonrakerError err);
 
+    /// Cause the next database_delete_item() call to fire its on_error callback
+    /// with the given MoonrakerError, and skip erasing from the mock DB. The
+    /// rejection is consumed on the first call — subsequent deletes succeed
+    /// normally unless this is called again. The no-arg overload uses a
+    /// generic UNKNOWN error with a descriptive message.
+    ///
+    /// Note: the mock mirrors MoonrakerAPI's missing-key normalization. If the
+    /// injected error has code == 404 or its message contains "not found",
+    /// on_success is called instead of on_error — faithfully simulating the
+    /// real API's contract. Tests relying on this remap can inject specific
+    /// errors and verify callers handle normalized results.
+    ///
+    /// Not thread-safe: call from the main test thread before the rejection
+    /// is consumed.
+    void mock_reject_next_db_delete();
+    void mock_reject_next_db_delete(MoonrakerError err);
+
     /// Ensure a namespace/key is absent from the mock database so subsequent
     /// database_get_item() calls route to on_error.
     void set_database_empty(const std::string& namespace_name, const std::string& key);
@@ -640,4 +657,7 @@ class MoonrakerAPIMock : public MoonrakerAPI {
 
     /// One-shot rejection for database_post_item (set by mock_reject_next_db_post).
     std::optional<MoonrakerError> next_db_post_rejection_;
+
+    /// One-shot rejection for database_delete_item (set by mock_reject_next_db_delete).
+    std::optional<MoonrakerError> next_db_delete_rejection_;
 };

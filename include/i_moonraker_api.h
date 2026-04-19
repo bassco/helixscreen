@@ -138,8 +138,10 @@ class IMoonrakerAPI {
                                         std::function<void(const json&)> on_success,
                                         ErrorCallback on_error = nullptr) = 0;
 
-    /// @brief Delete a key from Moonraker's database. Absent key is not an error
-    ///        in Moonraker's semantics; on_success fires either way.
+    /// @brief Delete a key from Moonraker's database. Implementations normalize
+    ///        the "missing key" error (Moonraker returns 404 for absent entries)
+    ///        into on_success so callers can treat delete as idempotent. on_error
+    ///        only fires for genuine failures (network, permission, protocol).
     virtual void database_delete_item(const std::string& namespace_name, const std::string& key,
                                       std::function<void()> on_success = nullptr,
                                       ErrorCallback on_error = nullptr) = 0;
