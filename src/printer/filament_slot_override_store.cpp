@@ -269,10 +269,37 @@ void FilamentSlotOverrideStore::save_async(int slot_index,
         });
 }
 
-void FilamentSlotOverrideStore::clear_async(int /*slot_index*/, SaveCallback cb) {
-    if (cb) {
-        cb(false, "not implemented");
+void FilamentSlotOverrideStore::clear_async(int slot_index, SaveCallback cb) {
+    if (!api_) {
+        if (cb) cb(false, "no API");
+        return;
     }
+    // Reject negative slot indices symmetrically with save_async and
+    // from_lane_data_record (matches OrcaSlicer's MoonrakerPrinterAgent.cpp:796).
+    if (slot_index < 0) {
+        if (cb) cb(false, "invalid slot_index");
+        return;
+    }
+
+    const std::string key = lane_key(slot_index);
+
+    // Lifetime safety mirrors save_async: Moonraker's request tracker can fire
+    // the error callback ~60s after this returns, well after the store may have
+    // been destroyed (backend swap, reconnect). Value-capture only; no `this`.
+    const std::string backend_id_copy = backend_id_;
+
+    api_->database_delete_item(namespace_, key,
+        [cb]() {
+            if (cb) cb(true, "");
+        },
+        [cb, backend_id_copy, key](const MoonrakerError& err) {
+            // Clear failures are user-visible — warn so ops can spot persistent
+            // failures in the logs. (Missing-key is mapped to success by the
+            // real api layer, so reaching this lambda means a real failure.)
+            spdlog::warn("[FilamentSlotOverrideStore:{}] clear failed for key {}: {}",
+                         backend_id_copy, key, err.message);
+            if (cb) cb(false, err.message);
+        });
 }
 
 }  // namespace helix::ams

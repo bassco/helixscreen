@@ -236,3 +236,82 @@ TEST_CASE("FilamentSlotOverrideStore save_async reports error on MR DB failure",
     auto stored = api.mock_get_db_value("lane_data", "lane1");
     CHECK(stored.is_null());
 }
+
+TEST_CASE("FilamentSlotOverrideStore clear_async removes single slot",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Seed two entries; clearing slot 0 should leave slot 1 untouched.
+    nlohmann::json lane1 = {{"lane", "0"}, {"material", "PLA"}};
+    nlohmann::json lane2 = {{"lane", "1"}, {"material", "PETG"}};
+    api.mock_set_db_value("lane_data", "lane1", lane1);
+    api.mock_set_db_value("lane_data", "lane2", lane2);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    bool cb_done = false;
+    bool cb_ok = false;
+    store.clear_async(0, [&](bool ok, std::string) { cb_ok = ok; cb_done = true; });
+    REQUIRE(cb_done);
+    CHECK(cb_ok);
+
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+    auto lane2_after = api.mock_get_db_value("lane_data", "lane2");
+    CHECK(lane2_after["material"] == "PETG");
+}
+
+TEST_CASE("FilamentSlotOverrideStore clear_async succeeds for absent slot (idempotent)",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    bool cb_done = false;
+    bool cb_ok = false;
+    std::string cb_err;
+    store.clear_async(3, [&](bool ok, std::string err) {
+        cb_ok = ok;
+        cb_err = std::move(err);
+        cb_done = true;
+    });
+    REQUIRE(cb_done);
+    CHECK(cb_ok);
+    CHECK(cb_err.empty());
+}
+
+TEST_CASE("FilamentSlotOverrideStore clear_async rejects negative slot_index",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    bool cb_done = false;
+    bool cb_ok = true;
+    store.clear_async(-1, [&](bool ok, std::string) { cb_ok = ok; cb_done = true; });
+    REQUIRE(cb_done);
+    CHECK(!cb_ok);
+}
+
+TEST_CASE("FilamentSlotOverrideStore clear_async handles null callback gracefully",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    api.mock_set_db_value("lane_data", "lane1", nlohmann::json{{"lane", "0"}});
+    // Should not crash with no callback provided.
+    store.clear_async(0, {});
+    // Verify delete still happened.
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+}

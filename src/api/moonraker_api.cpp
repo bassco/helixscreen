@@ -270,3 +270,36 @@ void MoonrakerAPI::database_get_namespace(const std::string& namespace_name,
         0,     // timeout_ms: use default
         true); // silent: suppress RPC_ERROR toast
 }
+
+void MoonrakerAPI::database_delete_item(const std::string& namespace_name, const std::string& key,
+                                        std::function<void()> on_success,
+                                        ErrorCallback on_error) {
+    json params = {{"namespace", namespace_name}, {"key", key}};
+    client_.send_jsonrpc(
+        "server.database.delete_item", params,
+        [on_success](const json&) {
+            // Moonraker returns the deleted value on success; we don't care.
+            if (on_success)
+                on_success();
+        },
+        [on_success, on_error](const MoonrakerError& err) {
+            // Moonraker historically returns a 404/"key not found" error when
+            // deleting a key that doesn't exist. clear_async treats a missing
+            // key as success (idempotency), so map that specific error here
+            // rather than forcing every caller to handle it.
+            const std::string& m = err.message;
+            const bool missing_key =
+                m.find("not found") != std::string::npos ||
+                m.find("Key ") != std::string::npos ||
+                m.find("key ") != std::string::npos;
+            if (missing_key) {
+                if (on_success)
+                    on_success();
+                return;
+            }
+            if (on_error)
+                on_error(err);
+        },
+        0,     // timeout_ms: use default
+        true); // silent: suppress RPC_ERROR toast (missing-key is benign)
+}

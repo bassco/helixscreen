@@ -227,6 +227,18 @@ void MoonrakerAPIMock::database_get_namespace(const std::string& namespace_name,
     }
 }
 
+void MoonrakerAPIMock::database_delete_item(const std::string& namespace_name,
+                                            const std::string& key,
+                                            std::function<void()> on_success,
+                                            ErrorCallback /*on_error*/) {
+    // Absent keys are a silent success (matches Moonraker's semantics after the
+    // real impl maps its "key not found" error to success).
+    mock_db_.erase(namespace_name + ":" + key);
+    if (on_success) {
+        on_success();
+    }
+}
+
 // ============================================================================
 // Helix Plugin Method Overrides (mock)
 // ============================================================================

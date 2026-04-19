@@ -137,4 +137,10 @@ class IMoonrakerAPI {
     virtual void database_get_namespace(const std::string& namespace_name,
                                         std::function<void(const json&)> on_success,
                                         ErrorCallback on_error = nullptr) = 0;
+
+    /// @brief Delete a key from Moonraker's database. Absent key is not an error
+    ///        in Moonraker's semantics; on_success fires either way.
+    virtual void database_delete_item(const std::string& namespace_name, const std::string& key,
+                                      std::function<void()> on_success = nullptr,
+                                      ErrorCallback on_error = nullptr) = 0;
 };
