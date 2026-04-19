@@ -175,6 +175,25 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // parse path (save_variables, Adventurer5M.json, GET_ZCOLOR SILENT=1) picks
     // up the override before the SlotInfo is exposed via events.
     void apply_overrides(SlotInfo& slot, int slot_index);
+    // Hardware-event detection: if the firmware-reported color for `slot_index`
+    // changes vs. the previously observed value, assume the user physically
+    // swapped the spool without HelixScreen's involvement and clear the stored
+    // override so the new spool's metadata starts blank instead of carrying
+    // stale brand/spool_name/spoolman_id from the previous user.
+    //
+    // `slot` is `entry->info` — when a clear fires, override-exclusive fields
+    // (brand/spool_name/spoolman_*/weights/color_name) are zeroed on `slot` so
+    // the very next get_slot_info() call reflects the cleared state. (The
+    // subsequent apply_overrides() sees no override and is a no-op, so without
+    // this reset the stale values would linger until the struct is rebuilt.)
+    //
+    // Called from update_slot_from_state BEFORE apply_overrides, so the check
+    // sees firmware-truth (not the override-masked value). First observation
+    // on a given slot is a baseline and NEVER triggers a clear.
+    //
+    // `firmware_color == 0` is treated as "no color reading" (empty slot,
+    // unread, transient) and is ignored — it must not update the baseline.
+    void check_hardware_event_clear(int slot_index, uint32_t firmware_color, SlotInfo& slot);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
     void register_zcolor_listener();
@@ -276,6 +295,18 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // under mutex_ (via update_slot_from_state).
     std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
     std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
+
+    // Per-slot previous firmware color (NOT the override-masked value).
+    // Used to detect hardware-event "user swapped physical spool" and clear
+    // the override so stale brand/spool_name/spoolman_id from the previous
+    // physical spool don't bleed onto the new one. Empty = first observation
+    // (baseline, never triggers a clear). firmware_color == 0 is ignored as
+    // "no reading" and does not update the baseline.
+    //
+    // Access is always under mutex_ (only written/read from
+    // update_slot_from_state -> check_hardware_event_clear, whose callers
+    // hold the lock).
+    std::unordered_map<int, uint32_t> last_firmware_color_;
 
     // Note: uses inherited lifetime_ from AmsSubscriptionBackend (not shadowed).
 };

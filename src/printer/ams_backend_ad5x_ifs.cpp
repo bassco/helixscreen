@@ -459,6 +459,13 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
     // Reverse tool mapping: find first tool that maps to this port
     entry->info.mapped_tool = find_first_tool_for_port(slot_index + 1);
 
+    // Hardware-event detection MUST run BEFORE apply_overrides. At this point
+    // entry->info.color_rgb is firmware-truth; after apply_overrides it may be
+    // masked by a stale override and we'd miss the swap signal. Pass entry->info
+    // so the helper can reset override-exclusive fields in place when a clear
+    // fires (apply_overrides below is then a no-op on the cleared slot).
+    check_hardware_event_clear(slot_index, entry->info.color_rgb, entry->info);
+
     // Layer user-configured overrides on top of firmware-reported data. Called
     // last so overrides win for any non-default field. Callers hold mutex_,
     // which also covers overrides_ writes from on_started() and set_slot_info()
@@ -505,6 +512,77 @@ void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
         slot.color_name = o.color_name;
     if (!o.material.empty())
         slot.material = o.material;
+}
+
+void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t firmware_color,
+                                                   SlotInfo& slot) {
+    // firmware_color == 0 is "no reading" (empty slot, unread, transient JSON
+    // parse race). Treat as non-signal: don't update the baseline, don't clear.
+    // Otherwise every empty-slot poll would overwrite a real prior color and
+    // mask a genuine hardware swap on the next non-empty poll.
+    if (firmware_color == 0)
+        return;
+
+    auto it = last_firmware_color_.find(slot_index);
+    if (it == last_firmware_color_.end()) {
+        // First observation for this slot — establish baseline. Even if the
+        // override's color_rgb differs from firmware, the initial startup
+        // observation is NEVER a "swap" signal. apply_overrides will still
+        // run after us and the override wins.
+        last_firmware_color_[slot_index] = firmware_color;
+        return;
+    }
+    if (it->second == firmware_color)
+        return; // unchanged — no swap signal
+
+    // Firmware color changed. Record the new color as the baseline before
+    // doing anything else so a failed clear_async doesn't make us re-fire
+    // every poll.
+    const uint32_t old_color = it->second;
+    it->second = firmware_color;
+
+    auto ovr_it = overrides_.find(slot_index);
+    if (ovr_it == overrides_.end()) {
+        spdlog::debug("{} Slot {} firmware color changed #{:06X} -> #{:06X} "
+                      "(no override to clear)",
+                      backend_log_tag(), slot_index, old_color, firmware_color);
+        return;
+    }
+
+    spdlog::info("{} Slot {} firmware color changed #{:06X} -> #{:06X}, "
+                 "clearing override (physical spool swap detected)",
+                 backend_log_tag(), slot_index, old_color, firmware_color);
+    overrides_.erase(ovr_it);
+
+    // Reset override-exclusive fields on the live SlotInfo so the cleared
+    // state is visible in the very next get_slot_info() read. apply_overrides
+    // runs right after this and is now a no-op for this slot — without the
+    // reset here, stale brand / spool_name / spoolman_* / weights / color_name
+    // would persist on entry->info until a new override is written. Firmware-
+    // sourced fields (color_rgb, material, mapped_tool, status) are left
+    // alone; update_slot_from_state has already refreshed them.
+    slot.brand.clear();
+    slot.spool_name.clear();
+    slot.spoolman_id = 0;
+    slot.spoolman_vendor_id = 0;
+    slot.remaining_weight_g = -1.0f;
+    slot.total_weight_g = -1.0f;
+    slot.color_name.clear();
+
+    if (override_store_) {
+        // Capture by value only — clear_async's Moonraker callback can fire
+        // long after this function returns (MR tracker ~60s timeout) and
+        // after the backend itself may be gone. Same pattern as the
+        // save_async site in set_slot_info().
+        const std::string tag = backend_log_tag();
+        override_store_->clear_async(slot_index,
+            [tag, slot_index](bool ok, std::string err) {
+                if (!ok) {
+                    spdlog::warn("{} clear_async failed for slot {}: {}",
+                                 tag, slot_index, err);
+                }
+            });
+    }
 }
 
 // --- State queries ---
