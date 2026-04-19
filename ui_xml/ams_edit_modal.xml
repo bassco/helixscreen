@@ -7,10 +7,29 @@
 <!-- Layout: Side-by-side with color preview on left, form fields on right -->
 <component>
   <consts>
-    <px name="color_preview_size" value="80"/>
+    <!-- ams_edit_color_preview_size: modal-scoped to avoid colliding with the
+         color picker's color_preview_size_* triplet. 25% smaller at MICRO/TINY
+         to reclaim horizontal room in the modal's two-column layout. -->
+    <px name="ams_edit_color_preview_size_micro" value="60"/>
+    <px name="ams_edit_color_preview_size_tiny" value="60"/>
+    <px name="ams_edit_color_preview_size_small" value="80"/>
+    <px name="ams_edit_color_preview_size_medium" value="80"/>
+    <px name="ams_edit_color_preview_size_large" value="80"/>
     <px name="dropdown_width" value="140"/>
     <!-- unused, kept for reference -->
     <px name="left_column_width" value="120"/>
+    <!-- Compact header padding at MICRO/TINY where every row of pixels matters.
+         Larger breakpoints keep the normal space_lg/sm generosity. -->
+    <px name="ams_edit_header_pad_top_micro" value="4"/>
+    <px name="ams_edit_header_pad_top_tiny" value="4"/>
+    <px name="ams_edit_header_pad_top_small" value="12"/>
+    <px name="ams_edit_header_pad_top_medium" value="16"/>
+    <px name="ams_edit_header_pad_top_large" value="20"/>
+    <px name="ams_edit_header_pad_bot_micro" value="2"/>
+    <px name="ams_edit_header_pad_bot_tiny" value="2"/>
+    <px name="ams_edit_header_pad_bot_small" value="6"/>
+    <px name="ams_edit_header_pad_bot_medium" value="7"/>
+    <px name="ams_edit_header_pad_bot_large" value="8"/>
   </consts>
   <!-- Dialog card - wider for horizontal layout, capped at 80% screen height -->
   <view name="ams_edit_modal"
@@ -18,8 +37,8 @@
         style_flex_main_place="start" style_pad_gap="0">
     <!-- Header with title and close button -->
     <lv_obj width="100%"
-            height="content" style_pad_left="#space_lg" style_pad_right="#space_md" style_pad_top="#space_lg"
-            style_pad_bottom="#space_sm" flex_flow="row" style_flex_main_place="space_between"
+            height="content" style_pad_left="#space_lg" style_pad_right="#space_md" style_pad_top="#ams_edit_header_pad_top"
+            style_pad_bottom="#ams_edit_header_pad_bot" flex_flow="row" style_flex_main_place="space_between"
             style_flex_cross_place="center" scrollable="false">
       <lv_obj name="btn_picker_back" height="100%"
               style_pad_all="0" style_pad_left="#space_sm" flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"

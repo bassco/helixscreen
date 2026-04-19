@@ -23,7 +23,7 @@
     <!-- Temperature graph fixed height. Pinned so flex_grow on the spool card
          below takes the remaining vertical space (previously both siblings
          shared flex_grow=1 and starved each other at MICRO). -->
-    <px name="filament_graph_h_micro" value="100"/>
+    <px name="filament_graph_h_micro" value="70"/>
     <px name="filament_graph_h_tiny" value="80"/>
     <px name="filament_graph_h_small" value="140"/>
     <px name="filament_graph_h_medium" value="180"/>
