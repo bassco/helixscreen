@@ -125,3 +125,111 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking rejects negative lane values"
     auto overrides = store.load_blocking();
     CHECK(overrides.empty());
 }
+
+TEST_CASE("FilamentSlotOverrideStore save_async writes AFC-shaped record to lane_data",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    ovr.spoolman_id = 42;
+    ovr.remaining_weight_g = 850.0f;
+    ovr.total_weight_g = 1000.0f;
+
+    bool cb_done = false;
+    bool cb_ok = false;
+    std::string cb_err;
+
+    // slot index 0 → lane1 key, lane="0" field
+    store.save_async(0, ovr, [&](bool ok, std::string err) {
+        cb_ok = ok;
+        cb_err = std::move(err);
+        cb_done = true;
+    });
+
+    // MoonrakerAPIMock fires callbacks synchronously in-call.
+    REQUIRE(cb_done);
+    CHECK(cb_ok);
+    CHECK(cb_err.empty());
+
+    // Verify the stored record.
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK(stored["lane"] == "0");
+    CHECK(stored["color"] == "#FF5500");
+    CHECK(stored["material"] == "PLA");
+    CHECK(stored["vendor"] == "Polymaker");
+    CHECK(stored["spool_id"] == 42);
+    CHECK(stored["remaining_weight_g"] == 850.0f);
+    CHECK(stored["total_weight_g"] == 1000.0f);
+    CHECK(stored.contains("scan_time"));  // set by save_async
+}
+
+TEST_CASE("FilamentSlotOverrideStore save_async sets updated_at on the stored record",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    FilamentSlotOverride ovr;
+    ovr.brand = "eSUN";
+    // updated_at deliberately left at default (epoch)
+
+    bool cb_done = false;
+    store.save_async(2, ovr, [&](bool, std::string) { cb_done = true; });
+    REQUIRE(cb_done);
+
+    // slot 2 → lane3 key
+    auto stored = api.mock_get_db_value("lane_data", "lane3");
+    REQUIRE(stored.contains("scan_time"));
+    REQUIRE(stored["scan_time"].is_string());
+
+    // Spot check the timestamp is ISO-8601-shaped.
+    std::string ts = stored["scan_time"].get<std::string>();
+    CHECK(ts.size() >= 20);  // "YYYY-MM-DDTHH:MM:SSZ" = 20 chars
+    CHECK(ts.back() == 'Z'); // UTC
+    CHECK(ts[10] == 'T');    // ISO-8601 separator
+
+    // Caller's override must NOT have been mutated.
+    CHECK(ovr.updated_at == std::chrono::system_clock::time_point{});
+}
+
+TEST_CASE("FilamentSlotOverrideStore save_async reports error on MR DB failure",
+          "[filament_slot_override][slow]") {
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+
+    api.mock_reject_next_db_post();
+
+    FilamentSlotOverride ovr;
+    ovr.brand = "X";
+
+    bool cb_done = false;
+    bool cb_ok = true;
+    std::string cb_err;
+    store.save_async(0, ovr, [&](bool ok, std::string err) {
+        cb_ok = ok;
+        cb_err = std::move(err);
+        cb_done = true;
+    });
+
+    REQUIRE(cb_done);
+    CHECK(!cb_ok);
+    CHECK(!cb_err.empty());
+
+    // Record must NOT have been written on rejection.
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    CHECK(stored.is_null());
+}

@@ -223,12 +223,44 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
     return result;
 }
 
-void FilamentSlotOverrideStore::save_async(int /*slot_index*/,
-                                           const FilamentSlotOverride& /*override*/,
+void FilamentSlotOverrideStore::save_async(int slot_index,
+                                           const FilamentSlotOverride& ovr,
                                            SaveCallback cb) {
-    if (cb) {
-        cb(false, "not implemented");
+    if (!api_) {
+        if (cb) cb(false, "no API");
+        return;
     }
+
+    // Stamp a fresh updated_at on a local copy. The caller's struct is NOT
+    // mutated — callers may keep their original value for UI echo, diff checks,
+    // or retry with deliberate preserved timestamps.
+    FilamentSlotOverride stamped = ovr;
+    stamped.updated_at = std::chrono::system_clock::now();
+
+    nlohmann::json record = to_lane_data_record(slot_index, stamped);
+
+    // Per-slot keys mean no read-modify-write: each slot is its own DB entry.
+    // Avoids racing concurrent edits on different slots.
+    const std::string key = lane_key(slot_index);
+
+    // Lifetime safety: Moonraker's request tracker can fire the error callback
+    // well after save_async returns (default ~60s timeout). The store may be
+    // destroyed in the meantime (backend swap, reconnect). Do NOT capture
+    // `this` — only value-captured copies, which keep the lambda self-contained.
+    const std::string backend_id_copy = backend_id_;
+
+    api_->database_post_item(namespace_, key, record,
+        [cb]() {
+            if (cb) cb(true, "");
+        },
+        [cb, backend_id_copy, key](const MoonrakerError& err) {
+            // Save failures are user-visible (unlike namespace-missing on load,
+            // which we swallow at debug). Warn so ops can spot persistent save
+            // failures in the logs.
+            spdlog::warn("[FilamentSlotOverrideStore:{}] save_async({}) failed: {}",
+                         backend_id_copy, key, err.message);
+            if (cb) cb(false, err.message);
+        });
 }
 
 void FilamentSlotOverrideStore::clear_async(int /*slot_index*/, SaveCallback cb) {

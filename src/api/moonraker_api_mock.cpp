@@ -170,6 +170,24 @@ void MoonrakerAPIMock::mock_set_db_value(const std::string& namespace_name, cons
     mock_db_[namespace_name + ":" + key] = value;
 }
 
+nlohmann::json MoonrakerAPIMock::mock_get_db_value(const std::string& namespace_name,
+                                                   const std::string& key) const {
+    auto it = mock_db_.find(namespace_name + ":" + key);
+    if (it == mock_db_.end()) return nlohmann::json();
+    return it->second;
+}
+
+void MoonrakerAPIMock::mock_reject_next_db_post() {
+    MoonrakerError err;
+    err.type = MoonrakerErrorType::UNKNOWN;
+    err.message = "Mock: database_post_item rejected";
+    next_db_post_rejection_ = std::move(err);
+}
+
+void MoonrakerAPIMock::mock_reject_next_db_post(MoonrakerError err) {
+    next_db_post_rejection_ = std::move(err);
+}
+
 void MoonrakerAPIMock::set_database_empty(const std::string& namespace_name,
                                           const std::string& key) {
     mock_db_.erase(namespace_name + ":" + key);
@@ -177,7 +195,15 @@ void MoonrakerAPIMock::set_database_empty(const std::string& namespace_name,
 
 void MoonrakerAPIMock::database_post_item(const std::string& namespace_name, const std::string& key,
                                           const json& value, std::function<void()> on_success,
-                                          ErrorCallback /*on_error*/) {
+                                          ErrorCallback on_error) {
+    if (next_db_post_rejection_.has_value()) {
+        MoonrakerError err = std::move(*next_db_post_rejection_);
+        next_db_post_rejection_.reset();
+        if (on_error) {
+            on_error(err);
+        }
+        return;
+    }
     mock_db_[namespace_name + ":" + key] = value;
     if (on_success) {
         on_success();

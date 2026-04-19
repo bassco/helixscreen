@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -602,6 +603,19 @@ class MoonrakerAPIMock : public MoonrakerAPI {
     void mock_set_db_value(const std::string& namespace_name, const std::string& key,
                            const nlohmann::json& value);
 
+    /// Fetch a mock database value for test assertions. Returns null JSON if the
+    /// key is absent.
+    nlohmann::json mock_get_db_value(const std::string& namespace_name,
+                                     const std::string& key) const;
+
+    /// Cause the next database_post_item() call to fire its on_error callback
+    /// with the given MoonrakerError, and skip writing to the mock DB. The
+    /// rejection is consumed on the first call — subsequent posts succeed
+    /// normally unless this is called again. The no-arg overload uses a
+    /// generic UNKNOWN error with a descriptive message.
+    void mock_reject_next_db_post();
+    void mock_reject_next_db_post(MoonrakerError err);
+
     /// Ensure a namespace/key is absent from the mock database so subsequent
     /// database_get_item() calls route to on_error.
     void set_database_empty(const std::string& namespace_name, const std::string& key);
@@ -618,4 +632,7 @@ class MoonrakerAPIMock : public MoonrakerAPI {
 
     /// Mock database storage: key = "namespace:key", value = JSON
     std::map<std::string, nlohmann::json> mock_db_;
+
+    /// One-shot rejection for database_post_item (set by mock_reject_next_db_post).
+    std::optional<MoonrakerError> next_db_post_rejection_;
 };
