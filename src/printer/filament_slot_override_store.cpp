@@ -383,6 +383,7 @@ namespace {
 //   there for the next attempt. That's correct conservative behavior.
 std::unordered_map<int, FilamentSlotOverride>
 try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
+                   std::chrono::milliseconds timeout,
                    const std::filesystem::path& cache_dir) {
     std::unordered_map<int, FilamentSlotOverride> empty_result;
     if (!api) return empty_result;
@@ -422,9 +423,10 @@ try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
     {
         std::unique_lock<std::mutex> lk(get_state->m);
         // Keep the wait bounded — migration runs only when we already proved
-        // MR DB is reachable via the prior lane_data fetch, so 5s is a
-        // generous upper bound for a single database_get_item round-trip.
-        get_state->cv.wait_for(lk, std::chrono::seconds(5),
+        // MR DB is reachable via the prior lane_data fetch, so the caller's
+        // load_timeout_ is a generous upper bound for a single
+        // database_get_item round-trip.
+        get_state->cv.wait_for(lk, timeout,
                                [get_state] { return get_state->done; });
         legacy_got = get_state->got;
         if (legacy_got) legacy_doc = get_state->received;
@@ -437,8 +439,14 @@ try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
     // FilamentSlotOverride members 1:1 — same as from_json, with the single
     // wrinkle that legacy had no updated_at stamp. Use now() so future
     // conflict-avoidance logic can distinguish "just migrated" from "ancient".
+    //
+    // Track legacy_entries_seen so we can distinguish "legacy blob was
+    // truly empty" (nothing to do) from "legacy had entries but every one
+    // was unsalvageable" (delete anyway so we don't re-scan every startup).
     std::unordered_map<int, FilamentSlotOverride> migrated;
+    int legacy_entries_seen = 0;
     for (auto it = legacy_doc.begin(); it != legacy_doc.end(); ++it) {
+        ++legacy_entries_seen;
         int slot_index = 0;
         try {
             slot_index = std::stoi(it.key());
@@ -453,7 +461,32 @@ try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
         migrated[slot_index] = o;
     }
 
-    if (migrated.empty()) return empty_result;
+    // All-malformed case: legacy had entries but none survived parsing. We
+    // must still delete the legacy blob — otherwise every subsequent startup
+    // re-fetches the same unsalvageable data, hits this code path, and bails.
+    // The cleanup is the whole point of a one-shot migration. Log at info so
+    // the drop is auditable, with the count for ops to correlate.
+    if (migrated.empty()) {
+        if (legacy_entries_seen > 0) {
+            spdlog::info("[FilamentSlotOverrideStore:{}] dropped {} malformed legacy "
+                         "entries from helix-screen:{}_slot_overrides",
+                         backend_id, legacy_entries_seen, backend_id);
+            api->database_delete_item(
+                legacy_ns, legacy_key,
+                nullptr,
+                [backend_id, legacy_key](const MoonrakerError& err) {
+                    spdlog::warn("[FilamentSlotOverrideStore:{}] failed to delete "
+                                 "all-malformed legacy helix-screen:{}: {} "
+                                 "(non-fatal, will retry on next startup)",
+                                 backend_id, legacy_key, err.message);
+                });
+            if (!cache_dir.empty()) {
+                std::error_code rm_ec;
+                std::filesystem::remove(cache_dir / (backend_id + "_slot_overrides.json"), rm_ec);
+            }
+        }
+        return empty_result;
+    }
 
     // Post each migrated slot to lane_data synchronously. If ANY write fails,
     // abort WITHOUT deleting legacy — the next startup retries cleanly. We
@@ -462,9 +495,11 @@ try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
     // retry path has full data.
     for (const auto& [slot_index, override_val] : migrated) {
         auto post_state = std::make_shared<SyncState>();
-        const std::string lane_key = "lane" + std::to_string(slot_index + 1);
+        // Local name is `lane_data_key` (NOT `lane_key`) to avoid shadowing
+        // the static member FilamentSlotOverrideStore::lane_key().
+        const std::string lane_data_key = "lane" + std::to_string(slot_index + 1);
         api->database_post_item(
-            "lane_data", lane_key, to_lane_data_record(slot_index, override_val),
+            "lane_data", lane_data_key, to_lane_data_record(slot_index, override_val),
             [post_state]() {
                 std::lock_guard<std::mutex> lk(post_state->m);
                 post_state->got = true;
@@ -480,14 +515,14 @@ try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
         bool write_ok = false;
         {
             std::unique_lock<std::mutex> lk(post_state->m);
-            post_state->cv.wait_for(lk, std::chrono::seconds(5),
+            post_state->cv.wait_for(lk, timeout,
                                     [post_state] { return post_state->done; });
             write_ok = post_state->got;
         }
         if (!write_ok) {
             spdlog::warn("[FilamentSlotOverrideStore:{}] legacy migration aborted: "
                          "failed to write {} to lane_data (legacy preserved for retry)",
-                         backend_id, lane_key);
+                         backend_id, lane_data_key);
             return empty_result;
         }
     }
@@ -618,7 +653,8 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
     // fallback branch above we explicitly do NOT migrate — a transient
     // network blip should not attempt destructive namespace moves.
     if (result.empty() && (backend_id_ == "ace" || backend_id_ == "cfs")) {
-        auto migrated = try_migrate_legacy(api_, backend_id_, cache_dir_effective());
+        auto migrated = try_migrate_legacy(api_, backend_id_, load_timeout_,
+                                           cache_dir_effective());
         if (!migrated.empty()) return migrated;
     }
     return result;

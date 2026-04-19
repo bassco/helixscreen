@@ -1170,6 +1170,33 @@ TEST_CASE("Migration: non-object slot entries are skipped silently",
     CHECK(overrides.count(0) == 0);  // malformed entry dropped
 }
 
+TEST_CASE("Migration: legacy with only malformed entries is still cleaned up",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_all_malformed");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Legacy with ONLY malformed entries (all non-object).
+    nlohmann::json legacy = {
+        {"0", "not an object"},
+        {"1", 42},  // not an object either
+    };
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides", legacy);
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    CHECK(overrides.empty());
+
+    // Legacy should be deleted (dropped as unsalvageable) so we don't re-scan
+    // every startup.
+    CHECK(api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
 TEST_CASE("Migration: deletes legacy per-backend local JSON file after success",
           "[filament_slot_override][migration][slow]") {
     TmpCacheDir tmp("task8_local_file_cleanup");
