@@ -23,6 +23,7 @@
 #include "ui_toast_manager.h"
 
 #include "moonraker_api.h"
+#include "printer_state.h"
 #include "spoolman_slot_saver.h"
 #include "spoolman_types.h"
 #include "tool_state.h"
@@ -1612,7 +1613,9 @@ void AmsEditModal::handle_save() {
     //     (brand + material + non-default color) — create a new Spoolman spool.
     // SpoolmanSlotSaver::save() contains its own internal gates, so this is just
     // the outer guard that decides whether to invoke the async path at all.
-    if (api_) {
+    // Skip entirely if Spoolman isn't available on this printer — otherwise every
+    // save would emit a "server.spoolman.proxy Method not found" error toast.
+    if (api_ && get_printer_state().is_spoolman_available()) {
         const bool has_linked_spool = working_info_.spoolman_id > 0;
         auto changes = helix::SpoolmanSlotSaver::detect_changes(original_info_, working_info_);
         const bool can_create_new =
