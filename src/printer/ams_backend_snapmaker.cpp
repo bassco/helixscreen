@@ -722,9 +722,14 @@ void AmsBackendSnapmaker::apply_overrides(SlotInfo& slot, int slot_index) {
     // so the map read here is implicitly lock-protected. Zero-cost hash miss
     // when the slot has no override — safe in the hot parse path.
     auto it = overrides_.find(slot_index);
-    if (it == overrides_.end())
+    if (it == overrides_.end()) {
+        spdlog::debug("{} apply_overrides slot={} no override (map size={})",
+                      backend_log_tag(), slot_index, overrides_.size());
         return;
+    }
     const auto& o = it->second;
+    spdlog::debug("{} apply_overrides slot={} brand={} spool_name={} material={}",
+                  backend_log_tag(), slot_index, o.brand, o.spool_name, o.material);
     // Merge policy — same as AD5X IFS. Override wins only when the override
     // field carries a real value; defaults fall through to firmware.
     if (!o.brand.empty())
