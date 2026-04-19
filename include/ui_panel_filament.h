@@ -299,6 +299,7 @@ class FilamentPanel : public PanelBase {
 
     void populate_extruder_dropdown();
     void update_multi_filament_card_visibility();
+    void apply_left_column_sizing(bool external_spool_mode);
     void handle_extruder_changed();
     static void on_extruder_dropdown_changed(lv_event_t* e);
 

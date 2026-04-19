@@ -359,16 +359,17 @@ void FilamentPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                                             self->update_multi_filament_card_visibility();
                                         });
 
-    // Subscribe to AMS type to update card row visibility. Graph sizing is
-    // driven entirely by the XML responsive constant #filament_graph_h — do
-    // NOT override height/flex_grow here (it was fighting the XML layout and
-    // causing the graph to overflow on MICRO).
+    // Subscribe to AMS type to update card row visibility. Graph vs spool
+    // sizing is owned by apply_left_column_sizing() (called from
+    // update_multi_filament_card_visibility). At MICRO/TINY with no AMS the
+    // spool card has almost no content, so the graph becomes the flex filler.
     ams_type_observer_ = observe_int_sync<FilamentPanel>(
         AmsState::instance().get_ams_type_subject(),
         this,
         [](FilamentPanel* self, int /*ams_type*/) {
             self->update_multi_filament_card_visibility();
         });
+
 
     // End operation guard when AMS action returns to idle (load/unload complete)
     ams_action_observer_ = observe_int_sync<FilamentPanel>(
@@ -1142,6 +1143,20 @@ void FilamentPanel::execute_retract() {
 // EXTRUDER DROPDOWN
 // ============================================================================
 
+// Left-column sizing: graph always grows to fill, spool card hugs its
+// content. Works for every breakpoint and every AMS mode — previous
+// "graph fixed per-breakpoint, spool fills" arrangement truncated the
+// AMS card at MEDIUM/SMALL when the fixed graph height ate too much.
+void FilamentPanel::apply_left_column_sizing(bool /*external_spool_mode*/) {
+    if (!temp_graph_card_ || !spool_card_)
+        return;
+
+    lv_obj_set_height(temp_graph_card_, 0);
+    lv_obj_set_flex_grow(temp_graph_card_, 1);
+    lv_obj_set_height(spool_card_, LV_SIZE_CONTENT);
+    lv_obj_set_flex_grow(spool_card_, 0);
+}
+
 void FilamentPanel::update_multi_filament_card_visibility() {
     if (!spool_card_)
         return;
@@ -1189,6 +1204,10 @@ void FilamentPanel::update_multi_filament_card_visibility() {
         lv_obj_set_style_flex_main_place(spool_card_, LV_FLEX_ALIGN_START, 0);
         lv_obj_set_style_flex_cross_place(spool_card_, LV_FLEX_ALIGN_START, 0);
     }
+
+    // Swap which card is the flex filler. Without AMS at MICRO/TINY the spool
+    // card has almost no content, so hand the freed space to the temp graph.
+    apply_left_column_sizing(external_spool_mode);
 
     // Update card title dynamically (for AMS/multi-tool modes)
     const char* title = external_spool_mode ? lv_tr("External Spool") : lv_tr("Multi-Filament");

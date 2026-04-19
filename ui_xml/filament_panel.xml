@@ -19,15 +19,18 @@
     <px name="temp_preset_btn_spacing_small" value="6"/>
     <px name="temp_preset_btn_spacing_medium" value="7"/>
     <px name="temp_preset_btn_spacing_large" value="8"/>
-
-    <!-- Temperature graph fixed height. Pinned so flex_grow on the spool card
-         below takes the remaining vertical space (previously both siblings
-         shared flex_grow=1 and starved each other at MICRO). -->
-    <px name="filament_graph_h_micro" value="70"/>
-    <px name="filament_graph_h_tiny" value="80"/>
-    <px name="filament_graph_h_small" value="140"/>
-    <px name="filament_graph_h_medium" value="180"/>
-    <px name="filament_graph_h_large" value="220"/>
+    <!-- AMS mini-status row height. Tuned so slot indicators have room
+         even at MICRO (button_height_lg_micro=34 was visibly pinched). -->
+    <px name="filament_ams_row_h_micro" value="48"/>
+    <px name="filament_ams_row_h_tiny" value="54"/>
+    <px name="filament_ams_row_h_small" value="64"/>
+    <px name="filament_ams_row_h_medium" value="72"/>
+    <px name="filament_ams_row_h_large" value="88"/>
+    <!-- Graph height and flex_grow on temp_graph_card / spool_card are owned
+         by FilamentPanel::apply_left_column_sizing() in C++ — the default
+         per-breakpoint heights (70/80/140/180/220) live there so the sizing
+         can swap between "graph fixed / spool grows" (AMS mode) and "graph
+         grows / spool content" (external spool at MICRO/TINY). -->
   </consts>
   <!-- Filament Management Panel -->
   <!-- Two-column layout: left (temp status + AMS), right (material + operations) -->
@@ -136,11 +139,12 @@
           </lv_obj>
         </ui_card> <!-- temp card -->
 
-        <!-- Temperature Graph (combined nozzle + bed). Uses a responsive fixed
-             height (not flex_grow) so the spool_card below gets the remaining
-             space — at MICRO the graph would otherwise starve the spool card. -->
+        <!-- Temperature Graph (combined nozzle + bed). Height and flex_grow
+             are set from C++ (apply_left_column_sizing) so the layout can
+             swap between fixed-graph / growing-spool (AMS) and growing-graph
+             / content-spool (external spool at MICRO/TINY). -->
         <lv_obj name="temp_graph_card"
-                 width="100%" height="#filament_graph_h" style_pad_all="0" scrollable="false"
+                 width="100%" height="0" style_pad_all="0" scrollable="false"
                  style_bg_opa="255" style_bg_color="#card_bg">
           <!-- Graph container - populated by C++ via TempControlPanel -->
           <lv_obj name="temp_graph_container"
@@ -162,8 +166,12 @@
           <text_body bind_text="filament_card_title" translation_tag="Multi-Filament" text_transform="uppercase" style_translate_y="2"/>
         </lv_obj>
 
-        <!-- AMS mini status + action widget row -->
-        <lv_obj name="ams_manage_row" width="100%" flex_grow="1"
+        <!-- AMS mini status + action widget row. Fixed height so the row
+             works when the parent card sizes to content (flex_grow has no
+             parent slack to distribute in that mode). Using button_height_lg
+             so the AMS slot indicators aren't pinched at MICRO (26px on
+             button_height is below the mini-status 32px floor). -->
+        <lv_obj name="ams_manage_row" width="100%" height="#filament_ams_row_h"
                 style_pad_all="0" scrollable="false"
                 flex_flow="row" style_flex_main_place="space_between" style_flex_cross_place="center"
                 style_pad_gap="#space_sm"
