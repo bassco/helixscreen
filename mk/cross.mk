@@ -625,6 +625,14 @@ ifneq ($(CROSS_COMPILE),)
         RANLIB := $(CROSS_COMPILE)ranlib
     endif
 
+    # Re-apply ccache wrapping: the CC/CXX assignments above clobber the
+    # ccache prefix the main Makefile sets (~line 143), so without this
+    # every cross-compile is a cold build. Observed symptom: CI ccache stats
+    # showed 0 hits / 0 misses / 0 kB after ~60 minute Pi builds.
+    ifneq ($(shell command -v ccache 2>/dev/null),)
+        CC := ccache $(CC)
+        CXX := ccache $(CXX)
+    endif
 endif
 
 # Override build directories when BUILD_SUBDIR is set (cross-compilation or

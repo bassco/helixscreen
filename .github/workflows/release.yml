@@ -92,32 +92,33 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
 
-    - name: Cache Docker layers
-      uses: actions/cache@v5
-      with:
-        path: /tmp/.buildx-cache
-        key: buildx-${{ matrix.docker_image || matrix.platform }}-${{ hashFiles(format('docker/Dockerfile.{0}', matrix.docker_image || matrix.platform)) }}
-        restore-keys: |
-          buildx-${{ matrix.docker_image || matrix.platform }}-
+    - name: Compute ccache bucket
+      id: ccache-bucket
+      run: echo "month=$(date -u +%Y-%m)" >> $GITHUB_OUTPUT
 
     - name: Cache ccache
       uses: actions/cache@v5
       with:
         path: /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}
-        key: ccache-release-${{ matrix.docker_image || matrix.platform }}-${{ github.sha }}
+        # Monthly bucket so the primary key is stable across tag pushes (prior
+        # SHA-based keys never hit on tag-scoped cache and the cache never
+        # warmed). Restore-keys still fall through to any older bucket.
+        key: ccache-release-${{ matrix.docker_image || matrix.platform }}-${{ steps.ccache-bucket.outputs.month }}
         restore-keys: |
           ccache-release-${{ matrix.docker_image || matrix.platform }}-
 
     - name: Configure ccache
       run: |
         mkdir -p /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}
-        printf 'max_size = 1G\ncompression = true\n' > /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}/ccache.conf
+        printf 'max_size = 2G\ncompression = true\n' > /tmp/.ccache-${{ matrix.docker_image || matrix.platform }}/ccache.conf
 
     - name: Build ${{ matrix.docker_image || matrix.platform }} toolchain image
+      # type=gha uses GitHub Actions' native buildx cache backend (faster + simpler
+      # than the previous type=local + actions/cache + "Move cache" shuffle).
       run: |
         docker buildx build \
-          --cache-from type=local,src=/tmp/.buildx-cache \
-          --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max \
+          --cache-from type=gha,scope=toolchain-${{ matrix.docker_image || matrix.platform }} \
+          --cache-to type=gha,mode=max,scope=toolchain-${{ matrix.docker_image || matrix.platform }} \
           --load \
           -t helixscreen/toolchain-${{ matrix.docker_image || matrix.platform }} \
           -f docker/Dockerfile.${{ matrix.docker_image || matrix.platform }} \
@@ -171,11 +172,6 @@ jobs:
           build/${{ matrix.build_dir || matrix.platform }}-fbdev/bin/helix-screen.debug
         if-no-files-found: error
         retention-days: 30
-
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
   # ============================================================================
   # Build Android APKs (runs in parallel with embedded platform builds)
