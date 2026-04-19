@@ -730,43 +730,6 @@ void AmsEditModal::handle_unlink() {
     update_spoolman_button_state();
 }
 
-void AmsEditModal::handle_clear_metadata() {
-    // User pressed "Clear slot metadata" in the edit form. Delegates to the
-    // backend, which erases the in-memory override, resets override-exclusive
-    // fields on the live SlotInfo, and fires override_store_->clear_async.
-    // We then reload working_info_ from the backend so the form reflects
-    // firmware-only state (matching the ghost-render policy in Task 15).
-    if (slot_index_ < 0) {
-        spdlog::warn("[AmsEditModal] Clear metadata called with invalid slot_index={}",
-                     slot_index_);
-        return;
-    }
-
-    auto* backend = AmsState::instance().get_backend();
-    if (!backend) {
-        spdlog::warn("[AmsEditModal] Clear metadata: no active backend");
-        return;
-    }
-
-    spdlog::info("[AmsEditModal] Clearing slot metadata for slot {}", slot_index_);
-    backend->clear_slot_override(slot_index_);
-
-    // Reload from firmware-truth state. The backend has already wiped
-    // override-exclusive fields on its live SlotInfo, so get_slot_info now
-    // returns pure firmware data. Update BOTH working_info_ (so edits resume
-    // from the new baseline) and original_info_ (so handle_reset doesn't
-    // offer to restore the just-cleared override).
-    working_info_ = backend->get_slot_info(slot_index_);
-    original_info_ = working_info_;
-
-    ToastManager::instance().show(ToastSeverity::INFO, lv_tr("Slot metadata cleared"), 2000);
-
-    update_ui();
-    update_sync_button_state();
-    update_spoolman_button_state();
-    update_clear_metadata_button_state();
-}
-
 void AmsEditModal::handle_spool_details() {
     if (working_info_.spoolman_id <= 0 || !api_) {
         return;
@@ -975,11 +938,6 @@ void AmsEditModal::update_spoolman_button_state() {
         }
     }
 
-    // Keep the "Clear slot metadata" button's visibility in sync whenever
-    // the Spoolman button state is recomputed — both react to the same
-    // working_info_ changes (linked spool, brand/spool_name populated, etc.).
-    update_clear_metadata_button_state();
-
     lv_obj_t* btn_actions = find_widget("btn_spool_actions");
     lv_obj_t* btn_scan_qr = find_widget("btn_scan_qr_code");
 
@@ -1010,33 +968,6 @@ void AmsEditModal::update_spoolman_button_state() {
         if (btn_actions) {
             lv_obj_add_flag(btn_actions, LV_OBJ_FLAG_HIDDEN);
         }
-    }
-}
-
-void AmsEditModal::update_clear_metadata_button_state() {
-    if (!dialog_) {
-        return;
-    }
-
-    // Treat "override present" as "any override-exclusive field populated in
-    // working_info_". Matches the ghost-render detection in Task 15 and the
-    // backend's apply_overrides merge policy (empty strings and 0 sentinels
-    // mean "no override for this field"). Any one of these being non-default
-    // is evidence the user staged metadata we should offer to clear.
-    const SlotInfo& info = working_info_;
-    const bool has_override = !info.brand.empty() || !info.spool_name.empty() ||
-                              info.spoolman_id > 0 || info.spoolman_vendor_id > 0 ||
-                              info.remaining_weight_g >= 0.0f || info.total_weight_g >= 0.0f ||
-                              !info.color_name.empty();
-
-    lv_obj_t* row = find_widget("clear_metadata_row");
-    if (!row) {
-        return;
-    }
-    if (has_override) {
-        lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -1744,7 +1675,6 @@ void AmsEditModal::register_callbacks() {
         {"spoolman_spool_item_clicked_cb", on_spool_item_cb},
         {"ams_edit_tool_changed_cb", on_tool_changed_cb},
         {"ams_edit_weight_changed_cb", on_weight_changed_cb},
-        {"ams_edit_clear_metadata_cb", on_clear_metadata_cb},
     });
 
     callbacks_registered_ = true;
@@ -1930,13 +1860,6 @@ void AmsEditModal::on_weight_changed_cb(lv_event_t* e) {
     auto* self = get_instance_from_event(e);
     if (self) {
         self->handle_weight_input_changed();
-    }
-}
-
-void AmsEditModal::on_clear_metadata_cb(lv_event_t* e) {
-    auto* self = get_instance_from_event(e);
-    if (self) {
-        self->handle_clear_metadata();
     }
 }
 

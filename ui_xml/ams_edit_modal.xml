@@ -233,20 +233,6 @@
           <event_cb trigger="value_changed" callback="ams_edit_spool_actions_changed_cb"/>
         </ui_split_button>
       </lv_obj>
-      <!-- Clear slot metadata: visible only when the current slot has an
-           override stored (brand / spool_name / spoolman_id populated).
-           Shown/hidden in C++ via update_clear_metadata_button_state() each
-           time the modal opens or working_info_ changes. -->
-      <lv_obj name="clear_metadata_row"
-              width="100%" height="content" style_pad_left="#space_md" style_pad_right="#space_md"
-              style_pad_top="0" style_pad_bottom="#space_sm"
-              flex_flow="row" style_flex_main_place="center" scrollable="false" hidden="true">
-        <ui_button name="btn_clear_metadata"
-                   height="#button_height" text="Clear slot metadata"
-                   translation_tag="Clear slot metadata" variant="ghost">
-          <event_cb trigger="clicked" callback="ams_edit_clear_metadata_cb"/>
-        </ui_button>
-      </lv_obj>
     </lv_obj>
 
     <!-- ============================================================ -->
