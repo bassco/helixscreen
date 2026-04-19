@@ -929,3 +929,272 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking cache returns only this backe
     CHECK(overrides[0].brand == "Poly");
     CHECK(overrides.size() == 1);  // ace entries did not leak.
 }
+
+// ============================================================================
+// Task 8: one-shot legacy-namespace migration.
+//
+// Pre-Task-8, ACE and CFS stored per-slot overrides in a single doc at
+// helix-screen:{backend_id}_slot_overrides. We now use the AFC-shaped
+// lane_data namespace (lane1, lane2, ...). On first startup after upgrade,
+// load_blocking migrates the legacy data forward so users don't lose their
+// overrides. IFS and Snapmaker never wrote a legacy namespace — they must
+// skip migration entirely. Migration runs only when lane_data is empty
+// (idempotence guard) and MR DB is reachable (the lane_data round-trip
+// already proved that at the call site).
+// ============================================================================
+
+TEST_CASE("Migration: ACE backend migrates legacy namespace to lane_data on first load",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_ace_migrate");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Seed legacy namespace with 2 slots; lane_data is empty → forces migration.
+    json legacy = {
+        {"0", {
+            {"brand", "Polymaker"},
+            {"material", "PLA"},
+            {"color_rgb", 0xFF5500},
+            {"spoolman_id", 42},
+            {"remaining_weight_g", 850.0},
+            {"total_weight_g", 1000.0},
+        }},
+        {"2", {
+            {"brand", "eSUN"},
+            {"material", "PETG"},
+            {"color_rgb", 0x00FF00},
+        }},
+    };
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides", legacy);
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+
+    // Migrated slots returned as if they'd come from lane_data.
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "Polymaker");
+    CHECK(overrides[0].material == "PLA");
+    CHECK(overrides[0].color_rgb == 0xFF5500u);
+    CHECK(overrides[0].spoolman_id == 42);
+    CHECK(overrides[0].remaining_weight_g == 850.0f);
+
+    REQUIRE(overrides.count(2) == 1);
+    CHECK(overrides[2].brand == "eSUN");
+
+    // lane_data now has the records in AFC shape (1-based keys, 0-based inner
+    // "lane" field — the same invariant enforced by to_lane_data_record).
+    auto lane1 = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!lane1.is_null());
+    CHECK(lane1["vendor"] == "Polymaker");
+    CHECK(lane1["lane"] == "0");
+
+    auto lane3 = api.mock_get_db_value("lane_data", "lane3");
+    REQUIRE(!lane3.is_null());
+    CHECK(lane3["vendor"] == "eSUN");
+    CHECK(lane3["lane"] == "2");
+
+    // Legacy namespace deleted post-migration — second startup sees lane_data
+    // populated and skips migration entirely.
+    CHECK(api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
+TEST_CASE("Migration: CFS backend migrates its legacy namespace, not ACE's",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_cfs_isolation");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_set_db_value("helix-screen", "cfs_slot_overrides",
+                          json{{"0", {{"brand", "CFS-Brand"}}}});
+    // ACE legacy also exists — must NOT be touched by a CFS store load. The
+    // per-backend key-naming discipline is the only thing keeping the two
+    // backends' migrations from colliding.
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides",
+                          json{{"0", {{"brand", "ACE-Brand"}}}});
+
+    FilamentSlotOverrideStore store(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "CFS-Brand");
+
+    // CFS legacy deleted; ACE legacy untouched.
+    CHECK(api.mock_get_db_value("helix-screen", "cfs_slot_overrides").is_null());
+    auto ace_legacy = api.mock_get_db_value("helix-screen", "ace_slot_overrides");
+    REQUIRE(!ace_legacy.is_null());
+    CHECK(ace_legacy["0"]["brand"] == "ACE-Brand");
+}
+
+TEST_CASE("Migration: IFS backend skips migration entirely",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_ifs_skip");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Even if a malformed "helix-screen:ifs_slot_overrides" somehow existed
+    // (e.g. hand-seeded during testing, or a misconfigured third-party tool),
+    // the IFS store must NOT attempt to migrate it — IFS never used this
+    // namespace, and silently consuming it could corrupt unrelated data.
+    api.mock_set_db_value("helix-screen", "ifs_slot_overrides",
+                          json{{"0", {{"brand", "X"}}}});
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    CHECK(overrides.empty());
+    // Legacy entry untouched — nothing read it, nothing deleted it.
+    CHECK(!api.mock_get_db_value("helix-screen", "ifs_slot_overrides").is_null());
+}
+
+TEST_CASE("Migration: no-op when lane_data already populated",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_no_op_with_lane_data");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Both lane_data AND legacy present. lane_data wins; legacy untouched.
+    // This is the "second startup after migration already happened" case,
+    // OR a manually-seeded lane_data that must NOT be clobbered by stale
+    // legacy data. Either way, lane_data is the source of truth.
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"lane", "0"}, {"vendor", "NewData"}});
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides",
+                          json{{"0", {{"brand", "LegacyData"}}}});
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "NewData");
+    // Legacy untouched — migration did not run.
+    CHECK(!api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
+TEST_CASE("Migration: idempotent (second startup after migration is no-op)",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_idempotent");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides",
+                          json{{"0", {{"brand", "Polymaker"}, {"material", "PLA"}}}});
+
+    FilamentSlotOverrideStore store1(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store1, tmp.path);
+    auto first = store1.load_blocking();
+    REQUIRE(first.count(0) == 1);
+    CHECK(first[0].brand == "Polymaker");
+
+    // Second startup — same printer, MR DB now has lane_data populated. The
+    // legacy blob was already deleted by the first startup, so there is
+    // literally nothing for a second migration attempt to latch onto.
+    FilamentSlotOverrideStore store2(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store2, tmp.path);
+    auto second = store2.load_blocking();
+    REQUIRE(second.count(0) == 1);
+    CHECK(second[0].brand == "Polymaker");
+    CHECK(api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+}
+
+TEST_CASE("Migration: aborts without deleting legacy if write fails",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_abort_on_write_fail");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides",
+                          json{{"0", {{"brand", "Polymaker"}}}});
+
+    // Reject the lane_data post — migration must abort before deleting legacy.
+    api.mock_reject_next_db_post(MoonrakerError{});
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    auto overrides = store.load_blocking();
+    // Migration failed — empty result (load_blocking falls through to return
+    // the empty lane_data map; no cache fallback because MR DB was reachable).
+    CHECK(overrides.empty());
+    // Legacy PRESERVED so the next startup can retry. Deleting on failure
+    // would drop user data irrecoverably.
+    CHECK(!api.mock_get_db_value("helix-screen", "ace_slot_overrides").is_null());
+    // lane_data remains empty — no partial write leaked through.
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+}
+
+TEST_CASE("Migration: non-object slot entries are skipped silently",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_malformed_slot");
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // "0" is malformed (string, not object). "1" is valid. The migration
+    // must not choke on the bad entry — skip it, migrate "1", and still
+    // delete the legacy blob since the good entries transferred cleanly.
+    json legacy = {
+        {"0", "not an object"},
+        {"1", {{"brand", "Good"}, {"material", "PLA"}}},
+    };
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides", legacy);
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(1) == 1);
+    CHECK(overrides[1].brand == "Good");
+    CHECK(overrides.count(0) == 0);  // malformed entry dropped
+}
+
+TEST_CASE("Migration: deletes legacy per-backend local JSON file after success",
+          "[filament_slot_override][migration][slow]") {
+    TmpCacheDir tmp("task8_local_file_cleanup");
+
+    // Seed the per-backend legacy local JSON file that pre-dates Task 6's
+    // unified filament_slot_overrides.json. Nothing reads it anymore, but
+    // the migration should remove it as cleanup so users inspecting their
+    // config dir don't see stale files lying around.
+    auto legacy_local = tmp.path / "ace_slot_overrides.json";
+    std::ofstream(legacy_local) << R"({"0": {"brand": "Old"}})";
+    REQUIRE(std::filesystem::exists(legacy_local));
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_set_db_value("helix-screen", "ace_slot_overrides",
+                          json{{"0", {{"brand", "Polymaker"}}}});
+
+    FilamentSlotOverrideStore store(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+
+    // Post-migration, the per-backend file is gone.
+    CHECK(!std::filesystem::exists(legacy_local));
+}

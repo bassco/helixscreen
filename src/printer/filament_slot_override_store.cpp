@@ -338,11 +338,194 @@ FilamentSlotOverride from_json(const nlohmann::json& j) {
 FilamentSlotOverrideStore::FilamentSlotOverrideStore(IMoonrakerAPI* api, std::string backend_id)
     : api_(api), backend_id_(std::move(backend_id)) {}
 
-std::filesystem::path FilamentSlotOverrideStore::cache_path() const {
-    std::filesystem::path dir =
-        cache_dir_.empty() ? std::filesystem::path(helix::get_user_config_dir()) : cache_dir_;
-    return dir / "filament_slot_overrides.json";
+std::filesystem::path FilamentSlotOverrideStore::cache_dir_effective() const {
+    return cache_dir_.empty() ? std::filesystem::path(helix::get_user_config_dir()) : cache_dir_;
 }
+
+std::filesystem::path FilamentSlotOverrideStore::cache_path() const {
+    return cache_dir_effective() / "filament_slot_overrides.json";
+}
+
+namespace {
+
+// Synchronous legacy-migration helper.
+//
+// Before Task 8, ACE and CFS backends stored per-slot overrides at
+// "helix-screen:{backend_id}_slot_overrides" as a single JSON object keyed by
+// slot-index string ("0", "1", ...). We now use the AFC-shaped lane_data
+// namespace (lane1, lane2, ...). On first startup after upgrade we translate
+// the old data forward so users don't lose their overrides silently.
+//
+// Contract:
+// - Returns the migrated slot map (empty if nothing to migrate or migration
+//   failed).
+// - Only runs for ACE/CFS — no other backend ever wrote the legacy namespace,
+//   and IFS/Snapmaker must NOT touch a spurious helix-screen:ifs_slot_overrides
+//   entry that somehow existed (e.g. hand-seeded during testing).
+// - Idempotent: once lane_data has data, callers skip migration entirely
+//   (the caller site guards on lane_data being empty before invoking us).
+// - Migration requires MR DB to be reachable — we need to READ legacy,
+//   WRITE lane_data, and DELETE legacy. The caller (load_blocking) only
+//   reaches this path when the lane_data round-trip itself succeeded
+//   (got_copy == true, received empty), which proves the printer is up.
+// - Safe against caller destruction: this function runs synchronously on the
+//   caller's thread via shared_ptr<SyncState> waits, so it completes before
+//   load_blocking returns — no orphaned lambdas to worry about.
+// - Write failures abort migration WITHOUT deleting the legacy data so the
+//   next startup can retry. We DO NOT attempt partial migration (writing 2
+//   of 4 slots, deleting legacy) because mixing lane_data entries with a
+//   still-live legacy blob would make subsequent reconciliation ambiguous.
+//
+// NOT captured in this helper (deliberately):
+// - Calling code's `this`. Only value types pass through lambdas.
+// - Any retry / exponential backoff. A transient network blip returns {}, the
+//   user sees no overrides until next app start, and the legacy data is still
+//   there for the next attempt. That's correct conservative behavior.
+std::unordered_map<int, FilamentSlotOverride>
+try_migrate_legacy(IMoonrakerAPI* api, const std::string& backend_id,
+                   const std::filesystem::path& cache_dir) {
+    std::unordered_map<int, FilamentSlotOverride> empty_result;
+    if (!api) return empty_result;
+    if (backend_id != "ace" && backend_id != "cfs") return empty_result;
+
+    const std::string legacy_ns = "helix-screen";
+    const std::string legacy_key = backend_id + "_slot_overrides";
+
+    struct SyncState {
+        std::mutex m;
+        std::condition_variable cv;
+        bool done{false};
+        bool got{false};
+        nlohmann::json received;
+    };
+    auto get_state = std::make_shared<SyncState>();
+
+    api->database_get_item(
+        legacy_ns, legacy_key,
+        [get_state](const nlohmann::json& value) {
+            std::lock_guard<std::mutex> lk(get_state->m);
+            get_state->received = value;
+            get_state->got = true;
+            get_state->done = true;
+            get_state->cv.notify_one();
+        },
+        [get_state](const MoonrakerError&) {
+            // Legacy namespace absent is the common case — no legacy data to
+            // migrate, but it's not an error. Silently proceed with empty.
+            std::lock_guard<std::mutex> lk(get_state->m);
+            get_state->done = true;
+            get_state->cv.notify_one();
+        });
+
+    nlohmann::json legacy_doc;
+    bool legacy_got = false;
+    {
+        std::unique_lock<std::mutex> lk(get_state->m);
+        // Keep the wait bounded — migration runs only when we already proved
+        // MR DB is reachable via the prior lane_data fetch, so 5s is a
+        // generous upper bound for a single database_get_item round-trip.
+        get_state->cv.wait_for(lk, std::chrono::seconds(5),
+                               [get_state] { return get_state->done; });
+        legacy_got = get_state->got;
+        if (legacy_got) legacy_doc = get_state->received;
+    }
+
+    if (!legacy_got) return empty_result;
+    if (!legacy_doc.is_object() || legacy_doc.empty()) return empty_result;
+
+    // Build the migrated slot map. Legacy field names happen to match our
+    // FilamentSlotOverride members 1:1 — same as from_json, with the single
+    // wrinkle that legacy had no updated_at stamp. Use now() so future
+    // conflict-avoidance logic can distinguish "just migrated" from "ancient".
+    std::unordered_map<int, FilamentSlotOverride> migrated;
+    for (auto it = legacy_doc.begin(); it != legacy_doc.end(); ++it) {
+        int slot_index = 0;
+        try {
+            slot_index = std::stoi(it.key());
+        } catch (...) {
+            continue; // non-int keys silently skipped (matches cache reader)
+        }
+        if (slot_index < 0) continue;
+        if (!it.value().is_object()) continue; // malformed entry → skip
+
+        FilamentSlotOverride o = from_json(it.value());
+        o.updated_at = std::chrono::system_clock::now();
+        migrated[slot_index] = o;
+    }
+
+    if (migrated.empty()) return empty_result;
+
+    // Post each migrated slot to lane_data synchronously. If ANY write fails,
+    // abort WITHOUT deleting legacy — the next startup retries cleanly. We
+    // don't try to roll back partial writes: a retry will overwrite them with
+    // the same values (idempotent), and leaving the legacy blob ensures the
+    // retry path has full data.
+    for (const auto& [slot_index, override_val] : migrated) {
+        auto post_state = std::make_shared<SyncState>();
+        const std::string lane_key = "lane" + std::to_string(slot_index + 1);
+        api->database_post_item(
+            "lane_data", lane_key, to_lane_data_record(slot_index, override_val),
+            [post_state]() {
+                std::lock_guard<std::mutex> lk(post_state->m);
+                post_state->got = true;
+                post_state->done = true;
+                post_state->cv.notify_one();
+            },
+            [post_state](const MoonrakerError&) {
+                std::lock_guard<std::mutex> lk(post_state->m);
+                post_state->done = true;
+                post_state->cv.notify_one();
+            });
+
+        bool write_ok = false;
+        {
+            std::unique_lock<std::mutex> lk(post_state->m);
+            post_state->cv.wait_for(lk, std::chrono::seconds(5),
+                                    [post_state] { return post_state->done; });
+            write_ok = post_state->got;
+        }
+        if (!write_ok) {
+            spdlog::warn("[FilamentSlotOverrideStore:{}] legacy migration aborted: "
+                         "failed to write {} to lane_data (legacy preserved for retry)",
+                         backend_id, lane_key);
+            return empty_result;
+        }
+    }
+
+    // All writes succeeded. Fire-and-forget delete of the legacy namespace —
+    // failure to delete is logged but does NOT break the migrated result.
+    // The idempotence guard (lane_data non-empty on next startup) means a
+    // lingering legacy blob simply sits there until the user clears it.
+    // Capture legacy_key by value (the lambda outlives this stack frame in
+    // case the error callback fires after the outer function returns).
+    api->database_delete_item(
+        legacy_ns, legacy_key,
+        nullptr,
+        [backend_id, legacy_key](const MoonrakerError& err) {
+            spdlog::warn("[FilamentSlotOverrideStore:{}] failed to delete legacy "
+                         "helix-screen:{}: {} (non-fatal, migration complete)",
+                         backend_id, legacy_key, err.message);
+        });
+
+    // Clean up the pre-Task-6 per-backend JSON file if it's still around.
+    // Task 6 unified all backends under filament_slot_overrides.json, but an
+    // upgrading user may have a lingering ace_slot_overrides.json or
+    // cfs_slot_overrides.json from an older build. Nothing reads it anymore,
+    // but leaving it behind is confusing when users inspect their config dir.
+    // Best-effort: swallow IO errors (not fatal to the migration result).
+    if (!cache_dir.empty()) {
+        std::error_code rm_ec;
+        std::filesystem::remove(cache_dir / (backend_id + "_slot_overrides.json"), rm_ec);
+    }
+
+    spdlog::info("[FilamentSlotOverrideStore:{}] migrated {} slot(s) from "
+                 "helix-screen:{}_slot_overrides to lane_data",
+                 backend_id, migrated.size(), backend_id);
+
+    return migrated;
+}
+
+} // namespace
 
 std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_blocking() {
     std::unordered_map<int, FilamentSlotOverride> result;
@@ -418,6 +601,25 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
         auto parsed = from_lane_data_record(it.value());
         if (!parsed) continue;
         result[parsed->first] = parsed->second;
+    }
+
+    // lane_data returned empty-but-reachable — the MR DB is authoritative
+    // ("no overrides configured"). Before accepting that verdict, give the
+    // one-shot legacy migration a chance: ACE and CFS backends pre-Task-8
+    // stored data at helix-screen:{backend_id}_slot_overrides. On first
+    // startup after upgrade we copy it forward into lane_data. The migration
+    // helper skips itself for IFS/Snapmaker (no legacy namespace ever
+    // existed for them) and for backends where lane_data already has data
+    // (guarded here by the !result.empty() early return above).
+    //
+    // Why here and not elsewhere: migration needs MR DB reachability (READ
+    // legacy, WRITE lane_data, DELETE legacy). got_copy==true proves the
+    // round-trip succeeded, so this is the right moment. In the offline
+    // fallback branch above we explicitly do NOT migrate — a transient
+    // network blip should not attempt destructive namespace moves.
+    if (result.empty() && (backend_id_ == "ace" || backend_id_ == "cfs")) {
+        auto migrated = try_migrate_legacy(api_, backend_id_, cache_dir_effective());
+        if (!migrated.empty()) return migrated;
     }
     return result;
 }

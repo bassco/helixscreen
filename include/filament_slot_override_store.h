@@ -57,6 +57,11 @@ class FilamentSlotOverrideStore {
     // get_user_config_dir() if empty). One file serves all backends; each
     // backend's slots live under doc[backend_id]["slots"].
     std::filesystem::path cache_path() const;
+    // Absolute path to the directory used for on-disk caches. Same resolution
+    // as cache_path(): cache_dir_ if set, otherwise get_user_config_dir().
+    // Migration uses this to locate legacy "{backend_id}_slot_overrides.json"
+    // files that pre-date the unified filament_slot_overrides.json format.
+    std::filesystem::path cache_dir_effective() const;
     // Returns the Moonraker DB key for a given slot.
     //
     // IMPORTANT: the DB key is 1-based (AFC convention: lane1, lane2, ...) but
