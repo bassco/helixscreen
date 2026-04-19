@@ -13,6 +13,7 @@
 #include "printer_state.h"
 #include "theme_manager.h"
 #include "tool_state.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -110,7 +111,7 @@ void NozzleTempsWidget::clear_rows() {
     auto* container =
         widget_obj_ ? lv_obj_find_by_name(widget_obj_, "nozzle_temps_container") : nullptr;
     if (container)
-        lv_obj_clean(container);
+        helix::ui::safe_clean_children(container);
 
     bed_row_ = nullptr;
     bed_temp_label_ = nullptr;

@@ -5,6 +5,7 @@
 
 #include "ui_ams_mini_status.h"
 #include "ui_notification.h"
+#include "ui_utils.h"
 
 #include "config.h"
 #include "grid_layout.h"
@@ -229,8 +230,11 @@ PanelWidgetManager::populate_widgets(const std::string& panel_id, lv_obj_t* cont
         active_configs_[cache_key] = ActiveWidgetConfig{std::move(new_ids)};
     }
 
-    // Clear existing children (for repopulation)
-    lv_obj_clean(container);
+    // Clear existing children (for repopulation). Use safe_clean_children so the
+    // deletions run on LVGL's async list — multiple sync cleans in one
+    // UpdateQueue batch (gate observers fanning out during CFS/AMS discovery)
+    // corrupt LVGL's event linked list (#776, #834).
+    helix::ui::safe_clean_children(container);
 
     if (enabled_widgets.empty()) {
         populating_ = false;

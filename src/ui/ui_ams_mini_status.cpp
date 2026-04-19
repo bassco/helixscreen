@@ -98,6 +98,11 @@ struct AmsMiniStatusData {
     // Note: slots_version is always bumped after slot_count changes, so one observer suffices
     ObserverGuard slots_version_observer;
     ObserverGuard current_slot_observer;
+
+    // Re-entrancy guard: slots_version and current_slot observers can both fire
+    // in one UpdateQueue batch. Without this, the second rebuild_bars would try
+    // to reparent rows the first call already moved to its condemned_parent.
+    bool rebuilding = false;
 };
 
 // Static registry for safe cleanup
@@ -176,6 +181,13 @@ static int effective_max_visible(const AmsMiniStatusData* data) {
 static void rebuild_bars(AmsMiniStatusData* data) {
     if (!data || !data->bars_container)
         return;
+    if (data->rebuilding)
+        return;
+    data->rebuilding = true;
+    struct ResetGuard {
+        AmsMiniStatusData* d;
+        ~ResetGuard() { d->rebuilding = false; }
+    } reset{data};
 
     // Guard: ensure overflow label has a valid font before any layout calculation.
     // A NULL font causes SEGV in lv_font_set_kerning during lv_obj_update_layout.

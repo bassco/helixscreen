@@ -516,7 +516,7 @@ void FanStackWidget::bind_carousel_fans() {
         if (!arc_core) {
             spdlog::error("[FanStackWidget] lv_xml_create('fan_arc_core') returned NULL for '{}'",
                           entry.display_name);
-            lv_obj_delete(page);
+            lv_obj_delete_async(page);
             continue;
         }
 

@@ -119,7 +119,7 @@ void ToolSwitcherWidget::rebuild_pills() {
     }
 
     pill_buttons_.clear();
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& tool_state = ToolState::instance();
     const auto& tools = tool_state.tools();
@@ -211,7 +211,7 @@ void ToolSwitcherWidget::rebuild_compact() {
     }
 
     pill_buttons_.clear();
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& tool_state = ToolState::instance();
     int active = tool_state.active_tool_index();
