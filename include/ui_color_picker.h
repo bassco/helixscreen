@@ -130,12 +130,18 @@ class ColorPicker : public Modal {
     lv_obj_t* btn_tab_presets_ = nullptr;
     lv_obj_t* btn_tab_custom_ = nullptr;
 
+    // Currently highlighted preset swatch (outline shown), cleared when the
+    // active color diverges from any preset via HSV picker or hex input.
+    lv_obj_t* selected_swatch_ = nullptr;
+
     // === Internal Methods ===
     void init_subjects();
     void deinit_subjects();
     void update_preview(uint32_t color_rgb, bool from_hsv_picker = false,
                         bool from_hex_input = false);
     void switch_tab(bool show_custom);
+    void highlight_swatch(lv_obj_t* swatch);
+    lv_obj_t* find_swatch_for_color(uint32_t color_rgb);
 
     // === Event Handlers (called by static callbacks) ===
     void handle_swatch_clicked(lv_obj_t* swatch);

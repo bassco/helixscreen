@@ -30,6 +30,14 @@
     <px name="ams_edit_header_pad_bot_small" value="6"/>
     <px name="ams_edit_header_pad_bot_medium" value="7"/>
     <px name="ams_edit_header_pad_bot_large" value="8"/>
+    <!-- Close button size. 40x40 gives a 40px touch target but with ~24px MDI
+         glyph inside leaves ~8px empty padding on each side — shrinking at
+         MICRO/TINY reclaims ~16px below the title without hurting usability. -->
+    <px name="ams_edit_close_btn_size_micro" value="32"/>
+    <px name="ams_edit_close_btn_size_tiny" value="32"/>
+    <px name="ams_edit_close_btn_size_small" value="40"/>
+    <px name="ams_edit_close_btn_size_medium" value="40"/>
+    <px name="ams_edit_close_btn_size_large" value="40"/>
   </consts>
   <!-- Dialog card - wider for horizontal layout, capped at 80% screen height -->
   <view name="ams_edit_modal"
@@ -54,7 +62,9 @@
         <text_small name="spoolman_id_label" text="" hidden="true" clickable="false" event_bubble="true"/>
       </lv_obj>
       <!-- Close button -->
-      <ui_button name="btn_close" width="40" height="40" icon="close" variant="ghost" focusable="false">
+      <ui_button name="btn_close"
+                 width="#ams_edit_close_btn_size" height="#ams_edit_close_btn_size"
+                 icon="close" variant="ghost" focusable="false">
         <event_cb trigger="clicked" callback="ams_edit_modal_close_cb"/>
       </ui_button>
     </lv_obj>

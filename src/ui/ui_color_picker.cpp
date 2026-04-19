@@ -212,6 +212,12 @@ void ColorPicker::on_show() {
 
         spdlog::debug("[ColorPicker] TINY mode: full-screen with tabbed layout");
     }
+
+    // Highlight the preset that matches the initial color, if any. Done after
+    // layout selection so we search the correct (visible) swatch grid.
+    if (lv_obj_t* match = find_swatch_for_color(selected_color_)) {
+        highlight_swatch(match);
+    }
 }
 
 void ColorPicker::on_hide() {
@@ -235,6 +241,7 @@ void ColorPicker::on_hide() {
     custom_content_ = nullptr;
     btn_tab_presets_ = nullptr;
     btn_tab_custom_ = nullptr;
+    selected_swatch_ = nullptr;
     is_tiny_mode_ = false;
 
     // Call dismiss callback if set (fires on any close - select, cancel, or backdrop)
@@ -322,6 +329,12 @@ void ColorPicker::update_preview(uint32_t color_rgb, bool from_hsv_picker, bool 
         if (hsv_picker_tiny_)
             ui_hsv_picker_set_color_rgb(hsv_picker_tiny_, color_rgb);
     }
+
+    // Any color change from HSV/hex means the user has diverged from the
+    // preset grid — clear the preset selection outline.
+    if (from_hsv_picker || from_hex_input) {
+        highlight_swatch(nullptr);
+    }
 }
 
 void ColorPicker::handle_swatch_clicked(lv_obj_t* swatch) {
@@ -333,7 +346,75 @@ void ColorPicker::handle_swatch_clicked(lv_obj_t* swatch) {
     lv_color_t color = lv_obj_get_style_bg_color(swatch, LV_PART_MAIN);
     uint32_t rgb = lv_color_to_u32(color) & 0xFFFFFF;
 
+    highlight_swatch(swatch);
     update_preview(rgb);
+}
+
+void ColorPicker::highlight_swatch(lv_obj_t* swatch) {
+    if (selected_swatch_ == swatch) {
+        return;
+    }
+
+    // Clear outline on previously selected swatch (if still alive)
+    if (selected_swatch_ && lv_obj_is_valid(selected_swatch_)) {
+        lv_obj_set_style_outline_width(selected_swatch_, 0, LV_PART_MAIN);
+        lv_obj_set_style_outline_opa(selected_swatch_, 0, LV_PART_MAIN);
+    }
+
+    selected_swatch_ = swatch;
+
+    if (swatch) {
+        // Outline sits outside the swatch and does not affect layout, so it
+        // works regardless of whether the swatch already has an XML border.
+        lv_obj_set_style_outline_color(swatch, theme_manager_get_color("primary"),
+                                       LV_PART_MAIN);
+        lv_obj_set_style_outline_width(swatch, 3, LV_PART_MAIN);
+        lv_obj_set_style_outline_opa(swatch, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_outline_pad(swatch, 1, LV_PART_MAIN);
+    }
+}
+
+static void find_swatch_recursive(lv_obj_t* root, uint32_t color_rgb, lv_obj_t*& out) {
+    if (!root || out) {
+        return;
+    }
+    const uint32_t count = lv_obj_get_child_count(root);
+    for (uint32_t i = 0; i < count; i++) {
+        lv_obj_t* child = lv_obj_get_child(root, i);
+        if (!child) {
+            continue;
+        }
+        if (lv_obj_has_flag(child, LV_OBJ_FLAG_CLICKABLE)) {
+            lv_color_t bg = lv_obj_get_style_bg_color(child, LV_PART_MAIN);
+            if ((lv_color_to_u32(bg) & 0xFFFFFF) == color_rgb) {
+                // Skip HSV picker children — identify swatches by their small
+                // radius token match would be nicer, but bg-color equality plus
+                // clickable is sufficient given HSV children don't use solid bg.
+                out = child;
+                return;
+            }
+        }
+        find_swatch_recursive(child, color_rgb, out);
+        if (out) {
+            return;
+        }
+    }
+}
+
+lv_obj_t* ColorPicker::find_swatch_for_color(uint32_t color_rgb) {
+    if (!dialog_) {
+        return nullptr;
+    }
+    // Both the standard and tiny preset grids live in the tree — scope the
+    // search to whichever is visible for the current breakpoint so we don't
+    // highlight a swatch the user can't see.
+    lv_obj_t* root = is_tiny_mode_ ? presets_content_ : find_widget("standard_content");
+    if (!root) {
+        return nullptr;
+    }
+    lv_obj_t* found = nullptr;
+    find_swatch_recursive(root, color_rgb, found);
+    return found;
 }
 
 void ColorPicker::handle_select() {
@@ -430,17 +511,28 @@ void ColorPicker::switch_tab(bool show_custom) {
             lv_obj_add_flag(custom_content_, LV_OBJ_FLAG_HIDDEN);
     }
 
-    // Style active tab
-    if (btn_tab_presets_) {
-        auto color = show_custom ? theme_manager_get_color("text_muted")
-                                 : theme_manager_get_color("primary");
-        lv_obj_set_style_text_color(btn_tab_presets_, color, 0);
-    }
-    if (btn_tab_custom_) {
-        auto color = show_custom ? theme_manager_get_color("primary")
-                                 : theme_manager_get_color("text_muted");
-        lv_obj_set_style_text_color(btn_tab_custom_, color, 0);
-    }
+    // Style active tab as a filled segmented-control pill; matches the
+    // purge_btn_selected pattern (primary fill / text-on-primary).
+    const auto primary = theme_manager_get_color("primary");
+    const auto text = theme_manager_get_color("text");
+    const auto text_muted = theme_manager_get_color("text_muted");
+
+    auto apply_tab_style = [&](lv_obj_t* btn, bool active) {
+        if (!btn) {
+            return;
+        }
+        if (active) {
+            lv_obj_set_style_bg_color(btn, primary, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_text_color(btn, text, LV_PART_MAIN);
+        } else {
+            lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, LV_PART_MAIN);
+            lv_obj_set_style_text_color(btn, text_muted, LV_PART_MAIN);
+        }
+    };
+
+    apply_tab_style(btn_tab_presets_, !show_custom);
+    apply_tab_style(btn_tab_custom_, show_custom);
 }
 
 // ============================================================================
