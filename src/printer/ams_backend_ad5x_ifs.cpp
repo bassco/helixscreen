@@ -55,9 +55,21 @@ void AmsBackendAd5xIfs::on_started() {
     // event loop, so the two threads don't interfere.
     if (api_) {
         override_store_ = std::make_unique<helix::ams::FilamentSlotOverrideStore>(api_, "ifs");
-        overrides_ = override_store_->load_blocking();
+        // Do the (potentially 5s) MR DB round-trip OUTSIDE the lock, then swap in
+        // under mutex_. AmsSubscriptionBackend::start() registers the WebSocket
+        // notify subscription before on_started() is invoked, so a status
+        // notification could in principle fire on the libhv thread while we're
+        // still inside load_blocking. Holding mutex_ during the swap ensures
+        // the parse path (which reads overrides_ under mutex_) sees a coherent
+        // map rather than a torn write.
+        auto loaded = override_store_->load_blocking();
+        const auto loaded_count = loaded.size();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            overrides_ = std::move(loaded);
+        }
         spdlog::info("{} Loaded {} slot overrides from filament_slot store", backend_log_tag(),
-                     overrides_.size());
+                     loaded_count);
     }
 
     // Query initial state from printer

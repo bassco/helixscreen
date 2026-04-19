@@ -2134,3 +2134,27 @@ TEST_CASE("AD5X IFS override negative weights do not replace firmware values",
     REQUIRE(info.remaining_weight_g == -1.0f);
     REQUIRE(info.total_weight_g == -1.0f);
 }
+
+TEST_CASE("AD5X IFS set_slot_info takes effect when no override present",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    // Regression lock: with no override seeded for the slot, set_slot_info's
+    // edit to IFS-native fields (color, material) must be visible via
+    // get_slot_info. Task 9 added apply_overrides to the parse path; this
+    // test guards against a future regression where the hook accidentally
+    // runs with stale overrides_ state and clobbers a plain user edit.
+    //
+    // NOTE: brand is deliberately NOT tested here — the current IFS
+    // set_slot_info path only propagates color/material/weight into the
+    // SlotInfo it stores; brand/spool_name/spoolman_id are gated on the
+    // (upcoming) Task 10 wiring that writes them into the override store.
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    SlotInfo edit;
+    edit.color_rgb = 0xAABBCC;
+    edit.material = "PETG";
+    backend.set_slot_info(0, edit, false);
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0xAABBCCu);
+    REQUIRE(info.material == "PETG");
+}

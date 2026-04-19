@@ -261,11 +261,18 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     std::chrono::steady_clock::time_point action_start_time_;
 
     // User-provided per-slot metadata (brand, spool name, spoolman IDs, remaining
-    // weight, etc.) layered over firmware-reported state. Populated once in
-    // on_started() via load_blocking() and NOT mutated afterwards — so every
-    // read from overrides_ in the parse path is implicitly thread-safe. If
-    // future tasks mutate this map at runtime (e.g. persisting user edits back
-    // into the store), add a mutex before enabling that write path.
+    // weight, etc.) layered over firmware-reported state.
+    //
+    // Write: exactly once in on_started(), under mutex_, before the printer
+    // typically delivers its first status notification. The subscription IS
+    // already registered by the time on_started() runs (see
+    // AmsSubscriptionBackend::start), so the lock is load-bearing for the
+    // race between load_blocking returning and a concurrent parse.
+    //
+    // Read: in apply_overrides() during the parse path, which always runs
+    // under mutex_. If future tasks mutate this map at runtime (persisting
+    // user edits back into the store from set_slot_info), they must also
+    // take mutex_ around the write.
     std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
     std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
 
