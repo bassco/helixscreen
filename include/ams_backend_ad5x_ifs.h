@@ -5,14 +5,18 @@
 #if HELIX_HAS_IFS
 
 #include "ams_subscription_backend.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
 #include "slot_registry.h"
 
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class Ad5xIfsTestAccess;
@@ -164,6 +168,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     void parse_port_sensor(int port_1based, bool detected);
     void parse_head_sensor(bool detected);
     void update_slot_from_state(int slot_index);
+    // Layer any configured FilamentSlotOverride for `slot_index` over `slot`,
+    // mutating `slot` in place. Override wins for every non-default field;
+    // default values (empty string, 0, -1.0 weights) fall through to the parsed
+    // firmware data untouched. Called from update_slot_from_state so every
+    // parse path (save_variables, Adventurer5M.json, GET_ZCOLOR SILENT=1) picks
+    // up the override before the SlotInfo is exposed via events.
+    void apply_overrides(SlotInfo& slot, int slot_index);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
     void register_zcolor_listener();
@@ -248,6 +259,15 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // Action timeout tracking
     static constexpr int ACTION_TIMEOUT_SECONDS = 90;
     std::chrono::steady_clock::time_point action_start_time_;
+
+    // User-provided per-slot metadata (brand, spool name, spoolman IDs, remaining
+    // weight, etc.) layered over firmware-reported state. Populated once in
+    // on_started() via load_blocking() and NOT mutated afterwards — so every
+    // read from overrides_ in the parse path is implicitly thread-safe. If
+    // future tasks mutate this map at runtime (e.g. persisting user edits back
+    // into the store), add a mutex before enabling that write path.
+    std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
+    std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
 
     // Note: uses inherited lifetime_ from AmsSubscriptionBackend (not shadowed).
 };

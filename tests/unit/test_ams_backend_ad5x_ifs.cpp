@@ -4,6 +4,7 @@
 #include "ams_backend_ad5x_ifs.h"
 #include "ams_backend_afc.h"
 #include "ams_types.h"
+#include "filament_slot_override.h"
 
 #include <chrono>
 #include <string>
@@ -100,6 +101,15 @@ class Ad5xIfsTestAccess {
     static void apply_zcolor_result(AmsBackendAd5xIfs& b,
                                     const AmsBackendAd5xIfs::ZColorSilentResult& r) {
         b.apply_zcolor_result(r);
+    }
+    // Seed the in-memory overrides map directly (bypasses load_blocking, which
+    // requires a live Moonraker connection). on_started() is the only
+    // production path that writes this field; tests must use this shim because
+    // the fixtures instantiate the backend with nullptr api/client.
+    static void seed_override(AmsBackendAd5xIfs& b, int slot_index,
+                              const helix::ams::FilamentSlotOverride& ovr) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.overrides_[slot_index] = ovr;
     }
 };
 
@@ -1911,4 +1921,216 @@ TEST_CASE("AFC backend has no whitelist and passes material through unchanged",
     REQUIRE(backend.normalize_material("PLA+") == "PLA+");
     REQUIRE(backend.normalize_material("Some Random String") == "Some Random String");
     REQUIRE(backend.normalize_material("") == "");
+}
+
+// ==========================================================================
+// FilamentSlotOverride integration (Task 9)
+//
+// The override store is loaded once in on_started() and then layered over
+// every parse via update_slot_from_state(). These tests exercise the layering
+// directly by seeding the in-memory overrides map (via test access) and then
+// driving the parse path — parse_adventurer_json is used because it goes
+// through update_slot_from_state and is the simplest hook-free entry point
+// from a test fixture constructed with nullptr api/client.
+// ==========================================================================
+
+TEST_CASE("AD5X IFS applies override brand over Adventurer5M.json data",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Green";
+    ovr.color_rgb = 0x00AA00;  // Override to green
+    ovr.material = "PETG";      // Override to PETG
+    ovr.spoolman_id = 42;
+    ovr.remaining_weight_g = 750.0f;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Firmware reports slot 0 (port 1) as orange PLA.
+    std::string content = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF5500",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+    auto info = backend.get_slot_info(0);
+    // Override wins for every non-default field.
+    REQUIRE(info.brand == "Polymaker");
+    REQUIRE(info.spool_name == "PolyLite Green");
+    REQUIRE(info.color_rgb == 0x00AA00u);
+    REQUIRE(info.material == "PETG");
+    REQUIRE(info.spoolman_id == 42);
+    REQUIRE(info.remaining_weight_g == 750.0f);
+}
+
+TEST_CASE("AD5X IFS preserves firmware color when no override present",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // No overrides seeded — firmware data must flow through unchanged.
+    std::string content = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF5500",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.color_rgb == 0xFF5500u);
+    REQUIRE(info.material == "PLA");
+    // Default-valued fields on SlotInfo.
+    REQUIRE(info.brand.empty());
+    REQUIRE(info.spool_name.empty());
+    REQUIRE(info.spoolman_id == 0);
+}
+
+TEST_CASE("AD5X IFS partial override only replaces specified fields",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed an override that only sets brand. Every other field must fall
+    // through to the firmware-reported value (or SlotInfo default).
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    std::string content = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF5500",
+            "ffmType1": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.brand == "Polymaker");       // override wins
+    REQUIRE(info.color_rgb == 0xFF5500u);     // firmware untouched
+    REQUIRE(info.material == "PLA");          // firmware untouched
+    REQUIRE(info.spool_name.empty());         // default
+    REQUIRE(info.spoolman_id == 0);           // default
+    REQUIRE(info.remaining_weight_g == -1.0f); // default
+}
+
+TEST_CASE("AD5X IFS override applies to multiple slots independently",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    helix::ams::FilamentSlotOverride ovr0;
+    ovr0.brand = "Polymaker";
+    ovr0.material = "PETG";
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr0);
+
+    helix::ams::FilamentSlotOverride ovr2;
+    ovr2.brand = "eSUN";
+    ovr2.color_rgb = 0x123456;
+    Ad5xIfsTestAccess::seed_override(backend, 2, ovr2);
+
+    // Slots 1 and 3 have NO override — must reflect pure firmware data.
+    std::string content = R"({
+        "FFMInfo": {
+            "ffmColor1": "#FF0000",
+            "ffmColor2": "#00FF00",
+            "ffmColor3": "#0000FF",
+            "ffmColor4": "#FFFFFF",
+            "ffmType1": "PLA",
+            "ffmType2": "PLA",
+            "ffmType3": "PLA",
+            "ffmType4": "PLA"
+        }
+    })";
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, content);
+
+    auto info0 = backend.get_slot_info(0);
+    REQUIRE(info0.brand == "Polymaker");
+    REQUIRE(info0.material == "PETG");
+    REQUIRE(info0.color_rgb == 0xFF0000u); // firmware untouched by ovr0
+
+    auto info1 = backend.get_slot_info(1);
+    REQUIRE(info1.brand.empty());
+    REQUIRE(info1.color_rgb == 0x00FF00u);
+    REQUIRE(info1.material == "PLA");
+
+    auto info2 = backend.get_slot_info(2);
+    REQUIRE(info2.brand == "eSUN");
+    REQUIRE(info2.color_rgb == 0x123456u);
+    REQUIRE(info2.material == "PLA");
+
+    auto info3 = backend.get_slot_info(3);
+    REQUIRE(info3.brand.empty());
+    REQUIRE(info3.color_rgb == 0xFFFFFFu);
+}
+
+TEST_CASE("AD5X IFS override re-applied on every parse",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.material = "PETG";
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    // First parse: firmware reports orange PLA.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    auto first = backend.get_slot_info(0);
+    REQUIRE(first.brand == "Polymaker");
+    REQUIRE(first.material == "PETG");
+
+    // Second parse with new firmware data — override must still win.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#123456", "ffmType1": "ABS"}
+    })");
+    auto second = backend.get_slot_info(0);
+    REQUIRE(second.brand == "Polymaker");
+    REQUIRE(second.material == "PETG");
+}
+
+TEST_CASE("AD5X IFS override zero color_rgb does not replace firmware color",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // color_rgb=0 is the "no override" sentinel — must not clobber firmware.
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "TestBrand";
+    ovr.color_rgb = 0;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#AA55FF", "ffmType1": "PLA"}
+    })");
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.brand == "TestBrand");
+    REQUIRE(info.color_rgb == 0xAA55FFu); // unchanged
+}
+
+TEST_CASE("AD5X IFS override negative weights do not replace firmware values",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed an override with -1.0 weights (the "unknown" sentinel) — must not
+    // overwrite whatever weights the firmware / SlotInfo default holds.
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "WeightTest";
+    ovr.remaining_weight_g = -1.0f;
+    ovr.total_weight_g = -1.0f;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF0000", "ffmType1": "PLA"}
+    })");
+
+    auto info = backend.get_slot_info(0);
+    REQUIRE(info.brand == "WeightTest");
+    // Firmware doesn't populate weights at all — they should remain at the
+    // SlotInfo default (-1), not at zero. This verifies apply_overrides did
+    // NOT write the -1 sentinel over the default (which would be a no-op
+    // today but guards against a future default change).
+    REQUIRE(info.remaining_weight_g == -1.0f);
+    REQUIRE(info.total_weight_g == -1.0f);
 }

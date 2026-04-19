@@ -46,6 +46,20 @@ AmsBackendAd5xIfs::~AmsBackendAd5xIfs() = default;
 // --- Lifecycle ---
 
 void AmsBackendAd5xIfs::on_started() {
+    // Load persisted per-slot overrides (brand, spool name, spoolman IDs, etc.)
+    // BEFORE issuing the initial status query — otherwise the first
+    // handle_status_update() callback may fire (on the websocket thread) and
+    // update slots before overrides_ is populated, so the first frame of
+    // EVENT_STATE_CHANGED would be missing override data. load_blocking runs
+    // on this (main) thread; the Moonraker DB callback fires on the libhv
+    // event loop, so the two threads don't interfere.
+    if (api_) {
+        override_store_ = std::make_unique<helix::ams::FilamentSlotOverrideStore>(api_, "ifs");
+        overrides_ = override_store_->load_blocking();
+        spdlog::info("{} Loaded {} slot overrides from filament_slot store", backend_log_tag(),
+                     overrides_.size());
+    }
+
     // Query initial state from printer
     if (!client_)
         return;
@@ -432,6 +446,50 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
 
     // Reverse tool mapping: find first tool that maps to this port
     entry->info.mapped_tool = find_first_tool_for_port(slot_index + 1);
+
+    // Layer user-configured overrides on top of firmware-reported data. Called
+    // last so overrides win for any non-default field. Safe to call while
+    // mutex_ is held (overrides_ is populated once in on_started and never
+    // mutated after).
+    apply_overrides(entry->info, slot_index);
+}
+
+void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
+    // overrides_ is read-only after on_started(); no locking needed. If a
+    // slot has no override entry, this is a zero-cost hash lookup followed
+    // by early return — safe to call inside the hot parse path.
+    auto it = overrides_.find(slot_index);
+    if (it == overrides_.end())
+        return;
+    const auto& o = it->second;
+    // Merge policy: override wins when the override field carries a real value.
+    // - Strings: non-empty means "user set this", empty means "don't override".
+    // - spoolman_id / spoolman_vendor_id: >0 means a real Spoolman record;
+    //   0 is the "not linked" sentinel and must fall through.
+    // - weights: -1.0 is "unknown" and must fall through; 0 is a legitimate
+    //   empty-spool reading and should override.
+    // - color_rgb: 0 is treated as "no override" (matches to_lane_data_record's
+    //   omission rule and keeps black-but-unset indistinguishable from unset
+    //   per the store's on-disk schema; callers who truly mean pure black
+    //   #000000 should instead use 0x000001-equivalent color_name).
+    if (!o.brand.empty())
+        slot.brand = o.brand;
+    if (!o.spool_name.empty())
+        slot.spool_name = o.spool_name;
+    if (o.spoolman_id > 0)
+        slot.spoolman_id = o.spoolman_id;
+    if (o.spoolman_vendor_id > 0)
+        slot.spoolman_vendor_id = o.spoolman_vendor_id;
+    if (o.remaining_weight_g >= 0.0f)
+        slot.remaining_weight_g = o.remaining_weight_g;
+    if (o.total_weight_g >= 0.0f)
+        slot.total_weight_g = o.total_weight_g;
+    if (o.color_rgb != 0)
+        slot.color_rgb = o.color_rgb;
+    if (!o.color_name.empty())
+        slot.color_name = o.color_name;
+    if (!o.material.empty())
+        slot.material = o.material;
 }
 
 // --- State queries ---
