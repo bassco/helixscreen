@@ -348,47 +348,89 @@ static void write_kv_long(int fd, const char* key, long value, char* num_buf, si
 /// Fallback for the case where libgcc's DWARF-based `backtrace()` bails after
 /// 0-2 frames on SIGABRT (signal trampoline has no CFI; glibc's `backtrace()`
 /// can also itself crash when the heap is corrupted — we've seen this on Pi
-/// v0.99.36). The AArch64 / x86_64 ABI both use the same 2-word frame layout:
-///   [fp]      = saved_fp   (caller's frame pointer)
-///   [fp + 8]  = saved_lr   (return address into caller)
+/// v0.99.36). Every supported arch uses the same 2-word frame layout when
+/// compiled with -fno-omit-frame-pointer:
+///   [fp]            = saved_fp   (caller's frame pointer)
+///   [fp + wordsize] = saved_lr   (return address into caller)
+///
+/// This matches AArch64/x86_64 unconditionally and modern GCC codegen for
+/// ARM32 (both ARM and Thumb-2) with -fno-omit-frame-pointer. On ARM32 the
+/// caller must pass r7 (Thumb) or r11 (ARM) in initial_fp — see the CPSR.T
+/// check at the call site.
 ///
 /// Bounds checks: fp must be word-aligned, monotonically increasing up the
-/// stack, and inside [sp, sp + kMaxStackSize). If any check fails we stop
-/// walking — a corrupted chain is common in the crashes this is meant to help.
-///
-/// Skipped on ARM32 (EABI+-O2 often omits FP) and MIPS (no standard FP ABI).
-static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp) {
-#if defined(__aarch64__) || defined(__x86_64__)
-    constexpr uintptr_t kWordSize = 8;
+/// stack, and inside [sp, sp + kMaxStackSize). On ARM32 we additionally
+/// require saved_lr to fall inside the binary .text range — function
+/// prologues without a standard FP (leaf libc routines, inline asm) can
+/// plant a saved_fp value that walks into unrelated memory, and the .text
+/// filter catches that. If any check fails we stop walking rather than
+/// wander into bad memory.
+static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp,
+                             uintptr_t word_size) {
+#if defined(__aarch64__) || defined(__x86_64__) || defined(__arm__)
     constexpr uintptr_t kMaxStackSize = 16 * 1024 * 1024;
     constexpr int kMaxFrames = 48;
 
-    if (initial_fp == 0 || sp == 0)
+    if (initial_fp == 0 || sp == 0 || word_size == 0)
         return 0;
 
     char hex_buf[32];
     int frames_emitted = 0;
+    // Clamp to prevent 32-bit overflow: on ARM32 Linux, user stacks sit near
+    // 0xff000000, so sp + 16MB silently wraps to ~0x00Cxxxxx and every
+    // `fp + 8 > stack_hi` check spuriously trips, killing the walk on the
+    // first iteration.
     uintptr_t stack_hi = sp + kMaxStackSize;
+    if (stack_hi < sp) {
+        stack_hi = ~static_cast<uintptr_t>(0);
+    }
     uintptr_t fp = initial_fp;
     uintptr_t prev_fp = 0;
 
     for (int i = 0; i < kMaxFrames; ++i) {
-        if ((fp & (kWordSize - 1)) != 0)
+        if ((fp & (word_size - 1)) != 0)
             break;
-        if (fp < sp || fp + 2 * kWordSize > stack_hi)
+        if (fp < sp || fp + 2 * word_size > stack_hi)
             break;
         if (fp <= prev_fp && prev_fp != 0)
             break;
 
-        uintptr_t saved_fp = *reinterpret_cast<const volatile uintptr_t*>(fp);
-        uintptr_t saved_lr = *reinterpret_cast<const volatile uintptr_t*>(fp + kWordSize);
+        uintptr_t saved_fp;
+        uintptr_t saved_lr;
+        if (word_size == 8) {
+            saved_fp = *reinterpret_cast<const volatile uint64_t*>(fp);
+            saved_lr = *reinterpret_cast<const volatile uint64_t*>(fp + word_size);
+        } else {
+            saved_fp = *reinterpret_cast<const volatile uint32_t*>(fp);
+            saved_lr = *reinterpret_cast<const volatile uint32_t*>(fp + word_size);
+        }
 
+#if defined(__arm__)
+        // ARM32 LRs from Thumb callers have bit 0 set (the Thumb-interwork
+        // flag). Clear it for symbolization. The crashing function may be
+        // "leaf-ish" — if it only pushed {r7} and not {r7, lr} (common for
+        // [[noreturn]] trap functions) then [fp+4] contains stack garbage
+        // rather than a saved_lr. Filter by .text range and skip (don't
+        // break), so the saved_fp chain can still walk into the caller
+        // whose frame does have a proper {r7, lr} layout.
+        uintptr_t lr_addr = saved_lr & ~static_cast<uintptr_t>(1);
+        bool lr_in_text =
+            (s_text_start != 0 && s_text_end > s_text_start
+             && lr_addr >= s_text_start && lr_addr < s_text_end);
+        if (lr_in_text && lr_addr != 0) {
+            safe_write(fd, "bt:");
+            safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), lr_addr));
+            safe_write(fd, "\n");
+            ++frames_emitted;
+        }
+#else
         if (saved_lr != 0) {
             safe_write(fd, "bt:");
             safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), saved_lr));
             safe_write(fd, "\n");
             ++frames_emitted;
         }
+#endif
 
         if (saved_fp == 0)
             break;
@@ -401,6 +443,7 @@ static int fp_walk_backtrace(int fd, uintptr_t initial_fp, uintptr_t sp) {
     (void)fd;
     (void)initial_fp;
     (void)sp;
+    (void)word_size;
     return 0;
 #endif
 }
@@ -537,6 +580,13 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
         safe_write(fd, "\n");
         safe_write(fd, "reg_ip:");
         safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.arm_ip));
+        safe_write(fd, "\n");
+        // CPSR is needed downstream to tell which mode the crashing function
+        // was running in (Thumb-2 vs ARM). The FP walker already consumes it
+        // for r7-vs-r11 selection, but exposing it here lets the worker /
+        // resolve-backtrace script confirm the choice.
+        safe_write(fd, "reg_cpsr:");
+        safe_write(fd, ptr_to_hex(hex_buf, sizeof(hex_buf), uctx->uc_mcontext.arm_cpsr));
         safe_write(fd, "\n");
 #elif defined(__aarch64__)
         safe_write(fd, "reg_pc:");
@@ -741,29 +791,52 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
 #endif
     }
 
-    // Frame-pointer chain walk (AArch64 / x86_64). Runs BEFORE backtrace() and
-    // the stack dump because it's the most reliable fallback when libgcc's
-    // DWARF unwinder bails at the signal trampoline. Bounds-checked; if the
-    // chain is corrupt it stops early rather than wandering into bad memory.
+    // Frame-pointer chain walk. Runs BEFORE backtrace() and the stack dump
+    // because it's the most reliable fallback when libgcc's DWARF unwinder
+    // bails at the signal trampoline. Bounds-checked; if the chain is
+    // corrupt it stops early rather than wandering into bad memory.
+    //
+    // Arch-specific register selection:
+    //   AArch64 / x86_64: fp = x29 / rbp, 8-byte words
+    //   ARM32: Thumb-2 code uses r7; ARM-mode code uses r11 (fp). CPSR.T
+    //          tells us which mode the crashing function ran in. Debian
+    //          armhf userspace is predominantly Thumb-2 (Pi/SonicPad).
     if (ucontext) {
         const auto* uctx = static_cast<const ucontext_t*>(ucontext);
         uintptr_t fp_reg = 0;
         uintptr_t sp_reg = 0;
+        uintptr_t word_size = 0;
 #if defined(__APPLE__) && defined(__aarch64__)
         fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__fp);
         sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__sp);
+        word_size = 8;
 #elif defined(__APPLE__) && defined(__x86_64__)
         fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__rbp);
         sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext->__ss.__rsp);
+        word_size = 8;
 #elif defined(__aarch64__)
         fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.regs[29]);
         sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.sp);
+        word_size = 8;
 #elif defined(__x86_64__)
         fp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[REG_RBP]);
         sp_reg = static_cast<uintptr_t>(uctx->uc_mcontext.gregs[REG_RSP]);
+        word_size = 8;
+#elif defined(__arm__)
+        // CPSR bit 5 (T) = 1 when the crashing function was running in
+        // Thumb state. GCC's -fno-omit-frame-pointer uses r7 as FP in
+        // Thumb and r11 (arm_fp) in ARM mode. Both with 2-word frame layout.
+        constexpr unsigned long kCpsrThumbBit = 0x20;
+        if (uctx->uc_mcontext.arm_cpsr & kCpsrThumbBit) {
+            fp_reg = uctx->uc_mcontext.arm_r7;
+        } else {
+            fp_reg = uctx->uc_mcontext.arm_fp;
+        }
+        sp_reg = uctx->uc_mcontext.arm_sp;
+        word_size = 4;
 #endif
-        if (fp_reg != 0 && sp_reg != 0) {
-            fp_walk_backtrace(fd, fp_reg, sp_reg);
+        if (fp_reg != 0 && sp_reg != 0 && word_size != 0) {
+            fp_walk_backtrace(fd, fp_reg, sp_reg, word_size);
         }
     }
 
@@ -1404,4 +1477,53 @@ void crash_handler::write_mock_crash_file(const std::string& crash_file_path) {
     ofs << "lv_heap_free_biggest_kb:14\n";
 
     spdlog::info("[CrashHandler] Wrote mock crash file: {}", crash_file_path);
+}
+
+// =============================================================================
+// trigger_test_crash() — deterministic SIGSEGV for verifying the unwind path.
+// Each level is noinline + externally visible so the five stack frames appear
+// in crash.txt. The top-level symbols are clustered in the static namespace
+// below; they're only meant to be called via trigger_test_crash() and should
+// not be reachable from normal code paths.
+// =============================================================================
+
+namespace {
+
+// NOTE: these return int (not [[noreturn]]) so each function emits a full
+// prologue + epilogue; without the epilogue padding they compress to 9-byte
+// shims whose return addresses collide with the next level's entry point,
+// making symbolization pick the wrong name. The return value is visibly used
+// by the caller so the compiler can't tail-call-optimize the chain away.
+
+[[gnu::noinline]] static int crash_level_4() {
+    volatile int* p = nullptr;
+    *p = 1; // SIGSEGV here — SEGV_MAPERR at 0x0
+    return 4;
+}
+
+[[gnu::noinline]] static int crash_level_3() {
+    int r = crash_level_4();
+    return r + 3;
+}
+
+[[gnu::noinline]] static int crash_level_2() {
+    int r = crash_level_3();
+    return r + 2;
+}
+
+[[gnu::noinline]] static int crash_level_1() {
+    int r = crash_level_2();
+    return r + 1;
+}
+
+} // namespace
+
+[[noreturn]] void crash_handler::trigger_test_crash() {
+    spdlog::warn(
+        "[CrashHandler] HELIX_CRASH_TEST active — triggering SIGSEGV at crash_level_4()");
+    // Read the result so the compiler can't elide the chain.
+    volatile int sink = crash_level_1();
+    (void)sink;
+    // Unreachable; if control somehow returns, terminate to keep [[noreturn]] honest.
+    _exit(99);
 }

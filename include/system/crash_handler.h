@@ -87,6 +87,21 @@ void remove_crash_file(const std::string& crash_file_path);
 void write_mock_crash_file(const std::string& crash_file_path);
 
 /**
+ * @brief Intentionally SIGSEGV through a deep call chain, for verifying the
+ *        signal handler's unwind path on real hardware.
+ *
+ * Call chain (distinct function names, `__attribute__((noinline))`):
+ *   trigger_test_crash() -> crash_level_1() -> crash_level_2() ->
+ *   crash_level_3() -> crash_level_4() -> *(volatile int*)0 = 1;
+ *
+ * Use via `HELIX_CRASH_TEST=1` env var. The generated crash.txt should
+ * resolve a live FP-walk chain that includes all five symbols. Absence of
+ * any of them means the walker broke somewhere. Only intended for
+ * signal-handler development — never wire this into production paths.
+ */
+[[noreturn]] void trigger_test_crash();
+
+/**
  * @brief Register a pointer to the current callback tag
  *
  * The UpdateQueue stores the tag of the currently executing callback in a

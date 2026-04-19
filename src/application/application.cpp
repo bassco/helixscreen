@@ -338,6 +338,13 @@ int Application::run(int argc, char** argv) {
         crash_handler::install(helix::writable_path("crash.txt"));
     }
 
+    // HELIX_CRASH_TEST=1 intentionally segfaults through a known call chain
+    // to verify the signal handler's unwind on real hardware. Must run AFTER
+    // install() so the generated crash.txt exercises the real handler.
+    if (const char* t = std::getenv("HELIX_CRASH_TEST"); t && *t && std::string(t) != "0") {
+        crash_handler::trigger_test_crash();
+    }
+
     // Install graceful shutdown signal handlers (Ctrl+C, kill)
     // When running under the watchdog, SIGINT/SIGTERM are handled there.
     // When running standalone (e.g., --test), these allow clean shutdown.

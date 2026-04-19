@@ -342,7 +342,7 @@ ifneq ($(CROSS_COMPILE),)
 		fi; \
 	fi; \
 	(cd $(LIBHV_DIR) && \
-		CC=$(CC) CXX=$(CXX) AR=$(AR) \
+		CC="$(CC)" CXX="$(CXX)" AR="$(AR)" \
 		CFLAGS="$(TARGET_CFLAGS)$$OPENSSL_INC" \
 		CXXFLAGS="$(TARGET_CFLAGS)$$OPENSSL_INC" \
 		LDFLAGS="$$OPENSSL_LIB_DIR" \
@@ -350,9 +350,9 @@ ifneq ($(CROSS_COMPILE),)
 	# libhv's nested make has been flaky under cross toolchains when run with
 	# inherited/parallel jobserver flags; keep only this sub-build serialized.
 	if [ -n "$$OPENSSL_ARCHIVES" ]; then \
-		CC=$(CC) CXX=$(CXX) AR=$(AR) MAKEFLAGS= $(MAKE) -j1 -C $(LIBHV_DIR) LIBHV_TARGET_TYPE=STATIC OPENSSL_LIBS="$$OPENSSL_ARCHIVES" libhv; \
+		CC="$(CC)" CXX="$(CXX)" AR="$(AR)" MAKEFLAGS= $(MAKE) -j1 -C $(LIBHV_DIR) LIBHV_TARGET_TYPE=STATIC OPENSSL_LIBS="$$OPENSSL_ARCHIVES" libhv; \
 	else \
-		CC=$(CC) CXX=$(CXX) AR=$(AR) MAKEFLAGS= $(MAKE) -j1 -C $(LIBHV_DIR) LIBHV_TARGET_TYPE=STATIC libhv; \
+		CC="$(CC)" CXX="$(CXX)" AR="$(AR)" MAKEFLAGS= $(MAKE) -j1 -C $(LIBHV_DIR) LIBHV_TARGET_TYPE=STATIC libhv; \
 	fi
 else ifeq ($(UNAME_S),Darwin)
 	$(Q)cd $(LIBHV_DIR) && \
