@@ -199,6 +199,17 @@ void MoonrakerAPIMock::mock_reject_next_db_delete(MoonrakerError err) {
     next_db_delete_rejection_ = std::move(err);
 }
 
+void MoonrakerAPIMock::mock_reject_next_db_get() {
+    MoonrakerError err;
+    err.type = MoonrakerErrorType::UNKNOWN;
+    err.message = "Mock: database_get_namespace rejected";
+    next_db_get_rejection_ = std::move(err);
+}
+
+void MoonrakerAPIMock::mock_reject_next_db_get(MoonrakerError err) {
+    next_db_get_rejection_ = std::move(err);
+}
+
 void MoonrakerAPIMock::mock_defer_next_db_post() {
     defer_next_db_post_ = true;
 }
@@ -299,6 +310,14 @@ void MoonrakerAPIMock::database_post_item(const std::string& namespace_name, con
 void MoonrakerAPIMock::database_get_namespace(const std::string& namespace_name,
                                               std::function<void(const json&)> on_success,
                                               ErrorCallback on_error) {
+    if (next_db_get_rejection_.has_value()) {
+        MoonrakerError err = std::move(*next_db_get_rejection_);
+        next_db_get_rejection_.reset();
+        if (on_error) {
+            on_error(err);
+        }
+        return;
+    }
     if (defer_next_db_get_) {
         defer_next_db_get_ = false;
         DeferredDbGet captured;

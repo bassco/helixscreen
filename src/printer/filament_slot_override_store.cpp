@@ -211,6 +211,90 @@ void write_cache_slot(const std::filesystem::path& cache_path,
     }
 }
 
+// Read the on-disk cache file and return this backend's slot overrides.
+//
+// Intentionally a free function (symmetric with write_cache_slot): load_blocking
+// calls it synchronously after its MR DB wait, so it takes the cache_path and
+// backend_id as value-parameters — no `this` access, matches the write-side
+// discipline for future refactors that might move either path off the main
+// thread.
+//
+// This is the OFFLINE-FALLBACK read. load_blocking only calls it when the MR
+// DB round-trip didn't yield a value — either because the error callback fired
+// (connection/server failure) or the cv.wait_for timeout elapsed. A successful
+// MR DB response with an empty namespace is NOT cache-fallback-eligible — that
+// response is authoritative ("no overrides configured") and we must not leak
+// stale cache data past it.
+//
+// Behavior:
+// - File absent → empty map, no log (normal first-run).
+// - File present but parse fails → warn, empty map. Do NOT delete the file —
+//   the next successful save will overwrite it atomically via write_cache_slot,
+//   and in the meantime keeping it around lets an ops user inspect corruption.
+// - doc["version"] != 1 → warn, empty map (forward-compat: a future schema
+//   bump should be ignored here so an old build doesn't truncate new data on
+//   its first save).
+// - doc[backend_id]["slots"] missing → empty map, no log (this backend has
+//   never been saved, or another backend owns the file exclusively).
+// - Otherwise iterate slots: parse each key as int, skip if non-int or
+//   negative (symmetric with from_lane_data_record's rejection rule), call
+//   from_json on the value, insert into the result map.
+std::unordered_map<int, FilamentSlotOverride>
+read_cache(const std::filesystem::path& cache_path, const std::string& backend_id) {
+    std::unordered_map<int, FilamentSlotOverride> result;
+    std::error_code ec;
+    if (!std::filesystem::exists(cache_path, ec)) return result;
+
+    std::ifstream in(cache_path);
+    if (!in) return result;
+
+    nlohmann::json doc;
+    try {
+        doc = nlohmann::json::parse(in);
+    } catch (const std::exception& e) {
+        spdlog::warn("[FilamentSlotOverrideStore] cache parse failed ({}): {}",
+                     cache_path.string(), e.what());
+        return result;
+    }
+    if (!doc.is_object()) {
+        spdlog::warn("[FilamentSlotOverrideStore] cache top-level is not an object ({})",
+                     cache_path.string());
+        return result;
+    }
+
+    // Forward-compat: silently ignore schemas we don't understand. A newer
+    // build may have bumped version; we must not mis-parse its data nor
+    // truncate it on our own next save (write_cache_slot re-reads and merges,
+    // but only entries keyed under backend_id[slots] — other top-level fields
+    // are preserved).
+    if (!doc.contains("version") || doc["version"] != 1) {
+        spdlog::warn("[FilamentSlotOverrideStore] cache schema version mismatch ({}): {}",
+                     cache_path.string(),
+                     doc.contains("version") ? doc["version"].dump() : std::string("<missing>"));
+        return result;
+    }
+
+    if (!doc.contains(backend_id) || !doc[backend_id].is_object()) return result;
+    const auto& backend_entry = doc[backend_id];
+    if (!backend_entry.contains("slots") || !backend_entry["slots"].is_object()) return result;
+
+    const auto& slots = backend_entry["slots"];
+    for (auto it = slots.begin(); it != slots.end(); ++it) {
+        int slot_index = 0;
+        try {
+            slot_index = std::stoi(it.key());
+        } catch (...) {
+            continue;
+        }
+        // Symmetric with from_lane_data_record / save_async / clear_async:
+        // negative slot indices are never valid and must be silently skipped.
+        if (slot_index < 0) continue;
+        if (!it.value().is_object()) continue;
+        result[slot_index] = from_json(it.value());
+    }
+    return result;
+}
+
 } // namespace
 
 nlohmann::json to_json(const FilamentSlotOverride& o) {
@@ -307,7 +391,15 @@ std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_bl
         state->cv.wait_for(lk, load_timeout_, [state] { return state->done; });
     }
 
-    if (!state->got || !state->received.is_object()) return result;
+    // Fall back to local cache ONLY when the MR DB round-trip didn't yield a
+    // value — either because the error callback fired (got==false, done==true)
+    // or the cv.wait_for timeout elapsed (got==false, done==false). A
+    // successful MR DB response with an empty namespace is authoritative ("no
+    // overrides configured") and must NOT be replaced by stale cache data.
+    if (!state->got) {
+        return read_cache(cache_path(), backend_id_);
+    }
+    if (!state->received.is_object()) return result;
 
     for (auto it = state->received.begin(); it != state->received.end(); ++it) {
         const std::string& key = it.key();

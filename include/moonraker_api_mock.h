@@ -638,6 +638,17 @@ class MoonrakerAPIMock : public MoonrakerAPI {
     void mock_reject_next_db_delete();
     void mock_reject_next_db_delete(MoonrakerError err);
 
+    /// Cause the next database_get_namespace() call to fire its on_error callback
+    /// with the given MoonrakerError, and skip returning any value. The rejection
+    /// is consumed on the first call — subsequent gets succeed normally unless
+    /// this is called again. The no-arg overload uses a generic UNKNOWN error.
+    /// Used to exercise load_blocking()'s "MR DB unreachable → fall back to
+    /// local cache" path.
+    /// Not thread-safe: call from the main test thread before the rejection
+    /// is consumed.
+    void mock_reject_next_db_get();
+    void mock_reject_next_db_get(MoonrakerError err);
+
     /// Cause the next database_post_item() call to capture its callbacks without
     /// firing them. The captured callbacks can later be fired via
     /// fire_deferred_db_post_success() or fire_deferred_db_post_error(err).
@@ -686,6 +697,9 @@ class MoonrakerAPIMock : public MoonrakerAPI {
 
     /// One-shot rejection for database_delete_item (set by mock_reject_next_db_delete).
     std::optional<MoonrakerError> next_db_delete_rejection_;
+
+    /// One-shot rejection for database_get_namespace (set by mock_reject_next_db_get).
+    std::optional<MoonrakerError> next_db_get_rejection_;
 
     // One-shot deferred captures. Post/delete share the same shape (void()
     // success, error with MoonrakerError). Get captures a nlohmann::json value.

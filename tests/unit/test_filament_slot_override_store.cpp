@@ -763,3 +763,169 @@ TEST_CASE("FilamentSlotOverrideStore save_async survives corrupt existing cache"
     auto doc = nlohmann::json::parse(in);
     CHECK(doc["ifs"]["slots"]["0"]["brand"] == "Polymaker");
 }
+
+// ============================================================================
+// Task 7: local JSON read-cache — read side.
+//
+// When load_blocking cannot reach the Moonraker DB (connection error OR
+// cv.wait_for timeout), it falls back to the on-disk cache so the UI can show
+// last-known metadata offline. A successful-but-empty MR DB response is NOT
+// cache-fallback-eligible — it's authoritative "no overrides configured" and
+// stale cache data must not leak past it.
+// ============================================================================
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking falls back to cache when MR DB connection fails",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_fallback_error");
+
+    // Seed the cache file directly with a known entry.
+    nlohmann::json doc = {
+        {"version", 1},
+        {"ifs", {{"slots", {
+            {"0", {
+                {"brand", "Polymaker"},
+                {"material", "PLA"},
+                {"color_rgb", 0xFF5500},
+            }},
+        }}}}
+    };
+    std::ofstream(tmp.path / "filament_slot_overrides.json") << doc.dump(2);
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Force MR DB GET to fail — simulates a connection/server failure.
+    api.mock_reject_next_db_get();
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "Polymaker");
+    CHECK(overrides[0].material == "PLA");
+    CHECK(overrides[0].color_rgb == 0xFF5500u);
+}
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking falls back to cache on MR DB timeout",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_fallback_timeout");
+
+    nlohmann::json doc = {
+        {"version", 1},
+        {"ifs", {{"slots", {{"0", {{"brand", "eSUN"}}}}}}}
+    };
+    std::ofstream(tmp.path / "filament_slot_overrides.json") << doc.dump(2);
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_defer_next_db_get();  // never fires within the wait window
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    FilamentSlotOverrideStoreTestAccess::set_load_timeout(store, std::chrono::milliseconds(50));
+
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "eSUN");
+
+    // Clean up the deferred capture so the mock's internal state is tidy —
+    // matches the pattern used by the load_blocking-timeout test above.
+    api.fire_deferred_db_get_error(MoonrakerError{});
+}
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking does NOT use cache when MR DB returns empty namespace",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_empty_ns_no_fallback");
+
+    // Seed cache with stale data that we must NOT return — an empty-but-success
+    // MR DB response is authoritative.
+    nlohmann::json doc = {
+        {"version", 1},
+        {"ifs", {{"slots", {{"0", {{"brand", "StaleBrand"}}}}}}}
+    };
+    std::ofstream(tmp.path / "filament_slot_overrides.json") << doc.dump(2);
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    // No seed into lane_data — MR DB returns empty (success, not error).
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    CHECK(overrides.empty());  // MR DB said "no overrides" → trust it.
+}
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking cache fallback handles missing file",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_missing_cache");
+    // No cache file created — TmpCacheDir makes the dir but not the file.
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_reject_next_db_get();
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    CHECK(overrides.empty());  // first-run with no cache → empty, not a crash.
+}
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking cache fallback handles corrupt cache",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_corrupt_cache");
+    std::ofstream(tmp.path / "filament_slot_overrides.json") << "not json";
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_reject_next_db_get();
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    CHECK(overrides.empty());  // corrupt cache → treat as empty, don't crash.
+}
+
+TEST_CASE("FilamentSlotOverrideStore load_blocking cache returns only this backend's slots",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("task7_backend_isolation");
+
+    // Seed cache with both ifs and ace entries; only the ifs ones are ours.
+    nlohmann::json doc = {
+        {"version", 1},
+        {"ifs", {{"slots", {{"0", {{"brand", "Poly"}}}}}}},
+        {"ace", {{"slots", {{"0", {{"brand", "SHOULD_NOT_LEAK"}}}}}}}
+    };
+    std::ofstream(tmp.path / "filament_slot_overrides.json") << doc.dump(2);
+
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    api.mock_reject_next_db_get();
+
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    auto overrides = store.load_blocking();
+    REQUIRE(overrides.count(0) == 1);
+    CHECK(overrides[0].brand == "Poly");
+    CHECK(overrides.size() == 1);  // ace entries did not leak.
+}
