@@ -199,21 +199,15 @@ void AmsContextMenu::on_created(lv_obj_t* menu_obj) {
             lv_label_set_text(slot_header, lv_tr("External Spool"));
         }
 
-        // Check if external spool has an assignment (for Clear Spool mode)
-        clear_spool_mode_ = false;
+        // Show Clear Spool button when external spool has an assignment.
+        // btn_edit ("Spool Info") is always shown so users can reopen the edit modal.
         auto ext_info = AmsState::instance().get_external_spool_info();
         bool has_assignment =
             ext_info.has_value() && (ext_info->spoolman_id > 0 || !ext_info->material.empty());
 
-        lv_obj_t* btn_edit = lv_obj_find_by_name(menu_obj, "btn_edit");
-        if (has_assignment && btn_edit) {
-            // Show "Clear Spool" as the edit button action
-            clear_spool_mode_ = true;
-            ui_button_set_text(btn_edit, lv_tr("Clear Spool"));
-            ui_button_set_icon(btn_edit, "close");
-        } else if (!has_assignment && btn_edit) {
-            // No spool assigned — keep "Spool Info" label for editing
-            ui_button_set_text(btn_edit, lv_tr("Spool Info"));
+        lv_obj_t* btn_clear = lv_obj_find_by_name(menu_obj, "btn_clear_spool");
+        if (btn_clear && has_assignment) {
+            lv_obj_clear_flag(btn_clear, LV_OBJ_FLAG_HIDDEN);
         }
 
         // Show "Select Spool" and "Scan QR Code" if Spoolman is available
@@ -300,26 +294,15 @@ void AmsContextMenu::on_created(lv_obj_t* menu_obj) {
         }
     }
 
-    // Handle Spool Info / Clear Spool button based on slot state
-    clear_spool_mode_ = false;
-    if (!slot_has_filament) {
-        // Slot is empty — check if it still has an assigned spool
-        bool has_assignment = false;
-        if (backend_) {
-            SlotInfo slot_info = backend_->get_slot_info(slot_index);
-            has_assignment = (slot_info.spoolman_id > 0 || !slot_info.material.empty());
-        }
-
-        lv_obj_t* btn_edit = lv_obj_find_by_name(menu_obj, "btn_edit");
-        if (has_assignment) {
-            // Show "Clear Spool" instead of disabled "Spool Info"
-            clear_spool_mode_ = true;
-            if (btn_edit) {
-                ui_button_set_text(btn_edit, lv_tr("Clear Spool"));
-                ui_button_set_icon(btn_edit, "close");
-            }
-        } else {
-            // Truly empty — keep "Spool Info" enabled so users can assign a spool
+    // Show Clear Spool button when an empty slot still has a sticky assignment.
+    // btn_edit ("Spool Info") stays visible so users can reopen the edit modal
+    // to correct metadata without first clearing.
+    if (!slot_has_filament && backend_) {
+        SlotInfo slot_info = backend_->get_slot_info(slot_index);
+        bool has_assignment = (slot_info.spoolman_id > 0 || !slot_info.material.empty());
+        lv_obj_t* btn_clear = lv_obj_find_by_name(menu_obj, "btn_clear_spool");
+        if (btn_clear && has_assignment) {
+            lv_obj_clear_flag(btn_clear, LV_OBJ_FLAG_HIDDEN);
         }
     }
 
@@ -387,13 +370,13 @@ void AmsContextMenu::handle_reset_lane() {
 }
 
 void AmsContextMenu::handle_edit() {
-    if (clear_spool_mode_) {
-        spdlog::info("[AmsContextMenu] Clear spool requested for slot {}", get_item_index());
-        dispatch_ams_action(MenuAction::CLEAR_SPOOL);
-    } else {
-        spdlog::info("[AmsContextMenu] Edit requested for slot {}", get_item_index());
-        dispatch_ams_action(MenuAction::EDIT);
-    }
+    spdlog::info("[AmsContextMenu] Edit requested for slot {}", get_item_index());
+    dispatch_ams_action(MenuAction::EDIT);
+}
+
+void AmsContextMenu::handle_clear_spool() {
+    spdlog::info("[AmsContextMenu] Clear spool requested for slot {}", get_item_index());
+    dispatch_ams_action(MenuAction::CLEAR_SPOOL);
 }
 
 void AmsContextMenu::handle_spoolman() {
@@ -421,6 +404,7 @@ void AmsContextMenu::register_callbacks() {
         {"ams_context_unload_cb", on_unload_cb},
         {"ams_context_reset_lane_cb", on_reset_lane_cb},
         {"ams_context_edit_cb", on_edit_cb},
+        {"ams_context_clear_spool_cb", on_clear_spool_cb},
         {"ams_context_spoolman_cb", on_spoolman_cb},
         {"ams_context_scan_qr_cb", on_scan_qr_cb},
         {"ams_context_tool_changed_cb", on_tool_changed_cb},
@@ -474,6 +458,13 @@ void AmsContextMenu::on_edit_cb(lv_event_t* /*e*/) {
     auto* self = get_active_instance();
     if (self) {
         self->handle_edit();
+    }
+}
+
+void AmsContextMenu::on_clear_spool_cb(lv_event_t* /*e*/) {
+    auto* self = get_active_instance();
+    if (self) {
+        self->handle_clear_spool();
     }
 }
 

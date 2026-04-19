@@ -63,11 +63,17 @@
                  hidden="true">
         <event_cb trigger="clicked" callback="ams_context_scan_qr_cb"/>
       </ui_button>
-      <!-- Spool Info Button -->
+      <!-- Spool Info Button — always opens edit modal -->
       <ui_button name="btn_edit"
                  height="#button_height_sm" icon="tune" text="Spool Info" translation_tag="Spool Info"
                  variant="ghost" clickable="true" style_flex_main_place="start">
         <event_cb trigger="clicked" callback="ams_context_edit_cb"/>
+      </ui_button>
+      <!-- Clear Spool Button — shown only when the slot has a Spoolman assignment -->
+      <ui_button name="btn_clear_spool"
+                 height="#button_height_sm" icon="close" text="Clear Spool" translation_tag="Clear Spool"
+                 variant="ghost" clickable="true" style_flex_main_place="start" hidden="true">
+        <event_cb trigger="clicked" callback="ams_context_clear_spool_cb"/>
       </ui_button>
       <!-- Divider before dropdowns -->
       <lv_obj name="dropdown_divider"

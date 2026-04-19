@@ -1696,6 +1696,18 @@ void MoonrakerSpoolmanAPIMock::update_spoolman_spool(int spool_id, const nlohman
             }
             if (spool_data.contains("filament_id")) {
                 spool.filament_id = spool_data["filament_id"].get<int>();
+                // Re-resolve denormalized fields from the new filament so subsequent
+                // GETs reflect the repoint (mirrors real Spoolman's response shape).
+                for (const auto& f : mock_filaments_) {
+                    if (f.id == spool.filament_id) {
+                        spool.material = f.material;
+                        spool.color_name = f.color_name;
+                        spool.color_hex = f.color_hex;
+                        spool.vendor_id = f.vendor_id;
+                        spool.vendor = f.vendor_name;
+                        break;
+                    }
+                }
             }
             spdlog::debug("[MoonrakerAPIMock] Updated spool {} with {} fields", spool_id,
                           spool_data.size());
@@ -1867,7 +1879,7 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_filament(const nlohmann::json& fi
     FilamentInfo filament;
     filament.id = next_created_filament_id > 0 ? next_created_filament_id : next_filament_id_++;
     filament.material = filament_data.value("material", "");
-    filament.color_name = filament_data.value("name", "");
+    filament.color_name = filament_data.value("color_name", "");
     filament.color_hex = filament_data.value("color_hex", "");
     filament.diameter = filament_data.value("diameter", 1.75f);
     filament.weight = filament_data.value("weight", 0.0f);
@@ -1875,6 +1887,13 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_filament(const nlohmann::json& fi
 
     if (filament_data.contains("vendor_id")) {
         filament.vendor_id = filament_data.value("vendor_id", 0);
+        // Denormalize vendor_name from seeded or created vendors so GETs can serve it.
+        for (const auto& v : mock_vendors_) {
+            if (v.id == filament.vendor_id) {
+                filament.vendor_name = v.name;
+                break;
+            }
+        }
     }
 
     // Persist so subsequent get_spoolman_filaments() includes it
@@ -1902,13 +1921,18 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_spool(const nlohmann::json& spool
     spool.spool_weight_g = spool_data.value("spool_weight", 0.0);
     if (spool_data.contains("filament_id")) {
         spool.filament_id = spool_data.value("filament_id", 0);
-    }
-
-    // In real Spoolman, filament_id links to an existing filament definition
-    if (spool_data.contains("filament_id")) {
-        spool.material = "PLA";
-        spool.vendor = "Mock Vendor";
-        spool.color_name = "Mock Color";
+        // Resolve filament_id to its filament record (mirroring real Spoolman's GET
+        // behavior where the spool response includes the linked filament's fields).
+        for (const auto& f : mock_filaments_) {
+            if (f.id == spool.filament_id) {
+                spool.material = f.material;
+                spool.color_name = f.color_name;
+                spool.color_hex = f.color_hex;
+                spool.vendor_id = f.vendor_id;
+                spool.vendor = f.vendor_name;
+                break;
+            }
+        }
     }
 
     // Persist optional spool-level string fields

@@ -135,7 +135,6 @@ class AmsContextMenu : public ContextMenu {
     // === Pending state for on_created ===
     bool pending_is_loaded_ = false;
     bool eject_mode_ = false;          ///< True when showing "Eject" instead of "Unload"
-    bool clear_spool_mode_ = false;    ///< True when showing "Clear Spool" instead of "Spool Info"
     bool external_spool_mode_ = false; ///< True when showing menu for external spool (bypass)
 
     // === Event Handlers ===
@@ -144,6 +143,7 @@ class AmsContextMenu : public ContextMenu {
     void handle_unload();
     void handle_reset_lane();
     void handle_edit();
+    void handle_clear_spool();
     void handle_spoolman();
     void handle_scan_qr();
     void handle_tool_changed();
@@ -170,6 +170,7 @@ class AmsContextMenu : public ContextMenu {
     static void on_unload_cb(lv_event_t* e);
     static void on_reset_lane_cb(lv_event_t* e);
     static void on_edit_cb(lv_event_t* e);
+    static void on_clear_spool_cb(lv_event_t* e);
     static void on_spoolman_cb(lv_event_t* e);
     static void on_scan_qr_cb(lv_event_t* e);
     static void on_tool_changed_cb(lv_event_t* e);
