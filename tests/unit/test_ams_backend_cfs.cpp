@@ -3,10 +3,89 @@
 #include "ams_backend_cfs.h"
 #include "ams_types.h"
 #include "filament_database.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
+#include "moonraker_api_mock.h"
+#include "moonraker_client_mock.h"
+#include "printer_state.h"
+
+#include <filesystem>
+#include <memory>
+#include <optional>
+#include <string>
+#include <unistd.h>
 
 #include "../catch_amalgamated.hpp"
 
 using namespace helix::printer;
+using namespace helix;
+
+using json = nlohmann::json;
+
+// Friend-class shim for FilamentSlotOverrideStore — same idiom as IFS /
+// Snapmaker / ACE tests. Lets us redirect the store's on-disk read-cache to a
+// per-test tmp dir so save_async doesn't pollute the developer's real
+// helixscreen config.
+class FilamentSlotOverrideStoreTestAccess {
+  public:
+    static void set_cache_directory(helix::ams::FilamentSlotOverrideStore& store,
+                                    std::filesystem::path dir) {
+        store.cache_dir_ = std::move(dir);
+    }
+};
+
+// Friend-class shim for AmsBackendCfs — declared as friend in the backend
+// header. Gives tests narrow accessors for private override state without
+// going through the public get_slot_info path (which layers apply_overrides
+// on top and obscures what the internal maps actually hold).
+class CfsTestAccess {
+  public:
+    static void handle_status(AmsBackendCfs& b, const json& n) {
+        b.handle_status_update(n);
+    }
+    static void seed_override(AmsBackendCfs& b, int slot_index,
+                              const helix::ams::FilamentSlotOverride& ovr) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.overrides_[slot_index] = ovr;
+    }
+    static std::optional<helix::ams::FilamentSlotOverride>
+    get_override(const AmsBackendCfs& b, int slot_index) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        auto it = b.overrides_.find(slot_index);
+        if (it == b.overrides_.end())
+            return std::nullopt;
+        return it->second;
+    }
+    static void inject_override_store(AmsBackendCfs& b,
+                                      std::unique_ptr<helix::ams::FilamentSlotOverrideStore> s) {
+        b.override_store_ = std::move(s);
+    }
+    static std::optional<std::string> last_rfid_uid(const AmsBackendCfs& b, int slot_index) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        auto it = b.last_rfid_uid_.find(slot_index);
+        if (it == b.last_rfid_uid_.end())
+            return std::nullopt;
+        return it->second;
+    }
+};
+
+namespace {
+// Per-test tmp cache dir — same idiom as test_ams_backend_snapmaker.cpp /
+// test_ams_backend_ace.cpp.
+struct CfsTmpCacheDir {
+    std::filesystem::path path;
+    explicit CfsTmpCacheDir(const std::string& suffix) {
+        path = std::filesystem::temp_directory_path() /
+               ("cfs_cache_" + suffix + "_" + std::to_string(::getpid()));
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~CfsTmpCacheDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+} // namespace
 
 TEST_CASE("CFS type enum", "[ams][cfs]") {
     SECTION("CFS is a valid AmsType") {
@@ -183,8 +262,6 @@ TEST_CASE("CFS slot addressing", "[ams][cfs]") {
 // CFS backend status parsing tests
 // =============================================================================
 
-#include <hv/json.hpp>
-
 static nlohmann::json make_cfs_status_json() {
     return nlohmann::json::parse(R"({
         "box": {
@@ -234,6 +311,42 @@ static nlohmann::json make_cfs_status_json() {
             }
         }
     })");
+}
+
+// Wrap a box object in the notify_status_update envelope the backend expects.
+// {"params": [{ "box": {...} }, timestamp]}
+static json make_cfs_notification(const json& box_obj) {
+    return json{{"params", json::array({json{{"box", box_obj}}, 0})}};
+}
+
+// Build a single-unit T1 box object with configurable per-slot material_type
+// and color_value arrays. Other fields are held constant across tests so we
+// can focus assertions on the RFID fingerprint path. `material_type[i]` and
+// `color_value[i]` form the fingerprint for slot i.
+static json make_single_unit_box(const std::vector<std::string>& material_types,
+                                 const std::vector<std::string>& color_values) {
+    json box = json::parse(R"({
+        "state": "connect",
+        "filament": 0,
+        "auto_refill": 1,
+        "enable": 1,
+        "filament_useup": 1,
+        "map": {"T1A": "T1A", "T1B": "T1B", "T1C": "T1C", "T1D": "T1D"},
+        "T1": {
+            "state": "connect",
+            "filament": "None",
+            "temperature": "27",
+            "dry_and_humidity": "48",
+            "version": "1.1.3",
+            "sn": "SERIAL",
+            "vender": ["-1", "-1", "-1", "-1"],
+            "remain_len": ["35", "57", "52", "52"],
+            "change_color_num": ["-1", "-1", "-1", "-1"]
+        }
+    })");
+    box["T1"]["material_type"] = material_types;
+    box["T1"]["color_value"] = color_values;
+    return box;
 }
 
 using helix::printer::AmsBackendCfs;
@@ -449,4 +562,386 @@ TEST_CASE("CFS has no per-slot prep sensors", "[ams][cfs]") {
             REQUIRE_FALSE(backend.slot_has_prep_sensor(i));
         }
     }
+}
+
+// ============================================================================
+// Task 14: filament slot override integration
+// ============================================================================
+
+TEST_CASE("CFS override loaded at init is applied over firmware data",
+          "[ams][cfs][filament_slot_override][slow]") {
+    // Seed an override in-memory and verify apply_overrides layers it over
+    // firmware-parsed slot data. CFS's firmware populates brand /
+    // color_name / total_weight_g from the RFID material DB, but the
+    // override wins for every non-default field per the merge policy.
+    CfsTmpCacheDir tmp("task14_override_applied");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite PLA Orange";
+    ovr.spoolman_id = 42;
+    ovr.color_rgb = 0xFF5500;
+    ovr.material = "PLA";
+    CfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Firmware reports slot 0 with DIFFERENT color and material code (firmware
+    // material db lookup resolves code "101001" -> PLA/Creality).
+    json box = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0000000", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+
+    auto info = backend.get_slot_info(0);
+    // Override-eligible fields win.
+    CHECK(info.brand == "Polymaker");
+    CHECK(info.spool_name == "PolyLite PLA Orange");
+    CHECK(info.spoolman_id == 42);
+    CHECK(info.material == "PLA");
+    CHECK(info.color_rgb == 0xFF5500u);
+}
+
+TEST_CASE("CFS migrates from helix-screen:cfs_slot_overrides on first startup",
+          "[ams][cfs][filament_slot_override][migration][slow]") {
+    // Pre-Task-8 CFS wrote per-slot overrides to
+    // helix-screen:cfs_slot_overrides. On first startup post-upgrade, the
+    // store's load_blocking() migrates that data into lane_data and deletes
+    // the legacy namespace. Tests through the store + MoonrakerAPIMock
+    // directly so we don't need to drive on_started() (which requires a
+    // started subscription backend).
+    CfsTmpCacheDir tmp("task14_migration");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    // Seed legacy namespace with a PLA Orange override on slot 0. lane_data is
+    // untouched -> forces migration.
+    json legacy = {
+        {"0", {
+            {"brand", "Polymaker"},
+            {"material", "PLA"},
+            {"color_rgb", 0xFF5500},
+            {"spoolman_id", 42},
+            {"spool_name", "PolyLite Orange"},
+        }},
+    };
+    api.mock_set_db_value("helix-screen", "cfs_slot_overrides", legacy);
+
+    helix::ams::FilamentSlotOverrideStore store(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+    auto loaded = store.load_blocking();
+
+    // Migrated slot is returned from load_blocking as if it came from lane_data.
+    REQUIRE(loaded.count(0) == 1);
+    CHECK(loaded[0].brand == "Polymaker");
+    CHECK(loaded[0].material == "PLA");
+    CHECK(loaded[0].color_rgb == 0xFF5500u);
+    CHECK(loaded[0].spoolman_id == 42);
+    CHECK(loaded[0].spool_name == "PolyLite Orange");
+
+    // lane_data now holds the AFC-shaped record.
+    auto lane1 = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!lane1.is_null());
+    CHECK(lane1["vendor"] == "Polymaker");
+    CHECK(lane1["lane"] == "0");
+
+    // Legacy namespace deleted post-migration.
+    CHECK(api.mock_get_db_value("helix-screen", "cfs_slot_overrides").is_null());
+}
+
+TEST_CASE("CFS set_slot_info(persist=true) writes to store",
+          "[ams][cfs][filament_slot_override][slow]") {
+    CfsTmpCacheDir tmp("task14_persist_true");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // Prime the backend with 4 slots so set_slot_info's index check passes.
+    json box = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0000000", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+
+    SlotInfo edit;
+    edit.brand = "Polymaker";
+    edit.spool_name = "PolyLite PLA Orange";
+    edit.spoolman_id = 42;
+    edit.remaining_weight_g = 850.0f;
+    edit.material = "PLA";
+    edit.color_rgb = 0xFF5500;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/true);
+    REQUIRE(err.success());
+
+    // In-memory map carries the override.
+    auto staged = CfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->spoolman_id == 42);
+    CHECK(staged->color_rgb == 0xFF5500u);
+
+    // Moonraker DB received the AFC-shaped record via save_async.
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK(stored["vendor"] == "Polymaker");
+    CHECK(stored["spool_id"] == 42);
+    CHECK(stored["material"] == "PLA");
+    CHECK(stored["color"] == "#FF5500");
+
+    // Legacy namespace NOT touched — CFS no longer writes there.
+    CHECK(api.mock_get_db_value("helix-screen", "cfs_slot_overrides").is_null());
+}
+
+TEST_CASE("CFS set_slot_info(persist=false) does NOT write to store",
+          "[ams][cfs][filament_slot_override][slow]") {
+    CfsTmpCacheDir tmp("task14_persist_false");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    json box = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0000000", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+
+    SlotInfo edit;
+    edit.brand = "Draft";
+    edit.material = "PLA";
+    edit.color_rgb = 0x123456;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/false);
+    REQUIRE(err.success());
+
+    // No override staged, no DB write.
+    CHECK_FALSE(CfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Preview edit still visible via get_slot_info (in-memory only).
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Draft");
+    CHECK(info.material == "PLA");
+    CHECK(info.color_rgb == 0x123456u);
+}
+
+TEST_CASE("CFS RFID fingerprint change clears override (hardware swap detected)",
+          "[ams][cfs][filament_slot_override][slow]") {
+    CfsTmpCacheDir tmp("task14_uid_swap_clears");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed override AND the corresponding DB entry so we can verify
+    // clear_async deletes it on swap.
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"vendor", "Polymaker"},
+                               {"spool_id", 42},
+                               {"material", "PLA"},
+                               {"color", "#FF5500"}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    CfsTestAccess::seed_override(backend, 0, ovr);
+
+    // First parse: material=101001, color=0FF5500 establishes the baseline.
+    // No clear.
+    json box1 = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0FF5500", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box1));
+
+    REQUIRE(CfsTestAccess::get_override(backend, 0).has_value());
+    REQUIRE(CfsTestAccess::last_rfid_uid(backend, 0) == "101001|0FF5500");
+    REQUIRE(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Second parse: DIFFERENT fingerprint on slot 0 (material=102001, new
+    // color) — physical swap detected. Override must be cleared in-memory
+    // AND the Moonraker DB entry deleted.
+    json box2 = make_single_unit_box(
+        {"102001", "101001", "101001", "101001"},
+        {"000FF00", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box2));
+
+    CHECK_FALSE(CfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+    CHECK(CfsTestAccess::last_rfid_uid(backend, 0) == "102001|000FF00");
+
+    // Override-exclusive fields reset on the live slot. Firmware-populated
+    // fields (brand from material DB, color_rgb) stay — CFS firmware owns
+    // those and they should reflect the new spool.
+    auto info = backend.get_slot_info(0);
+    CHECK(info.spool_name.empty());
+    CHECK(info.spoolman_id == 0);
+    CHECK(info.remaining_weight_g == -1.0f);
+    // color_rgb was re-parsed from firmware this pass — should reflect new
+    // spool's color (0x00FF00), not the old override (0xFF5500).
+    CHECK(info.color_rgb == 0x00FF00u);
+}
+
+TEST_CASE("CFS first RFID observation does NOT clear override",
+          "[ams][cfs][filament_slot_override][slow]") {
+    // Even when the override was saved against a different (now-stale)
+    // fingerprint, the very first observation is a BASELINE and must never
+    // fire a clear. Matches Snapmaker semantics.
+    CfsTmpCacheDir tmp("task14_first_uid_baseline");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"vendor", "Polymaker"}, {"spool_id", 42}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spoolman_id = 42;
+    ovr.color_rgb = 0xFF5500;
+    CfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Firmware reports a fingerprint on the FIRST observation — no prior
+    // baseline, so this must NOT trigger a clear. Override survives.
+    json box = make_single_unit_box(
+        {"999001", "101001", "101001", "101001"},
+        {"0123456", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+
+    auto staged = CfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->spoolman_id == 42);
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Second parse of the SAME fingerprint stays the baseline — no clear.
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+
+    CHECK(CfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+}
+
+TEST_CASE("CFS empty RFID fingerprint does not update baseline or clear",
+          "[ams][cfs][filament_slot_override][slow]") {
+    // Sentinel material_type "-1" / color_value "-1" = no tag / reader
+    // disabled / unreadable. Must not update the baseline and must not clear.
+    // This is the contract that keeps transient tag-read failures from
+    // masking a genuine hardware swap on the next good read.
+    CfsTmpCacheDir tmp("task14_empty_uid_noop");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"vendor", "Polymaker"}, {"spool_id", 42}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spoolman_id = 42;
+    CfsTestAccess::seed_override(backend, 0, ovr);
+
+    // First parse: valid fingerprint — baseline established.
+    json box1 = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0FF5500", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box1));
+    REQUIRE(CfsTestAccess::last_rfid_uid(backend, 0) == "101001|0FF5500");
+
+    // Second parse: slot 0 has SENTINEL material_type and color — empty
+    // fingerprint. Must NOT update baseline and must NOT clear the override.
+    json box2 = make_single_unit_box(
+        {"-1", "101001", "101001", "101001"},
+        {"-1", "0FFFFFF", "00A2989", "0C12E1F"});
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box2));
+    CHECK(CfsTestAccess::last_rfid_uid(backend, 0) == "101001|0FF5500"); // unchanged
+    CHECK(CfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Third parse: same original fingerprint — matches baseline, no clear.
+    // Proves the sentinel-UID pass didn't corrupt state.
+    CfsTestAccess::handle_status(backend, make_cfs_notification(box1));
+    CHECK(CfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+}
+
+TEST_CASE("CFS override preserved across unchanged parses",
+          "[ams][cfs][filament_slot_override][slow]") {
+    // When the RFID fingerprint is unchanged (same spool re-observed), the
+    // override must be re-applied on every parse. This is the core behavior
+    // that was broken pre-Task-14: firmware data overwrote user edits on
+    // every status notification.
+    CfsTmpCacheDir tmp("task14_preserved_unchanged");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendCfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "cfs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    CfsTestAccess::inject_override_store(backend, std::move(store));
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.color_rgb = 0xFF5500;
+    ovr.material = "PLA";
+    CfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Multiple parses with the SAME fingerprint — override must persist.
+    json box = make_single_unit_box(
+        {"101001", "101001", "101001", "101001"},
+        {"0FF5500", "0FFFFFF", "00A2989", "0C12E1F"});
+
+    for (int i = 0; i < 3; ++i) {
+        CfsTestAccess::handle_status(backend, make_cfs_notification(box));
+        auto info = backend.get_slot_info(0);
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spool_name == "PolyLite Orange");
+        CHECK(info.spoolman_id == 42);
+        CHECK(info.material == "PLA");
+        CHECK(info.color_rgb == 0xFF5500u);
+    }
+
+    // Override map itself survived.
+    CHECK(CfsTestAccess::get_override(backend, 0).has_value());
 }

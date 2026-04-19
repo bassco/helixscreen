@@ -6,11 +6,16 @@
 
 #include "ams_subscription_backend.h"
 #include "async_lifetime_guard.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
 
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+class CfsTestAccess;
 
 namespace helix::printer {
 
@@ -87,7 +92,7 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     AmsError recover() override;
     AmsError cancel() override;
 
-    // Slot management (user overrides persisted locally + Moonraker DB)
+    // Slot management (user overrides persisted via shared FilamentSlotOverrideStore)
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
@@ -125,36 +130,57 @@ class AmsBackendCfs : public AmsSubscriptionBackend {
     void on_started() override;
 
   private:
+    friend class ::CfsTestAccess;
+
     std::string current_tnn_;
     bool motor_ready_ = true;
 
     // Callback lifetime management
     helix::AsyncLifetimeGuard lifetime_;
 
-    // User slot overrides: CFS hardware manages slot info via RFID,
-    // so user edits (color, material, weight) are stored in-memory and merged
-    // over hardware-reported values during parse. Cleared when slot status changes
-    // (e.g., spool physically swapped). Uses GLOBAL slot indices.
-    struct SlotOverride {
-        uint32_t color_rgb = 0;
-        std::string material;
-        std::string color_name;
-        std::string brand;
-        std::string spool_name;
-        int spoolman_id = 0;
-        float remaining_weight_g = -1;
-        float total_weight_g = -1;
-    };
-    std::unordered_map<int, SlotOverride> slot_overrides_;
-    std::unordered_map<int, SlotStatus> prev_slot_status_;
+    /// Layer a configured FilamentSlotOverride for `slot_index` over `slot`,
+    /// mutating `slot` in place. Override wins for every non-default field;
+    /// default sentinels (empty strings, spoolman_id 0, weights -1, color_rgb 0)
+    /// fall through to firmware-reported data. Callers must hold mutex_.
+    /// Called from handle_status_update AFTER firmware parse populates the slot
+    /// and AFTER check_hardware_event_clear, so the final SlotInfo visible via
+    /// get_slot_info reflects the override layer.
+    void apply_overrides(SlotInfo& slot, int slot_index);
 
-    // Slot override persistence (Moonraker DB + local JSON fallback)
-    void save_slot_overrides();
-    void load_slot_overrides();
-    void save_slot_overrides_json() const;
-    bool load_slot_overrides_json();
-    nlohmann::json slot_overrides_to_json() const;
-    void apply_slot_overrides_json(const nlohmann::json& data);
+    /// Hardware-event detection: CFS exposes per-slot RFID material data. The
+    /// composite (material_type + color_value) raw RFID strings form a
+    /// per-slot fingerprint. When the fingerprint changes between parses, the
+    /// physical spool was swapped — clear the stored override so stale
+    /// spool_name / spoolman_id / remaining_weight_g from the previous user
+    /// don't bleed onto the new spool.
+    ///
+    /// Empty observed_uid (no tag / sentinel `-1` / `None`) is treated as
+    /// "no signal" — never updates the baseline and never clears. First
+    /// observation for a slot establishes the baseline and NEVER fires a
+    /// clear. Must be called BEFORE apply_overrides so the clear's field
+    /// reset isn't masked by a stale override layer.
+    ///
+    /// CFS-specific field policy on clear: CFS firmware populates
+    /// brand/color_name/total_weight_g from its material database via RFID
+    /// lookup, so those fields are NOT zeroed here — the parse has already
+    /// written firmware-truth for the newly-inserted spool. Only strictly
+    /// override-exclusive fields (spool_name / spoolman_id /
+    /// spoolman_vendor_id / remaining_weight_g) are reset.
+    void check_hardware_event_clear(SlotInfo& slot, int slot_index,
+                                    const std::string& observed_uid);
+
+    // Persistent per-slot overrides. Writers (on_started bulk load,
+    // set_slot_info persist path, check_hardware_event_clear) all hold
+    // mutex_. Reads happen inside apply_overrides, which is also called
+    // under mutex_.
+    std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
+    std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
+
+    // Per-slot last-observed RFID fingerprint (material_type + "|" +
+    // color_value, using the raw pre-strip_code strings). Empty = first
+    // observation not yet made (or only sentinel / no-tag values seen so
+    // far). All access under mutex_.
+    std::unordered_map<int, std::string> last_rfid_uid_;
 };
 
 } // namespace helix::printer
