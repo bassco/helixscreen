@@ -1384,15 +1384,23 @@ void AmsBackendAce::check_hardware_event_clear(SlotInfo& slot, int slot_index,
 
     spdlog::info("[ACE] Slot {} insertion detected (prev={}, curr={}); clearing override",
                  slot_index, slot_status_to_string(prev), slot_status_to_string(curr));
-    overrides_.erase(ovr_it);
 
-    // Zero override-exclusive fields on the live SlotInfo so the cleared
-    // state is visible in the very next get_slot_info() read. For ACE,
-    // brand / spool_name / spoolman_* / weights are override-only (ACE
-    // firmware doesn't populate them). Color/material and color_name also
-    // come from the override for ACE — but the parse has just written the
-    // firmware-sourced color/material onto `slot`, so leaving those fields
-    // alone lets the new spool's firmware data surface immediately.
+    // Delegate erase + field reset + clear_async to the shared helper so
+    // hardware-event clears and user-initiated clears share one field-reset
+    // policy. Caller already holds mutex_.
+    (void)ovr_it;
+    clear_override_locked(slot_index, slot);
+}
+
+void AmsBackendAce::clear_override_locked(int slot_index, SlotInfo& slot) {
+    // Caller must hold mutex_. Erases the in-memory override, resets
+    // override-exclusive fields on the live SlotInfo so the cleared state
+    // is visible in the very next get_slot_info() read. ACE field policy:
+    // brand / spool_name / spoolman_* / weights / color_name are override-only
+    // (firmware doesn't populate them). Color and material come from the
+    // parse and are left alone so the new spool's firmware data surfaces.
+    overrides_.erase(slot_index);
+
     slot.brand.clear();
     slot.spool_name.clear();
     slot.spoolman_id = 0;
@@ -1406,11 +1414,28 @@ void AmsBackendAce::check_hardware_event_clear(SlotInfo& slot, int slot_index,
         // this returns (MR tracker ~60s) and potentially after the backend
         // itself is gone. Same rationale as save_async.
         const std::string tag = backend_log_tag();
-        override_store_->clear_async(slot_index,
-            [tag, slot_index](bool ok, std::string err) {
+        override_store_->clear_async(
+            slot_index, [tag, slot_index](bool ok, std::string err) {
                 if (!ok) {
                     spdlog::warn("{} clear_async failed for slot {}: {}", tag, slot_index, err);
                 }
             });
     }
+}
+
+void AmsBackendAce::clear_slot_override(int slot_index) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto* slot = system_info_.units.empty() ? nullptr
+                                                : system_info_.units[0].get_slot(slot_index);
+        if (!slot) {
+            spdlog::warn("{} clear_slot_override: no slot entry for index {}", backend_log_tag(),
+                         slot_index);
+            return;
+        }
+        spdlog::info("{} Slot {} override cleared by user request", backend_log_tag(), slot_index);
+        clear_override_locked(slot_index, *slot);
+    }
+
+    emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
 }

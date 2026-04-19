@@ -868,3 +868,94 @@ TEST_CASE("ACE partial override only replaces specified fields",
     CHECK(info.spoolman_id == 0);            // default
     CHECK(info.remaining_weight_g == -1.0f); // default
 }
+
+// ============================================================================
+// Task 16: explicit clear_slot_override
+// ============================================================================
+
+TEST_CASE("ACE clear_slot_override erases in-memory override and MR DB entry",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task16_clear_slot_override");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed both halves of the override so the clear has something to remove
+    // at each layer (in-memory + Moonraker lane_data).
+    api.mock_set_db_value("lane_data", "lane1",
+                          json{{"vendor", "Polymaker"},
+                               {"spool_id", 42},
+                               {"material", "PLA"},
+                               {"color", "#FF5500"}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    ovr.total_weight_g = 1000.0f;
+    ovr.remaining_weight_g = 800.0f;
+    AceTestAccess::seed_override(backend, 0, ovr);
+
+    // Prime a parse so system_info_ has slots populated (otherwise
+    // clear_slot_override can't find the live SlotInfo to reset).
+    AceTestAccess::parse_ace(backend, make_ace_slot_payload("loaded", 0xFF5500, "PLA"));
+
+    {
+        auto info = backend.get_slot_info(0);
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spoolman_id == 42);
+    }
+    REQUIRE(AceTestAccess::get_override(backend, 0).has_value());
+    REQUIRE(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // User presses "Clear slot metadata". Override must disappear everywhere.
+    backend.clear_slot_override(0);
+
+    CHECK_FALSE(AceTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand.empty());
+    CHECK(info.spool_name.empty());
+    CHECK(info.spoolman_id == 0);
+    CHECK(info.spoolman_vendor_id == 0);
+    CHECK(info.remaining_weight_g < 0.0f);
+    CHECK(info.total_weight_g < 0.0f);
+    CHECK(info.color_name.empty());
+    // Firmware-sourced color/material flow through — clear only wipes
+    // override-exclusive fields for ACE.
+    CHECK(info.color_rgb == 0xFF5500u);
+    CHECK(info.material == "PLA");
+}
+
+TEST_CASE("ACE clear_slot_override is a no-op when no override is present",
+          "[ams][ace][filament_slot_override][slow]") {
+    AceTmpCacheDir tmp("task16_clear_slot_override_noop");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAce backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ace");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    AceTestAccess::inject_override_store(backend, std::move(store));
+
+    AceTestAccess::parse_ace(backend, make_ace_slot_payload("loaded", 0xAA55FF, "PETG"));
+
+    // No override staged. Should not crash, should not touch firmware state.
+    backend.clear_slot_override(0);
+
+    CHECK_FALSE(AceTestAccess::get_override(backend, 0).has_value());
+    auto info = backend.get_slot_info(0);
+    CHECK(info.color_rgb == 0xAA55FFu);
+    CHECK(info.material == "PETG");
+}

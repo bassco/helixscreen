@@ -1034,22 +1034,27 @@ void AmsBackendCfs::check_hardware_event_clear(SlotInfo& slot, int slot_index,
     spdlog::info("{} Slot {} RFID fingerprint changed {} -> {}, clearing override "
                  "(physical spool swap detected)",
                  backend_log_tag(), slot_index, old_uid, observed_uid);
-    overrides_.erase(ovr_it);
 
-    // Zero STRICTLY override-exclusive fields on the live SlotInfo so the
-    // cleared state is visible in the very next get_slot_info() read.
-    // apply_overrides runs right after and is a no-op for this slot —
-    // without this reset, stale spool_name / spoolman_* / remaining_weight_g
-    // would persist until a new override is written.
+    // Delegate erase + field reset + clear_async to the shared helper so
+    // hardware-event clears and user-initiated clears share one field-reset
+    // policy. Caller already holds mutex_.
+    (void)ovr_it;
+    clear_override_locked(slot_index, slot);
+}
+
+void AmsBackendCfs::clear_override_locked(int slot_index, SlotInfo& slot) {
+    // Caller must hold mutex_. Erases the in-memory override, resets STRICTLY
+    // override-exclusive fields on the live SlotInfo so the cleared state is
+    // visible in the very next get_slot_info() read (apply_overrides is a
+    // no-op for this slot afterwards).
     //
-    // CFS difference from IFS / ACE: the RFID material database populates
-    // brand, color_name, and total_weight_g directly from firmware (via
-    // CfsMaterialInfo and the material_type code lookup in parse_box_status).
-    // The parse has already written those firmware-truth values to `slot`
-    // THIS pass; we must NOT re-zero them here or we'd wipe the new spool's
-    // firmware-sourced metadata. The override's brand/color_name/total_weight_g
-    // copies are gone with the override itself; firmware's copy stays.
-    // Matches Snapmaker's field policy.
+    // CFS field policy: brand / color_name / total_weight_g come from the
+    // RFID material database (CfsMaterialInfo lookup in parse_box_status) —
+    // the parse has already written firmware truth for the current spool, so
+    // we must NOT re-zero those fields. The override's copies disappear with
+    // the erase; firmware's copies stay. Matches Snapmaker policy.
+    overrides_.erase(slot_index);
+
     slot.spool_name.clear();
     slot.spoolman_id = 0;
     slot.spoolman_vendor_id = 0;
@@ -1060,13 +1065,29 @@ void AmsBackendCfs::check_hardware_event_clear(SlotInfo& slot, int slot_index,
         // this returns (MR tracker ~60s) and potentially after the backend
         // itself is gone. Same rationale as save_async.
         const std::string tag = backend_log_tag();
-        override_store_->clear_async(slot_index,
-            [tag, slot_index](bool ok, std::string err) {
+        override_store_->clear_async(
+            slot_index, [tag, slot_index](bool ok, std::string err) {
                 if (!ok) {
                     spdlog::warn("{} clear_async failed for slot {}: {}", tag, slot_index, err);
                 }
             });
     }
+}
+
+void AmsBackendCfs::clear_slot_override(int slot_index) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto* slot = system_info_.get_slot_global(slot_index);
+        if (!slot) {
+            spdlog::warn("{} clear_slot_override: no slot entry for global index {}",
+                         backend_log_tag(), slot_index);
+            return;
+        }
+        spdlog::info("{} Slot {} override cleared by user request", backend_log_tag(), slot_index);
+        clear_override_locked(slot_index, *slot);
+    }
+
+    emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
 }
 
 } // namespace helix::printer

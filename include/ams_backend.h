@@ -507,6 +507,26 @@ class AmsBackend {
      */
     virtual AmsError set_tool_mapping(int tool_number, int slot_index) = 0;
 
+    /**
+     * @brief Erase the user-provided override for a slot.
+     *
+     * Removes the FilamentSlotOverride for @p slot_index from both the
+     * in-memory map and the persisted FilamentSlotOverrideStore, then refreshes
+     * override-exclusive fields on the live SlotInfo so the cleared state is
+     * visible via get_slot_info() on the very next read.
+     *
+     * Default implementation is a no-op. Backends without FilamentSlotOverride
+     * integration (AFC, Happy Hare, Tool Changer, Mock) ignore the call.
+     *
+     * Safe to call from the UI thread. Backends lock their own mutex_ for the
+     * in-memory mutation and submit the store clear asynchronously.
+     *
+     * @param slot_index Slot to clear (0-based, global)
+     */
+    virtual void clear_slot_override(int slot_index) {
+        (void)slot_index;
+    }
+
     // ========================================================================
     // Bypass Mode Operations
     // ========================================================================

@@ -561,15 +561,25 @@ void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t obse
     spdlog::info("{} Slot {} firmware color changed #{:06X} -> #{:06X}, "
                  "clearing override (physical spool swap detected)",
                  backend_log_tag(), slot_index, old_color, observed_color);
-    overrides_.erase(ovr_it);
 
-    // Reset override-exclusive fields on the live SlotInfo so the cleared
-    // state is visible in the very next get_slot_info() read. apply_overrides
-    // runs right after this and is now a no-op for this slot — without the
-    // reset here, stale brand / spool_name / spoolman_* / weights / color_name
-    // would persist on entry->info until a new override is written. Firmware-
-    // sourced fields (color_rgb, material, mapped_tool, status) are left
-    // alone; update_slot_from_state has already refreshed them.
+    // Delegate the erase + field reset + clear_async to the public method so
+    // explicit user-initiated clears and hardware-event clears share one
+    // field-reset policy. Caller holds mutex_ and the public method is
+    // designed to be called with mutex_ held (it locks internally but the
+    // lock is reentrant-free by contract — the helper below runs the locked
+    // work inline when the caller already owns the lock).
+    clear_override_locked(slot_index, slot);
+}
+
+void AmsBackendAd5xIfs::clear_override_locked(int slot_index, SlotInfo& slot) {
+    // Caller must hold mutex_. Erases the in-memory override, resets
+    // override-exclusive fields on the live SlotInfo (so the next
+    // get_slot_info sees cleared state — apply_overrides is a no-op for this
+    // slot after erase), and fires the async store delete. Firmware-sourced
+    // fields (color_rgb, material, mapped_tool, status) are left alone —
+    // update_slot_from_state has already refreshed them.
+    overrides_.erase(slot_index);
+
     slot.brand.clear();
     slot.spool_name.clear();
     slot.spoolman_id = 0;
@@ -584,14 +594,34 @@ void AmsBackendAd5xIfs::check_hardware_event_clear(int slot_index, uint32_t obse
         // after the backend itself may be gone. Same pattern as the
         // save_async site in set_slot_info().
         const std::string tag = backend_log_tag();
-        override_store_->clear_async(slot_index,
-            [tag, slot_index](bool ok, std::string err) {
+        override_store_->clear_async(
+            slot_index, [tag, slot_index](bool ok, std::string err) {
                 if (!ok) {
-                    spdlog::warn("{} clear_async failed for slot {}: {}",
-                                 tag, slot_index, err);
+                    spdlog::warn("{} clear_async failed for slot {}: {}", tag, slot_index, err);
                 }
             });
     }
+}
+
+void AmsBackendAd5xIfs::clear_slot_override(int slot_index) {
+    if (slot_index < 0 || slot_index >= NUM_PORTS) {
+        spdlog::warn("{} clear_slot_override: invalid slot {}", backend_log_tag(), slot_index);
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto* entry = slots_.get_mut(slot_index);
+        if (!entry) {
+            spdlog::warn("{} clear_slot_override: no slot entry for index {}", backend_log_tag(),
+                         slot_index);
+            return;
+        }
+        spdlog::info("{} Slot {} override cleared by user request", backend_log_tag(), slot_index);
+        clear_override_locked(slot_index, entry->info);
+    }
+
+    emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
 }
 
 // --- State queries ---

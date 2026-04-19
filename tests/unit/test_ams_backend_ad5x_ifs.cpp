@@ -2797,3 +2797,116 @@ TEST_CASE("AD5X IFS empty firmware color does not update the baseline",
     REQUIRE(staged.has_value());
     CHECK(staged->brand == "Polymaker");
 }
+
+// ------------------------------------------------------------------
+// Task 16: explicit clear_slot_override — user pressed "Clear slot metadata".
+// Verifies the same clear pathway used by hardware-event detection is
+// reachable through the public API with no swap signal required.
+// ------------------------------------------------------------------
+
+TEST_CASE("AD5X IFS clear_slot_override erases in-memory override and MR DB entry",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    Ad5xIfsTmpCacheDir tmp("task16_clear_slot_override");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed both halves of the override — lane_data on the Moonraker side
+    // and the in-memory map on the backend side — so the clear has something
+    // to remove at each layer.
+    api.mock_set_db_value("lane_data", "lane1",
+                          nlohmann::json{{"vendor", "Polymaker"},
+                                         {"spool_id", 42},
+                                         {"material", "PLA"},
+                                         {"color", "#FF5500"}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Orange";
+    ovr.spoolman_id = 42;
+    ovr.material = "PLA";
+    ovr.color_rgb = 0xFF5500;
+    ovr.total_weight_g = 1000.0f;
+    ovr.remaining_weight_g = 750.0f;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Prime with a firmware parse so slots_ has an entry to reset. This also
+    // establishes the last_firmware_color_ baseline — unrelated to the
+    // clear_slot_override path but good sanity for the test.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+
+    {
+        auto info = backend.get_slot_info(0);
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spoolman_id == 42);
+        CHECK(info.remaining_weight_g == 750.0f);
+    }
+    REQUIRE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    REQUIRE(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // User presses "Clear slot metadata". Override MUST be removed from both
+    // layers — no swap signal needed.
+    backend.clear_slot_override(0);
+
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand.empty());
+    CHECK(info.spool_name.empty());
+    CHECK(info.spoolman_id == 0);
+    CHECK(info.spoolman_vendor_id == 0);
+    CHECK(info.remaining_weight_g < 0.0f); // -1.0 sentinel ("unknown")
+    CHECK(info.total_weight_g < 0.0f);
+    CHECK(info.color_name.empty());
+    // Firmware-sourced color flows through — clear only touches override-exclusive fields.
+    CHECK(info.color_rgb == 0xFF5500u);
+    CHECK(info.material == "PLA");
+}
+
+TEST_CASE("AD5X IFS clear_slot_override is safe when no override is present",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    Ad5xIfsTmpCacheDir tmp("task16_clear_slot_override_noop");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#00FF00", "ffmType1": "PETG"}
+    })");
+
+    // No override staged. Calling clear must not crash and must leave
+    // firmware-sourced fields intact.
+    backend.clear_slot_override(0);
+
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    auto info = backend.get_slot_info(0);
+    CHECK(info.color_rgb == 0x00FF00u);
+    CHECK(info.material == "PETG");
+}
+
+TEST_CASE("AD5X IFS clear_slot_override rejects out-of-range indices",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    // Should not crash or touch anything — validate_slot_index rejects.
+    backend.clear_slot_override(-1);
+    backend.clear_slot_override(AmsBackendAd5xIfs::NUM_PORTS);
+    backend.clear_slot_override(999);
+    SUCCEED();
+}

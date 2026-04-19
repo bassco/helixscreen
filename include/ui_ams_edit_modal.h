@@ -177,8 +177,10 @@ class AmsEditModal : public Modal {
     void handle_manual_entry();                  ///< Switch from picker to form
     void handle_change_spool();                  ///< Switch from form to picker
     void handle_unlink();                        ///< Clear spoolman_id from working slot
+    void handle_clear_metadata();                ///< Clear stored override via backend and reload
     void handle_picker_search(const char* text); ///< Filter picker list by search text
     void update_spoolman_button_state();         ///< Show/hide change/unlink buttons
+    void update_clear_metadata_button_state();   ///< Hide "Clear slot metadata" when no override present
 
     // === Save orchestration ===
     void fire_completion(bool saved); ///< Common exit path for save/cancel
@@ -229,6 +231,7 @@ class AmsEditModal : public Modal {
     static void on_spool_item_cb(lv_event_t* e);
     static void on_tool_changed_cb(lv_event_t* e);
     static void on_weight_changed_cb(lv_event_t* e);
+    static void on_clear_metadata_cb(lv_event_t* e);
 
     /**
      * @brief Find AmsEditModal instance from event target

@@ -92,6 +92,16 @@ class AmsBackendSnapmaker : public AmsSubscriptionBackend {
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
+    // Explicit user-initiated override clear (e.g. "Clear slot metadata" button
+    // in the AMS edit modal). Erases overrides_[slot_index], resets the
+    // override-exclusive fields (spool_name, spoolman_*, remaining_weight_g) on
+    // the live SlotInfo, and fires override_store_->clear_async. Brand /
+    // color_name / total_weight_g are preserved — on Snapmaker those fields
+    // are populated from the RFID tag, so they reflect firmware truth.
+    // The hardware-event detector calls this internally once a CARD_UID change
+    // confirms a physical swap.
+    void clear_slot_override(int slot_index) override;
+
     // Bypass (not applicable for tool changers)
     AmsError enable_bypass() override;
     AmsError disable_bypass() override;
@@ -140,6 +150,14 @@ class AmsBackendSnapmaker : public AmsSubscriptionBackend {
     /// stays at whatever firmware last reported and user edits don't race.
     void check_hardware_event_clear(SlotInfo& slot, int slot_index,
                                     const std::string& observed_uid);
+
+    // Shared helper used by every override-clear path (hardware event and
+    // explicit user request). Caller must hold mutex_. Erases
+    // overrides_[slot_index], resets strictly override-exclusive fields on
+    // the provided SlotInfo (spool_name, spoolman_*, remaining_weight_g), and
+    // fires clear_async. Brand / color_name / total_weight_g are preserved —
+    // firmware populates them from the RFID tag.
+    void clear_override_locked(int slot_index, SlotInfo& slot);
 
     // Persistent per-slot overrides. Writers (on_started bulk load,
     // set_slot_info persist path, check_hardware_event_clear) all hold mutex_.

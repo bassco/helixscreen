@@ -113,6 +113,14 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
+    // Explicit user-initiated override clear (e.g. "Clear slot metadata" button
+    // in the AMS edit modal). Erases overrides_[slot_index], resets the
+    // override-exclusive fields on the live SlotInfo, and kicks off
+    // override_store_->clear_async so the Moonraker lane_data entry is deleted.
+    // The hardware-event detector calls this internally once it has confirmed
+    // a physical spool swap, so the field-reset policy stays in one place.
+    void clear_slot_override(int slot_index) override;
+
     AmsError enable_bypass() override;
     AmsError disable_bypass() override;
 
@@ -200,6 +208,12 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // `observed_color == 0` is treated as "no color reading" (empty slot,
     // unread, transient) and is ignored — it must not update the baseline.
     void check_hardware_event_clear(int slot_index, uint32_t observed_color, SlotInfo& slot);
+    // Shared helper for every override-clear path (hardware event and explicit
+    // user request). Caller must hold mutex_. Erases overrides_[slot_index],
+    // resets override-exclusive fields on the provided SlotInfo (brand,
+    // spool_name, spoolman_*, weights, color_name), and fires clear_async on
+    // the override store. Firmware-sourced fields are left untouched.
+    void clear_override_locked(int slot_index, SlotInfo& slot);
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
     void register_zcolor_listener();

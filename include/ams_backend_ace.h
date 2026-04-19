@@ -93,6 +93,16 @@ class AmsBackendAce : public AmsSubscriptionBackend {
     // ========================================================================
 
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
+
+    // Explicit user-initiated override clear (e.g. "Clear slot metadata" button
+    // in the AMS edit modal). Erases overrides_[slot_index], resets the
+    // override-exclusive fields on the live SlotInfo, and fires
+    // override_store_->clear_async. ACE firmware doesn't populate brand /
+    // spool_name / spoolman_* / weights / color_name — those are override-only,
+    // so they're all zeroed. Color/material come from firmware so they stay.
+    // The hardware-event detector calls this internally once an EMPTY -> present
+    // transition confirms a physical swap.
+    void clear_slot_override(int slot_index) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
     // ACE has fixed 1:1 mapping (tools ARE slots), not configurable
@@ -253,6 +263,14 @@ class AmsBackendAce : public AmsSubscriptionBackend {
     // ACE's single signal is too coarse to distinguish the two cases.
     void check_hardware_event_clear(SlotInfo& slot, int slot_index,
                                     SlotStatus previous_status, SlotStatus current_status);
+
+    // Shared helper used by every override-clear path (hardware event and
+    // explicit user request). Caller must hold mutex_. Erases
+    // overrides_[slot_index], resets override-exclusive fields on the
+    // provided SlotInfo (brand, spool_name, spoolman_*, weights, color_name),
+    // and fires clear_async. Color/material stay untouched — firmware owns
+    // them for ACE and the parse has just refreshed them.
+    void clear_override_locked(int slot_index, SlotInfo& slot);
 
     // User-provided per-slot metadata (brand, spool name, spoolman IDs,
     // remaining weight, etc.) layered over firmware-reported state.
