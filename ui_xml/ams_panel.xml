@@ -4,7 +4,49 @@
 <component>
   <!-- Component-local constants -->
   <consts>
-    <!-- Right column 28% with 180px cap; left column takes remaining space via flex_grow -->
+    <!-- Right column width. ~40% narrower at MICRO/TINY so the left
+         content (slots + flow graphic) gets more horizontal room. -->
+    <px name="ams_right_col_w_micro" value="145"/>
+    <px name="ams_right_col_w_tiny" value="145"/>
+    <px name="ams_right_col_w_small" value="200"/>
+    <px name="ams_right_col_w_medium" value="240"/>
+    <px name="ams_right_col_w_large" value="240"/>
+    <!-- AMS slot spool widget size. Previously `space_lg * 4` which collapsed
+         to 32px at MICRO/TINY (too small given available space). -->
+    <px name="ams_slot_spool_size_micro" value="48"/>
+    <px name="ams_slot_spool_size_tiny" value="48"/>
+    <px name="ams_slot_spool_size_small" value="48"/>
+    <px name="ams_slot_spool_size_medium" value="64"/>
+    <px name="ams_slot_spool_size_large" value="80"/>
+    <!-- Badge border thickness — thinner at MICRO/TINY to reclaim pixels on the
+         already-small spool. -->
+    <px name="ams_slot_badge_border_w_micro" value="1"/>
+    <px name="ams_slot_badge_border_w_tiny" value="1"/>
+    <px name="ams_slot_badge_border_w_small" value="2"/>
+    <px name="ams_slot_badge_border_w_medium" value="2"/>
+    <px name="ams_slot_badge_border_w_large" value="2"/>
+    <!-- Badge internal padding + overall dimensions. Tight at MICRO/TINY so the
+         single-digit slot number / tool label isn't swimming in whitespace. -->
+    <px name="ams_slot_badge_pad_h_micro" value="2"/>
+    <px name="ams_slot_badge_pad_h_tiny" value="2"/>
+    <px name="ams_slot_badge_pad_h_small" value="4"/>
+    <px name="ams_slot_badge_pad_h_medium" value="4"/>
+    <px name="ams_slot_badge_pad_h_large" value="4"/>
+    <px name="ams_slot_status_badge_size_micro" value="16"/>
+    <px name="ams_slot_status_badge_size_tiny" value="16"/>
+    <px name="ams_slot_status_badge_size_small" value="20"/>
+    <px name="ams_slot_status_badge_size_medium" value="20"/>
+    <px name="ams_slot_status_badge_size_large" value="20"/>
+    <px name="ams_slot_tool_badge_h_micro" value="14"/>
+    <px name="ams_slot_tool_badge_h_tiny" value="14"/>
+    <px name="ams_slot_tool_badge_h_small" value="16"/>
+    <px name="ams_slot_tool_badge_h_medium" value="16"/>
+    <px name="ams_slot_tool_badge_h_large" value="16"/>
+    <px name="ams_slot_tool_badge_min_w_micro" value="18"/>
+    <px name="ams_slot_tool_badge_min_w_tiny" value="18"/>
+    <px name="ams_slot_tool_badge_min_w_small" value="22"/>
+    <px name="ams_slot_tool_badge_min_w_medium" value="22"/>
+    <px name="ams_slot_tool_badge_min_w_large" value="22"/>
   </consts>
   <!-- Overlay panel - right-aligned, row layout so right column spans full height -->
   <view name="ams_panel"
@@ -29,18 +71,28 @@
                 flex_flow="row" style_pad_gap="#space_xs">
           <event_cb trigger="clicked" callback="on_header_back_clicked"/>
           <icon src="back" size="lg" variant="text" clickable="false" event_bubble="true"/>
-          <!-- Title: "Multi-Filament:" -->
+          <!-- Title: "Multi-Filament" (colon lives with the backend suffix so it
+               can be hidden together at MICRO/TINY) -->
           <text_heading name="header_title"
-                        text="Multi-Filament:" translation_tag="Multi-Filament:"
+                        text="Multi-Filament" translation_tag="Multi-Filament"
                         text_transform="uppercase" long_mode="dots" style_text_align="left"
                         clickable="false" event_bubble="true" scrollable="false"/>
-          <!-- System logo (bound to ams_system_logo subject) -->
-          <lv_image name="system_logo" width="20" height="20"
-                    bind_src="ams_system_logo" inner_align="contain" style_pad_left="#space_xs"
-                    clickable="false" event_bubble="true"/>
-          <!-- System name (bound to ams_system_name subject) -->
-          <text_heading name="system_name_label" bind_text="ams_system_name"
-                        text_transform="uppercase" long_mode="dots" clickable="false" event_bubble="true" scrollable="false"/>
+          <!-- Backend suffix (":" + logo + name) — hidden at MICRO/TINY where
+               horizontal room is tight. -->
+          <lv_obj name="header_backend_suffix"
+                  width="content" height="content" style_pad_all="0"
+                  flex_flow="row" style_flex_cross_place="center" style_pad_gap="#space_xs"
+                  scrollable="false" clickable="false" event_bubble="true">
+            <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+            <text_heading text=":" clickable="false" event_bubble="true" scrollable="false"/>
+            <!-- System logo (bound to ams_system_logo subject) -->
+            <lv_image name="system_logo" width="20" height="20"
+                      bind_src="ams_system_logo" inner_align="contain"
+                      clickable="false" event_bubble="true"/>
+            <!-- System name (bound to ams_system_name subject) -->
+            <text_heading name="system_name_label" bind_text="ams_system_name"
+                          text_transform="uppercase" long_mode="dots" clickable="false" event_bubble="true" scrollable="false"/>
+          </lv_obj>
         </lv_obj>
       </lv_obj>
       <!-- Left column content (unit visualization + path canvas) -->
@@ -110,7 +162,7 @@
     </lv_obj>
     <!-- Right column (status + action buttons) - spans full panel height -->
     <lv_obj name="right_column"
-            height="100%" width="240" style_pad_all="#space_sm" style_pad_gap="#space_sm" flex_flow="column"
+            height="100%" width="#ams_right_col_w" style_pad_all="#space_sm" style_pad_gap="#space_sm" flex_flow="column"
             style_flex_main_place="start" style_flex_cross_place="start" scrollable="false">
       <bind_state_if_not_eq subject="nav_buttons_enabled" state="disabled" ref_value="1"/>
       <ams_sidebar name="ams_operation_sidebar"/>

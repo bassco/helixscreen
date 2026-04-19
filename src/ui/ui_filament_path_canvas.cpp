@@ -2394,8 +2394,10 @@ static void filament_path_draw_cb(lv_event_t* e) {
 
             int32_t font_h = lv_font_get_line_height(data->label_font);
             int32_t label_half_w = width / 8;
-            // Place below spool: spool is centered on bypass_merge_y, ~sensor_r*4 tall
-            int32_t label_top = bypass_merge_y + sensor_r * 4;
+            // Place just below the merge sensor dot — close to the horizontal
+            // bypass line, not floated down next to the spool. Held slightly
+            // tighter to the sensor so the gap to the spool reads cleanly.
+            int32_t label_top = bypass_merge_y + sensor_r * 2;
             lv_area_t label_area = {bypass_x - label_half_w, label_top, bypass_x + label_half_w,
                                     label_top + font_h};
             lv_draw_label(layer, &label_dsc, &label_area);

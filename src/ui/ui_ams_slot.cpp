@@ -609,9 +609,13 @@ static void create_spool_visualization(AmsSlotData* data) {
     // Check config for visualization style
     data->use_3d_style = is_3d_spool_style();
 
-    // Spool size adapts to available space - scales with screen size
-    int32_t space_lg = theme_manager_get_spacing("space_lg");
-    int32_t spool_size = (space_lg * 4); // Responsive: 64px at 16px, 80px at 20px
+    // Spool size is a dedicated responsive token (see ams_panel.xml consts).
+    // Previously derived from `space_lg * 4` which gave only 32px at MICRO/TINY.
+    int32_t spool_size = theme_manager_get_spacing("ams_slot_spool_size");
+    if (spool_size <= 0) {
+        // Fallback for non-ams contexts where the token isn't registered
+        spool_size = theme_manager_get_spacing("space_lg") * 4;
+    }
 
     // Update spool_container size to match responsive sizing
     int32_t container_size = spool_size + 8; // Extra room for badge

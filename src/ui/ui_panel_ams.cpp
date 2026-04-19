@@ -791,9 +791,12 @@ void AmsPanel::setup_bypass_spool() {
     int32_t canvas_x = lv_obj_get_x(path_canvas_);
     int32_t canvas_y = lv_obj_get_y(path_canvas_);
 
-    // Match the path canvas bypass ratios — spool aligns with bypass merge sensor
+    // Match the path canvas bypass ratios — spool aligns with bypass merge sensor.
+    // These MUST track ui_filament_path_canvas.cpp's BYPASS_X_RATIO / BYPASS_MERGE_Y_RATIO
+    // constants — they had drifted (spool was at 0.44 while the line draws at 0.58),
+    // so the spool floated noticeably above the bypass tube.
     static constexpr float BYPASS_X_RATIO = 0.85f;
-    static constexpr float BYPASS_MERGE_Y_RATIO = 0.44f;
+    static constexpr float BYPASS_MERGE_Y_RATIO = 0.9f;
     int32_t bypass_x = canvas_x + (int32_t)(canvas_w * BYPASS_X_RATIO);
     int32_t bypass_merge_y = canvas_y + (int32_t)(canvas_h * BYPASS_MERGE_Y_RATIO);
 
