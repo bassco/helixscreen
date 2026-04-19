@@ -113,6 +113,15 @@ void write_mock_crash_file(const std::string& crash_file_path);
 void register_callback_tag_ptr(volatile const char* const* tag_ptr);
 
 /**
+ * @brief Register a pointer to the last-completed callback tag
+ *
+ * Lets the signal handler emit a `queue_prev:` line when the crash happens
+ * AFTER a queued callback finished — useful for pinning heap corruption
+ * detected on the next main-thread malloc.
+ */
+void register_previous_tag_ptr(volatile const char* const* tag_ptr);
+
+/**
  * @brief Record the LVGL event currently being dispatched
  *
  * Maintains a volatile record of the innermost lv_obj_t under dispatch.

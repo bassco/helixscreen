@@ -40,6 +40,7 @@
 #include "runtime_config.h"
 #include "static_panel_registry.h"
 #include "subject_managed_panel.h"
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 #include "wizard_config_paths.h"
 #include "wizard_step_logic.h"
@@ -770,9 +771,14 @@ static void ui_wizard_load_screen(int step) {
     // connection → printer-identify transition).
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        crash_handler::breadcrumb::note("wiz", "cleanup_begin",
+                                        static_cast<long>(current_screen_step));
         ui_wizard_cleanup_current_screen();
+        crash_handler::breadcrumb::note("wiz", "drain_begin", static_cast<long>(step));
         helix::ui::UpdateQueue::instance().drain();
+        crash_handler::breadcrumb::note("wiz", "clean_begin", static_cast<long>(step));
         lv_obj_clean(content);
+        crash_handler::breadcrumb::note("wiz", "clean_end", static_cast<long>(step));
     }
     spdlog::debug("[Wizard] Cleared wizard_content container");
 
@@ -790,6 +796,7 @@ static void ui_wizard_load_screen(int step) {
     // Create appropriate screen based on step
     // Note: Step-specific initialization remains in switch because each step
     // has unique logic (WiFi needs init_wifi_manager, etc.)
+    crash_handler::breadcrumb::note("wiz", "create_begin", static_cast<long>(step));
     switch (step) {
     case 0: // Touch Calibration
         spdlog::debug("[Wizard] Creating touch calibration screen");
@@ -918,6 +925,7 @@ static void ui_wizard_load_screen(int step) {
         spdlog::warn("[Wizard] Invalid step {}, ignoring", step);
         break;
     }
+    crash_handler::breadcrumb::note("wiz", "create_end", static_cast<long>(step));
 
     // Update current screen step tracking
     current_screen_step = step;

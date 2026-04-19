@@ -92,6 +92,9 @@ static uintptr_t s_text_end = 0;
 /// Pointer to the UpdateQueue's current callback tag (registered at init)
 static volatile const char* const* s_callback_tag_ptr = nullptr;
 
+/// Pointer to the UpdateQueue's last-completed callback tag (registered at init)
+static volatile const char* const* s_previous_tag_ptr = nullptr;
+
 // =============================================================================
 // Heap snapshot cache
 // =============================================================================
@@ -687,6 +690,14 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
             safe_write(fd, "\n");
         }
     }
+    if (s_previous_tag_ptr) {
+        const char* prev = const_cast<const char*>(*s_previous_tag_ptr);
+        if (prev) {
+            safe_write(fd, "queue_prev:");
+            safe_write(fd, prev);
+            safe_write(fd, "\n");
+        }
+    }
 
     // Cached heap snapshot (refreshed from main loop; reads here are signal-safe).
     // Acquire pairs with the release-store of ts_ms in refresh_heap_snapshot().
@@ -987,6 +998,10 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
 
 void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_ptr) {
     s_callback_tag_ptr = tag_ptr;
+}
+
+void crash_handler::register_previous_tag_ptr(volatile const char* const* tag_ptr) {
+    s_previous_tag_ptr = tag_ptr;
 }
 
 void crash_handler::set_current_event(const void* target, const void* original_target,

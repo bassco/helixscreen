@@ -114,6 +114,10 @@ class UpdateQueue {
         // Register the current callback tag pointer with the crash handler
         // so crashes inside process_pending() identify which callback was running
         crash_handler::register_callback_tag_ptr(&current_tag_);
+        // Also register the last-completed tag so post-callback crashes
+        // (heap corruption detonating on the next main-thread malloc) name
+        // the callback that most recently ran.
+        crash_handler::register_previous_tag_ptr(&previous_tag_);
 
         initialized_ = true;
         spdlog::debug("[UpdateQueue] Initialized - timer created for queue drain");
@@ -327,6 +331,11 @@ class UpdateQueue {
             } catch (...) {
                 spdlog::error("[UpdateQueue] Unknown exception in queued callback");
             }
+            // Retain previous tag so a post-callback crash (heap corruption
+            // detonating on the next main-thread malloc) still names the
+            // callback that most recently ran. current_tag_ signals "inside"
+            // vs "after" via the xor on both pointers.
+            if (current_tag_) previous_tag_ = current_tag_;
             current_tag_ = nullptr;
             to_process.pop();
         }
@@ -345,6 +354,11 @@ class UpdateQueue {
     /// Volatile ensures the signal handler sees the current value, not a cached one.
     static inline volatile const char* current_tag_ = nullptr;
 
+    /// Tag of the most-recently-completed callback. Useful when the crashing
+    /// instruction ran AFTER process_pending() returned but was corrupted by
+    /// a prior callback — current_tag_ is null but this points at the suspect.
+    static inline volatile const char* previous_tag_ = nullptr;
+
   public:
     /**
      * @brief Get the tag of the currently executing callback
@@ -354,6 +368,18 @@ class UpdateQueue {
      */
     static const char* current_callback_tag() {
         return const_cast<const char*>(current_tag_);
+    }
+
+    /**
+     * @brief Get the tag of the most-recently-completed callback.
+     *
+     * Non-null once any callback has finished. Read by the crash handler
+     * when current_callback_tag() is null — helps pin crashes that detonate
+     * on the next main-thread malloc after a corruption-causing callback
+     * has already returned.
+     */
+    static const char* previous_callback_tag() {
+        return const_cast<const char*>(previous_tag_);
     }
 };
 

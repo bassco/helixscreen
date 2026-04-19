@@ -11,6 +11,7 @@
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
+#include "system/crash_handler.h"
 #include "system/telemetry_manager.h"
 #include "system/update_checker.h"
 
@@ -135,13 +136,16 @@ std::string SystemSettingsManager::get_language() const {
 void SystemSettingsManager::set_language(const std::string& lang) {
     int index = language_code_to_index(lang);
     spdlog::info("[SystemSettingsManager] set_language({}) -> index {}", lang, index);
+    crash_handler::breadcrumb::note("lang", lang.c_str(), static_cast<long>(index));
 
     // 1. Update subject (UI reacts)
     lv_subject_set_int(&language_subject_, index);
 
     // 2. Call LVGL translation API for hot-reload
     // This sends LV_EVENT_TRANSLATION_LANGUAGE_CHANGED to all widgets
+    crash_handler::breadcrumb::note("lang", "lv_translation_begin");
     lv_translation_set_language(lang.c_str());
+    crash_handler::breadcrumb::note("lang", "lv_translation_end");
 
     // Load/unload CJK runtime fonts based on locale
     helix::system::CjkFontManager::instance().on_language_changed(lang);
@@ -159,6 +163,7 @@ void SystemSettingsManager::set_language(const std::string& lang) {
     Config* config = Config::get_instance();
     config->set_language(lang);
     config->save();
+    crash_handler::breadcrumb::note("lang", "set_end", static_cast<long>(index));
 }
 
 void SystemSettingsManager::set_language_by_index(int index) {
