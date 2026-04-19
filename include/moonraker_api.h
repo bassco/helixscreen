@@ -510,6 +510,11 @@ class MoonrakerAPI : public IMoonrakerAPI {
                             const json& value, std::function<void()> on_success = nullptr,
                             ErrorCallback on_error = nullptr) override;
 
+    /// Get all keys in a namespace
+    void database_get_namespace(const std::string& namespace_name,
+                                std::function<void(const json&)> on_success,
+                                ErrorCallback on_error = nullptr) override;
+
     // ========================================================================
     // Internal Access
     // ========================================================================

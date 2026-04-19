@@ -249,3 +249,24 @@ void MoonrakerAPI::database_post_item(const std::string& namespace_name, const s
                 on_error(err);
         });
 }
+
+void MoonrakerAPI::database_get_namespace(const std::string& namespace_name,
+                                          std::function<void(const json&)> on_success,
+                                          ErrorCallback on_error) {
+    // Moonraker's server.database.get_item accepts just a namespace (no key)
+    // and returns the full namespace contents as a JSON object.
+    json params = {{"namespace", namespace_name}};
+    client_.send_jsonrpc(
+        "server.database.get_item", params,
+        [on_success](const json& result) {
+            if (on_success) {
+                on_success(result.value("value", json::object()));
+            }
+        },
+        [on_error](const MoonrakerError& err) {
+            if (on_error)
+                on_error(err);
+        },
+        0,     // timeout_ms: use default
+        true); // silent: suppress RPC_ERROR toast
+}

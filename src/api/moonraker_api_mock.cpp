@@ -184,6 +184,23 @@ void MoonrakerAPIMock::database_post_item(const std::string& namespace_name, con
     }
 }
 
+void MoonrakerAPIMock::database_get_namespace(const std::string& namespace_name,
+                                              std::function<void(const json&)> on_success,
+                                              ErrorCallback /*on_error*/) {
+    // Collect all entries whose mock key starts with "<namespace_name>:" into
+    // a single JSON object keyed by the portion after the colon.
+    nlohmann::json result = nlohmann::json::object();
+    const std::string prefix = namespace_name + ":";
+    for (const auto& [db_key, value] : mock_db_) {
+        if (db_key.rfind(prefix, 0) == 0) {
+            result[db_key.substr(prefix.size())] = value;
+        }
+    }
+    if (on_success) {
+        on_success(result);
+    }
+}
+
 // ============================================================================
 // Helix Plugin Method Overrides (mock)
 // ============================================================================

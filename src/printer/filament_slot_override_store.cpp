@@ -2,15 +2,23 @@
 #include "filament_slot_override.h"
 #include "filament_slot_override_store.h"
 #include "i_moonraker_api.h"
+#include "moonraker_error.h"
 
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
 #include <ctime>
 #include <iomanip>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <utility>
 
 namespace helix::ams {
 
-static std::string format_iso8601(std::chrono::system_clock::time_point tp) {
+namespace {
+
+std::string format_iso8601(std::chrono::system_clock::time_point tp) {
     auto t = std::chrono::system_clock::to_time_t(tp);
     std::tm tm{};
     gmtime_r(&t, &tm);
@@ -19,13 +27,89 @@ static std::string format_iso8601(std::chrono::system_clock::time_point tp) {
     return os.str();
 }
 
-static std::chrono::system_clock::time_point parse_iso8601(const std::string& s) {
+std::chrono::system_clock::time_point parse_iso8601(const std::string& s) {
     std::tm tm{};
     std::istringstream is(s);
     is >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
     if (is.fail()) return {};
     return std::chrono::system_clock::from_time_t(timegm(&tm));
 }
+
+// Convert FilamentSlotOverride + slot_index to the AFC-shaped JSON Orca expects,
+// plus our extension fields (prefixed comment fields are HelixScreen-only, silently
+// ignored by Orca 2.3.2 which only reads the top 5 required fields).
+nlohmann::json to_lane_data_record(int slot_index, const FilamentSlotOverride& o) {
+    nlohmann::json j;
+    j["lane"] = std::to_string(slot_index); // REQUIRED by Orca
+    if (o.color_rgb != 0) {
+        char buf[8];
+        std::snprintf(buf, sizeof(buf), "#%06X", o.color_rgb);
+        j["color"] = buf;
+    }
+    if (!o.material.empty()) j["material"] = o.material;
+    if (!o.brand.empty()) j["vendor"] = o.brand;
+    if (o.spoolman_id > 0) j["spool_id"] = o.spoolman_id;
+    if (o.updated_at.time_since_epoch().count() > 0) {
+        j["scan_time"] = format_iso8601(o.updated_at);
+    }
+    // bed_temp, nozzle_temp deliberately omitted - unknown to HelixScreen today.
+    if (!o.spool_name.empty()) j["spool_name"] = o.spool_name;
+    if (o.spoolman_vendor_id > 0) j["spoolman_vendor_id"] = o.spoolman_vendor_id;
+    if (o.remaining_weight_g >= 0) j["remaining_weight_g"] = o.remaining_weight_g;
+    if (o.total_weight_g >= 0) j["total_weight_g"] = o.total_weight_g;
+    if (!o.color_name.empty()) j["color_name"] = o.color_name;
+    return j;
+}
+
+// Parse AFC-shaped record (+ our extensions) back into FilamentSlotOverride.
+// Returns (slot_index, override) where slot_index comes from the "lane" field
+// (which Orca requires). nullopt if the record is malformed (non-object or
+// missing/invalid "lane" field).
+std::optional<std::pair<int, FilamentSlotOverride>>
+from_lane_data_record(const nlohmann::json& j) {
+    if (!j.is_object() || !j.contains("lane")) return std::nullopt;
+    int slot_index = 0;
+    if (j["lane"].is_string()) {
+        try {
+            slot_index = std::stoi(j["lane"].get<std::string>());
+        } catch (...) {
+            return std::nullopt;
+        }
+    } else if (j["lane"].is_number_integer()) {
+        slot_index = j["lane"].get<int>();
+    } else {
+        return std::nullopt;
+    }
+
+    FilamentSlotOverride o;
+    if (j.contains("color") && j["color"].is_string()) {
+        std::string s = j["color"].get<std::string>();
+        if (!s.empty() && s[0] == '#') {
+            s = s.substr(1);
+        } else if (s.size() >= 2 && (s.substr(0, 2) == "0x" || s.substr(0, 2) == "0X")) {
+            s = s.substr(2);
+        }
+        try {
+            o.color_rgb = static_cast<uint32_t>(std::stoul(s, nullptr, 16));
+        } catch (...) {
+            // Leave color_rgb at default 0 on parse failure.
+        }
+    }
+    o.material = j.value("material", "");
+    o.brand = j.value("vendor", "");
+    o.spoolman_id = j.value("spool_id", 0);
+    if (j.contains("scan_time") && j["scan_time"].is_string()) {
+        o.updated_at = parse_iso8601(j["scan_time"].get<std::string>());
+    }
+    o.spool_name = j.value("spool_name", "");
+    o.spoolman_vendor_id = j.value("spoolman_vendor_id", 0);
+    o.remaining_weight_g = j.value("remaining_weight_g", -1.0f);
+    o.total_weight_g = j.value("total_weight_g", -1.0f);
+    o.color_name = j.value("color_name", "");
+    return std::make_pair(slot_index, o);
+}
+
+} // namespace
 
 nlohmann::json to_json(const FilamentSlotOverride& o) {
     return {
@@ -69,7 +153,47 @@ FilamentSlotOverrideStore::FilamentSlotOverrideStore(IMoonrakerAPI* api, std::st
     : api_(api), backend_id_(std::move(backend_id)) {}
 
 std::unordered_map<int, FilamentSlotOverride> FilamentSlotOverrideStore::load_blocking() {
-    return {};
+    std::unordered_map<int, FilamentSlotOverride> result;
+    if (!api_) return result;
+
+    std::mutex m;
+    std::condition_variable cv;
+    bool done = false;
+    bool got = false;
+    nlohmann::json received;
+
+    api_->database_get_namespace(
+        namespace_,
+        [&](const nlohmann::json& value) {
+            std::lock_guard<std::mutex> lk(m);
+            received = value;
+            got = true;
+            done = true;
+            cv.notify_one();
+        },
+        [&](const MoonrakerError&) {
+            std::lock_guard<std::mutex> lk(m);
+            done = true;
+            cv.notify_one();
+        });
+
+    {
+        std::unique_lock<std::mutex> lk(m);
+        cv.wait_for(lk, std::chrono::seconds(5), [&] { return done; });
+    }
+
+    if (!got || !received.is_object()) return result;
+
+    for (auto it = received.begin(); it != received.end(); ++it) {
+        const std::string& key = it.key();
+        // Only consider lane-prefixed keys (AFC convention). Ignore any
+        // unrelated data that may live in the lane_data namespace.
+        if (key.rfind("lane", 0) != 0) continue;
+        auto parsed = from_lane_data_record(it.value());
+        if (!parsed) continue;
+        result[parsed->first] = parsed->second;
+    }
+    return result;
 }
 
 void FilamentSlotOverrideStore::save_async(int /*slot_index*/,

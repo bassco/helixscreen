@@ -131,4 +131,10 @@ class IMoonrakerAPI {
                                     const json& value,
                                     std::function<void()> on_success = nullptr,
                                     ErrorCallback on_error = nullptr) = 0;
+
+    /// @brief Get all keys in a namespace. Moonraker returns a JSON object
+    ///        mapping key -> value. Empty object if namespace is empty/missing.
+    virtual void database_get_namespace(const std::string& namespace_name,
+                                        std::function<void(const json&)> on_success,
+                                        ErrorCallback on_error = nullptr) = 0;
 };

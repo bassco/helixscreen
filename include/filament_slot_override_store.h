@@ -30,9 +30,12 @@ class FilamentSlotOverrideStore {
   private:
     IMoonrakerAPI* api_;
     std::string backend_id_;
-    std::string namespace_ = "filament_slots";
-    std::string key() const {
-        return backend_id_ + ":slots";
+    // Adopts the AFC/OrcaSlicer lane_data Moonraker convention. Each slot is
+    // stored under key "laneN" where N is the 1-based slot index (lane1, lane2,
+    // ...). Slot index 0 in HelixScreen maps to "lane1" on disk.
+    std::string namespace_ = "lane_data";
+    static std::string lane_key(int slot_index) {
+        return "lane" + std::to_string(slot_index + 1);
     }
 };
 
