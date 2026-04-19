@@ -3,12 +3,16 @@
 #include "ams_backend_snapmaker.h"
 
 #include "ams_error.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
 #include "moonraker_api.h"
 #include "post_op_cooldown_manager.h"
 
 #include <spdlog/spdlog.h>
 
 #include <spdlog/fmt/fmt.h>
+
+#include <utility>
 
 // ============================================================================
 // Construction
@@ -49,6 +53,32 @@ AmsBackendSnapmaker::AmsBackendSnapmaker(MoonrakerAPI* api, helix::MoonrakerClie
     system_info_.total_slots = NUM_TOOLS;
 
     spdlog::debug("[AMS Snapmaker] Backend created with {} tools", NUM_TOOLS);
+}
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
+
+void AmsBackendSnapmaker::on_started() {
+    // Load persisted per-slot overrides (brand, spool name, spoolman IDs, etc.)
+    // from the Moonraker DB lane_data namespace BEFORE any status parse runs.
+    // AmsSubscriptionBackend::start() registers the WebSocket subscription
+    // before on_started(); a status notification could in principle fire on
+    // the libhv thread while we're still inside load_blocking(). Holding
+    // mutex_ only during the swap keeps the parse path's read of overrides_
+    // coherent without blocking it during the 5s DB round-trip.
+    if (!api_)
+        return;
+
+    override_store_ = std::make_unique<helix::ams::FilamentSlotOverrideStore>(api_, "snapmaker");
+    auto loaded = override_store_->load_blocking();
+    const auto loaded_count = loaded.size();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        overrides_ = std::move(loaded);
+    }
+    spdlog::info("{} Loaded {} slot overrides from filament_slot store", backend_log_tag(),
+                 loaded_count);
 }
 
 // ============================================================================
@@ -153,26 +183,90 @@ AmsError AmsBackendSnapmaker::cancel() {
 // Configuration
 // ============================================================================
 
-AmsError AmsBackendSnapmaker::set_slot_info(int slot_index, const SlotInfo& info, bool /*persist*/) {
+AmsError AmsBackendSnapmaker::set_slot_info(int slot_index, const SlotInfo& info, bool persist) {
     auto err = validate_slot_index(slot_index);
     if (err.result != AmsResult::SUCCESS) return err;
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto* slot = system_info_.units[0].get_slot(slot_index);
-    if (!slot) return AmsErrorHelper::invalid_slot(slot_index, NUM_TOOLS - 1);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto* slot = system_info_.units[0].get_slot(slot_index);
+        if (!slot) return AmsErrorHelper::invalid_slot(slot_index, NUM_TOOLS - 1);
 
-    // Update filament fields from info
-    slot->color_name = info.color_name;
-    slot->color_rgb = info.color_rgb;
-    slot->material = info.material;
-    slot->brand = info.brand;
-    slot->nozzle_temp_min = info.nozzle_temp_min;
-    slot->nozzle_temp_max = info.nozzle_temp_max;
-    slot->bed_temp = info.bed_temp;
-    slot->remaining_weight_g = info.remaining_weight_g;
-    slot->total_weight_g = info.total_weight_g;
-    slot->spoolman_id = info.spoolman_id;
-    slot->spool_name = info.spool_name;
+        // Update the in-memory slot directly. Covers every SlotInfo field the
+        // caller may set — a persist=false preview must not silently drop
+        // brand / spool_name / spoolman_* / weights / color_name because
+        // otherwise the UI would snap back on the next get_slot_info read.
+        slot->color_name = info.color_name;
+        slot->color_rgb = info.color_rgb;
+        slot->material = info.material;
+        slot->brand = info.brand;
+        slot->nozzle_temp_min = info.nozzle_temp_min;
+        slot->nozzle_temp_max = info.nozzle_temp_max;
+        slot->bed_temp = info.bed_temp;
+        slot->remaining_weight_g = info.remaining_weight_g;
+        slot->total_weight_g = info.total_weight_g;
+        slot->spoolman_id = info.spoolman_id;
+        slot->spoolman_vendor_id = info.spoolman_vendor_id;
+        slot->spool_name = info.spool_name;
+
+        // Previously this function IGNORED the persist parameter — user edits
+        // were in-memory only and the next Klipper status update wiped them
+        // via handle_status_update's unconditional writes from RFID and
+        // print_task_config. For persist=true, stage the override into
+        // overrides_ now so apply_overrides layers it back over firmware data
+        // on every subsequent parse. For persist=false we explicitly do NOT
+        // touch overrides_ — preview edits are in-memory only and will be
+        // overwritten by the next firmware parse, which is the expected
+        // preview contract.
+        //
+        // NOTE on self-wipe: the AD5X IFS implementation pre-updates
+        // last_firmware_color_ here to prevent the color-based hardware-event
+        // check from misreading a user color edit as a physical spool swap.
+        // Snapmaker's hardware-event check is RFID-UID-based, and the user
+        // cannot set a CARD_UID through the edit UI — SlotInfo has no UID
+        // field. So last_rfid_uid_ stays at whatever the firmware last
+        // reported, and the next parse compares firmware UID against that
+        // baseline exactly as intended. No pre-update needed here.
+        if (persist) {
+            helix::ams::FilamentSlotOverride ovr;
+            ovr.brand = info.brand;
+            ovr.spool_name = info.spool_name;
+            ovr.spoolman_id = info.spoolman_id;
+            ovr.spoolman_vendor_id = info.spoolman_vendor_id;
+            ovr.remaining_weight_g = info.remaining_weight_g;
+            ovr.total_weight_g = info.total_weight_g;
+            ovr.color_rgb = info.color_rgb;
+            ovr.color_name = info.color_name;
+            ovr.material = info.material;
+            // updated_at left default — save_async stamps a fresh value.
+            overrides_[slot_index] = ovr;
+        }
+    }
+
+    if (persist && override_store_) {
+        // Re-read from overrides_ under the lock to get the staged copy.
+        helix::ams::FilamentSlotOverride ovr_to_save;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto it = overrides_.find(slot_index);
+            if (it != overrides_.end()) {
+                ovr_to_save = it->second;
+            }
+        }
+        // Capture backend_log_tag by value — save_async's MR callback may fire
+        // long after this returns (MR tracker ~60s timeout). Do NOT capture
+        // `this`: the backend may outlive its store, but the store will
+        // outlive the scheduled save by design.
+        const std::string tag = backend_log_tag();
+        override_store_->save_async(
+            slot_index, ovr_to_save,
+            [tag, slot_index](bool success, const std::string& err) {
+                if (!success) {
+                    spdlog::warn("{} Override persist failed for slot {}: {}", tag, slot_index,
+                                 err);
+                }
+            });
+    }
 
     emit_event(EVENT_SLOT_CHANGED);
     return AmsErrorHelper::success();
@@ -266,6 +360,27 @@ SnapmakerRfidInfo AmsBackendSnapmaker::parse_rfid_info(const nlohmann::json& jso
     if (json.contains("WEIGHT") && json["WEIGHT"].is_number()) {
         info.weight_g = json["WEIGHT"].get<int>();
     }
+    // CARD_UID is a 4-byte array like [144, 32, 196, 2]. Canonicalize to a
+    // comma-joined string so the override system's baseline comparison is a
+    // simple string == string check. Empty / missing array stays as empty
+    // string (treated as "no tag / unread" by check_hardware_event_clear).
+    if (json.contains("CARD_UID") && json["CARD_UID"].is_array()) {
+        const auto& arr = json["CARD_UID"];
+        std::string uid;
+        for (size_t i = 0; i < arr.size(); ++i) {
+            if (!arr[i].is_number()) {
+                // If any byte isn't a number, bail out — partial UIDs aren't
+                // safe to compare. Leave info.uid empty so the check is a
+                // no-op for this parse.
+                uid.clear();
+                break;
+            }
+            if (!uid.empty())
+                uid.push_back(',');
+            uid += std::to_string(arr[i].get<int>());
+        }
+        info.uid = std::move(uid);
+    }
 
     return info;
 }
@@ -276,14 +391,24 @@ SnapmakerRfidInfo AmsBackendSnapmaker::parse_rfid_info(const nlohmann::json& jso
 
 void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notification) {
     // notify_status_update format: {"method":"notify_status_update","params":[{...}, timestamp]}
-    if (!notification.contains("params") || !notification["params"].is_array() ||
-        notification["params"].empty()) {
-        return;
+    // Initial query responses send unwrapped status directly — handle both.
+    const nlohmann::json* status_ptr = &notification;
+    if (notification.contains("params") && notification["params"].is_array() &&
+        !notification["params"].empty()) {
+        status_ptr = &notification["params"][0];
     }
-    const auto& status = notification["params"][0];
+    const auto& status = *status_ptr;
     if (!status.is_object()) return;
 
     bool changed = false;
+
+    // Per-slot UID observed THIS parse. Empty string means no RFID info in
+    // this notification (incremental update, or slot not included). Only
+    // populated when filament_detect.info is present and parse_rfid_info
+    // returns a non-empty UID. check_hardware_event_clear then sees the
+    // observed UID (or empty = no signal) and updates / clears accordingly.
+    std::array<std::string, NUM_TOOLS> observed_uids;
+    std::array<bool, NUM_TOOLS> saw_rfid_info{};
 
     {  // Scope lock — emit_event MUST be called outside mutex_ to avoid deadlock
        // with sync_from_backend() which acquires mutex_ via get_system_info()
@@ -373,6 +498,13 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
             for (int i = 0; i < NUM_TOOLS && i < static_cast<int>(info_arr.size()); i++) {
                 if (!info_arr[i].is_object()) continue;
                 auto rfid = parse_rfid_info(info_arr[i]);
+
+                // Capture the UID for hardware-swap detection before any early
+                // exit. Even "NONE" tags can carry a CARD_UID in theory, and
+                // we want the observed value visible to check_hardware_event_clear
+                // regardless of whether we apply the rest of the RFID fields.
+                observed_uids[i] = rfid.uid;
+                saw_rfid_info[i] = true;
 
                 // Skip entirely if RFID reader is disabled or no tag present
                 if (rfid.main_type == "NONE") continue;
@@ -534,10 +666,150 @@ void AmsBackendSnapmaker::handle_status_update(const nlohmann::json& notificatio
         }
     }
 
+    // Parse convergence point. After every firmware-sourced field on the
+    // SlotInfo has been populated above, loop through slots and apply
+    // user-configured overrides on top. check_hardware_event_clear must run
+    // FIRST so it sees firmware-truth fields (not the override-masked view)
+    // and can clear a stale override when a physical spool swap is detected.
+    // apply_overrides runs after, so the final SlotInfo the UI reads through
+    // get_slot_info / the emitted event reflects the override layer.
+    //
+    // Snapmaker has multiple parse paths feeding the same slot (RFID info,
+    // print_task_config, filament_feed). Rather than hook the override logic
+    // into each one, we run it once here at the tail — the tradeoff is that
+    // get_slot_info during a partial parse would observe uncleared overrides,
+    // but since everything runs under mutex_ and handle_status_update is the
+    // only writer, there's no observable window.
+    for (int i = 0; i < NUM_TOOLS; ++i) {
+        auto* slot = system_info_.units[0].get_slot(i);
+        if (!slot)
+            continue;
+
+        // Only pass a UID to the hardware-event check when this parse
+        // actually carried filament_detect.info for the slot. Otherwise we'd
+        // feed an empty-string UID on every incremental notify (e.g. pure
+        // toolhead status updates) and defeat the "empty = no signal"
+        // contract the helper expects. saw_rfid_info[i] captures "we had an
+        // info blob"; observed_uids[i] may still be empty if the tag's
+        // CARD_UID field was missing or malformed, which the helper also
+        // treats as no signal.
+        if (saw_rfid_info[i]) {
+            check_hardware_event_clear(*slot, i, observed_uids[i]);
+        }
+        apply_overrides(*slot, i);
+    }
+
     }  // Release mutex_ before emitting event
 
     if (changed) {
         emit_event(EVENT_STATE_CHANGED);
+    }
+}
+
+// ============================================================================
+// Override layering
+// ============================================================================
+
+void AmsBackendSnapmaker::apply_overrides(SlotInfo& slot, int slot_index) {
+    // Every caller of apply_overrides runs under mutex_ (handle_status_update's
+    // tail, set_slot_info's lock block). overrides_ writers also hold mutex_,
+    // so the map read here is implicitly lock-protected. Zero-cost hash miss
+    // when the slot has no override — safe in the hot parse path.
+    auto it = overrides_.find(slot_index);
+    if (it == overrides_.end())
+        return;
+    const auto& o = it->second;
+    // Merge policy — same as AD5X IFS. Override wins only when the override
+    // field carries a real value; defaults fall through to firmware.
+    if (!o.brand.empty())
+        slot.brand = o.brand;
+    if (!o.spool_name.empty())
+        slot.spool_name = o.spool_name;
+    if (o.spoolman_id > 0)
+        slot.spoolman_id = o.spoolman_id;
+    if (o.spoolman_vendor_id > 0)
+        slot.spoolman_vendor_id = o.spoolman_vendor_id;
+    if (o.remaining_weight_g >= 0.0f)
+        slot.remaining_weight_g = o.remaining_weight_g;
+    if (o.total_weight_g >= 0.0f)
+        slot.total_weight_g = o.total_weight_g;
+    if (o.color_rgb != 0)
+        slot.color_rgb = o.color_rgb;
+    if (!o.color_name.empty())
+        slot.color_name = o.color_name;
+    if (!o.material.empty())
+        slot.material = o.material;
+}
+
+void AmsBackendSnapmaker::check_hardware_event_clear(SlotInfo& slot, int slot_index,
+                                                     const std::string& observed_uid) {
+    // Empty UID = "no reading" (no tag, unread, RFID reader disabled,
+    // malformed CARD_UID). Treat as non-signal: don't update the baseline,
+    // don't clear. Without this guard every tag-less poll would overwrite a
+    // real prior UID and mask a genuine hardware swap on the next good read.
+    if (observed_uid.empty())
+        return;
+
+    auto it = last_rfid_uid_.find(slot_index);
+    if (it == last_rfid_uid_.end()) {
+        // First observation for this slot — establish baseline. Even if the
+        // override was previously saved against a different UID, the first
+        // observation is NEVER a swap signal. apply_overrides still runs
+        // after us and the override wins.
+        last_rfid_uid_[slot_index] = observed_uid;
+        spdlog::debug("{} Slot {} baseline RFID UID: {}", backend_log_tag(), slot_index,
+                      observed_uid);
+        return;
+    }
+    if (it->second == observed_uid)
+        return; // unchanged — no swap signal
+
+    // UID changed. Record the new UID as the baseline FIRST so a failed
+    // clear_async doesn't make us re-fire on every subsequent poll.
+    const std::string old_uid = it->second;
+    it->second = observed_uid;
+
+    auto ovr_it = overrides_.find(slot_index);
+    if (ovr_it == overrides_.end()) {
+        spdlog::debug("{} Slot {} RFID UID changed {} -> {} (no override to clear)",
+                      backend_log_tag(), slot_index, old_uid, observed_uid);
+        return;
+    }
+
+    spdlog::info("{} Slot {} RFID UID changed {} -> {}, clearing override "
+                 "(physical spool swap detected)",
+                 backend_log_tag(), slot_index, old_uid, observed_uid);
+    overrides_.erase(ovr_it);
+
+    // Zero STRICTLY override-exclusive fields on the live SlotInfo so the
+    // cleared state is visible in the very next get_slot_info() read.
+    // apply_overrides runs right after and is a no-op for this slot —
+    // without this reset, stale spool_name / spoolman_* / remaining_weight_g
+    // would persist until a new override is written.
+    //
+    // Snapmaker difference from AD5X IFS: the RFID tag can populate brand,
+    // color_name, and total_weight_g directly. handle_status_update has
+    // already written firmware truth to those fields THIS pass; we must NOT
+    // re-zero them here or we'd wipe the new spool's firmware-sourced
+    // metadata (e.g. the swap brought a tagged spool whose brand should
+    // surface immediately). The override's brand/color_name/total_weight_g
+    // copies are gone with the override itself; firmware's copy stays.
+    slot.spool_name.clear();
+    slot.spoolman_id = 0;
+    slot.spoolman_vendor_id = 0;
+    slot.remaining_weight_g = -1.0f;
+
+    if (override_store_) {
+        // Capture by value only — clear_async's Moonraker callback can fire
+        // after this function returns (MR tracker ~60s) and potentially
+        // after the backend itself is gone. Same rationale as save_async.
+        const std::string tag = backend_log_tag();
+        override_store_->clear_async(slot_index,
+            [tag, slot_index](bool ok, std::string err) {
+                if (!ok) {
+                    spdlog::warn("{} clear_async failed for slot {}: {}", tag, slot_index, err);
+                }
+            });
     }
 }
 

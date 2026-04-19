@@ -3,10 +3,16 @@
 #pragma once
 
 #include "ams_subscription_backend.h"
+#include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
 
 #include <array>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+class SnapmakerTestAccess;
 
 /**
  * @file ams_backend_snapmaker.h
@@ -48,6 +54,11 @@ struct SnapmakerRfidInfo {
     int hotend_max_temp = 0;
     int bed_temp = 0;
     int weight_g = 0;            ///< Spool weight in grams
+    /// Canonical string form of CARD_UID (e.g. "144,32,196,2"). Empty when no
+    /// tag is present, the RFID reader is disabled, or the field is missing.
+    /// Used by the override system as the hardware-event signal: a change
+    /// means the physical spool was swapped.
+    std::string uid;
 };
 
 class AmsBackendSnapmaker : public AmsSubscriptionBackend {
@@ -91,10 +102,13 @@ class AmsBackendSnapmaker : public AmsSubscriptionBackend {
     static SnapmakerRfidInfo parse_rfid_info(const nlohmann::json& json);
 
   protected:
+    void on_started() override;
     void handle_status_update(const nlohmann::json& notification) override;
     const char* backend_log_tag() const override { return "[AMS Snapmaker]"; }
 
   private:
+    friend class ::SnapmakerTestAccess;
+
     static constexpr int NUM_TOOLS = 4;
 
     /// Per-extruder cached state
@@ -102,4 +116,38 @@ class AmsBackendSnapmaker : public AmsSubscriptionBackend {
 
     /// Validate slot index is within range
     AmsError validate_slot_index(int slot_index) const;
+
+    /// Layer a configured FilamentSlotOverride for `slot_index` over `slot`,
+    /// mutating `slot` in place. Override wins for every non-default field.
+    /// Callers must hold mutex_. Called from the tail of handle_status_update
+    /// AFTER firmware data has been populated and BEFORE event emission, so
+    /// the very next get_slot_info() reflects the overridden values.
+    void apply_overrides(SlotInfo& slot, int slot_index);
+
+    /// Hardware-event detection: if the RFID CARD_UID changes between parses,
+    /// the user physically swapped the spool. Clears the stored override so
+    /// stale brand / spool_name / spoolman_id from the previous user don't
+    /// bleed onto the new spool. Empty observed_uid (no tag / unread) is
+    /// treated as "no signal" — never updates the baseline and never clears.
+    /// First observation for a slot establishes the baseline and NEVER fires
+    /// a clear. Must be called BEFORE apply_overrides so the clear's field
+    /// reset isn't masked by a stale override layer.
+    ///
+    /// Unlike the AD5X IFS implementation (which uses color as the event
+    /// signal and needs a self-wipe guard in set_slot_info), Snapmaker uses
+    /// the RFID UID — a hardware identifier the user cannot set via the UI.
+    /// So set_slot_info does NOT pre-update last_rfid_uid_; the baseline
+    /// stays at whatever firmware last reported and user edits don't race.
+    void check_hardware_event_clear(SlotInfo& slot, int slot_index,
+                                    const std::string& observed_uid);
+
+    // Persistent per-slot overrides. Writers (on_started bulk load,
+    // set_slot_info persist path, check_hardware_event_clear) all hold mutex_.
+    // Reads happen inside apply_overrides which is also under mutex_.
+    std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
+    std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
+
+    // Per-slot last-observed RFID CARD_UID. Empty = first observation not yet
+    // made (or only empty UIDs seen). All access under mutex_.
+    std::unordered_map<int, std::string> last_rfid_uid_;
 };
