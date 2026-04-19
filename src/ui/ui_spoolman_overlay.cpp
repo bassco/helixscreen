@@ -16,11 +16,13 @@
 #include "ui_settings_label_printer.h"
 #endif
 #include "ui_settings_barcode_scanner.h"
+#include "ui_button.h"
 #include "ui_spoolman_setup.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "ams_state.h"
+#include "http_executor.h"
 #include "hv/requests.h"
 #include "moonraker_api.h"
 #include "moonraker_config_manager.h"
@@ -33,7 +35,6 @@
 #include <spdlog/spdlog.h>
 
 #include <memory>
-#include <thread>
 
 namespace helix::ui {
 
@@ -492,6 +493,18 @@ void SpoolmanOverlay::set_setup_status(const char* text, bool is_error) {
     }
 }
 
+void SpoolmanOverlay::set_connecting(bool connecting) {
+    if (!connect_btn_ || !lv_obj_is_valid(connect_btn_))
+        return;
+    if (connecting) {
+        lv_obj_add_state(connect_btn_, LV_STATE_DISABLED);
+        ui_button_set_text(connect_btn_, lv_tr("Connecting..."));
+    } else {
+        lv_obj_remove_state(connect_btn_, LV_STATE_DISABLED);
+        ui_button_set_text(connect_btn_, lv_tr("Connect"));
+    }
+}
+
 // ============================================================================
 // BARCODE SCANNER PICKER
 // ============================================================================
@@ -549,6 +562,7 @@ void SpoolmanOverlay::on_connect_clicked(lv_event_t* /*e*/) {
         return;
     }
 
+    overlay.set_connecting(true);
     overlay.set_setup_status(lv_tr("Checking Spoolman server..."));
     overlay.probe_spoolman_server(host, port);
 
@@ -572,7 +586,11 @@ void SpoolmanOverlay::probe_spoolman_server(const std::string& host, const std::
 
     spdlog::info("[{}] Probing Spoolman at {}", get_name(), probe_url);
 
-    std::thread([this, token, probe_url, host_copy, port_copy]() {
+    // Route through HttpExecutor::fast() (bounded 4-worker pool) instead of
+    // spawning a detached std::thread per click. Raw thread creation failed
+    // with pthread EAGAIN under thread exhaustion on memory-constrained ARM
+    // devices (#724) and crashed when users double-tapped the Connect button.
+    helix::http::HttpExecutor::fast().submit([this, token, probe_url, host_copy, port_copy]() {
         auto req = std::make_shared<HttpRequest>();
         req->method = HTTP_GET;
         req->url = probe_url;
@@ -593,9 +611,10 @@ void SpoolmanOverlay::probe_spoolman_server(const std::string& host, const std::
                 auto msg = fmt::format("{} {}:{}", lv_tr("Could not reach Spoolman at"), host_copy,
                                        port_copy);
                 set_setup_status(msg.c_str(), true);
+                set_connecting(false);
             }
         });
-    }).detach();
+    });
 }
 
 // ============================================================================
@@ -605,6 +624,7 @@ void SpoolmanOverlay::probe_spoolman_server(const std::string& host, const std::
 void SpoolmanOverlay::configure_spoolman(const std::string& host, const std::string& port) {
     if (!api_) {
         set_setup_status(lv_tr("Not connected to printer."), true);
+        set_connecting(false);
         return;
     }
     auto token = lifetime_.token();
@@ -626,6 +646,7 @@ void SpoolmanOverlay::configure_spoolman(const std::string& host, const std::str
             } else {
                 token.defer("SpoolmanOverlay::configure_error", [this]() {
                     set_setup_status(lv_tr("Failed to read config. Check connection."), true);
+                    set_connecting(false);
                 });
             }
         });
@@ -653,6 +674,7 @@ void SpoolmanOverlay::finish_configure(
             token.defer("SpoolmanOverlay::upload_error", [this, msg]() {
                 spdlog::error("[{}] Failed to upload helixscreen.conf: {}", get_name(), msg);
                 set_setup_status(lv_tr("Failed to save config."), true);
+                set_connecting(false);
             });
         });
 }
@@ -684,6 +706,7 @@ void SpoolmanOverlay::ensure_moonraker_include() {
                             return;
                         token2.defer([this]() {
                             set_setup_status(lv_tr("Failed to update moonraker.conf."), true);
+                            set_connecting(false);
                         });
                     });
             });
@@ -708,12 +731,15 @@ void SpoolmanOverlay::ensure_moonraker_include() {
                                 return;
                             token2.defer([this]() {
                                 set_setup_status(lv_tr("Failed to update moonraker.conf."), true);
+                                set_connecting(false);
                             });
                         });
                 });
             } else {
-                token.defer(
-                    [this]() { set_setup_status(lv_tr("Failed to read moonraker.conf."), true); });
+                token.defer([this]() {
+                    set_setup_status(lv_tr("Failed to read moonraker.conf."), true);
+                    set_connecting(false);
+                });
             }
         });
 }
@@ -746,6 +772,7 @@ void SpoolmanOverlay::restart_and_verify() {
                 return;
             token.defer("SpoolmanOverlay::restart_error", [this]() {
                 set_setup_status(lv_tr("Failed to restart Moonraker."), true);
+                set_connecting(false);
             });
         });
 }
@@ -770,6 +797,7 @@ void SpoolmanOverlay::verify_spoolman_connected() {
                         lv_tr("Moonraker restarted but Spoolman not connected. Check server."),
                         true);
                 }
+                set_connecting(false);
             });
         },
         [this, token](const MoonrakerError&) {
@@ -779,6 +807,7 @@ void SpoolmanOverlay::verify_spoolman_connected() {
                 set_setup_status(
                     lv_tr("Could not verify Spoolman status. Moonraker may still be restarting."),
                     true);
+                set_connecting(false);
             });
         });
 }
@@ -864,6 +893,7 @@ void SpoolmanOverlay::on_cancel_setup_clicked(lv_event_t* /*e*/) {
     if (overlay.status_card_)
         lv_obj_remove_flag(overlay.status_card_, LV_OBJ_FLAG_HIDDEN);
     overlay.set_setup_status("");
+    overlay.set_connecting(false);
 
     LVGL_SAFE_EVENT_CB_END();
 }

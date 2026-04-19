@@ -269,6 +269,16 @@ class SpoolmanOverlay : public OverlayBase {
     void update_server_url_display();
     void set_setup_status(const char* text, bool is_error = false);
 
+    /**
+     * @brief Toggle the Connect button's busy state
+     *
+     * When @p connecting is true, the button is disabled and its label swapped
+     * to "Connecting...". When false, the original "Connect" label is restored
+     * and the button is re-enabled. Called at the start of the probe flow and
+     * from every terminal path (success, error, cancel).
+     */
+    void set_connecting(bool connecting);
+
     // === Server Setup Callbacks ===
     static void on_connect_clicked(lv_event_t* e);
     static void on_cancel_setup_clicked(lv_event_t* e);
