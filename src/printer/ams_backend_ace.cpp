@@ -1030,7 +1030,10 @@ void AmsBackendAce::poll_slots() {
 
         if (resp.success && resp.data.contains("result")) {
             if (parse_slots_response(resp.data["result"])) {
-                emit_event(EVENT_SLOT_CHANGED);
+                // REST fallback parses all slots at once — use STATE_CHANGED
+                // (full-sync semantics) rather than SLOT_CHANGED without a
+                // slot_index.
+                emit_event(EVENT_STATE_CHANGED);
             }
         } else {
             spdlog::debug("[ACE] Slots poll failed: {}", resp.error);

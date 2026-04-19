@@ -159,7 +159,11 @@ void MoonrakerAPI::get_phase_tracking_status(std::function<void(bool enabled)> o
                                              ErrorCallback on_error) {
     client_.send_jsonrpc(
         "server.helix.phase_tracking.status", json::object(),
-        [on_success](const json& result) {
+        [on_success](const json& response) {
+            // send_jsonrpc passes the full JSON-RPC message; unwrap
+            // response["result"] before reading the "enabled" field.
+            const json& result =
+                response.contains("result") ? response.at("result") : json::object();
             bool enabled = result.value("enabled", false);
             if (on_success)
                 on_success(enabled);
@@ -179,7 +183,11 @@ void MoonrakerAPI::set_phase_tracking_enabled(bool enabled,
         enabled ? "server.helix.phase_tracking.enable" : "server.helix.phase_tracking.disable";
     client_.send_jsonrpc(
         method, json::object(),
-        [on_success, on_error, method](const json& result) {
+        [on_success, on_error, method](const json& response) {
+            // send_jsonrpc passes the full JSON-RPC message; unwrap
+            // response["result"] before reading "success"/"message".
+            const json& result =
+                response.contains("result") ? response.at("result") : json::object();
             bool ok = result.value("success", false);
             if (ok) {
                 if (on_success)

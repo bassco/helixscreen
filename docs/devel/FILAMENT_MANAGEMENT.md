@@ -226,9 +226,27 @@ flow to the slicer on Moonraker-based printers.
 - **Wire-format spec (public):** [`../specs/filament_slots.md`](../specs/filament_slots.md)
 - **Implementation notes (internal):** [`FILAMENT_SLOT_METADATA.md`](FILAMENT_SLOT_METADATA.md)
 
-Backends: IFS, Snapmaker, ACE, CFS share the `FilamentSlotOverrideStore`
-infrastructure. AFC and Happy Hare manage their own `lane_data` via
-their respective Klipper plugins; HelixScreen does not touch those.
+### OrcaSlicer 2.3.2 compatibility — by backend
+
+All HelixScreen-managed AMS backends write the AFC-standard `lane_data`
+record on edit, so every one of them round-trips to OrcaSlicer 2.3.2+ with
+no additional configuration:
+
+| Backend | Writer | OrcaSlicer 2.3.2+ picks up edits? |
+|---------|--------|-----------------------------------|
+| AD5X IFS | HelixScreen (`FilamentSlotOverrideStore`) | Yes |
+| Snapmaker U1 | HelixScreen (`FilamentSlotOverrideStore`) | Yes |
+| ACE (Anycubic ACE Pro) | HelixScreen (`FilamentSlotOverrideStore`) | Yes |
+| CFS (Creality K2) | HelixScreen (`FilamentSlotOverrideStore`) | Yes |
+| AFC / Box Turtle | AFC's own Klipper plugin | Yes (native AFC writer) |
+| Happy Hare | Happy Hare's own Klipper plugin | Yes (native HH writer) |
+| Tool Changer | (not applicable — no per-slot metadata) | N/A |
+
+IFS, Snapmaker, ACE, and CFS share the `FilamentSlotOverrideStore`
+infrastructure. AFC and Happy Hare manage their own `lane_data` via their
+respective Klipper plugins; HelixScreen does not touch those records, but
+the wire format is the same — a user's OrcaSlicer sees filament info from
+all of these sources the same way.
 
 ---
 

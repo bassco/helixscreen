@@ -152,6 +152,16 @@ Tap **Spool Info** in the slot context menu to open the filament editor. This le
 
 Tap **Save** to apply your changes, or **Cancel** to discard them.
 
+### Syncing with OrcaSlicer 2.3.2+
+
+When you edit spool info in HelixScreen — on any supported filament system (AD5X IFS, Snapmaker U1, ACE, CFS) — that information is saved to your printer in the standard location OrcaSlicer 2.3.2 and later reads automatically. Open OrcaSlicer after editing and your slot's vendor, material, color, and Spoolman link show up in the filament panel with no extra setup.
+
+**AFC (Box Turtle) and Happy Hare** work the same way automatically — their Klipper plugins write the same records on their own, so your lane assignments also flow through to OrcaSlicer with nothing to configure.
+
+Either way — whether HelixScreen is writing the metadata (IFS / Snapmaker / ACE / CFS) or your filament system's own plugin is (AFC / Happy Hare) — your printer's filament info and OrcaSlicer stay in sync.
+
+> **Requirements:** OrcaSlicer 2.3.2 or newer, connected to the same printer's Moonraker. Nothing to enable on the HelixScreen side — it's automatic.
+
 ### AMS Management (Settings Overlay)
 
 Tap **Settings** in the sidebar to open the AMS Management overlay with advanced controls:

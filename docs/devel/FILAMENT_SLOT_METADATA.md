@@ -21,6 +21,14 @@ pre-spec legacy namespaces.
 The public format is covered by [`../specs/filament_slots.md`](../specs/filament_slots.md);
 don't duplicate field semantics here.
 
+All four HelixScreen-managed backends (IFS, Snapmaker, ACE, CFS) emit the
+AFC-standard `lane` / `color` / `material` / `vendor` / `spool_id` /
+`scan_time` / `bed_temp` / `nozzle_temp` fields (where a source value is
+available) in addition to HelixScreen's extension fields. This makes every
+slot edit in HelixScreen round-trip to OrcaSlicer 2.3.2+ with no extra
+configuration on the slicer side — the convention is shared, not
+HelixScreen-specific.
+
 ---
 
 ## 2. Architecture
