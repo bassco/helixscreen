@@ -7,11 +7,22 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 
 #include "hv/json.hpp"
 
 namespace helix {
+
+namespace {
+
+std::string to_lower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+} // namespace
 
 SpoolmanSlotSaver::SpoolmanSlotSaver(MoonrakerAPI* api) : api_(api) {}
 
@@ -155,6 +166,33 @@ void SpoolmanSlotSaver::update_filament(int filament_id, const SlotInfo& edited,
             if (on_complete)
                 on_complete(SaveResult{.success = false});
         });
+}
+
+void SpoolmanSlotSaver::find_or_create_vendor(const std::string& vendor_name,
+                                              VendorCallback on_found, ErrorCallback on_error) {
+    const std::string needle = to_lower(vendor_name);
+    api_->spoolman().get_spoolman_vendors(
+        [this, vendor_name, needle, on_found, on_error](const std::vector<VendorInfo>& vendors) {
+            for (const auto& v : vendors) {
+                if (to_lower(v.name) == needle) {
+                    spdlog::debug("[SpoolmanSlotSaver] Reusing vendor '{}' -> id={}", v.name, v.id);
+                    if (on_found)
+                        on_found(v.id);
+                    return;
+                }
+            }
+            nlohmann::json payload;
+            payload["name"] = vendor_name;
+            spdlog::info("[SpoolmanSlotSaver] Creating vendor '{}'", vendor_name);
+            api_->spoolman().create_spoolman_vendor(
+                payload,
+                [on_found](const VendorInfo& info) {
+                    if (on_found)
+                        on_found(info.id);
+                },
+                on_error);
+        },
+        on_error);
 }
 
 } // namespace helix

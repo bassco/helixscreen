@@ -197,6 +197,27 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     };
     std::vector<FilamentUpdateRecord> filament_updates;
 
+    /// Captured POST payloads from create_spoolman_vendor() calls (for test assertions).
+    std::vector<nlohmann::json> created_vendors;
+
+    /// ID to assign to the next vendor created via create_spoolman_vendor().
+    /// If 0, the mock falls back to an auto-assigned ID.
+    int next_created_vendor_id = 0;
+
+    /**
+     * @brief Pre-seed a vendor with a known ID and name.
+     *
+     * Added vendors are returned by get_spoolman_vendors() ahead of
+     * vendors synthesized from mock_spools_. Use to test vendor-lookup
+     * code with predictable IDs.
+     */
+    void add_vendor(int id, std::string name) {
+        VendorInfo v;
+        v.id = id;
+        v.name = std::move(name);
+        mock_vendors_.push_back(v);
+    }
+
     /**
      * @brief Get mutable reference to mock spools for testing
      */
@@ -224,6 +245,7 @@ class MoonrakerSpoolmanAPIMock : public MoonrakerSpoolmanAPI {
     int mock_active_spool_id_ = 1;
     std::vector<SpoolInfo> mock_spools_;
     std::vector<FilamentInfo> mock_filaments_;
+    std::vector<VendorInfo> mock_vendors_;
     int next_filament_id_ = 300;
     std::map<int, int> slot_spool_map_;
 

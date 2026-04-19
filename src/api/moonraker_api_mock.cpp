@@ -1745,15 +1745,28 @@ void MoonrakerSpoolmanAPIMock::get_spoolman_vendors(VendorListCallback on_succes
                                                     ErrorCallback /*on_error*/) {
     spdlog::debug("[MoonrakerAPIMock] get_spoolman_vendors()");
 
-    // Build vendor list from existing mock spools (deduplicate by vendor name)
-    std::vector<VendorInfo> vendors;
+    // Include explicitly seeded vendors first (stable IDs for tests).
+    std::vector<VendorInfo> vendors = mock_vendors_;
     std::set<std::string> seen;
+    std::set<int> seen_ids;
     int next_id = 1;
+    for (const auto& v : vendors) {
+        seen.insert(v.name);
+        seen_ids.insert(v.id);
+        if (v.id >= next_id) {
+            next_id = v.id + 1;
+        }
+    }
 
+    // Build vendor list from existing mock spools (deduplicate by vendor name)
     for (const auto& spool : mock_spools_) {
         if (!spool.vendor.empty() && seen.find(spool.vendor) == seen.end()) {
             seen.insert(spool.vendor);
             VendorInfo v;
+            // Skip any IDs already claimed by seeded vendors.
+            while (seen_ids.count(next_id)) {
+                ++next_id;
+            }
             v.id = next_id++;
             v.name = spool.vendor;
             vendors.push_back(v);
@@ -1823,10 +1836,18 @@ void MoonrakerSpoolmanAPIMock::create_spoolman_vendor(const nlohmann::json& vend
     spdlog::info("[MoonrakerAPIMock] create_spoolman_vendor({})",
                  vendor_data.value("name", "unknown"));
 
+    // Capture the POST payload for test inspection.
+    created_vendors.push_back(vendor_data);
+
     VendorInfo vendor;
-    vendor.id = static_cast<int>(mock_spools_.size()) + 100; // Avoid ID conflicts
+    vendor.id = next_created_vendor_id > 0
+                    ? next_created_vendor_id
+                    : static_cast<int>(mock_spools_.size()) + 100; // Avoid ID conflicts
     vendor.name = vendor_data.value("name", "");
     vendor.url = vendor_data.value("url", "");
+
+    // Persist so subsequent get_spoolman_vendors() includes it.
+    mock_vendors_.push_back(vendor);
 
     if (on_success) {
         on_success(vendor);

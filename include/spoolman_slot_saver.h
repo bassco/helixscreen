@@ -3,10 +3,12 @@
 #pragma once
 
 #include "ams_types.h"
+#include "moonraker_error.h"
 #include "spoolman_types.h"
 
 #include <cmath>
 #include <functional>
+#include <string>
 
 class MoonrakerAPI;
 
@@ -56,6 +58,8 @@ struct SaveResult {
 class SpoolmanSlotSaver {
   public:
     using CompletionCallback = std::function<void(const SaveResult&)>;
+    using VendorCallback = std::function<void(int vendor_id)>;
+    using ErrorCallback = std::function<void(const MoonrakerError&)>;
 
     /// Weight comparison threshold for float equality
     static constexpr float WEIGHT_THRESHOLD = 0.1f;
@@ -97,6 +101,21 @@ class SpoolmanSlotSaver {
      * @param on_complete Called with true on success, false on failure
      */
     void save(const SlotInfo& original, const SlotInfo& edited, CompletionCallback on_complete);
+
+    /**
+     * @brief Resolve a vendor name to a Spoolman vendor_id, creating a new vendor if none matches.
+     *
+     * Matches case-insensitively on vendor name.
+     * On match, calls on_found(vendor_id).
+     * On no match, POSTs {"name": <name>} to Spoolman and calls on_found(new_id).
+     * On API error at either step, calls on_error.
+     *
+     * @param vendor_name Vendor display name (e.g., "Polymaker")
+     * @param on_found Called with the resolved vendor_id
+     * @param on_error Called with the MoonrakerError if either the list or create call fails
+     */
+    void find_or_create_vendor(const std::string& vendor_name, VendorCallback on_found,
+                               ErrorCallback on_error);
 
   private:
     MoonrakerAPI* api_;

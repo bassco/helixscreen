@@ -716,3 +716,55 @@ TEST_CASE("SpoolmanSlotSaver is_filament_complete: default gray color returns fa
     slot.color_rgb = AMS_DEFAULT_SLOT_COLOR; // 0x808080
     REQUIRE_FALSE(SpoolmanSlotSaver::is_filament_complete(slot));
 }
+
+// ============================================================================
+// find_or_create_vendor() Tests
+// ============================================================================
+
+TEST_CASE(
+    "SpoolmanSlotSaver find_or_create_vendor: reuses existing vendor by name (case-insensitive)",
+    "[spoolman][slot_saver][vendor]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    // Pre-seed vendor with id=7, name="Polymaker".
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    bool error_called = false;
+    saver.find_or_create_vendor(
+        "polymaker", // lower-case input; should match case-insensitively
+        [&](int id) { got_id = id; }, [&](const MoonrakerError&) { error_called = true; });
+
+    REQUIRE(got_id == 7);
+    REQUIRE_FALSE(error_called);
+    // Mock should NOT have received any create_vendor POST.
+    REQUIRE(api.spoolman_mock().created_vendors.empty());
+}
+
+TEST_CASE("SpoolmanSlotSaver find_or_create_vendor: creates new vendor when name not found",
+          "[spoolman][slot_saver][vendor]") {
+    PrinterState state;
+    MoonrakerClientMock client;
+    MoonrakerAPIMock api(client, state);
+
+    // Clear any spool-synthesized vendors so lookup definitely misses.
+    api.spoolman_mock().get_mock_spools().clear();
+    api.spoolman_mock().add_vendor(7, "Polymaker");
+    api.spoolman_mock().next_created_vendor_id = 42;
+
+    SpoolmanSlotSaver saver(&api);
+    int got_id = -1;
+    bool error_called = false;
+    saver.find_or_create_vendor(
+        "eSUN", [&](int id) { got_id = id; },
+        [&](const MoonrakerError&) { error_called = true; });
+
+    REQUIRE(got_id == 42);
+    REQUIRE_FALSE(error_called);
+    REQUIRE(api.spoolman_mock().created_vendors.size() == 1);
+    REQUIRE(api.spoolman_mock().created_vendors[0].contains("name"));
+    REQUIRE(api.spoolman_mock().created_vendors[0]["name"] == "eSUN");
+}
