@@ -5,12 +5,52 @@
 #include "ams_backend_afc.h"
 #include "ams_types.h"
 #include "filament_slot_override.h"
+#include "filament_slot_override_store.h"
+#include "moonraker_api_mock.h"
+#include "moonraker_client_mock.h"
+#include "printer_state.h"
 
 #include <chrono>
+#include <filesystem>
+#include <memory>
+#include <optional>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "../catch_amalgamated.hpp"
+
+// Friend-class shim matching the one in test_filament_slot_override_store.cpp
+// (declared friend in filament_slot_override_store.h per L065). Allows our
+// Task 10 tests to redirect the store's read-cache to a per-test tmp dir so
+// successful save_async calls don't pollute the developer's real config.
+class FilamentSlotOverrideStoreTestAccess {
+  public:
+    static void set_cache_directory(helix::ams::FilamentSlotOverrideStore& store,
+                                    std::filesystem::path dir) {
+        store.cache_dir_ = std::move(dir);
+    }
+};
+
+namespace {
+// Per-test tmp cache dir — same idiom as test_filament_slot_override_store.cpp.
+// The store's save callback writes a local JSON cache so the UI can show
+// last-known overrides when Moonraker is unreachable. Without redirection,
+// that cache lands in the developer's real helixscreen config dir.
+struct Ad5xIfsTmpCacheDir {
+    std::filesystem::path path;
+    explicit Ad5xIfsTmpCacheDir(const std::string& suffix) {
+        path = std::filesystem::temp_directory_path() /
+               ("ad5x_ifs_cache_" + suffix + "_" + std::to_string(::getpid()));
+        std::filesystem::remove_all(path);
+        std::filesystem::create_directories(path);
+    }
+    ~Ad5xIfsTmpCacheDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+} // namespace
 
 using json = nlohmann::json;
 
@@ -110,6 +150,26 @@ class Ad5xIfsTestAccess {
                               const helix::ams::FilamentSlotOverride& ovr) {
         std::lock_guard<std::mutex> lock(b.mutex_);
         b.overrides_[slot_index] = ovr;
+    }
+    // Read the override currently staged for a slot (empty optional if none).
+    // Lets tests assert what set_slot_info(persist=true) wrote into the
+    // in-memory map without going through get_slot_info (which also layers
+    // apply_overrides on top of firmware state).
+    static std::optional<helix::ams::FilamentSlotOverride>
+    get_override(const AmsBackendAd5xIfs& b, int slot_index) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        auto it = b.overrides_.find(slot_index);
+        if (it == b.overrides_.end())
+            return std::nullopt;
+        return it->second;
+    }
+    // Inject an override store so persist=true set_slot_info has somewhere to
+    // write. Production creates the store inside on_started(); tests that
+    // build the backend with a concrete MoonrakerAPIMock but never call
+    // on_started() need this shim to populate override_store_.
+    static void inject_override_store(AmsBackendAd5xIfs& b,
+                                      std::unique_ptr<helix::ams::FilamentSlotOverrideStore> s) {
+        b.override_store_ = std::move(s);
     }
 };
 
@@ -2138,23 +2198,234 @@ TEST_CASE("AD5X IFS override negative weights do not replace firmware values",
 TEST_CASE("AD5X IFS set_slot_info takes effect when no override present",
           "[ams][ad5x_ifs][filament_slot_override]") {
     // Regression lock: with no override seeded for the slot, set_slot_info's
-    // edit to IFS-native fields (color, material) must be visible via
-    // get_slot_info. Task 9 added apply_overrides to the parse path; this
-    // test guards against a future regression where the hook accidentally
-    // runs with stale overrides_ state and clobbers a plain user edit.
-    //
-    // NOTE: brand is deliberately NOT tested here — the current IFS
-    // set_slot_info path only propagates color/material/weight into the
-    // SlotInfo it stores; brand/spool_name/spoolman_id are gated on the
-    // (upcoming) Task 10 wiring that writes them into the override store.
+    // edit (every SlotInfo field, not just color/material) must be visible
+    // via get_slot_info. Task 9 added apply_overrides to the parse path;
+    // Task 10 extended entry->info update to carry brand / spool_name /
+    // spoolman_id / color_name through a persist=false "preview" write.
+    // This test guards against a regression where the parse path
+    // accidentally runs with stale overrides_ state and clobbers the edit.
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
     SlotInfo edit;
     edit.color_rgb = 0xAABBCC;
     edit.material = "PETG";
+    edit.brand = "UserBrand";
+    edit.spool_name = "UserSpool";
+    edit.spoolman_id = 99;
     backend.set_slot_info(0, edit, false);
 
     auto info = backend.get_slot_info(0);
     REQUIRE(info.color_rgb == 0xAABBCCu);
     REQUIRE(info.material == "PETG");
+    REQUIRE(info.brand == "UserBrand");
+    REQUIRE(info.spool_name == "UserSpool");
+    REQUIRE(info.spoolman_id == 99);
+}
+
+// ==========================================================================
+// Task 10: set_slot_info(persist=true) writes through to
+// FilamentSlotOverrideStore + in-memory overrides_ map so user edits survive
+// subsequent parses.
+// ==========================================================================
+
+TEST_CASE("AD5X IFS set_slot_info(persist=true) stores override in memory and store",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Build a real MoonrakerAPIMock so the backend's override store has a
+    // destination to write to. on_started() is not called — overrides_
+    // starts empty — so we can assert the persist path populates it.
+    Ad5xIfsTmpCacheDir tmp("task10_stores_override");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    // Native ZMOD path is skipped by marking has_ifs_vars_ true — this test
+    // focuses on the override-store write, not the Klipper-facing side.
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    SlotInfo edit;
+    edit.brand = "Polymaker";
+    edit.spool_name = "PolyLite PLA Orange";
+    edit.spoolman_id = 42;
+    edit.remaining_weight_g = 850.0f;
+    edit.material = "PLA";
+    edit.color_rgb = 0xFF5500;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/true);
+    REQUIRE(err.success());
+
+    // In-memory reads immediately see the edits — apply_overrides uses the
+    // newly-staged override rather than any pre-edit value.
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Polymaker");
+    CHECK(info.spool_name == "PolyLite PLA Orange");
+    CHECK(info.spoolman_id == 42);
+    CHECK(info.remaining_weight_g == 850.0f);
+    CHECK(info.material == "PLA");
+    CHECK(info.color_rgb == 0xFF5500u);
+
+    // overrides_ map was written under mutex_ as the persist staging step.
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->spoolman_id == 42);
+    CHECK(staged->color_rgb == 0xFF5500u);
+
+    // Moonraker DB received the AFC-shaped record via save_async (which
+    // MoonrakerAPIMock dispatches synchronously in-call).
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK(stored["vendor"] == "Polymaker");
+    CHECK(stored["spool_id"] == 42);
+    CHECK(stored["material"] == "PLA");
+    CHECK(stored["color"] == "#FF5500");
+}
+
+TEST_CASE("AD5X IFS set_slot_info(persist=false) does NOT write to store",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Same fixture as above, but with persist=false the override store
+    // must stay untouched — set_slot_info is a pure in-memory preview.
+    Ad5xIfsTmpCacheDir tmp("task10_no_persist");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    SlotInfo edit;
+    edit.brand = "Draft";
+    edit.material = "PLA";
+    edit.color_rgb = 0x123456;
+
+    auto err = backend.set_slot_info(0, edit, /*persist=*/false);
+    REQUIRE(err.success());
+
+    // No override staged — the in-memory entry carries the edit directly
+    // (since no prior override clobbers it via apply_overrides).
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+    // Moonraker DB not touched.
+    CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // The edit is still visible via get_slot_info — this is the preview path.
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Draft");
+    CHECK(info.material == "PLA");
+    CHECK(info.color_rgb == 0x123456u);
+}
+
+TEST_CASE("AD5X IFS set_slot_info(persist=true) updates overrides_ so next parse preserves it",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // After a persist=true write, a subsequent firmware parse must still see
+    // the user's edit — that's the whole point of the override-store layer.
+    Ad5xIfsTmpCacheDir tmp("task10_next_parse");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    // Leave has_ifs_vars_ false so the persist path also exercises the
+    // Adventurer5M.json write — write_adventurer_json will no-op because
+    // the download mock is empty, which is fine: we only care that the
+    // override persist happened and the parse layer respects it.
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    SlotInfo edit;
+    edit.brand = "Polymaker";
+    edit.material = "PLA";
+    edit.color_rgb = 0xFF5500;
+    // set_slot_info's Adventurer5M.json write will error out because the
+    // mock has no file — we don't care, we just need overrides_ populated.
+    backend.set_slot_info(0, edit, /*persist=*/true);
+
+    // Simulate a subsequent firmware parse reporting different values — the
+    // override must win, since that's the user's saved preference.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#000000", "ffmType1": "ABS"}
+    })");
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "Polymaker");     // override still wins after re-parse
+    CHECK(info.material == "PLA");         // override still wins
+    CHECK(info.color_rgb == 0xFF5500u);    // override still wins
+}
+
+TEST_CASE("AD5X IFS set_slot_info(persist=true) with no store still updates in-memory map",
+          "[ams][ad5x_ifs][filament_slot_override]") {
+    // Backend constructed with no api/client AND no injected store — the
+    // persist path must still stage the override in memory so the current
+    // UI session sees the edit, even though there's nowhere to save it.
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    SlotInfo edit;
+    edit.brand = "Polymaker";
+    edit.material = "PLA";
+    edit.color_rgb = 0xFF5500;
+    auto err = backend.set_slot_info(0, edit, /*persist=*/true);
+    // write_adventurer_json will fail with "No API connection" because api_
+    // is nullptr. That's expected — but the in-memory override stage
+    // happens BEFORE that write and must still be visible.
+    (void)err;
+
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "Polymaker");
+    CHECK(staged->material == "PLA");
+    CHECK(staged->color_rgb == 0xFF5500u);
+}
+
+TEST_CASE("AD5X IFS set_slot_info(persist=true) with pre-existing override replaces it",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    // Seed an old override (simulating a prior load from disk), then overwrite
+    // it via set_slot_info. get_slot_info must reflect the NEW values
+    // immediately, not the old staged override.
+    Ad5xIfsTmpCacheDir tmp("task10_replace");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    helix::ams::FilamentSlotOverride old;
+    old.brand = "OldBrand";
+    old.spool_name = "OldSpool";
+    old.spoolman_id = 7;
+    Ad5xIfsTestAccess::seed_override(backend, 0, old);
+
+    // User edits with a different brand — the NEW values must win, not
+    // the old override.
+    SlotInfo edit;
+    edit.brand = "NewBrand";
+    edit.spool_name = "NewSpool";
+    edit.spoolman_id = 99;
+    edit.material = "PLA";
+    edit.color_rgb = 0xAABBCC;
+    backend.set_slot_info(0, edit, /*persist=*/true);
+
+    auto info = backend.get_slot_info(0);
+    CHECK(info.brand == "NewBrand");
+    CHECK(info.spool_name == "NewSpool");
+    CHECK(info.spoolman_id == 99);
+
+    // Staged override replaced cleanly.
+    auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+    REQUIRE(staged.has_value());
+    CHECK(staged->brand == "NewBrand");
+    CHECK(staged->spoolman_id == 99);
 }

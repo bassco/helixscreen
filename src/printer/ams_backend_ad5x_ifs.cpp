@@ -467,9 +467,12 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
 }
 
 void AmsBackendAd5xIfs::apply_overrides(SlotInfo& slot, int slot_index) {
-    // overrides_ is read-only after on_started(); no locking needed. If a
-    // slot has no override entry, this is a zero-cost hash lookup followed
-    // by early return — safe to call inside the hot parse path.
+    // overrides_ is mutated in on_started() (initial load) and set_slot_info()
+    // (persisted user edit). Both writers hold mutex_, and every caller of
+    // apply_overrides runs inside update_slot_from_state() under mutex_ — so
+    // the map is implicitly lock-protected here. If a slot has no override
+    // entry, this is a zero-cost hash lookup followed by early return — safe
+    // to call inside the hot parse path.
     auto it = overrides_.find(slot_index);
     if (it == overrides_.end())
         return;
@@ -812,18 +815,102 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
                       backend_log_tag(), slot_index, hex, normalized_material, info.material,
                       port_presence_[idx]);
 
-        // Update entry directly
+        // Update entry directly. Covers every SlotInfo field the caller may
+        // have set, not just the IFS-native color/material — otherwise a
+        // persist=false "preview" write would silently drop brand /
+        // spool_name / spoolman_* / color_name and the UI would snap back
+        // to the previous values on the next get_slot_info().
         entry->info.color_rgb = info.color_rgb;
+        entry->info.color_name = info.color_name;
         entry->info.material = normalized_material;
+        entry->info.brand = info.brand;
+        entry->info.spool_name = info.spool_name;
         entry->info.spoolman_id = info.spoolman_id;
+        entry->info.spoolman_vendor_id = info.spoolman_vendor_id;
         entry->info.remaining_weight_g = info.remaining_weight_g;
         entry->info.total_weight_g = info.total_weight_g;
 
-        // Recalculate slot status now that port_presence may have changed
+        // If the caller asked for persistence, stage the new override into
+        // overrides_ BEFORE update_slot_from_state() — otherwise the call
+        // below will re-apply the PRE-EDIT override (if any), snap brand /
+        // spool_name / spoolman_id back to their old saved values, and
+        // revert the user's edit visually until the next parse. The
+        // override store's own save_async fires outside the lock further
+        // down, so there's only one place that mutates overrides_ for
+        // persist=true set_slot_info.
+        if (persist) {
+            helix::ams::FilamentSlotOverride ovr;
+            ovr.brand = info.brand;
+            ovr.spool_name = info.spool_name;
+            ovr.spoolman_id = info.spoolman_id;
+            ovr.spoolman_vendor_id = info.spoolman_vendor_id;
+            ovr.remaining_weight_g = info.remaining_weight_g;
+            ovr.total_weight_g = info.total_weight_g;
+            ovr.color_rgb = info.color_rgb;
+            ovr.color_name = info.color_name;
+            // normalize_material() was already applied to the cached
+            // materials_ copy; reuse it so the on-disk record carries the
+            // firmware-valid value instead of the raw user-typed string.
+            ovr.material = normalized_material;
+            // updated_at left default — save_async stamps a fresh value so
+            // the on-disk record's scan_time wins over any local clock skew.
+            overrides_[slot_index] = ovr;
+        }
+
+        // Recalculate slot status now that port_presence may have changed.
+        // update_slot_from_state() re-applies apply_overrides() from
+        // overrides_ — which for persist=true now holds the values we
+        // just staged above, so the override wins and matches the edit.
+        // For persist=false with NO existing override, apply_overrides is
+        // a no-op and the direct entry->info fields survive.
         update_slot_from_state(slot_index);
     }
 
     if (persist) {
+        // Persist user-provided metadata to the slot-override store.
+        //
+        // Two persistence paths run here, by design:
+        //
+        //   1. IFS-native fields (color, material) are sent to Klipper via
+        //      _IFS_VARS / Adventurer5M.json below — that's the printer-
+        //      facing side the firmware and other UIs (Orca, LCD) see.
+        //
+        //   2. User metadata the firmware can't carry (brand, spool_name,
+        //      spoolman_id, weights, color_name) lands in the Moonraker DB
+        //      lane_data namespace via the override store. apply_overrides
+        //      layers these back over firmware data on every parse.
+        //
+        // Color + material go into BOTH stores so an external writer
+        // (Orca via its own MoonrakerPrinterAgent, another HelixScreen
+        // instance) sees the full record in lane_data even when it's not
+        // also listening to _IFS_VARS.
+        if (override_store_) {
+            // Re-read from overrides_ under the lock to get the same object
+            // we staged above (including the normalized material). Cheap —
+            // FilamentSlotOverride is a small POD-ish struct.
+            helix::ams::FilamentSlotOverride ovr_to_save;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                auto it = overrides_.find(slot_index);
+                if (it != overrides_.end()) {
+                    ovr_to_save = it->second;
+                }
+            }
+            // Capture backend_log_tag by value — the save callback may fire
+            // well after set_slot_info returns (MR tracker ~60s timeout).
+            // Do NOT capture `this`: the backend may outlive its store, but
+            // the store will outlive the scheduled save by design.
+            const std::string tag = backend_log_tag();
+            override_store_->save_async(
+                slot_index, ovr_to_save,
+                [tag, slot_index](bool success, const std::string& err) {
+                    if (!success) {
+                        spdlog::warn("{} Override persist failed for slot {}: {}", tag, slot_index,
+                                     err);
+                    }
+                });
+        }
+
         bool use_ifs_vars;
         {
             std::lock_guard<std::mutex> lock(mutex_);

@@ -263,16 +263,17 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // User-provided per-slot metadata (brand, spool name, spoolman IDs, remaining
     // weight, etc.) layered over firmware-reported state.
     //
-    // Write: exactly once in on_started(), under mutex_, before the printer
-    // typically delivers its first status notification. The subscription IS
-    // already registered by the time on_started() runs (see
-    // AmsSubscriptionBackend::start), so the lock is load-bearing for the
-    // race between load_blocking returning and a concurrent parse.
+    // Write paths (both hold mutex_):
+    //   - on_started(): initial bulk load from Moonraker DB lane_data.
+    //     Swap happens under mutex_ so a concurrent status notification can
+    //     never see a torn map.
+    //   - set_slot_info(persist=true): user edit staged into overrides_
+    //     BEFORE update_slot_from_state() is called, so apply_overrides on
+    //     the very same call applies the new values rather than the old
+    //     pre-edit override.
     //
     // Read: in apply_overrides() during the parse path, which always runs
-    // under mutex_. If future tasks mutate this map at runtime (persisting
-    // user edits back into the store from set_slot_info), they must also
-    // take mutex_ around the write.
+    // under mutex_ (via update_slot_from_state).
     std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
     std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
 
