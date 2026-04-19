@@ -460,9 +460,9 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
     entry->info.mapped_tool = find_first_tool_for_port(slot_index + 1);
 
     // Layer user-configured overrides on top of firmware-reported data. Called
-    // last so overrides win for any non-default field. Safe to call while
-    // mutex_ is held (overrides_ is populated once in on_started and never
-    // mutated after).
+    // last so overrides win for any non-default field. Callers hold mutex_,
+    // which also covers overrides_ writes from on_started() and set_slot_info()
+    // — see apply_overrides() below for the invariant.
     apply_overrides(entry->info, slot_index);
 }
 
