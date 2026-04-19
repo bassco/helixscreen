@@ -290,12 +290,15 @@ static void apply_slot_status(AmsSlotData* data, int status_int) {
     bool show_empty_placeholder = false;
 
     if (status == SlotStatus::EMPTY) {
-        // Check if slot is assigned (has Spoolman data or material)
+        // Check if slot is assigned (has Spoolman data, material, or override metadata).
+        // Brand/spool_name cover IFS-style backends where a user-configured override
+        // exists without a Spoolman ID, so we still ghost-render the spool visual.
         AmsBackend* backend = AmsState::instance().get_backend();
         bool is_assigned = false;
         if (backend && data->slot_index >= 0) {
             SlotInfo slot_info = backend->get_slot_info(data->slot_index);
-            is_assigned = (slot_info.spoolman_id > 0 || !slot_info.material.empty());
+            is_assigned = (slot_info.spoolman_id > 0 || !slot_info.material.empty() ||
+                           !slot_info.brand.empty() || !slot_info.spool_name.empty());
         }
 
         if (is_assigned) {

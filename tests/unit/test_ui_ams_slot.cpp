@@ -559,3 +559,168 @@ TEST_CASE_METHOD(LVGLUITestFixture, "ams_slot: get_fill_level returns 1.0 for no
 
     lv_obj_delete(obj);
 }
+
+// ============================================================================
+// Filament Slot Override — Ghost render for empty slots with override metadata
+// ============================================================================
+//
+// When a slot is physically empty but the user has configured a filament
+// override (brand, spool_name, material, or linked Spoolman spool), the slot
+// should render the spool visual at 20% opacity ("ghosted") instead of showing
+// the empty placeholder. This lets users see at a glance which empty slots
+// are "assigned" and waiting for a reload vs truly unused.
+//
+// Prior behavior only treated spoolman_id>0 or !material.empty() as assigned.
+// Brand/spool_name were missed for backends (IFS-style) where a user-configured
+// override exists without a Spoolman link.
+
+namespace {
+
+/// Result of examining the spool visual after status update.
+struct SpoolVisualState {
+    bool any_ghosted = false;      ///< true if any child has opa/bg_opa == LV_OPA_20
+    bool any_spool_hidden = false; ///< true if spool_canvas or spool rings are hidden
+    int child_count = 0;           ///< For diagnostic purposes
+};
+
+/// Inspect spool_container children to determine the ghost/placeholder state.
+///
+/// After ui_ams_slot creates the widget, the spool_container child order is:
+///   [0] status_badge (XML, named)
+///   [1] spool_canvas (3d) or spool_outer (flat) — the "main spool visual"
+///   [2] empty_placeholder (unnamed, transparent)
+///   [3] tool_badge (XML, named, moved to end via move_to_index)
+///   [4] error_indicator (unnamed, moved to end)
+/// The XML-named badges are always named; the dynamically-created visuals are
+/// unnamed. We key off the first unnamed child for the spool visual.
+SpoolVisualState inspect_spool_state(lv_obj_t* spool_container) {
+    SpoolVisualState st;
+    uint32_t n = lv_obj_get_child_count(spool_container);
+    st.child_count = static_cast<int>(n);
+
+    lv_obj_t* spool_visual = nullptr;
+    for (uint32_t i = 0; i < n; ++i) {
+        lv_obj_t* child = lv_obj_get_child(spool_container, i);
+        if (!child) continue;
+        const char* name = lv_obj_get_name(child);
+        if (name) continue; // skip named XML children (status_badge, tool_badge)
+        spool_visual = child;
+        break;
+    }
+    if (!spool_visual) return st;
+
+    lv_opa_t opa = lv_obj_get_style_opa(spool_visual, LV_PART_MAIN);
+    lv_opa_t bg_opa = lv_obj_get_style_bg_opa(spool_visual, LV_PART_MAIN);
+    bool hidden = lv_obj_has_flag(spool_visual, LV_OBJ_FLAG_HIDDEN);
+
+    if (opa == LV_OPA_20 || bg_opa == LV_OPA_20) {
+        st.any_ghosted = true;
+    }
+    if (hidden) {
+        st.any_spool_hidden = true;
+    }
+    return st;
+}
+
+/// Drive slot 0 EMPTY in AmsState and create the widget.
+lv_obj_t* create_empty_slot(lv_obj_t* parent, AmsBackendMock* mock_ptr) {
+    mock_ptr->force_slot_status(0, SlotStatus::EMPTY);
+
+    // Seed status subject to EMPTY so observer fires correctly on widget creation.
+    lv_subject_t* status_subj = AmsState::instance().get_slot_status_subject(0);
+    REQUIRE(status_subj != nullptr);
+    lv_subject_set_int(status_subj, static_cast<int>(SlotStatus::EMPTY));
+
+    char index_str[4];
+    snprintf(index_str, sizeof(index_str), "%d", 0);
+    const char* attrs[] = {"slot_index", index_str, nullptr};
+    auto* slot = static_cast<lv_obj_t*>(lv_xml_create(parent, "ams_slot", attrs));
+    REQUIRE(slot != nullptr);
+    return slot;
+}
+
+} // namespace
+
+TEST_CASE_METHOD(LVGLUITestFixture, "AMS slot ghosts empty slot with brand-only metadata",
+                 "[ui][ams_slot][filament_slot_override][slow]") {
+    ui_ams_slot_register();
+    AmsState::instance().init_subjects(true);
+
+    auto mock = AmsBackend::create_mock(4);
+    auto* mock_ptr = static_cast<AmsBackendMock*>(mock.get());
+
+    // Brand set, but no spoolman_id, no material, no spool_name.
+    SlotInfo info;
+    info.slot_index = 0;
+    info.brand = "Polymaker";
+    mock_ptr->set_slot_info(0, info);
+
+    AmsState::instance().set_backend(std::move(mock));
+
+    lv_obj_t* slot = create_empty_slot(test_screen(), mock_ptr);
+    lv_obj_t* spool_container = UITest::find_by_name(slot, "spool_container");
+    REQUIRE(spool_container != nullptr);
+
+    // Brand-only override triggers ghost render: spool is visible at 20% opacity,
+    // and the main spool visual should NOT be hidden (placeholder mode).
+    auto st = inspect_spool_state(spool_container);
+    REQUIRE(st.any_ghosted);
+    REQUIRE_FALSE(st.any_spool_hidden);
+
+    AmsState::instance().clear_backends();
+}
+
+TEST_CASE_METHOD(LVGLUITestFixture, "AMS slot ghosts empty slot with spool_name-only metadata",
+                 "[ui][ams_slot][filament_slot_override][slow]") {
+    ui_ams_slot_register();
+    AmsState::instance().init_subjects(true);
+
+    auto mock = AmsBackend::create_mock(4);
+    auto* mock_ptr = static_cast<AmsBackendMock*>(mock.get());
+
+    // spool_name set, but no brand, no spoolman_id, no material.
+    SlotInfo info;
+    info.slot_index = 0;
+    info.spool_name = "Shop Floor #7";
+    mock_ptr->set_slot_info(0, info);
+
+    AmsState::instance().set_backend(std::move(mock));
+
+    lv_obj_t* slot = create_empty_slot(test_screen(), mock_ptr);
+    lv_obj_t* spool_container = UITest::find_by_name(slot, "spool_container");
+    REQUIRE(spool_container != nullptr);
+
+    auto st = inspect_spool_state(spool_container);
+    REQUIRE(st.any_ghosted);
+    REQUIRE_FALSE(st.any_spool_hidden);
+
+    AmsState::instance().clear_backends();
+}
+
+TEST_CASE_METHOD(LVGLUITestFixture, "AMS slot hides empty slot with no metadata at all",
+                 "[ui][ams_slot][filament_slot_override][slow]") {
+    ui_ams_slot_register();
+    AmsState::instance().init_subjects(true);
+
+    auto mock = AmsBackend::create_mock(4);
+    auto* mock_ptr = static_cast<AmsBackendMock*>(mock.get());
+
+    // Truly empty — no brand, spool_name, material, or spoolman_id.
+    SlotInfo info;
+    info.slot_index = 0;
+    mock_ptr->set_slot_info(0, info);
+
+    AmsState::instance().set_backend(std::move(mock));
+
+    lv_obj_t* slot = create_empty_slot(test_screen(), mock_ptr);
+    lv_obj_t* spool_container = UITest::find_by_name(slot, "spool_container");
+    REQUIRE(spool_container != nullptr);
+
+    // With no override metadata, the main spool visual is hidden (placeholder
+    // shown). Regression guard for the original is_assigned behavior.
+    auto st = inspect_spool_state(spool_container);
+    REQUIRE(st.any_spool_hidden);
+    REQUIRE_FALSE(st.any_ghosted);
+
+    AmsState::instance().clear_backends();
+}
