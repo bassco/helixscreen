@@ -531,7 +531,8 @@ TEST_CASE("MoonrakerAPIMock - create_spoolman_filament", "[filament][mock]") {
     SECTION("Creates filament and returns it") {
         nlohmann::json data;
         data["material"] = "PETG";
-        data["name"] = "Ocean Blue";
+        data["name"] = "Ocean Blue PETG";
+        data["color_name"] = "Ocean Blue";
         data["color_hex"] = "#0077B6";
         data["diameter"] = 1.75f;
         data["weight"] = 1000.0f;
@@ -1009,7 +1010,8 @@ TEST_CASE("Mock persists created filaments", "[spoolman][mock]") {
     // Create a filament
     nlohmann::json filament_data;
     filament_data["material"] = "PETG";
-    filament_data["name"] = "Blue";
+    filament_data["name"] = "Blue PETG";
+    filament_data["color_name"] = "Blue";
     filament_data["color_hex"] = "#0000FF";
     filament_data["vendor_id"] = 1;
 
