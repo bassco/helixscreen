@@ -382,6 +382,10 @@ void AmsPanel::on_activate() {
             bypass_spool_box_ = nullptr;
             bypass_spool_ = nullptr;
         }
+        if (bypass_label_) {
+            lv_obj_delete(bypass_label_);
+            bypass_label_ = nullptr;
+        }
     } else {
         // Non-scoped: show all system slots
         int slot_count = lv_subject_get_int(AmsState::instance().get_slot_count_subject());
@@ -475,6 +479,7 @@ void AmsPanel::clear_panel_reference() {
     path_canvas_ = nullptr;
     bypass_spool_box_ = nullptr;
     bypass_spool_ = nullptr;
+    bypass_label_ = nullptr;
     endless_arrows_ = nullptr;
     current_slot_count_ = 0;
 
@@ -783,8 +788,17 @@ void AmsPanel::setup_bypass_spool() {
     // Set initial color/fill
     update_bypass_spool_from_state();
 
+    // "Bypass" label, floating sibling of the spool widget. The path canvas
+    // clips draws to its own bounds, but the spool extends past the canvas
+    // bottom (FLOATING). A panel-owned label can sit below the spool without
+    // getting clipped.
+    bypass_label_ = lv_label_create(path_container);
+    lv_label_set_text(bypass_label_, "Bypass");
+    lv_obj_set_style_text_color(bypass_label_, theme_manager_get_color("text"), 0);
+    lv_obj_add_flag(bypass_label_, LV_OBJ_FLAG_FLOATING);
+
     // Position spool widget relative to bypass merge point in path canvas.
-    // Layout: "Bypass" label → horizontal line → spool widget (top to bottom)
+    // Layout: spool widget → horizontal line → "Bypass" label (top to bottom)
     lv_obj_update_layout(path_canvas_);
     int32_t canvas_w = lv_obj_get_width(path_canvas_);
     int32_t canvas_h = lv_obj_get_height(path_canvas_);
@@ -806,8 +820,14 @@ void AmsPanel::setup_bypass_spool() {
     int32_t box_h = lv_obj_get_height(bypass_spool_box_);
     lv_obj_set_pos(bypass_spool_box_, bypass_x - box_w / 2, bypass_merge_y - box_h / 2);
 
-    spdlog::debug("[{}] Bypass spool: {}x{} at ({},{}), merge_y={}", get_name(), box_w, box_h,
-                  bypass_x - box_w / 2, bypass_merge_y - box_h / 2, bypass_merge_y);
+    // Place label centered under the spool with a small gap.
+    lv_obj_update_layout(bypass_label_);
+    int32_t label_w = lv_obj_get_width(bypass_label_);
+    int32_t label_y = bypass_merge_y + box_h / 2 + 4;
+    lv_obj_set_pos(bypass_label_, bypass_x - label_w / 2, label_y);
+
+    spdlog::debug("[{}] Bypass spool: {}x{} at ({},{}), merge_y={}, label_y={}", get_name(), box_w,
+                  box_h, bypass_x - box_w / 2, bypass_merge_y - box_h / 2, bypass_merge_y, label_y);
 }
 
 void AmsPanel::update_bypass_spool_from_state() {

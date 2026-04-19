@@ -2383,25 +2383,9 @@ static void filament_path_draw_cb(lv_event_t* e) {
         draw_sensor_dot(layer, center_x, bypass_merge_y, bypass_merge_color, bypass_merge_active,
                         sensor_r);
 
-        // Draw "Bypass" label beneath the spool widget
-        if (data->label_font) {
-            lv_draw_label_dsc_t label_dsc;
-            lv_draw_label_dsc_init(&label_dsc);
-            label_dsc.color = data->bypass_active ? bypass_line_color : data->color_text;
-            label_dsc.font = data->label_font;
-            label_dsc.align = LV_TEXT_ALIGN_CENTER;
-            label_dsc.text = "Bypass";
-
-            int32_t font_h = lv_font_get_line_height(data->label_font);
-            int32_t label_half_w = width / 8;
-            // Place just below the merge sensor dot — close to the horizontal
-            // bypass line, not floated down next to the spool. Held slightly
-            // tighter to the sensor so the gap to the spool reads cleanly.
-            int32_t label_top = bypass_merge_y + sensor_r * 2;
-            lv_area_t label_area = {bypass_x - label_half_w, label_top, bypass_x + label_half_w,
-                                    label_top + font_h};
-            lv_draw_label(layer, &label_dsc, &label_area);
-        }
+        // "Bypass" label is drawn by the panel as a FLOATING sibling of the
+        // bypass spool widget (see ui_panel_ams.cpp::setup_bypass_spool) so it
+        // can sit below the spool without being clipped by the canvas bounds.
     }
 
     // ========================================================================

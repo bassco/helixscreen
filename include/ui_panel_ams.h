@@ -162,6 +162,7 @@ class AmsPanel : public PanelBase {
 
     lv_obj_t* bypass_spool_box_ = nullptr; ///< ui_card container for bypass spool
     lv_obj_t* bypass_spool_ = nullptr;     ///< spool_canvas widget inside the box
+    lv_obj_t* bypass_label_ = nullptr;     ///< "Bypass" text label below spool widget
 
     // === Endless Spool Arrows Canvas ===
 
