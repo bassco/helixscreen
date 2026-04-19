@@ -1310,13 +1310,17 @@ void AmsState::on_backend_event(int backend_index, const std::string& event,
     if (event == AmsBackend::EVENT_STATE_CHANGED) {
         queue_sync(true, -1);
     } else if (event == AmsBackend::EVENT_SLOT_CHANGED) {
-        // Parse slot index from data
-        if (!data.empty()) {
+        // Parse slot index from data. Fall back to a full sync for ANY case
+        // where we can't parse a specific slot — empty data OR non-numeric.
+        // Dropping the event silently (the old behavior) left the UI stale
+        // whenever a backend forgot to pass slot_index.
+        if (data.empty()) {
+            queue_sync(true, -1);
+        } else {
             try {
                 int slot_index = std::stoi(data);
                 queue_sync(false, slot_index);
             } catch (...) {
-                // Invalid data, do full sync
                 queue_sync(true, -1);
             }
         }

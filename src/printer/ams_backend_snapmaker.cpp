@@ -268,7 +268,11 @@ AmsError AmsBackendSnapmaker::set_slot_info(int slot_index, const SlotInfo& info
             });
     }
 
-    emit_event(EVENT_SLOT_CHANGED);
+    // Pass slot_index as event data so AmsState can do a targeted slot sync.
+    // Without it, AmsState::on_event silently skips the refresh and the AMS
+    // panel never re-reads the edited slot — the UI shows stale data until
+    // the next firmware status notification triggers a full refresh.
+    emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
     return AmsErrorHelper::success();
 }
 
