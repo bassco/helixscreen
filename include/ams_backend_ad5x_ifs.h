@@ -118,6 +118,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
         return false;
     }
 
+    // AD5X IFS firmware (ZMOD) validates material against a fixed whitelist
+    // and rejects anything outside it with "Invalid material type: X. Valid: ...".
+    // The UI dropdown is filtered to this list and outgoing values are normalized
+    // via normalize_material() before being sent to firmware.
+    [[nodiscard]] std::optional<std::vector<std::string>>
+    get_supported_materials() const override;
+
     // Result of parsing a GET_ZCOLOR SILENT=1 response. Public so tests can
     // construct instances via Ad5xIfsTestAccess.
     struct ZColorSlot {

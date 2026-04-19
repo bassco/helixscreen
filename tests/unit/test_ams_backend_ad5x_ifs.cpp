@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ams_backend_ad5x_ifs.h"
+#include "ams_backend_afc.h"
 #include "ams_types.h"
 
 #include <chrono>
@@ -480,9 +481,11 @@ TEST_CASE("AD5X IFS set_slot_info persist=false", "[ams][ad5x_ifs]") {
     // First parse standard state so slots exist
     Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
 
+    // Use a material in the firmware whitelist so normalize_material()
+    // doesn't coerce it. See get_supported_materials() for the accepted set.
     SlotInfo new_info;
     new_info.color_rgb = 0x123456;
-    new_info.material = "SILK_PLA";
+    new_info.material = "SILK";
     new_info.spoolman_id = 42;
     new_info.remaining_weight_g = 500;
     new_info.total_weight_g = 1000;
@@ -492,7 +495,7 @@ TEST_CASE("AD5X IFS set_slot_info persist=false", "[ams][ad5x_ifs]") {
 
     auto info = backend.get_slot_info(1);
     REQUIRE(info.color_rgb == 0x123456);
-    REQUIRE(info.material == "SILK_PLA");
+    REQUIRE(info.material == "SILK");
     REQUIRE(info.spoolman_id == 42);
     REQUIRE(info.remaining_weight_g == 500);
     REQUIRE(info.total_weight_g == 1000);
@@ -1164,10 +1167,12 @@ TEST_CASE("AD5X IFS dirty flag protects against both parse paths", "[ams][ad5x_i
     // Seed via save_variables (lessWaste path)
     Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
 
-    // User edits slot 0
+    // User edits slot 0. Use a material in the firmware whitelist so
+    // normalize_material() leaves it alone — this test is about the dirty
+    // flag, not normalization.
     SlotInfo edit;
     edit.color_rgb = 0xDEADBE;
-    edit.material = "SILK_PLA";
+    edit.material = "SILK";
     backend.set_slot_info(0, edit, false);
     REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
 
@@ -1175,7 +1180,7 @@ TEST_CASE("AD5X IFS dirty flag protects against both parse paths", "[ams][ad5x_i
     Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
     auto info = backend.get_slot_info(0);
     REQUIRE(info.color_rgb == 0xDEADBE);
-    REQUIRE(info.material == "SILK_PLA");
+    REQUIRE(info.material == "SILK");
 
     // parse_adventurer_json must not overwrite dirty slot either
     std::string stale_json = R"({
@@ -1187,7 +1192,7 @@ TEST_CASE("AD5X IFS dirty flag protects against both parse paths", "[ams][ad5x_i
     Ad5xIfsTestAccess::parse_adventurer_json(backend, stale_json);
     info = backend.get_slot_info(0);
     REQUIRE(info.color_rgb == 0xDEADBE);
-    REQUIRE(info.material == "SILK_PLA");
+    REQUIRE(info.material == "SILK");
 }
 
 // ==========================================================================
@@ -1795,4 +1800,85 @@ TEST_CASE("AD5X IFS parse_zcolor_silent sets saw_valid_response", "[ams][ad5x_if
         auto r = Ad5xIfsTestAccess::parse_zcolor_silent(lines);
         REQUIRE_FALSE(r.saw_valid_response);
     }
+}
+
+// ==========================================================================
+// Material whitelist + normalization
+// ==========================================================================
+
+TEST_CASE("AD5X IFS get_supported_materials returns firmware whitelist",
+          "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    auto supported = backend.get_supported_materials();
+    REQUIRE(supported.has_value());
+    REQUIRE(supported->size() == 7);
+
+    // Exact strings as firmware expects (order mirrors the firmware error message).
+    REQUIRE((*supported)[0] == "PLA");
+    REQUIRE((*supported)[1] == "PLA-CF");
+    REQUIRE((*supported)[2] == "SILK");
+    REQUIRE((*supported)[3] == "TPU");
+    REQUIRE((*supported)[4] == "ABS");
+    REQUIRE((*supported)[5] == "PETG");
+    REQUIRE((*supported)[6] == "PETG-CF");
+}
+
+TEST_CASE("AD5X IFS normalize_material coerces input to whitelist", "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    SECTION("exact match passes through") {
+        REQUIRE(backend.normalize_material("PLA") == "PLA");
+        REQUIRE(backend.normalize_material("PETG-CF") == "PETG-CF");
+        REQUIRE(backend.normalize_material("TPU") == "TPU");
+    }
+
+    SECTION("case-insensitive match returns canonical case") {
+        REQUIRE(backend.normalize_material("pla") == "PLA");
+        REQUIRE(backend.normalize_material("Pla") == "PLA");
+        REQUIRE(backend.normalize_material("petg-cf") == "PETG-CF");
+        REQUIRE(backend.normalize_material("silk") == "SILK");
+    }
+
+    SECTION("PLA+ collapses via compat_group to PLA") {
+        // PLA+ shares compat_group "PLA" with PLA in the filament DB.
+        REQUIRE(backend.normalize_material("PLA+") == "PLA");
+    }
+
+    SECTION("ASA collapses via compat_group to ABS") {
+        // ASA has compat_group "ABS_ASA"; ABS is the first whitelist entry
+        // with matching compat_group.
+        REQUIRE(backend.normalize_material("ASA") == "ABS");
+    }
+
+    SECTION("PEEK falls back to first entry (no compat_group match)") {
+        // PEEK's compat_group is "HIGH_TEMP" which no whitelist entry shares.
+        REQUIRE(backend.normalize_material("PEEK") == "PLA");
+    }
+
+    SECTION("empty string falls back to first entry") {
+        REQUIRE(backend.normalize_material("") == "PLA");
+    }
+
+    SECTION("unknown material falls back to first entry") {
+        REQUIRE(backend.normalize_material("Nonsense") == "PLA");
+    }
+
+    SECTION("Silk PLA collapses to PLA via compat_group (known limitation)") {
+        // "Silk PLA" has compat_group "PLA" in the DB, so it maps to PLA
+        // rather than SILK. Documented quirk: if user feedback prefers SILK,
+        // AD5X backend can add an explicit override of normalize_material().
+        REQUIRE(backend.normalize_material("Silk PLA") == "PLA");
+    }
+}
+
+TEST_CASE("AFC backend has no whitelist and passes material through unchanged",
+          "[ams][whitelist]") {
+    // AFC (like Happy Hare, ACE, CFS) treats material as a free-form label.
+    AmsBackendAfc backend(nullptr, nullptr);
+
+    REQUIRE_FALSE(backend.get_supported_materials().has_value());
+    REQUIRE(backend.normalize_material("PLA+") == "PLA+");
+    REQUIRE(backend.normalize_material("Some Random String") == "Some Random String");
+    REQUIRE(backend.normalize_material("") == "");
 }

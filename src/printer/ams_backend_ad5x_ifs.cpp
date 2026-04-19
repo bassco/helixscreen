@@ -670,6 +670,15 @@ AmsError AmsBackendAd5xIfs::cancel() {
 
 // --- Configuration ---
 
+std::optional<std::vector<std::string>>
+AmsBackendAd5xIfs::get_supported_materials() const {
+    // Valid material types accepted by AD5X IFS firmware (ZMOD).
+    // Sending anything else causes firmware to reject with
+    // "Invalid material type: X. Valid: PLA, PLA-CF, SILK, TPU, ABS, PETG, PETG-CF".
+    return std::vector<std::string>{
+        "PLA", "PLA-CF", "SILK", "TPU", "ABS", "PETG", "PETG-CF"};
+}
+
 AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, bool persist) {
     if (!validate_slot_index(slot_index)) {
         return AmsErrorHelper::invalid_slot(slot_index, NUM_PORTS - 1);
@@ -694,21 +703,30 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
         snprintf(hex, sizeof(hex), "%06X", info.color_rgb & 0xFFFFFF);
         colors_[idx] = hex;
 
-        materials_[idx] = info.material;
+        // Normalize material to a value the IFS firmware will accept.
+        // Empty input stays empty (an empty slot has no material), but any
+        // non-empty input is coerced to the firmware whitelist so we never
+        // send "PLA+" or "Silk PLA" and hit "Invalid material type".
+        std::string normalized_material =
+            info.material.empty() ? std::string{} : normalize_material(info.material);
+        materials_[idx] = normalized_material;
 
         // Without per-port sensors, infer presence from user-provided data.
         // Setting color/material marks the slot occupied; clearing both marks it empty.
         if (!has_per_port_sensors_) {
-            bool has_data = !info.material.empty() || info.color_rgb != AMS_DEFAULT_SLOT_COLOR;
+            bool has_data =
+                !normalized_material.empty() || info.color_rgb != AMS_DEFAULT_SLOT_COLOR;
             port_presence_[idx] = has_data;
         }
 
-        spdlog::debug("{} set_slot_info: slot {} dirty=true, color={}, material={}, presence={}",
-                      backend_log_tag(), slot_index, hex, info.material, port_presence_[idx]);
+        spdlog::debug("{} set_slot_info: slot {} dirty=true, color={}, material={} (raw={}), "
+                      "presence={}",
+                      backend_log_tag(), slot_index, hex, normalized_material, info.material,
+                      port_presence_[idx]);
 
         // Update entry directly
         entry->info.color_rgb = info.color_rgb;
-        entry->info.material = info.material;
+        entry->info.material = normalized_material;
         entry->info.spoolman_id = info.spoolman_id;
         entry->info.remaining_weight_g = info.remaining_weight_g;
         entry->info.total_weight_g = info.total_weight_g;

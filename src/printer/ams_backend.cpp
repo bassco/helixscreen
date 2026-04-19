@@ -17,6 +17,7 @@
 #include "ams_backend_snapmaker.h"
 #include "ams_backend_toolchanger.h"
 #include "ams_backend_ace.h"
+#include "filament_database.h"
 #include "moonraker_api.h"
 #include "runtime_config.h"
 
@@ -25,8 +26,48 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <string_view>
 
 using namespace helix;
+
+std::string AmsBackend::normalize_material(const std::string& material) const {
+    auto supported = get_supported_materials();
+    if (!supported || supported->empty()) {
+        return material;
+    }
+    const auto& list = *supported;
+
+    // Case-insensitive lowercase helper.
+    auto lower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return s;
+    };
+
+    // (2) Case-insensitive exact match against the whitelist.
+    const std::string input_lc = lower(material);
+    for (const auto& s : list) {
+        if (lower(s) == input_lc) {
+            return s;
+        }
+    }
+
+    // (3) compat_group match via the filament database.
+    auto info = filament::find_material(material);
+    if (info.has_value() && info->compat_group != nullptr) {
+        std::string_view group(info->compat_group);
+        for (const auto& s : list) {
+            auto s_info = filament::find_material(s);
+            if (s_info.has_value() && s_info->compat_group != nullptr &&
+                std::string_view(s_info->compat_group) == group) {
+                return s;
+            }
+        }
+    }
+
+    // (4) Fallback: first whitelist entry (typically the safest / most common).
+    return list.front();
+}
 
 #ifdef HELIX_ENABLE_MOCKS
 // Helper: lowercase a string for case-insensitive comparison

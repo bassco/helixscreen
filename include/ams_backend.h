@@ -24,7 +24,9 @@ class MoonrakerClient;
 #include <any>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 /**
  * @brief Abstract interface for AMS/MMU backend implementations
@@ -806,6 +808,41 @@ class AmsBackend {
     [[nodiscard]] virtual bool has_environment_sensors() const {
         return false;
     }
+
+    /**
+     * @brief Get the list of material strings this backend's firmware will accept.
+     *
+     * Returns std::nullopt if the backend accepts any material string
+     * (default for AFC, Happy Hare, ACE, CFS — firmware treats material as
+     * a free-form label).
+     *
+     * Returns a non-empty vector when firmware validates the string against
+     * a fixed list (e.g., AD5X IFS rejects anything outside its 7-item set).
+     * Callers should filter dropdowns and normalize outgoing values to this
+     * list. An empty vector is treated the same as nullopt (no restriction).
+     */
+    [[nodiscard]] virtual std::optional<std::vector<std::string>>
+    get_supported_materials() const {
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Normalize an arbitrary material string to one the firmware will accept.
+     *
+     * Called before sending material to firmware. Default implementation:
+     *   1. If get_supported_materials() returns nullopt/empty -> return input unchanged.
+     *   2. Case-insensitive exact match against whitelist -> return whitelist entry.
+     *   3. Look up input via filament::find_material() -> get compat_group -> find
+     *      first whitelist entry whose compat_group matches -> return it.
+     *   4. Fallback: return first whitelist entry (safest default, usually PLA).
+     *
+     * Backends can override for firmware-specific quirks (e.g., AD5X distinguishes
+     * SILK from PLA but both share compat_group "PLA" in the DB).
+     *
+     * @param material Input material string (may be empty)
+     * @return Normalized string safe to send to firmware
+     */
+    [[nodiscard]] virtual std::string normalize_material(const std::string& material) const;
 
     // ========================================================================
     // Discovery Configuration (Optional - default implementations are no-ops)

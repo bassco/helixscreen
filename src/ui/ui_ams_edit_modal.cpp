@@ -489,8 +489,13 @@ void AmsEditModal::update_vendor_dropdown() {
             break;
         }
     }
-    if (vendor_idx < 0)
+    if (vendor_idx < 0) {
         vendor_idx = generic_idx;
+        if (working_info_.brand.empty())
+            working_info_.brand = "Generic";
+        if (original_info_.brand.empty())
+            original_info_.brand = "Generic";
+    }
     lv_dropdown_set_selected(vendor_dropdown, vendor_idx);
 }
 
@@ -998,19 +1003,72 @@ void AmsEditModal::update_ui() {
         }
     }
 
-    // Build material options from filament database (if not already built)
+    // Build material options from filament database (if not already built).
+    // When the active backend advertises a firmware whitelist (e.g., AD5X IFS
+    // accepts only PLA / PLA-CF / SILK / TPU / ABS / PETG / PETG-CF), restrict
+    // the dropdown to that set. Whitelist entries not present in the shared
+    // filament DB (e.g., "SILK") are still appended so users aren't silently
+    // locked out of a firmware-supported option.
     if (material_list_.empty()) {
+        auto* backend = AmsState::instance().get_backend();
+        auto supported = backend ? backend->get_supported_materials() : std::nullopt;
+        const bool filtered = supported.has_value() && !supported->empty();
+
+        auto to_lower = [](std::string s) {
+            std::transform(s.begin(), s.end(), s.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            return s;
+        };
+
+        auto is_supported = [&](const char* name) {
+            if (!filtered) {
+                return true;
+            }
+            std::string n_lc = to_lower(name);
+            for (const auto& s : *supported) {
+                if (to_lower(s) == n_lc) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
         auto all_materials = filament::get_all_material_names();
-        material_list_.reserve(all_materials.size());
+        material_list_.reserve(filtered ? supported->size() : all_materials.size());
         for (const char* mat : all_materials) {
+            if (!is_supported(mat)) {
+                continue;
+            }
             if (!material_options_.empty()) {
                 material_options_ += '\n';
             }
             material_options_ += mat;
             material_list_.push_back(mat);
         }
-        spdlog::debug("[AmsEditModal] Built material list with {} materials from database",
-                      material_list_.size());
+
+        // Ensure every whitelist entry appears even if the shared DB doesn't
+        // have a case-matching name for it (e.g., AD5X's "SILK" vs DB's "Silk PLA").
+        if (filtered) {
+            for (const auto& s : *supported) {
+                bool found = false;
+                for (const auto& existing : material_list_) {
+                    if (existing == s) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    if (!material_options_.empty()) {
+                        material_options_ += '\n';
+                    }
+                    material_options_ += s;
+                    material_list_.push_back(s);
+                }
+            }
+        }
+
+        spdlog::debug("[AmsEditModal] Built material list with {} materials (filtered={})",
+                      material_list_.size(), filtered);
     }
 
     // Set up vendor dropdown (use cached vendors from Spoolman, or fallback)
@@ -1036,21 +1094,29 @@ void AmsEditModal::update_ui() {
             }
         }
 
-        // Set initial selection based on working_info_.brand
-        int vendor_idx = 0; // Default to first
+        // Set initial selection based on working_info_.brand, falling back to
+        // "Generic" if the brand is empty or unknown. Normalize both working
+        // and original to "Generic" when empty so the dropdown display matches
+        // state and unchanged saves don't flip-flop the field.
+        int vendor_idx = -1;
+        int generic_idx = 0;
         for (size_t i = 0; i < vendor_list_.size(); i++) {
-            if (working_info_.brand == vendor_list_[i].name) {
+            if (vendor_list_[i].name == "Generic") {
+                generic_idx = static_cast<int>(i);
+            }
+            if (!working_info_.brand.empty() && working_info_.brand == vendor_list_[i].name) {
                 vendor_idx = static_cast<int>(i);
                 break;
             }
         }
-        lv_dropdown_set_selected(vendor_dropdown, vendor_idx);
-
-        // Sync working_info_ when dropdown defaults to first entry
-        if (working_info_.brand.empty() && !vendor_list_.empty()) {
-            working_info_.brand = vendor_list_[vendor_idx].name;
-            working_info_.spoolman_vendor_id = vendor_list_[vendor_idx].id;
+        if (vendor_idx < 0) {
+            vendor_idx = generic_idx;
+            if (working_info_.brand.empty())
+                working_info_.brand = "Generic";
+            if (original_info_.brand.empty())
+                original_info_.brand = "Generic";
         }
+        lv_dropdown_set_selected(vendor_dropdown, vendor_idx);
     }
 
     // Set up material dropdown from filament database
