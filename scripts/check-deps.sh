@@ -211,12 +211,14 @@ check_libraries() {
             :  # ok already printed
         elif [ -f "/usr/include/openssl/ssl.h" ] || [ -f "/usr/local/include/openssl/ssl.h" ]; then
             ok "OpenSSL found (system headers)"
-        elif [ -n "$CC" ] && command -v "$CC" >/dev/null 2>&1; then
+        elif [ -n "$CC" ] && command -v "${CC##* }" >/dev/null 2>&1; then
             # Cross-compilation: check the compiler's sysroot for OpenSSL headers
             # ARM standalone toolchains: gcc -print-sysroot returns <prefix>/<triple>/libc
             # but OpenSSL installs to <prefix>/<triple>/include (one level up from libc)
+            # CC may have a ccache prefix ("ccache arm-linux-gnueabihf-gcc"); strip it.
+            CC_BIN="${CC##* }"
             SSL_FOUND=0
-            SYSROOT=$("$CC" -print-sysroot 2>/dev/null || true)
+            SYSROOT=$("$CC_BIN" -print-sysroot 2>/dev/null || true)
             if [ -n "$SYSROOT" ] && [ -f "$SYSROOT/usr/include/openssl/ssl.h" ]; then
                 ok "OpenSSL found (cross-compiler sysroot/usr)"
                 SSL_FOUND=1
