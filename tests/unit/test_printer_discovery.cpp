@@ -1133,6 +1133,47 @@ TEST_CASE("PrinterDiscovery detects chamber heater and sensor", "[printer_discov
 
         REQUIRE(hw.has_chamber_heater());
     }
+
+    SECTION("Box sensor is treated as chamber (Elegoo COSMOS)") {
+        json objects = {"temperature_sensor box"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_sensor());
+        REQUIRE(hw.supports_chamber());
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor box");
+    }
+
+    SECTION("Enclosure sensor is treated as chamber") {
+        json objects = {"temperature_sensor enclosure"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_sensor());
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor enclosure");
+    }
+
+    SECTION("Enclosure heater_generic is treated as chamber") {
+        json objects = {"heater_generic enclosure_heater"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_heater());
+    }
+
+    SECTION("Box temperature_fan is treated as chamber") {
+        json objects = {"temperature_fan box_fan"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_heater());
+    }
+
+    SECTION("Case-insensitive keyword match") {
+        json objects = {"temperature_sensor Box",          "temperature_sensor ENCLOSURE_top",
+                        "heater_generic Chamber_primary",  "temperature_fan Cavity"};
+        PrinterDiscovery hw2;
+        hw2.parse_objects(objects);
+
+        REQUIRE(hw2.has_chamber_sensor());
+        REQUIRE(hw2.has_chamber_heater());
+    }
 }
 
 // ============================================================================
