@@ -457,6 +457,12 @@ void PrintStatusPanel::deinit_subjects() {
     set_global_light_timelapse_controls(nullptr);
     light_timelapse_controls_.deinit_subjects();
 
+    // Reset observers on local subjects BEFORE deinit frees them.
+    // subjects_.deinit_all() calls lv_subject_deinit which frees observer
+    // structs — any ObserverGuard still holding a pointer would crash
+    // in its destructor trying to lv_observer_remove() on freed memory.
+    end_overlay_dismissed_observer_.reset();
+
     temp_observers_.clear();
     subjects_.deinit_all();
 
