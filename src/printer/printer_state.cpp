@@ -13,6 +13,7 @@
 
 #include "printer_state.h"
 
+#include "system/crash_handler.h"
 #include "ui_update_queue.h"
 
 #include "accel_sensor_manager.h"
@@ -544,13 +545,22 @@ void PrinterState::set_hardware(helix::PrinterDiscovery hardware) {
     // No deferral needed — the caller is already inside a queue_update callback.
     // Taken by value so we own a stable copy — the caller's source may alias
     // api->hardware_ which can be written by other queued callbacks (#799).
+    static int s_set_hardware_n = 0;
+    long sh_n = static_cast<long>(++s_set_hardware_n);
+    crash_handler::breadcrumb::note(
+        "disc", "sh_entry", static_cast<long>(hardware.macros().size()));
+
     spdlog::debug("[PrinterState] set_hardware: has_probe={}", hardware.has_probe());
 
     // Store for later access by UI (e.g., chamber assignment dropdowns)
     discovery_ = std::move(hardware);
+    crash_handler::breadcrumb::note(
+        "disc", "sh_moved", static_cast<long>(discovery_.macros().size()));
 
     // Pass auto-detected hardware to the override layer
+    crash_handler::breadcrumb::note("disc", "pre_co_set", sh_n);
     capability_overrides_.set_hardware(discovery_);
+    crash_handler::breadcrumb::note("disc", "post_co_set", sh_n);
 
     // Delegate capability subject updates to capabilities_state_ component
     capabilities_state_.set_hardware(discovery_, capability_overrides_);

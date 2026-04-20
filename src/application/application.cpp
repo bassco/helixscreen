@@ -2038,6 +2038,13 @@ void Application::setup_discovery_callbacks() {
         auto status_snapshot = std::make_shared<const nlohmann::json>(initial_status);
         helix::ui::queue_critical("Application::on_discovery_complete",
                                   [api, client, app, snapshot, status_snapshot]() {
+            // Count invocations so crash bundles reveal whether we crashed on
+            // the first discovery or on a reconnect-triggered re-run.
+            static int s_discovery_complete_n = 0;
+            long n = static_cast<long>(++s_discovery_complete_n);
+            crash_handler::breadcrumb::note(
+                "disc", "cb_begin", n);
+
             spdlog::debug("[Application] on_discovery_complete UI-thread entry (shutdown={})",
                           app->m_shutdown_complete);
             // Safety check: if Application is shutting down, skip all processing
@@ -2050,7 +2057,11 @@ void Application::setup_discovery_callbacks() {
             // move the snapshot into set_hardware below — the snapshot is the
             // only reference we own and nobody else aliases it, so this copy is
             // race-free (#789, #799).
+            crash_handler::breadcrumb::note(
+                "disc", "pre_api_hw",
+                static_cast<long>(snapshot->macros().size()));
             api->hardware() = *snapshot;
+            crash_handler::breadcrumb::note("disc", "post_api_hw", n);
 
             // Mark discovery complete so splash can exit
             app->m_splash_manager.on_discovery_complete();
@@ -2075,7 +2086,11 @@ void Application::setup_discovery_callbacks() {
             // copy iterates against a live, potentially-mutated api->hardware_ (#799).
             // After this point *snapshot is empty — use api->hardware() for reads.
             const auto& hw = api->hardware();
+            crash_handler::breadcrumb::note(
+                "disc", "pre_set_hw",
+                static_cast<long>(snapshot->macros().size()));
             get_printer_state().set_hardware(std::move(*snapshot));
+            crash_handler::breadcrumb::note("disc", "post_set_hw", n);
             get_printer_state().init_fans(
                 hw.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
 
