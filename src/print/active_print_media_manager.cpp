@@ -49,8 +49,18 @@ ActivePrintMediaManager& get_active_print_media_manager() {
 
 ActivePrintMediaManager::ActivePrintMediaManager(PrinterState& printer_state)
     : printer_state_(printer_state) {
-    // Observe print_filename_ subject to react to filename changes
-    print_filename_observer_ = helix::ui::observe_string<ActivePrintMediaManager>(
+    // Observe print_filename_ subject to react to filename changes.
+    // Use observe_string_immediate so process_filename runs SYNCHRONOUSLY
+    // when the subject changes. This is critical: process_filename clears
+    // the stale print_thumbnail_path_ from the previous print BEFORE any
+    // deferred observers fire (e.g., print_start_navigation's push_overlay
+    // → on_activate, which reads print_thumbnail_path_ to populate the UI).
+    // Without this, the race window allows stale thumbnails to be cached
+    // and displayed for the wrong print.
+    // Safety: process_filename only clears subjects, queues updates, and
+    // starts async operations — no observer lifecycle changes or widget
+    // destruction, so immediate dispatch is safe.
+    print_filename_observer_ = helix::ui::observe_string_immediate<ActivePrintMediaManager>(
         printer_state_.get_print_filename_subject(), this,
         [](ActivePrintMediaManager* self, const char* filename) {
             self->process_filename(filename);
