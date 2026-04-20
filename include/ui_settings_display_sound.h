@@ -107,7 +107,7 @@ class DisplaySoundSettingsOverlay : public OverlayBase {
     void handle_volume_changed(int value);
     void handle_ui_sounds_changed(bool enabled);
     void handle_sound_theme_changed(int index);
-    void handle_test_beep();
+    void handle_preview_sounds();
     void handle_test_tracker();
 
     /**
@@ -216,7 +216,7 @@ class DisplaySoundSettingsOverlay : public OverlayBase {
     static void on_volume_released(lv_event_t* e);
     static void on_ui_sounds_changed(lv_event_t* e);
     static void on_sound_theme_changed(lv_event_t* e);
-    static void on_test_beep(lv_event_t* e);
+    static void on_preview_sounds(lv_event_t* e);
     static void on_test_tracker(lv_event_t* e);
 };
 

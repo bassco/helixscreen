@@ -12,6 +12,7 @@
 #include "ui_event_safety.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
+#include "ui_sound_preview_overlay.h"
 #include "ui_theme_editor_overlay.h"
 #include "ui_toast_manager.h"
 #include "ui_utils.h"
@@ -130,7 +131,7 @@ void DisplaySoundSettingsOverlay::register_callbacks() {
         {"on_volume_changed", on_volume_changed},
         {"on_ui_sounds_changed", on_ui_sounds_changed},
         {"on_sound_theme_changed", on_sound_theme_changed},
-        {"on_test_beep", on_test_beep},
+        {"on_preview_sounds", on_preview_sounds},
         {"on_test_tracker", on_test_tracker},
     });
 
@@ -919,9 +920,9 @@ void DisplaySoundSettingsOverlay::handle_sound_theme_changed(int index) {
     }
 }
 
-void DisplaySoundSettingsOverlay::handle_test_beep() {
-    spdlog::info("[{}] Test beep requested", get_name());
-    SoundManager::instance().play_test_beep();
+void DisplaySoundSettingsOverlay::handle_preview_sounds() {
+    spdlog::info("[{}] Opening sound preview", get_name());
+    get_sound_preview_overlay().show(parent_screen_);
 }
 
 void DisplaySoundSettingsOverlay::handle_test_tracker() {
@@ -1150,9 +1151,9 @@ void DisplaySoundSettingsOverlay::on_sound_theme_changed(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_END();
 }
 
-void DisplaySoundSettingsOverlay::on_test_beep(lv_event_t* /*e*/) {
-    LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySoundSettingsOverlay] on_test_beep");
-    get_display_sound_settings_overlay().handle_test_beep();
+void DisplaySoundSettingsOverlay::on_preview_sounds(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySoundSettingsOverlay] on_preview_sounds");
+    get_display_sound_settings_overlay().handle_preview_sounds();
     LVGL_SAFE_EVENT_CB_END();
 }
 

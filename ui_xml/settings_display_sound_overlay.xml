@@ -190,12 +190,13 @@
                               label="Sound Theme" label_tag="Sound Theme" icon="tune" description="Choose sound style"
                               description_tag="Choose sound style" callback="on_sound_theme_changed"/>
       </lv_obj>
-      <!-- Test Sound (hidden when master sounds off) -->
-      <lv_obj name="container_test_beep" width="100%" style_pad_all="0" scrollable="false">
+      <!-- Preview Sounds (hidden when master sounds off) -->
+      <lv_obj name="container_preview_sounds" width="100%" style_pad_all="0" scrollable="false">
         <bind_flag_if_eq subject="settings_sounds_enabled" flag="hidden" ref_value="0"/>
-        <setting_action_row name="row_test_beep"
-                            label="Test Sound" label_tag="Test Sound" icon="play" description="Play a test beep"
-                            description_tag="Play a test beep" callback="on_test_beep"/>
+        <setting_action_row name="row_preview_sounds"
+                            label="Preview Sounds" label_tag="Preview Sounds" icon="play"
+                            description="Listen to all theme sounds"
+                            description_tag="Listen to all theme sounds" callback="on_preview_sounds"/>
       </lv_obj>
       <!-- Test Tracker (hidden when master sounds off) -->
       <lv_obj name="container_test_tracker" width="100%" style_pad_all="0" scrollable="false">

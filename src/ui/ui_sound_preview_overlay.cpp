@@ -3,7 +3,7 @@
 
 #include "ui_sound_preview_overlay.h"
 
-#include "navigation_manager.h"
+#include "ui_nav_manager.h"
 #include "sound_manager.h"
 #include "static_panel_registry.h"
 #include "ui_event_safety.h"
