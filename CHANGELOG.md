@@ -13,6 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   firmware) to package HelixScreen as a native variant. See
   `docs/devel/AD5M_KMOD_VARIANT.md`. The existing `ad5m` target is unchanged.
 
+### Fixed
+- **Installer (K1 / K2 / Snapmaker U1):** Repaired five regressions from the
+  earlier `config/` → `assets/config/` refactor. On affected boards the
+  installer was silently leaving the stock Creality UI running alongside
+  HelixScreen (`[WARN] No platform hooks for: k2`) and skipping Mainsail/Fluidd
+  config symlinks (`[INFO] No printer_data/config found, skipping config
+  symlink`). The underlying issues: init script sourced hooks from a path
+  that no longer existed; `deploy_platform_hooks` looked under
+  `config/platform/` instead of `assets/config/platform/`; `KLIPPER_HOME`
+  defaulted to `/root` on K1 and K2 whose `printer_data` lives on `/usr/data`
+  and `/mnt/UDISK` respectively; Snapmaker U1's detection of `/home/lava` was
+  fragile on freshly-flashed units. All five fixes auto-apply on the next
+  self-update. Already-installed users who cannot update can apply the
+  migration manually:
+  ```sh
+  /etc/init.d/app stop; /etc/init.d/app disable   # K2 only
+  mkdir -p /opt/helixscreen/platform
+  cp /opt/helixscreen/assets/config/platform/hooks-k2.sh \
+     /opt/helixscreen/platform/hooks.sh
+  chmod +x /opt/helixscreen/platform/hooks.sh
+  sed -i 's|/assets/config/platform/hooks\.sh|/platform/hooks.sh|' \
+     /etc/init.d/S99helixscreen
+  /etc/init.d/S99helixscreen restart
+  ```
+  Verified on K1C, K2 Plus, AD5M Forge-X, Snapmaker U1, and CC1 hardware.
+
 ## [0.99.38] - 2026-04-20
 
 ### Added
