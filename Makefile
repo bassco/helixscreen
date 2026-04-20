@@ -974,9 +974,11 @@ endif
 include mk/rules.mk
 
 # Debug helpers — print computed variables for bats tests.
-.PHONY: print-ldflags print-strip print-target-cflags print-cxxflags
+.PHONY: print-ldflags print-target-ldflags print-strip print-target-cflags print-cxxflags
 print-ldflags:
 	@echo "$(LDFLAGS)"
+print-target-ldflags:
+	@echo "$(TARGET_LDFLAGS)"
 print-strip:
 	@echo "STRIP_BINARY=$(STRIP_BINARY)"
 print-target-cflags:

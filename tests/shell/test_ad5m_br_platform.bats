@@ -14,11 +14,11 @@ load helpers
     }
 }
 
-@test "ad5m-br: does NOT set -static in LDFLAGS" {
-    run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE= CC=gcc CXX=g++ print-ldflags
+@test "ad5m-br: does NOT set -static in TARGET_LDFLAGS" {
+    run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE= CC=gcc CXX=g++ print-target-ldflags
     [ "$status" -eq 0 ]
     ! echo "$output" | grep -qE '(^|\s)-static(\s|$)' || {
-        echo "Unexpected -static in ad5m-br LDFLAGS:"
+        echo "Unexpected -static in ad5m-br TARGET_LDFLAGS:"
         echo "$output"
         return 1
     }
@@ -37,7 +37,7 @@ load helpers
 @test "ad5m-br: inherits ad5m TARGET_CFLAGS cpu/fpu flags" {
     run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE= CC=gcc CXX=g++ print-target-cflags
     [ "$status" -eq 0 ]
-    echo "$output" | grep -qE 'mcpu=cortex-a7|mtune=cortex-a7' || {
+    echo "$output" | grep -qE 'mtune=cortex-a7' || {
         echo "Missing cortex-a7 tuning in ad5m-br TARGET_CFLAGS:"
         echo "$output"
         return 1
