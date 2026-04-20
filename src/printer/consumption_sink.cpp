@@ -86,9 +86,7 @@ void ExternalSpoolSink::apply_delta(float filament_used_mm) {
             "[ConsumptionSink:external] External write detected (was {} g, now "
             "{} g); rebaselining",
             last_written_weight_g_, info.remaining_weight_g);
-        snapshot_mm_ = filament_used_mm;
-        snapshot_weight_g_ = info.remaining_weight_g;
-        last_written_weight_g_ = info.remaining_weight_g;
+        rebaseline(filament_used_mm);
         return;
     }
 
