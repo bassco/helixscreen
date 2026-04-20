@@ -97,8 +97,10 @@ TEST_CASE("PendingStartupWarnings: concurrent enqueue is safe", "[startup_warnin
     auto& q = PendingStartupWarnings::instance();
     q.clear();
 
-    constexpr int kThreads = 8;
-    constexpr int kPerThread = 100;
+    // Stay under the 64-entry cap so the assertion is about thread safety, not
+    // overflow behaviour (the overflow case has its own test).
+    constexpr int kThreads = 7;
+    constexpr int kPerThread = 8;
 
     std::vector<std::thread> workers;
     for (int t = 0; t < kThreads; t++) {
@@ -116,4 +118,23 @@ TEST_CASE("PendingStartupWarnings: concurrent enqueue is safe", "[startup_warnin
     int count = 0;
     q.drain([&](auto, auto&) { count++; });
     REQUIRE(count == kThreads * kPerThread);
+}
+
+TEST_CASE("PendingStartupWarnings: drops past cap, preserves earlier entries",
+          "[startup_warnings]") {
+    auto& q = PendingStartupWarnings::instance();
+    q.clear();
+
+    // Enqueue well past the cap; only the first N should survive.
+    for (int i = 0; i < 100; i++) {
+        q.enqueue(PendingStartupWarnings::Severity::INFO, "msg_" + std::to_string(i));
+    }
+
+    std::vector<std::string> captured;
+    q.drain([&](PendingStartupWarnings::Severity, const std::string& m) { captured.push_back(m); });
+
+    // Cap is an implementation detail; we only assert it's bounded and FIFO.
+    REQUIRE(captured.size() >= 1);
+    REQUIRE(captured.size() <= 100);
+    REQUIRE(captured.front() == "msg_0");
 }

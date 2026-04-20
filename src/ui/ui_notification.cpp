@@ -13,6 +13,7 @@
 
 #include "ui_notification.h"
 
+#include "pending_startup_warnings.h"
 #include "ui_modal.h"
 #include "ui_notification_history.h"
 #include "ui_notification_manager.h"
@@ -31,6 +32,8 @@
 
 // Forward declarations
 static void notification_observer_cb(lv_observer_t* observer, lv_subject_t* subject);
+static void show_notification(const char* title, const char* message, ToastSeverity severity,
+                              uint32_t duration_ms);
 // Thread tracking for auto-detection
 static std::thread::id g_main_thread_id;
 static std::atomic<bool> g_main_thread_id_initialized{false};
@@ -44,6 +47,37 @@ static bool is_main_thread() {
         return true; // Before initialization, assume main thread
     }
     return std::this_thread::get_id() == g_main_thread_id;
+}
+
+// Redirect notifications to PendingStartupWarnings when ToastManager::init() has
+// not run yet. Without this, early NOTIFY_* calls (e.g. from config restore in
+// Application phase 2 or TipsManager in phase 4) queue a toast that fires inside
+// the splash's lv_timer_handler, before subjects are initialized and the
+// toast_notification XML component is registered — which emits bogus
+// "type=0" subject warnings and "toast_notification is not a known widget"
+// errors on every boot after a settings restore / tips load failure.
+// Application::run() drains PendingStartupWarnings right after ToastManager::init().
+static bool try_defer_to_startup_queue(ToastSeverity severity, const char* display_msg) {
+    if (!display_msg || !*display_msg) return false;
+    if (ToastManager::instance().is_initialized()) return false;
+
+    helix::PendingStartupWarnings::Severity sev;
+    switch (severity) {
+    case ToastSeverity::INFO:
+        sev = helix::PendingStartupWarnings::Severity::INFO;
+        break;
+    case ToastSeverity::SUCCESS:
+        sev = helix::PendingStartupWarnings::Severity::SUCCESS;
+        break;
+    case ToastSeverity::WARNING:
+        sev = helix::PendingStartupWarnings::Severity::WARNING;
+        break;
+    case ToastSeverity::ERROR:
+        sev = helix::PendingStartupWarnings::Severity::ERROR;
+        break;
+    }
+    helix::PendingStartupWarnings::instance().enqueue(sev, display_msg);
+    return true;
 }
 
 // ============================================================================
@@ -67,17 +101,28 @@ struct AsyncErrorData {
     bool has_title;
 };
 
+// Format "title: message" (or just message when no title) into caller-provided
+// buffer. Buffer must be at least 324 bytes (matches title(64)+": "(2)+message(256)+null).
+static void format_titled_display(char* out, size_t out_size, bool has_title, const char* title,
+                                  const char* message) {
+    if (has_title) {
+        snprintf(out, out_size, "%s: %s", title, message);
+    } else {
+        strncpy(out, message, out_size - 1);
+        out[out_size - 1] = '\0';
+    }
+}
+
 // Async callbacks for lv_async_call (called on main thread)
 static void async_message_callback(void* user_data) {
     AsyncMessageData* data = (AsyncMessageData*)user_data;
     if (data && data->message[0] != '\0') {
-        // Format display message with title if present
         char display_buf[324]; // title(64) + ": "(2) + message(256) + null
-        if (data->has_title) {
-            snprintf(display_buf, sizeof(display_buf), "%s: %s", data->title, data->message);
-        } else {
-            strncpy(display_buf, data->message, sizeof(display_buf) - 1);
-            display_buf[sizeof(display_buf) - 1] = '\0';
+        format_titled_display(display_buf, sizeof(display_buf), data->has_title, data->title,
+                              data->message);
+        if (try_defer_to_startup_queue(data->severity, display_buf)) {
+            delete data;
+            return;
         }
         ToastManager::instance().show(data->severity, display_buf, data->duration_ms);
 
@@ -106,6 +151,18 @@ static void async_message_callback(void* user_data) {
 static void async_error_callback(void* user_data) {
     AsyncErrorData* data = (AsyncErrorData*)user_data;
     if (data && data->message[0] != '\0') {
+        // Pre-init: drop to startup queue (modal degrades to toast — ui_dialog
+        // XML isn't registered yet either).
+        {
+            char display_buf[324];
+            format_titled_display(display_buf, sizeof(display_buf), data->has_title, data->title,
+                                  data->message);
+            if (try_defer_to_startup_queue(ToastSeverity::ERROR, display_buf)) {
+                delete data;
+                return;
+            }
+        }
+
         if (data->modal && data->has_title) {
             // Check if a modal with the same title is already showing
             lv_obj_t* existing_modal = helix::ui::modal_get_top();
@@ -177,144 +234,37 @@ void ui_notification_deinit() {
     spdlog::debug("[Notification] Notification observer released");
 }
 
+// ============================================================================
+// Titled / untitled variants (display "Title: message" in toast when titled,
+// store title in history)
+// ============================================================================
+
 void ui_notification_info(const char* message) {
-    if (!message) {
-        spdlog::warn("[Notification] Attempted to show info notification with null message");
-        return;
-    }
-
-    if (is_main_thread()) {
-        // Main thread: call LVGL directly
-        ToastManager::instance().show(ToastSeverity::INFO, message, 4000);
-
-        NotificationHistoryEntry entry = {};
-        entry.timestamp_ms = lv_tick_get();
-        entry.severity = ToastSeverity::INFO;
-        entry.was_modal = false;
-        entry.was_read = false;
-        entry.title[0] = '\0';
-        strncpy(entry.message, message, sizeof(entry.message) - 1);
-        entry.message[sizeof(entry.message) - 1] = '\0';
-
-        NotificationHistory::instance().add(entry);
-        helix::ui::notification_update_count(NotificationHistory::instance().get_unread_count());
-    } else {
-        // Background thread: marshal to main thread
-        auto* data = new (std::nothrow) AsyncMessageData{};
-        if (!data) {
-            spdlog::error("[Notification] Failed to allocate memory for async notification");
-            return;
-        }
-
-        strncpy(data->message, message, sizeof(data->message) - 1);
-        data->message[sizeof(data->message) - 1] = '\0';
-        data->title[0] = '\0';
-        data->has_title = false;
-        data->severity = ToastSeverity::INFO;
-        data->duration_ms = 4000;
-
-        helix::ui::async_call(async_message_callback, data);
-    }
+    show_notification(nullptr, message, ToastSeverity::INFO, 4000);
 }
 
 void ui_notification_success(const char* message) {
-    if (!message) {
-        spdlog::warn("[Notification] Attempted to show success notification with null message");
-        return;
-    }
-
-    if (is_main_thread()) {
-        // Main thread: call LVGL directly
-        ToastManager::instance().show(ToastSeverity::SUCCESS, message, 4000);
-
-        NotificationHistoryEntry entry = {};
-        entry.timestamp_ms = lv_tick_get();
-        entry.severity = ToastSeverity::SUCCESS;
-        entry.was_modal = false;
-        entry.was_read = false;
-        entry.title[0] = '\0';
-        strncpy(entry.message, message, sizeof(entry.message) - 1);
-        entry.message[sizeof(entry.message) - 1] = '\0';
-
-        NotificationHistory::instance().add(entry);
-        helix::ui::notification_update_count(NotificationHistory::instance().get_unread_count());
-    } else {
-        // Background thread: marshal to main thread
-        auto* data = new (std::nothrow) AsyncMessageData{};
-        if (!data) {
-            spdlog::error("[Notification] Failed to allocate memory for async notification");
-            return;
-        }
-
-        strncpy(data->message, message, sizeof(data->message) - 1);
-        data->message[sizeof(data->message) - 1] = '\0';
-        data->title[0] = '\0';
-        data->has_title = false;
-        data->severity = ToastSeverity::SUCCESS;
-        data->duration_ms = 4000;
-
-        helix::ui::async_call(async_message_callback, data);
-    }
+    show_notification(nullptr, message, ToastSeverity::SUCCESS, 4000);
 }
 
 void ui_notification_warning(const char* message) {
-    if (!message) {
-        spdlog::warn("[Notification] Attempted to show warning notification with null message");
-        return;
-    }
-
-    if (is_main_thread()) {
-        // Main thread: call LVGL directly
-        ToastManager::instance().show(ToastSeverity::WARNING, message, 5000);
-
-        NotificationHistoryEntry entry = {};
-        entry.timestamp_ms = lv_tick_get();
-        entry.severity = ToastSeverity::WARNING;
-        entry.was_modal = false;
-        entry.was_read = false;
-        entry.title[0] = '\0';
-        strncpy(entry.message, message, sizeof(entry.message) - 1);
-        entry.message[sizeof(entry.message) - 1] = '\0';
-
-        NotificationHistory::instance().add(entry);
-        helix::ui::notification_update_count(NotificationHistory::instance().get_unread_count());
-    } else {
-        // Background thread: marshal to main thread
-        auto* data = new (std::nothrow) AsyncMessageData{};
-        if (!data) {
-            spdlog::error("[Notification] Failed to allocate memory for async notification");
-            return;
-        }
-
-        strncpy(data->message, message, sizeof(data->message) - 1);
-        data->message[sizeof(data->message) - 1] = '\0';
-        data->title[0] = '\0';
-        data->has_title = false;
-        data->severity = ToastSeverity::WARNING;
-        data->duration_ms = 5000;
-
-        helix::ui::async_call(async_message_callback, data);
-    }
+    show_notification(nullptr, message, ToastSeverity::WARNING, 5000);
 }
 
-// ============================================================================
-// Titled variants (display "Title: message" in toast, store title in history)
-// ============================================================================
-
-// Helper to show titled notification (reduces code duplication)
-static void show_titled_notification(const char* title, const char* message, ToastSeverity severity,
-                                     uint32_t duration_ms) {
+// Helper to show notification with optional title. When title is null/empty the
+// toast displays just the message; otherwise it shows "Title: message" and the
+// title is stored in history.
+static void show_notification(const char* title, const char* message, ToastSeverity severity,
+                              uint32_t duration_ms) {
     if (!message) {
         spdlog::warn("[Notification] Attempted to show notification with null message");
         return;
     }
-    if (!title) {
-        spdlog::warn("[Notification] Titled notification called with null title");
-        return;
-    }
 
-    // Format display message as "Title: message"
-    std::string display_msg = std::string(title) + ": " + message;
+    const bool has_title = title && *title;
+    std::string display_msg = has_title ? (std::string(title) + ": " + message) : message;
+
+    if (try_defer_to_startup_queue(severity, display_msg.c_str())) return;
 
     if (is_main_thread()) {
         // Main thread: call LVGL directly
@@ -325,8 +275,12 @@ static void show_titled_notification(const char* title, const char* message, Toa
         entry.severity = severity;
         entry.was_modal = false;
         entry.was_read = false;
-        strncpy(entry.title, title, sizeof(entry.title) - 1);
-        entry.title[sizeof(entry.title) - 1] = '\0';
+        if (has_title) {
+            strncpy(entry.title, title, sizeof(entry.title) - 1);
+            entry.title[sizeof(entry.title) - 1] = '\0';
+        } else {
+            entry.title[0] = '\0';
+        }
         strncpy(entry.message, message, sizeof(entry.message) - 1);
         entry.message[sizeof(entry.message) - 1] = '\0';
 
@@ -340,11 +294,15 @@ static void show_titled_notification(const char* title, const char* message, Toa
             return;
         }
 
-        strncpy(data->title, title, sizeof(data->title) - 1);
-        data->title[sizeof(data->title) - 1] = '\0';
+        if (has_title) {
+            strncpy(data->title, title, sizeof(data->title) - 1);
+            data->title[sizeof(data->title) - 1] = '\0';
+        } else {
+            data->title[0] = '\0';
+        }
+        data->has_title = has_title;
         strncpy(data->message, message, sizeof(data->message) - 1);
         data->message[sizeof(data->message) - 1] = '\0';
-        data->has_title = true;
         data->severity = severity;
         data->duration_ms = duration_ms;
 
@@ -353,7 +311,7 @@ static void show_titled_notification(const char* title, const char* message, Toa
 }
 
 void ui_notification_info(const char* title, const char* message) {
-    show_titled_notification(title, message, ToastSeverity::INFO, 4000);
+    show_notification(title, message, ToastSeverity::INFO, 4000);
 }
 
 void ui_notification_info_with_action(const char* title, const char* message, const char* action) {
@@ -402,17 +360,27 @@ void ui_notification_info_with_action(const char* title, const char* message, co
 }
 
 void ui_notification_success(const char* title, const char* message) {
-    show_titled_notification(title, message, ToastSeverity::SUCCESS, 4000);
+    show_notification(title, message, ToastSeverity::SUCCESS, 4000);
 }
 
 void ui_notification_warning(const char* title, const char* message) {
-    show_titled_notification(title, message, ToastSeverity::WARNING, 5000);
+    show_notification(title, message, ToastSeverity::WARNING, 5000);
 }
 
 void ui_notification_error(const char* title, const char* message, bool modal) {
     if (!message) {
         spdlog::warn("[Notification] Attempted to show error notification with null message");
         return;
+    }
+
+    // Pre-init (before ToastManager::init() and modal XML registration) route to
+    // the startup queue. The queue drains as plain toasts — modal dialogs are
+    // degraded to error toasts in that window, since ui_dialog's XML component
+    // also isn't registered yet.
+    {
+        const bool has_title = title && *title;
+        std::string display = has_title ? (std::string(title) + ": " + message) : message;
+        if (try_defer_to_startup_queue(ToastSeverity::ERROR, display.c_str())) return;
     }
 
     if (is_main_thread()) {

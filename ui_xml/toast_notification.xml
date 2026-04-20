@@ -4,43 +4,31 @@
 <component>
   <api>
     <prop name="message" type="string"/>
+    <!-- Icon appearance driven per-instance so multiple stacked toasts of
+         different severities can coexist without shared subjects. -->
+    <prop name="icon_glyph" type="string" default="󰋼"/>
+    <prop name="icon_color" type="string" default="#info"/>
+    <!-- Action button is hidden by default; set hide_action="false" to show it.
+         action_text / wiring of the click callback is done in C++ after create. -->
+    <prop name="action_text" type="string" default=""/>
+    <prop name="hide_action" type="string" default="true"/>
   </api>
-  <!-- Toast container - floating appearance with shadow, positioned top-right -->
+  <!-- Toast card - floating appearance with shadow. Positioning is handled by
+       the stack container ToastManager maintains on lv_layer_top. -->
   <view name="toast_root"
-        extends="lv_obj" width="content" height="content" align="top_right" x="#space_2xl_neg" y="#space_2xl"
+        extends="lv_obj" width="content" height="content"
         style_min_width="50%" style_max_width="450" style_radius="#border_radius" style_pad_all="#space_lg"
-        style_pad_gap="#space_sm" style_border_width="0" style_bg_color="#screen_bg" style_bg_opa="255" style_shadow_width="#space_2xl"
-        style_shadow_spread="#space_xs" style_shadow_opa="120" style_shadow_ofs_y="#space_xs" flex_flow="row"
-        style_flex_main_place="start" style_flex_cross_place="center">
-    <!-- INFO icon (circle-info) - shown when toast_severity=0 -->
-    <lv_label name="icon_info" text="#icon_info_circle" style_text_font="mdi_icons_24" style_text_color="#info">
-      <bind_flag_if_not_eq subject="toast_severity" flag="hidden" ref_value="0"/>
-    </lv_label>
-    <!-- SUCCESS icon (check) - shown when toast_severity=1 -->
-    <lv_label name="icon_success"
-              text="#icon_check" style_text_font="mdi_icons_24" style_text_color="#success" hidden="true">
-      <bind_flag_if_not_eq subject="toast_severity" flag="hidden" ref_value="1"/>
-    </lv_label>
-    <!-- WARNING icon (triangle-exclamation) - shown when toast_severity=2 -->
-    <lv_label name="icon_warning"
-              text="#icon_triangle_exclamation" style_text_font="mdi_icons_24" style_text_color="#warning" hidden="true">
-      <bind_flag_if_not_eq subject="toast_severity" flag="hidden" ref_value="2"/>
-    </lv_label>
-    <!-- ERROR icon (triangle-exclamation) - shown when toast_severity=3 -->
-    <lv_label name="icon_error"
-              text="#icon_triangle_exclamation" style_text_font="mdi_icons_24" style_text_color="#danger" hidden="true">
-      <bind_flag_if_not_eq subject="toast_severity" flag="hidden" ref_value="3"/>
-    </lv_label>
-    <!-- Message text (wraps to fit content) -->
+        style_pad_gap="#space_sm" style_border_width="0" style_bg_color="#screen_bg" style_bg_opa="255"
+        style_shadow_width="#space_2xl" style_shadow_spread="#space_xs" style_shadow_opa="120"
+        style_shadow_ofs_y="#space_xs" flex_flow="row" style_flex_main_place="start"
+        style_flex_cross_place="center">
+    <lv_label name="icon"
+              text="$icon_glyph" style_text_font="mdi_icons_24" style_text_color="$icon_color"/>
     <text_body name="toast_message"
                text="$message" flex_grow="1" long_mode="wrap" style_pad_left="#space_sm" style_pad_right="#space_sm"/>
-    <!-- Action button (hidden by default, shown via toast_action_visible subject) -->
     <ui_button name="toast_action_btn"
-               width="content" height="36" bind_text="toast_action_text" variant="success" style_min_width="72"
-               hidden="true">
-      <bind_flag_if_eq subject="toast_action_visible" flag="hidden" ref_value="0"/>
-    </ui_button>
-    <!-- Close button -->
+               width="content" height="36" text="$action_text" variant="success" style_min_width="72"
+               hidden="$hide_action"/>
     <ui_button name="toast_close_btn" width="40" height="40" icon="xmark" variant="ghost">
       <event_cb trigger="clicked" callback="toast_close_btn_clicked"/>
     </ui_button>

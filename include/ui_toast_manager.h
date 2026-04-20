@@ -5,7 +5,9 @@
 
 #include "lvgl.h"
 
+#include <atomic>
 #include <cstdint>
+#include <list>
 
 /**
  * @brief Toast notification severity levels
@@ -25,131 +27,85 @@ typedef void (*toast_action_callback_t)(void* user_data);
 /**
  * @brief Singleton manager for toast notifications
  *
- * Manages temporary non-blocking toast notifications that appear at the
- * top-center of the screen and auto-dismiss after a configurable duration.
- *
- * Features:
- * - Single active toast (new notifications replace old ones)
- * - Auto-dismiss with configurable timer
- * - Manual dismiss via close button
- * - Severity-based color coding (info, success, warning, error)
- * - Encapsulated state with proper RAII lifecycle
- *
- * Usage:
- *   ToastManager::instance().init();  // Call once at startup
- *   ToastManager::instance().show(ToastSeverity::INFO, "Message");
+ * Stacks multiple simultaneous toasts in the top-right of the screen. Each
+ * toast owns its own dismiss timer and action callback so the stack can
+ * dismiss in any order. The stack height is capped at kMaxVisible to protect
+ * small screens — overflow silently drops the oldest toast (no queueing).
  */
 class ToastManager {
   public:
-    /**
-     * @brief Get singleton instance
-     * @return Reference to the ToastManager singleton
-     */
     static ToastManager& instance();
 
-    // Non-copyable, non-movable (singleton)
     ToastManager(const ToastManager&) = delete;
     ToastManager& operator=(const ToastManager&) = delete;
     ToastManager(ToastManager&&) = delete;
     ToastManager& operator=(ToastManager&&) = delete;
 
-    /**
-     * @brief Initialize the toast notification system
-     *
-     * Registers LVGL subjects for XML binding and event callbacks.
-     * Should be called during app initialization.
-     */
+    /** Initialize the toast system. Call once at app startup. */
     void init();
 
-    /**
-     * @brief Show a toast notification
-     *
-     * Displays a toast notification with the specified severity and message.
-     * If a toast is already visible, it will be replaced with the new one.
-     *
-     * @param severity Toast severity level (determines color)
-     * @param message Message text to display
-     * @param duration_ms Duration in milliseconds before auto-dismiss (default: 4000ms)
-     */
+    /** Show a toast; does not replace existing toasts (stacks instead). */
     void show(ToastSeverity severity, const char* message, uint32_t duration_ms = 4000);
 
     /**
-     * @brief Show a toast notification with an action button
-     *
-     * Displays a toast with an action button (e.g., "Undo"). The action callback
-     * is invoked when the button is clicked. The toast auto-dismisses after
-     * duration_ms, or when the close button is clicked.
-     *
-     * @param severity Toast severity level (determines color)
-     * @param message Message text to display
-     * @param action_text Text for the action button (e.g., "Undo")
-     * @param action_callback Callback invoked when action button is clicked
-     * @param user_data User data passed to the callback
-     * @param duration_ms Duration in milliseconds before auto-dismiss (default: 5000ms)
+     * Show a toast with an action button. Each toast has its own callback, so
+     * multiple action toasts can coexist in the stack.
      */
     void show_with_action(ToastSeverity severity, const char* message, const char* action_text,
                           toast_action_callback_t action_callback, void* user_data,
                           uint32_t duration_ms = 5000);
 
-    /**
-     * @brief Hide the currently visible toast
-     *
-     * Can be called to manually dismiss a toast before its timer expires.
-     */
+    /** Dismiss all currently visible toasts (animated). */
     void hide();
 
-    /**
-     * @brief Deinitialize LVGL subjects (removes all observers from widgets)
-     *
-     * Must be called before lv_deinit() to prevent dangling observer pointers.
-     * Registered with StaticSubjectRegistry for automatic cleanup.
-     */
+    /** Deinit LVGL resources; safe to call before lv_deinit. */
     void deinit_subjects();
 
-    /**
-     * @brief Check if a toast is currently visible
-     * @return true if a toast is visible, false otherwise
-     */
+    /** True if at least one toast is visible. */
     bool is_visible() const;
 
+    /** Whether init() has completed. Callers before phase 9d should route
+     *  through PendingStartupWarnings — see ui_notification.cpp. Atomic
+     *  because ui_notification may read this from background threads. */
+    bool is_initialized() const { return initialized_.load(std::memory_order_acquire); }
+
   private:
-    // Private constructor for singleton
     ToastManager() = default;
     ~ToastManager();
 
-    // Internal helpers
-    void create_toast_internal(ToastSeverity severity, const char* message, uint32_t duration_ms,
-                               bool with_action);
-    void deferred_delete_toast(lv_obj_t*& toast_ptr);
+    struct ToastInstance {
+        lv_obj_t* widget = nullptr;
+        lv_timer_t* dismiss_timer = nullptr;
+        toast_action_callback_t action_cb = nullptr;
+        void* action_user_data = nullptr;
+        bool is_exiting = false;
+    };
+    using ToastList = std::list<ToastInstance>; // std::list → stable pointers
 
-    // Animation helpers
+    void create_toast_internal(ToastSeverity severity, const char* message, uint32_t duration_ms,
+                               bool with_action, toast_action_callback_t action_cb,
+                               void* action_user_data, const char* action_text);
+    void ensure_stack_container();
+    ToastList::iterator find_by_widget(lv_obj_t* widget);
+    void begin_exit(ToastList::iterator it);
+    void force_remove(ToastList::iterator it); // no animation
+    void finalize_remove(lv_obj_t* widget);    // called from exit-anim completion
+    void update_notification_bell();
+    size_t visible_count() const; // active_ minus those already exiting
+
     void animate_entrance(lv_obj_t* toast);
     void animate_exit(lv_obj_t* toast);
     static void exit_animation_complete_cb(lv_anim_t* anim);
 
-    // Timer callback
     static void dismiss_timer_cb(lv_timer_t* timer);
-
-    // Event callbacks
     static void close_btn_clicked(lv_event_t* e);
     static void action_btn_clicked(lv_event_t* e);
 
-    // Active toast state
-    lv_obj_t* active_toast_ = nullptr;
-    lv_timer_t* dismiss_timer_ = nullptr;
+    // Hard cap — further bounded at first show_by screen height.
+    static constexpr size_t kMaxVisible = 5;
 
-    // Action button state
-    toast_action_callback_t action_callback_ = nullptr;
-    void* action_user_data_ = nullptr;
-
-    // Subjects for XML binding
-    lv_subject_t action_visible_subject_{};
-    lv_subject_t action_text_subject_{};
-    lv_subject_t severity_subject_{};
-
-    // Text buffer for action button (for string subject)
-    char action_text_buf_[64] = "";
-
-    bool initialized_ = false;
-    bool animating_exit_ = false; // Prevents double-hide during exit animation
+    lv_obj_t* toast_stack_ = nullptr;
+    ToastList active_;
+    size_t max_visible_ = kMaxVisible;
+    std::atomic<bool> initialized_{false};
 };
