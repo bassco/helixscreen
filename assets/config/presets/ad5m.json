@@ -23,8 +23,7 @@
     },
     "fans": {
       "hotend": "heater_fan hotend_fan",
-      "part": "fan",
-      "aux": "fan_generic internal_fan"
+      "part": "fan"
     },
     "filament_sensors": {
       "master_enabled": true,
@@ -43,7 +42,6 @@
         "extruder",
         "fan",
         "heater_fan hotend_fan",
-        "fan_generic internal_fan",
         "controller_fan stepper_driver_fan",
         "filament_switch_sensor runout_sensor"
       ]
