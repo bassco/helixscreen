@@ -119,8 +119,7 @@ bool ALSASoundBackend::initialize() {
     spdlog::info("[ALSASound] Audio initialized: {} Hz, {} ch, period {}, format {}", sample_rate_,
                  channels_, period_size_, use_s16_ ? "S16_LE" : "FLOAT_LE");
 
-    // Allocate scratch buffers for multi-voice mixing
-    voice_buf_.resize(period_size_);
+    // Allocate scratch buffer for mixing
     mix_buf_.resize(period_size_);
 
     // Start render thread
@@ -155,8 +154,10 @@ void ALSASoundBackend::set_tone(float freq_hz, float amplitude, float duty_cycle
 }
 
 void ALSASoundBackend::silence() {
-    for (int v = 0; v < MAX_VOICES; ++v)
-        voices_[v].amplitude.store(0, std::memory_order_relaxed);
+    for (int v = 0; v < MAX_VOICES; ++v) {
+        voice_slots_[v].event.velocity = 0;
+        voice_slots_[v].generation.fetch_add(1, std::memory_order_release);
+    }
 }
 
 void ALSASoundBackend::set_waveform(Waveform w) {
@@ -165,87 +166,28 @@ void ALSASoundBackend::set_waveform(Waveform w) {
 
 void ALSASoundBackend::set_voice(int slot, float freq_hz, float amplitude, float duty_cycle) {
     if (slot < 0 || slot >= MAX_VOICES) return;
-    voices_[slot].freq.store(freq_hz, std::memory_order_relaxed);
-    voices_[slot].amplitude.store(amplitude, std::memory_order_relaxed);
-    voices_[slot].duty.store(duty_cycle, std::memory_order_relaxed);
+    auto& s = voice_slots_[slot];
+    s.event.freq_hz = freq_hz;
+    s.event.velocity = amplitude;
+    s.event.duty_cycle = duty_cycle;
+    s.generation.fetch_add(1, std::memory_order_release);
 }
 
 void ALSASoundBackend::set_voice_waveform(int slot, Waveform w) {
     if (slot < 0 || slot >= MAX_VOICES) return;
-    voices_[slot].wave.store(w, std::memory_order_relaxed);
+    voice_slots_[slot].event.wave = w;
 }
 
 void ALSASoundBackend::silence_voice(int slot) {
     if (slot < 0 || slot >= MAX_VOICES) return;
-    voices_[slot].amplitude.store(0, std::memory_order_relaxed);
+    voice_slots_[slot].event.velocity = 0;
+    voice_slots_[slot].generation.fetch_add(1, std::memory_order_release);
 }
 
-void ALSASoundBackend::set_voice_envelope(int slot, const ADSREnvelope& env,
-                                           float velocity, float duration_ms) {
+void ALSASoundBackend::publish_note(int slot, const NoteEvent& event) {
     if (slot < 0 || slot >= MAX_VOICES) return;
-    auto& e = envelopes_[slot];
-    e.attack_ms.store(env.attack_ms, std::memory_order_relaxed);
-    e.decay_ms.store(env.decay_ms, std::memory_order_relaxed);
-    e.sustain_level.store(env.sustain_level, std::memory_order_relaxed);
-    e.release_ms.store(env.release_ms, std::memory_order_relaxed);
-    e.velocity.store(velocity, std::memory_order_relaxed);
-    e.duration_ms.store(duration_ms, std::memory_order_relaxed);
-    e.generation.fetch_add(1, std::memory_order_release);
-}
-
-float ALSASoundBackend::advance_envelope(VoiceEnvelope& env, float sample_rate) {
-    uint32_t gen = env.generation.load(std::memory_order_acquire);
-    if (gen != env.cb_generation) {
-        env.cb_generation = gen;
-        env.elapsed_samples = 0;
-        env.current_amplitude = 0;
-    }
-
-    float vel = env.velocity.load(std::memory_order_relaxed);
-    if (vel <= 0.001f) {
-        env.current_amplitude = 0;
-        return 0;
-    }
-
-    float a_ms = env.attack_ms.load(std::memory_order_relaxed);
-    float d_ms = env.decay_ms.load(std::memory_order_relaxed);
-    float s = env.sustain_level.load(std::memory_order_relaxed);
-    float r_ms = env.release_ms.load(std::memory_order_relaxed);
-    float dur_ms = env.duration_ms.load(std::memory_order_relaxed);
-
-    float elapsed_ms = env.elapsed_samples * 1000.0f / sample_rate;
-    env.elapsed_samples++;
-
-    float total_ms = std::max(dur_ms, a_ms + d_ms + r_ms);
-
-    if (a_ms <= 0 && d_ms <= 0 && r_ms <= 0) {
-        env.current_amplitude = (elapsed_ms < total_ms) ? vel : 0;
-        return env.current_amplitude;
-    }
-
-    if (elapsed_ms >= total_ms) {
-        env.current_amplitude = 0;
-        return 0;
-    }
-
-    float release_start = total_ms - r_ms;
-    float amp;
-
-    if (elapsed_ms < a_ms) {
-        amp = (a_ms > 0) ? (elapsed_ms / a_ms) : 1.0f;
-    } else if (elapsed_ms < a_ms + d_ms) {
-        float decay_progress = (d_ms > 0) ? ((elapsed_ms - a_ms) / d_ms) : 1.0f;
-        amp = 1.0f - (1.0f - s) * decay_progress;
-    } else if (elapsed_ms < release_start) {
-        amp = s;
-    } else {
-        float release_elapsed = elapsed_ms - release_start;
-        float release_progress = (r_ms > 0) ? std::clamp(release_elapsed / r_ms, 0.0f, 1.0f) : 1.0f;
-        amp = s * (1.0f - release_progress);
-    }
-
-    env.current_amplitude = amp * vel;
-    return env.current_amplitude;
+    voice_slots_[slot].event = event;
+    voice_slots_[slot].generation.fetch_add(1, std::memory_order_release);
 }
 
 void ALSASoundBackend::set_render_source(std::function<void(float*, size_t, int)> fn) {
@@ -259,18 +201,16 @@ void ALSASoundBackend::clear_render_source() {
 }
 
 void ALSASoundBackend::set_filter(const std::string& type, float cutoff) {
+    // Shared filter for external render source (tracker PCM).
+    // Synth voices use per-voice filter in VoiceSlot.
     if (type.empty()) {
         filter_type_.store(helix::audio::FilterType::NONE, std::memory_order_relaxed);
         return;
     }
-
     auto ft = helix::audio::filter_type_from_string(type);
     bool type_changed = (ft != filter_type_.load(std::memory_order_relaxed));
     filter_cutoff_.store(cutoff, std::memory_order_relaxed);
     helix::audio::compute_biquad_coeffs(filter_, ft, cutoff, static_cast<float>(sample_rate_));
-    // Only reset filter state when the filter type changes or was previously off.
-    // Resetting z1/z2 on every coefficient update (e.g. during sweeps) restarts the
-    // filter cold each tick, causing clicks and excessive attenuation.
     if (type_changed) {
         filter_.z1 = 0;
         filter_.z2 = 0;
@@ -293,8 +233,10 @@ void ALSASoundBackend::render_loop() {
     }
 
     while (running_.load(std::memory_order_relaxed)) {
+        std::memset(mix_buf_.data(), 0, frames * sizeof(float));
+        bool has_audio = false;
+
         // Check for external render source (tracker PCM playback)
-        bool rendered_externally = false;
         {
             std::function<void(float*, size_t, int)> source;
             {
@@ -303,7 +245,7 @@ void ALSASoundBackend::render_loop() {
             }
             if (source) {
                 source(mix_buf_.data(), frames, static_cast<int>(sample_rate_));
-                // Apply filter if active
+                // Apply shared filter for tracker output
                 auto ft = filter_type_.load(std::memory_order_acquire);
                 if (ft != helix::audio::FilterType::NONE) {
                     float cutoff = filter_cutoff_.load(std::memory_order_relaxed);
@@ -312,68 +254,49 @@ void ALSASoundBackend::render_loop() {
                     helix::audio::apply_filter(filter_, mix_buf_.data(),
                                                static_cast<int>(frames));
                 }
-                rendered_externally = true;
+                has_audio = true;
             }
         }
 
-        if (!rendered_externally) {
-        std::atomic_thread_fence(std::memory_order_acquire);
-
-        // Check if any voice is active
-        bool any_active = false;
+        // Mix synth voices using VoiceSlot per-sample rendering
+        float sr = static_cast<float>(sample_rate_);
+        int num_samples = static_cast<int>(frames);
         for (int v = 0; v < MAX_VOICES; ++v) {
-            if (voices_[v].amplitude.load(std::memory_order_relaxed) > 0.001f ||
-                envelopes_[v].current_amplitude > 0.001f) {
-                any_active = true;
-                break;
+            auto& slot = voice_slots_[v];
+
+            // Check for new note (generation changed)
+            uint32_t gen = slot.generation.load(std::memory_order_acquire);
+            if (gen != slot.cb_generation) {
+                slot.cb_generation = gen;
+                slot.reset_for_new_note();
+                if (slot.active.filter_type != 0) {
+                    auto ft = (slot.active.filter_type == 1) ? helix::audio::FilterType::LOWPASS
+                                                              : helix::audio::FilterType::HIGHPASS;
+                    helix::audio::compute_biquad_coeffs(slot.filter, ft,
+                                                         slot.active.filter_cutoff, sr);
+                }
             }
+
+            // Skip if silent
+            if (slot.active.velocity <= 0.001f && slot.current_amplitude <= 0.001f) {
+                continue;
+            }
+
+            // Render per-sample
+            for (int i = 0; i < num_samples; ++i) {
+                mix_buf_[i] += slot.render_sample(sr);
+            }
+            has_audio = true;
         }
 
-        if (!any_active) {
+        if (!has_audio) {
+            // Write silence but still feed ALSA to avoid underruns
             std::memset(mix_buf_.data(), 0, frames * sizeof(float));
         } else {
-            // Mix all active voices with per-sample envelope
-            std::memset(mix_buf_.data(), 0, frames * sizeof(float));
-            int num_samples = static_cast<int>(frames);
-            float sr = static_cast<float>(sample_rate_);
-            for (int v = 0; v < MAX_VOICES; ++v) {
-                float gate = voices_[v].amplitude.load(std::memory_order_relaxed);
-                auto& env = envelopes_[v];
-
-                if (gate <= 0.001f && env.current_amplitude <= 0.001f) {
-                    continue;
-                }
-                float freq = voices_[v].freq.load(std::memory_order_relaxed);
-                if (freq <= 0.0f) continue;
-
-                helix::audio::generate_samples(
-                    voice_buf_.data(), num_samples,
-                    static_cast<int>(sample_rate_),
-                    voices_[v].wave.load(std::memory_order_relaxed),
-                    freq, 1.0f,
-                    voices_[v].duty.load(std::memory_order_relaxed),
-                    voices_[v].phase);
-
-                for (int i = 0; i < num_samples; ++i) {
-                    float amp = advance_envelope(env, sr);
-                    mix_buf_[i] += voice_buf_[i] * amp;
-                }
-            }
-
             // Clamp
             for (size_t i = 0; i < frames; ++i)
                 mix_buf_[i] = std::clamp(mix_buf_[i], -1.0f, 1.0f);
-
-            // Apply shared filter
-            auto ft = filter_type_.load(std::memory_order_acquire);
-            if (ft != helix::audio::FilterType::NONE) {
-                float cutoff = filter_cutoff_.load(std::memory_order_relaxed);
-                helix::audio::update_filter_if_needed(filter_, ft, cutoff,
-                                                      static_cast<float>(sample_rate_));
-                helix::audio::apply_filter(filter_, mix_buf_.data(), static_cast<int>(frames));
-            }
         }
-        } // !rendered_externally
 
         // Determine what to write
         const void* write_buf = nullptr;
@@ -405,7 +328,6 @@ void ALSASoundBackend::render_loop() {
 
 snd_pcm_sframes_t ALSASoundBackend::recover_xrun(snd_pcm_sframes_t err) {
     if (err == -EPIPE) {
-        // Underrun
         spdlog::debug("[ALSASound] Buffer underrun, recovering");
         int ret = snd_pcm_prepare(pcm_);
         if (ret < 0) {
@@ -416,7 +338,6 @@ snd_pcm_sframes_t ALSASoundBackend::recover_xrun(snd_pcm_sframes_t err) {
     }
 
     if (err == -ESTRPIPE) {
-        // Suspended
         spdlog::debug("[ALSASound] Device suspended, resuming");
         int ret;
         while ((ret = snd_pcm_resume(pcm_)) == -EAGAIN) {
