@@ -204,6 +204,27 @@ class AmsBackend {
     [[nodiscard]] virtual int get_current_slot() const = 0;
 
     /**
+     * @brief Slot index currently sourced by the given extruder. Backends that model
+     * per-extruder attribution (tool-changers with one spool per tool) override to
+     * return the tool->slot mapping. Default returns nullopt; callers fall back to
+     * aggregate filament_used_mm + current_slot().
+     * @param extruder_idx 0-based extruder index (0 = primary, 1 = extruder1, ...)
+     */
+    [[nodiscard]] virtual std::optional<int> slot_for_extruder(int extruder_idx) const {
+        (void)extruder_idx;
+        return std::nullopt;
+    }
+
+    /**
+     * @brief True when this backend already populates remaining_weight_g from a live
+     * printer-side source. FilamentConsumptionTracker skips slots on such backends
+     * to avoid double-counting.
+     */
+    [[nodiscard]] virtual bool tracks_consumption_natively() const {
+        return false;
+    }
+
+    /**
      * @brief Check if filament is currently loaded in extruder
      * @return true if filament is loaded
      */
