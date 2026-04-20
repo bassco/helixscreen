@@ -1596,6 +1596,10 @@
       "calibration": {
         "bed_mesh_gcode": "MOVE_TO_TRAY\nM140 S60\nM104 S220\nM109 S220\nM190 S60\nM729\nG28\nM400\nLOAD_CELL_SAVE_TARE\nG4 P2000\nBED_MESH_CALIBRATE_WITH_WIPE\nBED_MESH_PROFILE SAVE={profile}"
       },
+      "_print_start_default_phases_comment": "CC1's slicer start-gcode only heats + G28 + loads a stored BED_MESH_PROFILE (<1s). No QGL/Z_TILT/mesh-calibrate/wipe. Loadcell homing is slower than endstop homing, so 30s covers G28 alone.",
+      "print_start_default_phases": {
+        "HOMING": 30
+      },
       "heuristics": [
         {
           "type": "kinematics_match",

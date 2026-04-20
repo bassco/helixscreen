@@ -359,6 +359,30 @@ class PrinterDetector {
      */
     static std::string get_print_start_profile(const std::string& printer_name);
 
+    /**
+     * @brief First-print pre-print phase durations for a printer
+     *
+     * PreprintPredictor's generic defaults assume a fully-featured macro flow
+     * (homing, QGL, Z-tilt, bed mesh, cleaning, purging) and sum to ~260s,
+     * which is wildly pessimistic for printers whose slicer start-gcode only
+     * heats and homes (e.g. Elegoo CC1 loads a stored bed-mesh profile and
+     * has a near-empty PRINT_START).
+     *
+     * Database field `print_start_default_phases` is an object mapping phase
+     * name → seconds, e.g. `{"HOMING": 25}`. When present it REPLACES the
+     * generic defaults for the first-print ETA; history still wins once a
+     * print has completed and the predictor has real timings.
+     *
+     * Phase name keys match the PrintStartPhase enum in printer_state.h:
+     * HOMING, QGL, Z_TILT, BED_MESH, CLEANING, PURGING. Unknown names are
+     * ignored (with a warning).
+     *
+     * @param printer_name Printer name (e.g., "Elegoo Centauri Carbon")
+     * @return phase_enum_int → seconds; empty map falls back to generic defaults.
+     */
+    static std::map<int, int>
+    get_print_start_default_phases(const std::string& printer_name);
+
     // =========================================================================
     // User Extensions API
     // =========================================================================

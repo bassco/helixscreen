@@ -4,6 +4,7 @@
 #include "config.h"
 #include "data_root_resolver.h"
 #include "printer_detector.h"
+#include "printer_state.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -3420,4 +3421,32 @@ TEST_CASE("PrinterDetector: loads printer_database.json from HELIX_DATA_DIR/asse
     PrinterDetector::reload();
 
     fs::remove_all(temp_root);
+}
+
+// ============================================================================
+// print_start_default_phases — per-printer first-print ETA defaults
+// ============================================================================
+
+TEST_CASE("PrinterDetector: print_start_default_phases returns CC1 override",
+          "[printer][preprint]") {
+    auto phases = PrinterDetector::get_print_start_default_phases("Elegoo Centauri Carbon");
+    REQUIRE(phases.size() == 1);
+    REQUIRE(phases[static_cast<int>(helix::PrintStartPhase::HOMING)] == 30);
+    // Not in map (CC1 doesn't run these in its slicer start-gcode):
+    REQUIRE(phases.count(static_cast<int>(helix::PrintStartPhase::BED_MESH)) == 0);
+    REQUIRE(phases.count(static_cast<int>(helix::PrintStartPhase::QGL)) == 0);
+    REQUIRE(phases.count(static_cast<int>(helix::PrintStartPhase::Z_TILT)) == 0);
+}
+
+TEST_CASE("PrinterDetector: print_start_default_phases empty for unknown printer",
+          "[printer][preprint]") {
+    auto phases = PrinterDetector::get_print_start_default_phases("Not A Real Printer");
+    REQUIRE(phases.empty());
+}
+
+TEST_CASE("PrinterDetector: print_start_default_phases empty for printer without override",
+          "[printer][preprint]") {
+    // Voron 2.4 has no print_start_default_phases field — generic defaults apply.
+    auto phases = PrinterDetector::get_print_start_default_phases("Voron 2.4");
+    REQUIRE(phases.empty());
 }

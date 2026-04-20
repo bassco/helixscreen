@@ -3,7 +3,9 @@
 #include "preprint_predictor.h"
 
 #include "config.h"
+#include "printer_detector.h"
 #include "printer_state.h"
+#include "wizard_config_paths.h"
 
 #include <spdlog/spdlog.h>
 
@@ -100,6 +102,22 @@ std::vector<double> PreprintPredictor::compute_weights() const {
 }
 
 std::map<int, int> PreprintPredictor::default_phase_durations() {
+    // Per-printer DB override wins over the generic defaults so first-print
+    // ETAs aren't wildly off on printers whose PRINT_START / slicer start
+    // gcode doesn't exercise the full QGL/mesh/wipe flow (e.g. Elegoo CC1).
+    if (auto* cfg = Config::get_instance()) {
+        std::string printer_type =
+            cfg->get<std::string>(cfg->df() + helix::wizard::PRINTER_TYPE, "");
+        if (!printer_type.empty()) {
+            auto db_phases = PrinterDetector::get_print_start_default_phases(printer_type);
+            if (!db_phases.empty()) {
+                return db_phases;
+            }
+        }
+    }
+
+    // Generic ceiling used when the DB has no override — tuned so a printer
+    // that actually runs all six phases still gets a ballpark first-print ETA.
     return {
         {static_cast<int>(PrintStartPhase::HOMING), 30},
         {static_cast<int>(PrintStartPhase::BED_MESH), 90},
