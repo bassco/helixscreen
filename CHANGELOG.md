@@ -5,6 +5,32 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.38] - 2026-04-20
+
+### Added
+- Toast notifications now stack when multiple fire simultaneously; startup warnings (NOTIFY_*) queue through PendingStartupWarnings so none are lost during init.
+- QIDI Box AMS backend scaffolding — placeholder for future PLUS4/Q2/MAX4 filament system support.
+- Per-extruder filament consumption routing: multi-extruder printers track spool usage independently per tool.
+- Tool-changer identity mapping: `slot_for_extruder()` routes the correct AMS slot to each physical tool.
+- Printer discovery treats 'cavity' as a chamber synonym (Snapmaker U1 compatibility).
+
+### Fixed
+- Wizard: connection step migrated to AsyncLifetimeGuard, preventing use-after-free on rapid step transitions; WiFi subject re-init is now guarded.
+- Wizard: manual printer-type pick now correctly applies the selected preset (#837).
+- Presets: ForgeX split from KlipperMod profile; ZMOD stepper fan name corrected.
+- AD5M ZMOD: probe for `/dev/fb0` before launching to avoid cold-boot race condition.
+- Android: read-only seed bundle now ships via build-time packaging manifest.
+- Presets: AD5M fan defaults aligned with actual hardware (#837).
+- Print start: deduplicate probe samples and complete detection on first extrusion move.
+- Home panel: widget ID cache reads from populate snapshot, not post-populate re-read.
+- Home panel: favorite macro label no longer overlays icon; long names truncate with ellipsis.
+- Home panel: Home label placed on same row as homing buttons.
+- AMS panel: blank weight field shown for unknown spool instead of "-1".
+- Per-extruder filament subjects pre-populated to prevent null-subject observer crashes.
+
+### Changed
+- Print status panel refactored from imperative UI state to declarative XML bindings.
+
 ## [0.99.37] - 2026-04-19
 
 ### Added
@@ -3105,6 +3131,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.38]: https://github.com/prestonbrown/helixscreen/compare/v0.99.37...v0.99.38
 [0.99.37]: https://github.com/prestonbrown/helixscreen/compare/v0.99.36...v0.99.37
 [0.99.36]: https://github.com/prestonbrown/helixscreen/compare/v0.99.35...v0.99.36
 [0.99.35]: https://github.com/prestonbrown/helixscreen/compare/v0.99.34...v0.99.35
