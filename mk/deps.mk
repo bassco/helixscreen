@@ -259,7 +259,9 @@ install-deps:
 # Clean libhv build artifacts
 libhv-clean:
 	$(ECHO) "$(CYAN)Cleaning libhv build artifacts...$(RESET)"
-	$(Q)find $(LIBHV_DIR) -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \) -delete 2>/dev/null || true
+	# -L follows symlinks so worktrees (where $(LIBHV_DIR) may be a symlink to
+	# the main repo's lib/libhv) also get their stale artifacts cleaned.
+	$(Q)find -L $(LIBHV_DIR) -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \) -delete 2>/dev/null || true
 	$(Q)rm -f $(BUILD_DIR)/lib/libhv.a 2>/dev/null || true
 	$(ECHO) "$(GREEN)✓ libhv cleaned$(RESET)"
 
@@ -315,9 +317,13 @@ libhv-build:
 	$(Q)mkdir -p $(BUILD_DIR)/lib
 ifneq ($(CROSS_COMPILE),)
 	# Cross-compilation mode - ALWAYS clean first to avoid architecture mixing and stale artifacts
-	# This is critical: mixing native and cross-compiled objects causes subtle runtime bugs
+	# This is critical: mixing native and cross-compiled objects causes subtle runtime bugs.
+	# -L follows symlinks so worktrees (where $(LIBHV_DIR) may be a symlink to the main repo's
+	# lib/libhv) also get their stale artifacts cleaned - otherwise stale .o files from a prior
+	# toolchain can leak into the resulting libhv.a, producing link errors (e.g. undefined
+	# __time64/__localtime64 when a buildroot 12.3 hlog.o survives into a GCC-10 link).
 	$(Q)echo "$(YELLOW)→ Cleaning libhv for cross-compilation...$(RESET)"
-	$(Q)find $(LIBHV_DIR) -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \) -delete 2>/dev/null || true
+	$(Q)find -L $(LIBHV_DIR) -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \) -delete 2>/dev/null || true
 	# Pass cross-compiler to configure and make.
 	# When SSL is enabled, map target -> toolchain OpenSSL prefix.
 	$(Q)OPENSSL_PREFIX=""; \
