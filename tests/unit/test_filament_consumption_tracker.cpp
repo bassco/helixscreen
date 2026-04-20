@@ -25,10 +25,11 @@ namespace helix {
 struct FilamentConsumptionTrackerTestAccess {
     static void set_persist_interval(FilamentConsumptionTracker& t, uint32_t ms) {
         // The throttle lives on the ExternalSpoolSink in the registry now.
-        // Locate it via dynamic_cast and poke the interval override.
+        // Locate it via kind() tag and poke the interval override.
         for (auto& s : t.sinks_) {
-            if (auto* ext = dynamic_cast<ExternalSpoolSink*>(s.get())) {
-                ext->set_persist_interval_ms_for_testing(ms);
+            if (s->kind() == SinkKind::ExternalSpool) {
+                static_cast<ExternalSpoolSink*>(s.get())
+                    ->set_persist_interval_ms_for_testing(ms);
                 return;
             }
         }

@@ -4,8 +4,11 @@
 #include "ams_backend_mock.h"
 #include "ams_state.h"
 #include "ams_types.h"
+#include "app_globals.h"
 #include "consumption_sink.h"
 #include "filament_consumption_tracker.h"
+#include "printer_state.h"
+#include "ui_update_queue.h"
 
 #include "../catch_amalgamated.hpp"
 #include "../lvgl_test_fixture.h"
@@ -234,4 +237,69 @@ TEST_CASE_METHOD(LVGLTestFixture,
     // still be present if start() ran — we only check no leftover AMS sinks).
     REQUIRE(FilamentConsumptionTracker::instance()
                 .ams_sink_count_for_testing() == 0);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "Tracker: mid-print register_sink auto-snapshots and tracks deltas",
+                 "[consumption_sink][ams][registration]") {
+    auto& ams = AmsState::instance();
+    auto& printer = get_printer_state();
+    auto& tracker = FilamentConsumptionTracker::instance();
+
+    ams.clear_backends();
+    ams.deinit_subjects();
+    ams.init_subjects(false);
+    printer.init_subjects(false);
+    ams.clear_external_spool_info();
+
+    // Backend gets added pre-start so its per-slot sinks are registered while
+    // no print is in progress. Seed slot 0 with a trackable configuration.
+    auto m = std::make_unique<AmsBackendMock>(4);
+    AmsBackendMock* mock = m.get();
+    int backend_idx = ams.add_backend(std::move(m));
+    SlotInfo seed = mock->get_slot_info(0);
+    seed.material = "PLA";
+    seed.remaining_weight_g = 500.0f;
+    seed.total_weight_g = 1000.0f;
+    seed.spoolman_id = 0;
+    mock->set_slot_info(0, seed, /*persist=*/false);
+
+    // Start tracker and drive the printer into PRINTING so print_in_progress_
+    // is true when we register a new sink below.
+    tracker.start();
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 0);
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(helix::PrintJobState::PRINTING));
+    helix::ui::UpdateQueue::instance().drain();
+
+    // Register a fresh sink mid-print. Tracker should snapshot it immediately.
+    SlotInfo seed1 = mock->get_slot_info(1);
+    seed1.material = "PLA";
+    seed1.remaining_weight_g = 800.0f;
+    seed1.total_weight_g = 1000.0f;
+    seed1.spoolman_id = 0;
+    mock->set_slot_info(1, seed1, /*persist=*/false);
+
+    auto late_sink = std::make_unique<helix::AmsSlotSink>(backend_idx, 1);
+    helix::AmsSlotSink* raw = late_sink.get();
+    auto handle = tracker.register_sink(std::move(late_sink));
+    REQUIRE(handle == raw);
+    REQUIRE(raw->is_trackable());
+
+    // Push a filament_used delta and verify the late sink's slot decremented.
+    lv_subject_set_int(printer.get_print_filament_used_subject(), 1000);
+    helix::ui::UpdateQueue::instance().drain();
+
+    SlotInfo after = mock->get_slot_info(1);
+    // 1000mm PLA @ 1.75mm / 1.24 g/cm^3 ≈ 2.98 g.
+    REQUIRE(after.remaining_weight_g < 800.0f);
+    REQUIRE(after.remaining_weight_g > 796.0f);
+
+    // Clean up.
+    lv_subject_set_int(printer.get_print_state_enum_subject(),
+                       static_cast<int>(helix::PrintJobState::COMPLETE));
+    helix::ui::UpdateQueue::instance().drain();
+    tracker.stop();
+    ams.clear_backends();
+    ams.clear_external_spool_info();
 }

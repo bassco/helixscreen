@@ -39,10 +39,18 @@ class FilamentConsumptionTracker {
     /// active, immediately calls snapshot() on the new sink using the current
     /// aggregate filament_used reading so mid-print registration still tracks
     /// from the point of registration. Returns a non-owning handle.
+    ///
+    /// **Thread safety**: must be called from the main thread. Tracker state
+    /// (sinks_, active_, print_in_progress_) is NOT guarded — observer callbacks
+    /// fire deferred via UpdateQueue (also main thread), so registration and
+    /// dispatch don't race today. Adding background-thread callers requires a
+    /// mutex.
     SinkHandle register_sink(std::unique_ptr<IConsumptionSink> sink);
 
     /// Unregister a sink. Flushes the sink before destruction. Safe to call
     /// with a null / already-removed handle (no-op).
+    ///
+    /// **Thread safety**: main thread only. See register_sink().
     void unregister_sink(SinkHandle handle);
 
     /// Test-only visibility of the sink registry. Not for production use.

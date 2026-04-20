@@ -96,7 +96,7 @@ void FilamentConsumptionTracker::unregister_sink(SinkHandle handle) {
 std::size_t FilamentConsumptionTracker::ams_sink_count_for_testing() const {
     std::size_t count = 0;
     for (const auto& s : sinks_) {
-        if (dynamic_cast<const AmsSlotSink*>(s.get()) != nullptr) {
+        if (s->kind() == SinkKind::AmsSlot) {
             ++count;
         }
     }

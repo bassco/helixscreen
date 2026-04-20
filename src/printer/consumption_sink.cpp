@@ -57,6 +57,9 @@ void ExternalSpoolSink::snapshot(float filament_used_mm) {
         return;
     }
     density_g_cm3_ = material->density_g_cm3;
+    // TODO(filament-diameter): SlotInfo/external-spool don't carry filament
+    // diameter yet. 1.75 mm is correct for ~99% of hobbyist setups; wire from
+    // a per-spool field once Spoolman exposes it.
     diameter_mm_ = 1.75f;
     snapshot_mm_ = filament_used_mm;
     snapshot_weight_g_ = info.remaining_weight_g;
@@ -219,6 +222,9 @@ void AmsSlotSink::snapshot(float filament_used_mm) {
         return;
     }
     density_g_cm3_ = material->density_g_cm3;
+    // TODO(filament-diameter): SlotInfo/external-spool don't carry filament
+    // diameter yet. 1.75 mm is correct for ~99% of hobbyist setups; wire from
+    // a per-spool field once Spoolman exposes it.
     diameter_mm_ = 1.75f;
     snapshot_mm_ = filament_used_mm;
     snapshot_weight_g_ = info.remaining_weight_g;

@@ -12,6 +12,14 @@
 
 namespace helix {
 
+/// Concrete sink type tag. Used instead of `dynamic_cast` for branch logic
+/// (Phase 5 per-extruder routing filters out AMS sinks from external sinks
+/// via this tag; the tracker test helper uses it to count AMS sinks).
+enum class SinkKind : uint8_t {
+    ExternalSpool,
+    AmsSlot,
+};
+
 /// Target for per-stream filament consumption updates. Owns its own baseline
 /// (snapshot_mm + snapshot_weight_g), material density, and persistence throttle.
 /// Tracker calls these hooks in response to print lifecycle + filament_used
@@ -19,6 +27,9 @@ namespace helix {
 class IConsumptionSink {
   public:
     virtual ~IConsumptionSink() = default;
+
+    /// Concrete sink type tag. Prefer this over `dynamic_cast` for branch logic.
+    [[nodiscard]] virtual SinkKind kind() const = 0;
 
     /// Stable identifier for logging ("external", "ams:0:2", ...).
     [[nodiscard]] virtual std::string_view name() const = 0;
@@ -54,6 +65,9 @@ class IConsumptionSink {
 /// set_external_spool_info() for throttled disk persistence via SettingsManager.
 class ExternalSpoolSink : public IConsumptionSink {
   public:
+    [[nodiscard]] SinkKind kind() const override {
+        return SinkKind::ExternalSpool;
+    }
     [[nodiscard]] std::string_view name() const override;
     [[nodiscard]] bool is_trackable() const override;
     void snapshot(float filament_used_mm) override;
@@ -98,6 +112,9 @@ class AmsSlotSink : public IConsumptionSink {
   public:
     AmsSlotSink(int backend_index, int slot_index);
 
+    [[nodiscard]] SinkKind kind() const override {
+        return SinkKind::AmsSlot;
+    }
     [[nodiscard]] std::string_view name() const override;
     [[nodiscard]] bool is_trackable() const override;
     void snapshot(float filament_used_mm) override;
