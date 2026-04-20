@@ -525,6 +525,7 @@ void register_xml_components() {
     register_xml("bed_mesh_panel.xml");
 
     // Settings overlay panels
+    register_xml("sound_preview_overlay.xml");
     register_xml("settings_display_sound_overlay.xml");
     register_xml("settings_printing_overlay.xml");
     register_xml("settings_hardware_overlay.xml");
