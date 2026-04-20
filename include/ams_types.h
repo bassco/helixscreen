@@ -45,7 +45,8 @@ enum class AmsType {
     TOOL_CHANGER = 4, ///< Physical tool changer (viesturz/klipper-toolchanger)
     AD5X_IFS = 5,     ///< FlashForge AD5X IFS (Intelligent Filament Switching)
     CFS = 6,           ///< Creality Filament System (K2 series, RS-485)
-    SNAPMAKER = 7      ///< Snapmaker U1 SnapSwap toolchanger
+    SNAPMAKER = 7,     ///< Snapmaker U1 SnapSwap toolchanger
+    QIDI_BOX = 8       ///< QIDI Box filament changer (PLUS4, Q2, MAX4 — hub AMS, 4 slots chainable to 16)
 };
 
 /**
@@ -69,6 +70,8 @@ inline const char* ams_type_to_string(AmsType type) {
         return "CFS";
     case AmsType::SNAPMAKER:
         return "Snapmaker";
+    case AmsType::QIDI_BOX:
+        return "QIDI Box"; // i18n: do not translate - product name
     default:
         return "None";
     }
@@ -103,6 +106,12 @@ inline AmsType ams_type_from_string(std::string_view str) {
     if (str == "snapmaker" || str == "Snapmaker" || str == "snapswap" || str == "SnapSwap") {
         return AmsType::SNAPMAKER;
     }
+    // QIDI Box: QIDI's 4-slot hub-style filament changer (PLUS4 / Q2 / MAX4).
+    // Note: the bare "box" alias is already claimed by CFS above, so QIDI Box
+    // requires the explicit "qidi_box" / "QIDI Box" spelling.
+    if (str == "qidi_box" || str == "QIDI Box" || str == "qidibox") {
+        return AmsType::QIDI_BOX;
+    }
     return AmsType::NONE;
 }
 
@@ -133,7 +142,8 @@ inline bool is_tool_changer(AmsType type) {
  */
 inline bool is_filament_system(AmsType type) {
     return type == AmsType::HAPPY_HARE || type == AmsType::AFC || type == AmsType::ACE ||
-           type == AmsType::AD5X_IFS || type == AmsType::CFS || type == AmsType::SNAPMAKER;
+           type == AmsType::AD5X_IFS || type == AmsType::CFS || type == AmsType::SNAPMAKER ||
+           type == AmsType::QIDI_BOX;
 }
 
 /**

@@ -315,7 +315,9 @@ enum class AmsType {
     ACE = 3,          // AnyCubic ACE Pro (ValgACE/BunnyACE/DuckACE Klipper drivers)
     TOOL_CHANGER = 4, // Physical tool changer (viesturz/klipper-toolchanger)
     AD5X_IFS = 5,     // FlashForge AD5X IFS (Intelligent Filament Switching)
-    CFS = 6           // Creality Filament System (K2 series, RS-485)
+    CFS = 6,          // Creality Filament System (K2 series, RS-485)
+    SNAPMAKER = 7,    // Snapmaker U1 SnapSwap toolchanger
+    QIDI_BOX = 8      // QIDI Box (PLUS4 / Q2 / MAX4, hub-style, 4 slots chainable to 16) — STUB
 };
 ```
 
@@ -915,6 +917,105 @@ AD5X users running ZMOD firmware get automatic detection — no configuration ne
 5. Queries initial state via `printer.objects.query`
 
 Existing beta testers upgrading to a version with IFS support will see the filament panel populate automatically on next connection.
+
+---
+
+## QIDI Box (QIDI PLUS4 / Q2 / MAX4)
+
+> **Status: STUB** — The `AmsType::QIDI_BOX` enum value, factory wiring, and a no-op `AmsBackendQidi` scaffold exist so the type round-trips through the rest of the system. No real protocol is implemented. Every backend operation logs `spdlog::warn("... not yet implemented")` and returns `AmsErrorHelper::not_supported(...)`. Do **not** ship this as a user-facing feature until live hardware validation has happened.
+
+The QIDI Box is QIDI's RFID-aware multi-material system: 4 slots per unit, chainable up to 4 units = 16 colors, with active drying up to 65°C and runout/tangle sensors. It is a **hub-style AMS** (like FlashForge IFS or Bambu AMS), not a lane-selector MMU — the closest in-tree analog is `AmsBackendAd5xIfs`, not Happy Hare or AFC.
+
+### Compatible Hardware
+
+| Printer | Supported | Notes |
+|---------|-----------|-------|
+| QIDI PLUS4 | Yes (per QIDI) | PLUS4 kit is not interchangeable with Q2/MAX4 — different hub board + data cable |
+| QIDI Q2    | Yes (per QIDI) | Same kit as MAX4 |
+| QIDI MAX4  | Yes (per QIDI) | Same kit as Q2 |
+| Q1 Pro     | **No** | Unsupported by QIDI — different mainboard generation |
+| X-Max 3    | **No** | Unsupported by QIDI — older MKSPI board |
+
+The `assets/config/printer_database.json` entries for `qidi_plus_4` and `qidi_q2` carry an `"ams_type": "qidi_box"` capability tag. A `qidi_max_4` entry does not yet exist in the database — add one alongside the real protocol work.
+
+### Detection
+
+**Not yet wired.** The `ams_type` capability in the printer database is informational today — actual filament-system detection runs through heuristics in `include/printer_discovery.h` against `printer.objects.list`. Detection for QIDI Box will likely key off Klipper objects exposed by the Box's udev-identified USB-serial device (`QIDI_BOX_V1`) or the `_BOX_*` gcode macros. The exact object names need to be enumerated on a real PLUS4 / Q2 / MAX4.
+
+### Firmware Openness
+
+QIDI printers (Q1 Pro and newer) run forks of Klipper and Moonraker from [QIDITECH/klipper](https://github.com/QIDITECH/klipper) and [QIDITECH/moonraker](https://github.com/QIDITECH/moonraker). SSH is open by default (`mks` / `makerbase`), and KIAUH is pre-installed. QIDI discourages upstream Klipper updates because their board requires their fork.
+
+**The Box firmware itself ships as obfuscated `.so` Python extension modules.** A community open-source reimplementation at [qidi-community/Plus4-Wiki customisable_qidibox_firmware](https://github.com/qidi-community/Plus4-Wiki/tree/main/content/customisable_qidibox_firmware) replaces six modules (`box_detect.py`, `box_rfid.py`, `box_stepper.py`, `box_extras.py`, `aht20_f.py`, `buttons_irq.py`) with editable Python. Maintainers label it "strongly WIP." This repo is the primary protocol reference for a HelixScreen integrator.
+
+### Control Surface (expected)
+
+All control runs through Klipper gcode macros — **no dedicated Moonraker endpoints**, no REST extension. State lives in printer objects and `save_variables`, same shape as AD5X IFS. Known macro names from the QIDI stock config:
+
+| Command | Action |
+|---------|--------|
+| `BOX_CHANGE_FILAMENT` | Tool change |
+| `_BOX_START` | Internal helper |
+| `_BOX_*` | Additional internal macros |
+
+Exact parameter shapes and the full macro list need to be confirmed against a real printer.
+
+### Path Topology
+
+```
+  Slot 1 ──┐
+  Slot 2 ──┤
+            ├── Hub ── Toolhead
+  Slot 3 ──┤
+  Slot 4 ──┘
+```
+
+`PathTopology::HUB` — slots converge at a hub inside the Box before the toolhead. Chained boxes add units with their own hubs; the multi-unit addressing scheme is not publicly documented.
+
+### RFID
+
+Spools identify via MIFARE Classic RFID tags. Data lives in sector 1 block 0. Third-party read/write tools exist:
+
+- [TinkerBarn/BoxRFID](https://github.com/TinkerBarn/BoxRFID) — Electron desktop app
+- [n0cloud/qidi-box-rfid-manager](https://github.com/n0cloud/qidi-box-rfid-manager) — mobile
+- [LexyGuru/Qidi_RFID_App](https://github.com/LexyGuru/Qidi_RFID_App)
+
+### Do NOT Confuse With
+
+- **Happy Hare "QuattroBox"** — listed in Happy Hare's supported hardware, but it is an unrelated DIY MMU by [Batalhoti](https://github.com/Batalhoti/QuattroBox). Happy Hare does **not** support the QIDI Box.
+- **The `"box"` string alias in `ams_type_from_string()`** — already claimed by `CFS` (Creality K2 "box" terminology). QIDI Box requires the explicit `"qidi_box"` / `"QIDI Box"` / `"qidibox"` spelling.
+
+### Capabilities (planned)
+
+| Feature | Expected | Notes |
+|---------|----------|-------|
+| Endless Spool | Yes (auto-backup-spool) | Advertised by QIDI |
+| Tool Mapping | Likely via `save_variables` | Matches AD5X IFS shape |
+| Bypass Mode | Unknown | Need hardware inspection |
+| Spoolman | Optional | Works through standard Moonraker `[spoolman]` |
+| Auto-Heat on Load | Unknown | |
+| Dryer | Yes (up to 65°C) | `aht20_f.py` owns humidity sensing |
+| Device Actions | Unknown | |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `include/ams_backend_qidi.h` | Backend class declaration (stub) |
+| `src/printer/ams_backend_qidi.cpp` | Stub implementation — logs warn, returns not-supported |
+| `include/ams_types.h` | `AmsType::QIDI_BOX` enum + string converters |
+
+No dedicated unit tests yet — adding them is blocked on having real protocol behavior to test against.
+
+### Follow-up Work (in order)
+
+1. Get access to a PLUS4, Q2, or MAX4 with a Box attached.
+2. SSH in (`mks` / `makerbase`), enumerate `printer.objects.list` and `save_variables` keys. Capture the stock gcode macro bodies.
+3. Add detection to `PrinterDiscovery::parse_objects()` — key off whatever Klipper objects the Box exposes.
+4. Implement `AmsBackendQidi` on top of `AmsSubscriptionBackend`, modeled on `AmsBackendAd5xIfs` (printer-object polling + macro invocation).
+5. Add the `qidi_max_4` entry to `assets/config/printer_database.json`.
+6. Add `assets/images/ams/qidi_box_64.png` (TODO comment exists in the stub).
+7. Write unit tests against captured real-device fixtures.
 
 ---
 

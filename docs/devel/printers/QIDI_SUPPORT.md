@@ -129,6 +129,16 @@ If WiFi doesn't work in HelixScreen on a Q2:
 4. **Check the wpa_supplicant socket:** `ls /var/run/wpa_supplicant/` — HelixScreen needs this socket to communicate
 5. **If using stock firmware:** The stock `client` binary may hold the wpa_supplicant socket. Stop it first: `killall client`
 
+## QIDI Box (Filament Changer)
+
+QIDI sells a 4-slot RFID-aware filament changer — the **QIDI Box** — for PLUS4, Q2, and MAX4 (not for Q1 Pro or X-Max 3). Chainable to 16 slots, active drying up to 65°C, MIFARE Classic RFID.
+
+HelixScreen has a **stub backend** for the Box (`AmsType::QIDI_BOX`, `AmsBackendQidi`). The type round-trips through the enum, factory, and UI identify wizard, but no protocol is implemented — every operation logs a warning and reports not-supported. Detection is **not** wired up yet; the `"ams_type": "qidi_box"` capability on the Plus 4 and Q2 printer-database entries is informational today.
+
+Full context, references to the `qidi-community/Plus4-Wiki` open-source reimplementation, and the follow-up work list live in [`FILAMENT_MANAGEMENT.md` → QIDI Box](../FILAMENT_MANAGEMENT.md#qidi-box-qidi-plus4--q2--max4).
+
+Real integration is blocked on test-hardware access.
+
 ## Known Limitations
 
 - **Most older QIDI models have TJC HMI serial displays** -- The X-Max 3, X-Plus 3, Q1 Pro, and X-Smart 3 all use TJC (Nextion-compatible) displays connected via serial UART. HelixScreen cannot drive these. A physical screen replacement (HDMI or DSI touchscreen) is required.
