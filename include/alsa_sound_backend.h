@@ -14,9 +14,8 @@
 #include <thread>
 #include <vector>
 
-// VoiceEnvelope is defined in sdl_sound_backend.h for SDL builds.
-// For ALSA-only builds (embedded), define it here.
-#ifndef HELIX_DISPLAY_SDL
+/// Per-voice ADSR envelope state, advanced per-sample in the render loop.
+/// Will be replaced by VoiceSlot in Task 4 (ALSA backend migration).
 struct VoiceEnvelope {
     std::atomic<float> attack_ms{5};
     std::atomic<float> decay_ms{40};
@@ -30,9 +29,6 @@ struct VoiceEnvelope {
     float elapsed_samples = 0;
     float current_amplitude = 0;
 };
-#else
-#include "sdl_sound_backend.h" // VoiceEnvelope defined there
-#endif
 
 /// ALSA PCM audio backend — real waveform synthesis for Linux SBCs
 /// Uses the shared sound_synthesis.h for sample generation.
