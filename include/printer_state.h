@@ -525,6 +525,22 @@ class PrinterState {
         return print_domain_.get_print_filament_used_subject();
     }
 
+    /**
+     * @brief Per-extruder filament_used (mm), 0-based.
+     *
+     * Dynamic subject — observers MUST capture the returned lifetime token and
+     * subscribe via observe_int_sync(..., lifetime). See
+     * PrinterPrintState::get_extruder_filament_used_subject for full contract.
+     *
+     * @param extruder_idx 0-based extruder index (0 = "extruder", 1 = "extruder1", ...)
+     * @param[out] lifetime Token whose expiration signals subject death
+     * @return Non-null subject pointer (created lazily on first access).
+     */
+    lv_subject_t* get_extruder_filament_used_subject(int extruder_idx,
+                                                     SubjectLifetime& lifetime) {
+        return print_domain_.get_extruder_filament_used_subject(extruder_idx, lifetime);
+    }
+
     // Layer tracking subjects (from print_stats.info.current_layer/total_layer)
     // Delegated to PrinterPrintState component
     lv_subject_t* get_print_layer_current_subject() {

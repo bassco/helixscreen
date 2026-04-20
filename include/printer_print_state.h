@@ -2,10 +2,13 @@
 #pragma once
 
 #include "subject_managed_panel.h"
+#include "ui_observer_guard.h" // SubjectLifetime
 
 #include <atomic>
 #include <lvgl.h>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "hv/json.hpp"
 
@@ -144,6 +147,26 @@ class PrinterPrintState {
     lv_subject_t* get_print_filament_used_subject() {
         return &print_filament_used_;
     }
+
+    /**
+     * @brief Per-extruder filament_used (mm, integer), 0-based.
+     *
+     * Populated from Klipper's per-object `extruder`/`extruder1`/`extruder2`/...
+     * `filament_used` fields during status updates. Callers use the returned
+     * subject to observe one tool's consumption independently of the aggregate
+     * `print_stats.filament_used` stream.
+     *
+     * These subjects are **dynamic** ([L077]): they are heap-allocated on
+     * first access and re-created on deinit_subjects(). Observers MUST pass
+     * a SubjectLifetime token and subscribe via observe_int_sync(..., lifetime)
+     * — otherwise ObserverGuard dangles on reconnect.
+     *
+     * @param extruder_idx 0-based extruder index (0 = "extruder", 1 = "extruder1", ...)
+     * @param[out] lifetime Token whose expiration signals subject death
+     * @return Non-null subject pointer; never null for any non-negative idx.
+     */
+    lv_subject_t* get_extruder_filament_used_subject(int extruder_idx,
+                                                     SubjectLifetime& lifetime);
 
     /// Current PrintStartPhase enum value
     lv_subject_t* get_print_start_phase_subject() {
@@ -370,6 +393,19 @@ class PrinterPrintState {
     lv_subject_t print_elapsed_{};       // Wall-clock elapsed time (Moonraker total_duration)
     lv_subject_t print_time_left_{};     // Estimated remaining
     lv_subject_t print_filament_used_{}; // Filament used in mm (from Moonraker print_stats)
+
+    // Per-extruder filament_used (mm) — heap-allocated for stable pointers across rehash.
+    // Created lazily on first get_extruder_filament_used_subject() access and on first
+    // status update containing a matching extruder key. See [L077] for lifetime-token
+    // discipline required when observing these dynamic subjects.
+    struct ExtruderFilamentInfo {
+        std::unique_ptr<lv_subject_t> subject; ///< int: mm consumed on this extruder
+        SubjectLifetime lifetime;              ///< shared_ptr<bool>: true while subject alive
+    };
+    std::unordered_map<int, ExtruderFilamentInfo> extruder_filament_used_;
+
+    /// Lazily create or return the per-extruder filament_used entry for idx.
+    ExtruderFilamentInfo& ensure_extruder_filament_entry(int extruder_idx);
 
     // Print start progress subjects
     lv_subject_t print_start_phase_{};    // Integer: PrintStartPhase enum

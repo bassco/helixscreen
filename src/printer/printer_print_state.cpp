@@ -95,8 +95,47 @@ void PrinterPrintState::deinit_subjects() {
     }
 
     spdlog::trace("[PrinterPrintState] Deinitializing subjects");
+
+    // Per-extruder filament_used subjects are dynamic: signal subject death
+    // BEFORE deinit so all ObserverGuards (including those still holding
+    // shared_ptr copies) detect the subject as dead and skip lv_observer_remove()
+    // on the about-to-be-freed observers (#816).
+    for (auto& [idx, info] : extruder_filament_used_) {
+        if (info.lifetime) *info.lifetime = false;
+        info.lifetime.reset();
+    }
+    for (auto& [idx, info] : extruder_filament_used_) {
+        if (info.subject) {
+            lv_subject_deinit(info.subject.get());
+        }
+    }
+    extruder_filament_used_.clear();
+
     subjects_.deinit_all();
     subjects_initialized_ = false;
+}
+
+PrinterPrintState::ExtruderFilamentInfo&
+PrinterPrintState::ensure_extruder_filament_entry(int extruder_idx) {
+    auto it = extruder_filament_used_.find(extruder_idx);
+    if (it != extruder_filament_used_.end()) {
+        return it->second;
+    }
+    ExtruderFilamentInfo info;
+    info.subject = std::make_unique<lv_subject_t>();
+    lv_subject_init_int(info.subject.get(), 0);
+    info.lifetime = std::make_shared<bool>(true);
+    auto [ins, _] = extruder_filament_used_.emplace(extruder_idx, std::move(info));
+    spdlog::trace("[PrinterPrintState] Created per-extruder filament_used subject for idx={}",
+                  extruder_idx);
+    return ins->second;
+}
+
+lv_subject_t* PrinterPrintState::get_extruder_filament_used_subject(int extruder_idx,
+                                                                    SubjectLifetime& lifetime) {
+    auto& info = ensure_extruder_filament_entry(extruder_idx);
+    lifetime = info.lifetime;
+    return info.subject.get();
 }
 
 void PrinterPrintState::reset_for_new_print() {
@@ -403,6 +442,31 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
         if ((!is_terminal_state || progress_pct >= current_progress) &&
             current_progress != progress_pct) {
             lv_subject_set_int(&print_progress_, progress_pct);
+        }
+    }
+
+    // Per-extruder filament_used (from Klipper's extruder/extruder1/... objects).
+    // Keys live at the top level of the status payload, NOT under print_stats.
+    // We scan a small fixed range (0..15) — Klipper toolchanger setups max out
+    // well below that. Missing keys are silently skipped.
+    //
+    // Subjects are created lazily: if a status update for extruder2 arrives
+    // before anything observes it, we still create the subject so subsequent
+    // observers see the latest value.
+    constexpr int kMaxExtruderScan = 16;
+    for (int idx = 0; idx < kMaxExtruderScan; ++idx) {
+        std::string key = (idx == 0) ? "extruder" : "extruder" + std::to_string(idx);
+        auto it = status.find(key);
+        if (it == status.end() || !it->is_object()) {
+            continue;
+        }
+        if (!it->contains("filament_used") || !(*it)["filament_used"].is_number()) {
+            continue;
+        }
+        int mm = static_cast<int>((*it)["filament_used"].get<double>());
+        auto& info = ensure_extruder_filament_entry(idx);
+        if (info.subject && lv_subject_get_int(info.subject.get()) != mm) {
+            lv_subject_set_int(info.subject.get(), mm);
         }
     }
 
