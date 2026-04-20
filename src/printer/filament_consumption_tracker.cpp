@@ -88,6 +88,13 @@ FilamentConsumptionTracker::register_sink(std::unique_ptr<IConsumptionSink> sink
     // it can start tracking from this point forward. If the new sink becomes
     // trackable and the tracker was previously idle (no other trackable sink),
     // flip active_ so deltas start flowing.
+    //
+    // Note: we always snapshot from the aggregate `print_stats.filament_used`.
+    // For AmsSlotSinks whose backend declares a per-extruder mapping, the
+    // first per-extruder tick will fall below this aggregate baseline and
+    // hit the reset-detection branch in apply_delta(), which rebases to the
+    // per-extruder stream. No gram is lost in that rebase because the
+    // remaining_weight_g snapshot reads the backend's current value each time.
     if (print_in_progress_) {
         auto* subj = get_printer_state().get_print_filament_used_subject();
         const float mm = static_cast<float>(lv_subject_get_int(subj));
@@ -227,6 +234,12 @@ void FilamentConsumptionTracker::on_extruder_filament_used_changed(int extruder_
     // Find any backend that declares a slot mapping for this extruder and
     // route the delta to the matching AmsSlotSink. A single extruder can map
     // at most one slot per backend; multiple backends are independent.
+    //
+    // TODO(filament-tracker-deadidx): If a backend declares a mapping for an
+    // extruder that Klipper never reports (e.g. mapping claims slot 1 →
+    // extruder1, but only `extruder` appears in status), that slot silently
+    // never accrues. Consider emitting a single spdlog::warn on first
+    // print-start if a mapped extruder has never fired a status update.
     for (int b = 0; b < AmsState::instance().backend_count(); ++b) {
         AmsBackend* backend = AmsState::instance().get_backend(b);
         if (!backend) {
