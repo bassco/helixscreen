@@ -198,7 +198,10 @@ void button_style_changed_cb(lv_event_t* e) {
  *
  * @param e Event object (unused)
  */
-void button_clicked_sound_cb(lv_event_t* /*e*/) {
+void button_clicked_sound_cb(lv_event_t* e) {
+    auto* btn = static_cast<lv_obj_t*>(lv_event_get_target(e));
+    if (lv_obj_has_flag(btn, LV_OBJ_FLAG_USER_4))
+        return; // Suppressed (e.g., sound preview buttons)
     SoundManager::instance().play("button_tap");
 }
 

@@ -284,8 +284,9 @@ void SoundSequencer::advance_step() {
                     publish_note_for_step(step);
                 }
             }
-            // Silence between repeats
-            backend_->silence();
+            // Silence between repeats (non-PCM only; PCM backends auto-silence via envelope)
+            if (!backend_->supports_note_events())
+                backend_->silence();
             return;
         }
 
@@ -306,13 +307,13 @@ void SoundSequencer::advance_step() {
         return;
     }
 
-    // Send envelope to PCM backends for per-sample computation
+    // Publish note to backends for next step
     if (!step.is_pause) {
         publish_note_for_step(step);
+    } else if (!backend_->supports_note_events()) {
+        // Non-PCM backends need explicit silence for pauses
+        backend_->silence();
     }
-
-    // Silence at step boundary
-    backend_->silence();
 }
 
 float SoundSequencer::compute_envelope(const ADSREnvelope& env, float elapsed_ms,
