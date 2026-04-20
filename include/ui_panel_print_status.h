@@ -312,9 +312,16 @@ class PrintStatusPanel : public OverlayBase {
 
     // 1 once the user taps the print end overlay to dismiss it. Reset to 0
     // on new-print transitions so the next outcome's overlay appears normally.
-    // XML bindings on the complete/cancelled/error overlays add this as a
-    // second hide condition alongside print_outcome.
     lv_subject_t end_overlay_dismissed_subject_;
+
+    // Derived visibility for the three end-of-print overlays. Each is 1 iff
+    // print_outcome matches AND end_overlay_dismissed == 0. Stacking two
+    // independent XML bind_flag observers on the same hidden flag raced at
+    // startup (issue L042) — the second observer unhid the overlay even when
+    // outcome was NONE. Computed in recompute_end_overlay_visibility().
+    lv_subject_t show_complete_overlay_subject_;
+    lv_subject_t show_cancelled_overlay_subject_;
+    lv_subject_t show_error_overlay_subject_;
 
     lv_subject_t exclude_objects_available_subject_; ///< Int: 1 if multi-object print
     lv_subject_t objects_text_subject_;              ///< String: "X of Y obj" display text
@@ -465,6 +472,7 @@ class PrintStatusPanel : public OverlayBase {
 
     void handle_temp_card_click();
     void update_chamber_status();
+    void recompute_end_overlay_visibility();
     void handle_pause_button();
     void handle_tune_button();
     void handle_cancel_button();
@@ -535,6 +543,8 @@ class PrintStatusPanel : public OverlayBase {
     ObserverGuard chamber_temp_observer_; ///< Updates chamber status text
     ObserverGuard print_thumbnail_path_observer_; ///< Updates print_thumbnail_ from shared subject
     ObserverGuard gcode_render_mode_observer_; ///< Watches settings changes to update viewer mode
+    ObserverGuard print_outcome_observer_;     ///< Drives show_{complete,cancelled,error}_overlay
+    ObserverGuard end_overlay_dismissed_observer_; ///< Ditto; second input to the same recompute
 
     //
     // === Exclude Object Manager ===

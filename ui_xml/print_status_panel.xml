@@ -5,12 +5,16 @@
   <!-- overlay_bg and overlay_text are theme-aware pairs defined in globals.xml -->
   <consts>
     <!-- metadata_clip_height: Clip container for print status metadata overlay -->
+    <px name="metadata_clip_height_micro" value="72"/>
+    <px name="metadata_clip_height_tiny" value="82"/>
     <px name="metadata_clip_height_small" value="95"/>
     <px name="metadata_clip_height_medium" value="105"/>
     <px name="metadata_clip_height_large" value="113"/>
     <!-- Thumbnail vertical offset to clear metadata overlay at bottom -->
     <percentage name="thumbnail_offset_y" value="-15%"/>
     <!-- metadata_overlay_height: Inner metadata overlay (slightly taller than clip) -->
+    <px name="metadata_overlay_height_micro" value="78"/>
+    <px name="metadata_overlay_height_tiny" value="88"/>
     <px name="metadata_overlay_height_small" value="101"/>
     <px name="metadata_overlay_height_medium" value="111"/>
     <px name="metadata_overlay_height_large" value="119"/>
@@ -75,9 +79,12 @@
         </lv_label>
 
         <!-- PREPARING OVERLAY: Shown during pre-print operations (homing, etc) -->
+        <!-- pad_bottom reserves the metadata strip so spinner/heading/progress don't collide -->
+        <!-- with the Layer/Filename/ETA rows that metadata_overlay draws on top. -->
         <lv_obj name="preparing_overlay"
                 width="100%" height="100%" align="center" style_bg_color="#overlay_bg" style_bg_opa="220"
-                style_radius="0" style_pad_all="#space_lg" flex_flow="column" style_flex_main_place="center"
+                style_radius="0" style_pad_all="#space_lg" style_pad_bottom="#metadata_clip_height"
+                flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_pad_gap="#space_md" scrollable="false">
           <bind_flag_if_eq subject="preparing_visible" flag="hidden" ref_value="0"/>
           <spinner name="preparing_spinner" size="lg"/>
@@ -114,15 +121,14 @@
         </lv_obj>
 
         <!-- PRINT COMPLETE OVERLAY: Shown when print finishes successfully -->
-        <!-- Hidden by default. Binding removes hidden ONLY when outcome == COMPLETE (1) -->
-        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
+        <!-- Single derived subject show_complete_overlay = (outcome==COMPLETE && !dismissed). -->
+        <!-- Two independent bind_flag observers on hidden raced at startup (L042). -->
         <lv_obj name="print_complete_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
                 scrollable="false" clickable="true" hidden="true">
-          <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="1"/>
-          <bind_flag_if_eq subject="end_overlay_dismissed" flag="hidden" ref_value="1"/>
+          <bind_flag_if_eq subject="show_complete_overlay" flag="hidden" ref_value="0"/>
           <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Green success badge with checkmark (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->
@@ -133,16 +139,13 @@
                      style_pad_bottom="#space_sm"/>
         </lv_obj>
 
-        <!-- PRINT CANCELLED OVERLAY: Shown when print is cancelled -->
-        <!-- Hidden by default. Binding removes hidden ONLY when outcome == CANCELLED (2) -->
-        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
+        <!-- PRINT CANCELLED OVERLAY: shown via show_cancelled_overlay (see COMPLETE above). -->
         <lv_obj name="print_cancelled_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
                 scrollable="false" clickable="true" hidden="true">
-          <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="2"/>
-          <bind_flag_if_eq subject="end_overlay_dismissed" flag="hidden" ref_value="1"/>
+          <bind_flag_if_eq subject="show_cancelled_overlay" flag="hidden" ref_value="0"/>
           <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Orange warning badge with cancel icon (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->
@@ -153,16 +156,13 @@
                      style_pad_bottom="#space_sm"/>
         </lv_obj>
 
-        <!-- PRINT ERROR OVERLAY: Shown when print fails with error -->
-        <!-- Hidden by default. Binding removes hidden ONLY when outcome == ERROR (3) -->
-        <!-- Tap to dismiss overlay and interact with 3D viewer underneath -->
+        <!-- PRINT ERROR OVERLAY: shown via show_error_overlay (see COMPLETE above). -->
         <lv_obj name="print_error_overlay"
                 width="100%" height="100%" align="top_mid" style_radius="0" style_pad_all="#space_lg"
                 style_pad_bottom="#metadata_clip_height" flex_flow="column" style_flex_main_place="center"
                 style_flex_cross_place="center" style_flex_track_place="center" style_pad_gap="#space_sm"
                 scrollable="false" clickable="true" hidden="true">
-          <bind_flag_if_not_eq subject="print_outcome" flag="hidden" ref_value="3"/>
-          <bind_flag_if_eq subject="end_overlay_dismissed" flag="hidden" ref_value="1"/>
+          <bind_flag_if_eq subject="show_error_overlay" flag="hidden" ref_value="0"/>
           <event_cb trigger="clicked" callback="on_print_status_dismiss_overlay"/>
           <!-- Red danger badge with alert icon (animated on appearance) -->
           <!-- Uses ui_button for auto-contrast text via update_button_text_contrast() -->

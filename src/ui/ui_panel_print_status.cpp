@@ -256,6 +256,15 @@ PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* ap
         });
     spdlog::debug("[{}] G-code render mode observer registered", get_name());
 
+    // End-overlay visibility: derive three show_* bool subjects from print_outcome
+    // and end_overlay_dismissed_. XML binds each overlay's hidden flag to a single
+    // subject, avoiding the L042 two-observer race that made the error overlay
+    // pop at startup when end_overlay_dismissed==0 unhide-raced the outcome check.
+    print_outcome_observer_ = observe_int_sync<PrintStatusPanel>(
+        printer_state_.get_print_outcome_subject(), this,
+        [](PrintStatusPanel* self, int) { self->recompute_end_overlay_visibility(); });
+    recompute_end_overlay_visibility();
+
     // Create filament runout handler (extracted from PrintStatusPanel)
     runout_handler_ = std::make_unique<helix::ui::FilamentRunoutHandler>(api_);
     spdlog::debug("[{}] Created filament runout handler", get_name());
@@ -364,6 +373,16 @@ void PrintStatusPanel::init_subjects() {
     UI_MANAGED_SUBJECT_INT(gcode_viewer_mode_subject_, 0, "gcode_viewer_mode", subjects_);
     UI_MANAGED_SUBJECT_INT(exclude_map_active_subject_, 0, "exclude_map_active", subjects_);
     UI_MANAGED_SUBJECT_INT(end_overlay_dismissed_subject_, 0, "end_overlay_dismissed", subjects_);
+    end_overlay_dismissed_observer_ = observe_int_sync<PrintStatusPanel>(
+        &end_overlay_dismissed_subject_, this,
+        [](PrintStatusPanel* self, int) { self->recompute_end_overlay_visibility(); });
+
+    // Derived show flags — computed in recompute_end_overlay_visibility() from
+    // print_outcome + end_overlay_dismissed. Replaces the racy pair of XML
+    // bind_flag observers per overlay (issue L042).
+    UI_MANAGED_SUBJECT_INT(show_complete_overlay_subject_, 0, "show_complete_overlay", subjects_);
+    UI_MANAGED_SUBJECT_INT(show_cancelled_overlay_subject_, 0, "show_cancelled_overlay", subjects_);
+    UI_MANAGED_SUBJECT_INT(show_error_overlay_subject_, 0, "show_error_overlay", subjects_);
 
     // Button enable states driven declaratively from XML (see update_button_states).
     UI_MANAGED_SUBJECT_INT(print_controls_enabled_subject_, 0, "print_controls_enabled", subjects_);
@@ -1524,6 +1543,19 @@ void PrintStatusPanel::on_temperature_changed() {
     spdlog::trace("[{}] Temperatures updated: nozzle {}/{}°C, bed {}/{}°C", get_name(),
                   lifecycle_.nozzle_current(), lifecycle_.nozzle_target(), lifecycle_.bed_current(),
                   lifecycle_.bed_target());
+}
+
+void PrintStatusPanel::recompute_end_overlay_visibility() {
+    if (!subjects_initialized_)
+        return;
+    int outcome = lv_subject_get_int(printer_state_.get_print_outcome_subject());
+    bool dismissed = lv_subject_get_int(&end_overlay_dismissed_subject_) != 0;
+    int complete = (!dismissed && outcome == static_cast<int>(PrintOutcome::COMPLETE)) ? 1 : 0;
+    int cancelled = (!dismissed && outcome == static_cast<int>(PrintOutcome::CANCELLED)) ? 1 : 0;
+    int error = (!dismissed && outcome == static_cast<int>(PrintOutcome::ERROR)) ? 1 : 0;
+    lv_subject_set_int(&show_complete_overlay_subject_, complete);
+    lv_subject_set_int(&show_cancelled_overlay_subject_, cancelled);
+    lv_subject_set_int(&show_error_overlay_subject_, error);
 }
 
 void PrintStatusPanel::update_chamber_status() {
