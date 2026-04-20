@@ -95,9 +95,11 @@ class PrinterDiscovery {
             // Generic heaters (e.g., "heater_generic chamber")
             else if (name.rfind("heater_generic ", 0) == 0) {
                 heaters_.push_back(name);
-                // Check for chamber heater
+                // Check for chamber heater ("cavity" is a Snapmaker-ism for the same thing)
                 std::string heater_name = name.substr(15); // Remove "heater_generic " prefix
-                if (to_upper(heater_name).find("CHAMBER") != std::string::npos) {
+                std::string upper = to_upper(heater_name);
+                if (upper.find("CHAMBER") != std::string::npos ||
+                    upper.find("CAVITY") != std::string::npos) {
                     has_chamber_heater_ = true;
                     chamber_heater_name_ = name;
                     chamber_heater_object_name_ = heater_name;
@@ -108,9 +110,11 @@ class PrinterDiscovery {
             // ================================================================
             else if (name.rfind("temperature_sensor ", 0) == 0) {
                 sensors_.push_back(name);
-                // Check for chamber sensor
+                // Check for chamber sensor ("cavity" is a Snapmaker-ism for the same thing)
                 std::string sensor_name = name.substr(19); // Remove "temperature_sensor " prefix
-                if (to_upper(sensor_name).find("CHAMBER") != std::string::npos) {
+                std::string upper = to_upper(sensor_name);
+                if (upper.find("CHAMBER") != std::string::npos ||
+                    upper.find("CAVITY") != std::string::npos) {
                     has_chamber_sensor_ = true;
                     chamber_sensor_name_ = name;
                 }
@@ -119,9 +123,11 @@ class PrinterDiscovery {
             else if (name.rfind("temperature_fan ", 0) == 0) {
                 sensors_.push_back(name);
                 fans_.push_back(name); // Also add to fans for control
-                // Check for chamber temperature_fan
+                // Check for chamber temperature_fan ("cavity" synonym, as above)
                 std::string fan_name = name.substr(16); // Remove "temperature_fan " prefix
-                if (to_upper(fan_name).find("CHAMBER") != std::string::npos) {
+                std::string upper = to_upper(fan_name);
+                if (upper.find("CHAMBER") != std::string::npos ||
+                    upper.find("CAVITY") != std::string::npos) {
                     has_chamber_heater_ = true;
                     chamber_heater_name_ = name;
                     chamber_heater_object_name_ = fan_name;

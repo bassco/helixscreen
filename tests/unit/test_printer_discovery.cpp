@@ -1109,6 +1109,30 @@ TEST_CASE("PrinterDiscovery detects chamber heater and sensor", "[printer_discov
         REQUIRE(hw.has_chamber_heater());
         REQUIRE(hw.has_chamber_sensor());
     }
+
+    SECTION("Cavity sensor is treated as chamber (Snapmaker U1)") {
+        json objects = {"temperature_sensor cavity"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_sensor());
+        REQUIRE(hw.supports_chamber());
+        REQUIRE(hw.chamber_sensor_name() == "temperature_sensor cavity");
+    }
+
+    SECTION("Cavity heater_generic is treated as chamber") {
+        json objects = {"heater_generic cavity"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_heater());
+        REQUIRE(hw.supports_chamber());
+    }
+
+    SECTION("Cavity temperature_fan is treated as chamber") {
+        json objects = {"temperature_fan cavity_fan"};
+        hw.parse_objects(objects);
+
+        REQUIRE(hw.has_chamber_heater());
+    }
 }
 
 // ============================================================================
