@@ -23,10 +23,11 @@
       "hotend": "heater_fan hotend_fan",
       "chamber": "temperature_fan chamber_fan",
       "exhaust": "output_pin fan1",
+      "aux": "output_pin fan2",
       "names": {
         "output_pin fan0": "Part",
         "output_pin fan1": "Chamber Exhaust",
-        "output_pin fan2": "Aux Bed"
+        "output_pin fan2": "Auxiliary"
       }
     },
     "leds": {
@@ -70,8 +71,8 @@
     },
     "default_macros": {
       "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0",
-      "load_filament": { "label": "Load", "gcode": "LOAD_FILAMENT" },
-      "unload_filament": { "label": "Unload", "gcode": "UNLOAD_FILAMENT" },
+      "load_filament": { "label": "Load", "gcode": "LOAD_MATERIAL" },
+      "unload_filament": { "label": "Unload", "gcode": "QUIT_MATERIAL" },
       "macro_1": { "label": "Clean Nozzle", "gcode": "HELIX_CLEAN_NOZZLE" },
       "macro_2": { "label": "Bed Level", "gcode": "HELIX_BED_MESH_IF_NEEDED" }
     }
