@@ -76,8 +76,9 @@ class SoundSequencer {
     /// @return interpolated value between start and end
     float compute_sweep(float start, float end, float progress) const;
 
-    /// Send envelope parameters to the backend for per-sample computation
-    void send_envelope_for_step(const SoundStep& step);
+    /// Publish a NoteEvent to the backend for per-sample rendering (PCM backends),
+    /// or set initial tone parameters (non-PCM backends).
+    void publish_note_for_step(const SoundStep& step);
 
     /// Start playing a request (called from sequencer thread)
     void begin_playback(PlayRequest&& req);

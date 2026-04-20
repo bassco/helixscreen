@@ -6,6 +6,8 @@
 #include <functional>
 #include <string>
 
+#include "note_event.h"
+
 /// Forward declarations — defined in sound_theme.h
 enum class Waveform;
 struct ADSREnvelope;
@@ -80,11 +82,21 @@ class SoundBackend {
     /// Number of independent voice slots. Default: 1 (monophonic).
     virtual int voice_count() const { return 1; }
 
+    /// [DEPRECATED - will be removed after backend migration to publish_note()]
     /// Set envelope parameters for a voice. PCM backends (SDL, ALSA) compute
     /// the envelope per-sample in the render thread for timing-accurate amplitude.
     /// Non-PCM backends ignore this (sequencer applies envelope via set_voice amplitude).
     virtual void set_voice_envelope(int /*slot*/, const ADSREnvelope& /*env*/,
                                     float /*velocity*/, float /*duration_ms*/) {}
+
+    /// Publish a complete note event for a voice. PCM backends (SDL, ALSA) use
+    /// this for per-sample rendering. Non-PCM backends ignore it.
+    virtual void publish_note(int /*slot*/, const NoteEvent& /*event*/) {}
+
+    /// Whether this backend uses NoteEvent-based rendering (per-sample envelope,
+    /// sweep, LFO in the render thread). When true, the sequencer skips per-tick
+    /// set_tone/set_filter/set_waveform calls — the callback handles everything.
+    virtual bool supports_note_events() const { return false; }
 
     /// Minimum tick interval the backend can handle (ms)
     virtual float min_tick_ms() const {

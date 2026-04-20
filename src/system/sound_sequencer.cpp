@@ -4,6 +4,7 @@
 #include "sound_sequencer.h"
 
 #include "audio_settings_manager.h"
+#include "note_event.h"
 #include "spdlog/spdlog.h"
 
 #include <algorithm>
@@ -202,67 +203,57 @@ void SoundSequencer::tick(float dt_ms) {
 
     auto& steps = current_sound_.steps;
     if (step_state_.step_index >= static_cast<int>(steps.size())) {
-        // Past the end — check repeat
         advance_step();
         return;
     }
 
     auto& step = steps[step_state_.step_index];
-
-    // Advance elapsed time
     step_state_.elapsed_ms += dt_ms;
 
-    // Check if this step is complete
     if (step_state_.elapsed_ms >= step_state_.total_ms) {
         advance_step();
         return;
     }
 
-    // Process the step
     if (step.is_pause) {
         backend_->silence();
         return;
     }
 
+    // PCM backends handle everything per-sample — sequencer only manages timing
+    if (backend_->supports_note_events()) {
+        return;
+    }
+
+    // Non-PCM backends: compute parameters per-tick as before
     float elapsed = step_state_.elapsed_ms;
     float duration = step_state_.total_ms;
     float progress = (duration > 0) ? std::clamp(elapsed / duration, 0.0f, 1.0f) : 1.0f;
 
-    // Base values
     float freq = step.freq_hz;
     float amplitude = step.velocity;
-    float duty = 0.5f; // default duty cycle for square wave
+    float duty = 0.5f;
 
-    // Apply ADSR envelope
     float env_mul = compute_envelope(step.envelope, elapsed, duration);
     amplitude *= env_mul;
 
-    // Apply sweep
     if (!step.sweep.target.empty() && step.sweep.target == "freq") {
         freq = compute_sweep(step.freq_hz, step.sweep.end_value, progress);
     }
 
-    // Apply LFO
     if (step.lfo.rate > 0 && step.lfo.depth > 0) {
         float lfo_val = compute_lfo(step.lfo, elapsed);
-        if (step.lfo.target == "freq") {
-            freq += lfo_val;
-        } else if (step.lfo.target == "amplitude") {
-            amplitude += lfo_val;
-        } else if (step.lfo.target == "duty") {
-            duty += lfo_val;
-        }
+        if (step.lfo.target == "freq") freq += lfo_val;
+        else if (step.lfo.target == "amplitude") amplitude += lfo_val;
+        else if (step.lfo.target == "duty") duty += lfo_val;
     }
 
-    // Apply master volume attenuation (perceptual curve)
     amplitude *= AudioSettingsManager::instance().get_volume_scaled();
 
-    // Clamp outputs
     freq = std::clamp(freq, 20.0f, 20000.0f);
     amplitude = std::clamp(amplitude, 0.0f, 1.0f);
     duty = std::clamp(duty, 0.0f, 1.0f);
 
-    // Set filter if backend supports it and step has a filter configured
     if (backend_->supports_filter() && !step.filter.type.empty()) {
         float cutoff = step.filter.cutoff;
         if (step.filter.sweep_to > 0) {
@@ -271,8 +262,6 @@ void SoundSequencer::tick(float dt_ms) {
         backend_->set_filter(step.filter.type, cutoff);
     }
 
-    // Apply voices (polyphonic or monophonic). Pass the modulated freq directly —
-    // apply_step_voices scales chord intervals by the freq/step.freq_hz ratio internally.
     apply_step_voices(step, freq, amplitude, duty);
 }
 
@@ -292,7 +281,7 @@ void SoundSequencer::advance_step() {
                     step.envelope.attack_ms + step.envelope.decay_ms + step.envelope.release_ms;
                 step_state_.total_ms = std::max(step.duration_ms, env_min);
                 if (!step.is_pause) {
-                    send_envelope_for_step(step);
+                    publish_note_for_step(step);
                 }
             }
             // Silence between repeats
@@ -319,7 +308,7 @@ void SoundSequencer::advance_step() {
 
     // Send envelope to PCM backends for per-sample computation
     if (!step.is_pause) {
-        send_envelope_for_step(step);
+        publish_note_for_step(step);
     }
 
     // Silence at step boundary
@@ -370,17 +359,92 @@ float SoundSequencer::compute_sweep(float start, float end, float progress) cons
     return start + (end - start) * progress;
 }
 
-void SoundSequencer::send_envelope_for_step(const SoundStep& step) {
-    // Apply master volume to velocity so the backend's per-sample envelope
-    // produces the correct final amplitude without the sequencer's tick loop.
+void SoundSequencer::publish_note_for_step(const SoundStep& step) {
     float vel = step.velocity * AudioSettingsManager::instance().get_volume_scaled();
-    if (step.chord_count > 0) {
-        int voices = backend_->voice_count();
-        for (int v = 0; v < voices && v < step.chord_count; ++v) {
-            backend_->set_voice_envelope(v, step.envelope, vel, step_state_.total_ms);
+
+    if (backend_->supports_note_events()) {
+        // PCM backend: publish complete NoteEvent — callback owns rendering
+        NoteEvent event;
+        event.freq_hz = step.freq_hz;
+        event.velocity = vel;
+        event.duration_ms = step_state_.total_ms;
+        event.duty_cycle = 0.5f;
+        event.wave = step.wave;
+
+        // ADSR
+        event.attack_ms = step.envelope.attack_ms;
+        event.decay_ms = step.envelope.decay_ms;
+        event.sustain_level = step.envelope.sustain_level;
+        event.release_ms = step.envelope.release_ms;
+
+        // Sweep
+        if (!step.sweep.target.empty() && step.sweep.target == "freq") {
+            event.sweep_end_freq = step.sweep.end_value;
+        }
+
+        // LFO
+        if (step.lfo.rate > 0 && step.lfo.depth > 0) {
+            event.lfo_rate = step.lfo.rate;
+            event.lfo_depth = step.lfo.depth;
+            if (step.lfo.target == "freq") event.lfo_target = 1;
+            else if (step.lfo.target == "amplitude") event.lfo_target = 2;
+            else if (step.lfo.target == "duty") event.lfo_target = 3;
+        }
+
+        // Filter
+        if (!step.filter.type.empty()) {
+            event.filter_cutoff = step.filter.cutoff;
+            event.filter_sweep_to = step.filter.sweep_to;
+            if (step.filter.type == "lowpass") event.filter_type = 1;
+            else if (step.filter.type == "highpass") event.filter_type = 2;
+        }
+
+        if (step.chord_count > 0) {
+            int voices = backend_->voice_count();
+            for (int v = 0; v < voices && v < step.chord_count; ++v) {
+                NoteEvent chord_event = event;
+                chord_event.freq_hz = step.chord_freqs[v];
+                if (event.sweep_end_freq > 0 && step.freq_hz > 0) {
+                    // Scale sweep endpoint by chord interval ratio
+                    chord_event.sweep_end_freq =
+                        event.sweep_end_freq * (step.chord_freqs[v] / step.freq_hz);
+                }
+                backend_->publish_note(v, chord_event);
+            }
+            // Silence unused voices
+            for (int v = step.chord_count; v < voices; ++v) {
+                NoteEvent silence;
+                backend_->publish_note(v, silence);
+            }
+        } else {
+            backend_->publish_note(0, event);
+            // Silence other voices
+            for (int v = 1; v < backend_->voice_count(); ++v) {
+                NoteEvent silence;
+                backend_->publish_note(v, silence);
+            }
         }
     } else {
-        backend_->set_voice_envelope(0, step.envelope, vel, step_state_.total_ms);
+        // Non-PCM backend: set initial tone (sequencer handles per-tick updates)
+        if (step.chord_count > 0) {
+            int voices = backend_->voice_count();
+            for (int v = 0; v < voices && v < step.chord_count; ++v) {
+                backend_->set_voice(v, step.chord_freqs[v], vel, 0.5f);
+                if (backend_->supports_waveforms()) {
+                    backend_->set_voice_waveform(v, step.wave);
+                }
+            }
+            for (int v = step.chord_count; v < voices; ++v) {
+                backend_->silence_voice(v);
+            }
+        } else {
+            if (backend_->supports_waveforms()) {
+                backend_->set_waveform(step.wave);
+            }
+            backend_->set_tone(step.freq_hz, vel, 0.5f);
+            for (int v = 1; v < backend_->voice_count(); ++v)
+                backend_->silence_voice(v);
+        }
     }
 }
 
@@ -413,7 +477,7 @@ void SoundSequencer::begin_playback(PlayRequest&& req) {
 
     // Send envelope to PCM backends for per-sample computation
     if (!current_sound_.steps.empty() && !current_sound_.steps[step_state_.step_index].is_pause) {
-        send_envelope_for_step(current_sound_.steps[step_state_.step_index]);
+        publish_note_for_step(current_sound_.steps[step_state_.step_index]);
     }
 
     playing_.store(true);
