@@ -23,7 +23,7 @@
     "fans": {
       "chamber": "",
       "exhaust": "",
-      "hotend": "heater_fan power_fan",
+      "hotend": "heater_fan e0_nozzle_fan",
       "part": "fan",
       "names": {
         "fan_generic cavity_fan": "Aux Bed Fan"
@@ -89,11 +89,11 @@
       ]
     },
     "default_macros": {
-      "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0",
-      "load_filament": { "label": "Load", "gcode": "LOAD_FILAMENT" },
-      "unload_filament": { "label": "Unload", "gcode": "UNLOAD_FILAMENT" },
-      "macro_1": { "label": "Clean Nozzle", "gcode": "HELIX_CLEAN_NOZZLE" },
-      "macro_2": { "label": "Bed Level", "gcode": "HELIX_BED_MESH_IF_NEEDED" }
+      "cooldown": "SET_HEATER_TEMPERATURE HEATER=extruder TARGET=0\nSET_HEATER_TEMPERATURE HEATER=extruder1 TARGET=0\nSET_HEATER_TEMPERATURE HEATER=extruder2 TARGET=0\nSET_HEATER_TEMPERATURE HEATER=extruder3 TARGET=0\nSET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=0",
+      "load_filament": { "label": "Load", "gcode": "AUTO_FEEDING" },
+      "unload_filament": { "label": "Unload", "gcode": "INNER_FILAMENT_UNLOAD" },
+      "macro_1": { "label": "Clean Nozzle", "gcode": "ROUGHLY_CLEAN_NOZZLE" },
+      "macro_2": { "label": "Bed Mesh", "gcode": "BED_MESH_CALIBRATE" }
     },
     "panel_widgets": {
       "home": {
