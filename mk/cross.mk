@@ -2055,7 +2055,7 @@ k1-dynamic-test: k1-dynamic-docker deploy-k1-dynamic-fg
 #   - 32 GB storage (plenty of room)
 #   - SSH: root / creality_2024
 #
-# Hardware-validated on K2 Max (2026-03-23).
+# Hardware-validated on K2 Plus (2026-03-23).
 # See docs/devel/printers/CREALITY_K2_SUPPORT.md
 #
 # Example: make deploy-k2 K2_HOST=192.168.30.197

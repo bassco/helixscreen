@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Platform hooks: Creality K2 / K2 Pro / K2 Plus / K2 Max
+# Platform hooks: Creality K2 / K2 Pro / K2 Plus
 #
 # K2 series runs OpenWrt 21.02 with procd init system.
 # Stock UI is managed by /etc/init.d/app (procd service).

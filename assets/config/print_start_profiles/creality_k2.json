@@ -1,6 +1,6 @@
 {
   "name": "Creality K2",
-  "description": "Print start patterns for Creality K2 series (K2, K2 Pro, K2 Plus, K2 Max) with CFS",
+  "description": "Print start patterns for Creality K2 series (K2, K2 Pro, K2 Plus) with CFS",
   "progress_mode": "weighted",
   "signal_formats": [
     {
