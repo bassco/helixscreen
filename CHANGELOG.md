@@ -5,22 +5,46 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.99.37] - 2026-04-19
 
 ### Added
 - Filament slot metadata now persists across restarts and reconnects on AD5X IFS, Snapmaker U1, ACE, and CFS — brand, spool name, Spoolman link, and weights survive Klipper reloads and printer reboots.
 - OrcaSlicer 2.3.2+ automatic filament sync: HelixScreen writes the AFC-originated `lane_data` Moonraker DB convention, so Orca's filament panel picks up your slot metadata with zero configuration.
-- "Clear slot metadata" button in the AMS edit modal — visible only when a slot has user-set override data. Clearing falls the slot back to firmware-reported state.
-- Empty-but-overridden slots now ghost-render (20% opacity) across all backends, matching the previous AFC-only behavior — lets you see what spool profile is assigned to an empty slot.
+- "Clear Spool" entry in the AMS slot context menu — clears user overrides and falls the slot back to firmware-reported state. `Spool Info` and `Clear Spool` are now separate menu actions.
+- Empty-but-overridden slots now ghost-render (20% opacity) across all backends, matching the previous AFC-only behavior.
 - Automatic override clearing on detected physical spool swap: color change for IFS, RFID UID change for Snapmaker, material+color fingerprint change for CFS, status transition (empty→loaded) for ACE.
-- Public specification at `docs/specs/filament_slots.md` documenting the shared `lane_data` convention for third-party adopters.
+- Per-backend material whitelist and alias normalization for AMS (e.g., `PLA-BASIC` → `PLA`).
+- Public specification at `docs/specs/filament_slots.md` for the shared `lane_data` convention.
+- Crash diagnostics: breadcrumbs for wizard step transitions, language changes, and the previous queue-callback tag.
+- ARM32 frame-pointer unwinding fallback so Pi32 and SonicPad crashes produce usable backtraces when `backtrace()` fails.
+- Translation strings for camera, QR code, and print stats labels.
 
 ### Fixed
-- Snapmaker U1: `set_slot_info` now honors the `persist` parameter — user edits to brand / spool name / weights were previously discarded on the next Klipper status poll. Edits now persist as intended.
+- Snapmaker U1: `set_slot_info` honors the `persist` parameter — user edits were previously discarded on the next Klipper status poll.
+- Snapmaker U1: RFID `SUB_TYPE` is now mapped to the spool name and shown in the edit modal.
+- Wizard: freeze `UpdateQueue` around step transitions to prevent async-callback races on quick advance (#827).
+- Crash handler: reorder so `backtrace()` runs last, with FP-walk fallback (#827).
+- Crash reporter: filter post-crash lines out of the log tail (#827).
+- Crash: `std::terminate` exit encodes `128 + SIGABRT` so the watchdog surfaces the recovery dialog.
+- Brother QL label print: route network send through HttpExecutor — Test Print no longer crashes from unbounded thread spawns.
+- Spoolman: `Connect` probe runs on HttpExecutor and the button is disabled in-flight.
+- Home/widget/tool/temp rebuilds use `safe_clean_children` to escape the UpdateQueue batch (#834, #776).
+- AMS pre-print filament runout warning suppressed for auto-unload backends (IFS).
+- AMS edit modal: skip Spoolman save when Spoolman is unavailable so local overrides still persist.
+- AMS panel: `remaining_weight_g=-1` displays as "unknown" rather than empty; bypass label escapes the canvas; MICRO/TINY layouts no longer clip spool cards or temp graph.
+- Moonraker API: `database.get_item` / `database.get_namespace` now unwrap the `response["result"]` envelope.
+- AD5X IFS: defer initial `GET_ZCOLOR` until Klippy reports ready.
+- AD5X IFS: latch the `_IFS_VARS` macro-missing check so `save_variables` notifications can't re-enable the broken path.
+- Color picker: selected-preset outline, segmented tab fill, MICRO/TINY polish.
+- Dropdown: honor theme `border_radius` as local style; narrow backup dropdown at MICRO/TINY.
+- Filament panel: temperature graph fills and spool card sizes to content so the whole card stays on-screen at MICRO/TINY.
+- Network widget: re-detect Wi-Fi when backend reports READY so "Disconnected" unsticks after async init (#819).
+- IFS: pre-update baseline color in `set_slot_info` to avoid self-wiping the override it just set.
+- Moonraker: tighten `delete_item` missing-key detection (prefer HTTP 404).
 
 ### Changed
-- ACE: user override fields now merge with firmware-reported data field-by-field (empty override fields fall through to firmware). Previously the override replaced the entire slot record.
-- Pre-existing `helix-screen:ace_slot_overrides` and `helix-screen:cfs_slot_overrides` Moonraker DB entries automatically migrate to the `lane_data` namespace on first launch. Local `ace_slot_overrides.json` / `cfs_slot_overrides.json` cache files are removed after migration.
+- ACE: user override fields merge with firmware-reported data field-by-field (empty override fields fall through to firmware). Previously the override replaced the entire slot record.
+- Pre-existing `helix-screen:ace_slot_overrides` / `helix-screen:cfs_slot_overrides` DB entries auto-migrate to `lane_data` on first launch; legacy JSON caches are removed after migration.
 
 ## [0.99.36] - 2026-04-18
 
@@ -3081,6 +3105,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.37]: https://github.com/prestonbrown/helixscreen/compare/v0.99.36...v0.99.37
 [0.99.36]: https://github.com/prestonbrown/helixscreen/compare/v0.99.35...v0.99.36
 [0.99.35]: https://github.com/prestonbrown/helixscreen/compare/v0.99.34...v0.99.35
 [0.99.34]: https://github.com/prestonbrown/helixscreen/compare/v0.99.33...v0.99.34
