@@ -81,3 +81,18 @@ teardown() {
         return 1
     }
 }
+
+@test "install: ui_xml/ excludes source-tree build scaffolding" {
+    run make install PLATFORM_TARGET=ad5m-br DESTDIR="$STAGE_DIR"
+    [ "$status" -eq 0 ]
+    # None of these should appear under the installed ui_xml/ tree
+    ! find "$STAGE_DIR/opt/helixscreen/ui_xml" \
+        \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.c' -o -name '*.h' \) \
+        -type f | grep -q . || {
+        echo "Unexpected source scaffolding shipped in install tree:"
+        find "$STAGE_DIR/opt/helixscreen/ui_xml" \
+            \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.c' -o -name '*.h' \) \
+            -type f
+        return 1
+    }
+}

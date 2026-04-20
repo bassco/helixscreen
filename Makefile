@@ -1031,9 +1031,12 @@ install:
 		install -m 0755 "$(BIN_DIR)/helix-watchdog" "$(DESTDIR)/opt/helixscreen/bin/helix-watchdog"; \
 	fi
 	@echo "  → binaries"
-	@# ui_xml: copy tree as-is (loaded at runtime)
+	@# ui_xml: copy tree, then prune source-tree build scaffolding that isn't runtime data.
 	@install -d "$(DESTDIR)/opt/helixscreen/ui_xml"
 	@cp -a ui_xml/. "$(DESTDIR)/opt/helixscreen/ui_xml/"
+	@find "$(DESTDIR)/opt/helixscreen/ui_xml" \
+		\( -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' -o -name '*.cmake' \) \
+		-type f -delete
 	@echo "  → ui_xml/"
 	@# assets: fonts, images, sounds, config
 	@install -d "$(DESTDIR)/opt/helixscreen/assets"
