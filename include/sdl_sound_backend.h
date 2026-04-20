@@ -16,6 +16,24 @@
 #include <string>
 #include <vector>
 
+/// Per-voice ADSR envelope state, advanced per-sample in the audio callback.
+/// The sequencer writes parameters via atomics; the callback owns the phase state.
+struct VoiceEnvelope {
+    // Parameters set by sequencer (atomic for cross-thread safety)
+    std::atomic<float> attack_ms{5};
+    std::atomic<float> decay_ms{40};
+    std::atomic<float> sustain_level{0.6f};
+    std::atomic<float> release_ms{80};
+    std::atomic<float> velocity{0};    // peak amplitude (0 = silent)
+    std::atomic<float> duration_ms{0}; // total step duration (for release timing)
+    std::atomic<uint32_t> generation{0}; // bumped on each new note
+
+    // State owned by audio callback thread only
+    uint32_t cb_generation = 0;  // last seen generation
+    float elapsed_samples = 0;  // samples elapsed since note start
+    float current_amplitude = 0; // current envelope output
+};
+
 /// SDL2 audio backend -- generates real waveform audio for desktop simulator
 class SDLSoundBackend : public SoundBackend {
   public:
@@ -52,6 +70,10 @@ class SDLSoundBackend : public SoundBackend {
     void silence_voice(int slot) override;
     int voice_count() const override { return MAX_VOICES; }
 
+    /// Set envelope parameters for a voice (called by sequencer at step start)
+    void set_voice_envelope(int slot, const ADSREnvelope& env, float velocity,
+                            float duration_ms) override;
+
     // Render source for direct audio generation (tracker PCM playback)
     bool supports_render_source() const override { return true; }
     void set_render_source(std::function<void(float*, size_t, int)> fn) override;
@@ -62,15 +84,19 @@ class SDLSoundBackend : public SoundBackend {
 
     struct VoiceState {
         std::atomic<float> freq{0};
-        std::atomic<float> amplitude{0};
+        std::atomic<float> amplitude{0}; // used as gate (>0 = voice active)
         std::atomic<float> duty{0.5f};
         std::atomic<Waveform> wave{Waveform::SQUARE};
-        float phase = 0;  // audio callback thread only
+        float phase = 0; // audio callback thread only
     };
+
+    /// Compute per-sample envelope value in the audio callback
+    static float advance_envelope(VoiceEnvelope& env, float sample_rate);
 
     static void audio_callback(void* userdata, uint8_t* stream, int len);
 
     VoiceState voices_[MAX_VOICES];
+    VoiceEnvelope envelopes_[MAX_VOICES];
 
     // Filter parameters (shared across all voices)
     std::atomic<float> filter_cutoff_{20000.0f};

@@ -26,7 +26,7 @@ bool SDLSoundBackend::initialize() {
     desired.freq = sample_rate_;
     desired.format = AUDIO_F32SYS;
     desired.channels = 1;
-    desired.samples = 256; // Low latency buffer
+    desired.samples = 64; // Very low latency buffer — keeps callback period ~1.5ms
     desired.callback = audio_callback;
     desired.userdata = this;
 
@@ -89,6 +89,20 @@ void SDLSoundBackend::silence_voice(int slot) {
     voices_[slot].amplitude.store(0, std::memory_order_relaxed);
 }
 
+void SDLSoundBackend::set_voice_envelope(int slot, const ADSREnvelope& env,
+                                          float velocity, float duration_ms) {
+    if (slot < 0 || slot >= MAX_VOICES) return;
+    auto& e = envelopes_[slot];
+    e.attack_ms.store(env.attack_ms, std::memory_order_relaxed);
+    e.decay_ms.store(env.decay_ms, std::memory_order_relaxed);
+    e.sustain_level.store(env.sustain_level, std::memory_order_relaxed);
+    e.release_ms.store(env.release_ms, std::memory_order_relaxed);
+    e.velocity.store(velocity, std::memory_order_relaxed);
+    e.duration_ms.store(duration_ms, std::memory_order_relaxed);
+    // Bump generation last with release fence — callback sees consistent params
+    e.generation.fetch_add(1, std::memory_order_release);
+}
+
 void SDLSoundBackend::set_render_source(std::function<void(float*, size_t, int)> fn) {
     std::lock_guard<std::mutex> lock(render_source_mutex_);
     render_source_ = std::move(fn);
@@ -100,22 +114,96 @@ void SDLSoundBackend::clear_render_source() {
 }
 
 void SDLSoundBackend::set_filter(const std::string& type, float cutoff) {
-    // Note: compute_biquad_coeffs writes to filter_ (plain struct) from the sequencer
-    // thread while the render thread reads it. This is technically a data race, but
-    // a torn read at worst causes a single-frame audio glitch — acceptable for a
-    // synthesizer buzzer on a 3D printer touchscreen.
     if (type.empty()) {
         filter_type_.store(helix::audio::FilterType::NONE, std::memory_order_relaxed);
         return;
     }
 
     auto ft = helix::audio::filter_type_from_string(type);
+    bool type_changed = (ft != filter_type_.load(std::memory_order_relaxed));
     filter_cutoff_.store(cutoff, std::memory_order_relaxed);
     helix::audio::compute_biquad_coeffs(filter_, ft, cutoff, static_cast<float>(sample_rate_));
-    filter_.z1 = 0;
-    filter_.z2 = 0;
+    // Only reset filter state when the filter type changes or was previously off.
+    // Resetting z1/z2 on every coefficient update (e.g. during sweeps) restarts the
+    // filter cold each tick, causing clicks and excessive attenuation.
+    if (type_changed) {
+        filter_.z1 = 0;
+        filter_.z2 = 0;
+    }
     filter_type_.store(ft, std::memory_order_release);
 }
+
+// ============================================================================
+// Per-sample envelope computation (runs in audio callback thread)
+// ============================================================================
+
+float SDLSoundBackend::advance_envelope(VoiceEnvelope& env, float sample_rate) {
+    // Check for new note (generation changed)
+    uint32_t gen = env.generation.load(std::memory_order_acquire);
+    if (gen != env.cb_generation) {
+        env.cb_generation = gen;
+        env.elapsed_samples = 0;
+        env.current_amplitude = 0;
+    }
+
+    float vel = env.velocity.load(std::memory_order_relaxed);
+    if (vel <= 0.001f) {
+        env.current_amplitude = 0;
+        return 0;
+    }
+
+    float a_ms = env.attack_ms.load(std::memory_order_relaxed);
+    float d_ms = env.decay_ms.load(std::memory_order_relaxed);
+    float s = env.sustain_level.load(std::memory_order_relaxed);
+    float r_ms = env.release_ms.load(std::memory_order_relaxed);
+    float dur_ms = env.duration_ms.load(std::memory_order_relaxed);
+
+    // Convert elapsed samples to milliseconds
+    float elapsed_ms = env.elapsed_samples * 1000.0f / sample_rate;
+    env.elapsed_samples++;
+
+    // Total step duration (at least enough for the full ADSR)
+    float total_ms = std::max(dur_ms, a_ms + d_ms + r_ms);
+
+    // If all ADSR times are 0, return full velocity
+    if (a_ms <= 0 && d_ms <= 0 && r_ms <= 0) {
+        env.current_amplitude = (elapsed_ms < total_ms) ? vel : 0;
+        return env.current_amplitude;
+    }
+
+    // Past the end of the note
+    if (elapsed_ms >= total_ms) {
+        env.current_amplitude = 0;
+        return 0;
+    }
+
+    float release_start = total_ms - r_ms;
+    float amp;
+
+    if (elapsed_ms < a_ms) {
+        // Attack: ramp 0 → 1
+        amp = (a_ms > 0) ? (elapsed_ms / a_ms) : 1.0f;
+    } else if (elapsed_ms < a_ms + d_ms) {
+        // Decay: ramp 1 → sustain
+        float decay_progress = (d_ms > 0) ? ((elapsed_ms - a_ms) / d_ms) : 1.0f;
+        amp = 1.0f - (1.0f - s) * decay_progress;
+    } else if (elapsed_ms < release_start) {
+        // Sustain
+        amp = s;
+    } else {
+        // Release: ramp sustain → 0
+        float release_elapsed = elapsed_ms - release_start;
+        float release_progress = (r_ms > 0) ? std::clamp(release_elapsed / r_ms, 0.0f, 1.0f) : 1.0f;
+        amp = s * (1.0f - release_progress);
+    }
+
+    env.current_amplitude = amp * vel;
+    return env.current_amplitude;
+}
+
+// ============================================================================
+// Audio callback (runs in SDL audio thread)
+// ============================================================================
 
 void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
     auto* self = static_cast<SDLSoundBackend*>(userdata);
@@ -143,25 +231,31 @@ void SDLSoundBackend::audio_callback(void* userdata, uint8_t* stream, int len) {
 
     std::atomic_thread_fence(std::memory_order_acquire);
 
-    // Mix synth voices on top (SFX layered over tracker)
+    // Mix synth voices with per-sample envelope
     for (int v = 0; v < MAX_VOICES; ++v) {
-        float amp = self->voices_[v].amplitude.load(std::memory_order_relaxed);
-        if (amp <= 0.001f) {
-            self->voices_[v].phase = 0;
+        float gate = self->voices_[v].amplitude.load(std::memory_order_relaxed);
+        auto& env = self->envelopes_[v];
+
+        // Skip voice if gate is off and envelope is already silent
+        if (gate <= 0.001f && env.current_amplitude <= 0.001f) {
             continue;
         }
         float freq = self->voices_[v].freq.load(std::memory_order_relaxed);
         if (freq <= 0.0f) continue;
 
+        // Generate waveform at unit amplitude
         helix::audio::generate_samples(
             vbuf, num_samples, self->sample_rate_,
             self->voices_[v].wave.load(std::memory_order_relaxed),
-            freq, amp,
+            freq, 1.0f,
             self->voices_[v].duty.load(std::memory_order_relaxed),
             self->voices_[v].phase);
 
-        for (int i = 0; i < num_samples; ++i)
-            mix[i] += vbuf[i];
+        // Apply per-sample envelope
+        for (int i = 0; i < num_samples; ++i) {
+            float amp = advance_envelope(env, static_cast<float>(self->sample_rate_));
+            mix[i] += vbuf[i] * amp;
+        }
         has_audio = true;
     }
 

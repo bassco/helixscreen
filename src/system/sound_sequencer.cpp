@@ -291,6 +291,9 @@ void SoundSequencer::advance_step() {
                 float env_min =
                     step.envelope.attack_ms + step.envelope.decay_ms + step.envelope.release_ms;
                 step_state_.total_ms = std::max(step.duration_ms, env_min);
+                if (!step.is_pause) {
+                    send_envelope_for_step(step);
+                }
             }
             // Silence between repeats
             backend_->silence();
@@ -312,6 +315,11 @@ void SoundSequencer::advance_step() {
     if (step_state_.total_ms <= 0) {
         advance_step();
         return;
+    }
+
+    // Send envelope to PCM backends for per-sample computation
+    if (!step.is_pause) {
+        send_envelope_for_step(step);
     }
 
     // Silence at step boundary
@@ -362,6 +370,20 @@ float SoundSequencer::compute_sweep(float start, float end, float progress) cons
     return start + (end - start) * progress;
 }
 
+void SoundSequencer::send_envelope_for_step(const SoundStep& step) {
+    // Apply master volume to velocity so the backend's per-sample envelope
+    // produces the correct final amplitude without the sequencer's tick loop.
+    float vel = step.velocity * AudioSettingsManager::instance().get_volume_scaled();
+    if (step.chord_count > 0) {
+        int voices = backend_->voice_count();
+        for (int v = 0; v < voices && v < step.chord_count; ++v) {
+            backend_->set_voice_envelope(v, step.envelope, vel, step_state_.total_ms);
+        }
+    } else {
+        backend_->set_voice_envelope(0, step.envelope, vel, step_state_.total_ms);
+    }
+}
+
 void SoundSequencer::begin_playback(PlayRequest&& req) {
     current_sound_ = std::move(req.sound);
     current_priority_ = req.priority;
@@ -387,6 +409,11 @@ void SoundSequencer::begin_playback(PlayRequest&& req) {
             step_state_.repeat_remaining <= 0) {
             return; // Entire sequence was zero-duration
         }
+    }
+
+    // Send envelope to PCM backends for per-sample computation
+    if (!current_sound_.steps.empty() && !current_sound_.steps[step_state_.step_index].is_pause) {
+        send_envelope_for_step(current_sound_.steps[step_state_.step_index]);
     }
 
     playing_.store(true);

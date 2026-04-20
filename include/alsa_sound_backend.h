@@ -14,6 +14,26 @@
 #include <thread>
 #include <vector>
 
+// VoiceEnvelope is defined in sdl_sound_backend.h for SDL builds.
+// For ALSA-only builds (embedded), define it here.
+#ifndef HELIX_DISPLAY_SDL
+struct VoiceEnvelope {
+    std::atomic<float> attack_ms{5};
+    std::atomic<float> decay_ms{40};
+    std::atomic<float> sustain_level{0.6f};
+    std::atomic<float> release_ms{80};
+    std::atomic<float> velocity{0};
+    std::atomic<float> duration_ms{0};
+    std::atomic<uint32_t> generation{0};
+
+    uint32_t cb_generation = 0;
+    float elapsed_samples = 0;
+    float current_amplitude = 0;
+};
+#else
+#include "sdl_sound_backend.h" // VoiceEnvelope defined there
+#endif
+
 /// ALSA PCM audio backend — real waveform synthesis for Linux SBCs
 /// Uses the shared sound_synthesis.h for sample generation.
 /// Threading: sequencer thread writes atomic params, render thread reads and generates.
@@ -50,6 +70,10 @@ class ALSASoundBackend : public SoundBackend {
     void silence_voice(int slot) override;
     int voice_count() const override { return MAX_VOICES; }
 
+    /// Set envelope parameters for a voice (called by sequencer at step start)
+    void set_voice_envelope(int slot, const ADSREnvelope& env, float velocity,
+                            float duration_ms) override;
+
     // Render source for direct audio generation (tracker PCM playback)
     bool supports_render_source() const override { return true; }
     void set_render_source(std::function<void(float*, size_t, int)> fn) override;
@@ -58,6 +82,9 @@ class ALSASoundBackend : public SoundBackend {
   private:
     void render_loop();
     snd_pcm_sframes_t recover_xrun(snd_pcm_sframes_t err);
+
+    /// Compute per-sample envelope value in the render thread
+    static float advance_envelope(VoiceEnvelope& env, float sample_rate);
 
     snd_pcm_t* pcm_ = nullptr;
     std::thread render_thread_;
@@ -70,10 +97,11 @@ class ALSASoundBackend : public SoundBackend {
         std::atomic<float> amplitude{0};
         std::atomic<float> duty{0.5f};
         std::atomic<Waveform> wave{Waveform::SQUARE};
-        float phase = 0;  // render thread only
+        float phase = 0; // render thread only
     };
 
     VoiceState voices_[MAX_VOICES];
+    VoiceEnvelope envelopes_[MAX_VOICES];
 
     // Filter parameters
     std::atomic<helix::audio::FilterType> filter_type_{helix::audio::FilterType::NONE};
