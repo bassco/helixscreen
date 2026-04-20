@@ -972,3 +972,14 @@ ifdef PI_DUAL_LINK
 include mk/pi-dual-link.mk
 endif
 include mk/rules.mk
+
+# Debug helpers — print computed variables for bats tests.
+.PHONY: print-ldflags print-strip print-target-cflags print-cxxflags
+print-ldflags:
+	@echo "$(LDFLAGS)"
+print-strip:
+	@echo "STRIP_BINARY=$(STRIP_BINARY)"
+print-target-cflags:
+	@echo "$(TARGET_CFLAGS)"
+print-cxxflags:
+	@echo "$(CXXFLAGS)"

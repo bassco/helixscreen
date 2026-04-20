@@ -11,7 +11,8 @@
 #   make PLATFORM_TARGET=pi32-fbdev  # Cross-compile for Pi (armhf, fbdev fallback)
 #   make PLATFORM_TARGET=pi-both  # Pi 64-bit: compile once, link DRM + fbdev
 #   make PLATFORM_TARGET=pi32-both  # Pi 32-bit: compile once, link DRM + fbdev
-#   make PLATFORM_TARGET=ad5m  # Cross-compile for Adventurer 5M (armv7-a)
+#   make PLATFORM_TARGET=ad5m  # Cross-compile for Adventurer 5M (armv7-a, bundled toolchain)
+#   make PLATFORM_TARGET=ad5m-br # Adventurer 5M via buildroot-provided toolchain (kmod)
 #   make PLATFORM_TARGET=cc1   # Cross-compile for Centauri Carbon 1 (armv7-a)
 #   make PLATFORM_TARGET=mips  # Cross-compile for MIPS32 devices (K1)
 #   make PLATFORM_TARGET=k1    # Alias for mips (Creality K1 series)
@@ -247,6 +248,36 @@ else ifeq ($(PLATFORM_TARGET),ad5m)
     BUILD_SUBDIR := ad5m
     # Strip binary for size on memory-constrained device
     STRIP_BINARY := yes
+    FONT_TIERS := medium large
+
+else ifeq ($(PLATFORM_TARGET),ad5m-br)
+    # -------------------------------------------------------------------------
+    # Flashforge Adventurer 5M - buildroot-compat variant for AD5M Klipper Mod
+    # integration. Parallels `ad5m` but:
+    #   - Expects CROSS_COMPILE from caller (buildroot's arm-buildroot-linux-gnueabihf-)
+    #   - No -static (buildroot links dynamically against its sysroot)
+    #   - No strip (buildroot strips target binaries itself)
+    #   - Dynamic OpenSSL (buildroot ships libssl; no static-link needed)
+    # All other CPU tuning, size optimizations, and asset gates match `ad5m`.
+    # -------------------------------------------------------------------------
+    # CROSS_COMPILE is NOT defaulted here — buildroot passes it via TARGET_CONFIGURE_OPTS.
+    TARGET_ARCH := armv7-a
+    TARGET_TRIPLE := arm-buildroot-linux-gnueabihf
+    TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a7 \
+        -Os -flto -ffunction-sections -fdata-sections -funwind-tables \
+        -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_AD5M \
+        -DHELIX_HAS_LABEL_PRINTER=0 -DHELIX_HAS_CFS=0 -DHELIX_HAS_IFS=0
+    # No -static — buildroot wants dynamic linking against its sysroot
+    TARGET_LDFLAGS := -Wl,--gc-sections -flto -lstdc++fs
+    ENABLE_SSL := yes
+    DISPLAY_BACKEND := fbdev
+    ENABLE_SDL := no
+    ENABLE_GLES_3D := no
+    ENABLE_SCREENSAVER := no
+    ENABLE_EVDEV := yes
+    BUILD_SUBDIR := ad5m-br
+    # No strip — buildroot strips target binaries itself
+    STRIP_BINARY := no
     FONT_TIERS := medium large
 
 else ifeq ($(PLATFORM_TARGET),ad5x)
@@ -601,7 +632,7 @@ else ifeq ($(PLATFORM_TARGET),native)
     BUILD_SUBDIR :=
 
 else
-    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, x86, ad5m, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1, yocto)
+    $(error Unknown PLATFORM_TARGET: $(PLATFORM_TARGET). Valid options: native, pi, pi32, x86, ad5m, ad5m-br, cc1, mips, k1, ad5x, k1-dynamic, k2, snapmaker-u1, yocto)
 endif
 
 # =============================================================================
