@@ -90,15 +90,35 @@ Choose sound style. A test sound plays when you switch themes.
 
 ### Sound Themes
 
-HelixScreen comes with three built-in themes:
+HelixScreen comes with five built-in themes:
 
 | Theme | Description |
 |-------|-------------|
 | **Default** | Balanced, tasteful sounds. Subtle clicks, smooth navigation chirps, and a melodic fanfare when your print completes. |
 | **Minimal** | Only plays sounds for important events: print complete, errors, and alarms. No button or navigation sounds at all. |
 | **Retro** | 8-bit chiptune style. Punchy square-wave arpeggios, a Mario-style victory fanfare, and buzzy retro alarms. |
+| **Miami Vice** | Punchy 80s electronic synth. Staccato square-wave hits, driving rhythm, and a soaring saw-wave lead for print complete. |
+| **Crockett's Theme** | Warm, cinematic 80s synth. Smooth saw waves with long sustains and filter sweeps. Startup plays the Crockett's Theme melody. |
 
-Advanced users can create custom sound themes by adding a JSON file to `config/sounds/` on the printer. Custom themes appear automatically in the dropdown — no restart required. See the [Sound System developer docs](../../devel/SOUND_SYSTEM.md#adding-a-new-sound-theme) for the file format.
+### Preview Sounds
+
+Tap **Preview Sounds** in the Sound section to open an overlay with buttons for every sound in the current theme. Tap any button to hear that sound immediately. This is useful for comparing themes or testing custom sounds.
+
+### Custom Sound Themes
+
+You can create your own sound themes without modifying the HelixScreen installation:
+
+1. SSH into your printer
+2. Create the sounds directory if it doesn't exist: `mkdir -p ~/helixscreen/config/sounds`
+3. Copy an existing theme as a starting point: `cp ~/helixscreen/assets/config/sounds/default.json ~/helixscreen/config/sounds/mytheme.json`
+4. Edit the file: change the `"name"` field and modify the sounds
+5. Your theme appears in the Sound Theme dropdown immediately
+
+Custom themes support the full synthesis engine: four waveform types (square, saw, triangle, sine), ADSR envelopes, frequency sweeps, lowpass/highpass filters with sweep, LFO modulation, polyphonic chords (up to 4 voices), musical note names (C4, F#5, Bb3), and musical duration notation (8n, 4n., 16t) with BPM.
+
+If your custom theme has the same filename as a built-in theme, your version takes priority.
+
+See the [Sound System developer docs](../../devel/SOUND_SYSTEM.md#sound-theme-json-schema) for the complete JSON schema reference.
 
 ### What Sounds When
 
@@ -114,7 +134,7 @@ Advanced users can create custom sound themes by adding a JSON file to `config/s
 | Error alert | Pulsing alarm | A significant error occurred |
 | Error notification | Short buzz | An error toast appeared |
 | Critical alarm | Urgent siren | Critical failure requiring attention |
-| Test sound | Short beep | "Test Sound" button in settings |
+| Test sound | Short beep | Preview Sounds overlay in settings |
 | Startup | Theme jingle | HelixScreen launches (plays once at startup) |
 
 The first five (button press, toggles, navigation) are **UI sounds** and respect the "UI Sounds" toggle. The rest always play as long as the master toggle is on.

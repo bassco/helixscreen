@@ -17,13 +17,14 @@ SoundManager (singleton, public API)
   +-> SoundTheme / SoundThemeParser (JSON parser, note/duration conversion)
   |     Loads config/sounds/*.json, converts note names to Hz, musical durations to ms.
   |
-  +-> SoundSequencer (dedicated thread, ADSR/LFO/sweep, priority queue)
-  |     Ticks at ~1ms (backend-dependent). Computes envelope, modulation, filter sweep
-  |     each tick and calls backend->set_tone().
+  +-> SoundSequencer (dedicated thread, LFO/sweep, priority queue)
+  |     Ticks at ~1ms (backend-dependent). Computes modulation and filter sweep
+  |     each tick. Sends envelope params to PCM backends at step boundaries.
   |
   +-> SoundBackend (abstract interface)
         |
-        +-> SDLSoundBackend   (desktop builds, full waveform synthesis + biquad filter)
+        +-> SDLSoundBackend   (desktop, per-sample envelope + biquad filter)
+        +-> ALSASoundBackend  (Linux SBCs, per-sample envelope + biquad filter)
         +-> PWMSoundBackend   (AD5M hardware buzzer, sysfs /sys/class/pwm)
         +-> M300SoundBackend  (Klipper printers, G-code via Moonraker)
 ```
@@ -31,30 +32,38 @@ SoundManager (singleton, public API)
 ### Thread Model
 
 ```
-LVGL thread (main)                  Sequencer thread (dedicated)
-  |                                   |
-  SoundManager::play("button_tap")    |
-    |                                 |
-    +-- mutex lock --+                |
-    |  push to queue |                |
-    +-- unlock ------+                |
-    |                                 |
-    |                    queue_cv_ wakeup
-    |                                 |
-    |                    pop request from queue
-    |                    priority check -> preempt or drop
-    |                                 |
-    |                    tick loop @ ~1ms:
-    |                      compute_envelope()   -> amplitude multiplier
-    |                      compute_lfo()        -> parameter modulation
-    |                      compute_sweep()      -> frequency/filter glide
-    |                      backend->set_waveform()  (if supported)
-    |                      backend->set_filter()    (if supported)
-    |                      backend->set_tone(freq, amplitude, duty)
-    |                                 |
-    |                    advance_step() when step completes
-    |                    end_playback() when sequence completes
+LVGL thread (main)                  Sequencer thread              Audio render thread
+  |                                   |                             (SDL callback / ALSA loop)
+  SoundManager::play("button_tap")    |                             |
+    |                                 |                             |
+    +-- mutex lock --+                |                             |
+    |  push to queue |                |                             |
+    +-- unlock ------+                |                             |
+    |                    queue_cv_ wakeup                            |
+    |                                 |                             |
+    |                    pop request from queue                      |
+    |                    priority check -> preempt or drop           |
+    |                                 |                             |
+    |                    begin_playback():                           |
+    |                      set_voice_envelope() -----> VoiceEnvelope atomics
+    |                                 |                             |
+    |                    tick loop @ ~1ms:                           |
+    |                      compute_lfo()         (modulation)       |
+    |                      compute_sweep()       (freq/filter)      |
+    |                      backend->set_tone()   (freq, gate, duty) |
+    |                      backend->set_filter() (cutoff)           |
+    |                                 |                             |
+    |                                 |           audio_callback():
+    |                                 |             for each sample:
+    |                                 |               advance_envelope() -> amplitude
+    |                                 |               generate_samples() -> waveform
+    |                                 |               apply_filter()     -> output
+    |                                 |                             |
+    |                    advance_step() when step completes          |
+    |                    end_playback() when sequence completes      |
 ```
+
+**Envelope ownership split**: The sequencer sends ADSR parameters + velocity to the backend at step boundaries via `set_voice_envelope()`. PCM backends (SDL, ALSA) compute the envelope per-sample in the render thread for sample-accurate timing. Non-PCM backends (PWM, M300) ignore `set_voice_envelope()` and use the sequencer's per-tick amplitude instead.
 
 The sequencer thread sleeps on a condition variable when idle (no sound playing, queue empty). When a sound is queued, it wakes and ticks at the backend's `min_tick_ms()` interval until playback completes.
 
@@ -75,11 +84,12 @@ The sequencer thread sleeps on a condition variable when idle (no sound playing,
 
 The sequencer adapts to what the backend can do. Features not supported by the backend are silently skipped.
 
-| Backend | Waveforms | Amplitude | Filter | min_tick_ms | Notes |
-|---------|-----------|-----------|--------|-------------|-------|
-| SDL     | yes       | yes       | yes    | 1.0         | Full synthesis: 4 waveforms, biquad lowpass/highpass |
-| PWM     | no*       | yes       | no     | 2.0         | Approximates waveforms via duty cycle ratios |
-| M300    | no        | no        | no     | 50.0        | Frequency only, 100-10000 Hz, deduplicates commands |
+| Backend | Waveforms | Amplitude | Filter | Envelope | min_tick_ms | Notes |
+|---------|-----------|-----------|--------|----------|-------------|-------|
+| SDL     | yes       | yes       | yes    | per-sample | 1.0       | Full synthesis: 4 waveforms, biquad filter, 64-sample buffer (~1.5ms) |
+| ALSA    | yes       | yes       | yes    | per-sample | 1.0       | Same synthesis as SDL, hardware-negotiated buffer size |
+| PWM     | no*       | yes       | no     | per-tick   | 2.0       | Approximates waveforms via duty cycle ratios |
+| M300    | no        | no        | no     | per-tick   | 50.0      | Frequency only, 100-10000 Hz, deduplicates commands |
 
 *PWM `supports_waveforms()` returns `false`, but `set_waveform()` stores the waveform internally to adjust the duty cycle ratio: Square=50%, Saw=25%, Triangle=35%, Sine=40%. This gives perceptually different timbres even on a single-pin buzzer.
 
@@ -196,7 +206,7 @@ Themes live in `config/sounds/{name}.json`. The parser is lenient -- unknown fie
 
 ## All Sound Names
 
-These are the 12 standard sound names recognized by the system. Theme files may include any subset.
+These are the 13 standard sound names recognized by the system. Theme files may include any subset.
 
 | Sound Name | Default Priority | Category | When Played |
 |------------|------------------|----------|-------------|
@@ -211,7 +221,8 @@ These are the 12 standard sound names recognized by the system. Theme files may 
 | `error_alert` | EVENT | Error | Repeated urgent alert |
 | `error_tone` | EVENT | Error | Error severity toast shown |
 | `alarm_urgent` | ALARM | Critical | Critical failure alarm |
-| `test_beep` | UI | Settings | Test sound button in settings panel |
+| `test_beep` | UI | Settings | Preview sound buttons in settings |
+| `startup` | EVENT | System | HelixScreen boot chime |
 
 **UI sounds** (`button_tap`, `toggle_on`, `toggle_off`, `nav_forward`, `nav_back`, `dropdown_open`) are affected by the `ui_sounds_enabled` toggle. EVENT and ALARM sounds play regardless of the UI toggle -- only the `sounds_enabled` master toggle can disable them.
 
@@ -221,11 +232,25 @@ The list of UI sounds is defined in `SoundManager::is_ui_sound()` in `sound_mana
 
 ## Adding a New Sound Theme
 
-1. Create `config/sounds/mytheme.json`
-2. Include all 12 standard sound names (or a subset -- missing sounds just won't play)
+### Shipped themes (developers)
+
+1. Create `assets/config/sounds/mytheme.json`
+2. Include any subset of the 13 standard sound names (missing sounds just won't play)
 3. Set `name`, `description`, `version` fields at the top level
 4. Theme appears automatically in Settings > Sound Theme dropdown
-5. No code changes or rebuild needed -- `get_available_themes()` scans `config/sounds/*.json` at runtime
+5. No code changes or rebuild needed -- `get_available_themes()` scans for `.json` files at runtime
+
+### User drop-in themes (end users)
+
+Users can create custom themes without modifying the installation:
+
+1. Create `~/helixscreen/config/sounds/mytheme.json` on the device
+2. The theme appears in the Sound Theme dropdown immediately
+3. If a user theme has the same filename as a shipped theme, the user version takes priority (shadows it)
+
+`get_available_themes()` scans two directories and merges the results:
+- **Read-only (shipped):** `<data_dir>/assets/config/sounds/` 
+- **Writable (user):** `~/helixscreen/config/sounds/` (via `helix::writable_path("sounds")`)
 
 Example minimal structure:
 
@@ -347,7 +372,8 @@ SOUND section
   |     +-- row_ui_sounds     (UI toggle, bound to settings_ui_sounds_enabled)
   +-- container_sound_theme   (hidden when master off)
   |     +-- row_sound_theme   (dropdown, populated from get_available_themes())
-  +-- test beep button        (hidden when master off)
+  +-- container_preview_sounds (hidden when master off)
+  |     +-- row_preview_sounds (opens SoundPreviewOverlay with buttons for each sound)
 ```
 
 The `container_ui_sounds`, `container_sound_theme`, and test beep button all use `bind_flag_if_eq` to hide when `settings_sounds_enabled` is 0.
@@ -419,18 +445,24 @@ if (SoundManager::instance().is_available()) {
 | `include/sound_theme.h` | Theme structs (`SoundTheme`, `SoundStep`, `ADSREnvelope`, etc.) + parser class |
 | `include/sound_sequencer.h` | Playback engine (`SoundPriority` enum, sequencer thread) |
 | `include/sound_manager.h` | Singleton public API |
-| `include/sdl_sound_backend.h` | SDL2 audio backend (desktop, `#ifdef HELIX_DISPLAY_SDL`) |
+| `include/sdl_sound_backend.h` | SDL2 audio backend + `VoiceEnvelope` struct (desktop, `#ifdef HELIX_DISPLAY_SDL`) |
+| `include/alsa_sound_backend.h` | ALSA PCM audio backend (Linux SBCs, `#ifdef HELIX_HAS_ALSA`) |
+| `include/sound_synthesis.h` | Shared synthesis: waveform generation, biquad filter, `BiquadFilter` struct |
 | `include/pwm_sound_backend.h` | PWM sysfs backend (AD5M buzzer) |
 | `include/m300_sound_backend.h` | M300 G-code backend (Klipper via Moonraker) |
 | `src/system/sound_theme.cpp` | Theme JSON parsing, note-to-freq, musical duration conversion |
-| `src/system/sound_sequencer.cpp` | Sequencer thread + tick loop, ADSR/LFO/sweep math |
+| `src/system/sound_sequencer.cpp` | Sequencer thread + tick loop, LFO/sweep math, envelope dispatch |
+| `src/system/sound_synthesis.cpp` | Waveform generation, biquad coefficient computation, filter application |
 | `src/system/sound_manager.cpp` | Manager singleton, backend auto-detection, theme loading |
-| `src/system/sdl_sound_backend.cpp` | SDL waveform synthesis, biquad filter (Direct Form II) |
+| `src/system/sdl_sound_backend.cpp` | SDL audio callback, per-sample envelope, biquad filter |
+| `src/system/alsa_sound_backend.cpp` | ALSA render thread, per-sample envelope, biquad filter |
 | `src/system/pwm_sound_backend.cpp` | PWM sysfs writes (period, duty_cycle, enable) |
 | `src/system/m300_sound_backend.cpp` | M300 G-code formatting, frequency deduplication |
-| `config/sounds/default.json` | Default theme (12 sounds, balanced) |
-| `config/sounds/minimal.json` | Minimal theme (6 sounds, event/alarm only) |
-| `config/sounds/retro.json` | Retro chiptune theme (12 sounds, 8-bit style) |
+| `config/sounds/default.json` | Default theme (13 sounds, balanced) |
+| `config/sounds/minimal.json` | Minimal theme (7 sounds, event/alarm only) |
+| `config/sounds/retro.json` | Retro chiptune theme (13 sounds, 8-bit style) |
+| `config/sounds/miami_vice.json` | Miami Vice theme (13 sounds, punchy 80s electronic) |
+| `config/sounds/crocketts_theme.json` | Crockett's Theme (13 sounds, warm Jan Hammer synth) |
 | `tests/unit/test_sound_theme.cpp` | Theme parser tests |
 | `tests/unit/test_sound_sequencer.cpp` | Sequencer tests |
 | `tests/unit/test_sdl_sound_backend.cpp` | SDL backend tests |
@@ -443,9 +475,11 @@ if (SoundManager::instance().is_available()) {
 
 | Theme | File | Sounds | Style |
 |-------|------|--------|-------|
-| **default** | `config/sounds/default.json` | 12 | Balanced, tasteful. Saw waves with filter sweeps for nav, clean square taps. |
-| **minimal** | `config/sounds/minimal.json` | 6 | Event/alarm sounds only. No UI interaction sounds. |
-| **retro** | `config/sounds/retro.json` | 12 | 8-bit chiptune. Fast arpeggios, narrow duty cycles, game-style chirps. |
+| **default** | `config/sounds/default.json` | 13 | Balanced, tasteful. Saw waves with filter sweeps for nav, clean square taps. |
+| **minimal** | `config/sounds/minimal.json` | 7 | Event/alarm sounds only. No UI interaction sounds. |
+| **retro** | `config/sounds/retro.json` | 13 | 8-bit chiptune. Fast arpeggios, narrow duty cycles, game-style chirps. |
+| **miami_vice** | `config/sounds/miami_vice.json` | 13 | Punchy 80s electronic synth. E minor key, staccato square hits, driving rhythm. |
+| **crocketts_theme** | `config/sounds/crocketts_theme.json` | 13 | Warm Jan Hammer saw waves. Bb minor key, long sustains, filter bloom. Startup plays the Crockett's Theme melody. |
 
 ---
 
@@ -478,7 +512,11 @@ make test-run
 
 ## ADSR Envelope Details
 
-The sequencer computes the amplitude envelope every tick. Given a step with duration `D` and ADSR values `(A, D, S, R)`:
+On PCM backends (SDL, ALSA), the envelope is computed **per-sample** in the audio render thread for sample-accurate timing. The sequencer sends envelope parameters at step boundaries via `set_voice_envelope()`, and the render thread advances a `VoiceEnvelope` state machine for each audio sample. This eliminates timing-dependent volume variations on very short sounds.
+
+On non-PCM backends (PWM, M300), the sequencer still computes the envelope per-tick (~1-50ms) and passes the amplitude to `set_tone()`.
+
+Given a step with duration `D` and ADSR values `(A, D, S, R)`:
 
 ```
 Amplitude
@@ -514,8 +552,7 @@ Each tick (~1ms on SDL, ~2ms on PWM, ~50ms on M300):
 4. **Check step completion**: If elapsed >= total, call `advance_step()`.
 5. **Compute parameters** for current step:
    - Base frequency from `step.freq_hz`
-   - Base amplitude from `step.velocity`
-   - Envelope multiplier from `compute_envelope()`
+   - Base amplitude from `step.velocity` * envelope (for non-PCM backends) or just velocity (for PCM backends where the render thread handles the envelope)
    - Sweep interpolation from `compute_sweep()` (linear, based on progress 0.0-1.0)
    - LFO offset from `compute_lfo()` (sinusoidal)
 6. **Clamp outputs**: freq 20-20000 Hz, amplitude 0.0-1.0, duty 0.0-1.0
@@ -543,5 +580,4 @@ The M300 backend requires Klipper to have `[output_pin beeper]` configured. With
 
 - **Duty cycle parsing**: The `duty` field appears in theme JSON files (e.g., retro theme) but is not yet parsed into `SoundStep`. The sequencer defaults duty to 0.5 and only modulates it via LFO. Adding `duty` to `SoundStep` + the parser is a minor change.
 - **Volume normalization**: Per-theme or per-backend volume curves.
-- **Custom user themes**: `config/sounds.d/` directory for user-created themes that survive updates.
 - **M300 batch mode**: Pre-compute a sound sequence into a list of M300 commands and send them all at once, reducing round-trip latency.
