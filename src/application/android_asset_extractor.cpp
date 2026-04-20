@@ -73,6 +73,7 @@ AssetExtractionResult extract_assets_if_needed(const std::string& source_dir,
 #include <android/asset_manager_jni.h>
 #include <cstdlib>
 #include <jni.h>
+#include <sstream>
 #include <vector>
 
 // Get AAssetManager from the Android Activity via JNI
@@ -158,31 +159,43 @@ static int extract_asset_dir(AAssetManager* mgr, const std::string& asset_path,
     return count;
 }
 
-// Recursively extract a known directory tree from APK assets.
-// AAssetDir only lists files (not subdirs), so we need to know the subdirectory
-// names in advance. For ui_xml/ we have a known structure: ui_xml/components/.
-static int extract_known_tree(AAssetManager* mgr, const std::string& asset_root,
-                              const std::string& target_root,
-                              const std::vector<std::string>& subdirs) {
-    int total = 0;
-
-    // Extract files from root directory
-    int n = extract_asset_dir(mgr, asset_root, target_root);
-    if (n < 0)
-        return -1;
-    total += n;
-
-    // Extract each known subdirectory
-    for (const auto& sub : subdirs) {
-        std::string asset_sub = asset_root + "/" + sub;
-        std::string target_sub = target_root + "/" + sub;
-        n = extract_asset_dir(mgr, asset_sub, target_sub);
-        if (n >= 0) {
-            total += n;
-        }
+// Read MANIFEST.txt from the APK root. The manifest is produced at build time
+// by scripts/gen-packaging-manifest.sh and lists every subdirectory (one per
+// line, project-relative) that ships in the APK. AAssetDir can only list
+// files, not subdirs — the manifest is how the extractor learns the tree.
+//
+// Returns empty vector on failure; caller must treat that as fatal since
+// there is no safe fallback (a hardcoded list is exactly the drift we are
+// trying to eliminate).
+static std::vector<std::string> read_manifest(AAssetManager* mgr) {
+    std::vector<std::string> dirs;
+    AAsset* asset = AAssetManager_open(mgr, "MANIFEST.txt", AASSET_MODE_BUFFER);
+    if (!asset) {
+        spdlog::error("[AndroidAssets] BUILD ERROR: MANIFEST.txt missing from APK. "
+                      "Check android/app/build.gradle — the genManifest task must run "
+                      "before copyAssets/mergeAssets.");
+        return dirs;
     }
 
-    return total;
+    off_t size = AAsset_getLength(asset);
+    std::string content(static_cast<size_t>(size), '\0');
+    int bytes_read = AAsset_read(asset, content.data(), size);
+    AAsset_close(asset);
+    if (bytes_read != size) {
+        spdlog::error("[AndroidAssets] Short read on MANIFEST.txt: {} of {}", bytes_read, size);
+        return dirs;
+    }
+
+    std::istringstream iss(content);
+    std::string line;
+    while (std::getline(iss, line)) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty() || line[0] == '#')
+            continue;
+        dirs.push_back(std::move(line));
+    }
+    return dirs;
 }
 
 void android_extract_assets_if_needed() {
@@ -218,35 +231,45 @@ void android_extract_assets_if_needed() {
         return;
     }
 
-    // Extract the three asset trees from the APK.
-    // AAssetDir_getNextFileName() only returns files, not subdirectories,
-    // so we enumerate known subdirectory structure explicitly.
+    // Remove pre-split stale seeds under {target_dir}/config/. Before bfeba7c26
+    // these paths held the shipped RO seeds; after the split they moved to
+    // assets/config/, but an upgrade-in-place leaves the old copies on disk
+    // where find_readable() would return them first and shadow the new seeds.
+    // Safe to delete: all entries here are RO shipped content, not user state.
+    {
+        std::error_code ec;
+        const std::string cfg = target_dir + "/config";
+        for (const char* stale : {"printer_database.json", "printing_tips.json",
+                                  "default_layout.json", "helix_macros.cfg"}) {
+            fs::remove(cfg + "/" + stale, ec);
+        }
+        for (const char* stale_dir : {"presets", "print_start_profiles", "platform",
+                                      "sounds", "themes/defaults"}) {
+            fs::remove_all(cfg + "/" + stale_dir, ec);
+        }
+    }
+
+    // Walk MANIFEST.txt — every directory in the APK, one per line, in a stable
+    // sort order. For each entry, extract the files it contains (AAssetDir can
+    // only enumerate files, not subdirs, which is why the manifest exists).
+    // Adding a new source-tree directory doesn't require touching this code:
+    // the build-time script regenerates the manifest automatically.
+    std::vector<std::string> manifest = read_manifest(mgr);
+    if (manifest.empty()) {
+        spdlog::error("[AndroidAssets] No manifest — aborting extraction. App will lack "
+                      "UI resources (printer database, themes, presets, etc.).");
+        setenv("HELIX_DATA_DIR", target_dir.c_str(), 1);
+        return;
+    }
+
     int total = 0;
-
-    // ui_xml/ tree
-    int n = extract_known_tree(mgr, "ui_xml", target_dir + "/ui_xml",
-                               {"components", "translations", "ultrawide"});
-    if (n > 0)
-        total += n;
-    spdlog::info("[AndroidAssets] Extracted {} files from ui_xml/", n);
-
-    // assets/ tree (images has subdirs: ams, flags, printers)
-    n = extract_known_tree(mgr, "assets", target_dir + "/assets",
-                           {"fonts", "images", "images/ams", "images/flags", "images/printers",
-                            "sounds", "test_gcodes"});
-    if (n > 0)
-        total += n;
-    spdlog::info("[AndroidAssets] Extracted {} files from assets/", n);
-
-    // config/ tree
-    n = extract_known_tree(mgr, "config", target_dir + "/config",
-                           {"platform", "presets", "print_start_profiles", "printer_database.d",
-                            "sounds", "themes", "themes/defaults"});
-    if (n > 0)
-        total += n;
-    spdlog::info("[AndroidAssets] Extracted {} files from config/", n);
-
-    spdlog::info("[AndroidAssets] Total: {} files extracted to '{}'", total, target_dir);
+    for (const std::string& rel : manifest) {
+        int n = extract_asset_dir(mgr, rel, target_dir + "/" + rel);
+        if (n > 0)
+            total += n;
+    }
+    spdlog::info("[AndroidAssets] Total: {} files extracted across {} dirs to '{}'", total,
+                 manifest.size(), target_dir);
 
     // Write version marker
     {

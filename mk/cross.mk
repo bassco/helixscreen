@@ -2174,13 +2174,18 @@ VERSION := $(shell cat VERSION.txt 2>/dev/null || echo "dev")
 # Release filenames include 'v' prefix to match git tag convention (v0.9.3)
 RELEASE_VERSION := v$(VERSION)
 
-# Assets to include (exclude test_gcodes, gcode test files).
-# assets/config ships the RO seed tree split out by bfeba7c26: printer_database.json,
-# printing_tips.json, default_layout.json, helix_macros.cfg, themes/defaults/,
-# presets/, print_start_profiles/, sounds/, platform/hooks-*.sh. Omitting it
-# breaks printer detection, shipped themes, and platform init hooks on every
-# embedded target (v0.99.33 regression).
-RELEASE_ASSETS := assets/fonts assets/images assets/config
+# Top-level asset dirs to include in release tarballs, derived from the shared
+# packaging manifest (scripts/gen-packaging-manifest.sh) minus test-data dirs
+# that are too large to ship. This replaces the previous hand-maintained
+# whitelist, which silently missed assets/config post-bfeba7c26 (v0.99.33
+# regression, fix e0840a4b6) and has also been missing assets/sounds all along
+# (tracker music used by snake game and settings UI).
+#
+# Adding a new assets/<foo>/ directory to the source tree will now ship it
+# automatically. To explicitly exclude something, add it to RELEASE_ASSETS_EXCLUDE.
+RELEASE_ASSETS_ALL := $(shell scripts/gen-packaging-manifest.sh 2>/dev/null | grep -E '^assets/[^/]+$$')
+RELEASE_ASSETS_EXCLUDE := assets/test_gcodes assets/test_timelapse
+RELEASE_ASSETS := $(filter-out $(RELEASE_ASSETS_EXCLUDE),$(RELEASE_ASSETS_ALL))
 
 # Clean up release assets: remove files that are compiled into the binary or dev-only
 # .c font files are compiled into the binary at build time
