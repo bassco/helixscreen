@@ -12,6 +12,8 @@
 #include "display_settings_manager.h"
 #include "sound_manager.h"
 #include "static_subject_registry.h"
+#include "theme_manager.h"
+#include "ui_breakpoint.h"
 
 #include <spdlog/spdlog.h>
 
@@ -91,6 +93,31 @@ static int32_t xml_int_const(const char* name, int32_t fallback) {
     const char* val = lv_xml_get_const_silent(nullptr, name);
     if (!val || !*val) return fallback;
     return static_cast<int32_t>(std::atoi(val));
+}
+
+// Toast stack width by breakpoint. Calibrated to hold ~50 chars of body text
+// per line given the body font for each tier, so a typical message wraps to
+// at most two lines. Smaller screens get near-full-width; larger screens get
+// a fixed-ish card that floats in the top-right corner.
+static int32_t toast_stack_width_for(UiBreakpoint bp) {
+    switch (bp) {
+    case UiBreakpoint::Micro:
+    case UiBreakpoint::Tiny:    return 400;
+    case UiBreakpoint::Small:   return 420;
+    case UiBreakpoint::Medium:  return 460;
+    case UiBreakpoint::Large:   return 500;
+    case UiBreakpoint::XLarge:  return 560;
+    case UiBreakpoint::XXLarge:
+    default:                    return 640;
+    }
+}
+
+static int32_t compute_toast_stack_width() {
+    UiBreakpoint bp = UiBreakpoint::Medium;
+    if (auto* s = theme_manager_get_breakpoint_subject()) {
+        bp = as_breakpoint(lv_subject_get_int(s));
+    }
+    return toast_stack_width_for(bp);
 }
 
 // ============================================================================
@@ -208,23 +235,27 @@ void ToastManager::deinit_subjects() {
 // ============================================================================
 
 void ToastManager::ensure_stack_container() {
-    if (toast_stack_ && lv_obj_is_valid(toast_stack_)) return;
+    const int32_t margin = xml_int_const("space_2xl", 24);
+    const int32_t stack_width = compute_toast_stack_width();
 
-    lv_obj_t* layer = lv_layer_top();
-    toast_stack_ = lv_obj_create(layer);
-    lv_obj_set_size(toast_stack_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    if (!toast_stack_ || !lv_obj_is_valid(toast_stack_)) {
+        lv_obj_t* layer = lv_layer_top();
+        toast_stack_ = lv_obj_create(layer);
 
-    int32_t margin = xml_int_const("space_2xl", 24);
+        lv_obj_set_flex_flow(toast_stack_, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_gap(toast_stack_, xml_int_const("space_sm", 8), LV_PART_MAIN);
+        lv_obj_set_style_pad_all(toast_stack_, 0, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(toast_stack_, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(toast_stack_, 0, LV_PART_MAIN);
+        // Container itself should never intercept clicks — only the toasts inside do.
+        lv_obj_clear_flag(toast_stack_, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(toast_stack_, LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    // (Re)apply size + anchor every time — picks up breakpoint changes between
+    // toasts. Toasts are width:100% children, so they resize with us.
+    lv_obj_set_size(toast_stack_, stack_width, LV_SIZE_CONTENT);
     lv_obj_align(toast_stack_, LV_ALIGN_TOP_RIGHT, -margin, margin);
-
-    lv_obj_set_flex_flow(toast_stack_, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_gap(toast_stack_, xml_int_const("space_sm", 8), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(toast_stack_, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(toast_stack_, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(toast_stack_, 0, LV_PART_MAIN);
-    // Container itself should never intercept clicks — only the toasts inside do.
-    lv_obj_clear_flag(toast_stack_, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(toast_stack_, LV_OBJ_FLAG_CLICKABLE);
 }
 
 // ============================================================================
