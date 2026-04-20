@@ -385,6 +385,76 @@ _mock_k2_detect_platform() {
     [ "$KLIPPER_USER" = "root" ]
 }
 
+# Regression: K2 printer_data lives on /mnt/UDISK. Pre-2026-04-20 the K2
+# branch hard-coded KLIPPER_HOME=/root (squashfs, no printer_data there),
+# which caused setup_config_symlink to skip with "No printer_data/config
+# found." Bootstrap projects (k2-improvements) paper over it with a
+# /root/printer_data symlink, but the installer shouldn't depend on that.
+@test "K2: set_install_paths points KLIPPER_HOME at /mnt/UDISK (printer_data lives there)" {
+    detect_tmp_dir() { TMP_DIR="/tmp/helixscreen-install"; }
+
+    set_install_paths "k2"
+
+    [ "$KLIPPER_HOME" = "/mnt/UDISK" ]
+}
+
+# The bundled install.sh is what actually ships to users — make sure the
+# fix isn't only present in the modular sources.
+@test "install.sh (bundled) sets KLIPPER_HOME=/mnt/UDISK for k2" {
+    grep -qE 'platform.*=.*"k2"' "$WORKTREE_ROOT/scripts/install.sh"
+    grep -q 'KLIPPER_HOME="/mnt/UDISK"' "$WORKTREE_ROOT/scripts/install.sh"
+}
+
+# Same regression class as K2: K1 printer_data is at /usr/data/printer_data,
+# not /root. Without the fix, the fallback /root in detect_klipper_user
+# made setup_config_symlink skip on K1 as well.
+@test "K1: set_install_paths points KLIPPER_HOME at /usr/data" {
+    detect_tmp_dir() { TMP_DIR="/tmp/helixscreen-install"; }
+
+    set_install_paths "k1" "stock_klipper"
+
+    [ "$KLIPPER_HOME" = "/usr/data" ]
+    [ "$INSTALL_DIR" = "/usr/data/helixscreen" ]
+}
+
+@test "install.sh (bundled) sets KLIPPER_HOME=/usr/data for k1" {
+    grep -qE 'platform.*=.*"k1"' "$WORKTREE_ROOT/scripts/install.sh"
+    grep -q 'KLIPPER_HOME="/usr/data"' "$WORKTREE_ROOT/scripts/install.sh"
+}
+
+# Snapmaker U1: detect_klipper_user would normally find /home/lava via
+# filesystem scan, but that scan assumes klipper has already populated
+# printer_data. On a freshly-flashed U1, detection can miss and fall back
+# to /root — an explicit override makes install behavior deterministic.
+@test "U1: set_install_paths points KLIPPER_HOME at /home/lava" {
+    detect_tmp_dir() { TMP_DIR="/tmp/helixscreen-install"; }
+
+    set_install_paths "snapmaker-u1"
+
+    [ "$KLIPPER_HOME" = "/home/lava" ]
+    [ "$INSTALL_DIR" = "/userdata/helixscreen" ]
+}
+
+@test "install.sh (bundled) sets KLIPPER_HOME=/home/lava for snapmaker-u1" {
+    grep -qE 'platform.*=.*"snapmaker-u1"' "$WORKTREE_ROOT/scripts/install.sh"
+    grep -q 'KLIPPER_HOME="/home/lava"' "$WORKTREE_ROOT/scripts/install.sh"
+}
+
+# AD5M: /root/printer_data is the correct location (verified on hardware) —
+# the fallback KLIPPER_HOME=/root already matches reality. Pin the expected
+# behavior so no one "fixes" it later and regresses AD5M.
+@test "AD5M forge_x: KLIPPER_HOME=/root is intentional (matches /root/printer_data)" {
+    detect_tmp_dir() { TMP_DIR="/tmp/helixscreen-install"; }
+    # Simulate the detect_klipper_user fallback
+    KLIPPER_HOME="/root"
+    KLIPPER_USER="root"
+
+    set_install_paths "ad5m" "forge_x"
+
+    # AD5M forge_x branch intentionally does NOT override — the fallback is correct.
+    [ "$KLIPPER_HOME" = "/root" ]
+}
+
 @test "platform.sh returns k2 in detect_platform docstring" {
     grep -q '"k2"' "$WORKTREE_ROOT/scripts/lib/installer/platform.sh"
 }

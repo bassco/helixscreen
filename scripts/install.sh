@@ -712,10 +712,15 @@ set_install_paths() {
         log_info "Platform: FlashForge AD5X (ZMOD)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
-        # Creality K1 series - uses /usr/data structure
-        # Common paths for all K1 variants
+        # Creality K1 series - uses /usr/data structure.
+        # printer_data is at /usr/data/printer_data (squashfs /root is RO).
+        # Without the explicit override, detect_klipper_user falls back to
+        # KLIPPER_HOME=/root and setup_config_symlink skips with
+        # "No printer_data/config found" on every K1 install.
         INSTALL_DIR="/usr/data/helixscreen"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+        KLIPPER_USER="root"
+        KLIPPER_HOME="/usr/data"
         case "$firmware" in
             simple_af)
                 PREVIOUS_UI_SCRIPT="/etc/init.d/S99guppyscreen"
@@ -732,12 +737,17 @@ set_install_paths() {
         esac
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k2" ]; then
-        # Creality K2 series - OpenWrt/Tina Linux, storage on /mnt/UDISK
+        # Creality K2 series - OpenWrt/Tina Linux, storage on /mnt/UDISK.
+        # printer_data lives on /mnt/UDISK (squashfs /root has no space).
+        # Some K2 bootstrap projects (k2-improvements) drop a symlink
+        # /root/printer_data -> /mnt/UDISK/printer_data/, but the installer
+        # runs before that bootstrap for many users — point KLIPPER_HOME at
+        # the actual storage so config symlinks work on first install.
         INSTALL_DIR="/opt/helixscreen"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         PREVIOUS_UI_SCRIPT=""
         KLIPPER_USER="root"
-        KLIPPER_HOME="/root"
+        KLIPPER_HOME="/mnt/UDISK"
         log_info "Platform: Creality K2 series"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "cc1" ]; then
@@ -755,8 +765,15 @@ set_install_paths() {
         log_info "Platform: Elegoo Centauri Carbon (COSMOS)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "snapmaker-u1" ]; then
+        # Snapmaker U1: klipper runs as user 'lava', printer_data lives at
+        # /home/lava/printer_data. HelixScreen itself runs as root, but
+        # config symlinks must target the lava-owned tree so Mainsail/Fluidd
+        # can read them. detect_klipper_user normally finds /home/lava, but
+        # on a freshly-flashed U1 before klipper has ever run that path may
+        # not exist yet — make it explicit so the installer is deterministic.
         INSTALL_DIR="/userdata/helixscreen"
         KLIPPER_USER="root"
+        KLIPPER_HOME="/home/lava"
         INIT_SYSTEM="sysv"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         log_info "Platform: Snapmaker U1"
@@ -3421,6 +3438,28 @@ _has_no_new_privs() {
 
 # _is_self_update() is defined in common.sh (sourced before this module)
 
+# Fix a known-broken PLATFORM_HOOKS path in an already-deployed init script.
+#
+# Init scripts shipped before 2026-04-20 sourced platform hooks from
+# ${DAEMON_DIR}/assets/config/platform/hooks.sh, but the installer (and the
+# deploy makefile) write hooks to ${DAEMON_DIR}/platform/hooks.sh.  Result:
+# the file was never found, platform_stop_competing_uis() stayed a no-op,
+# and stock UIs (Creality K2 /etc/init.d/app, etc.) ran alongside HelixScreen.
+#
+# Self-update deliberately skips copying the init script to preserve
+# platform customizations (#314), so a pure source-tree fix can't reach
+# already-installed users.  This surgical sed rewrites only that one
+# known-broken substring; anything else the platform may have customized
+# is left alone.
+_migrate_init_script_hooks_path() {
+    local init_script="${INIT_SCRIPT_DEST:-}"
+    [ -n "$init_script" ] && [ -f "$init_script" ] || return 0
+    if grep -q 'assets/config/platform/hooks\.sh' "$init_script" 2>/dev/null; then
+        log_info "Migrating stale PLATFORM_HOOKS path in $init_script"
+        _sed_inplace 's|assets/config/platform/hooks\.sh|platform/hooks.sh|' "$init_script"
+    fi
+}
+
 # Install service (dispatcher)
 # Calls install_service_systemd or install_service_sysv based on INIT_SYSTEM
 install_service() {
@@ -3643,6 +3682,7 @@ install_service_sysv() {
     # Overwriting it destroys platform customizations (ZMOD, Klipper Mod) (#314).
     if _is_self_update; then
         log_info "Skipping init script install (self-update; already installed)"
+        _migrate_init_script_hooks_path
         CLEANUP_SERVICE=true
         return 0
     fi
@@ -3805,7 +3845,12 @@ start_service_sysv() {
 deploy_platform_hooks() {
     local install_dir="$1"
     local platform="$2"  # "ad5m-forgex", "ad5m-kmod", "pi", "k1"
-    local hooks_src="${install_dir}/config/platform/hooks-${platform}.sh"
+    # Tarball ships platform hooks under assets/config/ as part of the
+    # read-only seed bundle (see scripts/package.sh). Older installers looked
+    # in config/platform/ — that path moved in the config/→assets/config/
+    # refactor and the deploy_platform_hooks lookup got left behind,
+    # silently dropping the hooks file for every sysv platform (#k2-no-hooks).
+    local hooks_src="${install_dir}/assets/config/platform/hooks-${platform}.sh"
 
     if [ ! -f "$hooks_src" ]; then
         log_warn "No platform hooks for: $platform"

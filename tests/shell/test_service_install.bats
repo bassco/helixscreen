@@ -189,6 +189,96 @@ INITEOF
 }
 
 # =============================================================================
+# Self-update: stale PLATFORM_HOOKS path migration
+# =============================================================================
+
+# Helper: seed an already-installed init script at INIT_SCRIPT_DEST with
+# the pre-2026-04-20 buggy PLATFORM_HOOKS path (wrong 'assets/config/' prefix).
+seed_installed_buggy_init() {
+    cat > "$INIT_SCRIPT_DEST" << 'BUGEOF'
+#!/bin/sh
+DAEMON_DIR="/opt/helixscreen"
+PLATFORM_HOOKS="${DAEMON_DIR}/assets/config/platform/hooks.sh"
+if [ -f "$PLATFORM_HOOKS" ]; then
+    . "$PLATFORM_HOOKS"
+fi
+# platform-specific customization that must survive migration
+platform_pre_start() { echo "zmod-custom" > /tmp/marker; }
+BUGEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+}
+
+@test "install_service_sysv: self-update migrates stale PLATFORM_HOOKS path" {
+    create_init_template   # fresh tarball (unused on self-update path)
+    seed_installed_buggy_init
+    HELIX_SELF_UPDATE=1
+
+    install_service_sysv
+
+    # Bad substring replaced
+    ! grep -q 'assets/config/platform/hooks\.sh' "$INIT_SCRIPT_DEST"
+    # Correct path written
+    grep -q 'PLATFORM_HOOKS="\${DAEMON_DIR}/platform/hooks.sh"' "$INIT_SCRIPT_DEST"
+}
+
+@test "install_service_sysv: self-update preserves platform customizations" {
+    create_init_template
+    seed_installed_buggy_init
+    HELIX_SELF_UPDATE=1
+
+    install_service_sysv
+
+    # Unrelated customization (e.g., ZMOD's platform_pre_start override) survives
+    grep -q 'zmod-custom' "$INIT_SCRIPT_DEST"
+    # Init script still executable after migration
+    [ -x "$INIT_SCRIPT_DEST" ]
+}
+
+@test "install_service_sysv: self-update is a no-op when already migrated" {
+    # Seed an init script that already has the correct path — migration
+    # should not touch it, and certainly must not duplicate or corrupt it.
+    cat > "$INIT_SCRIPT_DEST" << 'OKEOF'
+#!/bin/sh
+DAEMON_DIR="/opt/helixscreen"
+PLATFORM_HOOKS="${DAEMON_DIR}/platform/hooks.sh"
+OKEOF
+    chmod +x "$INIT_SCRIPT_DEST"
+    local before
+    before=$(md5sum "$INIT_SCRIPT_DEST" | awk '{print $1}')
+    HELIX_SELF_UPDATE=1
+
+    install_service_sysv
+
+    local after
+    after=$(md5sum "$INIT_SCRIPT_DEST" | awk '{print $1}')
+    [ "$before" = "$after" ]
+}
+
+@test "install_service_sysv: self-update does not overwrite init script from tarball" {
+    # Core #314 guarantee: self-update must NOT clobber the installed init
+    # script with the fresh tarball copy, even while doing the surgical sed.
+    create_init_template
+    seed_installed_buggy_init
+    HELIX_SELF_UPDATE=1
+
+    install_service_sysv
+
+    # The tarball template has "Usage:" text; the installed (seeded) file does not.
+    ! grep -q 'Usage: \$0' "$INIT_SCRIPT_DEST"
+}
+
+@test "install_service_sysv: fresh install does not need migration path" {
+    # On a fresh install (no HELIX_SELF_UPDATE), the full tarball copy runs
+    # and the fixed path is already present — no buggy substring should exist.
+    create_init_template
+    unset HELIX_SELF_UPDATE
+
+    install_service_sysv
+
+    ! grep -q 'assets/config/platform/hooks\.sh' "$INIT_SCRIPT_DEST"
+}
+
+# =============================================================================
 # install_service (dispatcher)
 # =============================================================================
 
@@ -300,7 +390,7 @@ ALTEOF
 # =============================================================================
 
 @test "deploy_platform_hooks: copies hooks file for known platform" {
-    local hooks_src="$INSTALL_DIR/config/platform/hooks-pi.sh"
+    local hooks_src="$INSTALL_DIR/assets/config/platform/hooks-pi.sh"
     mkdir -p "$(dirname "$hooks_src")"
     echo '#!/bin/sh' > "$hooks_src"
     echo 'platform_pre_start() { :; }' >> "$hooks_src"
@@ -317,8 +407,40 @@ ALTEOF
     [ "$status" -eq 0 ]
 }
 
+# Regression: tarball ships hooks under assets/config/platform/, not config/platform/.
+# Before the fix, deploy_platform_hooks looked in config/platform/ and silently
+# emitted "No platform hooks for: <platform>" on every sysv install because the
+# tarball never put anything there.
+@test "deploy_platform_hooks: looks under assets/config/platform (not legacy config/platform)" {
+    # Only the NEW tarball location is populated; legacy location stays empty.
+    local tarball_src="$INSTALL_DIR/assets/config/platform/hooks-k2.sh"
+    mkdir -p "$(dirname "$tarball_src")"
+    cat > "$tarball_src" << 'EOF'
+#!/bin/sh
+platform_stop_competing_uis() { /etc/init.d/app stop; }
+EOF
+
+    deploy_platform_hooks "$INSTALL_DIR" "k2"
+
+    [ -f "$INSTALL_DIR/platform/hooks.sh" ]
+    grep -q '/etc/init.d/app stop' "$INSTALL_DIR/platform/hooks.sh"
+}
+
+@test "deploy_platform_hooks: legacy config/platform/ is NOT consulted" {
+    # Stash a decoy at the OLD path; deploy must NOT pick it up.
+    local decoy="$INSTALL_DIR/config/platform/hooks-k2.sh"
+    mkdir -p "$(dirname "$decoy")"
+    echo 'exit 42' > "$decoy"
+
+    run deploy_platform_hooks "$INSTALL_DIR" "k2"
+
+    # Tarball location empty → warn and return 0 (no hooks deployed).
+    [ "$status" -eq 0 ]
+    [ ! -f "$INSTALL_DIR/platform/hooks.sh" ]
+}
+
 @test "deploy_platform_hooks: creates platform directory if needed" {
-    local hooks_src="$INSTALL_DIR/config/platform/hooks-k1.sh"
+    local hooks_src="$INSTALL_DIR/assets/config/platform/hooks-k1.sh"
     mkdir -p "$(dirname "$hooks_src")"
     echo '#!/bin/sh' > "$hooks_src"
 

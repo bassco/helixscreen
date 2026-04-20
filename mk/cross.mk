@@ -1585,9 +1585,9 @@ deploy-ad5m:
 	@ssh $(AD5M_SSH_TARGET) '\
 		mkdir -p $(AD5M_DEPLOY_DIR)/platform; \
 		if [ -d /mnt/data/.klipper_mod ]; then \
-			HOOK="$(AD5M_DEPLOY_DIR)/config/platform/hooks-ad5m-kmod.sh"; \
+			HOOK="$(AD5M_DEPLOY_DIR)/assets/config/platform/hooks-ad5m-kmod.sh"; \
 		elif [ -d /opt/config/mod/.root ]; then \
-			HOOK="$(AD5M_DEPLOY_DIR)/config/platform/hooks-ad5m-forgex.sh"; \
+			HOOK="$(AD5M_DEPLOY_DIR)/assets/config/platform/hooks-ad5m-forgex.sh"; \
 		else \
 			HOOK=""; \
 		fi; \
@@ -1847,7 +1847,7 @@ define snapmaker-u1-deploy-common
 	@if [ -f build/snapmaker-u1/bin/helix-watchdog ]; then scp build/snapmaker-u1/bin/helix-watchdog $(SNAPMAKER_U1_SSH_TARGET):$(SNAPMAKER_U1_DEPLOY_DIR)/bin/; fi
 	ssh $(SNAPMAKER_U1_SSH_TARGET) "chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/bin/helix-*"
 	COPYFILE_DISABLE=1 tar -cf - $(DEPLOY_TAR_EXCLUDES) $(DEPLOY_TAR_NO_TRACKER) $(DEPLOY_ASSET_DIRS) | ssh $(SNAPMAKER_U1_SSH_TARGET) "cd $(SNAPMAKER_U1_DEPLOY_DIR) && tar -xf -"
-	cat config/platform/hooks-snapmaker-u1.sh | ssh $(SNAPMAKER_U1_SSH_TARGET) "cat > $(SNAPMAKER_U1_DEPLOY_DIR)/platform/hooks.sh && chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/platform/hooks.sh"
+	cat assets/config/platform/hooks-snapmaker-u1.sh | ssh $(SNAPMAKER_U1_SSH_TARGET) "cat > $(SNAPMAKER_U1_DEPLOY_DIR)/platform/hooks.sh && chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/platform/hooks.sh"
 	scp scripts/helix-launcher.sh $(SNAPMAKER_U1_SSH_TARGET):$(SNAPMAKER_U1_DEPLOY_DIR)/bin/ && ssh $(SNAPMAKER_U1_SSH_TARGET) "chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/bin/helix-launcher.sh"
 	cat config/helixscreen.init | ssh $(SNAPMAKER_U1_SSH_TARGET) "sed 's|DAEMON_DIR=\"/opt/helixscreen\"|DAEMON_DIR=\"$(SNAPMAKER_U1_DEPLOY_DIR)\"|' > $(SNAPMAKER_U1_DEPLOY_DIR)/helixscreen.init && chmod +x $(SNAPMAKER_U1_DEPLOY_DIR)/helixscreen.init"
 	@if [ -f "build/snapmaker-u1/certs/ca-certificates.crt" ]; then \
@@ -2122,8 +2122,8 @@ deploy-k2:
 	@# Stop running processes, remove stale lock, and prepare directory
 	ssh $(K2_SSH_TARGET) "killall helix-watchdog helix-screen helix-splash 2>/dev/null || true; sleep 1; killall -9 helix-watchdog helix-screen helix-splash 2>/dev/null || true; rm -f /tmp/helix-screen.lock; mkdir -p $(K2_DEPLOY_DIR)/bin $(K2_DEPLOY_DIR)/platform"
 	@# Deploy platform hooks (stops stock display-server cleanly via procd)
-	@if [ -f config/platform/hooks-k2.sh ]; then \
-		cat config/platform/hooks-k2.sh | ssh $(K2_SSH_TARGET) "cat > $(K2_DEPLOY_DIR)/platform/hooks.sh && chmod +x $(K2_DEPLOY_DIR)/platform/hooks.sh"; \
+	@if [ -f assets/config/platform/hooks-k2.sh ]; then \
+		cat assets/config/platform/hooks-k2.sh | ssh $(K2_SSH_TARGET) "cat > $(K2_DEPLOY_DIR)/platform/hooks.sh && chmod +x $(K2_DEPLOY_DIR)/platform/hooks.sh"; \
 	fi
 	@# Transfer binaries via cat/ssh
 	@echo "$(DIM)Transferring binaries...$(RESET)"

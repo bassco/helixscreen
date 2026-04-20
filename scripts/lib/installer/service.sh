@@ -38,6 +38,28 @@ _has_no_new_privs() {
 
 # _is_self_update() is defined in common.sh (sourced before this module)
 
+# Fix a known-broken PLATFORM_HOOKS path in an already-deployed init script.
+#
+# Init scripts shipped before 2026-04-20 sourced platform hooks from
+# ${DAEMON_DIR}/assets/config/platform/hooks.sh, but the installer (and the
+# deploy makefile) write hooks to ${DAEMON_DIR}/platform/hooks.sh.  Result:
+# the file was never found, platform_stop_competing_uis() stayed a no-op,
+# and stock UIs (Creality K2 /etc/init.d/app, etc.) ran alongside HelixScreen.
+#
+# Self-update deliberately skips copying the init script to preserve
+# platform customizations (#314), so a pure source-tree fix can't reach
+# already-installed users.  This surgical sed rewrites only that one
+# known-broken substring; anything else the platform may have customized
+# is left alone.
+_migrate_init_script_hooks_path() {
+    local init_script="${INIT_SCRIPT_DEST:-}"
+    [ -n "$init_script" ] && [ -f "$init_script" ] || return 0
+    if grep -q 'assets/config/platform/hooks\.sh' "$init_script" 2>/dev/null; then
+        log_info "Migrating stale PLATFORM_HOOKS path in $init_script"
+        _sed_inplace 's|assets/config/platform/hooks\.sh|platform/hooks.sh|' "$init_script"
+    fi
+}
+
 # Install service (dispatcher)
 # Calls install_service_systemd or install_service_sysv based on INIT_SYSTEM
 install_service() {
@@ -260,6 +282,7 @@ install_service_sysv() {
     # Overwriting it destroys platform customizations (ZMOD, Klipper Mod) (#314).
     if _is_self_update; then
         log_info "Skipping init script install (self-update; already installed)"
+        _migrate_init_script_hooks_path
         CLEANUP_SERVICE=true
         return 0
     fi
@@ -422,7 +445,12 @@ start_service_sysv() {
 deploy_platform_hooks() {
     local install_dir="$1"
     local platform="$2"  # "ad5m-forgex", "ad5m-kmod", "pi", "k1"
-    local hooks_src="${install_dir}/config/platform/hooks-${platform}.sh"
+    # Tarball ships platform hooks under assets/config/ as part of the
+    # read-only seed bundle (see scripts/package.sh). Older installers looked
+    # in config/platform/ — that path moved in the config/→assets/config/
+    # refactor and the deploy_platform_hooks lookup got left behind,
+    # silently dropping the hooks file for every sysv platform (#k2-no-hooks).
+    local hooks_src="${install_dir}/assets/config/platform/hooks-${platform}.sh"
 
     if [ ! -f "$hooks_src" ]; then
         log_warn "No platform hooks for: $platform"
