@@ -7,9 +7,11 @@
 
 #include "ams_backend.h"
 #include "ams_types.h"
+#include "filament_consumption_tracker.h"
 #include "lvgl/lvgl.h"
 #include "subject_managed_panel.h"
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -1015,6 +1017,11 @@ class AmsState {
     mutable std::recursive_mutex mutex_;
     std::vector<std::unique_ptr<AmsBackend>> backends_;
     std::vector<BackendSlotSubjects> secondary_slot_subjects_;
+    /// FilamentConsumptionTracker sink handles, keyed by backend index. One
+    /// AmsSlotSink per slot is registered when a backend is added and removed
+    /// in clear_backends().
+    std::map<int, std::vector<helix::FilamentConsumptionTracker::SinkHandle>>
+        consumption_sinks_;
     bool initialized_ = false;
 
     // Moonraker API for Spoolman integration

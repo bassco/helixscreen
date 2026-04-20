@@ -52,6 +52,20 @@ class AmsBackendMock : public AmsBackend {
     [[nodiscard]] int get_current_slot() const override;
     [[nodiscard]] bool is_filament_loaded() const override;
 
+    // Capability flag (overridable in tests; production mock returns default false)
+    [[nodiscard]] bool tracks_consumption_natively() const override {
+        return tracks_consumption_natively_;
+    }
+
+    /**
+     * @brief Test hook: make get_slot_for_extruder / tracks_consumption_natively() return
+     *        the given value. Test-only setter on the mock, not on a production backend
+     *        (per CLAUDE L065 the mock is test infrastructure).
+     */
+    void set_tracks_consumption_natively_for_testing(bool value) {
+        tracks_consumption_natively_ = value;
+    }
+
     // Path visualization
     [[nodiscard]] PathTopology get_topology() const override;
     [[nodiscard]] PathTopology get_unit_topology(int unit_index) const override;
@@ -586,4 +600,8 @@ class AmsBackendMock : public AmsBackend {
     std::string initial_state_scenario_;
     std::thread scenario_thread_; ///< Thread for deferred loading/bypass scenario
     std::atomic<bool> scenario_thread_running_{false}; ///< Guards against double-join
+
+    // Test override for native-tracking capability. False in production; tests
+    // flip this to exercise the FilamentConsumptionTracker gating path.
+    bool tracks_consumption_natively_ = false;
 };
