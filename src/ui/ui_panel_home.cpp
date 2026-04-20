@@ -432,11 +432,19 @@ void HomePanel::populate_page(int page_index, bool force) {
         return;
     }
 
+    // Compute the widget ID list ONCE per populate_page call.  Re-reading gate
+    // subjects after populate_widgets (e.g. when caching at line ~510) caused a
+    // race: late-arriving capabilities (printer_has_led flipping 0→1 shortly
+    // after placement) would be baked into the cache, making the subsequent
+    // gate-observer rebuild short-circuit as "unchanged" and leaving the widget
+    // permanently in its initial ~gated placeholder.  Snapshotting here ties
+    // the cache to the snapshot driving placement.
+    auto snapshot_ids =
+        helix::PanelWidgetManager::instance().compute_visible_widget_ids("home", page_index);
+
     // Skip rebuild if the resulting widget list would be identical
     if (!force) {
-        auto new_ids =
-            helix::PanelWidgetManager::instance().compute_visible_widget_ids("home", page_index);
-        if (idx < page_visible_ids_.size() && new_ids == page_visible_ids_[idx]) {
+        if (idx < page_visible_ids_.size() && snapshot_ids == page_visible_ids_[idx]) {
             spdlog::debug("[{}] Page {} widget list unchanged, skipping rebuild", get_name(),
                           page_index);
             populating_widgets_ = false;
@@ -503,12 +511,13 @@ void HomePanel::populate_page(int page_index, bool force) {
     }
     page_widgets_[idx] = std::move(widgets);
 
-    // Cache visible widget IDs
+    // Cache visible widget IDs — use the snapshot computed at populate_page
+    // entry so the cache matches the gate values that drove placement, not a
+    // fresh read that could include late-arriving capability flips.
     if (idx >= page_visible_ids_.size()) {
         page_visible_ids_.resize(idx + 1);
     }
-    page_visible_ids_[idx] =
-        helix::PanelWidgetManager::instance().compute_visible_widget_ids("home", page_index);
+    page_visible_ids_[idx] = std::move(snapshot_ids);
 
     populating_widgets_ = false;
 }
