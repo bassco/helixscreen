@@ -767,6 +767,14 @@ void PrintStatusPanel::on_deactivate() {
             if (mem.is_low_memory()) {
                 ui_gcode_viewer_clear(gcode_viewer_);
                 gcode_loaded_ = false;
+                // Clear ALL dedup guards so on_activate() can re-download.
+                // loaded_thumbnail_filename_ gates the entire set_filename() block
+                // (thumbnail + gcode). Without clearing it, on_activate()'s reload
+                // path is silently blocked when the filename hasn't changed.
+                // The thumbnail re-fetch is a cache hit (file stays on disk).
+                loaded_thumbnail_filename_.clear();
+                requested_gcode_filename_.clear();
+                pending_gcode_filename_.clear();
                 spdlog::debug("[{}] Cleared gcode viewer ({}MB available, {}MB total)", get_name(),
                               mem.available_mb(), mem.total_mb());
             } else {
