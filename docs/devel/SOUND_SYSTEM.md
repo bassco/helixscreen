@@ -45,17 +45,18 @@ LVGL thread (main)                  Sequencer thread              Audio render t
     |                    priority check -> preempt or drop           |
     |                                 |                             |
     |                    begin_playback():                           |
-    |                      set_voice_envelope() -----> VoiceEnvelope atomics
+    |                      publish_note() --------> VoiceSlot (generation++)
     |                                 |                             |
     |                    tick loop @ ~1ms:                           |
-    |                      compute_lfo()         (modulation)       |
-    |                      compute_sweep()       (freq/filter)      |
-    |                      backend->set_tone()   (freq, gate, duty) |
-    |                      backend->set_filter() (cutoff)           |
+    |                      (PCM backends: step timing only)         |
+    |                      (non-PCM: compute_lfo, compute_sweep,    |
+    |                       backend->set_tone, backend->set_filter) |
     |                                 |                             |
     |                                 |           audio_callback():
-    |                                 |             for each sample:
-    |                                 |               advance_envelope() -> amplitude
+    |                                 |             detect new note via generation counter
+    |                                 |             snapshot ALL params atomically (VoiceSlot)
+    |                                 |             VoiceSlot::render_sample():
+    |                                 |               envelope + sweep + LFO -> amplitude
     |                                 |               generate_samples() -> waveform
     |                                 |               apply_filter()     -> output
     |                                 |                             |
@@ -63,7 +64,7 @@ LVGL thread (main)                  Sequencer thread              Audio render t
     |                    end_playback() when sequence completes      |
 ```
 
-**Envelope ownership split**: The sequencer sends ADSR parameters + velocity to the backend at step boundaries via `set_voice_envelope()`. PCM backends (SDL, ALSA) compute the envelope per-sample in the render thread for sample-accurate timing. Non-PCM backends (PWM, M300) ignore `set_voice_envelope()` and use the sequencer's per-tick amplitude instead.
+**NoteEvent publishing**: At step boundaries the sequencer calls `publish_note()`, which writes a complete `NoteEvent` (frequency, amplitude, duty, waveform, ADSR, LFO, sweep, filter) into a `VoiceSlot` and bumps a generation counter. The audio callback detects the new generation, snapshots all parameters at once, and `VoiceSlot::render_sample()` computes envelope + modulation + waveform per-sample. This eliminates timing-dependent pitch variation from independent atomic writes. Non-PCM backends (PWM, M300) do not use `publish_note()`; the sequencer continues to drive per-tick computation for them.
 
 The sequencer thread sleeps on a condition variable when idle (no sound playing, queue empty). When a sound is queued, it wakes and ticks at the backend's `min_tick_ms()` interval until playback completes.
 
@@ -84,12 +85,12 @@ The sequencer thread sleeps on a condition variable when idle (no sound playing,
 
 The sequencer adapts to what the backend can do. Features not supported by the backend are silently skipped.
 
-| Backend | Waveforms | Amplitude | Filter | Envelope | min_tick_ms | Notes |
-|---------|-----------|-----------|--------|----------|-------------|-------|
-| SDL     | yes       | yes       | yes    | per-sample | 1.0       | Full synthesis: 4 waveforms, biquad filter, 64-sample buffer (~1.5ms) |
-| ALSA    | yes       | yes       | yes    | per-sample | 1.0       | Same synthesis as SDL, hardware-negotiated buffer size |
-| PWM     | no*       | yes       | no     | per-tick   | 2.0       | Approximates waveforms via duty cycle ratios |
-| M300    | no        | no        | no     | per-tick   | 50.0      | Frequency only, 100-10000 Hz, deduplicates commands |
+| Backend | Waveforms | Amplitude | Filter | NoteEvent | min_tick_ms | Notes |
+|---------|-----------|-----------|--------|-----------|-------------|-------|
+| SDL     | yes       | yes       | yes    | yes       | 1.0         | Full synthesis: 4 waveforms, biquad filter, 64-sample buffer (~1.5ms) |
+| ALSA    | yes       | yes       | yes    | yes       | 1.0         | Same synthesis as SDL, hardware-negotiated buffer size |
+| PWM     | no*       | yes       | no     | no        | 2.0         | Approximates waveforms via duty cycle ratios; sequencer drives per-tick |
+| M300    | no        | no        | no     | no        | 50.0        | Frequency only, 100-10000 Hz, deduplicates commands; sequencer drives per-tick |
 
 *PWM `supports_waveforms()` returns `false`, but `set_waveform()` stores the waveform internally to adjust the duty cycle ratio: Square=50%, Saw=25%, Triangle=35%, Sine=40%. This gives perceptually different timbres even on a single-pin buzzer.
 
@@ -441,17 +442,18 @@ if (SoundManager::instance().is_available()) {
 
 | File | Purpose |
 |------|---------|
-| `include/sound_backend.h` | Abstract backend interface (`set_tone`, `silence`, capabilities) |
+| `include/note_event.h` | `NoteEvent` struct (complete per-step params) + `VoiceSlot` (per-voice state: event, generation, phase, envelope, filter) |
+| `include/sound_backend.h` | Abstract backend interface (`set_tone`, `silence`, `publish_note`, `supports_note_events`, capabilities) |
 | `include/sound_theme.h` | Theme structs (`SoundTheme`, `SoundStep`, `ADSREnvelope`, etc.) + parser class |
 | `include/sound_sequencer.h` | Playback engine (`SoundPriority` enum, sequencer thread) |
 | `include/sound_manager.h` | Singleton public API |
-| `include/sdl_sound_backend.h` | SDL2 audio backend + `VoiceEnvelope` struct (desktop, `#ifdef HELIX_DISPLAY_SDL`) |
-| `include/alsa_sound_backend.h` | ALSA PCM audio backend (Linux SBCs, `#ifdef HELIX_HAS_ALSA`) |
+| `include/sdl_sound_backend.h` | SDL2 audio backend; owns `VoiceSlot voice_slots_[MAX_VOICES]` (desktop, `#ifdef HELIX_DISPLAY_SDL`) |
+| `include/alsa_sound_backend.h` | ALSA PCM audio backend; owns `VoiceSlot voice_slots_[MAX_VOICES]` (Linux SBCs, `#ifdef HELIX_HAS_ALSA`) |
 | `include/sound_synthesis.h` | Shared synthesis: waveform generation, biquad filter, `BiquadFilter` struct |
 | `include/pwm_sound_backend.h` | PWM sysfs backend (AD5M buzzer) |
 | `include/m300_sound_backend.h` | M300 G-code backend (Klipper via Moonraker) |
 | `src/system/sound_theme.cpp` | Theme JSON parsing, note-to-freq, musical duration conversion |
-| `src/system/sound_sequencer.cpp` | Sequencer thread + tick loop, LFO/sweep math, envelope dispatch |
+| `src/system/sound_sequencer.cpp` | Sequencer thread + tick loop, LFO/sweep math; `publish_note_for_step()` for PCM backends |
 | `src/system/sound_synthesis.cpp` | Waveform generation, biquad coefficient computation, filter application |
 | `src/system/sound_manager.cpp` | Manager singleton, backend auto-detection, theme loading |
 | `src/system/sdl_sound_backend.cpp` | SDL audio callback, per-sample envelope, biquad filter |
@@ -512,9 +514,9 @@ make test-run
 
 ## ADSR Envelope Details
 
-On PCM backends (SDL, ALSA), the envelope is computed **per-sample** in the audio render thread for sample-accurate timing. The sequencer sends envelope parameters at step boundaries via `set_voice_envelope()`, and the render thread advances a `VoiceEnvelope` state machine for each audio sample. This eliminates timing-dependent volume variations on very short sounds.
+On PCM backends (SDL, ALSA), the envelope is computed **per-sample** in the audio render thread for sample-accurate timing. At each step boundary the sequencer calls `publish_note_for_step()`, which writes a complete `NoteEvent` into a `VoiceSlot` and bumps a generation counter. The audio callback detects the new generation, snapshots all parameters atomically, and `VoiceSlot::render_sample()` advances the ADSR state machine per-sample. This eliminates timing-dependent volume variations on very short sounds that arose from writing frequency, amplitude, and duty cycle as independent atomics.
 
-On non-PCM backends (PWM, M300), the sequencer still computes the envelope per-tick (~1-50ms) and passes the amplitude to `set_tone()`.
+On non-PCM backends (PWM, M300), `supports_note_events()` returns `false`. The sequencer still computes the envelope per-tick (~1-50ms) and passes the amplitude directly to `set_tone()`.
 
 Given a step with duration `D` and ADSR values `(A, D, S, R)`:
 
@@ -549,14 +551,14 @@ Each tick (~1ms on SDL, ~2ms on PWM, ~50ms on M300):
 1. **Check stop request**: If `stop()` was called, end playback immediately.
 2. **Process queue**: Pop all pending requests. Higher/equal priority preempts; lower priority is dropped.
 3. **Advance elapsed time**: `step_state_.elapsed_ms += dt_ms` (capped at 5ms to prevent scheduling-delay jumps).
-4. **Check step completion**: If elapsed >= total, call `advance_step()`.
-5. **Compute parameters** for current step:
+4. **Check step completion**: If elapsed >= total, call `advance_step()`. For PCM backends, `advance_step()` calls `publish_note_for_step()` to deliver the next `NoteEvent` to the `VoiceSlot`.
+5. **Compute parameters** for current step (non-PCM backends only — PCM backends let the render thread own this):
    - Base frequency from `step.freq_hz`
-   - Base amplitude from `step.velocity` * envelope (for non-PCM backends) or just velocity (for PCM backends where the render thread handles the envelope)
+   - Base amplitude from `step.velocity` * envelope
    - Sweep interpolation from `compute_sweep()` (linear, based on progress 0.0-1.0)
    - LFO offset from `compute_lfo()` (sinusoidal)
 6. **Clamp outputs**: freq 20-20000 Hz, amplitude 0.0-1.0, duty 0.0-1.0
-7. **Send to backend**: `set_waveform()`, `set_filter()`, `set_tone()`
+7. **Send to backend** (non-PCM only): `set_waveform()`, `set_filter()`, `set_tone()`
 
 When a step completes, `advance_step()` increments the step index. If past the end of the steps array, it decrements `repeat_remaining`. If repeats remain, it resets to step 0. Otherwise, playback ends.
 

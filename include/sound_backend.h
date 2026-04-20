@@ -8,10 +8,6 @@
 
 #include "note_event.h"
 
-/// Forward declarations — defined in sound_theme.h
-enum class Waveform;
-struct ADSREnvelope;
-
 /// Sound priority levels (higher numeric value = more important)
 enum class SoundPriority {
     UI = 0,    // button taps, nav sounds — can be interrupted by anything
@@ -81,13 +77,6 @@ class SoundBackend {
 
     /// Number of independent voice slots. Default: 1 (monophonic).
     virtual int voice_count() const { return 1; }
-
-    /// [DEPRECATED - will be removed after backend migration to publish_note()]
-    /// Set envelope parameters for a voice. PCM backends (SDL, ALSA) compute
-    /// the envelope per-sample in the render thread for timing-accurate amplitude.
-    /// Non-PCM backends ignore this (sequencer applies envelope via set_voice amplitude).
-    virtual void set_voice_envelope(int /*slot*/, const ADSREnvelope& /*env*/,
-                                    float /*velocity*/, float /*duration_ms*/) {}
 
     /// Publish a complete note event for a voice. PCM backends (SDL, ALSA) use
     /// this for per-sample rendering. Non-PCM backends ignore it.
