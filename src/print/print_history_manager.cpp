@@ -36,11 +36,6 @@ PrintHistoryManager::~PrintHistoryManager() {
 // ============================================================================
 
 void PrintHistoryManager::fetch(int limit) {
-    if (is_fetching_) {
-        spdlog::debug("[HistoryManager] Fetch already in progress, ignoring");
-        return;
-    }
-
     if (!api_) {
         spdlog::warn("[HistoryManager] No API available, cannot fetch");
         return;
@@ -51,7 +46,14 @@ void PrintHistoryManager::fetch(int limit) {
         return;
     }
 
-    is_fetching_ = true;
+    // Atomic check-and-set prevents concurrent fetches. Pairs with the reset
+    // in the BG-thread callbacks below.
+    bool expected = false;
+    if (!is_fetching_.compare_exchange_strong(expected, true)) {
+        spdlog::debug("[HistoryManager] Fetch already in progress, ignoring");
+        return;
+    }
+
     spdlog::debug("[HistoryManager] Fetching history (limit={})", limit);
 
     auto token = lifetime_.token();
@@ -59,21 +61,21 @@ void PrintHistoryManager::fetch(int limit) {
     api_->history().get_history_list(
         limit, 0, 0.0, 0.0, // limit, start, since, before
         [this, token](const std::vector<PrintHistoryJob>& jobs, uint64_t /*total*/) {
+            // Clear guard BEFORE posting defer so a freeze-drop doesn't strand us.
+            is_fetching_.store(false);
             if (token.expired())
                 return;
-            // Copy jobs since callback param is const ref
             std::vector<PrintHistoryJob> jobs_copy = jobs;
-
             token.defer("PrintHistoryManager::fetch_success",
                         [this, jobs = std::move(jobs_copy)]() mutable {
                             on_history_fetched(std::move(jobs));
                         });
         },
         [this, token](const MoonrakerError& error) {
+            is_fetching_.store(false);
             if (token.expired())
                 return;
             spdlog::warn("[HistoryManager] Failed to fetch history: {}", error.message);
-            token.defer("PrintHistoryManager::fetch_error", [this]() { is_fetching_ = false; });
         });
 }
 
@@ -116,7 +118,7 @@ void PrintHistoryManager::on_history_fetched(std::vector<PrintHistoryJob>&& jobs
     build_filename_stats();
 
     is_loaded_ = true;
-    is_fetching_ = false;
+    // is_fetching_ was cleared on the BG thread before this defer was posted.
 
     notify_observers();
 }

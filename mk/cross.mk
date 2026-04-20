@@ -1354,7 +1354,7 @@ define deploy-common
 		echo "$(DIM)Generating pre-rendered printer images...$(RESET)"; \
 		$(MAKE) gen-printer-images; \
 	fi
-	@if [ ! -f build/assets/images/prerendered/thumbnail-placeholder-160.bin ]; then \
+	@if [ ! -f build/assets/images/prerendered/benchy_thumbnail_white.bin ]; then \
 		echo "$(DIM)Generating placeholder images...$(RESET)"; \
 		$(MAKE) gen-placeholder-images; \
 	fi

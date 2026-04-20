@@ -8,7 +8,6 @@
 # pre-rendered .bin files for instant display on embedded devices.
 #
 # Output:
-#   build/assets/images/prerendered/thumbnail-placeholder-160.bin
 #   build/assets/images/prerendered/benchy_thumbnail_white.bin
 #
 # Usage:
@@ -37,7 +36,6 @@ NC="$LVGL_NC"
 # Format: "source_path:output_name:size"
 # Note: size of 0 means "keep original size" (no resize)
 PLACEHOLDER_IMAGES=(
-    "assets/images/thumbnail-placeholder-160.png:thumbnail-placeholder-160:160"
     "assets/images/benchy_thumbnail_white.png:benchy_thumbnail_white:0"
 )
 

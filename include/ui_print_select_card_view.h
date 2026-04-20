@@ -122,27 +122,21 @@ class PrintSelectCardView {
     static constexpr int ROW_3_MIN_HEIGHT = 520; ///< Min height for 3-row layout
 
     static constexpr const char* COMPONENT_NAME = "print_file_card";
-    static constexpr const char* DEFAULT_THUMB = "A:assets/images/thumbnail-placeholder-160.png";
     static constexpr const char* FOLDER_ICON = "A:assets/images/folder.png";
 
     /**
-     * @brief Get the best available placeholder thumbnail path
+     * @brief Sentinel thumbnail path for files without an embedded thumbnail
      *
-     * Returns pre-rendered .bin file if available, otherwise falls back to PNG.
-     * Use this instead of DEFAULT_THUMB for optimal embedded performance.
-     *
-     * @return LVGL path to placeholder thumbnail (A:...)
+     * Returns an empty string. The card and detail views hide their lv_image
+     * and show the cube_outline icon whenever this sentinel is used.
      */
     static std::string get_default_thumbnail();
 
     /**
-     * @brief Check if a path is the placeholder thumbnail (any format)
-     *
-     * Checks if the given path matches either the PNG or pre-rendered .bin
-     * placeholder. Use this instead of direct comparison with DEFAULT_THUMB.
+     * @brief Check whether a path is the empty-placeholder sentinel
      *
      * @param path Thumbnail path to check
-     * @return true if path is a placeholder thumbnail
+     * @return true if path is empty (no real thumbnail yet)
      */
     static bool is_placeholder_thumbnail(const std::string& path);
 

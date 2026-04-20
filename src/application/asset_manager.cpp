@@ -203,10 +203,6 @@ void AssetManager::register_images() {
                           "A:assets/images/placeholder_thumb_centered.png");
     lv_xml_register_image(nullptr, "A:assets/images/thumbnail-gradient-bg.png",
                           "A:assets/images/thumbnail-gradient-bg.png");
-    lv_xml_register_image(nullptr, "A:assets/images/thumbnail-placeholder.png",
-                          "A:assets/images/thumbnail-placeholder.png");
-    lv_xml_register_image(nullptr, "A:assets/images/thumbnail-placeholder-160.png",
-                          "A:assets/images/thumbnail-placeholder-160.png");
     lv_xml_register_image(nullptr, "A:assets/images/benchy_thumbnail_white.png",
                           "A:assets/images/benchy_thumbnail_white.png");
 
@@ -217,9 +213,6 @@ void AssetManager::register_images() {
                           "A:assets/images/gradient-panel-medium-dark.bin");
     lv_xml_register_image(nullptr, "A:assets/images/gradient-panel-medium-light.bin",
                           "A:assets/images/gradient-panel-medium-light.bin");
-    // Pre-rendered placeholder thumbnails (for file cards without embedded thumbnails)
-    lv_xml_register_image(nullptr, "A:assets/images/prerendered/thumbnail-placeholder-160.bin",
-                          "A:assets/images/prerendered/thumbnail-placeholder-160.bin");
     lv_xml_register_image(nullptr, "A:assets/images/prerendered/benchy_thumbnail_white.bin",
                           "A:assets/images/prerendered/benchy_thumbnail_white.bin");
 

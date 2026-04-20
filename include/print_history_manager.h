@@ -6,6 +6,7 @@
 #include "async_lifetime_guard.h"
 #include "print_history_data.h"
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -223,7 +224,10 @@ class PrintHistoryManager {
 
     // State
     bool is_loaded_ = false;
-    bool is_fetching_ = false;
+    // Atomic because we clear it on the WebSocket BG thread (before posting the
+    // main-thread defer) to survive UpdateQueue freeze-drops — otherwise a dropped
+    // fetch_success strands the guard and blocks every subsequent fetch.
+    std::atomic<bool> is_fetching_{false};
 
     /// Guard for async callback safety
     /// Prevents use-after-free when callbacks fire after destruction

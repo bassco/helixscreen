@@ -23,21 +23,14 @@ using helix::ui::PrintSelectCardView;
 // is_placeholder_thumbnail
 // ============================================================================
 
-TEST_CASE("CardView: is_placeholder_thumbnail detects PNG placeholder", "[ui][card_view]") {
-    REQUIRE(PrintSelectCardView::is_placeholder_thumbnail(
-        "A:assets/images/thumbnail-placeholder-160.png"));
-}
-
-TEST_CASE("CardView: is_placeholder_thumbnail detects bin placeholder", "[ui][card_view]") {
-    REQUIRE(PrintSelectCardView::is_placeholder_thumbnail(
-        "A:assets/images/prerendered/thumbnail-placeholder-160.bin"));
+TEST_CASE("CardView: is_placeholder_thumbnail treats empty path as placeholder", "[ui][card_view]") {
+    REQUIRE(PrintSelectCardView::is_placeholder_thumbnail(""));
 }
 
 TEST_CASE("CardView: is_placeholder_thumbnail rejects real paths", "[ui][card_view]") {
     REQUIRE_FALSE(PrintSelectCardView::is_placeholder_thumbnail(
         "A:/home/user/.cache/helix/abc123_160x160_ARGB8888.bin"));
     REQUIRE_FALSE(PrintSelectCardView::is_placeholder_thumbnail("A:/tmp/thumb.png"));
-    REQUIRE_FALSE(PrintSelectCardView::is_placeholder_thumbnail(""));
 }
 
 // ============================================================================
@@ -46,13 +39,6 @@ TEST_CASE("CardView: is_placeholder_thumbnail rejects real paths", "[ui][card_vi
 
 TEST_CASE("CardView: has_real_thumbnail returns false for empty path", "[ui][card_view]") {
     REQUIRE_FALSE(PrintSelectCardView::has_real_thumbnail(""));
-}
-
-TEST_CASE("CardView: has_real_thumbnail returns false for placeholder", "[ui][card_view]") {
-    REQUIRE_FALSE(
-        PrintSelectCardView::has_real_thumbnail("A:assets/images/thumbnail-placeholder-160.png"));
-    REQUIRE_FALSE(PrintSelectCardView::has_real_thumbnail(
-        "A:assets/images/prerendered/thumbnail-placeholder-160.bin"));
 }
 
 TEST_CASE("CardView: has_real_thumbnail returns false for nonexistent file", "[ui][card_view]") {

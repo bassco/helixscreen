@@ -1796,29 +1796,35 @@ void PrintSelectPanel::set_selected_file(const char* filename, const char* thumb
     }
     lv_subject_set_pointer(&selected_detail_thumbnail_subject_, selected_detail_thumbnail_buffer_);
 
-    // Toggle no-thumbnail placeholder icon and gradient background in detail view
+    // Toggle thumbnail image, no-thumbnail placeholder icon, and gradient background in detail view
     if (detail_view_ && detail_view_->get_widget()) {
+        lv_obj_t* thumb_img =
+            lv_obj_find_by_name(detail_view_->get_widget(), "detail_thumbnail");
         lv_obj_t* no_thumb =
             lv_obj_find_by_name(detail_view_->get_widget(), "detail_no_thumbnail_icon");
         lv_obj_t* gradient = lv_obj_find_by_name(detail_view_->get_widget(), "gradient_bg");
-        if (no_thumb) {
-            bool has_real =
-                thumbnail_src && thumbnail_src[0] != '\0' &&
-                !helix::ui::PrintSelectCardView::is_placeholder_thumbnail(thumbnail_src);
-            if (has_real) {
+        bool has_real =
+            thumbnail_src && thumbnail_src[0] != '\0' &&
+            !helix::ui::PrintSelectCardView::is_placeholder_thumbnail(thumbnail_src);
+        if (has_real) {
+            if (thumb_img)
+                lv_obj_remove_flag(thumb_img, LV_OBJ_FLAG_HIDDEN);
+            if (no_thumb)
                 lv_obj_add_flag(no_thumb, LV_OBJ_FLAG_HIDDEN);
-                // Restore gradient opacity behind real thumbnails
-                if (gradient) {
-                    lv_obj_set_style_image_opa(gradient, LV_OPA_COVER, 0);
-                }
-            } else {
+            if (gradient)
+                lv_obj_set_style_image_opa(gradient, LV_OPA_COVER, 0);
+        } else {
+            // Hide the lv_image so nothing renders behind the cube icon,
+            // and clear the buffer so LVGL doesn't hold a stale src reference.
+            if (thumb_img)
+                lv_obj_add_flag(thumb_img, LV_OBJ_FLAG_HIDDEN);
+            if (no_thumb)
                 lv_obj_remove_flag(no_thumb, LV_OBJ_FLAG_HIDDEN);
-                // Make gradient transparent when showing placeholder to prevent
-                // the gradient shape appearing behind the placeholder icon
-                if (gradient) {
-                    lv_obj_set_style_image_opa(gradient, LV_OPA_TRANSP, 0);
-                }
-            }
+            selected_detail_thumbnail_buffer_[0] = '\0';
+            lv_subject_set_pointer(&selected_detail_thumbnail_subject_,
+                                   selected_detail_thumbnail_buffer_);
+            if (gradient)
+                lv_obj_set_style_image_opa(gradient, LV_OPA_TRANSP, 0);
         }
     }
 

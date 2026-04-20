@@ -7,7 +7,6 @@
 #include "ui_gradient_canvas.h"
 #include "ui_panel_print_select.h" // For PrintFileData, CardDimensions
 
-#include "prerendered_images.h"
 #include "sound_manager.h"
 #include "theme_manager.h"
 #include "thumbnail_processor.h"
@@ -26,16 +25,12 @@ namespace helix::ui {
 // ============================================================================
 
 std::string PrintSelectCardView::get_default_thumbnail() {
-    // Cache result - path never changes at runtime
-    static const std::string cached =
-        helix::get_prerendered_placeholder_path("thumbnail-placeholder-160");
-    return cached;
+    // Empty sentinel — views key the cube_outline icon on empty path.
+    return {};
 }
 
 bool PrintSelectCardView::is_placeholder_thumbnail(const std::string& path) {
-    // Check for both PNG and pre-rendered .bin formats
-    return path == DEFAULT_THUMB ||
-           path == "A:assets/images/prerendered/thumbnail-placeholder-160.bin";
+    return path.empty();
 }
 
 bool PrintSelectCardView::has_real_thumbnail(const std::string& path) {

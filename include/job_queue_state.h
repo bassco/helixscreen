@@ -6,6 +6,7 @@
 #include "async_lifetime_guard.h"
 #include "moonraker_queue_api.h"
 
+#include <atomic>
 #include <lvgl.h>
 #include <string>
 #include <vector>
@@ -63,7 +64,9 @@ class JobQueueState {
 
     // State
     bool is_loaded_ = false;
-    bool is_fetching_ = false;
+    // Atomic so the BG callback can clear it before the defer is posted —
+    // prevents UpdateQueue freeze-drops from stranding the fetch guard.
+    std::atomic<bool> is_fetching_{false};
     bool subjects_initialized_ = false;
 
     // LVGL subjects

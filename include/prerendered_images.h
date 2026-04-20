@@ -196,16 +196,4 @@ void prune_printer_image_cache(int max_files = 10, int max_keep = 5);
  */
 int invalidate_printer_image_cache(const std::string& source_image_path);
 
-/**
- * @brief Get path to pre-rendered placeholder thumbnail
- *
- * Returns path to pre-rendered .bin file if it exists, otherwise
- * falls back to original PNG. Used for thumbnail placeholders
- * displayed when G-code files have no embedded thumbnail.
- *
- * @param placeholder_name Name without extension (e.g., "thumbnail-placeholder-160")
- * @return LVGL path (A:...) to the image
- */
-[[nodiscard]] std::string get_prerendered_placeholder_path(const std::string& placeholder_name);
-
 } // namespace helix

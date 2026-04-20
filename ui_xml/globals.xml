@@ -375,6 +375,15 @@
     <string name="icon_font_xl_xlarge" value="mdi_icons_80"/>
     <string name="icon_font_xl_xxlarge" value="mdi_icons_128"/>
     <!-- NO BASE icon_font_xl - registered at runtime -->
+    <!-- icon_font_hero: Card-filling empty-state icons (thumbnail placeholders etc.) -->
+    <string name="icon_font_hero_micro" value="mdi_icons_96"/>
+    <string name="icon_font_hero_tiny" value="mdi_icons_96"/>
+    <string name="icon_font_hero_small" value="mdi_icons_128"/>
+    <string name="icon_font_hero_medium" value="mdi_icons_128"/>
+    <string name="icon_font_hero_large" value="mdi_icons_128"/>
+    <string name="icon_font_hero_xlarge" value="mdi_icons_128"/>
+    <string name="icon_font_hero_xxlarge" value="mdi_icons_128"/>
+    <!-- NO BASE icon_font_hero - registered at runtime -->
 
     <!-- Step progress colors (wizard steps) -->
     <color name="step_pending" value="#4c566a"/>

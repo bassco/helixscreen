@@ -80,24 +80,26 @@ void JobQueueState::deinit_subjects() {
 }
 
 void JobQueueState::fetch() {
-    if (is_fetching_ || !api_)
+    if (!api_)
         return;
-    is_fetching_ = true;
+    bool expected = false;
+    if (!is_fetching_.compare_exchange_strong(expected, true))
+        return;
 
     auto token = lifetime_.token();
     api_->queue().get_queue_status(
         [this, token](const JobQueueStatus& status) {
+            // Clear guard on the BG thread so a freeze-drop doesn't strand us.
+            is_fetching_.store(false);
             if (token.expired())
                 return;
             on_queue_fetched(status);
         },
         [this, token](const MoonrakerError& err) {
+            is_fetching_.store(false);
             if (token.expired())
                 return;
-            token.defer("JobQueueState::fetch_error", [this, msg = err.message]() {
-                is_fetching_ = false;
-                spdlog::warn("[JobQueueState] Fetch failed: {}", msg);
-            });
+            spdlog::warn("[JobQueueState] Fetch failed: {}", err.message);
         });
 }
 
@@ -106,11 +108,11 @@ void JobQueueState::on_queue_fetched(const JobQueueStatus& status) {
     // Use queue_update to marshal onto the LVGL main thread.
     // Guard must be captured into the lambda to prevent use-after-free
     // if JobQueueState is destroyed before the queued update executes.
+    // is_fetching_ was cleared on the BG thread before this defer was posted.
     lifetime_.defer("JobQueueState::on_queue_fetched", [this, status]() {
         cached_jobs_ = status.queued_jobs;
         queue_state_ = status.queue_state;
         is_loaded_ = true;
-        is_fetching_ = false;
         update_subjects();
         spdlog::debug("[JobQueueState] Updated: state={}, jobs={}", queue_state_,
                       cached_jobs_.size());

@@ -40,7 +40,7 @@ static PrintFileData create_test_file_with_metadata(const std::string& name, tim
                                                     bool metadata_fetched) {
     PrintFileData file;
     file.filename = name;
-    file.thumbnail_path = "A:assets/images/thumbnail-placeholder.png";
+    file.thumbnail_path = "";
     file.file_size_bytes = 1024;
     file.modified_timestamp = modified;
     file.print_time_minutes = 100;

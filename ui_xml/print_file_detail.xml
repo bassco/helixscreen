@@ -58,17 +58,24 @@
           <bind_flag_if_eq subject="detail_gcode_loading" flag="hidden" ref_value="0"/>
           <spinner size="lg" align="center"/>
         </lv_obj>
-        <!-- No-thumbnail placeholder - shown when file has no real thumbnail -->
-        <icon name="detail_no_thumbnail_icon"
-              src="cube_outline" size="xl" variant="tertiary" align="center" style_translate_y="-20"
-              style_transform_scale_x="512" style_transform_scale_y="512" hidden="true"/>
+        <!-- No-thumbnail placeholder - responsive hero-size glyph shown when file has no real thumbnail.
+             Uses icon_font_hero so the cube scales with the breakpoint (96px micro → 128px large+). -->
+        <lv_label name="detail_no_thumbnail_icon"
+                  text="#icon_cube_outline" style_text_font="#icon_font_hero"
+                  style_text_color="#tertiary" align="center" style_translate_y="-20" hidden="true"/>
         <!-- Metadata clip - content-sized, hides top rounded corners of inner overlay -->
         <lv_obj name="detail_metadata_clip"
                 width="100%" height="content" style_radius="0" style_pad_all="0"
                 align="bottom_mid" scrollable="false">
+          <!-- translate_y="-12" pushes the overlay up so its rounded top corners
+               are clipped by the clip container and its rounded bottom corners
+               ride along the card's rounded bottom (card has style_clip_corner="true").
+               pad_top must exceed the translate magnitude so the filename isn't
+               cut off at the clip — 16px gives 4px breathing room above the 12px
+               font on micro. -->
           <lv_obj name="detail_metadata_overlay"
                   width="100%" height="content" style_bg_opa="160" style_radius="#border_radius"
-                  style_pad_left="#space_sm" style_pad_right="#space_sm" style_pad_top="#space_md"
+                  style_pad_left="#space_sm" style_pad_right="#space_sm" style_pad_top="16"
                   style_pad_bottom="#space_sm" style_pad_gap="#space_xs" style_translate_y="-12"
                   flex_flow="column" scrollable="false">
             <!-- Filename with reactive binding - scrolls if too long for single line -->

@@ -67,7 +67,7 @@ PrintFileData create_test_file(const std::string& name, size_t size_bytes, int d
                                int print_mins, float filament_g) {
     PrintFileData file;
     file.filename = name;
-    file.thumbnail_path = "A:assets/images/thumbnail-placeholder.png";
+    file.thumbnail_path = "";
     file.file_size_bytes = size_bytes;
     file.modified_timestamp = time(nullptr) - (days_ago * 86400);
     file.print_time_minutes = print_mins;
