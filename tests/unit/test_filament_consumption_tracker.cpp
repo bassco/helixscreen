@@ -24,7 +24,8 @@ using namespace helix;
 namespace helix {
 struct FilamentConsumptionTrackerTestAccess {
     static void set_persist_interval(FilamentConsumptionTracker& t, uint32_t ms) {
-        t.persist_interval_override_ms_ = ms;
+        // The throttle lives on the sink now; reach through via the friend access.
+        t.external_sink_.set_persist_interval_ms_for_testing(ms);
     }
 };
 } // namespace helix

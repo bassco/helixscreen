@@ -3,9 +3,8 @@
 
 #pragma once
 
+#include "consumption_sink.h"
 #include "ui_observer_guard.h"
-
-#include <cstdint>
 
 namespace helix {
 
@@ -34,33 +33,17 @@ class FilamentConsumptionTracker {
     FilamentConsumptionTracker(const FilamentConsumptionTracker&) = delete;
     FilamentConsumptionTracker& operator=(const FilamentConsumptionTracker&) = delete;
 
-    // --- Snapshot captured at print start (or on re-snapshot) ---
-    float snapshot_mm_ = 0.0f;
-    float snapshot_weight_g_ = 0.0f;
-    float diameter_mm_ = 1.75f;
-    float density_g_cm3_ = 0.0f;
-
-    /// Last weight this tracker wrote. Used for external-write detection
-    /// (Task 7 re-snapshots when another writer changes remaining_weight_g).
-    float last_written_weight_g_ = 0.0f;
+    /// Sink owning weight-tracking state for the non-AMS external spool. Phase 1
+    /// holds a single sink directly; a registry replaces this in a later phase.
+    ExternalSpoolSink external_sink_;
 
     bool active_ = false;
-
-    uint32_t last_persist_tick_ms_ = 0;
-    static constexpr uint32_t kPersistIntervalMs = 60'000;
-
-    uint32_t persist_interval_override_ms_ = 0;
-    [[nodiscard]] uint32_t persist_interval_ms() const {
-        return persist_interval_override_ms_ ? persist_interval_override_ms_ : kPersistIntervalMs;
-    }
 
     ObserverGuard print_state_obs_;
     ObserverGuard filament_used_obs_;
 
     void on_print_state_changed(int job_state);
     void on_filament_used_changed(int filament_mm);
-    void snapshot();
-    void persist();
 };
 
 } // namespace helix
