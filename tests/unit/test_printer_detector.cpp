@@ -3157,6 +3157,22 @@ TEST_CASE("PrinterDetector: get_name_for_preset resolves DB preset field",
     REQUIRE(PrinterDetector::get_name_for_preset("").empty());
 }
 
+TEST_CASE("PrinterDetector: get_preset_for_name resolves DB name field",
+          "[printer_detector][preset]") {
+    PrinterDetector::reload();
+
+    REQUIRE(PrinterDetector::get_preset_for_name("FlashForge Adventurer 5X") == "ad5x");
+    REQUIRE(PrinterDetector::get_preset_for_name("FlashForge Adventurer 5M Pro") == "ad5m_pro");
+
+    // Round-trip: name → preset → name should be stable
+    std::string name = PrinterDetector::get_name_for_preset("ad5x");
+    REQUIRE(PrinterDetector::get_preset_for_name(name) == "ad5x");
+
+    // Unknown / empty inputs return empty
+    REQUIRE(PrinterDetector::get_preset_for_name("Not A Real Printer").empty());
+    REQUIRE(PrinterDetector::get_preset_for_name("").empty());
+}
+
 TEST_CASE_METHOD(PrinterDetectorFixture,
                  "PrinterDetector: No unknown heuristic warning for Venture Delta",
                  "[printer_detector]") {

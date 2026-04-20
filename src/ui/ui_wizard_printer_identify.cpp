@@ -511,6 +511,25 @@ void WizardPrinterIdentifyStep::cleanup() {
         spdlog::debug("[{}] Saving printer type to config: '{}' (index {})", get_name(), type_name,
                       type_index);
 
+        // Apply the matching preset for the user's pick. Auto-detect already runs
+        // this in printer_detector.cpp, but only when its confidence is non-zero.
+        // When the user picks the type manually (low-confidence detection or
+        // mismatch), we still need to merge the preset's hardware/expected list
+        // and fan role mappings into config — otherwise legitimate hardware shows
+        // up as "new hardware" warnings on next boot (issue #837).
+        std::string preset = PrinterDetector::get_preset_for_name(type_name);
+        if (!preset.empty()) {
+            MoonrakerAPI* api = get_moonraker_api();
+            if (api) {
+                std::string applied =
+                    PrinterDetector::apply_preset_with_variants(config, preset, api->hardware());
+                if (!applied.empty()) {
+                    spdlog::info("[{}] Applied preset '{}' for printer '{}'", get_name(), applied,
+                                 type_name);
+                }
+            }
+        }
+
         // Apply platform-specific display config overrides.
         // Some Allwinner platforms can't recover from backlight power-off during
         // sleep — wake-on-touch fails because the display controller loses state.

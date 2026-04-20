@@ -849,6 +849,67 @@ std::string PrinterDetector::get_name_for_preset(const std::string& preset_name)
     return "";
 }
 
+std::string PrinterDetector::get_preset_for_name(const std::string& printer_name) {
+    if (printer_name.empty()) {
+        return "";
+    }
+
+    if (!g_database.load()) {
+        spdlog::warn("[PrinterDetector] Cannot lookup name without database");
+        return "";
+    }
+
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return "";
+    }
+
+    for (const auto& printer : g_database.data["printers"]) {
+        if (printer.value("name", "") == printer_name) {
+            return printer.value("preset", "");
+        }
+    }
+
+    return "";
+}
+
+std::string PrinterDetector::apply_preset_with_variants(helix::Config* config,
+                                                        const std::string& preset,
+                                                        const helix::PrinterDiscovery& discovery) {
+    if (!config || preset.empty()) {
+        return "";
+    }
+
+    // Firmware-variant detection: ZMOD renames standard Klipper objects
+    // (e.g. "fan" → "fan_generic fanM106"). Probe for the variant signature
+    // and prefer the "_zmod" preset when present.
+    auto& objects = discovery.printer_objects();
+    bool is_zmod =
+        std::find(objects.begin(), objects.end(), "fan_generic fanM106") != objects.end();
+
+    std::string applied = preset;
+    if (is_zmod) {
+        std::string zmod_preset = preset + "_zmod";
+        spdlog::info("[PrinterDetector] ZMOD firmware detected (fan_generic fanM106), "
+                     "trying preset '{}'",
+                     zmod_preset);
+        if (config->apply_preset_file(zmod_preset)) {
+            applied = zmod_preset;
+        } else {
+            spdlog::info("[PrinterDetector] No ZMOD preset variant, using '{}'", preset);
+            if (!config->apply_preset_file(preset)) {
+                return "";
+            }
+        }
+    } else {
+        if (!config->apply_preset_file(preset)) {
+            return "";
+        }
+    }
+
+    config->set_preset(applied);
+    return applied;
+}
+
 // ============================================================================
 // Dynamic List Builder
 // ============================================================================
@@ -1537,32 +1598,11 @@ bool PrinterDetector::auto_detect_and_save(const helix::PrinterDiscovery& discov
         // Save to config
         config->set<std::string>(config->df() + helix::wizard::PRINTER_TYPE, result.type_name);
         if (!result.preset.empty()) {
-            // Select firmware-specific preset variant when available.
-            // ZMOD firmware uses different Klipper device names (e.g. "fan_generic fanM106"
-            // instead of "fan", "heater_fan heat_fan" instead of "heater_fan hotend_fan").
-            // Check for ZMOD signature objects and use the _zmod preset variant if it exists.
-            std::string preset = result.preset;
-            auto& objects = discovery.printer_objects();
-            bool is_zmod =
-                std::find(objects.begin(), objects.end(), "fan_generic fanM106") != objects.end();
-            if (is_zmod) {
-                std::string zmod_preset = preset + "_zmod";
-                spdlog::info("[PrinterDetector] ZMOD firmware detected (fan_generic fanM106), "
-                             "trying preset '{}'",
-                             zmod_preset);
-                if (config->apply_preset_file(zmod_preset)) {
-                    preset = zmod_preset;
-                } else {
-                    spdlog::info("[PrinterDetector] No ZMOD preset variant, using '{}'", preset);
-                }
+            std::string applied = apply_preset_with_variants(config, result.preset, discovery);
+            if (!applied.empty()) {
+                spdlog::info("[PrinterDetector] Applied preset '{}' for printer '{}'", applied,
+                             result.type_name);
             }
-            config->set_preset(preset);
-            if (!is_zmod) {
-                // Apply default preset (ZMOD variant was already applied above if found)
-                config->apply_preset_file(preset);
-            }
-            spdlog::info("[PrinterDetector] Applied preset '{}' for printer '{}'", preset,
-                         result.type_name);
         }
         config->save();
 

@@ -179,6 +179,39 @@ class PrinterDetector {
     static std::string get_name_for_preset(const std::string& preset_name);
 
     /**
+     * @brief Look up the preset name for a printer display name
+     *
+     * Reverse of @ref get_name_for_preset. Used by the wizard's manual
+     * printer-type selection step to resolve the user's pick to a preset
+     * file before applying it.
+     *
+     * @param printer_name Printer display name (e.g. "FlashForge Adventurer 5M Pro")
+     * @return Matching preset name, empty string if no entry matches
+     */
+    static std::string get_preset_for_name(const std::string& printer_name);
+
+    /**
+     * @brief Apply a preset to the active printer with firmware-variant detection
+     *
+     * Applies the given base preset, but first checks the discovery's printer-object
+     * list for firmware-variant signatures (e.g. `fan_generic fanM106` → `_zmod`
+     * variant). When a variant exists for the firmware fingerprint, applies that
+     * variant instead and writes its name as the active preset.
+     *
+     * Used by both the auto-detect path and the wizard manual-pick path so they
+     * stay in sync on variant resolution.
+     *
+     * @param config Active config (must be non-null)
+     * @param preset Base preset name (e.g. "ad5m_pro")
+     * @param discovery Printer discovery used for variant detection
+     * @return Preset name actually applied (may be a variant), empty if neither
+     *         the base nor a variant could be applied
+     */
+    static std::string apply_preset_with_variants(helix::Config* config,
+                                                  const std::string& preset,
+                                                  const helix::PrinterDiscovery& discovery);
+
+    /**
      * @brief Build list options string from database
      *
      * Dynamically builds a newline-separated string of printer names suitable
