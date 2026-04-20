@@ -9,7 +9,7 @@
 ## Active Lessons
 
 ### [L008] [***--|*****] Design tokens and semantic widgets
-- **Uses**: 18 | **Velocity**: 9 | **Learned**: 2025-12-14 | **Last**: 2026-04-18 | **Category**: pattern | **Type**: informational
+- **Uses**: 19 | **Velocity**: 10 | **Learned**: 2025-12-14 | **Last**: 2026-04-19 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 93.50375 | **Learned**: 2025-12-27 | **Last**: 2026-04-18 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 94.50375 | **Learned**: 2025-12-27 | **Last**: 2026-04-19 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [**---|****-] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 78.005 | **Learned**: 2026-02-01 | **Last**: 2026-04-18 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 79.005 | **Learned**: 2026-02-01 | **Last**: 2026-04-19 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -121,15 +121,15 @@
 > AD5M (192.168.1.67, root@) runs armv7l Linux 5.4.61 (BusyBox). Key gotchas: (1) No curl, only wget - and wget has NO HTTPS support (compiled without SSL). (2) No sftp-server - use 'scp -O' (legacy protocol) instead of default scp. (3) Logging: default level is WARN, app logs to BOTH /tmp/helixscreen.log AND syslog (/var/log/messages) - syslog has the CURRENT session, /tmp/helixscreen.log may be stale from previous session. (4) No CA certificate bundle shipped - /etc/ssl/certs/ is empty, breaks ALL outbound HTTPS (libhv, wget). Must ship ca-certificates.crt with install. (5) No openssl CLI command. (6) No inotify support. (7) No WiFi (wpa_supplicant present but no interfaces). (8) OpenSSL 1.1 libs exist at /usr/lib/libssl.so.1.1. (9) Binary at /opt/helixscreen/, config at /opt/helixscreen/config/helixconfig.json. (10) ldd may return empty for statically-linked ARM binaries.
 
 ### [L062] [**---|*****] AD5M build and deploy targets
-- **Uses**: 7 | **Velocity**: 4.5 | **Learned**: 2026-02-07 | **Last**: 2026-04-16 | **Category**: build
+- **Uses**: 8 | **Velocity**: 5.5 | **Learned**: 2026-02-07 | **Last**: 2026-04-19 | **Category**: build
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [***--|*****] Commit generated translation artifacts
-- **Uses**: 23 | **Velocity**: 16 | **Learned**: 2026-02-10 | **Last**: 2026-04-16 | **Category**: i18n
+- **Uses**: 24 | **Velocity**: 17 | **Learned**: 2026-02-10 | **Last**: 2026-04-19 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
-### [L065] [*----|****-] No test-only methods on production classes
-- **Uses**: 3 | **Velocity**: 3 | **Learned**: 2026-02-11 | **Last**: 2026-04-18 | **Category**: patterns
+### [L065] [*----|*****] No test-only methods on production classes
+- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-02-11 | **Last**: 2026-04-19 | **Category**: patterns
 > WRONG: Adding public methods like reset_for_testing(), clear_startup_grace_period_for_testing() on production classes. Pollutes API, ships test code to users, creates coupling. FOUND: 40+ instances across AbortManager (15 callback simulators), sensor managers, printer state classes. RIGHT: Use friend class pattern — add 'friend class FooTestAccess;' in private section, define FooTestAccess in the test .cpp file with static methods that access private members. Example: FilamentSensorManagerTestAccess::reset(mgr) instead of mgr.reset_for_testing(). For state machine callbacks (like AbortManager), consider a testable interface/mock instead of exposing every internal transition.
 
 ### [L066] [**---|****-] LVGL flex_grow row_wrap trick
@@ -137,7 +137,7 @@
 > When using flex_grow on a container with flex_flow=row_wrap, LVGL calculates wrap points based on the container's natural (content) width, NOT the flex-allocated width. Fix: set width="1" + flex_grow="1" — forces LVGL to use the grown width for wrapping. Without this, children overflow instead of wrapping.
 
 ### [L067] [***--|*****] Wrap C++ UI strings in lv_tr()
-- **Uses**: 13 | **Velocity**: 10.5 | **Learned**: 2026-02-14 | **Last**: 2026-04-18 | **Category**: ui
+- **Uses**: 14 | **Velocity**: 11.5 | **Learned**: 2026-02-14 | **Last**: 2026-04-19 | **Category**: ui
 > All user-visible English strings in C++ code must be wrapped in lv_tr() for i18n. Dropdown options are concatenated strings so they're harder to translate - but labels, help text, toasts, etc. must use lv_tr().
 
 ### [L068] [*----|****-] Cancel LVGL animations before object deletion
@@ -153,7 +153,7 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 17 | **Velocity**: 12.5 | **Learned**: 2026-02-17 | **Last**: 2026-04-15 | **Category**: i18n
+- **Uses**: 20 | **Velocity**: 15.5 | **Learned**: 2026-02-17 | **Last**: 2026-04-19 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [***--|*****] Never capture bare this in async/WebSocket callbacks
@@ -176,8 +176,8 @@
 - **Uses**: 11 | **Velocity**: 7 | **Learned**: 2026-02-22 | **Last**: 2026-04-16 | **Category**: gotcha
 > lv_obj_is_valid() does a RECURSIVE O(n) walk of ALL screens and ALL children via obj_valid_child(). On Pi with thousands of widgets, this causes stack overflow SIGSEGV. NEVER use in: observer callbacks, animation callbacks (pulse_anim_cb), timer callbacks, loops, destructor paths, safe_delete_obj(), or async deletion guards. Use simple null pointer checks instead. For deferred deletion guards, use **application-level tracking** (e.g., ModalStack membership check) or `lv_obj_delete_async()` which self-cancels. `lv_obj_is_valid()` can return TRUE on recycled memory — if LVGL reuses the address, you delete a live object (crash #399). Only safe in one-shot user-initiated event handlers (button clicks) where tree is stable and call happens once.
 
-### [L077] [*----|***--] Dynamic subject observers MUST use SubjectLifetime tokens
-- **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-02-22 | **Last**: 2026-04-15 | **Category**: gotcha
+### [L077] [*----|*****] Dynamic subject observers MUST use SubjectLifetime tokens
+- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-02-22 | **Last**: 2026-04-19 | **Category**: gotcha
 > When observing dynamic subjects (per-fan, per-sensor, per-extruder), always use the get_*_subject(name, lifetime) overload and pass the lifetime token to the observer factory function. Without it, lv_subject_deinit() frees the observer but ObserverGuard::reset() calls lv_observer_remove() on freed memory → SEGV. Static singleton subjects don't need tokens.
 
 ### [L078] [-----|-----] lv_obj transform_scale invisible without background
@@ -188,11 +188,11 @@
 - **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-03-29 | **Last**: 2026-03-29 | **Category**: lvgl
 > LVGL 9.5 changed the draw pipeline: DRAW_TASK_ADDED callbacks fire during rendering (AFTER DRAW_MAIN_END/DRAW_POST), so lv_draw_rect/lv_draw_triangle/lv_draw_fill calls from within them produce NO visible output. This broke chart gradient fills that worked in 9.4-pre. Fix: use DRAW_MAIN_END to draw custom fills, computing pixel positions from chart data directly via lv_chart_get_y_array() + lv_map(). Also: lv_draw_fill VER gradient frac=0 is BOTTOM of rect, frac=255 is TOP (counterintuitive). Use lv_draw_fill instead of lv_draw_rect for gradient-only fills to avoid solid bg_color bleeding through.
 
-### [L080] [*----|*****] Verify deployment chain before user interaction
-- **Uses**: 4 | **Velocity**: 4 | **Learned**: 2026-04-16 | **Last**: 2026-04-18 | **Category**: gotcha
+### [L080] [**---|*****] Verify deployment chain before user interaction
+- **Uses**: 5 | **Velocity**: 5 | **Learned**: 2026-04-16 | **Last**: 2026-04-19 | **Category**: gotcha
 > Before asking user to scroll/tap/interact on a device: (1) verify the NEW binary is running (check PID start time or version string in logs), (2) verify logging captures to the expected destination (journalctl vs file vs console), (3) verify required state is enabled (telemetry enabled, debug log level set in helixscreen.env), (4) verify logs are accessible from SSH. Do ALL checks in one pass BEFORE involving the user. Each failed round-trip wastes the user's time and patience. On Pi: systemctl runs through journalctl, deploy-pi-fg uses SSH -t (console only), nohup loses output. Always use systemd + journalctl for production log capture.
 
-### [L081] [*----|*****] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 1 | **Velocity**: 1 | **Learned**: 2026-04-18 | **Last**: 2026-04-18 | **Category**: gotcha | **Type**: constraint
+### [L081] [*----|****-] lifetime_.defer does NOT escape UpdateQueue batch
+- **Uses**: 2 | **Velocity**: 2 | **Learned**: 2026-04-18 | **Last**: 2026-04-19 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / `helix::ui::async_call` (our wrapper) are thin wrappers around `queue_update` — the callback fires in the *next* `UpdateQueue::process_pending` tick, which is still a UpdateQueue batch that may contain other sync deletions. The AsyncLifetimeGuard generation counter protects against use-after-free of `this`; it does NOT prevent LVGL event-list corruption. Any comment claiming "defer outside process_pending" is wrong — fix it. Observer callbacks (`observe_int_sync`, `observe_string`) are also deferred via queue_update since #82 and share the same batch. BANNED inside any queued/deferred callback: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. USE INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's own async list, outside our batch. Multiple sync deletions in the same batch corrupt LVGL's global event linked list → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). See CLAUDE.md § "No sync widget deletion in queued callbacks" and `include/ui_utils.h`.
 
