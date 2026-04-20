@@ -719,6 +719,21 @@ void WizardWifiStep::handle_modal_connect_clicked() {
 // ============================================================================
 
 void WizardWifiStep::init_subjects() {
+    if (subjects_initialized_) {
+        spdlog::debug("[{}] Subjects already initialized, resetting values", get_name());
+        lv_subject_set_int(&wifi_enabled_, 0);
+        lv_subject_set_int(&wifi_scanning_, 0);
+        lv_subject_set_int(&wifi_connecting_, 0);
+        lv_subject_set_int(&wifi_hardware_available_, 1);
+        lv_subject_copy_string(&wifi_password_modal_ssid_, "");
+        lv_subject_copy_string(&wifi_status_, get_status_text("disabled"));
+        lv_subject_copy_string(&wifi_ip_, "");
+        lv_subject_copy_string(&wifi_mac_, "");
+        lv_subject_copy_string(&ethernet_status_, "Checking...");
+        lv_subject_copy_string(&ethernet_mac_, "");
+        return;
+    }
+
     spdlog::debug("[{}] Initializing subjects", get_name());
 
     UI_MANAGED_SUBJECT_INT(wifi_enabled_, 0, "wifi_enabled", subjects_);

@@ -1,10 +1,12 @@
 // Copyright (C) 2025-2026 356C LLC
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "ui_update_queue.h"
 #include "ui_wizard.h"
 #include "ui_wizard_connection.h"
 
 #include "../lvgl_ui_test_fixture.h"
+#include "../test_helpers/update_queue_test_access.h"
 #include "../ui_test_utils.h"
 #include "lvgl/lvgl.h"
 #include "moonraker_client.h"
@@ -388,4 +390,71 @@ TEST_CASE_METHOD(WizardConnectionUIFixture, "Connection UI: Responsive layout",
     // Verify the connection root has children (layout content exists)
     uint32_t child_count = lv_obj_get_child_count(connection_root);
     REQUIRE(child_count > 0);
+}
+
+// ============================================================================
+// AsyncLifetimeGuard Integration Tests
+// ============================================================================
+// These test the lifetime-token-based callback safety that replaced the old
+// cleanup_called_ + connection_generation_ + m_alive pattern (#827).
+
+class WizardConnectionLifetimeFixture : public LVGLTestFixture {
+  public:
+    WizardConnectionLifetimeFixture() {
+        step = get_wizard_connection_step();
+        step->init_subjects();
+    }
+    ~WizardConnectionLifetimeFixture() { step->cleanup(); }
+    WizardConnectionStep* step = nullptr;
+};
+
+TEST_CASE_METHOD(WizardConnectionLifetimeFixture,
+                 "Connection step: cleanup expires lifetime tokens",
+                 "[wizard][connection][lifetime]") {
+    auto tok = step->lifetime_token_for_test();
+    REQUIRE_FALSE(tok.expired());
+
+    step->cleanup();
+    REQUIRE(tok.expired());
+
+    // tok.defer should be silently skipped (no crash, no side effects)
+    bool callback_ran = false;
+    tok.defer("test_after_cleanup", [&callback_ran]() { callback_ran = true; });
+
+    helix::ui::UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+    REQUIRE_FALSE(callback_ran);
+}
+
+TEST_CASE_METHOD(WizardConnectionLifetimeFixture,
+                 "Connection step: retry invalidates previous attempt tokens",
+                 "[wizard][connection][lifetime]") {
+    // First "attempt"
+    auto tok1 = step->lifetime_token_for_test();
+    REQUIRE_FALSE(tok1.expired());
+
+    // Simulate the invalidation that happens at the start of a new attempt
+    step->cleanup();
+
+    REQUIRE(tok1.expired());
+
+    // Re-init for new attempt (as wizard framework does on re-navigation)
+    step->init_subjects();
+    auto tok2 = step->lifetime_token_for_test();
+    REQUIRE_FALSE(tok2.expired());
+
+    // Old token still expired, new token valid
+    REQUIRE(tok1.expired());
+    REQUIRE_FALSE(tok2.expired());
+}
+
+TEST_CASE_METHOD(WizardConnectionLifetimeFixture,
+                 "Connection step: deferred callback runs when token valid",
+                 "[wizard][connection][lifetime]") {
+    auto tok = step->lifetime_token_for_test();
+
+    bool callback_ran = false;
+    tok.defer("test_valid_token", [&callback_ran]() { callback_ran = true; });
+
+    helix::ui::UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
+    REQUIRE(callback_ran);
 }

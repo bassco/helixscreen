@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "async_lifetime_guard.h"
 #include "lvgl/lvgl.h"
 #include "mdns_discovery.h"
 
@@ -145,31 +146,8 @@ class WizardConnectionStep {
      */
     void set_mdns_discovery(std::unique_ptr<helix::IMdnsDiscovery> discovery);
 
-    /**
-     * @brief Check if this step has been cleaned up
-     *
-     * Thread-safe check for use in async callbacks. Returns true if cleanup()
-     * has been called, meaning any pending async work should be abandoned.
-     *
-     * @return true if cleanup has been called
-     */
-    bool is_stale() const {
-        return cleanup_called_.load(std::memory_order_acquire);
-    }
-
-    /**
-     * @brief Check if a connection generation is still current
-     *
-     * Thread-safe check for use in async callbacks. Returns true if the
-     * given generation matches the current generation, meaning the callback
-     * is still relevant.
-     *
-     * @param generation The generation captured when the async operation started
-     * @return true if the generation is still current
-     */
-    bool is_current_generation(uint64_t generation) const {
-        return connection_generation_.load(std::memory_order_acquire) == generation;
-    }
+    /// Test-only: expose a lifetime token for verifying callback safety
+    helix::LifetimeToken lifetime_token_for_test() { return lifetime_.token(); }
 
   private:
     // Screen instance
@@ -193,13 +171,9 @@ class WizardConnectionStep {
     bool connection_validated_ = false;
     bool subjects_initialized_ = false;
 
-    // Thread-safe state for async callback guards
-    std::atomic<bool> cleanup_called_{false};        ///< Guards async callbacks after navigation
-    std::atomic<uint64_t> connection_generation_{0}; ///< Invalidates stale callbacks
-
-    /// Shared alive token for mDNS callback safety — prevents use-after-free when
-    /// queued callbacks fire after wizard destruction (prestonbrown/helixscreen#193)
-    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
+    // Async callback safety — invalidated on cleanup AND on each new connection
+    // attempt, replacing both cleanup_called_ and connection_generation_ (#193, #827)
+    helix::AsyncLifetimeGuard lifetime_;
 
     // Auto-probe state for localhost detection (atomic for cross-thread access)
     std::atomic<AutoProbeState> auto_probe_state_{AutoProbeState::IDLE};
@@ -216,9 +190,9 @@ class WizardConnectionStep {
     void handle_ip_input_changed();
     void handle_port_input_changed();
 
-    // Async callback handlers (called from WebSocket callbacks)
-    void on_connection_success();
-    void on_connection_failure();
+    // Async callback handlers (called from WebSocket callbacks, marshal via tok.defer)
+    void on_connection_success(const helix::LifetimeToken& tok);
+    void on_connection_failure(const helix::LifetimeToken& tok);
 
     // Helper to set status icon and text imperatively with appropriate colors
     enum class StatusVariant { None, Success, Warning, Danger };
@@ -227,8 +201,8 @@ class WizardConnectionStep {
     // Auto-probe methods for localhost detection
     bool should_auto_probe() const;
     void attempt_auto_probe();
-    void on_auto_probe_success();
-    void on_auto_probe_failure();
+    void on_auto_probe_success(const helix::LifetimeToken& tok);
+    void on_auto_probe_failure(const helix::LifetimeToken& tok);
 
     // Static trampolines for LVGL callbacks
     static void on_test_connection_clicked_static(lv_event_t* e);
