@@ -1314,9 +1314,16 @@ void AmsEditModal::format_remaining_label(int pct) {
     if (has_weight) {
         lv_obj_t* weight_input = find_widget("remaining_weight_input");
         if (weight_input) {
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%d", static_cast<int>(working_info_.remaining_weight_g));
-            lv_textarea_set_text(weight_input, buf);
+            if (working_info_.remaining_weight_g < 0.0f) {
+                // Sentinel: remaining weight unknown. Show blank rather than "-1"
+                // (which is an internal sentinel, not a user-facing value).
+                lv_textarea_set_text(weight_input, "");
+            } else {
+                char buf[8];
+                snprintf(buf, sizeof(buf), "%d",
+                         static_cast<int>(working_info_.remaining_weight_g));
+                lv_textarea_set_text(weight_input, buf);
+            }
         }
     }
 }
@@ -1473,6 +1480,18 @@ void AmsEditModal::handle_weight_input_changed() {
 
     const char* text = lv_textarea_get_text(weight_input);
     if (!text || text[0] == '\0') {
+        // Blank field: treat as "unknown weight" sentinel so save preserves -1
+        // rather than coercing blank to 0. Reset the label to a plain percentage
+        // display and leave the slider where it is.
+        working_info_.remaining_weight_g = -1.0f;
+        int total = static_cast<int>(working_info_.total_weight_g);
+        if (total > 0) {
+            snprintf(remaining_pct_buf_, sizeof(remaining_pct_buf_), "/ %dg", total);
+        } else {
+            remaining_pct_buf_[0] = '\0';
+        }
+        lv_subject_copy_string(&remaining_pct_subject_, remaining_pct_buf_);
+        update_sync_button_state();
         return;
     }
 

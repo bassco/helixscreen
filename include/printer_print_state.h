@@ -2,10 +2,13 @@
 #pragma once
 
 #include "subject_managed_panel.h"
+#include "ui_observer_guard.h" // SubjectLifetime
 
 #include <atomic>
 #include <lvgl.h>
+#include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "hv/json.hpp"
 
@@ -144,6 +147,37 @@ class PrinterPrintState {
     lv_subject_t* get_print_filament_used_subject() {
         return &print_filament_used_;
     }
+
+    /**
+     * @brief Per-extruder filament_used (mm, integer), 0-based.
+     *
+     * Populated from Klipper's per-object `extruder`/`extruder1`/`extruder2`/...
+     * `filament_used` fields during status updates. Callers use the returned
+     * subject to observe one tool's consumption independently of the aggregate
+     * `print_stats.filament_used` stream.
+     *
+     * Map entries are **pre-populated** in `init_subjects()` for all indices
+     * `0 .. kMaxExtruderScan-1`, so the map structure is frozen after init.
+     * This eliminates the WebSocket-BG-thread vs UI-thread rehash race that
+     * lazy emplace would expose (only subject values change during status
+     * updates, and `lv_subject_set_int` is atomic for the int value).
+     *
+     * These subjects are still **dynamic** ([L077]): they are re-created on
+     * `deinit_subjects()` / `init_subjects()` cycles. Observers MUST pass a
+     * SubjectLifetime token and subscribe via `observe_int_sync(..., lifetime)`
+     * — otherwise ObserverGuard dangles on reconnect.
+     *
+     * @param extruder_idx 0-based extruder index (0 = "extruder", 1 = "extruder1", ...)
+     * @param[out] lifetime Token whose expiration signals subject death
+     * @return Non-null subject pointer for `0 <= idx < kMaxExtruderScan` once
+     *         `init_subjects()` has run; `nullptr` otherwise (lifetime untouched).
+     */
+    lv_subject_t* get_extruder_filament_used_subject(int extruder_idx,
+                                                     SubjectLifetime& lifetime);
+
+    /// Maximum number of per-extruder filament subjects pre-populated at init.
+    /// Klipper toolchanger setups max out well below this.
+    static constexpr int kMaxExtruderScan = 16;
 
     /// Current PrintStartPhase enum value
     lv_subject_t* get_print_start_phase_subject() {
@@ -370,6 +404,25 @@ class PrinterPrintState {
     lv_subject_t print_elapsed_{};       // Wall-clock elapsed time (Moonraker total_duration)
     lv_subject_t print_time_left_{};     // Estimated remaining
     lv_subject_t print_filament_used_{}; // Filament used in mm (from Moonraker print_stats)
+
+    // Per-extruder filament_used (mm) — heap-allocated for stable pointers.
+    // Map entries are pre-populated by init_subjects() for indices 0..kMaxExtruderScan-1,
+    // freezing the map structure so the WebSocket background thread cannot trigger
+    // a rehash while a UI-thread caller is reading. Only the int value inside
+    // each subject is mutated during status updates (atomic via lv_subject_set_int).
+    // See [L077] for the lifetime-token discipline required when observing
+    // these dynamic subjects.
+    struct ExtruderFilamentInfo {
+        std::unique_ptr<lv_subject_t> subject; ///< int: mm consumed on this extruder
+        SubjectLifetime lifetime;              ///< shared_ptr<bool>: true while subject alive
+    };
+    std::unordered_map<int, ExtruderFilamentInfo> extruder_filament_used_;
+
+    /// Create the per-extruder filament_used entry for idx. Called only from
+    /// init_subjects() to pre-populate the map — NEVER from update_from_status
+    /// or the accessor, because emplace from the WebSocket background thread
+    /// could race with UI-thread reads via rehash invalidation.
+    void create_extruder_filament_entry(int extruder_idx);
 
     // Print start progress subjects
     lv_subject_t print_start_phase_{};    // Integer: PrintStartPhase enum

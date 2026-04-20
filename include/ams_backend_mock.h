@@ -52,6 +52,44 @@ class AmsBackendMock : public AmsBackend {
     [[nodiscard]] int get_current_slot() const override;
     [[nodiscard]] bool is_filament_loaded() const override;
 
+    // Capability flag (overridable in tests; production mock returns default false)
+    [[nodiscard]] bool tracks_consumption_natively() const override {
+        return tracks_consumption_natively_;
+    }
+
+    /// Mock extruder->slot mapping. Returns slot == extruder_idx when the
+    /// identity mapping flag is set (simulates a tool-changer) and
+    /// std::nullopt otherwise (default AmsBackend behavior — aggregate routing).
+    [[nodiscard]] std::optional<int> slot_for_extruder(int extruder_idx) const override {
+        if (!identity_extruder_mapping_) {
+            return std::nullopt;
+        }
+        if (extruder_idx < 0 || extruder_idx >= system_info_.total_slots) {
+            return std::nullopt;
+        }
+        return extruder_idx;
+    }
+
+    /**
+     * @brief Test hook: make get_slot_for_extruder / tracks_consumption_natively() return
+     *        the given value. Test-only setter on the mock, not on a production backend
+     *        (per CLAUDE L065 the mock is test infrastructure).
+     */
+    void set_tracks_consumption_natively_for_testing(bool value) {
+        tracks_consumption_natively_ = value;
+    }
+
+    /**
+     * @brief Test hook: enable identity extruder->slot mapping so routing tests
+     *        can exercise the per-extruder dispatch path. When true,
+     *        slot_for_extruder(i) returns i; when false (default),
+     *        slot_for_extruder returns nullopt to preserve the pre-Phase-5
+     *        aggregate-routing behavior.
+     */
+    void set_identity_extruder_mapping_for_testing(bool enabled) {
+        identity_extruder_mapping_ = enabled;
+    }
+
     // Path visualization
     [[nodiscard]] PathTopology get_topology() const override;
     [[nodiscard]] PathTopology get_unit_topology(int unit_index) const override;
@@ -586,4 +624,13 @@ class AmsBackendMock : public AmsBackend {
     std::string initial_state_scenario_;
     std::thread scenario_thread_; ///< Thread for deferred loading/bypass scenario
     std::atomic<bool> scenario_thread_running_{false}; ///< Guards against double-join
+
+    // Test override for native-tracking capability. False in production; tests
+    // flip this to exercise the FilamentConsumptionTracker gating path.
+    bool tracks_consumption_natively_ = false;
+
+    // Test override for tool->slot identity mapping. False in production;
+    // Phase 5 routing tests set this true to simulate a tool-changer and
+    // exercise per-extruder dispatch.
+    bool identity_extruder_mapping_ = false;
 };

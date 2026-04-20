@@ -536,6 +536,20 @@ int AmsState::add_backend(std::unique_ptr<AmsBackend> backend) {
             subs.init(info.total_slots);
             secondary_slot_subjects_.push_back(std::move(subs));
         }
+
+        // Register one FilamentConsumptionTracker sink per slot. The tracker's
+        // gating (unknown weight / Spoolman-linked / native-tracking backend)
+        // decides per-tick whether each sink actually consumes deltas.
+        const int slot_count = backends_[index]->get_system_info().total_slots;
+        auto& handles = consumption_sinks_[index];
+        handles.reserve(slot_count);
+        auto& tracker = helix::FilamentConsumptionTracker::instance();
+        for (int slot = 0; slot < slot_count; ++slot) {
+            auto sink = std::make_unique<helix::AmsSlotSink>(index, slot);
+            handles.push_back(tracker.register_sink(std::move(sink)));
+        }
+        spdlog::debug("[AMS State] Registered {} consumption sinks for backend {}",
+                      slot_count, index);
     }
 
     // Update backend count subject for UI binding
@@ -562,6 +576,17 @@ int AmsState::backend_count() const {
 
 void AmsState::clear_backends() {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    // Unregister all FilamentConsumptionTracker sinks tied to these backends
+    // BEFORE tearing down the backends themselves — the sinks will read each
+    // backend one last time on flush().
+    auto& tracker = helix::FilamentConsumptionTracker::instance();
+    for (auto& [idx, handles] : consumption_sinks_) {
+        for (auto* h : handles) {
+            tracker.unregister_sink(h);
+        }
+    }
+    consumption_sinks_.clear();
 
     // Stop all backends
     for (auto& b : backends_) {

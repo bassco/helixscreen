@@ -16,18 +16,11 @@
 
 #include "../catch_amalgamated.hpp"
 #include "../lvgl_test_fixture.h"
+#include "filament_consumption_tracker_test_access.h"
 
 using Catch::Approx;
 using Catch::Matchers::WithinAbs;
 using namespace helix;
-
-namespace helix {
-struct FilamentConsumptionTrackerTestAccess {
-    static void set_persist_interval(FilamentConsumptionTracker& t, uint32_t ms) {
-        t.persist_interval_override_ms_ = ms;
-    }
-};
-} // namespace helix
 
 TEST_CASE("length_to_weight_g: 1.75mm PLA", "[filament][conversion]") {
     // 1.75mm PLA at 1.24 g/cm^3 is the canonical ~2.98 g/m.
