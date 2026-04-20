@@ -705,10 +705,15 @@ set_install_paths() {
         log_info "Platform: FlashForge AD5X (ZMOD)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k1" ]; then
-        # Creality K1 series - uses /usr/data structure
-        # Common paths for all K1 variants
+        # Creality K1 series - uses /usr/data structure.
+        # printer_data is at /usr/data/printer_data (squashfs /root is RO).
+        # Without the explicit override, detect_klipper_user falls back to
+        # KLIPPER_HOME=/root and setup_config_symlink skips with
+        # "No printer_data/config found" on every K1 install.
         INSTALL_DIR="/usr/data/helixscreen"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
+        KLIPPER_USER="root"
+        KLIPPER_HOME="/usr/data"
         case "$firmware" in
             simple_af)
                 PREVIOUS_UI_SCRIPT="/etc/init.d/S99guppyscreen"
@@ -725,12 +730,17 @@ set_install_paths() {
         esac
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "k2" ]; then
-        # Creality K2 series - OpenWrt/Tina Linux, storage on /mnt/UDISK
+        # Creality K2 series - OpenWrt/Tina Linux, storage on /mnt/UDISK.
+        # printer_data lives on /mnt/UDISK (squashfs /root has no space).
+        # Some K2 bootstrap projects (k2-improvements) drop a symlink
+        # /root/printer_data -> /mnt/UDISK/printer_data/, but the installer
+        # runs before that bootstrap for many users — point KLIPPER_HOME at
+        # the actual storage so config symlinks work on first install.
         INSTALL_DIR="/opt/helixscreen"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         PREVIOUS_UI_SCRIPT=""
         KLIPPER_USER="root"
-        KLIPPER_HOME="/root"
+        KLIPPER_HOME="/mnt/UDISK"
         log_info "Platform: Creality K2 series"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "cc1" ]; then
@@ -748,8 +758,15 @@ set_install_paths() {
         log_info "Platform: Elegoo Centauri Carbon (COSMOS)"
         log_info "Install directory: ${INSTALL_DIR}"
     elif [ "$platform" = "snapmaker-u1" ]; then
+        # Snapmaker U1: klipper runs as user 'lava', printer_data lives at
+        # /home/lava/printer_data. HelixScreen itself runs as root, but
+        # config symlinks must target the lava-owned tree so Mainsail/Fluidd
+        # can read them. detect_klipper_user normally finds /home/lava, but
+        # on a freshly-flashed U1 before klipper has ever run that path may
+        # not exist yet — make it explicit so the installer is deterministic.
         INSTALL_DIR="/userdata/helixscreen"
         KLIPPER_USER="root"
+        KLIPPER_HOME="/home/lava"
         INIT_SYSTEM="sysv"
         INIT_SCRIPT_DEST="/etc/init.d/S99helixscreen"
         log_info "Platform: Snapmaker U1"

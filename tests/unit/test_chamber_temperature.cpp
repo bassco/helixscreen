@@ -243,17 +243,17 @@ TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
     temp_state.init_subjects(false);
 
     PrinterDiscovery discovery;
-    nlohmann::json objects = {"temperature_sensor mcu_temp", "temperature_sensor enclosure_bme",
-                              "heater_generic heated_enclosure", "extruder", "heater_bed"};
+    nlohmann::json objects = {"temperature_sensor mcu_temp", "temperature_sensor external_bme",
+                              "heater_generic custom_heater", "extruder", "heater_bed"};
     discovery.parse_objects(objects);
 
-    // No "chamber" in any name — auto-detect finds nothing
+    // Names don't match any chamber keyword (chamber/cavity/enclosure/box) — auto-detect finds nothing
     REQUIRE_FALSE(discovery.has_chamber_sensor());
     REQUIRE_FALSE(discovery.has_chamber_heater());
 
     // User manually assigns
-    settings.set_chamber_sensor_assignment("temperature_sensor enclosure_bme");
-    settings.set_chamber_heater_assignment("heater_generic heated_enclosure");
+    settings.set_chamber_sensor_assignment("temperature_sensor external_bme");
+    settings.set_chamber_heater_assignment("heater_generic custom_heater");
 
     // Resolve (same logic as PrinterState::set_hardware)
     std::string sensor = settings.get_chamber_sensor_assignment();
@@ -273,8 +273,8 @@ TEST_CASE("Chamber assignment full round trip", "[chamber][integration]") {
 
     // Verify heater temp + target work
     nlohmann::json status = {
-        {"heater_generic heated_enclosure", {{"temperature", 55.2}, {"target", 60.0}}},
-        {"temperature_sensor enclosure_bme", {{"temperature", 48.1}}}};
+        {"heater_generic custom_heater", {{"temperature", 55.2}, {"target", 60.0}}},
+        {"temperature_sensor external_bme", {{"temperature", 48.1}}}};
     temp_state.update_from_status(status);
 
     // Heater is preferred when both are set
@@ -293,9 +293,9 @@ TEST_CASE("Manual chamber assignment enables capability flags", "[chamber][capab
     PrinterCapabilitiesState caps;
     caps.init_subjects(false);
 
-    // No "chamber" in any name — auto-detect finds nothing
+    // Names don't match any chamber keyword (chamber/cavity/enclosure/box) — auto-detect finds nothing
     PrinterDiscovery hardware;
-    nlohmann::json objects = {"temperature_sensor enclosure_bme", "heater_generic heated_enclosure",
+    nlohmann::json objects = {"temperature_sensor external_bme", "heater_generic custom_heater",
                               "extruder", "heater_bed"};
     hardware.parse_objects(objects);
 

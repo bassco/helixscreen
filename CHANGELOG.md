@@ -5,13 +5,18 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.99.39] - 2026-04-20
 
 ### Added
+- **Synth PCM backends on VoiceSlot** — ALSA and SDL backends now render per-sample through `VoiceSlot` with per-sample envelope and filter state. The sequencer publishes `NoteEvent` for continuous-audio backends and per-tick events for PWM/buzzer backends, unifying envelope behavior across every platform.
+- **Sound preview overlay** — Browse and preview individual sounds from the sound settings; a new "Preview Sounds" button opens `SoundPreviewOverlay`, a dynamic button grid populated from `SoundManager::get_sound_names()`.
 - **Build:** New `PLATFORM_TARGET=ad5m-br` mode and `make install DESTDIR=...`
   target, enabling external build systems (starting with the AD5M Klipper Mod
   firmware) to package HelixScreen as a native variant. See
   `docs/devel/AD5M_KMOD_VARIANT.md`. The existing `ad5m` target is unchanged.
+- Per-printer first-print phase defaults — each preset ships its own pre-print warm-up timing.
+- Header bar: per-widget `icon_size` override for oversized action-button glyphs.
+- Crash diagnostics: breadcrumb on the `discovery-complete` path to narrow the recurring copy-assign crash signature.
 
 ### Fixed
 - **Installer (K1 / K2 / Snapmaker U1):** Repaired five regressions from the
@@ -38,6 +43,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   /etc/init.d/S99helixscreen restart
   ```
   Verified on K1C, K2 Plus, AD5M Forge-X, Snapmaker U1, and CC1 hardware.
+- Discovery: `box` and `enclosure` now match as chamber-sensor keywords — Elegoo COSMOS `temperature_sensor box` and common modder `enclosure` names enable the chamber row on CC1 and similar builds.
+- Presets: Snapmaker U1 macros and hotend fan aligned with hardware; CC1 hardware list completed and filament sensor pre-declared; K1C `fan2` role and filament macros aligned with stock firmware; K2 Plus hardware list corrected (bogus "K2 Max" entry removed).
+- Display: bundle minimal zoneinfo so IANA timezones resolve on CC1 (ships without `/usr/share/zoneinfo`).
+- Synth: step-boundary silence no longer kills active PCM notes; `button_tap` suppressed in the preview overlay; per-sample envelope restores attack/release shape; filter state preserved across buffer boundaries; smaller SDL ring buffer cuts perceived latency.
+- Print status: low-memory deactivation clears gcode-viewer dedup guards; `end_overlay` observer reset before subject deinit; MICRO metadata sizing and end-overlay race.
+- Print: `ActivePrintMediaManager` uses an immediate observer to close the stale-thumbnail race during rapid print transitions.
+- Print select: egg placeholder removed; history/queue fetch guards hardened so transient Moonraker outages don't leave the panel empty.
+- Toast: responsive width restored after the stacking refactor.
+
+### Changed
+- Synth architecture: `set_voice_envelope` removed (deprecated); PCM backends now own per-sample rendering through `VoiceSlot`.
+- Build: libhv's symlinked `LIBHV_DIR` cleaned of stale artifacts; `ad5m-br` added to sound + `.PHONY` filters; cmake scaffolding pruned from the installed `ui_xml/` tree.
 
 ## [0.99.38] - 2026-04-20
 
@@ -3165,6 +3182,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.39]: https://github.com/prestonbrown/helixscreen/compare/v0.99.38...v0.99.39
 [0.99.38]: https://github.com/prestonbrown/helixscreen/compare/v0.99.37...v0.99.38
 [0.99.37]: https://github.com/prestonbrown/helixscreen/compare/v0.99.36...v0.99.37
 [0.99.36]: https://github.com/prestonbrown/helixscreen/compare/v0.99.35...v0.99.36
