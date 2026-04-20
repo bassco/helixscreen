@@ -6,6 +6,7 @@
 #include "consumption_sink.h"
 #include "ui_observer_guard.h"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <vector>
@@ -14,6 +15,12 @@ namespace helix {
 
 class FilamentConsumptionTracker {
   public:
+    /// Maximum number of per-extruder filament_used subjects the tracker
+    /// subscribes to. Aligns with `PrinterPrintState::kMaxExtruderScan` — the
+    /// pool of pre-populated dynamic subjects on PrinterState. Klipper
+    /// toolchanger setups never come close to this.
+    static constexpr int kMaxTrackedExtruders = 16;
+
     /// Opaque handle returned by register_sink() and consumed by unregister_sink().
     using SinkHandle = IConsumptionSink*;
 
@@ -90,17 +97,30 @@ class FilamentConsumptionTracker {
     ObserverGuard print_state_obs_;
     ObserverGuard filament_used_obs_;
 
+    /// Shared lifetime for every per-extruder filament_used subject observer.
+    /// Per [L077]: must be reset BEFORE `extruder_obs_` in stop() so the
+    /// weak_ptr held inside each ObserverGuard expires before the guard runs
+    /// lv_observer_remove() — otherwise the guard can try to remove an observer
+    /// from a freed subject when PrinterState tears down.
+    SubjectLifetime extruder_lifetime_;
+
+    /// Per-extruder filament_used_mm observers. Index i observes Klipper's
+    /// `extruder` (i=0) / `extruder1` / `extruder2` / ... filament_used field.
+    std::array<ObserverGuard, kMaxTrackedExtruders> extruder_obs_{};
+
     void on_print_state_changed(int job_state);
     void on_filament_used_changed(int filament_mm);
+
+    /// Handler for a single extruder's filament_used delta. Routes the delta
+    /// to any AmsSlotSink whose backend declares `slot_for_extruder(idx)`
+    /// mapping to this sink's slot.
+    void on_extruder_filament_used_changed(int extruder_idx, int mm);
 
     /// Snapshot every registered sink. Called on PRINTING transition.
     void snapshot_all_sinks(float filament_used_mm);
 
     /// Flush every registered sink. Called on COMPLETE / CANCELLED / ERROR / PAUSED.
     void flush_all_sinks();
-
-    /// Apply a delta to every currently-trackable sink.
-    void apply_delta_all_sinks(float filament_used_mm);
 
     /// True when at least one registered sink is currently trackable.
     [[nodiscard]] bool any_sink_trackable() const;

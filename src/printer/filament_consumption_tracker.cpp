@@ -3,6 +3,8 @@
 
 #include "filament_consumption_tracker.h"
 
+#include "ams_backend.h"
+#include "ams_state.h"
 #include "app_globals.h"
 #include "observer_factory.h"
 #include "printer_state.h"
@@ -32,6 +34,22 @@ void FilamentConsumptionTracker::start() {
             self->on_filament_used_changed(mm);
         });
 
+    // Per-extruder filament_used_mm observers. These are dynamic subjects
+    // ([L077]) and share one lifetime token so a single reset() in stop()
+    // invalidates every observer before the subjects are deinit'd.
+    for (int idx = 0; idx < kMaxTrackedExtruders; ++idx) {
+        auto* subj = printer.get_extruder_filament_used_subject(idx, extruder_lifetime_);
+        if (!subj) {
+            continue;
+        }
+        extruder_obs_[idx] = helix::ui::observe_int_sync<FilamentConsumptionTracker>(
+            subj, this,
+            [idx](FilamentConsumptionTracker* self, int mm) {
+                self->on_extruder_filament_used_changed(idx, mm);
+            },
+            extruder_lifetime_);
+    }
+
     // Install the one-and-only ExternalSpoolSink on the first start(). Any
     // later stop()/start() cycle keeps the same sink alive.
     if (external_sink_raw_ == nullptr) {
@@ -44,6 +62,16 @@ void FilamentConsumptionTracker::start() {
 void FilamentConsumptionTracker::stop() {
     print_state_obs_.reset();
     filament_used_obs_.reset();
+
+    // [L077] Reset the lifetime FIRST so the weak_ptr inside each extruder
+    // ObserverGuard expires before the guard's destructor runs — otherwise
+    // lv_observer_remove() may fire on a PrinterState subject that is about
+    // to be deinit'd.
+    extruder_lifetime_.reset();
+    for (auto& o : extruder_obs_) {
+        o.reset();
+    }
+
     active_ = false;
     print_in_progress_ = false;
 }
@@ -145,9 +173,80 @@ void FilamentConsumptionTracker::on_filament_used_changed(int filament_mm) {
     if (!print_in_progress_) {
         return;
     }
-    apply_delta_all_sinks(static_cast<float>(filament_mm));
+    const float f_mm = static_cast<float>(filament_mm);
+
+    // Aggregate path: drives the ExternalSpoolSink always, and drives
+    // AmsSlotSinks whose backend does NOT declare any per-extruder mapping
+    // (single-extruder multi-slot backends like HappyHare, CFS, ACE, IFS).
+    // Backends WITH a slot_for_extruder() mapping (tool-changers) are routed
+    // via the per-extruder path so they don't get double-counted here.
+    for (auto& sink : sinks_) {
+        if (sink->kind() == SinkKind::ExternalSpool) {
+            sink->apply_delta(f_mm);
+            continue;
+        }
+        // SinkKind::AmsSlot
+        auto* ams = static_cast<AmsSlotSink*>(sink.get());
+        AmsBackend* backend = AmsState::instance().get_backend(ams->backend_index());
+        if (!backend) {
+            continue;
+        }
+
+        // Skip if ANY extruder on this backend claims a slot mapping — the
+        // per-extruder routing path owns this backend.
+        bool has_mapping = false;
+        for (int e = 0; e < kMaxTrackedExtruders; ++e) {
+            if (backend->slot_for_extruder(e)) {
+                has_mapping = true;
+                break;
+            }
+        }
+        if (has_mapping) {
+            continue;
+        }
+
+        // Single-extruder multi-slot backend: only the currently-loaded slot
+        // accrues the delta.
+        if (ams->slot_index() == backend->get_current_slot()) {
+            ams->apply_delta(f_mm);
+        }
+    }
+
     // Sinks may have toggled trackability on this tick (e.g. external write
     // made a previously untrackable sink trackable). Keep is_active() in sync.
+    active_ = any_sink_trackable();
+}
+
+void FilamentConsumptionTracker::on_extruder_filament_used_changed(int extruder_idx,
+                                                                   int mm) {
+    if (!print_in_progress_) {
+        return;
+    }
+    const float f_mm = static_cast<float>(mm);
+
+    // Find any backend that declares a slot mapping for this extruder and
+    // route the delta to the matching AmsSlotSink. A single extruder can map
+    // at most one slot per backend; multiple backends are independent.
+    for (int b = 0; b < AmsState::instance().backend_count(); ++b) {
+        AmsBackend* backend = AmsState::instance().get_backend(b);
+        if (!backend) {
+            continue;
+        }
+        auto slot = backend->slot_for_extruder(extruder_idx);
+        if (!slot) {
+            continue;
+        }
+        for (auto& sink : sinks_) {
+            if (sink->kind() != SinkKind::AmsSlot) {
+                continue;
+            }
+            auto* ams = static_cast<AmsSlotSink*>(sink.get());
+            if (ams->backend_index() == b && ams->slot_index() == *slot) {
+                ams->apply_delta(f_mm);
+            }
+        }
+    }
+
     active_ = any_sink_trackable();
 }
 
@@ -160,12 +259,6 @@ void FilamentConsumptionTracker::snapshot_all_sinks(float filament_used_mm) {
 void FilamentConsumptionTracker::flush_all_sinks() {
     for (auto& s : sinks_) {
         s->flush();
-    }
-}
-
-void FilamentConsumptionTracker::apply_delta_all_sinks(float filament_used_mm) {
-    for (auto& s : sinks_) {
-        s->apply_delta(filament_used_mm);
     }
 }
 

@@ -286,6 +286,13 @@ TEST_CASE_METHOD(LVGLTestFixture,
     REQUIRE(handle == raw);
     REQUIRE(raw->is_trackable());
 
+    // Post-Phase-5: the aggregate filament_used path only decrements the slot
+    // whose index matches the backend's get_current_slot(). Point the mock at
+    // slot 1 before pushing the delta so the late-registered sink receives it.
+    mock->start();
+    REQUIRE(mock->select_slot(1).success());
+    REQUIRE(mock->get_current_slot() == 1);
+
     // Push a filament_used delta and verify the late sink's slot decremented.
     lv_subject_set_int(printer.get_print_filament_used_subject(), 1000);
     helix::ui::UpdateQueue::instance().drain();
