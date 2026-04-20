@@ -5,6 +5,14 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Build:** New `PLATFORM_TARGET=ad5m-br` mode and `make install DESTDIR=...`
+  target, enabling external build systems (starting with the AD5M Klipper Mod
+  firmware) to package HelixScreen as a native variant. See
+  `docs/devel/AD5M_KMOD_VARIANT.md`. The existing `ad5m` target is unchanged.
+
 ## [0.99.38] - 2026-04-20
 
 ### Added
