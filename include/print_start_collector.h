@@ -286,10 +286,18 @@ class PrintStartCollector : public std::enable_shared_from_this<PrintStartCollec
     // progress and per-probe time extrapolation for ETA.
     int mesh_probe_current_ = 0;
     int mesh_probe_total_ = 0;
-    int mesh_probe_fallback_count_ = 0; ///< Fallback counter for "probe at" lines
+    int mesh_probe_fallback_count_ = 0; ///< Unique probe POINTS (not samples) counted from fallback
     std::chrono::steady_clock::time_point mesh_first_probe_time_;
     std::chrono::steady_clock::time_point mesh_last_probe_time_;
     float mesh_seconds_per_probe_ = 0.0f; ///< Running average from observed probe intervals
+
+    // Dedupe state: Klipper's `samples: N` config emits N consecutive "probe at X,Y"
+    // lines at the same position. We count unique (x,y) positions as "points", which
+    // matches what the user expects (# points that will be probed, not raw sample
+    // count). Reset on gap-detection and in reset().
+    double mesh_last_probe_x_ = 0.0;
+    double mesh_last_probe_y_ = 0.0;
+    bool mesh_has_last_probe_pos_ = false;
 
     /// Max gap between consecutive probe lines before resetting counters.
     /// Handles printers that emit "probe at" for non-mesh operations (e.g.

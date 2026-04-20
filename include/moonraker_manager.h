@@ -209,6 +209,11 @@ class MoonrakerManager {
     SubjectLifetime m_print_bed_target_fallback_lifetime;
     ObserverGuard m_print_bed_target_fallback_observer;
     ObserverGuard m_print_ext_target_fallback_observer;
+    // First-extrusion completion: when print_duration transitions 0 -> positive while
+    // the collector is active, the pre-print phase is definitively over. This is the
+    // authoritative signal for printers whose PRINT_START macro runs inside the
+    // print_stats.state=printing window (Snapmaker U1, many Klipper setups).
+    ObserverGuard m_print_duration_observer;
 
     // Macro modification manager (PRINT_START wizard integration)
     std::unique_ptr<helix::MacroModificationManager> m_macro_analysis;

@@ -562,6 +562,25 @@ void MoonrakerManager::init_print_start_collector() {
         },
         nullptr);
 
+    // First-extrusion signal: when print_stats.print_duration transitions from 0 to
+    // positive, real extrusion has started — pre-print is over. This is printer-
+    // agnostic and handles printers whose PRINT_START macro runs entirely inside the
+    // print_stats.state=printing window (Snapmaker U1, many Klipper setups) where the
+    // state-transition signal fires too early.
+    m_print_duration_observer = ObserverGuard(
+        get_printer_state().get_print_duration_subject(),
+        [](lv_observer_t*, lv_subject_t* subject) {
+            auto collector = s_collector.lock();
+            if (!collector || !collector->is_active())
+                return;
+            if (lv_subject_get_int(subject) > 0) {
+                spdlog::info("[MoonrakerManager] Authoritative: first extrusion detected "
+                             "(print_duration>0), completing pre-print phase");
+                collector->complete_from_external_signal("first extrusion");
+            }
+        },
+        nullptr);
+
     // Fallback observers: trigger check_fallback_completion() when temperature targets change.
     // Proactive heating phase detection fires immediately when heater targets change (without
     // these, proactive detection only runs from the 5-second ETA timer).

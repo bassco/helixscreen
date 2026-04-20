@@ -61,4 +61,39 @@ inline bool is_probe_result_line(const std::string& line) {
     return line.find("probe at ") != std::string::npos && line.find(" is z=") != std::string::npos;
 }
 
+/**
+ * @brief (x,y) position parsed from a "probe at X,Y is z=Z" line
+ */
+struct ProbePosition {
+    double x;
+    double y;
+};
+
+/**
+ * @brief Extract (x,y) from a "probe at X,Y is z=Z" line
+ *
+ * Klipper's `samples` config causes the same (x,y) to appear multiple times
+ * consecutively. Callers can use this to deduplicate samples and count unique
+ * probe points rather than raw sample lines.
+ *
+ * Accepts both comma and whitespace separators after "probe at", and optional
+ * "x:"/"y:" prefixes (seen on some firmwares).
+ *
+ * @return Parsed position or std::nullopt if line doesn't match
+ */
+inline std::optional<ProbePosition> parse_probe_position(const std::string& line) {
+    // Matches "probe at x: 181.474, y: 55.048 is z=..." and "probe at 150.0,150.0 is z=..."
+    static const std::regex pos_regex(
+        R"(probe at (?:x:\s*)?(-?\d+(?:\.\d+)?)[,\s]+(?:y:\s*)?(-?\d+(?:\.\d+)?)\s+is z=)");
+    std::smatch match;
+    if (std::regex_search(line, match, pos_regex) && match.size() == 3) {
+        try {
+            return ProbePosition{std::stod(match[1].str()), std::stod(match[2].str())};
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;
+}
+
 } // namespace helix

@@ -96,6 +96,7 @@ void PrintStartCollector::start() {
         mesh_first_probe_time_ = {};
         mesh_last_probe_time_ = {};
         mesh_seconds_per_probe_ = 0.0f;
+        mesh_has_last_probe_pos_ = false;
         pre_mesh_probe_count_ = 0;
         pre_mesh_last_probe_time_ = {};
         // Snapshot stale subject values so fallbacks only trigger on real changes
@@ -294,6 +295,7 @@ void PrintStartCollector::reset() {
         mesh_first_probe_time_ = {};
         mesh_last_probe_time_ = {};
         mesh_seconds_per_probe_ = 0.0f;
+        mesh_has_last_probe_pos_ = false;
         pre_mesh_probe_count_ = 0;
         pre_mesh_last_probe_time_ = {};
     }
@@ -700,10 +702,14 @@ void PrintStartCollector::on_gcode_response(const json& msg) {
             }
 
             if (helix::is_probe_result_line(line)) {
-                // "probe at X,Y is z=Z" fallback — no total from firmware
+                // "probe at X,Y is z=Z" fallback — no total from firmware.
+                // Dedupe by (x,y): Klipper's `samples: N` config emits N consecutive
+                // probes at the same position; we count unique points, not samples.
+                auto pos = helix::parse_probe_position(line);
                 int count;
                 int total;
                 int progress;
+                bool is_new_point = false;
                 {
                     std::lock_guard<std::mutex> lock(state_mutex_);
                     auto now = std::chrono::steady_clock::now();
@@ -720,19 +726,39 @@ void PrintStartCollector::on_gcode_response(const json& msg) {
                         mesh_probe_fallback_count_ = 0;
                         mesh_probe_current_ = 0;
                         mesh_seconds_per_probe_ = 0.0f;
+                        mesh_has_last_probe_pos_ = false;
                     }
 
-                    mesh_probe_fallback_count_++;
-                    if (mesh_probe_fallback_count_ == 1) {
-                        mesh_first_probe_time_ = now;
+                    // Position-based dedupe. When we can't parse a position, fall back
+                    // to counting each line (preserves prior behavior for malformed input).
+                    constexpr double POS_TOL = 0.05; // mm — samples at same point are exact
+                    if (pos) {
+                        if (!mesh_has_last_probe_pos_ ||
+                            std::abs(pos->x - mesh_last_probe_x_) > POS_TOL ||
+                            std::abs(pos->y - mesh_last_probe_y_) > POS_TOL) {
+                            is_new_point = true;
+                            mesh_last_probe_x_ = pos->x;
+                            mesh_last_probe_y_ = pos->y;
+                            mesh_has_last_probe_pos_ = true;
+                        }
                     } else {
-                        float elapsed = static_cast<float>(
-                                            std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                now - mesh_first_probe_time_)
-                                                .count()) /
-                                        1000.0f;
-                        mesh_seconds_per_probe_ =
-                            elapsed / static_cast<float>(mesh_probe_fallback_count_ - 1);
+                        is_new_point = true;
+                    }
+
+                    if (is_new_point) {
+                        mesh_probe_fallback_count_++;
+                        if (mesh_probe_fallback_count_ == 1) {
+                            mesh_first_probe_time_ = now;
+                        } else {
+                            float elapsed =
+                                static_cast<float>(
+                                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        now - mesh_first_probe_time_)
+                                        .count()) /
+                                1000.0f;
+                            mesh_seconds_per_probe_ =
+                                elapsed / static_cast<float>(mesh_probe_fallback_count_ - 1);
+                        }
                     }
                     mesh_last_probe_time_ = now;
 
@@ -741,16 +767,18 @@ void PrintStartCollector::on_gcode_response(const json& msg) {
                     total = mesh_probe_total_;
                     progress = calculate_progress_locked();
                 }
-                spdlog::debug("[PrintStartCollector] Mesh probe fallback #{}/{} ({:.1f}s/probe)",
-                              count, total, mesh_seconds_per_probe_);
-                char msg_buf[64];
-                if (total > 0) {
-                    snprintf(msg_buf, sizeof(msg_buf), "%s (%d/%d)", lv_tr("Bed Mesh"), count,
-                             total);
-                } else {
-                    snprintf(msg_buf, sizeof(msg_buf), "%s (%d)", lv_tr("Bed Mesh"), count);
+                if (is_new_point) {
+                    spdlog::debug("[PrintStartCollector] Mesh point #{}/{} ({:.1f}s/point)", count,
+                                  total, mesh_seconds_per_probe_);
+                    char msg_buf[64];
+                    if (total > 0) {
+                        snprintf(msg_buf, sizeof(msg_buf), "%s (%d/%d)", lv_tr("Bed Mesh"), count,
+                                 total);
+                    } else {
+                        snprintf(msg_buf, sizeof(msg_buf), "%s (%d)", lv_tr("Bed Mesh"), count);
+                    }
+                    state_.set_print_start_state(PrintStartPhase::BED_MESH, msg_buf, progress);
                 }
-                state_.set_print_start_state(PrintStartPhase::BED_MESH, msg_buf, progress);
             }
         }
     }
@@ -1412,7 +1440,12 @@ void PrintStartCollector::query_mesh_probe_count() {
         return;
 
     auto self = shared_from_this();
-    json params = {{"objects", json::object({{"configfile", json::array({"settings"})}})}};
+    // Query both bed_mesh (for probed_matrix from last run — authoritative point count,
+    // handles adaptive meshing where probe_count config overstates actual probes)
+    // and configfile settings (fallback when no prior mesh exists).
+    json params = {
+        {"objects",
+         json::object({{"bed_mesh", nullptr}, {"configfile", json::array({"settings"})}})}};
 
     client_.send_jsonrpc(
         "printer.objects.query", params,
@@ -1421,29 +1454,55 @@ void PrintStartCollector::query_mesh_probe_count() {
                 return;
 
             int total = 0;
+            const char* source = "";
+
+            // Prefer probed_matrix dimensions from last completed mesh. For printers
+            // with adaptive/reduced probing (Snapmaker U1, KAMP), this reflects what
+            // will actually be probed; probe_count config overstates by 5x on U1.
             try {
-                const auto& settings = response["result"]["status"]["configfile"]["settings"];
-                if (settings.contains("bed_mesh") && settings["bed_mesh"].contains("probe_count")) {
-                    const auto& pc = settings["bed_mesh"]["probe_count"];
-                    if (pc.is_array() && pc.size() >= 2) {
-                        total = pc[0].template get<int>() * pc[1].template get<int>();
-                    } else if (pc.is_number_integer()) {
-                        int n = pc.template get<int>();
-                        total = n * n; // square grid
+                const auto& status = response["result"]["status"];
+                if (status.contains("bed_mesh") && status["bed_mesh"].contains("probed_matrix")) {
+                    const auto& pm = status["bed_mesh"]["probed_matrix"];
+                    if (pm.is_array() && !pm.empty() && pm[0].is_array()) {
+                        int rows = static_cast<int>(pm.size());
+                        int cols = static_cast<int>(pm[0].size());
+                        if (rows > 0 && cols > 0) {
+                            total = rows * cols;
+                            source = "probed_matrix";
+                        }
                     }
                 }
             } catch (...) {
-                // Non-fatal — fallback mode continues without total
+                // fall through to config
+            }
+
+            if (total == 0) {
+                try {
+                    const auto& settings = response["result"]["status"]["configfile"]["settings"];
+                    if (settings.contains("bed_mesh") &&
+                        settings["bed_mesh"].contains("probe_count")) {
+                        const auto& pc = settings["bed_mesh"]["probe_count"];
+                        if (pc.is_array() && pc.size() >= 2) {
+                            total = pc[0].template get<int>() * pc[1].template get<int>();
+                        } else if (pc.is_number_integer()) {
+                            int n = pc.template get<int>();
+                            total = n * n; // square grid
+                        }
+                        source = "probe_count";
+                    }
+                } catch (...) {
+                    // Non-fatal — fallback mode continues without total
+                }
             }
 
             if (total > 0) {
                 std::lock_guard<std::mutex> lock(self->state_mutex_);
                 self->mesh_probe_total_ = total;
-                spdlog::info("[PrintStartCollector] Mesh probe count from config: {}", total);
+                spdlog::info("[PrintStartCollector] Mesh point total from {}: {}", source, total);
             }
         },
         [](const MoonrakerError& /*err*/) {
-            spdlog::debug("[PrintStartCollector] Failed to query bed_mesh probe_count");
+            spdlog::debug("[PrintStartCollector] Failed to query bed_mesh point count");
         });
 }
 

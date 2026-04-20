@@ -395,3 +395,105 @@ TEST_CASE("is_probe_result_line detects standard Klipper probe output",
     REQUIRE_FALSE(helix::is_probe_result_line("Probing point 5/25"));
     REQUIRE_FALSE(helix::is_probe_result_line("ok"));
 }
+
+// ============================================================================
+// parse_probe_position — underpins sample deduplication
+// ============================================================================
+
+TEST_CASE("parse_probe_position extracts X,Y from comma-separated form",
+          "[bed_mesh_collector][probe_position]") {
+    auto p = helix::parse_probe_position("probe at 150.000,120.500 is z=-0.050");
+    REQUIRE(p.has_value());
+    REQUIRE(p->x == Catch::Approx(150.000));
+    REQUIRE(p->y == Catch::Approx(120.500));
+}
+
+TEST_CASE("parse_probe_position handles 'x:'/'y:' prefix form (Snapmaker U1)",
+          "[bed_mesh_collector][probe_position]") {
+    // Snapmaker U1 Klipper emits this labeled form
+    auto p = helix::parse_probe_position("probe at x: 181.474, y: 55.048 is z=-0.214167");
+    REQUIRE(p.has_value());
+    REQUIRE(p->x == Catch::Approx(181.474));
+    REQUIRE(p->y == Catch::Approx(55.048));
+}
+
+TEST_CASE("parse_probe_position handles negative coordinates",
+          "[bed_mesh_collector][probe_position]") {
+    auto p = helix::parse_probe_position("probe at -5.500,-10.250 is z=0.000");
+    REQUIRE(p.has_value());
+    REQUIRE(p->x == Catch::Approx(-5.500));
+    REQUIRE(p->y == Catch::Approx(-10.250));
+}
+
+TEST_CASE("parse_probe_position rejects non-probe lines",
+          "[bed_mesh_collector][probe_position]") {
+    REQUIRE_FALSE(helix::parse_probe_position("Probing point 5/25").has_value());
+    REQUIRE_FALSE(helix::parse_probe_position("ok").has_value());
+    REQUIRE_FALSE(helix::parse_probe_position("probe at is z=0").has_value());
+}
+
+/**
+ * @brief Simulate Klipper's `samples: N` probe stream with dedupe
+ *
+ * Klipper emits N consecutive "probe at X,Y is z=Z" lines at the same (x,y)
+ * for each grid point when `samples: N` is configured. The collector's
+ * dedupe logic (parse_probe_position + tolerance check) should count unique
+ * points, not raw sample lines — matching the user-facing "# points probed"
+ * expectation.
+ *
+ * This mirrors the real Snapmaker U1 observation: probed_matrix 6x5=30 with
+ * samples=3 produces 90 "probe at" lines that must deduplicate to 30 points.
+ */
+static int simulate_dedupe_count(int grid_rows, int grid_cols, int samples,
+                                 double x_spacing = 46.1, double y_spacing = 41.62) {
+    constexpr double POS_TOL = 0.05;
+    double last_x = 0.0, last_y = 0.0;
+    bool has_last = false;
+    int unique_points = 0;
+
+    for (int r = 0; r < grid_rows; ++r) {
+        for (int c = 0; c < grid_cols; ++c) {
+            double x = 43.173 + c * x_spacing;
+            double y = 55.048 + r * y_spacing;
+            for (int s = 0; s < samples; ++s) {
+                // Simulate the same dedupe logic as production:
+                // count unique points, ignore consecutive samples at same (x,y).
+                bool is_new =
+                    !has_last || std::abs(x - last_x) > POS_TOL || std::abs(y - last_y) > POS_TOL;
+                if (is_new) {
+                    ++unique_points;
+                    last_x = x;
+                    last_y = y;
+                    has_last = true;
+                }
+            }
+        }
+    }
+    return unique_points;
+}
+
+TEST_CASE("Sample dedupe: 6x5 grid with samples=3 counts 30 points, not 90",
+          "[bed_mesh_collector][dedupe]") {
+    // Matches Snapmaker U1 observed behavior: probe_count=[13,13] config,
+    // but adaptive mesh probes 6x5=30 points, 3 samples each = 90 "probe at" lines.
+    // Dedupe must collapse these to 30 unique points.
+    REQUIRE(simulate_dedupe_count(6, 5, 3) == 30);
+}
+
+TEST_CASE("Sample dedupe: 5x5 grid with samples=1 counts 25 points",
+          "[bed_mesh_collector][dedupe]") {
+    REQUIRE(simulate_dedupe_count(5, 5, 1) == 25);
+}
+
+TEST_CASE("Sample dedupe: 3x3 grid with samples=5 counts 9 points",
+          "[bed_mesh_collector][dedupe]") {
+    REQUIRE(simulate_dedupe_count(3, 3, 5) == 9);
+}
+
+TEST_CASE("Sample dedupe: tolerance distinguishes adjacent grid points",
+          "[bed_mesh_collector][dedupe]") {
+    // Neighboring probe positions ~1mm apart must NOT be treated as the same point
+    // even though they're close. Tolerance is 0.05mm — samples at exactly the same
+    // xy have 0 difference, real grid moves are always >>0.05mm.
+    REQUIRE(simulate_dedupe_count(2, 2, 2, 1.0, 1.0) == 4);
+}
