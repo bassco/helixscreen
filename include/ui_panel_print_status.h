@@ -296,6 +296,7 @@ class PrintStatusPanel : public OverlayBase {
     lv_subject_t flow_subject_;
     lv_subject_t pause_button_subject_;
     lv_subject_t pause_label_subject_; ///< Pause button label ("Pause"/"Resume")
+    lv_subject_t view_toggle_icon_subject_; ///< MDI codepoint for btn_view_toggle_icon (cube/layers)
 
     // Preparing state subjects
     lv_subject_t preparing_visible_subject_;   // int: 1 if preparing, 0 otherwise
@@ -304,6 +305,16 @@ class PrintStatusPanel : public OverlayBase {
 
     // Viewer mode subject (0=thumbnail mode, 1=gcode viewer mode)
     lv_subject_t gcode_viewer_mode_subject_;
+
+    // 1 while the exclude-object overhead map overlay covers the thumbnail
+    // section; drives XML bindings that hide print_thumbnail/gradient underneath.
+    lv_subject_t exclude_map_active_subject_;
+
+    // 1 once the user taps the print end overlay to dismiss it. Reset to 0
+    // on new-print transitions so the next outcome's overlay appears normally.
+    // XML bindings on the complete/cancelled/error overlays add this as a
+    // second hide condition alongside print_outcome.
+    lv_subject_t end_overlay_dismissed_subject_;
 
     lv_subject_t exclude_objects_available_subject_; ///< Int: 1 if multi-object print
     lv_subject_t objects_text_subject_;              ///< String: "X of Y obj" display text
@@ -332,6 +343,7 @@ class PrintStatusPanel : public OverlayBase {
     char pause_button_buf_[32] = "\xF3\xB0\x8F\xA4"; // MDI pause icon (F03E4)
     char pause_label_buf_[16] = "Pause";             ///< Pause button label
     char objects_text_buf_[32] = "";                 ///< "X of Y obj" buffer
+    char view_toggle_icon_buf_[8] = "";              ///< View toggle icon codepoint (cube/layers)
 
     //
     // === Instance State ===
@@ -395,7 +407,6 @@ class PrintStatusPanel : public OverlayBase {
     lv_obj_t* btn_pause_ = nullptr;
     lv_obj_t* btn_tune_ = nullptr;
     lv_obj_t* btn_cancel_ = nullptr;
-    lv_obj_t* btn_reprint_ = nullptr;
 
     // Print completion celebration badge (animated on print complete)
     lv_obj_t* success_badge_ = nullptr;

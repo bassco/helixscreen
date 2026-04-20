@@ -342,6 +342,10 @@ void PrintStatusPanel::init_subjects() {
                               subjects_);
     UI_MANAGED_SUBJECT_STRING(objects_text_subject_, objects_text_buf_, "", "print_objects_text",
                               subjects_);
+    // View toggle icon: starts as cube (progress view), flips to layers on complete view.
+    // Populated lazily at first update (icon_cube const resolves only after globals load).
+    UI_MANAGED_SUBJECT_STRING(view_toggle_icon_subject_, view_toggle_icon_buf_, "",
+                              "view_toggle_icon", subjects_);
 
     // Initialize light/timelapse controls (extracted Phase 2)
     light_timelapse_controls_.init_subjects();
@@ -358,6 +362,8 @@ void PrintStatusPanel::init_subjects() {
 
     // Viewer mode subject (0=thumbnail, 1=3D gcode viewer, 2=2D gcode viewer)
     UI_MANAGED_SUBJECT_INT(gcode_viewer_mode_subject_, 0, "gcode_viewer_mode", subjects_);
+    UI_MANAGED_SUBJECT_INT(exclude_map_active_subject_, 0, "exclude_map_active", subjects_);
+    UI_MANAGED_SUBJECT_INT(end_overlay_dismissed_subject_, 0, "end_overlay_dismissed", subjects_);
 
     // Button enable states driven declaratively from XML (see update_button_states).
     UI_MANAGED_SUBJECT_INT(print_controls_enabled_subject_, 0, "print_controls_enabled", subjects_);
@@ -546,7 +552,6 @@ lv_obj_t* PrintStatusPanel::create(lv_obj_t* parent) {
     btn_pause_ = lv_obj_find_by_name(overlay_content, "btn_pause");
     btn_tune_ = lv_obj_find_by_name(overlay_content, "btn_tune");
     btn_cancel_ = lv_obj_find_by_name(overlay_content, "btn_cancel");
-    btn_reprint_ = lv_obj_find_by_name(overlay_content, "btn_reprint");
 
     // Print complete celebration badge (for animation)
     success_badge_ = lv_obj_find_by_name(overlay_content, "success_badge");
@@ -632,6 +637,13 @@ lv_obj_t* PrintStatusPanel::create(lv_obj_t* parent) {
 
     // Hide initially - NavigationManager will show when pushed
     lv_obj_add_flag(overlay_root_, LV_OBJ_FLAG_HIDDEN);
+
+    // Seed view toggle icon now that globals.xml has been loaded (init_subjects
+    // runs too early to resolve #icon_cube). The subject drives the XML
+    // bind_text on btn_view_toggle_icon, so this is the initial render state.
+    if (const char* icon = lv_xml_get_const(nullptr, "icon_cube")) {
+        lv_subject_copy_string(&view_toggle_icon_subject_, icon);
+    }
 
     spdlog::debug("[{}] Setup complete!", get_name());
     return overlay_root_;
@@ -789,7 +801,6 @@ void PrintStatusPanel::on_ui_destroyed() {
     btn_pause_ = nullptr;
     btn_tune_ = nullptr;
     btn_cancel_ = nullptr;
-    btn_reprint_ = nullptr;
     success_badge_ = nullptr;
     cancel_badge_ = nullptr;
     error_badge_ = nullptr;
@@ -952,13 +963,10 @@ void PrintStatusPanel::show_exclude_map_view() {
         return;
     }
 
-    // Hide thumbnail and gradient to make room for the map view
-    if (print_thumbnail_) {
-        lv_obj_add_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (gradient_background_) {
-        lv_obj_add_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
-    }
+    // XML bindings on print_thumbnail and gradient_background hide them whenever
+    // exclude_map_active == 1 — setting this before creating the map avoids a
+    // brief frame with the overlay atop still-visible thumbnail/gradient.
+    lv_subject_set_int(&exclude_map_active_subject_, 1);
 
     map_view_ = std::make_unique<helix::ui::ExcludeObjectMapView>();
     map_view_->set_close_callback([this]() { hide_exclude_map_view(); });
@@ -986,12 +994,8 @@ void PrintStatusPanel::hide_exclude_map_view() {
         map_view_->destroy();
         map_view_.reset();
     }
-    if (print_thumbnail_) {
-        lv_obj_remove_flag(print_thumbnail_, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (gradient_background_) {
-        lv_obj_remove_flag(gradient_background_, LV_OBJ_FLAG_HIDDEN);
-    }
+    // Un-hides thumbnail/gradient via the XML bindings on exclude_map_active.
+    lv_subject_set_int(&exclude_map_active_subject_, 0);
 }
 
 void PrintStatusPanel::load_gcode_file(const char* file_path) {
@@ -1362,11 +1366,10 @@ void PrintStatusPanel::on_temp_card_clicked(lv_event_t* e) {
 
 void PrintStatusPanel::on_dismiss_overlay_clicked(lv_event_t* e) {
     LVGL_SAFE_EVENT_CB_BEGIN("[PrintStatusPanel] on_dismiss_overlay_clicked");
-    auto* overlay = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-    if (overlay) {
-        lv_obj_add_flag(overlay, LV_OBJ_FLAG_HIDDEN);
-        spdlog::debug("[PrintStatusPanel] Dismissed print end overlay");
-    }
+    (void)e;
+    // XML binding on each overlay hides when end_overlay_dismissed == 1.
+    lv_subject_set_int(&get_global_print_status_panel().end_overlay_dismissed_subject_, 1);
+    spdlog::debug("[PrintStatusPanel] Dismissed print end overlay");
     LVGL_SAFE_EVENT_CB_END();
 }
 
@@ -1451,21 +1454,10 @@ void PrintStatusPanel::on_view_toggle_clicked(lv_event_t* e) {
         }
     }
 
-    // Update icon — search within the gcode viewer's parent card
-    lv_obj_t* icon_label = nullptr;
-    if (panel.gcode_viewer_) {
-        lv_obj_t* card = lv_obj_get_parent(panel.gcode_viewer_);
-        if (card) {
-            icon_label = lv_obj_find_by_name(card, "btn_view_toggle_icon");
-        }
-    }
-    if (icon_label) {
-        // Resolve global string since lv_label_set_text does not resolve # prefix
-        const char* icon_text = panel.complete_view_mode_ ? lv_xml_get_const(nullptr, "icon_layers")
-                                                          : lv_xml_get_const(nullptr, "icon_cube");
-        if (icon_text) {
-            lv_label_set_text(icon_label, icon_text);
-        }
+    const char* icon_text =
+        lv_xml_get_const(nullptr, panel.complete_view_mode_ ? "icon_layers" : "icon_cube");
+    if (icon_text) {
+        lv_subject_copy_string(&panel.view_toggle_icon_subject_, icon_text);
     }
 
     spdlog::debug("[PrintStatusPanel] View toggle: {}",
@@ -1701,17 +1693,11 @@ void PrintStatusPanel::on_print_state_changed(PrintJobState job_state) {
         }
         complete_view_mode_ = false;
         // Reset toggle icon to default (progress view)
-        if (gcode_viewer_) {
-            lv_obj_t* card = lv_obj_get_parent(gcode_viewer_);
-            if (card) {
-                lv_obj_t* icon_label = lv_obj_find_by_name(card, "btn_view_toggle_icon");
-                if (icon_label) {
-                    const char* icon = lv_xml_get_const(nullptr, "icon_cube");
-                    if (icon)
-                        lv_label_set_text(icon_label, icon);
-                }
-            }
+        if (const char* icon = lv_xml_get_const(nullptr, "icon_cube")) {
+            lv_subject_copy_string(&view_toggle_icon_subject_, icon);
         }
+        // Clear any prior end-overlay dismissal so the next outcome surfaces.
+        lv_subject_set_int(&end_overlay_dismissed_subject_, 0);
         spdlog::debug("[{}] Reset progress bar and view toggle for new print", get_name());
     }
 
@@ -2133,28 +2119,8 @@ void PrintStatusPanel::update_button_states() {
     lv_subject_set_int(&btn_pause_enabled_subject_, pause_enabled ? 1 : 0);
     lv_subject_set_int(&btn_cancel_enabled_subject_, cancel_enabled ? 1 : 0);
 
-    // Sync Cancel/Reprint visibility from current print_outcome.
-    // XML bind_flag_if_eq/bind_flag_if_not_eq bindings normally handle this,
-    // but they can be lost during widget lifecycle transitions (#546).
-    auto outcome =
-        static_cast<PrintOutcome>(lv_subject_get_int(printer_state_.get_print_outcome_subject()));
-    bool is_terminal = (outcome != PrintOutcome::NONE);
-    if (btn_cancel_) {
-        if (is_terminal) {
-            lv_obj_add_flag(btn_cancel_, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_remove_flag(btn_cancel_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
-    if (btn_reprint_) {
-        if (is_terminal) {
-            lv_obj_remove_flag(btn_reprint_, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_remove_state(btn_reprint_, LV_STATE_DISABLED);
-            lv_obj_set_style_opa(btn_reprint_, LV_OPA_COVER, LV_PART_MAIN);
-        } else {
-            lv_obj_add_flag(btn_reprint_, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
+    // Cancel/Reprint visibility is driven entirely by the print_outcome subject
+    // via bind_flag_if_eq / bind_flag_if_not_eq on the <ui_button> elements.
 
     spdlog::debug("[{}] Button states updated: controls={}, pause={}, cancel={} (state={})",
                   get_name(), controls_enabled ? "enabled" : "disabled",

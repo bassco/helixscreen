@@ -737,6 +737,32 @@ void ui_button_apply(lv_xml_parser_state_t* state, const char** attrs) {
             spdlog::trace("[ui_button] Set icon name to '{}'", icon_name);
         }
     }
+
+    // Attribute-level analog of the `<bind_flag_if_eq subject="ui_breakpoint"
+    // flag="hidden" ref_value="N"/>` child pattern used on plain XML objects —
+    // but targeting the internal label instead of the button itself, which XML
+    // child bindings can't reach. Lets `ui_button` collapse to icon-only at a
+    // specific breakpoint without parallel button instances.
+    const char* label_hidden_bp = lv_xml_get_value_of(attrs, "label_hidden_if_bp_eq");
+    if (label_hidden_bp && data && data->magic == UiButtonData::MAGIC && data->label) {
+        lv_subject_t* bp_subject = lv_xml_get_subject(&state->scope, "ui_breakpoint");
+        if (bp_subject) {
+            intptr_t ref_val = static_cast<intptr_t>(atoi(label_hidden_bp));
+            lv_subject_add_observer_obj(
+                bp_subject,
+                [](lv_observer_t* o, lv_subject_t* s) {
+                    auto* target = static_cast<lv_obj_t*>(lv_observer_get_target_obj(o));
+                    intptr_t ref = reinterpret_cast<intptr_t>(lv_observer_get_user_data(o));
+                    ui_button_set_label_hidden(target, lv_subject_get_int(s) == ref);
+                },
+                btn, reinterpret_cast<void*>(ref_val));
+            spdlog::trace("[ui_button] label_hidden_if_bp_eq={} bound to ui_breakpoint",
+                          static_cast<int>(ref_val));
+        } else {
+            spdlog::warn("[ui_button] label_hidden_if_bp_eq set but ui_breakpoint subject "
+                         "not found");
+        }
+    }
 }
 
 } // namespace
@@ -783,4 +809,19 @@ void ui_button_set_icon(lv_obj_t* btn, const char* icon_name) {
 
     lv_label_set_text(data->icon, codepoint);
     lv_obj_invalidate(btn);
+}
+
+void ui_button_set_label_hidden(lv_obj_t* btn, bool hidden) {
+    if (!btn) {
+        return;
+    }
+    auto* data = static_cast<UiButtonData*>(lv_obj_get_user_data(btn));
+    if (!data || data->magic != UiButtonData::MAGIC || !data->label) {
+        return;
+    }
+    if (hidden) {
+        lv_obj_add_flag(data->label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(data->label, LV_OBJ_FLAG_HIDDEN);
+    }
 }

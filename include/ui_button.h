@@ -88,3 +88,13 @@ void ui_button_set_text(lv_obj_t* btn, const char* text);
  * a ui_button or if the button has no icon.
  */
 void ui_button_set_icon(lv_obj_t* btn, const char* icon_name);
+
+/**
+ * @brief Show or hide the internal label of a ui_button
+ *
+ * Toggles LV_OBJ_FLAG_HIDDEN on the button's label widget, leaving the
+ * icon untouched. The label's text and translation tag are preserved, so
+ * restoring visibility requires no re-bind. Safe to call on any lv_obj —
+ * returns silently if not a ui_button or if the button has no label.
+ */
+void ui_button_set_label_hidden(lv_obj_t* btn, bool hidden);
