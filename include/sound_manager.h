@@ -84,6 +84,9 @@ class SoundManager {
     /// Scan config/sounds/ for available .json theme files
     std::vector<std::string> get_available_themes() const;
 
+    /// Get sorted list of sound names in the current theme
+    std::vector<std::string> get_sound_names() const;
+
     /// Check if sound playback is available (backend exists + sounds enabled)
     [[nodiscard]] bool is_available() const;
 

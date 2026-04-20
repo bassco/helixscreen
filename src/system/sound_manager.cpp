@@ -242,6 +242,16 @@ std::vector<std::string> SoundManager::get_available_themes() const {
     return themes;
 }
 
+std::vector<std::string> SoundManager::get_sound_names() const {
+    std::vector<std::string> names;
+    names.reserve(current_theme_.sounds.size());
+    for (const auto& [key, _] : current_theme_.sounds) {
+        names.push_back(key);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
 bool SoundManager::is_available() const {
     return initialized_ && backend_ != nullptr &&
            AudioSettingsManager::instance().get_sounds_enabled();
