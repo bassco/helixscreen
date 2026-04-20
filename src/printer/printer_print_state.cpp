@@ -85,6 +85,14 @@ void PrinterPrintState::init_subjects(bool register_xml) {
     INIT_SUBJECT_STRING(display_message, "", subjects_, register_xml);
     INIT_SUBJECT_INT(display_message_visible, 0, subjects_, register_xml);
 
+    // Pre-populate per-extruder filament_used map. Freezing the map structure
+    // here eliminates the BG-thread emplace vs UI-thread read rehash race
+    // (see header). update_from_status and the accessor both do direct
+    // lookups and never mutate the map after this point.
+    for (int idx = 0; idx < kMaxExtruderScan; ++idx) {
+        create_extruder_filament_entry(idx);
+    }
+
     subjects_initialized_ = true;
     spdlog::trace("[PrinterPrintState] Subjects initialized successfully");
 }
@@ -96,15 +104,15 @@ void PrinterPrintState::deinit_subjects() {
 
     spdlog::trace("[PrinterPrintState] Deinitializing subjects");
 
-    // Per-extruder filament_used subjects are dynamic: signal subject death
-    // BEFORE deinit so all ObserverGuards (including those still holding
-    // shared_ptr copies) detect the subject as dead and skip lv_observer_remove()
-    // on the about-to-be-freed observers (#816).
+    // Per-extruder filament_used subjects are dynamic: for each entry, signal
+    // subject death BEFORE deinit so all ObserverGuards (including those still
+    // holding shared_ptr copies) detect the subject as dead and skip
+    // lv_observer_remove() on the about-to-be-freed observers (#816).
     for (auto& [idx, info] : extruder_filament_used_) {
-        if (info.lifetime) *info.lifetime = false;
+        if (info.lifetime) {
+            *info.lifetime = false;
+        }
         info.lifetime.reset();
-    }
-    for (auto& [idx, info] : extruder_filament_used_) {
         if (info.subject) {
             lv_subject_deinit(info.subject.get());
         }
@@ -115,27 +123,27 @@ void PrinterPrintState::deinit_subjects() {
     subjects_initialized_ = false;
 }
 
-PrinterPrintState::ExtruderFilamentInfo&
-PrinterPrintState::ensure_extruder_filament_entry(int extruder_idx) {
-    auto it = extruder_filament_used_.find(extruder_idx);
-    if (it != extruder_filament_used_.end()) {
-        return it->second;
-    }
+void PrinterPrintState::create_extruder_filament_entry(int extruder_idx) {
     ExtruderFilamentInfo info;
     info.subject = std::make_unique<lv_subject_t>();
     lv_subject_init_int(info.subject.get(), 0);
     info.lifetime = std::make_shared<bool>(true);
-    auto [ins, _] = extruder_filament_used_.emplace(extruder_idx, std::move(info));
-    spdlog::trace("[PrinterPrintState] Created per-extruder filament_used subject for idx={}",
-                  extruder_idx);
-    return ins->second;
+    extruder_filament_used_.emplace(extruder_idx, std::move(info));
 }
 
 lv_subject_t* PrinterPrintState::get_extruder_filament_used_subject(int extruder_idx,
                                                                     SubjectLifetime& lifetime) {
-    auto& info = ensure_extruder_filament_entry(extruder_idx);
-    lifetime = info.lifetime;
-    return info.subject.get();
+    // Direct lookup only — the map is frozen after init_subjects().
+    // No emplace on the UI thread, no races with the BG-thread status updater.
+    auto it = extruder_filament_used_.find(extruder_idx);
+    if (it == extruder_filament_used_.end()) {
+        spdlog::warn("[PrinterPrintState] get_extruder_filament_used_subject({}) out of range or "
+                     "subjects not initialized (kMaxExtruderScan={})",
+                     extruder_idx, kMaxExtruderScan);
+        return nullptr;
+    }
+    lifetime = it->second.lifetime;
+    return it->second.subject.get();
 }
 
 void PrinterPrintState::reset_for_new_print() {
@@ -447,24 +455,31 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
 
     // Per-extruder filament_used (from Klipper's extruder/extruder1/... objects).
     // Keys live at the top level of the status payload, NOT under print_stats.
-    // We scan a small fixed range (0..15) — Klipper toolchanger setups max out
-    // well below that. Missing keys are silently skipped.
+    // We scan a small fixed range (0..kMaxExtruderScan-1) — Klipper toolchanger
+    // setups max out well below that. Missing keys are silently skipped.
     //
-    // Subjects are created lazily: if a status update for extruder2 arrives
-    // before anything observes it, we still create the subject so subsequent
-    // observers see the latest value.
-    constexpr int kMaxExtruderScan = 16;
+    // All map entries are pre-populated by init_subjects(). We do a direct
+    // lookup and only mutate the int value inside the subject, so this runs
+    // safely on the WebSocket background thread without racing the UI
+    // accessor (no rehash, lv_subject_set_int is atomic on the int).
     for (int idx = 0; idx < kMaxExtruderScan; ++idx) {
         std::string key = (idx == 0) ? "extruder" : "extruder" + std::to_string(idx);
-        auto it = status.find(key);
-        if (it == status.end() || !it->is_object()) {
+        auto json_it = status.find(key);
+        if (json_it == status.end() || !json_it->is_object()) {
             continue;
         }
-        if (!it->contains("filament_used") || !(*it)["filament_used"].is_number()) {
+        if (!json_it->contains("filament_used") || !(*json_it)["filament_used"].is_number()) {
             continue;
         }
-        int mm = static_cast<int>((*it)["filament_used"].get<double>());
-        auto& info = ensure_extruder_filament_entry(idx);
+        int mm = static_cast<int>((*json_it)["filament_used"].get<double>());
+        auto map_it = extruder_filament_used_.find(idx);
+        if (map_it == extruder_filament_used_.end()) {
+            // Cannot happen after init_subjects() pre-population; defensive log.
+            spdlog::warn("[PrinterPrintState] extruder{} filament_used entry missing (init skipped?)",
+                         idx);
+            continue;
+        }
+        auto& info = map_it->second;
         if (info.subject && lv_subject_get_int(info.subject.get()) != mm) {
             lv_subject_set_int(info.subject.get(), mm);
         }
