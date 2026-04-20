@@ -95,11 +95,8 @@ class PrinterDiscovery {
             // Generic heaters (e.g., "heater_generic chamber")
             else if (name.rfind("heater_generic ", 0) == 0) {
                 heaters_.push_back(name);
-                // Check for chamber heater ("cavity" is a Snapmaker-ism for the same thing)
                 std::string heater_name = name.substr(15); // Remove "heater_generic " prefix
-                std::string upper = to_upper(heater_name);
-                if (upper.find("CHAMBER") != std::string::npos ||
-                    upper.find("CAVITY") != std::string::npos) {
+                if (is_chamber_keyword(heater_name)) {
                     has_chamber_heater_ = true;
                     chamber_heater_name_ = name;
                     chamber_heater_object_name_ = heater_name;
@@ -110,11 +107,10 @@ class PrinterDiscovery {
             // ================================================================
             else if (name.rfind("temperature_sensor ", 0) == 0) {
                 sensors_.push_back(name);
-                // Check for chamber sensor ("cavity" is a Snapmaker-ism for the same thing)
+                // Match chamber-equivalent names. Elegoo COSMOS uses "box",
+                // Snapmaker uses "cavity", many mods use "enclosure".
                 std::string sensor_name = name.substr(19); // Remove "temperature_sensor " prefix
-                std::string upper = to_upper(sensor_name);
-                if (upper.find("CHAMBER") != std::string::npos ||
-                    upper.find("CAVITY") != std::string::npos) {
+                if (is_chamber_keyword(sensor_name)) {
                     has_chamber_sensor_ = true;
                     chamber_sensor_name_ = name;
                 }
@@ -123,11 +119,8 @@ class PrinterDiscovery {
             else if (name.rfind("temperature_fan ", 0) == 0) {
                 sensors_.push_back(name);
                 fans_.push_back(name); // Also add to fans for control
-                // Check for chamber temperature_fan ("cavity" synonym, as above)
                 std::string fan_name = name.substr(16); // Remove "temperature_fan " prefix
-                std::string upper = to_upper(fan_name);
-                if (upper.find("CHAMBER") != std::string::npos ||
-                    upper.find("CAVITY") != std::string::npos) {
+                if (is_chamber_keyword(fan_name)) {
                     has_chamber_heater_ = true;
                     chamber_heater_name_ = name;
                     chamber_heater_object_name_ = fan_name;
@@ -1090,6 +1083,18 @@ class PrinterDiscovery {
         std::transform(result.begin(), result.end(), result.begin(),
                        [](unsigned char c) { return std::toupper(c); });
         return result;
+    }
+
+    // Chamber/enclosure keyword match for sensor, fan, and heater object names.
+    // Vendors diverge: Creality uses "chamber", Snapmaker uses "cavity", Elegoo
+    // COSMOS uses "box", modders often use "enclosure". Substring match (not
+    // whole-word) matches compound names like "chamber_temp", "cavity_fan".
+    static bool is_chamber_keyword(const std::string& object_name) {
+        std::string upper = to_upper(object_name);
+        return upper.find("CHAMBER") != std::string::npos ||
+               upper.find("CAVITY") != std::string::npos ||
+               upper.find("ENCLOSURE") != std::string::npos ||
+               upper.find("BOX") != std::string::npos;
     }
 
     // Helper: natural sort — splits on trailing digits so "lane2" < "lane10"
