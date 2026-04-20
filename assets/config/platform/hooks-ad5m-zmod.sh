@@ -42,9 +42,24 @@ platform_enable_backlight() {
     return 0
 }
 
-# ZMOD systems do not need Moonraker wait — memory is not as constrained
-# as ForgeX and there is no boot sequence contention.
+# ZMOD cold-boot readiness probe.
+#
+# ZMOD ships S80guppyscreen; we install as S80helixscreen. Alphabetical ordering
+# runs guppyscreen first in the same init slot, and on a cold boot the display
+# framebuffer may not be stable by the time we try to take it over. A short
+# probe for /dev/fb0 smooths over the race. Moonraker readiness is not checked
+# here — helix-screen handles a disconnected Moonraker gracefully.
 platform_wait_for_services() {
+    local fb_timeout=10
+    local fb_waited=0
+    while [ "$fb_waited" -lt "$fb_timeout" ]; do
+        if [ -c /dev/fb0 ] && [ -r /dev/fb0 ]; then
+            return 0
+        fi
+        sleep 1
+        fb_waited=$((fb_waited + 1))
+    done
+    echo "Warning: /dev/fb0 not ready after ${fb_timeout}s, starting anyway"
     return 0
 }
 
