@@ -814,7 +814,7 @@ endif
 # Cross-Compilation Build Targets
 # =============================================================================
 
-.PHONY: pi pi-both pi32 pi32-both ad5m cc1 mips k1 ad5x k1-dynamic k2 snapmaker-u1 x86 x86-both pi-docker pi32-docker ad5m-docker cc1-docker mips-docker k1-docker ad5x-docker k1-dynamic-docker k2-docker snapmaker-u1-docker x86-docker x86-fbdev-docker x86-all-docker docker-toolchains docker-toolchain-snapmaker-u1 docker-toolchain-x86 cross-info ensure-docker ensure-buildx maybe-stop-colima
+.PHONY: pi pi-both pi32 pi32-both ad5m ad5m-br cc1 mips k1 ad5x k1-dynamic k2 snapmaker-u1 x86 x86-both pi-docker pi32-docker ad5m-docker cc1-docker mips-docker k1-docker ad5x-docker k1-dynamic-docker k2-docker snapmaker-u1-docker x86-docker x86-fbdev-docker x86-all-docker docker-toolchains docker-toolchain-snapmaker-u1 docker-toolchain-x86 cross-info ensure-docker ensure-buildx maybe-stop-colima
 
 # Persistent ccache for Docker builds — bind-mounts a host directory so the
 # cache survives across container runs (the container is --rm).  Per-platform

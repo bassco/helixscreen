@@ -741,7 +741,7 @@ TRACKER_CXXFLAGS :=
 ifneq (,$(filter pi pi-fbdev pi-both pi32 pi32-fbdev pi32-both x86 x86-fbdev x86-both,$(PLATFORM_TARGET)))
     SOUND_CXXFLAGS := -DHELIX_HAS_SOUND
     TRACKER_CXXFLAGS := -DHELIX_HAS_TRACKER
-else ifneq (,$(filter ad5m ad5x,$(PLATFORM_TARGET)))
+else ifneq (,$(filter ad5m ad5m-br ad5x,$(PLATFORM_TARGET)))
     # AD5M/AD5X: PWM buzzer for tone-mode SFX only.
     # Tracker (MOD/MED) DISABLED — the PCM render thread's busy-wait loop
     # starves the single-core CPU, killing active prints and blocking

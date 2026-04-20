@@ -48,3 +48,45 @@ load helpers
         return 1
     }
 }
+
+@test "ad5m-br: sound enabled (HELIX_HAS_SOUND), tracker disabled" {
+    run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE= CC=gcc CXX=g++ print-cxxflags
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q 'DHELIX_HAS_SOUND' || {
+        echo "Expected -DHELIX_HAS_SOUND in ad5m-br CXXFLAGS:"
+        echo "$output"
+        return 1
+    }
+    ! echo "$output" | grep -q 'DHELIX_HAS_TRACKER' || {
+        echo "Unexpected -DHELIX_HAS_TRACKER (should be off on ad5m-br):"
+        echo "$output"
+        return 1
+    }
+}
+
+@test "ad5m-br: no libusb" {
+    # Pass CROSS_COMPILE so the cross-target LDFLAGS branch fires and libusb
+    # filter is evaluated meaningfully.
+    run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE=arm-buildroot-linux-gnueabihf- CC=gcc CXX=g++ print-ldflags
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -qE '(^|[[:space:]"])-lusb-1\.0([[:space:]"]|$)' || {
+        echo "Unexpected -lusb-1.0 in ad5m-br LDFLAGS:"
+        echo "$output"
+        return 1
+    }
+}
+
+@test "ad5m-br: OpenSSL linked dynamically (no -Wl,-Bstatic -lssl)" {
+    run make -n PLATFORM_TARGET=ad5m-br CROSS_COMPILE=arm-buildroot-linux-gnueabihf- CC=gcc CXX=g++ print-ldflags
+    [ "$status" -eq 0 ]
+    ! echo "$output" | grep -qE -- '-Wl,-Bstatic[[:space:]]+-lssl' || {
+        echo "OpenSSL is statically linked in ad5m-br (should be dynamic):"
+        echo "$output"
+        return 1
+    }
+    echo "$output" | grep -qE -- '-lssl' || {
+        echo "Expected -lssl in ad5m-br LDFLAGS:"
+        echo "$output"
+        return 1
+    }
+}
