@@ -13,6 +13,7 @@
 #include "static_subject_registry.h"
 #include "theme_loader.h"
 #include "theme_manager.h"
+#include "timezone_env.h"
 #include "wizard_config_paths.h"
 
 #include <algorithm>
@@ -242,9 +243,11 @@ void DisplaySettingsManager::init_subjects() {
     }
     UI_MANAGED_SUBJECT_INT(timezone_subject_, tz_index, "settings_timezone", subjects_);
 
-    // Apply timezone immediately
-    setenv("TZ", tz.c_str(), 1);
-    tzset();
+    // Apply timezone immediately. On devices without /usr/share/zoneinfo/ (notably
+    // Elegoo Centauri Carbon / OpenCentauri COSMOS), this points TZDIR at the
+    // bundled assets/zoneinfo/ so the zone resolves instead of silently falling
+    // back to UTC.
+    helix::timezone_env::apply(tz.c_str());
     spdlog::info("[DisplaySettingsManager] Timezone set to '{}' (index {})", tz, tz_index);
 
 #ifdef HELIX_ENABLE_SCREENSAVER
@@ -667,9 +670,8 @@ void DisplaySettingsManager::set_timezone_by_index(int index) {
 
     lv_subject_set_int(&timezone_subject_, index);
 
-    // Apply timezone to process
-    setenv("TZ", iana_id, 1);
-    tzset();
+    // Apply timezone to process (see init_subjects for bundled-zoneinfo note).
+    helix::timezone_env::apply(iana_id);
 
     // Persist
     Config* config = Config::get_instance();

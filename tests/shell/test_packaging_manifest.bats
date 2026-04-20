@@ -61,6 +61,7 @@ SCRIPT="scripts/gen-packaging-manifest.sh"
         assets/fonts
         assets/images
         assets/sounds
+        assets/zoneinfo
         ui_xml
         ui_xml/components
         ui_xml/translations
