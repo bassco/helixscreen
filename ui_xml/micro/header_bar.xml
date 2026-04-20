@@ -20,6 +20,9 @@
     <prop name="action_button_text_tag" type="string" default=""/>
     <!-- Icon-based action button (use action_button_icon instead of text) -->
     <prop name="action_button_icon" type="string" default=""/>
+    <!-- Icon size for action_button: sm (default), md, lg. md/lg scale the -->
+    <!-- icon-only e-stop glyph up on micro/small displays. -->
+    <prop name="action_button_icon_size" type="string" default="sm"/>
     <!-- Hide the icon in action button (for text-only buttons) -->
     <prop name="hide_action_button_icon" type="string" default="false"/>
     <!-- Hide the text label in action button (for icon-only circular buttons) -->
@@ -73,6 +76,7 @@
     <ui_button name="action_button"
                width="$action_button_width" height="$action_button_height" style_radius="$action_button_radius"
                style_bg_color="$action_button_bg_color" hidden="$hide_action_button" icon="$action_button_icon"
+               icon_size="$action_button_icon_size"
                text="$action_button_text" translation_tag="$action_button_text_tag">
       <!-- Reactive disabled state binding (enabled when subject exists and is non-empty) -->
       <bind_state_if_eq subject="$action_button_disabled_subject" state="disabled" ref_value="1"/>

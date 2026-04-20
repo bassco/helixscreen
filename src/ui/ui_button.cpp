@@ -37,20 +37,13 @@ struct UiButtonData {
 };
 
 /**
- * @brief Get icon font for button icons (responsive via icon_font_sm)
+ * @brief Resolve an icon font by XML const name (e.g. icon_font_sm/md/lg)
  *
- * Resolves once and caches the result. Falls back to mdi_icons_24
- * if the XML constant is missing or the font is not compiled.
+ * Falls back to mdi_icons_24 if the constant is missing or the font isn't
+ * compiled in. Not cached — callers pass one of a small set of names and
+ * LVGL's const lookup is already cheap.
  */
-static const lv_font_t* get_button_icon_font() {
-    static const lv_font_t* cached = nullptr;
-    static bool resolved = false;
-    if (resolved) {
-        return cached;
-    }
-
-    static const char* const xml_const = "icon_font_sm";
-
+static const lv_font_t* resolve_icon_font(const char* xml_const) {
     const lv_font_t* font = nullptr;
     const char* font_name = lv_xml_get_const_silent(nullptr, xml_const);
     if (font_name) {
@@ -60,19 +53,26 @@ static const lv_font_t* get_button_icon_font() {
                           font_name, xml_const);
         }
     } else {
-        spdlog::error("[ui_button] Font constant '{}' not found in globals.xml — using fallback",
-                      xml_const);
+        spdlog::error("[ui_button] Font constant '{}' not found — using fallback", xml_const);
     }
+    return font ? font : &mdi_icons_24;
+}
 
-    if (!font) {
-        font = &mdi_icons_24;
+/**
+ * @brief Get the default button icon font (icon_font_sm).
+ *
+ * Cached because the same value is used for every standard button.
+ */
+static const lv_font_t* get_button_icon_font() {
+    static const lv_font_t* cached = nullptr;
+    static bool resolved = false;
+    if (resolved) {
+        return cached;
     }
-
-    spdlog::debug("[ui_button] Using button icon font — line_height={}px",
-                  lv_font_get_line_height(font));
-
-    cached = font;
+    cached = resolve_icon_font("icon_font_sm");
     resolved = true;
+    spdlog::debug("[ui_button] Default button icon font — line_height={}px",
+                  lv_font_get_line_height(cached));
     return cached;
 }
 
@@ -229,7 +229,8 @@ void button_delete_cb(lv_event_t* e) {
  * @param icon_name Icon name (e.g., "settings", "heat_wave")
  * @return Created icon widget or nullptr on failure
  */
-lv_obj_t* create_button_icon(lv_obj_t* btn, const char* icon_name) {
+lv_obj_t* create_button_icon(lv_obj_t* btn, const char* icon_name,
+                             const char* size_override = nullptr) {
     if (!icon_name || strlen(icon_name) == 0) {
         return nullptr;
     }
@@ -249,10 +250,20 @@ lv_obj_t* create_button_icon(lv_obj_t* btn, const char* icon_name) {
         return nullptr;
     }
 
+    // Pick the icon font. "sm" / empty => default (cached); "md"/"lg" read the
+    // matching responsive const so callers can oversize icon-only buttons
+    // (e.g. e-stop at micro) without pulling the rest of the UI with them.
+    const lv_font_t* font = get_button_icon_font();
+    if (size_override && size_override[0] && strcmp(size_override, "sm") != 0) {
+        char const_name[32];
+        snprintf(const_name, sizeof(const_name), "icon_font_%s", size_override);
+        font = resolve_icon_font(const_name);
+    }
+
     // Create icon as lv_label with MDI font
     lv_obj_t* icon = lv_label_create(btn);
     lv_label_set_text(icon, codepoint);
-    lv_obj_set_style_text_font(icon, get_button_icon_font(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(icon, font, LV_PART_MAIN);
 
     spdlog::trace("[ui_button] Created icon '{}' -> codepoint", icon_name);
     return icon;
@@ -347,6 +358,10 @@ void* ui_button_create(lv_xml_parser_state_t* state, const char** attrs) {
 
     // Parse icon attribute
     const char* icon_name = lv_xml_get_value_of(attrs, "icon");
+    // Optional icon size override: "sm" (default), "md", "lg". Maps to
+    // icon_font_<size> in globals.xml so icon-only buttons can scale up
+    // on small displays without bumping icon_font_sm globally.
+    const char* icon_size = lv_xml_get_value_of(attrs, "icon_size");
 
     // Parse icon_position attribute (default: left)
     // Supported values: "left" (default), "right", "top", "bottom"
@@ -390,10 +405,10 @@ void* ui_button_create(lv_xml_parser_state_t* state, const char** attrs) {
                 // Text first, then icon
                 data->label = lv_label_create(btn);
                 lv_label_set_text(data->label, label_text);
-                data->icon = create_button_icon(btn, icon_name);
+                data->icon = create_button_icon(btn, icon_name, icon_size);
             } else {
                 // Icon first (top), then text
-                data->icon = create_button_icon(btn, icon_name);
+                data->icon = create_button_icon(btn, icon_name, icon_size);
                 data->label = lv_label_create(btn);
                 lv_label_set_text(data->label, label_text);
             }
@@ -415,17 +430,17 @@ void* ui_button_create(lv_xml_parser_state_t* state, const char** attrs) {
                 // Text first, then icon
                 data->label = lv_label_create(btn);
                 lv_label_set_text(data->label, label_text);
-                data->icon = create_button_icon(btn, icon_name);
+                data->icon = create_button_icon(btn, icon_name, icon_size);
             } else {
                 // Icon first (left), then text
-                data->icon = create_button_icon(btn, icon_name);
+                data->icon = create_button_icon(btn, icon_name, icon_size);
                 data->label = lv_label_create(btn);
                 lv_label_set_text(data->label, label_text);
             }
         }
     } else if (has_icon) {
         // Icon only: center the icon, no label needed
-        data->icon = create_button_icon(btn, icon_name);
+        data->icon = create_button_icon(btn, icon_name, icon_size);
         if (data->icon) {
             lv_obj_center(data->icon);
         }
