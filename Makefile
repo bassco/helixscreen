@@ -822,7 +822,7 @@ MOCK_OBJS := $(patsubst $(TEST_MOCK_DIR)/%.cpp,$(OBJ_DIR)/tests/mocks/%.o,$(MOCK
 # Default target
 .DEFAULT_GOAL := all
 
-.PHONY: all build clean run test tests test-integration test-cards test-print-select test-size-content demo compile_commands compile_commands_full libhv-build apply-patches generate-fonts validate-fonts regen-fonts update-mdi-cache verify-mdi-codepoints help check-deps install-deps venv-setup icon format format-staged screenshots tools moonraker-inspector strict quality setup translations symbols strip dev
+.PHONY: all build clean run test tests test-integration test-cards test-print-select test-size-content demo compile_commands compile_commands_full libhv-build apply-patches generate-fonts validate-fonts regen-fonts update-mdi-cache verify-mdi-codepoints help check-deps install-deps venv-setup icon format format-staged screenshots tools moonraker-inspector strict quality setup translations symbols strip dev install
 
 # Fast development build: -O0 skips optimization passes (~2x faster compilation)
 # Library code still builds at -O2 (via SUBMODULE_CFLAGS) since it rarely changes
@@ -985,3 +985,67 @@ print-target-cflags:
 	@echo "$(TARGET_CFLAGS)"
 print-cxxflags:
 	@echo "$(CXXFLAGS)"
+
+# =============================================================================
+# Install target — stages binary + assets under $(DESTDIR)/opt/helixscreen/
+#
+# Used by external buildroot/yocto/debian packaging (e.g. kmod's helixscreen.mk).
+# DESTDIR is mandatory; no system-wide install supported (by design — HelixScreen
+# runs as a dedicated embedded UI, not a general-purpose package).
+#
+# Layout:
+#   $(DESTDIR)/opt/helixscreen/
+#     bin/          helix-screen, helix-splash, helix-watchdog (if built)
+#     ui_xml/       runtime XML layouts (components, panels, translations)
+#     assets/
+#       fonts/      (only tiers enabled for this platform)
+#       images/     LVGL bitmaps, SVGs
+#       sounds/     platform-compatible sounds
+#       config/     default printer database, presets, platform hooks
+#     certs/        ca-certificates.crt (for HTTPS, if bundled)
+#
+# Runtime writable state (config, cache, logs) is NOT installed. Init scripts
+# create /data/helixscreen/{config,cache,log}/ on first boot.
+# =============================================================================
+.PHONY: install
+install:
+	@if [ -z "$(DESTDIR)" ]; then \
+		echo "$(RED)error: DESTDIR is required (e.g. make install DESTDIR=/tmp/staging)$(RESET)" >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$(BUILD_SUBDIR)" ]; then \
+		echo "$(RED)error: PLATFORM_TARGET must be set (e.g. PLATFORM_TARGET=ad5m-br)$(RESET)" >&2; \
+		exit 1; \
+	fi
+	@if [ ! -x "$(BIN_DIR)/helix-screen" ]; then \
+		echo "$(RED)error: $(BIN_DIR)/helix-screen not found — run '$(MAKE) PLATFORM_TARGET=$(PLATFORM_TARGET)' first$(RESET)" >&2; \
+		exit 1; \
+	fi
+	@echo "$(BOLD)Installing to $(DESTDIR)/opt/helixscreen/$(RESET)"
+	@install -d "$(DESTDIR)/opt/helixscreen/bin"
+	@install -m 0755 "$(BIN_DIR)/helix-screen" "$(DESTDIR)/opt/helixscreen/bin/helix-screen"
+	@if [ -x "$(BIN_DIR)/helix-splash" ]; then \
+		install -m 0755 "$(BIN_DIR)/helix-splash" "$(DESTDIR)/opt/helixscreen/bin/helix-splash"; \
+	fi
+	@if [ -x "$(BIN_DIR)/helix-watchdog" ]; then \
+		install -m 0755 "$(BIN_DIR)/helix-watchdog" "$(DESTDIR)/opt/helixscreen/bin/helix-watchdog"; \
+	fi
+	@echo "  → binaries"
+	@# ui_xml: copy tree as-is (loaded at runtime)
+	@install -d "$(DESTDIR)/opt/helixscreen/ui_xml"
+	@cp -a ui_xml/. "$(DESTDIR)/opt/helixscreen/ui_xml/"
+	@echo "  → ui_xml/"
+	@# assets: fonts, images, sounds, config
+	@install -d "$(DESTDIR)/opt/helixscreen/assets"
+	@if [ -d assets/fonts ]; then cp -a assets/fonts "$(DESTDIR)/opt/helixscreen/assets/"; fi
+	@if [ -d assets/images ]; then cp -a assets/images "$(DESTDIR)/opt/helixscreen/assets/"; fi
+	@if [ -d assets/sounds ]; then cp -a assets/sounds "$(DESTDIR)/opt/helixscreen/assets/"; fi
+	@if [ -d assets/config ]; then cp -a assets/config "$(DESTDIR)/opt/helixscreen/assets/"; fi
+	@echo "  → assets/"
+	@# certs (optional — only present after `make ad5m-docker` fetched them)
+	@if [ -f "$(BUILD_DIR)/certs/ca-certificates.crt" ]; then \
+		install -d "$(DESTDIR)/opt/helixscreen/certs"; \
+		install -m 0644 "$(BUILD_DIR)/certs/ca-certificates.crt" "$(DESTDIR)/opt/helixscreen/certs/"; \
+		echo "  → certs/"; \
+	fi
+	@echo "$(GREEN)Install complete: $(DESTDIR)/opt/helixscreen/$(RESET)"
