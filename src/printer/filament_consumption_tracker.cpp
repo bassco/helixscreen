@@ -20,6 +20,10 @@ FilamentConsumptionTracker& FilamentConsumptionTracker::instance() {
 }
 
 void FilamentConsumptionTracker::start() {
+    // Idempotent: a second start() without stop() would leak observers.
+    if (print_state_obs_) {
+        return;
+    }
     PrinterState& printer = get_printer_state();
 
     print_state_obs_ = helix::ui::observe_int_sync<FilamentConsumptionTracker>(

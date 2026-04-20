@@ -20,6 +20,10 @@ namespace {
 constexpr uint32_t kPersistIntervalMs = 60'000;
 constexpr float kDeltaWriteThresholdG = 0.05f;
 constexpr float kRebaselineThresholdG = 0.5f;
+// TODO(filament-diameter): SlotInfo/external-spool don't carry filament
+// diameter yet. 1.75 mm is correct for ~99% of hobbyist setups; wire from
+// a per-spool field once Spoolman exposes it.
+constexpr float kDefaultDiameterMm = 1.75f;
 } // namespace
 
 std::string_view ExternalSpoolSink::name() const {
@@ -43,9 +47,8 @@ void ExternalSpoolSink::snapshot(float filament_used_mm) {
         return;
     }
     const auto& info = *info_opt;
-    if (info.remaining_weight_g <= 0.0f) {
-        spdlog::debug(
-            "[ConsumptionSink:external] Unknown/empty remaining weight; skipping");
+    if (info.remaining_weight_g < 0.0f) {
+        spdlog::debug("[ConsumptionSink:external] Unknown remaining weight; skipping");
         return;
     }
     auto material = filament::find_material(info.material);
@@ -57,10 +60,7 @@ void ExternalSpoolSink::snapshot(float filament_used_mm) {
         return;
     }
     density_g_cm3_ = material->density_g_cm3;
-    // TODO(filament-diameter): SlotInfo/external-spool don't carry filament
-    // diameter yet. 1.75 mm is correct for ~99% of hobbyist setups; wire from
-    // a per-spool field once Spoolman exposes it.
-    diameter_mm_ = 1.75f;
+    diameter_mm_ = kDefaultDiameterMm;
     snapshot_mm_ = filament_used_mm;
     snapshot_weight_g_ = info.remaining_weight_g;
     last_written_weight_g_ = info.remaining_weight_g;
@@ -222,10 +222,7 @@ void AmsSlotSink::snapshot(float filament_used_mm) {
         return;
     }
     density_g_cm3_ = material->density_g_cm3;
-    // TODO(filament-diameter): SlotInfo/external-spool don't carry filament
-    // diameter yet. 1.75 mm is correct for ~99% of hobbyist setups; wire from
-    // a per-spool field once Spoolman exposes it.
-    diameter_mm_ = 1.75f;
+    diameter_mm_ = kDefaultDiameterMm;
     snapshot_mm_ = filament_used_mm;
     snapshot_weight_g_ = info.remaining_weight_g;
     last_written_weight_g_ = info.remaining_weight_g;
