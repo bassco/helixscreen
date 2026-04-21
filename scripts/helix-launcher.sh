@@ -190,6 +190,39 @@ if [ -n "$_helix_env_file" ]; then
 fi
 unset _helix_env_file
 
+# Heap-corruption diagnostics on constrained embedded glibc platforms where
+# ASAN is not feasible and crash reports otherwise show only libc frames.
+# MALLOC_CHECK_=3 aborts on malloc metadata corruption and prints a glibc
+# diagnostic line to stderr/syslog BEFORE the SIGABRT — pinpoints the
+# corruption class (double free, invalid pointer, corrupted size) that would
+# otherwise be invisible. MALLOC_PERTURB_=165 poisons freed memory so
+# use-after-free surfaces at the actual read, not six allocations later.
+# Applied ONLY on AD5M/AD5X (Flashforge ZMOD/Forge-X/KlipperMod) where we
+# have no test hardware and AD5X crash bundles have been unactionable.
+# Set MALLOC_CHECK_=0 in helixscreen.env to disable.
+_arch=$(uname -m)
+_kernel=$(uname -r)
+_enable_heap_diag=0
+
+# AD5M / AD5M Pro (armv7l, Flashforge firmware — kernel 5.4.61).
+# Exclude CC1 (OpenCentauri COSMOS) and K2 (Tina Linux) which share armv7l.
+if [ "$_arch" = "armv7l" ] && echo "$_kernel" | grep -q "ad5m\|5.4.61"; then
+    if [ ! -x /usr/bin/update-cosmos ] && [ ! -d /mnt/UDISK ]; then
+        _enable_heap_diag=1
+    fi
+fi
+
+# AD5X (MIPS, ZMOD on Flashforge AD5X — Ingenic X2600).
+if [ "$_arch" = "mips" ] && [ -d /usr/data ] && { [ -d /usr/prog ] || [ -f /ZMOD ]; }; then
+    _enable_heap_diag=1
+fi
+
+if [ "$_enable_heap_diag" = "1" ]; then
+    [ -z "${MALLOC_CHECK_:-}" ] && export MALLOC_CHECK_=3
+    [ -z "${MALLOC_PERTURB_:-}" ] && export MALLOC_PERTURB_=165
+fi
+unset _arch _kernel _enable_heap_diag
+
 # Resolve debug/logging settings: CLI flags > env vars (incl. env file) > defaults
 DEBUG_MODE="${CLI_DEBUG:-${HELIX_DEBUG:-0}}"
 LOG_DEST="${CLI_LOG_DEST:-${HELIX_LOG_DEST:-auto}}"
