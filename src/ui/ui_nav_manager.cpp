@@ -1172,6 +1172,24 @@ void NavigationManager::register_panel_instance(PanelId id, PanelBase* panel) {
     spdlog::trace("[NavigationManager] Registered panel instance for ID {}", static_cast<int>(id));
 }
 
+helix::PanelId NavigationManager::find_panel_id(const PanelBase* panel) const {
+    if (!panel) return helix::PanelId::Count;
+    for (int i = 0; i < UI_PANEL_COUNT; ++i) {
+        if (panel_instances_[i] == panel) {
+            return static_cast<helix::PanelId>(i);
+        }
+    }
+    return helix::PanelId::Count;
+}
+
+void NavigationManager::replace_panel_widget(helix::PanelId id, lv_obj_t* new_widget) {
+    int idx = static_cast<int>(id);
+    if (idx < 0 || idx >= UI_PANEL_COUNT) return;
+    panel_widgets_[idx] = new_widget;
+    spdlog::debug("[NavigationManager] Panel widget for {} swapped to {}",
+                  panel_id_to_name(id), (void*)new_widget);
+}
+
 void NavigationManager::activate_initial_panel() {
     if (panel_instances_[static_cast<int>(active_panel_)]) {
         spdlog::trace("[NavigationManager] Activating initial panel {}",

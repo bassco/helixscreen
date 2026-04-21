@@ -159,6 +159,29 @@ class NavigationManager {
     void register_panel_instance(helix::PanelId id, PanelBase* panel);
 
     /**
+     * @brief Find the PanelId owned by a given PanelBase instance
+     *
+     * Searches panel_instances_ for a matching pointer. Used by
+     * hot-reload rebuild to let panels locate themselves without
+     * needing per-subclass get_panel_id() overrides.
+     *
+     * @param panel Pointer to compare against registered instances
+     * @return PanelId if found, PanelId::Count if not registered
+     */
+    helix::PanelId find_panel_id(const PanelBase* panel) const;
+
+    /**
+     * @brief Replace the cached widget pointer for a panel
+     *
+     * Used by hot-reload rebuild. Does NOT free the old widget;
+     * caller is responsible for teardown (via safe_delete_deferred).
+     *
+     * @param id Panel identifier
+     * @param new_widget New widget to register in panel_widgets_[id]
+     */
+    void replace_panel_widget(helix::PanelId id, lv_obj_t* new_widget);
+
+    /**
      * @brief Activate the initial panel after all panels are registered
      *
      * Calls on_activate() on the current active panel. This should be called

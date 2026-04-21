@@ -3,9 +3,12 @@
 
 #include "ui_panel_base.h"
 
+#include "helix-xml/src/xml/lv_xml.h"
 #include "moonraker_api.h"
 #include "printer_state.h"
 #include "theme_manager.h"
+#include "ui_nav_manager.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -105,4 +108,66 @@ void PanelBase::set_overlay_width() {
     }
 
     ui_set_overlay_width(panel_, parent_screen_);
+}
+
+// ============================================================================
+// HOT-RELOAD REBUILD
+// ============================================================================
+
+bool PanelBase::rebuild() {
+    if (!panel_ || !parent_screen_) {
+        spdlog::debug("[PanelBase::rebuild] {} — no widget yet, skipping", get_name());
+        return false;
+    }
+
+    auto& nav = NavigationManager::instance();
+    auto id = nav.find_panel_id(this);
+    if (id == helix::PanelId::Count) {
+        spdlog::debug("[PanelBase::rebuild] {} — not registered with NavigationManager, skipping",
+                      get_name());
+        return false;
+    }
+
+    lv_obj_t* parent = lv_obj_get_parent(panel_);
+    if (!parent) {
+        spdlog::warn("[PanelBase::rebuild] {} — widget has no parent, skipping", get_name());
+        return false;
+    }
+
+    const char* component = get_xml_component_name();
+    spdlog::info("[PanelBase::rebuild] {} ({}) — tearing down and re-creating", get_name(),
+                 component);
+
+    bool was_hidden = lv_obj_has_flag(panel_, LV_OBJ_FLAG_HIDDEN);
+
+    on_deactivate();
+    cleanup_observers();
+
+    lv_obj_t* old_widget = panel_;
+    panel_ = nullptr;
+
+    auto* new_widget = static_cast<lv_obj_t*>(lv_xml_create(parent, component, nullptr));
+    if (!new_widget) {
+        spdlog::error("[PanelBase::rebuild] {} — lv_xml_create failed, leaving old widget in place",
+                      component);
+        panel_ = old_widget;
+        return false;
+    }
+
+    if (was_hidden) {
+        lv_obj_add_flag(new_widget, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(new_widget, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    setup(new_widget, parent_screen_);
+
+    nav.replace_panel_widget(id, new_widget);
+
+    helix::ui::safe_delete_deferred(old_widget);
+
+    if (!was_hidden) {
+        on_activate();
+    }
+    return true;
 }

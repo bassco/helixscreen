@@ -160,6 +160,21 @@ class PanelBase : public IPanelLifecycle {
      */
     void on_deactivate() override {}
 
+    /**
+     * @brief Rebuild this panel's widget tree from its XML component
+     *
+     * Tears down the current panel widget (observers cleaned up, widget
+     * async-deleted) and creates a new one via lv_xml_create. Updates
+     * NavigationManager's cached pointer. Restores visibility to match
+     * the old widget.
+     *
+     * Called by NavigationManager::rebuild_active_views() after XML hot-
+     * reload. Dev-only path; gated by HELIX_HOT_RELOAD.
+     *
+     * @return true if rebuilt, false if skipped (no widget yet, not registered)
+     */
+    bool rebuild() override;
+
     //
     // === Public API ===
     //
