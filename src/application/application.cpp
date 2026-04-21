@@ -21,6 +21,7 @@
 #include "asset_manager.h"
 #include "http_executor.h"
 #include "cjk_font_manager.h"
+#include "translation_loader.h"
 #include "config.h"
 #include "display/lv_display_private.h"
 #include "display_manager.h"
@@ -150,7 +151,6 @@
 #include "helix-xml/src/xml/lv_xml_translation.h"
 #include "hv/hlog.h" // libhv logging - sync level with spdlog
 #include "logging_init.h"
-#include "lv_i18n_translations.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "lvgl_log_handler.h"
 #include "memory_monitor.h"
@@ -1230,38 +1230,32 @@ bool Application::init_translations() {
     // are expected and produce many "language is missing from tag" warnings
     helix::logging::set_suppress_translation_warnings(true);
 
-    // Load translation strings from XML (for LVGL's native translation system)
-    // This must happen before UI creation but after the XML system is initialized
-    lv_result_t result =
-        lv_xml_register_translation_from_file("A:ui_xml/translations/translations.xml");
-    if (result != LV_RESULT_OK) {
-        spdlog::warn(
-            "[Application] Failed to load LVGL translations - UI will use English defaults");
-        // Not fatal - English will work via fallback (tag = English text)
-    } else {
-        spdlog::debug("[Application] LVGL translations loaded successfully");
-    }
+    // NOTE: lv_i18n (src/generated/lv_i18n_translations.c) was a parallel i18n
+    // subsystem kept alongside LVGL's native lv_translation_* API. It was never
+    // read from — lv_i18n_get_text() has no callers in the tree. Removing the
+    // init/set_locale calls lets LTO strip the ~1 MB of compiled language pack
+    // rodata. All real language switching goes through lv_translation_set_language
+    // and the per-locale XML files loaded below.
 
-    // Initialize lv_i18n translation system (for plural forms and runtime lookups)
-    int i18n_result = lv_i18n_init(lv_i18n_language_pack);
-    if (i18n_result != 0) {
-        spdlog::warn(
-            "[Application] Failed to initialize lv_i18n - plural translations unavailable");
-    } else {
-        spdlog::debug("[Application] lv_i18n initialized successfully");
-    }
-
-    // Set initial language from config (sync both systems)
+    // Load ONLY the current locale's translations. Parsing the combined
+    // translations.xml with all 9 languages at startup burns ~500-700 KB of
+    // heap in lv_translation_pack_t. Loading a single locale uses ~60-80 KB,
+    // and other locales load on demand when the user switches language.
+    // See helix::ui::ensure_translation_loaded().
     std::string lang = m_config->get_language();
+    helix::ui::ensure_translation_loaded(lang);
+
+    // Set initial language. When no pack is loaded for a language (e.g. English
+    // with no en.xml), lv_translation_get() returns the tag itself — and since
+    // our tags ARE English, English UI works without any registered pack.
     lv_translation_set_language(lang.c_str());
-    lv_i18n_set_locale(lang.c_str());
 
     // Load CJK runtime fonts if persisted language is CJK
     helix::system::CjkFontManager::instance().on_language_changed(lang);
 
     // Re-enable translation warnings for runtime (post-init warnings are actionable)
     helix::logging::set_suppress_translation_warnings(false);
-    spdlog::info("[Application] Language set to '{}' (both translation systems)", lang);
+    spdlog::info("[Application] Language set to '{}'", lang);
 
     return true;
 }

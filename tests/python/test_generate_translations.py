@@ -665,3 +665,228 @@ class TestIntegration:
 
         assert len(result.warnings) > 0
         assert any("Home" in w or "Cancel" in w for w in result.warnings)
+
+
+# =============================================================================
+# Per-Locale XML Output (for runtime lazy loading)
+# =============================================================================
+
+
+class TestPerLocaleXmlOutput:
+    """Tests for write_per_locale_xml() — each locale gets its own XML file.
+
+    Runtime reason: loading the combined translations.xml (all 9 langs) into
+    lv_translation_pack_t costs ~500-700 KB of heap. Loading only the current
+    locale costs ~60-80 KB. The generator emits one XML per locale so the app
+    can load on demand.
+    """
+
+    def test_emits_one_file_per_locale(self, tmp_path):
+        from generate_translations import write_per_locale_xml
+
+        translations = {
+            "en": {"Settings": "Settings", "Home": "Home"},
+            "de": {"Settings": "Einstellungen", "Home": "Startseite"},
+            "fr": {"Settings": "Paramètres", "Home": "Accueil"},
+        }
+
+        written = write_per_locale_xml(translations, tmp_path)
+
+        assert len(written) == 3
+        assert (tmp_path / "en.xml").exists()
+        assert (tmp_path / "de.xml").exists()
+        assert (tmp_path / "fr.xml").exists()
+
+    def test_each_file_contains_only_its_locale(self, tmp_path):
+        from generate_translations import write_per_locale_xml
+
+        translations = {
+            "en": {"Settings": "Settings"},
+            "de": {"Settings": "Einstellungen"},
+        }
+
+        write_per_locale_xml(translations, tmp_path)
+
+        de_content = (tmp_path / "de.xml").read_text(encoding="utf-8")
+        en_content = (tmp_path / "en.xml").read_text(encoding="utf-8")
+
+        # de.xml declares only the German language and contains only German
+        assert 'languages="de"' in de_content
+        assert "Einstellungen" in de_content
+        # English strings must NOT leak into German file — leaking would
+        # negate the heap savings of per-locale loading
+        assert 'en="Settings"' not in de_content
+
+        # Symmetric check for English
+        assert 'languages="en"' in en_content
+        assert "Einstellungen" not in en_content
+
+    def test_creates_parent_directory(self, tmp_path):
+        from generate_translations import write_per_locale_xml
+
+        deep = tmp_path / "nested" / "dir"
+        write_per_locale_xml({"en": {"Home": "Home"}}, deep)
+
+        assert (deep / "en.xml").exists()
+
+    def test_full_pipeline_emits_per_locale_xml(self, tmp_path):
+        """The end-to-end generate_all() pipeline emits per-locale XMLs alongside
+        the combined translations.xml."""
+        from generate_translations import generate_all
+
+        yaml_dir = tmp_path / "translations"
+        yaml_dir.mkdir()
+        (yaml_dir / "en.yml").write_text(dedent("""\
+            locale: en
+            translations:
+              "Home": Home
+        """))
+        (yaml_dir / "de.yml").write_text(dedent("""\
+            locale: de
+            translations:
+              "Home": Startseite
+        """))
+
+        xml_dir = tmp_path / "ui_xml" / "translations"
+        result = generate_all(
+            yaml_dir=yaml_dir,
+            xml_output_dir=xml_dir,
+            c_output_dir=tmp_path / "c",
+        )
+
+        assert result.success
+        # Combined file still exists (backward compat + dev tooling)
+        assert (xml_dir / "translations.xml").exists()
+        # Per-locale files exist for each YAML locale
+        assert (xml_dir / "en.xml").exists()
+        assert (xml_dir / "de.xml").exists()
+
+
+# =============================================================================
+# Language Whitelist (HELIX_LANG filter)
+# =============================================================================
+
+
+class TestLanguageWhitelist:
+    """Tests for the --languages CLI flag / `languages` parameter to generate_all().
+
+    Purpose: allow platform Makefiles (e.g. memory-constrained device builds)
+    to filter the compiled C translation table down to a subset of locales,
+    reducing .rodata size. Base locale is always kept as a fallback.
+    """
+
+    def test_filters_to_requested_locales(self, tmp_path):
+        from generate_translations import generate_all
+
+        yaml_dir = tmp_path / "translations"
+        yaml_dir.mkdir()
+        for locale, greeting in [("en", "Hello"), ("de", "Hallo"),
+                                 ("fr", "Bonjour"), ("ja", "こんにちは")]:
+            (yaml_dir / f"{locale}.yml").write_text(dedent(f"""\
+                locale: {locale}
+                translations:
+                  "Hello": {greeting}
+            """))
+
+        c_dir = tmp_path / "c"
+        result = generate_all(
+            yaml_dir=yaml_dir,
+            xml_output_dir=tmp_path / "xml",
+            c_output_dir=c_dir,
+            languages=["en", "de"],
+        )
+
+        assert result.success
+        c_content = (c_dir / "lv_i18n_translations.c").read_text(encoding="utf-8")
+        # Requested locales present
+        assert "en_singulars" in c_content
+        assert "de_singulars" in c_content
+        # Excluded locales absent — this is the whole point of the filter
+        assert "fr_singulars" not in c_content
+        assert "ja_singulars" not in c_content
+
+    def test_base_locale_always_kept(self, tmp_path):
+        """Even if the whitelist omits the base locale, it's retained as
+        fallback. Without this, non-English builds that request only 'de'
+        would have no English strings to fall back to on missing keys."""
+        from generate_translations import generate_all
+
+        yaml_dir = tmp_path / "translations"
+        yaml_dir.mkdir()
+        (yaml_dir / "en.yml").write_text(dedent("""\
+            locale: en
+            translations:
+              "Hello": Hello
+        """))
+        (yaml_dir / "de.yml").write_text(dedent("""\
+            locale: de
+            translations:
+              "Hello": Hallo
+        """))
+
+        c_dir = tmp_path / "c"
+        result = generate_all(
+            yaml_dir=yaml_dir,
+            xml_output_dir=tmp_path / "xml",
+            c_output_dir=c_dir,
+            languages=["de"],  # omits base_locale="en"
+        )
+
+        assert result.success
+        c_content = (c_dir / "lv_i18n_translations.c").read_text(encoding="utf-8")
+        assert "en_singulars" in c_content  # forced in as fallback
+        assert "de_singulars" in c_content
+
+    def test_none_means_all_locales(self, tmp_path):
+        """`languages=None` (the default) keeps all YAMLs — existing behavior
+        for builds that don't set HELIX_LANG."""
+        from generate_translations import generate_all
+
+        yaml_dir = tmp_path / "translations"
+        yaml_dir.mkdir()
+        for locale in ["en", "de", "fr"]:
+            (yaml_dir / f"{locale}.yml").write_text(dedent(f"""\
+                locale: {locale}
+                translations:
+                  "Hello": Hello-{locale}
+            """))
+
+        c_dir = tmp_path / "c"
+        result = generate_all(
+            yaml_dir=yaml_dir,
+            xml_output_dir=tmp_path / "xml",
+            c_output_dir=c_dir,
+        )
+
+        assert result.success
+        c_content = (c_dir / "lv_i18n_translations.c").read_text(encoding="utf-8")
+        assert "en_singulars" in c_content
+        assert "de_singulars" in c_content
+        assert "fr_singulars" in c_content
+
+    def test_drop_reported_in_warnings(self, tmp_path):
+        """Dropped locales are reported so builds log what they stripped."""
+        from generate_translations import generate_all
+
+        yaml_dir = tmp_path / "translations"
+        yaml_dir.mkdir()
+        for locale in ["en", "de", "fr", "ja"]:
+            (yaml_dir / f"{locale}.yml").write_text(dedent(f"""\
+                locale: {locale}
+                translations:
+                  "Hello": hello-{locale}
+            """))
+
+        result = generate_all(
+            yaml_dir=yaml_dir,
+            xml_output_dir=tmp_path / "xml",
+            c_output_dir=tmp_path / "c",
+            languages=["en"],
+        )
+
+        assert result.success
+        assert any("Dropped" in w for w in result.warnings)
+        dropped_msg = " ".join(result.warnings)
+        assert "de" in dropped_msg
+        assert "fr" in dropped_msg
+        assert "ja" in dropped_msg

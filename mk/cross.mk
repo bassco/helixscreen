@@ -336,6 +336,9 @@ else ifeq ($(PLATFORM_TARGET),cc1)
     # NOTE: CC1 framebuffer is 32bpp (ARGB8888), as is lv_conf.h (LV_COLOR_DEPTH=32)
     # -funwind-tables: Emit ARM unwind info (.ARM.exidx) so backtrace() can walk
     # the full call stack in crash reports. ~5-10% code size, zero runtime cost.
+    # NOTE: ALSO required for C++ exception unwinding — cannot be dropped while
+    # libstdc++/libhv/openssl (which throw) are statically linked. Attempting to
+    # strip via -fno-unwind-tables yielded zero delta (tables come from libstdc++).
     TARGET_CFLAGS := -march=armv7-a -mfpu=neon-vfpv4 -mfloat-abi=hard -mtune=cortex-a7 \
         -Os -flto -ffunction-sections -fdata-sections -funwind-tables \
         -Wno-error=conversion -Wno-error=sign-conversion -DHELIX_RELEASE_BUILD -DHELIX_PLATFORM_CC1
@@ -356,6 +359,10 @@ else ifeq ($(PLATFORM_TARGET),cc1)
     # Strip binary for size on memory-constrained device
     STRIP_BINARY := yes
     FONT_TIERS := micro tiny
+    # HELIX_LANG filter (mk/translations.mk) is available here but NOT set —
+    # users must be able to pick any of the 9 shipped locales at runtime. When
+    # the runtime-loaded translation .bin infrastructure lands, we can ship
+    # English compiled-in + all others on disk and get the ~500 KB win back.
 
 else ifneq ($(filter mips k1,$(PLATFORM_TARGET)),)
     # -------------------------------------------------------------------------
@@ -1044,6 +1051,9 @@ cc1-docker: ensure-docker
 		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
 		$(MAKE) docker-toolchain-cc1; \
 	fi
+	@# Generate translations on the host FIRST (docker image lacks python/yaml).
+	@# Pass PLATFORM_TARGET=cc1 so cross.mk sets HELIX_LANG for the generator.
+	@$(MAKE) --no-print-directory PLATFORM_TARGET=cc1 src/generated/lv_i18n_translations.c
 	$(call ensure-ccache-dir,cc1)
 	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,cc1) helixscreen/toolchain-cc1 \
 		make PLATFORM_TARGET=cc1 SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
@@ -1052,6 +1062,12 @@ cc1-docker: ensure-docker
 	@docker run --rm helixscreen/toolchain-cc1 cat /etc/ssl/certs/ca-certificates.crt > build/cc1/certs/ca-certificates.crt 2>/dev/null \
 		&& echo "$(GREEN)✓ CA certificates extracted$(RESET)" \
 		|| echo "$(YELLOW)⚠ Could not extract CA certificates (HTTPS may rely on device certs)$(RESET)"
+	@# Restore the full-language translation table so the committed file in
+	@# src/generated/ doesn't drift from git HEAD after a CC1 build. The stamp
+	@# file detects that HELIX_LANG is now empty and regenerates with all locales.
+	@$(MAKE) --no-print-directory src/generated/lv_i18n_translations.c >/dev/null 2>&1 \
+		&& echo "$(DIM)✓ Restored full translation table (repo clean)$(RESET)" \
+		|| echo "$(YELLOW)⚠ Could not restore full translation table — run 'make translations'$(RESET)"
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
 mips-docker: ensure-docker

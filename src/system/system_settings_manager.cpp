@@ -7,13 +7,13 @@
 #include "config.h"
 #include "locale_formats.h"
 #include "logging_init.h"
-#include "lv_i18n_translations.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 #include "system/crash_handler.h"
 #include "system/telemetry_manager.h"
 #include "system/update_checker.h"
+#include "translation_loader.h"
 
 #include <algorithm>
 
@@ -141,7 +141,11 @@ void SystemSettingsManager::set_language(const std::string& lang) {
     // 1. Update subject (UI reacts)
     lv_subject_set_int(&language_subject_, index);
 
-    // 2. Call LVGL translation API for hot-reload
+    // 2. Ensure the target locale's translation pack is loaded. Startup loads
+    //    only the saved lang; subsequent switches pull in additional packs.
+    helix::ui::ensure_translation_loaded(lang);
+
+    // 3. Call LVGL translation API for hot-reload
     // This sends LV_EVENT_TRANSLATION_LANGUAGE_CHANGED to all widgets
     crash_handler::breadcrumb::note("lang", "lv_translation_begin");
     lv_translation_set_language(lang.c_str());
@@ -153,13 +157,7 @@ void SystemSettingsManager::set_language(const std::string& lang) {
     // 3. Update locale formatting tables
     helix::ui::locale_set_language(lang);
 
-    // 4. Sync lv_i18n system (for plural forms and runtime lookups)
-    int i18n_result = lv_i18n_set_locale(lang.c_str());
-    if (i18n_result != 0) {
-        spdlog::warn("[SystemSettingsManager] Failed to set lv_i18n locale to '{}'", lang);
-    }
-
-    // 5. Persist to config
+    // 4. Persist to config
     Config* config = Config::get_instance();
     config->set_language(lang);
     config->save();

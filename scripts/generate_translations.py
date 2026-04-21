@@ -653,6 +653,37 @@ def write_xml_file(translations: dict[str, dict[str, str]], output_path: Path) -
     output_path.write_text(xml_content, encoding="utf-8")
 
 
+def write_per_locale_xml(
+    translations: dict[str, dict[str, str]], output_dir: Path
+) -> list[Path]:
+    """
+    Emit one XML file per locale so runtime can load only the current locale's
+    translations instead of parsing the combined 678 KB translations.xml (which
+    balloons to ~500-700 KB of heap when LVGL parses all 9 languages at once).
+
+    Each per-locale file declares `languages="<lang>"` and contains only that
+    locale's translations. Runtime loads `<saved_lang>.xml` at startup and
+    additional files as the user switches languages (packs accumulate because
+    LVGL's translation system has no remove API).
+
+    Args:
+        translations: Dict of {locale: {key: value, ...}, ...}
+        output_dir: Directory to write `<locale>.xml` into
+
+    Returns:
+        List of paths written
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for locale in sorted(translations.keys()):
+        single = {locale: translations[locale]}
+        path = output_dir / f"{locale}.xml"
+        path.write_text(generate_lvgl_xml(single), encoding="utf-8")
+        written.append(path)
+    return written
+
+
 def write_lv_i18n_files(
     singulars: dict[str, dict[str, str]],
     plurals: dict[str, dict[str, dict[str, str]]],
@@ -695,6 +726,7 @@ def generate_all(
     xml_output_dir: Path,
     c_output_dir: Path,
     base_locale: str = "en",
+    languages: list[str] | None = None,
 ) -> GenerateResult:
     """
     Run the full translation generation pipeline.
@@ -704,6 +736,9 @@ def generate_all(
         xml_output_dir: Directory to write XML output
         c_output_dir: Directory to write C output
         base_locale: Base locale for comparison (default: "en")
+        languages: Optional whitelist of locale codes. If None, all YAMLs are
+                   included. Constrained-device builds pass a short list (e.g.
+                   ["en"]) to shrink the compiled translation table.
 
     Returns:
         GenerateResult with success status and any warnings/errors
@@ -717,6 +752,17 @@ def generate_all(
         result.success = False
         result.errors.append(f"No translation files found in {yaml_dir}")
         return result
+
+    # Filter to whitelisted languages if requested. Base locale always stays
+    # so the app has a fallback if the runtime-selected locale is absent.
+    if languages:
+        keep = set(languages) | {base_locale}
+        dropped = sorted(set(translations.keys()) - keep)
+        translations = {k: v for k, v in translations.items() if k in keep}
+        if dropped:
+            result.warnings.append(
+                f"Dropped locales (not in HELIX_LANG whitelist): {', '.join(dropped)}"
+            )
 
     # Separate singulars and plurals
     singulars: dict[str, dict[str, str]] = {}
@@ -745,6 +791,10 @@ def generate_all(
 
     # Generate XML
     write_xml_file(singulars, xml_output_dir / "translations.xml")
+
+    # Also emit per-locale XMLs so the app can load only the current language
+    # at runtime. See write_per_locale_xml() for the rationale.
+    write_per_locale_xml(singulars, xml_output_dir)
 
     # Generate C code
     write_lv_i18n_files(singulars, plurals, c_output_dir)
@@ -785,14 +835,27 @@ def main():
         default="en",
         help="Base locale for translation comparison (default: en)",
     )
+    parser.add_argument(
+        "--languages",
+        default=None,
+        help="Comma-separated whitelist of locales to include (e.g. 'en,zh'). "
+             "If unset, all YAMLs are included. Base locale is always kept.",
+    )
 
     args = parser.parse_args()
+
+    lang_whitelist = None
+    if args.languages:
+        lang_whitelist = [
+            s.strip() for s in args.languages.split(",") if s.strip()
+        ]
 
     result = generate_all(
         yaml_dir=args.yaml_dir,
         xml_output_dir=args.xml_dir,
         c_output_dir=args.c_dir,
         base_locale=args.base_locale,
+        languages=lang_whitelist,
     )
 
     for warning in result.warnings:
