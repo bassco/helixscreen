@@ -5,6 +5,28 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.40] - 2026-04-21
+
+### Added
+- **XML hot-reload** — set `HELIX_HOT_RELOAD=1` to watch `ui_xml/` (including breakpoint subdirs) and rebuild the active panel, overlay, or modal in place when a file saves. Panels, overlays, modals, and the navigation stack all implement a `rebuild()` hook; after-reload callbacks re-show the top modal and refresh observer bindings. The watcher warns when a reload would dangle an XML subject pointer so you see it immediately instead of as a later crash.
+- **Print Select:** 3-column card grid on 480px breakpoints (previously 2-column) — more prints visible without scrolling on wider portraits.
+
+### Fixed
+- **Android update check** — libhv is built without SSL on Android, so HTTPS to R2 and GitHub silently failed with "Connection failed (R2 + GitHub)". Update-check traffic now routes through Android's system TLS stack via a JNI bridge to `HttpURLConnection`. The nightly auto-check and its in-app "New Version Available" notification now work, and the Install button opens the Play Store listing instead of attempting a tarball install.
+- Action-prompt modal: remove button event callbacks before freeing `user_data` to avoid a use-after-free on dismissal ([#840]).
+- LVGL: guard against a garbage non-null font pointer in the `sw_label` renderer that crashed under rare layout cascades ([#842]).
+- AMS edit modal: async-delete spool list children to avoid the LVGL event-list corruption pattern (L081) ([#845]).
+- Wizard: stop the connection spinner animation before `lv_obj_clean` to prevent a use-after-free on step transitions ([#843]).
+- AMS AD5X IFS: close the race where `_IFS_VARS` was enabled before the macro had been verified present on the printer.
+- Discovery (AD5X): IFS runout sensors now appear in `filament_sensor_names` so the runout row shows on AD5X.
+- Runout modal: removed stray XML `event_cb` declarations that produced "callback not found" warnings in the log.
+- Hot-reload: reset `error_code` between filesystem queries and use the non-throwing iterator increment — stops the watcher from aborting on transient `ENOENT`.
+- About settings: Check-for-Updates row description is visible at every breakpoint, so the "Error" / version text doesn't get hidden on narrow layouts.
+- Update flow: skip the redundant confirmation modal when the user already confirmed "Install" on the in-app update notification.
+
+### Changed
+- AD5M / AD5X launcher: enable `MALLOC_CHECK_=3` and `MALLOC_PERTURB_` for heap diagnostics on the printers most prone to memory-pressure crashes ([#838]).
+
 ## [0.99.39] - 2026-04-20
 
 ### Added
@@ -3182,6 +3204,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.40]: https://github.com/prestonbrown/helixscreen/compare/v0.99.39...v0.99.40
 [0.99.39]: https://github.com/prestonbrown/helixscreen/compare/v0.99.38...v0.99.39
 [0.99.38]: https://github.com/prestonbrown/helixscreen/compare/v0.99.37...v0.99.38
 [0.99.37]: https://github.com/prestonbrown/helixscreen/compare/v0.99.36...v0.99.37
