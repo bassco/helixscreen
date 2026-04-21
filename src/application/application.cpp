@@ -1214,6 +1214,11 @@ bool Application::register_xml_components() {
     // Start XML hot reloader if enabled (dev-only, HELIX_HOT_RELOAD=1)
     if (RuntimeConfig::hot_reload_enabled()) {
         m_hot_reloader = std::make_unique<helix::XmlHotReloader>();
+        m_hot_reloader->set_after_reload_callback([](const std::string& component) {
+            if (NavigationManager::is_destroyed()) return;
+            spdlog::debug("[HotReload] Post-reload rebuild triggered by '{}'", component);
+            NavigationManager::instance().rebuild_active_views();
+        });
         m_hot_reloader->start({"ui_xml"});
     }
 
