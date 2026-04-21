@@ -3322,9 +3322,7 @@ void Application::tear_down_printer_state() {
     NavigationManager::instance().shutdown();
 
     // 3. Stop UpdateChecker auto-check timer (fires API calls on background thread)
-    if (!helix::is_android_platform()) {
-        UpdateChecker::instance().stop_auto_check();
-    }
+    UpdateChecker::instance().stop_auto_check();
 
     // 4. Unload plugins (may hold refs to managers)
     if (m_plugin_manager) {

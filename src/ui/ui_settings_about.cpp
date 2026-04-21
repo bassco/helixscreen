@@ -327,6 +327,22 @@ void AboutSettingsOverlay::fetch_print_hours() {
 // ============================================================================
 
 void AboutSettingsOverlay::show_update_download_modal(bool start_immediately) {
+#ifdef __ANDROID__
+    // On Android, we never download/install tarballs — Play Store is the update
+    // channel. Route all install intents (About panel button and the in-app
+    // "New Version Available" notification) to the store listing.
+    if (helix::is_android_platform()) {
+        spdlog::info("[AboutSettings] Opening Play Store for update");
+        int result = SDL_OpenURL("market://details?id=org.helixscreen.app");
+        if (result != 0) {
+            spdlog::warn("[AboutSettings] market:// failed, trying web URL: {}", SDL_GetError());
+            SDL_OpenURL("https://play.google.com/store/apps/details?id=org.helixscreen.app");
+        }
+        (void)start_immediately;
+        return;
+    }
+#endif
+
     // Ensure callbacks are registered (modal may be shown before the overlay)
     if (!subjects_initialized_) {
         init_subjects();
@@ -489,22 +505,8 @@ void AboutSettingsOverlay::on_about_check_updates_clicked(lv_event_t* /*e*/) {
 
 void AboutSettingsOverlay::on_about_install_update_clicked(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[AboutSettings] on_about_install_update_clicked");
-
-#ifdef __ANDROID__
-    if (helix::is_android_platform()) {
-        spdlog::info("[AboutSettings] Opening Play Store for update");
-        int result = SDL_OpenURL("market://details?id=org.helixscreen.app");
-        if (result != 0) {
-            spdlog::warn("[AboutSettings] market:// failed, trying web URL: {}", SDL_GetError());
-            SDL_OpenURL("https://play.google.com/store/apps/details?id=org.helixscreen.app");
-        }
-    } else
-#endif
-    {
-        spdlog::info("[AboutSettings] Install update requested");
-        get_about_settings_overlay().show_update_download_modal();
-    }
-
+    spdlog::info("[AboutSettings] Install update requested");
+    get_about_settings_overlay().show_update_download_modal();
     LVGL_SAFE_EVENT_CB_END();
 }
 

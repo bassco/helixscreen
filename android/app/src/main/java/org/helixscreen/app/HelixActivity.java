@@ -301,6 +301,47 @@ public class HelixActivity extends SDLActivity {
     // =========================================================================
 
     /**
+     * Perform an HTTP(S) GET using Android's built-in TLS stack.
+     * Called from native code via JNI when libhv lacks SSL support.
+     *
+     * @param url         Full URL (http:// or https://)
+     * @param userAgent   User-Agent header value
+     * @param accept      Accept header value (may be empty)
+     * @param timeoutSec  Connection + read timeout in seconds
+     * @return            "STATUS_CODE\nRESPONSE_BODY" on success,
+     *                    "0\nERROR_MESSAGE" on failure
+     */
+    public static String httpsGet(String url, String userAgent, String accept, int timeoutSec) {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(timeoutSec * 1000);
+            conn.setReadTimeout(timeoutSec * 1000);
+            conn.setRequestProperty("User-Agent", userAgent);
+            if (accept != null && !accept.isEmpty()) {
+                conn.setRequestProperty("Accept", accept);
+            }
+
+            int status = conn.getResponseCode();
+            String responseBody = "";
+            try (Scanner s = new Scanner(
+                    status >= 200 && status < 400
+                        ? conn.getInputStream() : conn.getErrorStream(),
+                    "UTF-8")) {
+                s.useDelimiter("\\A");
+                if (s.hasNext()) responseBody = s.next();
+            }
+            return status + "\n" + responseBody;
+        } catch (Exception e) {
+            Log.w("HelixHTTPS", "GET failed: " + e.getMessage());
+            return "0\n" + e.getMessage();
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
      * Perform an HTTPS POST using Android's built-in TLS stack.
      * Called from native code via JNI when libhv lacks SSL support.
      *
