@@ -94,3 +94,50 @@ lv_obj_t* OverlayBase::create_overlay_from_xml(lv_obj_t* parent, const char* com
 
     return overlay_root_;
 }
+
+bool OverlayBase::rebuild() {
+    if (!overlay_root_ || !parent_screen_) {
+        spdlog::debug("[OverlayBase::rebuild] {} — no widget, skipping", get_name());
+        return false;
+    }
+
+    spdlog::info("[OverlayBase::rebuild] {} — tearing down and re-creating", get_name());
+
+    bool was_visible = visible_;
+
+    on_deactivate(); // invalidates lifetime_, clears visible_
+
+    lv_obj_t* old_root = overlay_root_;
+    overlay_root_ = nullptr;
+
+    lv_obj_t* new_root = create(parent_screen_);
+    if (!new_root) {
+        spdlog::error("[OverlayBase::rebuild] {} — create() returned null, restoring old widget",
+                      get_name());
+        overlay_root_ = old_root;
+        if (was_visible) {
+            visible_ = true;
+            on_activate();
+        }
+        return false;
+    }
+
+    // create() sets overlay_root_ internally; some implementations also call
+    // register_callbacks() — let them manage their own wiring.
+    overlay_root_ = new_root;
+
+    if (was_visible) {
+        lv_obj_remove_flag(new_root, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(new_root, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    NavigationManager::instance().rekey_overlay_widget(old_root, new_root);
+
+    helix::ui::safe_delete_deferred(old_root);
+
+    if (was_visible) {
+        on_activate();
+    }
+    return true;
+}

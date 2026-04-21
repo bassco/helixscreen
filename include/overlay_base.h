@@ -158,6 +158,18 @@ class OverlayBase : public IPanelLifecycle {
     void on_deactivate() override;
 
     /**
+     * @brief Rebuild this overlay's widget tree from its XML component
+     *
+     * Dev-only. Called by NavigationManager after XML hot-reload re-registers
+     * a component. Invokes on_deactivate() to drop state, calls create() for
+     * a new widget, rekeys NavigationManager maps, restores visibility, and
+     * schedules async deletion of the old widget.
+     *
+     * @return true if rebuilt, false if no current widget or create() failed
+     */
+    bool rebuild() override;
+
+    /**
      * @brief Clean up resources for async-safe destruction
      *
      * Call this before destroying the overlay to handle any pending

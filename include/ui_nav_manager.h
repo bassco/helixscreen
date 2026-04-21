@@ -182,6 +182,16 @@ class NavigationManager {
     void replace_panel_widget(helix::PanelId id, lv_obj_t* new_widget);
 
     /**
+     * @brief Re-key overlay maps: swap old_widget → new_widget for the same lifecycle.
+     *
+     * Used by hot-reload overlay rebuild. Touches overlay_instances_,
+     * persistent_overlay_instances_, overlay_backdrops_, overlay_close_callbacks_,
+     * zoom_source_rects_, and panel_stack_. Does NOT free either widget —
+     * caller handles old widget teardown.
+     */
+    void rekey_overlay_widget(lv_obj_t* old_widget, lv_obj_t* new_widget);
+
+    /**
      * @brief Activate the initial panel after all panels are registered
      *
      * Calls on_activate() on the current active panel. This should be called

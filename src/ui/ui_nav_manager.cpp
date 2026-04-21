@@ -1190,6 +1190,47 @@ void NavigationManager::replace_panel_widget(helix::PanelId id, lv_obj_t* new_wi
                   panel_id_to_name(id), (void*)new_widget);
 }
 
+void NavigationManager::rekey_overlay_widget(lv_obj_t* old_widget, lv_obj_t* new_widget) {
+    if (!old_widget || !new_widget || old_widget == new_widget) return;
+
+    auto rekey_life = [&](std::unordered_map<lv_obj_t*, IPanelLifecycle*>& m) {
+        auto it = m.find(old_widget);
+        if (it != m.end()) {
+            auto* inst = it->second;
+            m.erase(it);
+            m[new_widget] = inst;
+        }
+    };
+    rekey_life(overlay_instances_);
+    rekey_life(persistent_overlay_instances_);
+
+    auto bd_it = overlay_backdrops_.find(old_widget);
+    if (bd_it != overlay_backdrops_.end()) {
+        auto* backdrop = bd_it->second;
+        overlay_backdrops_.erase(bd_it);
+        overlay_backdrops_[new_widget] = backdrop;
+    }
+
+    auto cb_it = overlay_close_callbacks_.find(old_widget);
+    if (cb_it != overlay_close_callbacks_.end()) {
+        auto cb = std::move(cb_it->second);
+        overlay_close_callbacks_.erase(cb_it);
+        overlay_close_callbacks_[new_widget] = std::move(cb);
+    }
+
+    auto zs_it = zoom_source_rects_.find(old_widget);
+    if (zs_it != zoom_source_rects_.end()) {
+        auto rect = zs_it->second;
+        zoom_source_rects_.erase(zs_it);
+        zoom_source_rects_[new_widget] = rect;
+    }
+
+    std::replace(panel_stack_.begin(), panel_stack_.end(), old_widget, new_widget);
+
+    spdlog::debug("[NavigationManager] Rekeyed overlay widget {} → {}", (void*)old_widget,
+                  (void*)new_widget);
+}
+
 void NavigationManager::activate_initial_panel() {
     if (panel_instances_[static_cast<int>(active_panel_)]) {
         spdlog::trace("[NavigationManager] Activating initial panel {}",
