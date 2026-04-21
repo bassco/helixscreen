@@ -1361,6 +1361,14 @@ TEST_CASE("PrinterDiscovery detects native ZMOD IFS via motion sensor",
     REQUIRE(discovery.mmu_type() == AmsType::AD5X_IFS);
     REQUIRE(discovery.detected_ams_systems().size() == 1);
     REQUIRE(discovery.detected_ams_systems()[0].type == AmsType::AD5X_IFS);
+
+    // Both sensors must appear in filament_sensor_names (not just head_switch_sensor)
+    auto& sensors = discovery.filament_sensor_names();
+    REQUIRE(sensors.size() == 2);
+    REQUIRE(std::find(sensors.begin(), sensors.end(),
+                      "filament_motion_sensor ifs_motion_sensor") != sensors.end());
+    REQUIRE(std::find(sensors.begin(), sensors.end(),
+                      "filament_switch_sensor head_switch_sensor") != sensors.end());
 }
 
 TEST_CASE("PrinterDiscovery does not detect AD5X IFS without zmod sensors",

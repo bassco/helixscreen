@@ -298,6 +298,7 @@ class PrinterDiscovery {
                       name == "filament_motion_sensor ifs_motion_sensor")) {
                 has_mmu_ = true;
                 mmu_type_ = AmsType::AD5X_IFS;
+                filament_sensor_names_.push_back(name);
             }
             // Snapmaker U1 detection — filament_detect is unique to U1 firmware
             else if (name == "filament_detect") {
