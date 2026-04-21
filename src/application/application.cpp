@@ -1214,7 +1214,7 @@ bool Application::register_xml_components() {
     // Start XML hot reloader if enabled (dev-only, HELIX_HOT_RELOAD=1)
     if (RuntimeConfig::hot_reload_enabled()) {
         m_hot_reloader = std::make_unique<helix::XmlHotReloader>();
-        m_hot_reloader->start({"ui_xml", "ui_xml/components"});
+        m_hot_reloader->start({"ui_xml"});
     }
 
     return true;

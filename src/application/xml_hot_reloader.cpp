@@ -47,6 +47,17 @@ void XmlHotReloader::initial_scan(const std::vector<std::string>& xml_dirs) {
     file_mtimes_.clear();
     file_to_lvgl_path_.clear();
 
+    static constexpr const char* SKIP_DIRS[] = {"translations", ".claude-recall"};
+    auto is_skipped = [](const fs::path& p) {
+        auto name = p.filename().string();
+        for (const auto* skip : SKIP_DIRS) {
+            if (name == skip) return true;
+        }
+        return false;
+    };
+
+    std::unordered_map<std::string, size_t> per_dir_counts;
+
     for (const auto& dir : xml_dirs) {
         std::error_code ec;
         if (!fs::is_directory(dir, ec)) {
@@ -54,26 +65,38 @@ void XmlHotReloader::initial_scan(const std::vector<std::string>& xml_dirs) {
             continue;
         }
 
-        for (const auto& entry : fs::directory_iterator(dir, ec)) {
-            if (!fs::is_regular_file(entry.path(), ec))
+        fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec);
+        fs::recursive_directory_iterator end;
+        while (it != end) {
+            const auto& entry = *it;
+            if (entry.is_directory(ec) && is_skipped(entry.path())) {
+                it.disable_recursion_pending();
+                ++it;
                 continue;
-            if (entry.path().extension() != ".xml")
-                continue;
+            }
+            if (entry.is_regular_file(ec) && entry.path().extension() == ".xml") {
+                auto abs_path = fs::absolute(entry.path()).string();
+                file_mtimes_[abs_path] = fs::last_write_time(entry.path(), ec);
 
-            auto abs_path = fs::absolute(entry.path()).string();
-            auto mtime = fs::last_write_time(entry.path(), ec);
+                auto rel_path = entry.path().string();
+                file_to_lvgl_path_[abs_path] = "A:" + rel_path;
 
-            file_mtimes_[abs_path] = mtime;
+                auto parent = entry.path().parent_path().filename().string();
+                per_dir_counts[parent.empty() ? dir : parent]++;
 
-            // Build the LVGL registration path ("A:ui_xml/filename.xml")
-            // Use the relative path from the project root
-            auto rel_path = entry.path().string();
-            file_to_lvgl_path_[abs_path] = "A:" + rel_path;
-
-            spdlog::trace("[HotReload] Tracking: {} ({})", rel_path,
-                          component_name_from_path(entry.path()));
+                spdlog::trace("[HotReload] Tracking: {} ({})", rel_path,
+                              component_name_from_path(entry.path()));
+            }
+            ++it;
         }
     }
+
+    std::string breakdown;
+    for (const auto& [bucket, n] : per_dir_counts) {
+        if (!breakdown.empty()) breakdown += ", ";
+        breakdown += bucket + ": " + std::to_string(n);
+    }
+    spdlog::info("[HotReload] Scan complete ({} files) [{}]", file_mtimes_.size(), breakdown);
 }
 
 void XmlHotReloader::poll_loop() {

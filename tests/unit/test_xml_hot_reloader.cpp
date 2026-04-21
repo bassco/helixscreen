@@ -491,3 +491,43 @@ TEST_CASE_METHOD(HotReloadFixture, "scan_and_reload can be called manually witho
     hr.scan_and_reload();
     REQUIRE(reloaded.size() == 1);
 }
+
+// ============================================================================
+// Recursive scan [hot-reload]
+// ============================================================================
+
+TEST_CASE_METHOD(HotReloadFixture, "recursive scan finds files in nested subdirs", "[hot-reload]") {
+    auto ultrawide_dir = temp_dir_ / "ultrawide";
+    fs::create_directories(ultrawide_dir);
+    std::ofstream(ultrawide_dir / "home_panel.xml") << "<component/>";
+    create_xml("settings_panel.xml");
+
+    helix::XmlHotReloader hr;
+    hr.start({temp_dir_.string()}, /*poll_ms=*/10000);
+    hr.stop();
+
+    const auto& tracked = XmlHotReloaderTestAccess::file_mtimes(hr);
+    REQUIRE(tracked.size() == 2);
+    bool found_ultrawide = false;
+    for (const auto& [path, _] : tracked) {
+        if (path.find("ultrawide/home_panel.xml") != std::string::npos) {
+            found_ultrawide = true;
+        }
+    }
+    REQUIRE(found_ultrawide);
+}
+
+TEST_CASE_METHOD(HotReloadFixture, "recursive scan skips translations and claude-recall dirs",
+                 "[hot-reload]") {
+    fs::create_directories(temp_dir_ / "translations");
+    std::ofstream(temp_dir_ / "translations" / "en.xml") << "<component/>";
+    fs::create_directories(temp_dir_ / ".claude-recall");
+    std::ofstream(temp_dir_ / ".claude-recall" / "note.xml") << "<component/>";
+    create_xml("real_panel.xml");
+
+    helix::XmlHotReloader hr;
+    hr.start({temp_dir_.string()}, 10000);
+    hr.stop();
+
+    REQUIRE(XmlHotReloaderTestAccess::file_mtimes(hr).size() == 1);
+}
