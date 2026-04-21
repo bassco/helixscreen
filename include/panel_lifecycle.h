@@ -50,6 +50,17 @@ class IPanelLifecycle {
     virtual void on_deactivate() = 0;
 
     /**
+     * @brief Tear down and re-create this view from its XML component definition
+     *
+     * Dev-only hook called by NavigationManager after XML hot-reload re-registers
+     * a component. Default is a no-op for lifecycles that wrap non-XML or
+     * non-rebuildable widgets. Concrete panel/overlay bases override to rebuild.
+     *
+     * @return true if rebuilt, false if skipped (not yet shown, not this instance, etc.)
+     */
+    virtual bool rebuild() { return false; }
+
+    /**
      * @brief Get human-readable name for logging
      * @return Panel/overlay name (e.g., "Motion Panel", "Network Settings")
      */
