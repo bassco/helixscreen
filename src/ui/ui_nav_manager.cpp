@@ -1260,10 +1260,9 @@ void NavigationManager::rebuild_active_views() {
         inst->rebuild();
     }
 
-    // Top modal — stubbed until Task 8
-    if (lv_obj_t* top = ModalStack::instance().top_dialog()) {
-        spdlog::debug("[NavigationManager] Top modal rebuild not yet implemented (dialog={})",
-                      (void*)top);
+    // Top modal — rebuild via Modal::rebuild_top()
+    if (ModalStack::instance().top_dialog()) {
+        Modal::rebuild_top();
     }
 }
 

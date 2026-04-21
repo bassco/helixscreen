@@ -134,6 +134,14 @@ lv_obj_t* ModalStack::top_dialog() const {
     return nullptr;
 }
 
+std::string ModalStack::top_component_name() const {
+    // Walk from top, skipping exiting entries (matches top_dialog semantics).
+    for (auto it = stack_.rbegin(); it != stack_.rend(); ++it) {
+        if (!it->exiting) return it->component_name;
+    }
+    return "";
+}
+
 lv_obj_t* ModalStack::backdrop_for(lv_obj_t* dialog) const {
     for (const auto& entry : stack_) {
         if (entry.dialog == dialog) {
@@ -630,6 +638,23 @@ lv_obj_t* Modal::get_top() {
 
 bool Modal::any_visible() {
     return !ModalStack::instance().empty();
+}
+
+bool Modal::rebuild_top() {
+    auto& stack = ModalStack::instance();
+    lv_obj_t* dialog = stack.top_dialog();
+    if (!dialog) return false;
+
+    std::string name = stack.top_component_name();
+    if (name.empty()) {
+        spdlog::warn("[Modal::rebuild_top] top dialog has no component name — skipping");
+        return false;
+    }
+
+    spdlog::info("[Modal::rebuild_top] Rebuilding modal '{}'", name);
+    Modal::hide(dialog);
+    lv_obj_t* new_dialog = Modal::show(name.c_str());
+    return new_dialog != nullptr;
 }
 
 // ============================================================================

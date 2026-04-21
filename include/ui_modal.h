@@ -117,6 +117,15 @@ class Modal {
      */
     static bool any_visible();
 
+    /**
+     * @brief Rebuild the top modal by hiding it and re-showing the same component
+     *
+     * Dev-only hook for XML hot-reload. Does nothing if no modal is visible.
+     *
+     * @return true if a modal was rebuilt, false if no modal to rebuild
+     */
+    static bool rebuild_top();
+
     // ========================================================================
     // INSTANCE API (for subclassed modals)
     // ========================================================================
@@ -293,6 +302,9 @@ class ModalStack {
 
     // Get topmost dialog
     lv_obj_t* top_dialog() const;
+
+    /// Return the component name of the top (most recent non-exiting) modal, or "" if empty.
+    std::string top_component_name() const;
 
     // Get backdrop for a dialog
     lv_obj_t* backdrop_for(lv_obj_t* dialog) const;
