@@ -881,6 +881,18 @@ void WizardConnectionStep::cleanup() {
     // Reset auto-probe state (but NOT auto_probe_attempted_ - that persists)
     auto_probe_state_.store(AutoProbeState::IDLE);
 
+    // Stop the connection_spinner's rotation animation before lv_obj_clean()
+    // tears it down. LVGL's spinner is an arc with a continuous anim; if the
+    // anim timer fires mid-lv_obj_clean, the arc event chain
+    // (lv_arc_event → lv_event_send → update_obj_state → lv_malloc_zeroed)
+    // can touch freed style memory. Seen on back-nav 3→2 in DM626HYE (#843).
+    if (screen_root_ && lv_is_initialized()) {
+        lv_obj_t* spinner = lv_obj_find_by_name(screen_root_, "connection_spinner");
+        if (spinner) {
+            lv_anim_delete(spinner, nullptr);
+        }
+    }
+
     // Skip set_status() here — widgets are about to be deleted by lv_obj_clean()
     // in ui_wizard_load_screen(). Changing label text during cleanup triggers
     // lv_obj_invalidate → blur tree walk which can hit freed objects (#792).
