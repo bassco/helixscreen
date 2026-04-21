@@ -270,8 +270,16 @@ lv_color_t ActionPromptModal::get_button_color(const std::string& color_name) {
 }
 
 void ActionPromptModal::clear_dynamic_content() {
-    // Clear created buttons (LVGL handles deletion when parent is deleted,
-    // but we clear our tracking vectors)
+    // Remove click callbacks from each button before freeing their user_data.
+    // Without this, LVGL's async teardown can still hold references to the
+    // ButtonCallbackData pointers that button_callback_data_.clear() frees,
+    // risking use-after-free if any queued event dispatches against a button
+    // after on_hide() returns.
+    for (lv_obj_t* button : created_buttons_) {
+        if (button && lv_obj_is_valid(button)) {
+            lv_obj_remove_event_cb(button, on_button_cb);
+        }
+    }
     created_buttons_.clear();
     created_text_labels_.clear();
     button_callback_data_.clear();
