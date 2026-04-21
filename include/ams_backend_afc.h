@@ -363,10 +363,17 @@ class AmsBackendAfc : public AmsSubscriptionBackend {
     /**
      * @brief Parse AFC_stepper lane object for sensor states and filament info
      *
-     * @param lane_name Lane identifier (e.g., "lane1")
+     * Caller passes the slot index directly (the enclosing loop already knows
+     * it), so this function does not re-resolve the lane name through the
+     * SlotRegistry hashtable. Avoids a hashtable find on every status update.
+     *
+     * @param slot_index Registry slot index for this lane (from enclosing loop)
+     * @param lane_name Lane identifier (e.g., "lane1"), used for logging and
+     *                  lane_hub_routing_ keying
      * @param data JSON object from AFC_stepper lane{N}
      */
-    void parse_afc_stepper(const std::string& lane_name, const nlohmann::json& data);
+    void parse_afc_stepper(int slot_index, const std::string& lane_name,
+                           const nlohmann::json& data);
 
     /**
      * @brief Parse AFC_hub object for per-hub sensor state

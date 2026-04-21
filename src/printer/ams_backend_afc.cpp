@@ -450,7 +450,7 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             std::string lane_name = slots_.name_of(i);
             std::string key = "AFC_stepper " + lane_name;
             if (params.contains(key) && params[key].is_object()) {
-                parse_afc_stepper(lane_name, params[key]);
+                parse_afc_stepper(i, lane_name, params[key]);
                 state_changed = true;
                 lanes_updated = true;
             }
@@ -462,7 +462,7 @@ void AmsBackendAfc::handle_status_update(const nlohmann::json& notification) {
             std::string lane_name = slots_.name_of(i);
             std::string key = "AFC_lane " + lane_name;
             if (params.contains(key) && params[key].is_object()) {
-                parse_afc_stepper(lane_name, params[key]);
+                parse_afc_stepper(i, lane_name, params[key]);
                 state_changed = true;
                 lanes_updated = true;
             }
@@ -1025,7 +1025,8 @@ void AmsBackendAfc::parse_afc_state(const nlohmann::json& afc_data,
 // AFC Object Parsing (AFC_stepper, AFC_hub, AFC_extruder)
 // ============================================================================
 
-void AmsBackendAfc::parse_afc_stepper(const std::string& lane_name, const nlohmann::json& data) {
+void AmsBackendAfc::parse_afc_stepper(int slot_index, const std::string& lane_name,
+                                      const nlohmann::json& data) {
     // Parse AFC_stepper lane{N} object for sensor states and filament info
     // {
     //   "prep": true,           // Prep sensor
@@ -1039,15 +1040,11 @@ void AmsBackendAfc::parse_afc_stepper(const std::string& lane_name, const nlohma
     //   "weight": 931.7
     // }
 
-    int slot_index = slots_.index_of(lane_name);
-    if (slot_index < 0) {
-        spdlog::trace("[AMS AFC] Unknown lane name: {}", lane_name);
+    auto* entry = slots_.get_mut(slot_index);
+    if (!entry) {
+        spdlog::trace("[AMS AFC] Invalid slot index {} for lane: {}", slot_index, lane_name);
         return;
     }
-
-    auto* entry = slots_.get_mut(slot_index);
-    if (!entry)
-        return;
 
     // Update sensor state for this lane
     auto& sensors = entry->sensors;
