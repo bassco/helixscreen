@@ -18,7 +18,7 @@
     <px name="icon_text_gap" value="3"/>
     <!-- Card size constraints for responsive behavior -->
     <px name="card_base_width" value="170"/>
-    <px name="card_min_width" value="140"/>
+    <px name="card_min_width" value="130"/>
     <px name="card_max_width" value="230"/>
     <px name="card_height" value="245"/>
     <int name="metadata_overlay_opacity" value="160"/>

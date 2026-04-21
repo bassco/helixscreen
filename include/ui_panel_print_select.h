@@ -395,7 +395,7 @@ class PrintSelectPanel : public PanelBase {
     //
 
     // Card layout constants (used by calculate_card_dimensions)
-    static constexpr int CARD_MIN_WIDTH = 150;
+    static constexpr int CARD_MIN_WIDTH = 130;
     static constexpr int CARD_MAX_WIDTH = 230;
     static constexpr int CARD_DEFAULT_HEIGHT = 245;
     static constexpr int ROW_COUNT_3_MIN_HEIGHT = 520;
