@@ -9,7 +9,24 @@
 #include <chrono>
 #include <lvgl.h>
 
+extern "C" {
+#include "helix-xml/src/xml/lv_xml_component_private.h"
+}
+
 namespace fs = std::filesystem;
+
+static size_t count_xml_subjects(const char* component_name) {
+    lv_xml_component_scope_t* scope = lv_xml_component_get_scope(component_name);
+    if (!scope) return 0;
+    size_t n = 0;
+    // LV_LL_READ is a C macro that relies on implicit void* conversion — expand it manually
+    // for C++ so we can cast explicitly.
+    for (void* s = lv_ll_get_head(&scope->subjects_ll); s != nullptr;
+         s = lv_ll_get_next(&scope->subjects_ll, s)) {
+        ++n;
+    }
+    return n;
+}
 
 namespace helix {
 
@@ -165,6 +182,13 @@ void XmlHotReloader::scan_and_reload() {
             auto reload_path = lvgl_path;
             helix::ui::queue_update([reload_name, reload_path]() {
                 auto start = std::chrono::steady_clock::now();
+
+                size_t subject_count = count_xml_subjects(reload_name.c_str());
+                if (subject_count > 0) {
+                    spdlog::warn("[HotReload] '{}' defines {} XML subject(s); any live widget bound "
+                                 "to these subjects will hold a dangling pointer until rebuilt",
+                                 reload_name, subject_count);
+                }
 
                 // Unregister old component definition
                 auto result = lv_xml_component_unregister(reload_name.c_str());
