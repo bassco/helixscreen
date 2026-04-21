@@ -69,14 +69,36 @@ void XmlHotReloader::initial_scan(const std::vector<std::string>& xml_dirs) {
         fs::recursive_directory_iterator end;
         while (it != end) {
             const auto& entry = *it;
-            if (entry.is_directory(ec) && is_skipped(entry.path())) {
+            std::error_code dir_ec;
+            if (entry.is_directory(dir_ec) && is_skipped(entry.path())) {
                 it.disable_recursion_pending();
-                ++it;
+                std::error_code inc_ec;
+                it.increment(inc_ec);
+                if (inc_ec) {
+                    spdlog::warn("[HotReload] Iterator error in {}: {}", dir, inc_ec.message());
+                    break;
+                }
                 continue;
             }
-            if (entry.is_regular_file(ec) && entry.path().extension() == ".xml") {
+            std::error_code file_ec;
+            if (entry.is_regular_file(file_ec) && entry.path().extension() == ".xml") {
+                std::error_code mtime_ec;
+                auto mtime = fs::last_write_time(entry.path(), mtime_ec);
+                if (mtime_ec) {
+                    spdlog::warn("[HotReload] Could not stat {}: {}", entry.path().string(),
+                                 mtime_ec.message());
+                    std::error_code inc_ec;
+                    it.increment(inc_ec);
+                    if (inc_ec) {
+                        spdlog::warn("[HotReload] Iterator error in {}: {}", dir,
+                                     inc_ec.message());
+                        break;
+                    }
+                    continue;
+                }
+
                 auto abs_path = fs::absolute(entry.path()).string();
-                file_mtimes_[abs_path] = fs::last_write_time(entry.path(), ec);
+                file_mtimes_[abs_path] = mtime;
 
                 auto rel_path = entry.path().string();
                 file_to_lvgl_path_[abs_path] = "A:" + rel_path;
@@ -87,7 +109,12 @@ void XmlHotReloader::initial_scan(const std::vector<std::string>& xml_dirs) {
                 spdlog::trace("[HotReload] Tracking: {} ({})", rel_path,
                               component_name_from_path(entry.path()));
             }
-            ++it;
+            std::error_code inc_ec;
+            it.increment(inc_ec);
+            if (inc_ec) {
+                spdlog::warn("[HotReload] Iterator error in {}: {}", dir, inc_ec.message());
+                break;
+            }
         }
     }
 
