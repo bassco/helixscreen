@@ -8,6 +8,7 @@
 #include "ui_event_safety.h"
 #include "ui_fonts.h"
 #include "ui_keyboard_manager.h"
+#include "ui_modal.h"
 #include "ui_panel_base.h"
 #include "ui_panel_home.h"
 #include "ui_update_queue.h"
@@ -1229,6 +1230,41 @@ void NavigationManager::rekey_overlay_widget(lv_obj_t* old_widget, lv_obj_t* new
 
     spdlog::debug("[NavigationManager] Rekeyed overlay widget {} → {}", (void*)old_widget,
                   (void*)new_widget);
+}
+
+void NavigationManager::rebuild_active_views() {
+    if (shutting_down_) {
+        spdlog::debug("[NavigationManager] rebuild_active_views: shutting down, skipping");
+        return;
+    }
+    spdlog::info("[NavigationManager] Rebuilding active views for hot-reload");
+
+    // Active main panel
+    int active_idx = static_cast<int>(active_panel_);
+    if (active_idx >= 0 && active_idx < UI_PANEL_COUNT) {
+        if (auto* p = panel_instances_[active_idx]) {
+            p->rebuild();
+        }
+    }
+
+    // All overlays — snapshot first because rebuild() mutates the maps via rekey.
+    std::vector<IPanelLifecycle*> overlays;
+    overlays.reserve(overlay_instances_.size() + persistent_overlay_instances_.size());
+    for (auto& [w, inst] : overlay_instances_) {
+        if (inst) overlays.push_back(inst);
+    }
+    for (auto& [w, inst] : persistent_overlay_instances_) {
+        if (inst) overlays.push_back(inst);
+    }
+    for (auto* inst : overlays) {
+        inst->rebuild();
+    }
+
+    // Top modal — stubbed until Task 8
+    if (lv_obj_t* top = ModalStack::instance().top_dialog()) {
+        spdlog::debug("[NavigationManager] Top modal rebuild not yet implemented (dialog={})",
+                      (void*)top);
+    }
 }
 
 void NavigationManager::activate_initial_panel() {

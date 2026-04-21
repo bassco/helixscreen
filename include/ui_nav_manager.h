@@ -192,6 +192,19 @@ class NavigationManager {
     void rekey_overlay_widget(lv_obj_t* old_widget, lv_obj_t* new_widget);
 
     /**
+     * @brief Rebuild every on-screen widget tree (active panel + all overlays + top modal)
+     *
+     * Called by XmlHotReloader's after-reload callback. Iterates:
+     * - the active main panel
+     * - every overlay in overlay_instances_ (visible or hidden)
+     * - every overlay in persistent_overlay_instances_
+     * - the top modal (stubbed in Task 7; implemented in Task 8)
+     *
+     * Safe to call on the LVGL main thread only.
+     */
+    void rebuild_active_views();
+
+    /**
      * @brief Activate the initial panel after all panels are registered
      *
      * Calls on_activate() on the current active panel. This should be called
