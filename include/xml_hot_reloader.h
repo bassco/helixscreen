@@ -79,6 +79,16 @@ class XmlHotReloader {
         reload_callback_ = std::move(cb);
     }
 
+    /// Callback type for post-reload notifications: (component_name)
+    using AfterReloadCallback = std::function<void(const std::string&)>;
+
+    /// Set a callback invoked after successful re-registration (or directly after the test
+    /// reload_callback fires). Runs on whatever thread handled the reload — in production
+    /// that's the LVGL main thread via queue_update; in tests it's the caller thread.
+    void set_after_reload_callback(AfterReloadCallback cb) {
+        after_reload_callback_ = std::move(cb);
+    }
+
   private:
     friend class ::XmlHotReloaderTestAccess;
     void poll_loop();
@@ -99,6 +109,8 @@ class XmlHotReloader {
 
     /// Optional test callback — if set, called instead of LVGL unregister/register
     ReloadCallback reload_callback_;
+
+    AfterReloadCallback after_reload_callback_;
 };
 
 } // namespace helix

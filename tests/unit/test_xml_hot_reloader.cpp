@@ -531,3 +531,30 @@ TEST_CASE_METHOD(HotReloadFixture, "recursive scan skips translations and claude
 
     REQUIRE(XmlHotReloaderTestAccess::file_mtimes(hr).size() == 1);
 }
+
+TEST_CASE_METHOD(HotReloadFixture, "after_reload callback fires with component name",
+                 "[hot-reload]") {
+    create_xml("motion_panel.xml");
+    helix::XmlHotReloader hr;
+
+    std::vector<std::string> reload_log;
+    std::vector<std::string> after_log;
+    std::mutex m;
+    hr.set_reload_callback([&](const std::string& name, const std::string&) {
+        std::lock_guard<std::mutex> lock(m);
+        reload_log.push_back(name);
+    });
+    hr.set_after_reload_callback([&](const std::string& name) {
+        std::lock_guard<std::mutex> lock(m);
+        after_log.push_back(name);
+    });
+
+    hr.start({temp_dir_.string()}, 10000);
+    touch_xml("motion_panel.xml");
+    hr.scan_and_reload();
+    hr.stop();
+
+    std::lock_guard<std::mutex> lock(m);
+    REQUIRE(reload_log == std::vector<std::string>{"motion_panel"});
+    REQUIRE(after_log == std::vector<std::string>{"motion_panel"});
+}

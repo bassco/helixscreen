@@ -176,11 +176,13 @@ void XmlHotReloader::scan_and_reload() {
         if (reload_callback_) {
             // Test mode — invoke callback directly instead of LVGL operations
             reload_callback_(comp_name, lvgl_path);
+            if (after_reload_callback_) after_reload_callback_(comp_name);
         } else {
             // Marshal the reload to the LVGL main thread
             auto reload_name = comp_name;
             auto reload_path = lvgl_path;
-            helix::ui::queue_update([reload_name, reload_path]() {
+            auto after_cb = after_reload_callback_;
+            helix::ui::queue_update([reload_name, reload_path, after_cb]() {
                 auto start = std::chrono::steady_clock::now();
 
                 size_t subject_count = count_xml_subjects(reload_name.c_str());
@@ -208,6 +210,8 @@ void XmlHotReloader::scan_and_reload() {
                 auto elapsed = std::chrono::steady_clock::now() - start;
                 auto us = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
                 spdlog::info("[HotReload] Reloaded: {} ({:.1f}ms)", reload_name, us / 1000.0);
+
+                if (after_cb) after_cb(reload_name);
             });
         }
     }
