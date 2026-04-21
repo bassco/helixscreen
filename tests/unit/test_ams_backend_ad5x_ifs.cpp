@@ -977,17 +977,26 @@ TEST_CASE("AD5X IFS has_ifs_vars detection", "[ams][ad5x_ifs]") {
         REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
     }
 
-    SECTION("set true when lessWaste variables found") {
+    SECTION("set true when lessWaste variables found and macro verified") {
+        // Simulate initial query confirming macro exists (clears pessimistic latch)
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
         REQUIRE(Ad5xIfsTestAccess::has_ifs_vars(backend));
     }
 
-    SECTION("set true when bambufy variables found") {
+    SECTION("set true when bambufy variables found and macro verified") {
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
         json vars;
         vars["bambufy_colors"] = json::array({"FF0000", "00FF00", "0000FF", "FFFFFF"});
         vars["bambufy_tools"] = json::array({1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
         REQUIRE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+    }
+
+    SECTION("stays false when save_variables arrive before macro check completes") {
+        // Latch starts true (pessimistic) — save_variables alone can't enable has_ifs_vars
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
     }
 
     SECTION("stays false when save_variables has no recognized prefix") {
@@ -1005,20 +1014,21 @@ TEST_CASE("AD5X IFS has_ifs_vars reset when macro missing", "[ams][ad5x_ifs]") {
     // This test verifies the parse step sets the flag (the reset happens in on_started).
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
-    SECTION("parse_save_variables sets flag even without macro validation") {
+    SECTION("pessimistic latch prevents flag before macro check") {
+        // Latch starts true — parse_save_variables can't set has_ifs_vars_
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+
+        // Clearing the latch (as initial query would for a present macro) allows it
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
         REQUIRE(Ad5xIfsTestAccess::has_ifs_vars(backend));
-
-        // Simulate what on_started() does: reset if macro absent
-        Ad5xIfsTestAccess::set_has_ifs_vars(backend, false);
-        REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
     }
 
     SECTION(
         "later save_variables notify cannot re-enable has_ifs_vars once macro confirmed missing") {
-        // Regression: without the ifs_macro_confirmed_missing_ latch, every subsequent
-        // notify_status_update carrying less_waste_* data re-set has_ifs_vars_ = true,
-        // producing "Unknown command: _IFS_VARS" when users then edited slots.
+        // Simulate macro verified + save_variables arriving → has_ifs_vars_ = true
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
         REQUIRE(Ad5xIfsTestAccess::has_ifs_vars(backend));
 
@@ -1040,10 +1050,11 @@ TEST_CASE("AD5X IFS has_ifs_vars reset when macro missing", "[ams][ad5x_ifs]") {
     }
 
     SECTION("set_slot_info uses native ZMOD path when has_ifs_vars is false") {
-        // Pre-populate slot data via save_variables
+        // Clear latch to pre-populate slot data, then re-set to simulate macro missing
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-        // Reset has_ifs_vars_ as on_started() would when macro is missing
         Ad5xIfsTestAccess::set_has_ifs_vars(backend, false);
+        Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, true);
 
         // set_slot_info without persist should succeed regardless
         SlotInfo info;

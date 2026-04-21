@@ -111,6 +111,18 @@ void AmsBackendAd5xIfs::on_started() {
                     status["webhooks"]["state"].is_string()) {
                     klippy_ready = status["webhooks"]["state"].get<std::string>() == "ready";
                 }
+
+                // Update latch BEFORE handle_status_update so parse_save_variables
+                // sees the correct state. ifs_macro_confirmed_missing_ starts true
+                // (pessimistic) and is only cleared here when the macro exists.
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    if (macro_exists) {
+                        ifs_macro_confirmed_missing_ = false;
+                    }
+                    // !macro_exists: latch stays true (initialized true)
+                }
+
                 handle_status_update(status);
             }
 
@@ -127,22 +139,16 @@ void AmsBackendAd5xIfs::on_started() {
                               colors_[1], colors_[2], colors_[3]);
             }
 
-            // If parse_save_variables set has_ifs_vars_ but the macro doesn't exist,
-            // fall back to native ZMOD. This happens when lessWaste/bambufy plugins
-            // are partially installed (save_variables data exists but macros aren't loaded).
-            // Latch ifs_macro_confirmed_missing_ so subsequent save_variables notifies
-            // can't silently re-enable has_ifs_vars_.
+            // Safety net: if parse_save_variables somehow set has_ifs_vars_ despite
+            // the latch (shouldn't happen), force it back off for missing macros.
             bool need_zcolor = false;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (!macro_exists) {
-                    if (has_ifs_vars_) {
-                        spdlog::warn("{} save_variables contain {}_ data but _IFS_VARS macro "
-                                     "not found — falling back to native ZMOD",
-                                     backend_log_tag(), var_prefix_);
-                        has_ifs_vars_ = false;
-                    }
-                    ifs_macro_confirmed_missing_ = true;
+                if (!macro_exists && has_ifs_vars_) {
+                    spdlog::warn("{} save_variables contain {}_ data but _IFS_VARS macro "
+                                 "not found — falling back to native ZMOD",
+                                 backend_log_tag(), var_prefix_);
+                    has_ifs_vars_ = false;
                 }
                 need_zcolor = !has_ifs_vars_;
             }

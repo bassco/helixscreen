@@ -285,12 +285,15 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // (read/written via Moonraker HTTP file API).
     bool has_ifs_vars_ = false;
 
-    // Latch: set true in on_started when the gcode_macro _ifs_vars query
-    // confirms the macro is not registered. save_variables can contain stale
-    // less_waste_* / bambufy_* entries (partial install, plugin removed) —
-    // without this latch, every subsequent save_variables notify re-enables
-    // has_ifs_vars_, producing "Unknown command: _IFS_VARS" errors.
-    bool ifs_macro_confirmed_missing_ = false;
+    // Latch: starts TRUE (pessimistic) — cleared only when the initial
+    // gcode_macro query confirms the macro exists. Prevents the race where
+    // a notify_status_update with save_variables arrives between subscription
+    // registration and the initial query callback, which would set
+    // has_ifs_vars_ = true before we've verified the macro is loaded.
+    // Once the initial query confirms the macro is missing, stays true for
+    // the session so subsequent save_variables notifies can't re-enable
+    // has_ifs_vars_.
+    bool ifs_macro_confirmed_missing_ = true;
     std::atomic<bool> reread_pending_{false};
 
     // GET_ZCOLOR SILENT=1 query state.
