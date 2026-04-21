@@ -2233,7 +2233,8 @@ static void on_update_notify_install(lv_event_t* /*e*/) {
     LVGL_SAFE_EVENT_CB_BEGIN("[UpdateChecker] on_update_notify_install");
     spdlog::info("[UpdateChecker] User chose to install update");
     UpdateChecker::instance().hide_update_notification();
-    helix::settings::get_about_settings_overlay().show_update_download_modal();
+    helix::settings::get_about_settings_overlay().show_update_download_modal(
+        /*start_immediately=*/true);
     LVGL_SAFE_EVENT_CB_END();
 }
 

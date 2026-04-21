@@ -326,7 +326,7 @@ void AboutSettingsOverlay::fetch_print_hours() {
 // UPDATE DOWNLOAD MODAL
 // ============================================================================
 
-void AboutSettingsOverlay::show_update_download_modal() {
+void AboutSettingsOverlay::show_update_download_modal(bool start_immediately) {
     // Ensure callbacks are registered (modal may be shown before the overlay)
     if (!subjects_initialized_) {
         init_subjects();
@@ -344,10 +344,17 @@ void AboutSettingsOverlay::show_update_download_modal() {
     if (!update_download_modal_) {
         // Clear any stale Error/Complete status carried over from a prior
         // download attempt — otherwise the modal briefly flashes that
-        // content before the Confirming update below takes effect.
+        // content before the status update below takes effect.
         UpdateChecker::instance().report_download_status(UpdateChecker::DownloadStatus::Idle, 0,
                                                          "");
         update_download_modal_ = helix::ui::modal_show("update_download_modal");
+    }
+
+    if (start_immediately) {
+        // User already confirmed on the "New Version Available" notification —
+        // skip the redundant Confirming state and begin the download directly.
+        UpdateChecker::instance().start_download();
+        return;
     }
 
     // Set to Confirming state with version info

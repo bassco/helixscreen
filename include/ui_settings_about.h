@@ -95,8 +95,11 @@ class AboutSettingsOverlay : public OverlayBase {
      */
     void populate_info_rows();
 
-    // Update download modal management
-    void show_update_download_modal();
+    // Update download modal management.
+    // When start_immediately is true, skip the Confirming state and begin the
+    // download directly — used when the user already confirmed on the "New
+    // Version Available" notification modal (#prestonbrown/helixscreen).
+    void show_update_download_modal(bool start_immediately = false);
     void hide_update_download_modal();
 
   private:
