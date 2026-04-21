@@ -1191,6 +1191,12 @@ void NavigationManager::replace_panel_widget(helix::PanelId id, lv_obj_t* new_wi
                   panel_id_to_name(id), (void*)new_widget);
 }
 
+lv_obj_t* NavigationManager::get_panel_widget(helix::PanelId id) const {
+    int idx = static_cast<int>(id);
+    if (idx < 0 || idx >= UI_PANEL_COUNT) return nullptr;
+    return panel_widgets_[idx];
+}
+
 void NavigationManager::rekey_overlay_widget(lv_obj_t* old_widget, lv_obj_t* new_widget) {
     if (!old_widget || !new_widget || old_widget == new_widget) return;
 

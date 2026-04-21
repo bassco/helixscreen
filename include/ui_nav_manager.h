@@ -182,6 +182,15 @@ class NavigationManager {
     void replace_panel_widget(helix::PanelId id, lv_obj_t* new_widget);
 
     /**
+     * @brief Get the cached widget pointer for a panel
+     *
+     * @param id Panel identifier
+     * @return Widget pointer, or nullptr if id is out of range or panel
+     *         not yet registered via set_panels()/replace_panel_widget()
+     */
+    lv_obj_t* get_panel_widget(helix::PanelId id) const;
+
+    /**
      * @brief Re-key overlay maps: swap old_widget → new_widget for the same lifecycle.
      *
      * Used by hot-reload overlay rebuild. Touches overlay_instances_,
