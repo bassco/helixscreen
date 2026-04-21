@@ -13,6 +13,10 @@
     <prop name="bind_description" type="string"/>
     <prop name="callback" type="string" default=""/>
     <prop name="disabled" type="string" default=""/>
+    <!-- Hide description when ui_breakpoint is below this value. Default 2 hides on
+         micro/tiny; set to 0 to force the description visible at all breakpoints
+         (also suppresses the (?) info icon). -->
+    <prop name="description_min_bp" type="int" default="2"/>
   </api>
   <styles>
     <style name="label_enabled" text_color="#text"/>
@@ -44,11 +48,11 @@
           <bind_style name="label_enabled" subject="$disabled" ref_value="0"/>
           <bind_style name="label_disabled" subject="$disabled" ref_value="1"/>
         </text_body>
-        <!-- Description: hidden on micro/tiny by default -->
+        <!-- Description: hidden when breakpoint below description_min_bp (default 2) -->
         <text_small name="description"
                     text="$description" translation_tag="$description_tag"
                     bind_text="$bind_description">
-          <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="2"/>
+          <bind_flag_if_lt subject="ui_breakpoint" flag="hidden" ref_value="$description_min_bp"/>
         </text_small>
       </lv_obj>
       <!-- Info icon: hidden if no description, hidden on medium+ -->
@@ -57,7 +61,7 @@
               style_pad_all="2" style_bg_opa="0" style_border_width="0"
               clickable="true" event_bubble="false" scrollable="false"
               hidden_if_empty="$description">
-        <bind_flag_if_gt subject="ui_breakpoint" flag="hidden" ref_value="1"/>
+        <bind_flag_if_ge subject="ui_breakpoint" flag="hidden" ref_value="$description_min_bp"/>
         <icon src="info_outline" size="sm" variant="muted"
               clickable="false" event_bubble="true"/>
         <event_cb trigger="clicked" callback="on_setting_info_clicked"/>
