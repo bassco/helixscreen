@@ -8,6 +8,7 @@
 #include "ui_error_reporting.h"
 #include "ui_split_button.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "ams_state.h"
 #include "app_globals.h"
@@ -605,7 +606,10 @@ void AmsEditModal::render_spool_list(const std::string& filter) {
         return;
     }
 
-    lv_obj_clean(spool_list);
+    // Invoked from a token.defer() callback (UpdateQueue batch). Sync
+    // lv_obj_clean in that context corrupts LVGL's event linked list →
+    // SIGSEGV in lv_event_mark_deleted (#776).
+    helix::ui::safe_clean_children(spool_list);
 
     // Reuse shared filter_spools() from spoolman_types
     auto filtered = filter_spools(cached_spools_, filter);
