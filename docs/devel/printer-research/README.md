@@ -71,6 +71,7 @@ This directory contains research documentation on various 3D printers for HelixS
 | [CREALITY_K1_VS_K2_COMMUNITY.md](CREALITY_K1_VS_K2_COMMUNITY.md) | K1 vs K2 enthusiast/aftermarket ecosystem comparison |
 | [CREALITY_NEBULA_PAD_RESEARCH.md](CREALITY_NEBULA_PAD_RESEARCH.md) | Nebula Pad add-on touchscreen (competitor) |
 | [FLASHFORGE_AD5X_RESEARCH.md](FLASHFORGE_AD5X_RESEARCH.md) | AD5X, IFS multi-color, ZMOD |
+| [QIDI_PLUS_4_RESEARCH.md](QIDI_PLUS_4_RESEARCH.md) | QIDI Plus 4 (modded Pi 4 + Kalico + Happy Hare + QIDI Box), real-device analysis |
 | [SNAPMAKER_U1_RESEARCH.md](SNAPMAKER_U1_RESEARCH.md) | U1 toolchanger, SnapSwap |
 
 ## Competitor Devices (Add-on Touchscreens)
