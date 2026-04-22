@@ -5,6 +5,21 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.41] - 2026-04-21
+
+### Added
+- **Spoolman: spool lists sorted by last used** — AMS edit modal and Spoolman panel show the most recently used spool first; never-used spools sink to the bottom.
+
+### Fixed
+- **Spoolman new-spool-on-save** — the external spool modal's Save path failed to create the spool in Spoolman and never told Moonraker it was active. Density and diameter are now supplied on POST /v1/filament; initial_weight on POST /v1/spool; AmsEditModal fires sync_active_spool after create and re-syncs on every linked save (recovers from Moonraker state loss).
+- **Crash-report modal occluded by install wizard** ([#849]) — backdrop now parents to the top layer so Send/Dismiss is always reachable.
+- **i18n: icon_font_hero missing on smaller font tiers** — previously mapped to xxlarge-only glyphs, producing font-not-linked warnings and empty icons on CC1, AD5M, pi32, and K2. Now maps to each tier's largest available glyph.
+- **Wizard Back/Next crash during install** ([#848], [#843]) — wizard navigation routes through lv_async_call so the clean+rebuild runs outside the input-release tick.
+- **AMS AFC: redundant per-update hashtable lookup** — caller loops already know the slot index; closes the torn-pointer fault seen in bundle 8SA9DQZ4.
+
+### Changed
+- **i18n memory: −4.7 MB peak RSS on CC1** — dropped dead lv_i18n path; translations load per-locale on demand. Saves ~1.2 MB binary / ~521 KB VmExe; VmHWM drops 19 MB → 14 MB on CC1 (under the 15 MB OOM warning threshold). All 9 languages remain runtime-selectable.
+
 ## [0.99.40] - 2026-04-21
 
 ### Added
@@ -3204,6 +3219,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.41]: https://github.com/prestonbrown/helixscreen/compare/v0.99.40...v0.99.41
 [0.99.40]: https://github.com/prestonbrown/helixscreen/compare/v0.99.39...v0.99.40
 [0.99.39]: https://github.com/prestonbrown/helixscreen/compare/v0.99.38...v0.99.39
 [0.99.38]: https://github.com/prestonbrown/helixscreen/compare/v0.99.37...v0.99.38
