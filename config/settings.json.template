@@ -248,6 +248,12 @@
   },
   "telemetry_enabled": false,
   "_telemetry_enabled_comment": "Enable anonymous usage telemetry. Opt-in during setup wizard. Default: false.",
+  "upgrade_nudge": {
+    "intensity": "off",
+    "_intensity_comment": "In-app upgrade nudging intensity. 'off' = no in-app prompt beyond the Settings > About entry. 'normal' = red dot on Settings icon when an update is available. 'aggressive' = persistent dismissible top-banner for the 1.0 rollout. Default 'off' until 1.0 ships.",
+    "dismissed_version": "",
+    "_dismissed_version_comment": "Auto-maintained. The version the user dismissed the banner for; resets on each new detected release."
+  },
   "standard_macros": {
     "quick_button_1": "clean_nozzle",
     "quick_button_2": "bed_level",
