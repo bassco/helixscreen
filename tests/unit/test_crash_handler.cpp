@@ -283,8 +283,59 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: double install is idempotent", "[tele
 }
 
 // ============================================================================
-// TelemetryManager Integration [telemetry][crash]
+// write_exception_record [telemetry][crash]
 // ============================================================================
+//
+// AD5M v0.99.38-0.99.41 showed write_exception_crash_file in its own crash
+// stack — the exception path in main.cpp was heap-using (std::string for path,
+// dprintf, backtrace, dl_iterate_phdr) and re-crashed under memory pressure.
+// write_exception_record replaces it with async-signal-safe primitives and a
+// re-entrance guard.
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: write_exception_record writes parseable record",
+                 "[telemetry][crash]") {
+    crash_handler::install(crash_path());
+    crash_handler::write_exception_record("std::runtime_error: test");
+    crash_handler::uninstall();
+
+    REQUIRE(crash_handler::has_crash_file(crash_path()));
+    json parsed = crash_handler::read_crash_file(crash_path());
+    REQUIRE(parsed != nullptr);
+    REQUIRE(parsed["signal"] == 0);
+    REQUIRE(parsed["signal_name"] == "EXCEPTION");
+    REQUIRE(parsed.contains("app_version"));
+    REQUIRE(parsed.contains("timestamp"));
+    REQUIRE(parsed.contains("uptime_sec"));
+    REQUIRE(parsed["exception"] == "std::runtime_error: test");
+}
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: write_exception_record handles null what",
+                 "[telemetry][crash]") {
+    crash_handler::install(crash_path());
+    crash_handler::write_exception_record(nullptr);
+    crash_handler::uninstall();
+
+    REQUIRE(crash_handler::has_crash_file(crash_path()));
+    json parsed = crash_handler::read_crash_file(crash_path());
+    REQUIRE(parsed != nullptr);
+    REQUIRE(parsed["signal"] == 0);
+    REQUIRE(parsed["signal_name"] == "EXCEPTION");
+    // exception: key should be absent since what was nullptr
+    REQUIRE_FALSE(parsed.contains("exception"));
+}
+
+TEST_CASE_METHOD(CrashTestFixture, "Crash: write_exception_record is no-op without install",
+                 "[telemetry][crash]") {
+    // Ensure we start in uninstalled state — prior tests may have left state;
+    // uninstall is idempotent.
+    crash_handler::uninstall();
+
+    // No install() — s_crash_path is empty, so this must do nothing
+    // (it absolutely must not segfault or open("") ).
+    crash_handler::write_exception_record("should not write anywhere");
+
+    REQUIRE_FALSE(crash_handler::has_crash_file(crash_path()));
+}
 
 TEST_CASE_METHOD(CrashTestFixture, "Crash: TelemetryManager enqueues crash event from file",
                  "[telemetry][crash]") {

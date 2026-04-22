@@ -1299,6 +1299,58 @@ void crash_handler::uninstall() {
     spdlog::debug("[CrashHandler] Uninstalled signal handlers");
 }
 
+void crash_handler::write_exception_record(const char* what) noexcept {
+    // Without install() we have no destination path. The pre-install C++ catch
+    // blocks in main() are uninteresting in practice (Application's constructor
+    // doesn't throw before install completes), so dropping is acceptable.
+    if (s_crash_path[0] == '\0') {
+        return;
+    }
+
+    int fd = open(s_crash_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        return;
+    }
+
+    char num_buf[32];
+
+    // Schema-compatible with the SIGSEGV handler's output. signal:0 + name:EXCEPTION
+    // tells the parser this is the exception path (no register dump, no fault_addr).
+    safe_write(fd, "signal:0\n");
+    safe_write(fd, "name:EXCEPTION\n");
+
+    safe_write(fd, "version:");
+    safe_write(fd, HELIX_VERSION);
+    safe_write(fd, "\n");
+
+    // time(nullptr) is async-signal-safe per POSIX.
+    time_t now = time(nullptr);
+    safe_write(fd, "timestamp:");
+    safe_write(fd, int_to_str(num_buf, sizeof(num_buf), static_cast<long>(now)));
+    safe_write(fd, "\n");
+
+    long uptime = 0;
+    if (s_start_time > 0 && now >= s_start_time) {
+        uptime = static_cast<long>(now - s_start_time);
+    }
+    safe_write(fd, "uptime:");
+    safe_write(fd, int_to_str(num_buf, sizeof(num_buf), uptime));
+    safe_write(fd, "\n");
+
+    if (what) {
+        safe_write(fd, "exception:");
+        safe_write(fd, what);
+        safe_write(fd, "\n");
+    }
+
+    // Dump breadcrumbs — same context the signal handler emits, lets the
+    // resolver localize the throw site even though backtrace() would be useless
+    // here (the C++ unwinder has already collapsed the original throw frame).
+    crash_handler::breadcrumb::dump_to_fd(fd);
+
+    close(fd);
+}
+
 bool crash_handler::has_crash_file(const std::string& crash_file_path) {
     std::error_code ec;
     return fs::exists(crash_file_path, ec) && fs::file_size(crash_file_path, ec) > 0;

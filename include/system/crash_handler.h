@@ -87,6 +87,24 @@ void remove_crash_file(const std::string& crash_file_path);
 void write_mock_crash_file(const std::string& crash_file_path);
 
 /**
+ * @brief Write a minimal crash record for an uncaught C++ exception
+ *
+ * Async-signal-safe by construction — uses only the static crash path buffer
+ * and primitives shared with the signal handler (no heap allocation, no
+ * dprintf, no backtrace, no dl_iterate_phdr). Intended to be called from
+ * `std::terminate` handlers and top-level catch blocks where the program
+ * is already in an unrecoverable state and any heap touch could re-crash
+ * (this was observed on AD5M v0.99.38-0.99.41 — the prior heap-using
+ * implementation in main.cpp showed up in its own crash backtrace).
+ *
+ * Requires `crash_handler::install()` to have been called previously so the
+ * destination path is known. If not installed, the call is a no-op.
+ *
+ * @param what Optional exception message (e.what()), may be nullptr
+ */
+void write_exception_record(const char* what) noexcept;
+
+/**
  * @brief Intentionally SIGSEGV through a deep call chain, for verifying the
  *        signal handler's unwind path on real hardware.
  *

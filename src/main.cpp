@@ -15,29 +15,15 @@
 #include "application.h"
 #include "data_root_resolver.h"
 #include "helix_version.h"
+#include "system/crash_handler.h"
 
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
 #include <exception>
-#include <fcntl.h>
 #include <unistd.h>
-
-// execinfo.h: glibc Linux and macOS. Missing on Android NDK (bionic) and
-// musl libc (Creality K1/K2).
-#if defined(__APPLE__) || (defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__))
-#include <execinfo.h>
-#define HELIX_HAS_BACKTRACE 1
-#endif
-
-// link.h / dl_iterate_phdr: glibc Linux only. macOS SDK doesn't ship link.h.
-#if defined(__linux__) && defined(__GLIBC__) && !defined(__ANDROID__)
-#include <link.h>
-#define HELIX_HAS_DL_ITERATE_PHDR 1
-#endif
 
 // SDL2 redefines main → SDL_main via this header.
 // On Android, the SDL Java activity loads libmain.so and calls SDL_main().
@@ -51,54 +37,6 @@
 static void log_fatal(const char* msg) {
     fprintf(stderr, "[FATAL] %s\n", msg);
     fflush(stderr);
-}
-
-#ifdef HELIX_HAS_DL_ITERATE_PHDR
-static int find_load_base_cb(struct dl_phdr_info* info, size_t /*size*/, void* data) {
-    if (info->dlpi_name == nullptr || info->dlpi_name[0] == '\0') {
-        *static_cast<uintptr_t*>(data) = static_cast<uintptr_t>(info->dlpi_addr);
-        return 1;
-    }
-    return 0;
-}
-#endif
-
-// Write a minimal crash.txt for telemetry when an exception is caught.
-// Uses the same key:value format as crash_handler's signal handler so
-// CrashReporter can parse it on next startup.
-static void write_exception_crash_file(const char* what) {
-    const std::string crash_path = helix::writable_path("crash.txt");
-    int fd = open(crash_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    if (fd < 0) {
-        return;
-    }
-
-    // Build a crash record. Not a signal handler — heap/stdio/backtrace safe.
-    time_t now = time(nullptr);
-    dprintf(fd, "signal:0\n");
-    dprintf(fd, "name:EXCEPTION\n");
-    dprintf(fd, "version:%s\n", HELIX_VERSION);
-    dprintf(fd, "timestamp:%ld\n", static_cast<long>(now));
-    dprintf(fd, "uptime:0\n");
-    if (what) {
-        dprintf(fd, "exception:%s\n", what);
-    }
-
-#ifdef HELIX_HAS_DL_ITERATE_PHDR
-    uintptr_t load_base = 0;
-    dl_iterate_phdr(find_load_base_cb, &load_base);
-    dprintf(fd, "load_base:0x%lx\n", static_cast<unsigned long>(load_base));
-#endif
-
-#ifdef HELIX_HAS_BACKTRACE
-    void* frames[64];
-    int n = backtrace(frames, 64);
-    for (int i = 0; i < n; ++i) {
-        dprintf(fd, "bt:0x%lx\n", reinterpret_cast<unsigned long>(frames[i]));
-    }
-#endif
-
-    close(fd);
 }
 
 // Called by std::terminate() — covers uncaught exceptions, joinable thread
@@ -133,7 +71,7 @@ static void terminate_handler() {
 
     // Write crash file BEFORE abort — abort triggers the signal handler which
     // would overwrite it without the exception message.
-    write_exception_crash_file(what);
+    crash_handler::write_exception_record(what);
 
     // Encode signal death via POSIX 128+signum convention so the watchdog's
     // exit-code translation (helix_watchdog.cpp: "exited with code N (signal N
@@ -154,11 +92,11 @@ int main(int argc, char** argv) {
     } catch (const std::exception& e) {
         fprintf(stderr, "[FATAL] Unhandled exception in Application: %s\n", e.what());
         fflush(stderr);
-        write_exception_crash_file(e.what());
+        crash_handler::write_exception_record(e.what());
         _exit(128 + SIGABRT);
     } catch (...) {
         log_fatal("Unhandled non-std::exception in Application");
-        write_exception_crash_file("non-std::exception");
+        crash_handler::write_exception_record("non-std::exception");
         _exit(128 + SIGABRT);
     }
 
