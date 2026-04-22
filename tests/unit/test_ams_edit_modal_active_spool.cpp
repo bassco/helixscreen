@@ -158,13 +158,14 @@ TEST_CASE_METHOD(LVGLTestFixture, "handle_save clears active spool when spool un
     REQUIRE(api.spoolman_mock().get_mock_active_spool_id() == 0);
 }
 
-TEST_CASE_METHOD(LVGLTestFixture, "handle_save does NOT call set_active_spool when spool unchanged",
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "handle_save re-syncs active spool on unchanged linked save",
                  "[ams_edit_modal][spoolman][active_spool]") {
     PrinterState state;
     MoonrakerClientMock client;
     MoonrakerAPIMock api(client, state);
 
-    // Set active spool to something else to detect unwanted changes
+    // Simulate Moonraker having lost the active-spool state (e.g. after restart).
     api.spoolman_mock().set_active_spool(7, nullptr, nullptr);
 
     AmsEditModal modal;
@@ -175,7 +176,7 @@ TEST_CASE_METHOD(LVGLTestFixture, "handle_save does NOT call set_active_spool wh
     original.spoolman_id = 42;
 
     SlotInfo working;
-    working.spoolman_id = 42; // Same spool
+    working.spoolman_id = 42; // Same spool — re-save, not a change
 
     access.set_original_info(original);
     access.set_working_info(working);
@@ -190,8 +191,8 @@ TEST_CASE_METHOD(LVGLTestFixture, "handle_save does NOT call set_active_spool wh
     UpdateQueue::instance().drain();
 
     REQUIRE(completion_fired);
-    // Active spool should remain 7 — not changed to 42
-    REQUIRE(api.spoolman_mock().get_mock_active_spool_id() == 7);
+    // Re-save always re-syncs so Moonraker recovers lost state.
+    REQUIRE(api.spoolman_mock().get_mock_active_spool_id() == 42);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture, "handle_save does NOT crash when no API available",

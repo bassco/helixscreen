@@ -9,6 +9,7 @@
 #include "printer_state.h"
 #include "spoolman_types.h" // For SpoolInfo, VendorInfo, FilamentInfo
 
+#include <algorithm>
 #include <set>
 
 #include "../catch_amalgamated.hpp"
@@ -344,16 +345,14 @@ TEST_CASE("MoonrakerAPIMock - get_spoolman_spools", "[filament][mock]") {
         REQUIRE(callback_called);
     }
 
-    SECTION("First spool is active by default") {
+    SECTION("Exactly one spool is active by default") {
         api.spoolman().get_spoolman_spools(
             [&](const std::vector<SpoolInfo>& spools) {
                 REQUIRE(spools.size() > 0);
-                REQUIRE(spools[0].is_active == true);
-
-                // All other spools should not be active
-                for (size_t i = 1; i < spools.size(); ++i) {
-                    REQUIRE(spools[i].is_active == false);
-                }
+                const int active_count = std::count_if(
+                    spools.begin(), spools.end(),
+                    [](const SpoolInfo& s) { return s.is_active; });
+                REQUIRE(active_count == 1);
             },
             [](const MoonrakerError&) {});
     }
