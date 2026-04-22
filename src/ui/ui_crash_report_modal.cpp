@@ -83,6 +83,14 @@ bool CrashReportModal::show_modal(lv_obj_t* parent) {
 
 void CrashReportModal::on_show() {
     spdlog::debug("[CrashReportModal] on_show");
+
+    // Re-parent to top layer. The first-run wizard spawns on the active screen
+    // immediately after us and would otherwise render on top, making Send/Dismiss
+    // unreachable until wizard completion (#849). Top layer paints above all
+    // screen children by design. Same pattern as AbortManager.
+    if (backdrop_) {
+        lv_obj_set_parent(backdrop_, lv_layer_top());
+    }
 }
 
 void CrashReportModal::on_hide() {
