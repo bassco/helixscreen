@@ -43,6 +43,7 @@
 #include "runtime_config.h"
 #include "standard_macros.h"
 #include "static_panel_registry.h"
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 #include "thumbnail_cache.h"
 #include "thumbnail_processor.h"
@@ -699,8 +700,12 @@ void PrintStatusPanel::on_activate() {
         }
     }
 
-    // Re-apply cached thumbnail now that the panel is visible.
+    // Re-apply cached thumbnail now that the panel is visible. Breadcrumb the
+    // set_src so draw-time UAFs in the blend path (argb8888_image_blend reading
+    // source pixels from an unmapped heap page, #851) can be pinned to this
+    // reactivation site in post-hoc crash reports.
     if (print_thumbnail_ && !cached_thumbnail_path_.empty()) {
+        crash_handler::breadcrumb::note("pstat_thm", "on_activate");
         lv_image_set_src(print_thumbnail_, cached_thumbnail_path_.c_str());
     }
 

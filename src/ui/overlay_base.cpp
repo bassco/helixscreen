@@ -3,6 +3,7 @@
 
 #include "overlay_base.h"
 
+#include "system/crash_handler.h"
 #include "ui_nav_manager.h"
 #include "ui_panel_common.h"
 #include "ui_update_queue.h"
@@ -60,14 +61,25 @@ void OverlayBase::destroy_overlay_ui(lv_obj_t*& cached_panel) {
     NavigationManager::instance().unregister_overlay_close_callback(overlay_root_);
     NavigationManager::instance().unregister_overlay_instance(overlay_root_);
 
-    // Delete the widget tree
-    helix::ui::safe_delete(overlay_root_);
+    // Breadcrumb the destroy so crashes in the close path can be pinned to
+    // which overlay was being torn down. Pairs with existing "overlay+" crumb
+    // on push.
+    crash_handler::breadcrumb::note("ovrl_dst", get_name());
+
+    // Deferred delete: sync `safe_delete` is banned in overlay close callbacks
+    // (ui_utils.h) — multiple sync deletions in the same UpdateQueue batch
+    // corrupt LVGL's global event list (#776, #190, #80, #840).
+    // destroy_overlay_ui runs as a close callback on memory-constrained devices
+    // via register_overlay_close_callback(), so deferral is mandatory here.
+    helix::ui::safe_delete_deferred(overlay_root_);
 
     // Also null the caller's cached pointer (may be the same as overlay_root_,
     // but could be a separate copy held by the calling panel)
     cached_panel = nullptr;
 
-    // Let derived class null its widget pointers
+    // Let derived class null its widget pointers. With deferred deletion the
+    // child widgets are still valid (hidden, reparented to top layer) during
+    // this call; the async tick will recursively delete the whole subtree.
     on_ui_destroyed();
 }
 

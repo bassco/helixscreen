@@ -213,8 +213,12 @@ class OverlayBase : public IPanelLifecycle {
      * 1. Drains UpdateQueue (process pending deferred callbacks)
      * 2. Unregisters close callback from NavigationManager
      * 3. Unregisters overlay instance from NavigationManager
-     * 4. Deletes the widget tree via safe_delete()
+     * 4. Defers widget-tree deletion via safe_delete_deferred() — sync
+     *    deletion inside an overlay close callback corrupts LVGL's global
+     *    event list when chained from a UpdateQueue batch (#776, #840)
      * 5. Calls on_ui_destroyed() to null derived class widget pointers
+     *    (child widgets are still valid at this point, just hidden and
+     *    reparented to top layer; actual deletion runs on the next tick)
      *
      * The overlay object (subjects, state) survives — only the widget tree
      * is destroyed. Next open triggers re-creation via lazy_create_and_push_overlay.
