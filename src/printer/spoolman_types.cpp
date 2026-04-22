@@ -145,3 +145,15 @@ std::vector<SpoolInfo> filter_spools(const std::vector<SpoolInfo>& spools,
 
     return result;
 }
+
+void sort_spools_by_recency(std::vector<SpoolInfo>& spools) {
+    std::sort(spools.begin(), spools.end(), [](const SpoolInfo& a, const SpoolInfo& b) {
+        const bool a_null = a.last_used.empty();
+        const bool b_null = b.last_used.empty();
+        if (a_null != b_null)
+            return !a_null;
+        if (!a_null && a.last_used != b.last_used)
+            return a.last_used > b.last_used;
+        return a.id > b.id;
+    });
+}

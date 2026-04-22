@@ -1603,7 +1603,9 @@ void MoonrakerSpoolmanAPIMock::get_spoolman_spools(SpoolListCallback on_success,
     spdlog::debug("[MoonrakerAPIMock] get_spoolman_spools() -> {} spools", mock_spools_.size());
 
     if (on_success) {
-        on_success(mock_spools_);
+        std::vector<SpoolInfo> sorted = mock_spools_;
+        sort_spools_by_recency(sorted);
+        on_success(sorted);
     }
 }
 

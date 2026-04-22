@@ -32,6 +32,7 @@ static SpoolInfo parse_spool_info(const nlohmann::json& spool_json) {
     info.lot_nr = safe_string(spool_json, "lot_nr");
     info.comment = safe_string(spool_json, "comment");
     info.location = safe_string(spool_json, "location");
+    info.last_used = safe_string(spool_json, "last_used");
 
     // used_weight for fallback initial weight calculation
     double used_weight_g = safe_double(spool_json, "used_weight");
@@ -165,6 +166,8 @@ void MoonrakerSpoolmanAPI::get_spoolman_spools(SpoolListCallback on_success,
                     spools.push_back(parse_spool_info(spool_json));
                 }
             }
+
+            sort_spools_by_recency(spools);
 
             spdlog::debug("[SpoolmanAPI] Got {} spools from Spoolman", spools.size());
 

@@ -97,6 +97,7 @@ struct SpoolInfo {
     std::string lot_nr;            ///< Lot/batch number
     std::string location;          ///< Physical storage location (max 64 chars)
     std::string comment;           ///< User notes/comment
+    std::string last_used;         ///< ISO 8601 timestamp of last use (empty = never used)
     bool is_active = false;        ///< True if this is the currently tracked spool
 
     // Temperature recommendations from filament database
@@ -177,6 +178,17 @@ struct FilamentUsageRecord {
  */
 std::vector<SpoolInfo> filter_spools(const std::vector<SpoolInfo>& spools,
                                      const std::string& query);
+
+/**
+ * @brief Sort spools in-place by last-used timestamp (most recent first)
+ *
+ * Ordering (all descending):
+ *   1. Spools with a non-empty last_used come before spools that have never been used.
+ *   2. Among used spools, later last_used first. Spoolman emits ISO 8601, which
+ *      sorts lexically in temporal order, so string comparison is sufficient.
+ *   3. Tie-breaker (also for never-used spools): higher id first.
+ */
+void sort_spools_by_recency(std::vector<SpoolInfo>& spools);
 
 // ============================================================================
 // SpoolInfo → SlotInfo Conversion
