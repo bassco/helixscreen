@@ -352,22 +352,23 @@ void TelemetryManager::init(const std::string& config_dir) {
     // Recover snapshot state from previous session (e.g., after crash)
     load_snapshot_state();
 
-    // Load enabled state from config (before crash check so opt-in is respected)
-    try {
-        std::string config_path = config_dir_ + "/telemetry_config.json";
-        std::ifstream config_file(config_path);
-        if (config_file.good()) {
-            json config = json::parse(config_file);
-            if (config.contains("enabled") && config["enabled"].is_boolean()) {
-                enabled_.store(config["enabled"].get<bool>());
-                spdlog::info("[TelemetryManager] Loaded enabled state: {}",
-                             enabled_.load() ? "true" : "false");
-            }
+    // Load enabled state from settings.json via Config singleton (the single
+    // source of truth shared with SystemSettingsManager). Previously this
+    // was loaded from a separate telemetry_config.json, and a sync line in
+    // application.cpp clobbered it with SystemSettingsManager's value on
+    // every startup — silently disabling telemetry for any user whose
+    // settings.json didn't have the key set. Legacy file is migrated by
+    // config.cpp's migrate_v13_to_v14(), which runs before Config finishes
+    // loading, so by now /telemetry_enabled is already authoritative.
+    {
+        Config* cfg = Config::get_instance();
+        if (cfg) {
+            enabled_.store(cfg->get<bool>("/telemetry_enabled", false));
+            spdlog::info("[TelemetryManager] Loaded enabled state: {}",
+                         enabled_.load() ? "true" : "false");
+        } else {
+            enabled_.store(false);
         }
-    } catch (const std::exception& e) {
-        spdlog::warn("[TelemetryManager] Failed to load config, defaulting to disabled: {}",
-                     e.what());
-        enabled_.store(false);
     }
 
     // Check for crash file from a previous session (respects opt-in)
@@ -472,21 +473,17 @@ void TelemetryManager::set_enabled(bool enabled) {
             [this, enabled]() { lv_subject_set_int(&enabled_subject_, enabled ? 1 : 0); });
     }
 
-    // Persist to telemetry_config.json
-    try {
-        json config;
-        config["enabled"] = enabled;
-
-        std::string config_path = config_dir_ + "/telemetry_config.json";
-        std::ofstream config_file(config_path);
-        if (config_file.good()) {
-            config_file << config.dump(2);
-            spdlog::debug("[TelemetryManager] Persisted enabled state to {}", config_path);
-        } else {
-            spdlog::warn("[TelemetryManager] Failed to write config to {}", config_path);
-        }
-    } catch (const std::exception& e) {
-        spdlog::error("[TelemetryManager] Failed to persist enabled state: {}", e.what());
+    // Persist to settings.json via Config (single source of truth).
+    // SystemSettingsManager::set_telemetry_enabled() also calls this path,
+    // so there is exactly one writer now — application.cpp no longer needs
+    // to clobber our state on every startup.
+    Config* cfg = Config::get_instance();
+    if (cfg) {
+        cfg->set<bool>("/telemetry_enabled", enabled);
+        cfg->save();
+        spdlog::debug("[TelemetryManager] Persisted enabled state to settings.json");
+    } else {
+        spdlog::warn("[TelemetryManager] Config not available; enabled state not persisted");
     }
 }
 

@@ -589,8 +589,55 @@ static void migrate_v12_to_v13(json& config) {
     }
 }
 
+/// Fold legacy telemetry_config.json into settings.json. The previous
+/// architecture had two sources of truth for /telemetry_enabled: TelemetryManager
+/// owned telemetry_config.json; SystemSettingsManager owned settings.json's
+/// /telemetry_enabled. A sync line in application.cpp clobbered the former
+/// with the latter on every startup, silently disabling telemetry for users
+/// whose settings.json had never had the key set. This migration preserves
+/// whatever state telemetry_config.json held and then retires the file.
+static void migrate_v13_to_v14(json& config, const std::string& config_path) {
+    // If /telemetry_enabled is already in settings.json, no migration needed —
+    // but still delete the legacy file below if it exists.
+    bool has_key = config.contains("telemetry_enabled");
+
+    if (config_path.empty()) {
+        // Called from a test path without a filesystem; nothing to migrate.
+        return;
+    }
+
+    fs::path legacy_path = fs::path(config_path).parent_path() / "telemetry_config.json";
+    std::error_code ec;
+    if (!fs::exists(legacy_path, ec)) {
+        return;
+    }
+
+    try {
+        std::ifstream f(legacy_path);
+        json legacy;
+        f >> legacy;
+        if (!has_key && legacy.contains("enabled") && legacy["enabled"].is_boolean()) {
+            bool legacy_enabled = legacy["enabled"].get<bool>();
+            config["telemetry_enabled"] = legacy_enabled;
+            spdlog::info("[Config] Migration v14: imported telemetry_enabled={} "
+                         "from legacy {}",
+                         legacy_enabled ? "true" : "false", legacy_path.string());
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[Config] Migration v14: failed to read legacy {}: {} "
+                     "(leaving file in place for retry)",
+                     legacy_path.string(), e.what());
+        return;
+    }
+
+    fs::remove(legacy_path, ec);
+    if (!ec) {
+        spdlog::debug("[Config] Migration v14: removed legacy {}", legacy_path.string());
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
-static void run_versioned_migrations(json& config) {
+static void run_versioned_migrations(json& config, const std::string& config_path = "") {
     int version = 0;
     if (config.contains("config_version")) {
         version = config["config_version"].get<int>();
@@ -622,6 +669,8 @@ static void run_versioned_migrations(json& config) {
         migrate_v11_to_v12(config);
     if (version < 13)
         migrate_v12_to_v13(config);
+    if (version < 14)
+        migrate_v13_to_v14(config, config_path);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }
@@ -892,8 +941,9 @@ void Config::init(const std::string& config_path) {
         }
 
         // Run versioned migrations (v0→v1: disable sounds for existing configs, etc.)
+        // Pass path so v13→v14 can find the legacy telemetry_config.json sidecar.
         int version_before = data.value("config_version", 0);
-        run_versioned_migrations(data);
+        run_versioned_migrations(data, path);
         if (data["config_version"].get<int>() != version_before) {
             config_modified = true;
         }

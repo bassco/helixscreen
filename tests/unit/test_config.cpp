@@ -1876,6 +1876,126 @@ TEST_CASE("Config: v4→v5 migration skips when multiple printers configured",
     std::filesystem::remove_all(temp_dir);
 }
 
+// ============================================================================
+// v13 → v14: fold legacy telemetry_config.json into settings.json
+// ============================================================================
+
+TEST_CASE("Config: v13→v14 imports legacy telemetry_config.json when settings lacks key",
+          "[core][config][migration][v14]") {
+    std::string temp_dir = "/tmp/helix_test_v13_to_v14_import";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string settings_path = temp_dir + "/test_config.json";
+    std::string legacy_path = temp_dir + "/telemetry_config.json";
+
+    json v13_config = {
+        {"config_version", 13},
+        {"active_printer_id", "default"},
+        {"printers", {{"default", {{"moonraker_host", "127.0.0.1"}}}}}};
+    {
+        std::ofstream o(settings_path);
+        o << v13_config.dump(2);
+    }
+    {
+        std::ofstream o(legacy_path);
+        o << R"({"enabled": true})";
+    }
+
+    Config test_config;
+    test_config.init(settings_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    REQUIRE(test_config.exists("/telemetry_enabled"));
+    REQUIRE(test_config.get<bool>("/telemetry_enabled") == true);
+    // Legacy file must be removed so it can never re-poison a future startup.
+    REQUIRE_FALSE(std::filesystem::exists(legacy_path));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v13→v14 preserves disabled legacy state",
+          "[core][config][migration][v14]") {
+    std::string temp_dir = "/tmp/helix_test_v13_to_v14_disabled";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string settings_path = temp_dir + "/test_config.json";
+    std::string legacy_path = temp_dir + "/telemetry_config.json";
+
+    json v13_config = {{"config_version", 13}, {"active_printer_id", "default"}};
+    {
+        std::ofstream o(settings_path);
+        o << v13_config.dump(2);
+    }
+    {
+        std::ofstream o(legacy_path);
+        o << R"({"enabled": false})";
+    }
+
+    Config test_config;
+    test_config.init(settings_path);
+
+    REQUIRE(test_config.get<bool>("/telemetry_enabled") == false);
+    REQUIRE_FALSE(std::filesystem::exists(legacy_path));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v13→v14 does NOT overwrite existing /telemetry_enabled",
+          "[core][config][migration][v14]") {
+    // Regression guard for the original bug: settings.json had the key set;
+    // legacy telemetry_config.json should never silently override it.
+    std::string temp_dir = "/tmp/helix_test_v13_to_v14_no_overwrite";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string settings_path = temp_dir + "/test_config.json";
+    std::string legacy_path = temp_dir + "/telemetry_config.json";
+
+    json v13_config = {
+        {"config_version", 13},
+        {"active_printer_id", "default"},
+        {"telemetry_enabled", true}, // authoritative
+    };
+    {
+        std::ofstream o(settings_path);
+        o << v13_config.dump(2);
+    }
+    {
+        std::ofstream o(legacy_path);
+        o << R"({"enabled": false})"; // would silently disable if we honored this
+    }
+
+    Config test_config;
+    test_config.init(settings_path);
+
+    REQUIRE(test_config.get<bool>("/telemetry_enabled") == true);
+    // File still gets removed — it's dead weight either way.
+    REQUIRE_FALSE(std::filesystem::exists(legacy_path));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Config: v13→v14 is a no-op when no legacy file exists",
+          "[core][config][migration][v14]") {
+    std::string temp_dir = "/tmp/helix_test_v13_to_v14_noop";
+    std::filesystem::remove_all(temp_dir);
+    std::filesystem::create_directories(temp_dir);
+    std::string settings_path = temp_dir + "/test_config.json";
+
+    json v13_config = {{"config_version", 13}, {"active_printer_id", "default"}};
+    {
+        std::ofstream o(settings_path);
+        o << v13_config.dump(2);
+    }
+
+    Config test_config;
+    test_config.init(settings_path);
+
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+    REQUIRE_FALSE(test_config.exists("/telemetry_enabled"));
+
+    std::filesystem::remove_all(temp_dir);
+}
+
 TEST_CASE("Config: v4→v5 migration preserves explicit show_printer_switcher setting",
           "[core][config][migration][v5]") {
     std::string temp_dir = "/tmp/helix_test_v4_to_v5_explicit";

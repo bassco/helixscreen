@@ -11,6 +11,7 @@
  * Written TDD-style - tests WILL FAIL if crash_handler is removed.
  */
 
+#include "config.h"
 #include "system/crash_handler.h"
 #include "system/telemetry_manager.h"
 
@@ -347,10 +348,11 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: TelemetryManager enqueues crash event
             << "bt:0x0040abcd\nbt:0x0040ef01\n";
     }
 
-    // Enable telemetry via config file (crash events respect opt-in)
+    // Enable telemetry via Config singleton (single source of truth since
+    // config_version 14; previously telemetry_config.json was a sibling).
     {
-        std::ofstream ofs((temp_dir() / "telemetry_config.json").string());
-        ofs << R"({"enabled": true})";
+        helix::Config* cfg = helix::Config::get_instance();
+        cfg->set<bool>("/telemetry_enabled", true);
     }
 
     // Initialize TelemetryManager with the temp dir (init calls check_previous_crash)
@@ -422,7 +424,12 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: when disabled, crash event is not enq
         ofs << "signal:11\nname:SIGSEGV\nversion:0.9.6\ntimestamp:1707350400\nuptime:3600\n";
     }
 
-    // No telemetry config = disabled by default
+    // Explicitly disable via Config — Config is a singleton, prior tests in
+    // this binary may have enabled it.
+    {
+        helix::Config* cfg = helix::Config::get_instance();
+        cfg->set<bool>("/telemetry_enabled", false);
+    }
     auto& tm = TelemetryManager::instance();
     tm.shutdown();
     tm.init(temp_dir().string());
@@ -452,8 +459,8 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: crash event has correct device_id for
 
     // Enable telemetry so crash event is enqueued
     {
-        std::ofstream ofs((temp_dir() / "telemetry_config.json").string());
-        ofs << R"({"enabled": true})";
+        helix::Config* cfg = helix::Config::get_instance();
+        cfg->set<bool>("/telemetry_enabled", true);
     }
 
     auto& tm = TelemetryManager::instance();
@@ -619,8 +626,8 @@ TEST_CASE_METHOD(CrashTestFixture, "Crash: TelemetryManager crash event includes
             << "bt:0x920bac\nbt:0xf7101290\n";
     }
     {
-        std::ofstream ofs((temp_dir() / "telemetry_config.json").string());
-        ofs << R"({"enabled": true})";
+        helix::Config* cfg = helix::Config::get_instance();
+        cfg->set<bool>("/telemetry_enabled", true);
     }
 
     auto& tm = TelemetryManager::instance();

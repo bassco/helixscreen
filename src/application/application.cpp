@@ -521,11 +521,14 @@ int Application::run(int argc, char** argv) {
         spdlog::warn("[Application] Running without printer connection");
     }
 
-    // Sync telemetry enabled state from SystemSettingsManager (now that its subjects are
-    // initialized) Note: record_session() is deferred to on_discovery_complete callback so hardware
-    // data is available
-    TelemetryManager::instance().set_enabled(
-        SystemSettingsManager::instance().get_telemetry_enabled());
+    // Sync TelemetryManager's LVGL subject with its current enabled state.
+    // TelemetryManager already loaded the value from settings.json in init();
+    // this call no longer needs to pull from SystemSettingsManager (which
+    // used to be a separate source of truth — the sync here silently
+    // disabled telemetry whenever settings.json lacked /telemetry_enabled).
+    // Instead, re-assert the already-loaded state so start_auto_send() runs
+    // now that discovery has completed.
+    TelemetryManager::instance().set_enabled(TelemetryManager::instance().is_enabled());
 
     // Initialize SoundManager (audio feedback)
     // Backend detection (PWM, ALSA, SDL) is checked by PrinterCapabilitiesState
