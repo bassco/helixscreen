@@ -1331,8 +1331,14 @@ TEST_CASE("get_platform_key returns a known platform", "[update_checker][platfor
     std::string platform = UpdateChecker::get_platform_key();
     REQUIRE(!platform.empty());
 
-    // Must be one of the supported platform keys
-    std::vector<std::string> known_platforms = {"pi", "pi32", "ad5m", "k1", "k2", "ad5x", "cc1"};
+    // Must be one of the supported platform keys. Keep in sync with the
+    // release matrix in .github/workflows/release.yml and the #ifdef ladder in
+    // UpdateChecker::get_platform_key(). Adding a platform without an entry
+    // here — AND a matching #elif in get_platform_key — silently bricks
+    // in-app updates for that platform (falls through to "pi", so the device
+    // downloads the Pi tarball and ends up with missing shared libs).
+    std::vector<std::string> known_platforms = {
+        "pi", "pi32", "x86", "ad5m", "k1", "k2", "ad5x", "cc1", "snapmaker-u1"};
     bool found = false;
     for (const auto& p : known_platforms) {
         if (platform == p) {

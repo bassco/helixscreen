@@ -2111,10 +2111,17 @@ std::string UpdateChecker::get_platform_key() {
         }
         return "k1";
     }
+#elif defined(HELIX_PLATFORM_K1)
+    // k1-dynamic build variant: dev/debug dynamic-linked K1 binary. Not in the
+    // release matrix today — map to "k1" so if it ever ships, self-update
+    // fetches the static K1 tarball instead of silently falling through to pi.
+    return "k1";
 #elif defined(HELIX_PLATFORM_K2)
     return "k2";
 #elif defined(HELIX_PLATFORM_X86)
     return "x86";
+#elif defined(HELIX_PLATFORM_SNAPMAKER_U1)
+    return "snapmaker-u1";
 #elif defined(HELIX_PLATFORM_PI32)
     return "pi32";
 #else
