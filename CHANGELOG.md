@@ -5,6 +5,11 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.42] - 2026-04-22
+
+### Fixed
+- **Snapmaker U1 self-update bricked on v0.99.41** — the in-app updater fell through to the Raspberry Pi tarball because `HELIX_PLATFORM_SNAPMAKER_U1` had no mapping in `get_platform_key()`. U1 devices ended up with a Pi aarch64 binary missing libsystemd/libinput/libEGL/libGLESv2/libgbm/libasound, and helix-screen failed at exec time with "cannot open shared object file". A CI guardrail now blocks any new platform from shipping without the right asset mapping. **Recovery from v0.99.41:** the broken binary can't self-update out of this bug — reinstall the Snapmaker U1 tarball manually using the instructions on the release page.
+
 ## [0.99.41] - 2026-04-21
 
 ### Added
@@ -3219,6 +3224,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.42]: https://github.com/prestonbrown/helixscreen/compare/v0.99.41...v0.99.42
 [0.99.41]: https://github.com/prestonbrown/helixscreen/compare/v0.99.40...v0.99.41
 [0.99.40]: https://github.com/prestonbrown/helixscreen/compare/v0.99.39...v0.99.40
 [0.99.39]: https://github.com/prestonbrown/helixscreen/compare/v0.99.38...v0.99.39
