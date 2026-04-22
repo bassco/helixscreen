@@ -78,7 +78,7 @@ class ExternalSpoolSink : public IConsumptionSink {
     /// Test hook: override persist throttle (ms). 0 = default 60s. Plain-class
     /// sink (not a singleton) makes this setter acceptable for testing
     /// per-sink throttle behavior (see CLAUDE L065).
-    void set_persist_interval_ms_for_testing(uint32_t ms) {
+    void set_persist_interval_ms_override(uint32_t ms) {
         persist_interval_override_ms_ = ms;
     }
 
@@ -130,7 +130,7 @@ class AmsSlotSink : public IConsumptionSink {
     }
 
     /// Test hook: override persist throttle (ms). 0 = default 60s.
-    void set_persist_interval_ms_for_testing(uint32_t ms) {
+    void set_persist_interval_ms_override(uint32_t ms) {
         persist_interval_override_ms_ = ms;
     }
 

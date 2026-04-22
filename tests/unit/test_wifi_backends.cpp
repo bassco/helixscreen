@@ -639,16 +639,19 @@ TEST_CASE("WifiBackend::create() does not block the caller",
 
 TEST_CASE("WifiBackend: READY event fires once backend finishes async init",
           "[network][backend][events][slow]") {
-    auto backend = WifiBackend::create(/*silent=*/true);
-    REQUIRE(backend != nullptr);
+    // Test the async-init contract directly against the mock. Going through
+    // WifiBackend::create() here is brittle because the factory path depends
+    // on RuntimeConfig::test_mode, which isn't globally set for helix-tests
+    // and is mutated by other tests — a prior test flipping test_mode=false
+    // makes create() pick the real backend (nmcli/wpa_supplicant), which on
+    // a CI runner with no NM daemon never fires READY, hanging for 10s.
+    auto backend = std::make_unique<WifiBackendMock>();
+    backend->set_silent(true);
 
     std::mutex m;
     std::condition_variable cv;
     std::atomic<bool> ready{false};
 
-    // NEW API — "READY" event signals that deferred start() completed.
-    // This must fail to compile or fail at runtime against current code,
-    // which never emits a READY event.
     backend->register_event_callback("READY", [&](const std::string&) {
         {
             std::lock_guard<std::mutex> lock(m);
@@ -657,8 +660,6 @@ TEST_CASE("WifiBackend: READY event fires once backend finishes async init",
         cv.notify_all();
     });
 
-    // Explicitly kick off async init. The proposed API adds start_async()
-    // so callers can opt into the non-blocking lifecycle.
     backend->start_async();
 
     std::unique_lock<std::mutex> lock(m);

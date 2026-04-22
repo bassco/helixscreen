@@ -10,9 +10,14 @@ setup() {
 # --- No _for_testing methods in production code ---
 # Test-only methods belong in test files via friend class TestAccess pattern.
 # See commit removing these for the migration pattern.
+#
+# *_mock.h files are explicitly excluded: mocks ARE test infrastructure (the
+# whole class exists only for tests), so a `_for_testing` setter on a mock
+# carries no risk of shipping test code to users — the mock itself is gated
+# by HELIX_ENABLE_MOCKS and never enters production builds.
 
 @test "no _for_testing methods declared in headers" {
-    run grep -rn '_for_testing' include/ --include='*.h'
+    run grep -rn '_for_testing' include/ --include='*.h' --exclude='*_mock.h'
     [ "$status" -eq 1 ]  # grep returns 1 when no matches found
 }
 

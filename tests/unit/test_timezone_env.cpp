@@ -73,7 +73,7 @@ struct EnvGuard {
         else
             ::unsetenv("TZDIR");
         ::tzset();
-        helix::timezone_env::reset_for_testing();
+        helix::timezone_env::reset_probe_state();
     }
 };
 
@@ -82,7 +82,7 @@ struct EnvGuard {
 TEST_CASE("timezone_env: falls back to bundled TZDIR when system zoneinfo missing",
           "[timezone_env]") {
     EnvGuard guard;
-    helix::timezone_env::reset_for_testing();
+    helix::timezone_env::reset_probe_state();
 
     fs::path temp = make_temp_zoneinfo();
     fs::path fake_root = temp.parent_path() / ("helix_tz_root_" + temp.filename().string());
@@ -90,16 +90,21 @@ TEST_CASE("timezone_env: falls back to bundled TZDIR when system zoneinfo missin
     fs::current_path(fake_root);
     fs::create_directory_symlink(temp, fake_root / "bundled_zi");
 
+    // configure_tzdir() uses getcwd() which resolves symlinks (macOS:
+    // /var/folders → /private/var/folders). Compare against the canonicalized
+    // path so the test holds on both Linux (no-op) and macOS.
+    const fs::path canonical_root = fs::canonical(fake_root);
+
     const std::string nonexistent_probe = "/nonexistent/helix/zoneinfo/UTC";
     const char* result =
         helix::timezone_env::configure_tzdir(nonexistent_probe.c_str(), "bundled_zi");
 
     REQUIRE(result != nullptr);
-    REQUIRE(std::string(result) == (fake_root / "bundled_zi").string());
+    REQUIRE(std::string(result) == (canonical_root / "bundled_zi").string());
 
     const char* tzdir_env = ::getenv("TZDIR");
     REQUIRE(tzdir_env != nullptr);
-    REQUIRE(std::string(tzdir_env) == (fake_root / "bundled_zi").string());
+    REQUIRE(std::string(tzdir_env) == (canonical_root / "bundled_zi").string());
 
     fs::remove_all(temp);
     fs::remove_all(fake_root);
@@ -108,7 +113,7 @@ TEST_CASE("timezone_env: falls back to bundled TZDIR when system zoneinfo missin
 TEST_CASE("timezone_env: apply() with bundled TZDIR yields correct localtime offset",
           "[timezone_env]") {
     EnvGuard guard;
-    helix::timezone_env::reset_for_testing();
+    helix::timezone_env::reset_probe_state();
 
     fs::path temp = make_temp_zoneinfo();
     fs::path fake_root = temp.parent_path() / ("helix_tz_root2_" + temp.filename().string());
@@ -149,7 +154,7 @@ TEST_CASE("timezone_env: apply() with bundled TZDIR yields correct localtime off
 TEST_CASE("timezone_env: leaves TZDIR untouched when system zoneinfo present",
           "[timezone_env]") {
     EnvGuard guard;
-    helix::timezone_env::reset_for_testing();
+    helix::timezone_env::reset_probe_state();
     ::unsetenv("TZDIR");
 
     // Use a probe path that definitely exists (the system's own zoneinfo if

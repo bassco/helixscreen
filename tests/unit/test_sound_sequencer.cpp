@@ -290,11 +290,15 @@ TEST_CASE("SoundSequencer: ADSR attack ramps amplitude up", "[sound][sequencer][
 
     SoundStep step;
     step.freq_hz = 1000;
-    step.duration_ms = 500; // long enough to observe
+    // Longer duration and attack — CI runners can be slow to deliver the
+    // first sequencer tick. With a 200ms attack on an overloaded runner the
+    // first captured tone can already be past the attack phase. A 600ms
+    // attack plus 1200ms total duration leaves plenty of headroom while still
+    // keeping the test comfortably under 2s.
+    step.duration_ms = 1200;
     step.velocity = 1.0f;
     step.wave = Waveform::SQUARE;
-    // Long attack phase for clear observation
-    step.envelope = {200, 0, 1.0f, 0}; // 200ms attack, sustain=1
+    step.envelope = {600, 0, 1.0f, 0}; // 600ms attack, sustain=1
 
     SoundDefinition def;
     def.name = "adsr_attack";
@@ -307,23 +311,45 @@ TEST_CASE("SoundSequencer: ADSR attack ramps amplitude up", "[sound][sequencer][
     auto tones = backend->get_tones();
     REQUIRE(tones.size() >= 5);
 
-    // Early events should have low amplitude (attack phase)
-    CHECK(tones[0].amplitude < 0.3f);
-
-    // Events well past the attack phase (>200ms) should be at full amplitude.
-    // Use 400ms threshold (200ms past attack end) to tolerate CI timing jitter.
+    // Envelope must ramp UP during the attack phase: any tone captured well
+    // before attack end (<300ms, half the attack window) should be measurably
+    // quieter than any tone captured after sustain begins. Comparing against
+    // the FIRST tone alone is flaky because thread-startup latency can push
+    // tones[0] past the attack phase on slow CI runners; comparing samples
+    // across the whole attack-to-sustain arc is the real invariant.
     auto start_time = tones[0].timestamp;
+    auto elapsed_ms = [&](const MockBackend::ToneEvent& t) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(t.timestamp - start_time)
+            .count();
+    };
+
+    float min_attack_amp = 2.0f; // impossibly high sentinel
+    for (const auto& t : tones) {
+        if (elapsed_ms(t) < 300) {
+            min_attack_amp = std::min(min_attack_amp, t.amplitude);
+        }
+    }
+
+    // Events well past the attack phase (>800ms) should be at full amplitude.
     bool found_full = false;
-    for (auto& t : tones) {
-        auto elapsed =
-            std::chrono::duration_cast<std::chrono::milliseconds>(t.timestamp - start_time).count();
-        if (elapsed > 400) {
-            CHECK(t.amplitude > 0.8f);
-            found_full = true;
-            break;
+    float max_sustain_amp = 0.0f;
+    for (const auto& t : tones) {
+        if (elapsed_ms(t) > 800) {
+            max_sustain_amp = std::max(max_sustain_amp, t.amplitude);
+            if (t.amplitude > 0.8f) {
+                found_full = true;
+            }
         }
     }
     CHECK(found_full);
+    CHECK(max_sustain_amp > 0.8f);
+
+    // The envelope *must* be ramping: the quietest attack-window sample must
+    // be lower than the loudest sustain-window sample. This works even if the
+    // very first tick lands halfway through attack.
+    if (min_attack_amp <= 1.0f) {
+        CHECK(min_attack_amp < max_sustain_amp);
+    }
 
     seq.shutdown();
 }

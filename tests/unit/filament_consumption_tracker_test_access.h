@@ -28,7 +28,7 @@ struct FilamentConsumptionTrackerTestAccess {
         for (auto& s : t.sinks_) {
             if (s->kind() == SinkKind::ExternalSpool) {
                 static_cast<ExternalSpoolSink*>(s.get())
-                    ->set_persist_interval_ms_for_testing(ms);
+                    ->set_persist_interval_ms_override(ms);
                 return;
             }
         }
@@ -52,6 +52,17 @@ struct FilamentConsumptionTrackerTestAccess {
     /// Count of registered sinks (any kind).
     static std::size_t sink_count() {
         return FilamentConsumptionTracker::instance().sinks_.size();
+    }
+
+    /// Count of AmsSlotSink instances (ignores ExternalSpoolSink).
+    static std::size_t ams_sink_count() {
+        std::size_t count = 0;
+        for (const auto& s : FilamentConsumptionTracker::instance().sinks_) {
+            if (s->kind() == SinkKind::AmsSlot) {
+                ++count;
+            }
+        }
+        return count;
     }
 };
 

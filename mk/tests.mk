@@ -587,30 +587,34 @@ $(CATCH2_OBJ): $(TEST_DIR)/catch_amalgamated.cpp
 	$(ECHO) "$(BLUE)[CATCH2]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Test compile rules depend on libhv-generated headers ($(LIBHV_JSON_HEADER))
+# and the PCH so a fresh `make test-asan` / `make test-tsan` (without a prior
+# `make`) triggers libhv-build before any .cpp that includes hv/json.hpp.
+#
 # Compile UI test utilities
 # Uses DEPFLAGS to track header dependencies
-$(UI_TEST_UTILS_OBJ): $(TEST_DIR)/ui_test_utils.cpp
+$(UI_TEST_UTILS_OBJ): $(TEST_DIR)/ui_test_utils.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[UI-TEST]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
 
 # Compile LVGL test fixture (shared base class for UI tests)
 # Uses DEPFLAGS to track header dependencies
-$(LVGL_TEST_FIXTURE_OBJ): $(TEST_DIR)/lvgl_test_fixture.cpp
+$(LVGL_TEST_FIXTURE_OBJ): $(TEST_DIR)/lvgl_test_fixture.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[LVGL-FIXTURE]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
 
 # Compile HelixScreen test fixture (base class that resets process singletons)
 # Uses DEPFLAGS to track header dependencies
-$(HELIX_TEST_FIXTURE_OBJ): $(TEST_DIR)/helix_test_fixture.cpp
+$(HELIX_TEST_FIXTURE_OBJ): $(TEST_DIR)/helix_test_fixture.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[HELIX-FIXTURE]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
 
 # Compile test fixtures (reusable fixtures with mock initialization helpers)
 # Uses DEPFLAGS to track header dependencies
-$(TEST_FIXTURES_OBJ): $(TEST_DIR)/test_fixtures.cpp
+$(TEST_FIXTURES_OBJ): $(TEST_DIR)/test_fixtures.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[TEST-FIXTURE]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
@@ -618,7 +622,7 @@ $(TEST_FIXTURES_OBJ): $(TEST_DIR)/test_fixtures.cpp
 # Compile LVGL UI test fixture (full UI integration test fixture)
 # Uses DEPFLAGS to track header dependencies
 # Emits .ccj fragment for incremental compile_commands.json generation
-$(LVGL_UI_TEST_FIXTURE_OBJ): $(TEST_DIR)/lvgl_ui_test_fixture.cpp
+$(LVGL_UI_TEST_FIXTURE_OBJ): $(TEST_DIR)/lvgl_ui_test_fixture.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[UI-FIXTURE]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
@@ -627,7 +631,7 @@ $(LVGL_UI_TEST_FIXTURE_OBJ): $(TEST_DIR)/lvgl_ui_test_fixture.cpp
 # Compile test sources
 # Uses DEPFLAGS to track header dependencies for incremental rebuilds
 # Emits .ccj fragment for incremental compile_commands.json generation
-$(OBJ_DIR)/tests/%.o: $(TEST_UNIT_DIR)/%.cpp
+$(OBJ_DIR)/tests/%.o: $(TEST_UNIT_DIR)/%.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@
@@ -635,7 +639,7 @@ $(OBJ_DIR)/tests/%.o: $(TEST_UNIT_DIR)/%.cpp
 
 # Compile application subdirectory test sources
 # Emits .ccj fragment for incremental compile_commands.json generation
-$(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp
+$(OBJ_DIR)/tests/application/%.o: $(TEST_UNIT_DIR)/application/%.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(BLUE)[TEST-APP]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_DIR) -I$(TEST_UNIT_DIR)/application $(INCLUDES) $(LV_CONF) -c $< -o $@
@@ -651,7 +655,7 @@ $(DNS_RESOLV_OBJ): $(LIBHV_DIR)/base/dns_resolv.c
 # Compile mock sources
 # Uses DEPFLAGS to track header dependencies
 # Emits .ccj fragment for incremental compile_commands.json generation
-$(OBJ_DIR)/tests/mocks/%.o: $(TEST_MOCK_DIR)/%.cpp
+$(OBJ_DIR)/tests/mocks/%.o: $(TEST_MOCK_DIR)/%.cpp $(LIBHV_LIB) $(LIBHV_JSON_HEADER) $(PCH)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(YELLOW)[MOCK]$(RESET) $<"
 	$(Q)$(CXX) $(CXXFLAGS) $(DEPFLAGS) $(PCH_FLAGS) -I$(TEST_MOCK_DIR) $(INCLUDES) $(LV_CONF) -c $< -o $@

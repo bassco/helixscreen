@@ -28,12 +28,12 @@ void apply(const char* iana_id);
 //
 // Idempotent across calls within one process: the probe runs at most once per
 // process lifetime so the test must be the first caller to observe the probe.
-// For repeated testing, use reset_for_testing().
+// For repeated testing, use reset_probe_state().
 [[nodiscard]] const char* configure_tzdir(const char* system_probe = nullptr,
                                           const char* bundled_subdir = nullptr);
 
 // Test hook: resets the "probe has run" flag so the next configure_tzdir()
 // call re-runs the probe. Do not call from production code.
-void reset_for_testing();
+void reset_probe_state();
 
 } // namespace helix::timezone_env

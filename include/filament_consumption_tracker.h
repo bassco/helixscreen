@@ -60,14 +60,6 @@ class FilamentConsumptionTracker {
     /// **Thread safety**: main thread only. See register_sink().
     void unregister_sink(SinkHandle handle);
 
-    /// Test-only visibility of the sink registry. Not for production use.
-    [[nodiscard]] std::size_t sink_count_for_testing() const {
-        return sinks_.size();
-    }
-
-    /// Test-only: count of AmsSlotSink instances (ignores ExternalSpoolSink).
-    [[nodiscard]] std::size_t ams_sink_count_for_testing() const;
-
   private:
     friend struct FilamentConsumptionTrackerTestAccess;
 

@@ -132,15 +132,6 @@ void FilamentConsumptionTracker::unregister_sink(SinkHandle handle) {
     sinks_.erase(it);
 }
 
-std::size_t FilamentConsumptionTracker::ams_sink_count_for_testing() const {
-    std::size_t count = 0;
-    for (const auto& s : sinks_) {
-        if (s->kind() == SinkKind::AmsSlot) {
-            ++count;
-        }
-    }
-    return count;
-}
 
 void FilamentConsumptionTracker::on_print_state_changed(int job_state) {
     auto state = static_cast<PrintJobState>(job_state);

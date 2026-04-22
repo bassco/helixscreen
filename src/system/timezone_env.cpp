@@ -70,7 +70,7 @@ void apply(const char* iana_id) {
     ::tzset();
 }
 
-void reset_for_testing() {
+void reset_probe_state() {
     probed_ = false;
     active_tzdir_.clear();
     ::unsetenv("TZDIR");

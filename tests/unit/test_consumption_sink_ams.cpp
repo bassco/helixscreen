@@ -7,6 +7,7 @@
 #include "app_globals.h"
 #include "consumption_sink.h"
 #include "filament_consumption_tracker.h"
+#include "filament_consumption_tracker_test_access.h"
 #include "printer_state.h"
 #include "ui_update_queue.h"
 
@@ -15,6 +16,7 @@
 
 using helix::AmsSlotSink;
 using helix::FilamentConsumptionTracker;
+using helix::FilamentConsumptionTrackerTestAccess;
 
 namespace {
 
@@ -229,14 +231,13 @@ TEST_CASE_METHOD(LVGLTestFixture,
     REQUIRE(idx == 0);
 
     // After add_backend, kSlots sinks should have been registered.
-    REQUIRE(FilamentConsumptionTracker::instance().sink_count_for_testing() >=
+    REQUIRE(FilamentConsumptionTrackerTestAccess::sink_count() >=
             static_cast<std::size_t>(kSlots));
 
     ams.clear_backends();
     // After clear_backends, slot sinks should be gone (but an external sink may
     // still be present if start() ran — we only check no leftover AMS sinks).
-    REQUIRE(FilamentConsumptionTracker::instance()
-                .ams_sink_count_for_testing() == 0);
+    REQUIRE(FilamentConsumptionTrackerTestAccess::ams_sink_count() == 0);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture,
