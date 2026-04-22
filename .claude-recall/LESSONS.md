@@ -144,8 +144,8 @@
 - **Uses**: 3 | **Velocity**: 1.25 | **Learned**: 2026-02-15 | **Last**: 2026-03-25 | **Category**: lvgl
 > When deleting LVGL objects that have animations with completion callbacks, ALWAYS cancel animations FIRST (lv_anim_delete) before lv_obj_delete/lv_obj_safe_delete. The completion callback may fire synchronously during lv_anim_delete, causing use-after-free if the object is already freed. Pattern: (1) nullify member pointer, (2) clear state flags, (3) lv_anim_delete, (4) lv_obj_delete. For animations using 'this' as var: set guard flags to false BEFORE lv_anim_delete so callbacks become no-ops.
 
-### [L069] [***--|****-] Never assume lv_obj user_data ownership — it may already be set
-- **Uses**: 10 | **Velocity**: 3.5 | **Learned**: 2026-02-15 | **Last**: 2026-04-22 | **Category**: architecture
+### [L069] [***--|*****] Never assume lv_obj user_data ownership — it may already be set
+- **Uses**: 12 | **Velocity**: 5.5 | **Learned**: 2026-02-15 | **Last**: 2026-04-22 | **Category**: architecture
 > LVGL's lv_obj_set_user_data() is a single shared slot per object. Custom XML widgets, component handlers, and LVGL internals may set user_data during object creation (e.g., ui_button stores button_data_t*, severity_card stores a severity string). NEVER call delete/free on lv_obj_get_user_data() unless you are 100% certain you set it yourself on that specific object. NEVER use user_data as general-purpose storage on objects you didn't fully create — XML components and custom widgets may have claimed it already. **CRITICAL: NEVER walk parent chain checking any non-null user_data to find an instance pointer** — ui_button and other widgets set their own user_data, so the traversal will find the WRONG data and miscast it (caused SEGFAULT in AmsOperationSidebar/AmsDryerCard). Instead, walk parents checking `lv_obj_get_name()` for a specific known name, THEN read user_data from that named object. For per-item data, prefer: (1) event callback user_data (separate per-callback), (2) a C++ side container (map/vector indexed by object pointer), or (3) lv_obj_find_by_name to stash data in a hidden child label.
 
 ### [L071] [***--|*****] XML child click passthrough
@@ -160,8 +160,8 @@
 - **Uses**: 11 | **Velocity**: 3.5 | **Learned**: 2026-02-22 | **Last**: 2026-04-15 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
-### [L073] [**---|*****] ObserverGuard release vs reset
-- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
+### [L073] [***--|*****] ObserverGuard release vs reset
+- **Uses**: 10 | **Velocity**: 6 | **Learned**: 2026-02-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > Use obs.reset() when subjects are ALIVE (normal cleanup, repopulate) — properly unsubscribes and frees the LambdaObserverContext, expiring weak_alive tokens so deferred callbacks are skipped. Use obs.release() ONLY when subjects may already be DESTROYED (shutdown, pre-deinit) — avoids double-free. Wrong choice = crash: reset() on dead subject = double-free, release() on live subject = zombie observer (context stays alive in LVGL, weak_alive never expires, deferred callbacks fire with stale pointers). This caused 17 crash reports (#579): release() in unregister_slot_data left zombie observers that corrupted LVGL rendering state → NEON blend SIGSEGV. Fixed by switching to reset() since subjects are alive during normal widget deletion. The pre-deinit cleanup_all_slot_data() correctly uses release().
 
 ### [L074] [***--|*****] Generation counter for deferred observer callbacks
@@ -200,16 +200,16 @@
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-20 | **Last**: 2026-04-20 | **Category**: gotcha | **Type**: constraint
 > LVGL percent sizing (`width="50%"`, `style_min_width="50%"`, etc.) resolves against the parent's content area. If the parent is `LV_SIZE_CONTENT`, the percent computes against a circular dependency and effectively becomes 0 — the child collapses. Symptom: labels with `long_mode="wrap"` and `flex_grow="1"` wrap near-per-character, making cards extremely tall; flex rows appear to only render their fixed-width children (icons, buttons) with the growing child squeezed to nothing. Fix: give the parent an explicit width (pixel or breakpoint-keyed), then let the child be `width="100%"`. Don't nest percent-sized children inside content-sized parents. Burned us when the toast stacking refactor (26573f1f2) inserted an LV_SIZE_CONTENT stack container between `lv_layer_top` and toast_root, collapsing the toast's `min_width="50%"` against the old screen-sized parent.
 
-### [L083] [*----|-----] Never `std::thread(...).detach()` for fire-and-forget work
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
+### [L083] [*----|****-] Never `std::thread(...).detach()` for fire-and-forget work
+- **Uses**: 3 | **Velocity**: 2 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > On AD5M/CC1 and other resource-constrained ARM targets, `pthread_create` can return EAGAIN under thread exhaustion. The `std::thread` constructor then throws `std::system_error`; if it propagates through an LVGL C event-dispatch frame or hits a `noexcept` boundary, the process aborts with `std::terminate without active exception` — near-impossible to diagnose because the crash looks like a different code path (#724, #837 debug-bundle upload crash, #811-adjacent RatOS HTTP-thread storm).
 > **HTTP work:** route through `helix::http::HttpExecutor::fast()` (4-worker bounded pool for REST/API/thumbnails/small uploads) or `::slow()` (1-worker lane for multi-MB file transfers, debug bundles, etc.). Submitted lambdas still need `helix::ui::queue_update()` / `tok.defer()` for UI work. `include/http_executor.h`.
 > **Non-HTTP IO** (BT/USB/RFCOMM, QR decode, per-device discovery): either use an existing managed pool/BusThread for that domain, OR wrap `std::thread(...).detach()` in `try { ... } catch (const std::system_error& e) { ... callback with error ... }` so spawn failure gracefully surfaces a toast instead of terminating. `feedback_no_bare_threads_arm.md`.
 > **Member `std::thread` variables** with proper `join()` in destructor (WifiBackendNetworkManager::connect_thread_, CameraStream::stream_thread_, etc.) are fine — the issue is one-shot detached spawns hitting resource limits per operation.
 > Before grepping for `std::thread` to add a new site, check if HttpExecutor or another managed pool already serves that domain. Adding a raw detached thread reintroduces the anti-pattern and will crash on the smallest device you ship to.
 
-### [L084] [*----|-----] SubjectLifetime must be a member, never a local
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
+### [L084] [*----|***--] SubjectLifetime must be a member, never a local
+- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > **When writing new code** that observes a dynamic subject (per-fan/per-sensor/per-extruder), the `SubjectLifetime` token MUST outlive the observer — which means it MUST be a member, not a local. A local `SubjectLifetime lt;` inside a function paired with a member `ObserverGuard` is a UAF: when `lt` falls off the stack, the observer's `weak_ptr` is dead but the observer itself is still registered against the (potentially recreated) subject. Companion to [L077] (which states the rule) — this lesson catches the specific local-variable shape so it never gets written in the first place.
 > **Rule:** every member `ObserverGuard` on a dynamic subject MUST have a paired member `SubjectLifetime` next to it in the header. Same for vector members.
 > **For per-item collections** (carousel pages, slot lists), use parallel vectors and keep them aligned (push/pop in lockstep, clear lifetimes BEFORE observers per #705):
