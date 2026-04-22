@@ -133,6 +133,7 @@
 #include "system/crash_reporter.h"
 #include "system/telemetry_manager.h"
 #include "system/update_checker.h"
+#include "upgrade_banner.h"
 #include "system_settings_manager.h"
 #include "theme_manager.h"
 #include "wifi_manager.h"
@@ -482,6 +483,12 @@ int Application::run(int argc, char** argv) {
     // On Android the checker still runs (so "Check for Updates" works), but
     // "Install Update" redirects to the Play Store instead of self-updating.
     UpdateChecker::instance().init();
+
+    // Initialize UpgradeBanner — creates the persistent top-banner widget on
+    // lv_layer_top and observes UpdateChecker state. Ships hidden because the
+    // /upgrade_nudge/intensity setting defaults to 'off'; flipped to
+    // 'aggressive' for the 1.0 rollout (no code change needed).
+    UpgradeBanner::instance().init();
 
     // Initialize CrashReporter (independent of telemetry)
     // Write mock crash file first if --mock-crash flag is set (requires --test)
@@ -3574,6 +3581,10 @@ void Application::shutdown() {
 
     // Deactivate UI and clear navigation registries
     NavigationManager::instance().shutdown();
+
+    // Tear down the upgrade banner before UpdateChecker so its observers
+    // release cleanly (subject-lifetime-before-observer per #705).
+    UpgradeBanner::instance().shutdown();
 
     // Stop auto-check timer before full shutdown
     UpdateChecker::instance().stop_auto_check();

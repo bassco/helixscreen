@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2025-2026 356C LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<component>
+  <!--
+    Persistent top-banner that prompts the user to upgrade when
+    UpgradeNudge::should_show_banner() is true. Ships invisible: the C++
+    side (UpgradeBanner singleton) attaches an instance to lv_layer_top
+    during app init, then observes UpgradeNudge + UpdateChecker state and
+    toggles visibility. Dismiss button persists per-version via
+    UpgradeNudge::dismiss_current_version(); Update button navigates to
+    Settings > About where the install can be triggered.
+
+    Attached to lv_layer_top so it floats above panel navigation without
+    requiring every panel to host a copy.
+  -->
+  <view name="upgrade_banner" extends="lv_obj"
+        width="100%" height="content"
+        style_bg_color="#info" style_bg_opa="255"
+        style_pad_all="#space_sm" style_pad_gap="#space_sm"
+        style_border_width="0" style_radius="0"
+        flex_flow="row"
+        style_flex_main_place="space_between" style_flex_cross_place="center"
+        scrollable="false" clickable="false">
+    <!-- Left: icon + message, grows to fill remaining width -->
+    <lv_obj width="1" height="content" flex_grow="1"
+            style_pad_all="0" style_pad_gap="#space_sm"
+            flex_flow="row" style_flex_cross_place="center"
+            style_bg_opa="0" style_border_width="0"
+            scrollable="false" clickable="false">
+      <ui_icon name="upgrade_banner_icon" codepoint="arrow_up_circle"
+               style_text_color="#white"/>
+      <text_body name="upgrade_banner_message" width="1" flex_grow="1"
+                 bind_text="upgrade_banner_text"
+                 style_text_color="#white" long_mode="dots"/>
+    </lv_obj>
+    <!-- Right: update + dismiss buttons -->
+    <ui_button name="upgrade_banner_update_btn"
+               text="Update" translation_tag="Update"
+               variant="primary">
+      <event_cb trigger="clicked" callback="on_upgrade_banner_update"/>
+    </ui_button>
+    <ui_button name="upgrade_banner_dismiss_btn"
+               text="X" translation_tag="[do_not_translate]"
+               variant="secondary" width="40">
+      <event_cb trigger="clicked" callback="on_upgrade_banner_dismiss"/>
+    </ui_button>
+  </view>
+</component>
