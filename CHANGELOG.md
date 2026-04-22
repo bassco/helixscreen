@@ -5,6 +5,28 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.43] - 2026-04-22
+
+### Added
+- **Niimbot B-series support (B1 / B18 / B3S)** — added to the brand table with the shared 384-dot printhead profile. Previously these models were unsupported.
+- **New label sizes** — 30×20, 30×40, 40×40, 25×30, 14×40, 14×60. Fixes **"feeds but prints blank" on B1 with 30×20 stock**, where the printer previously defaulted to a 50×30 template and advanced 50 mm of material across 2.5 of the user's actual labels per print.
+
+### Fixed
+- **Dual-mode Bluetooth label printers no longer fail to connect** — dual-mode Niimbots (D110 and siblings) enumerate as two BlueZ devices with the same name: a BR/EDR half exposing only SPP/PnP and a BLE half carrying the vendor GATT service. Discovery dedup was MAC-based, so both entries appeared in the picker and selecting the BR/EDR half always failed with `br-connection-profile-unavailable`. Dedup now resolves same-name conflicts via the brand table and keeps the vendor's preferred transport. Users whose saved pairing points at the wrong-transport sibling are auto-migrated on the next discovery (saved MAC cleared) so a single re-pair puts them on the right half.
+- **"(Saved)" indicator showing on every Bluetooth device** — the saved-pair tag was flagging any device with a non-empty MAC (i.e., all of them); it now compares against the actual saved `bt_address`.
+- **AD5M: crash reporter recursion on uncaught exception** — the exception record path is now async-signal-safe. When a C++ exception escaped, the crash writer recursed and the process aborted with "std::terminate without active exception" before the report could be written. Reports from AD5M devices will now arrive intact.
+- **Thread exhaustion crash on small devices** ([#837]) — raw detached `std::thread(...)` sites are now routed through managed pools (`HttpExecutor::fast/slow`, `BusThread`) or wrapped in try/catch so `pthread_create` EAGAIN surfaces as a toast instead of terminating. Most visible on AD5M/CC1 under thread pressure.
+- **WiFi panel use-after-free on scroll** ([#850]) — the LVGL input device is now reset before clearing the network list, closing the window where the scroll indev dereferenced a freed scrollable mid-rebuild.
+- **Overlay dismiss use-after-free** ([#840]) — widget deletion in `destroy_overlay_ui` is now deferred, removing the window where a pending async callback could fire on a freed overlay.
+- **Thermistor rediscover UAF** — paired `SubjectLifetime` as a member next to `ObserverGuard` so per-sensor observers expire cleanly when dynamic temperature subjects are destroyed on reconnect.
+- **Observer `release()` → `reset()` in widget `LV_EVENT_DELETE` callbacks** — closes a zombie-observer class that caused rare render-state corruption behind the #579 report cluster.
+- **Config: `telemetry_enabled` source-of-truth** on v13→v14 migration — resolves cases where the in-app toggle state could disagree with the stored value.
+- **Crash-handler diagnostics** ([#851]) — `queue_prev` ring expanded to 4 slots for richer last-actions context; silenced an empty-name image-lookup spam path during crash capture.
+
+### Changed
+- **Toast contrast** — toast cards now sit on `elevated_bg` with a theme border, reading cleanly against busy backgrounds on all themes.
+- **Printer log noise** — per-tick hot-path logs only emit on an actual state change, significantly lowering journal volume on idle devices.
+
 ## [0.99.42] - 2026-04-22
 
 ### Fixed
@@ -3224,6 +3246,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.43]: https://github.com/prestonbrown/helixscreen/compare/v0.99.42...v0.99.43
 [0.99.42]: https://github.com/prestonbrown/helixscreen/compare/v0.99.41...v0.99.42
 [0.99.41]: https://github.com/prestonbrown/helixscreen/compare/v0.99.40...v0.99.41
 [0.99.40]: https://github.com/prestonbrown/helixscreen/compare/v0.99.39...v0.99.40
