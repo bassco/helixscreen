@@ -376,12 +376,22 @@
     <string name="icon_font_xl_xxlarge" value="mdi_icons_128"/>
     <!-- NO BASE icon_font_xl - registered at runtime -->
     <!-- icon_font_hero: Card-filling empty-state icons (thumbnail placeholders etc.) -->
-    <string name="icon_font_hero_micro" value="mdi_icons_96"/>
-    <string name="icon_font_hero_tiny" value="mdi_icons_96"/>
-    <string name="icon_font_hero_small" value="mdi_icons_128"/>
-    <string name="icon_font_hero_medium" value="mdi_icons_128"/>
-    <string name="icon_font_hero_large" value="mdi_icons_128"/>
-    <string name="icon_font_hero_xlarge" value="mdi_icons_128"/>
+    <!-- mdi_icons_96/128 live only in the xxlarge font tier (mk/fonts.mk). On -->
+    <!-- devices whose FONT_TIERS excludes xxlarge (CC1 = micro+tiny, AD5M = -->
+    <!-- medium+large, pi32 = small+medium, etc.) the theme can't register -->
+    <!-- icon_font_hero and every XML consumer spams "No constant was found" + -->
+    <!-- "lv_xml_get_image: No image was found with name ''" warnings every -->
+    <!-- time the placeholder cube renders. Cap each tier at a font size the -->
+    <!-- tier actually ships with: CORE stops at mdi_icons_64 (always linked), -->
+    <!-- XLARGE adds 80, XXLARGE adds 96/128. Hero size converges with xl on -->
+    <!-- sub-xxlarge tiers — acceptable trade vs shipping ~200 KB of oversized -->
+    <!-- glyphs in every build. -->
+    <string name="icon_font_hero_micro" value="mdi_icons_64"/>
+    <string name="icon_font_hero_tiny" value="mdi_icons_64"/>
+    <string name="icon_font_hero_small" value="mdi_icons_64"/>
+    <string name="icon_font_hero_medium" value="mdi_icons_64"/>
+    <string name="icon_font_hero_large" value="mdi_icons_64"/>
+    <string name="icon_font_hero_xlarge" value="mdi_icons_80"/>
     <string name="icon_font_hero_xxlarge" value="mdi_icons_128"/>
     <!-- NO BASE icon_font_hero - registered at runtime -->
 
