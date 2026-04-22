@@ -137,6 +137,21 @@ static const char* get_step_title_from_xml(int step);
 static const char* get_step_subtitle_from_xml(int step);
 static void ui_wizard_precalculate_skips();
 
+// Async navigation: defer ui_wizard_navigate_to_step() from click handlers so
+// lv_obj_clean() doesn't run inside LVGL's indev_proc_release traversal — that
+// race corrupts the global event linked list and aborts in libc (#848/#843).
+// The caller sets navigating=true first; the callback path clears it when
+// navigate_to_step finishes.
+static void navigate_to_step_async_cb(void* data) {
+    int step = static_cast<int>(reinterpret_cast<intptr_t>(data));
+    ui_wizard_navigate_to_step(step);
+}
+
+static void schedule_navigate_to_step(int step) {
+    lv_async_call(navigate_to_step_async_cb,
+                  reinterpret_cast<void*>(static_cast<intptr_t>(step)));
+}
+
 // ============================================================================
 // Step Metadata (read from XML <consts>)
 // ============================================================================
@@ -515,6 +530,7 @@ void ui_wizard_navigate_to_step(int step) {
     calculate_display_step(step, display_step, display_total);
 
     // Update current_step subject (internal step number for UI bindings)
+    crash_handler::breadcrumb::note("wiz", "notify_current", static_cast<long>(step));
     lv_subject_set_int(&current_step, step);
 
     // Update Back button visibility based on whether we can go back
@@ -527,6 +543,7 @@ void ui_wizard_navigate_to_step(int step) {
     if (min_step == 2 && wifi_step_skipped)
         min_step = 3;
     bool has_cancel = (get_wizard_cancel_callback() != nullptr);
+    crash_handler::breadcrumb::note("wiz", "notify_back_vis", static_cast<long>(step));
     lv_subject_set_int(&wizard_back_visible, (step > min_step || has_cancel) ? 1 : 0);
 
     // Show "Cancel" instead of "Back" on the first step when add-printer cancel is available
@@ -556,14 +573,17 @@ void ui_wizard_navigate_to_step(int step) {
     bool is_last_step = (helix::wizard_next_step(step, skips) == -1);
 
     // Update final step flag for button visibility binding
+    crash_handler::breadcrumb::note("wiz", "notify_final", static_cast<long>(step));
     lv_subject_set_int(&wizard_is_final_step, is_last_step ? 1 : 0);
 
     // Update progress display - step numbers as strings for bind_text
     snprintf(wizard_step_current_buffer, sizeof(wizard_step_current_buffer), "%d", display_step);
+    crash_handler::breadcrumb::note("wiz", "notify_step_cur", static_cast<long>(step));
     lv_subject_copy_string(&wizard_step_current, wizard_step_current_buffer);
 
     if (skips_precalculated) {
         snprintf(wizard_step_total_buffer, sizeof(wizard_step_total_buffer), "%d", display_total);
+        crash_handler::breadcrumb::note("wiz", "notify_step_tot", static_cast<long>(step));
         lv_subject_copy_string(&wizard_step_total, wizard_step_total_buffer);
     }
 
@@ -784,13 +804,17 @@ static void ui_wizard_load_screen(int step) {
 
     // Set title and subtitle from XML metadata (no more hardcoded strings!)
     // Use lv_tr() to translate the title/subtitle dynamically based on current language
+    // Per-notify breadcrumbs pin which subject observer is faulty if #848/#843 recurs.
     const char* title = get_step_title_from_xml(step);
+    crash_handler::breadcrumb::note("wiz", "notify_title", static_cast<long>(step));
     ui_wizard_set_title(lv_tr(title));
     const char* subtitle = get_step_subtitle_from_xml(step);
+    crash_handler::breadcrumb::note("wiz", "notify_subtitle", static_cast<long>(step));
     lv_subject_copy_string(&wizard_subtitle, lv_tr(subtitle));
 
     // Default Next button to enabled - steps that gate on validation (language,
     // connection, printer identify, fan select) will set it to 0 in their init
+    crash_handler::breadcrumb::note("wiz", "notify_test_passed", static_cast<long>(step));
     lv_subject_set_int(&connection_test_passed, 1);
 
     // Create appropriate screen based on step
@@ -1114,7 +1138,7 @@ static void on_back_clicked(lv_event_t* e) {
         auto flags = get_current_skip_flags();
         int prev_step = helix::wizard_prev_step(current, flags);
         if (prev_step >= 0) {
-            ui_wizard_navigate_to_step(prev_step);
+            schedule_navigate_to_step(prev_step);
             spdlog::debug("[Wizard] Back button clicked, step: {}", prev_step);
         } else {
             // At first step — invoke cancel callback if registered (add-printer mode)
@@ -1197,8 +1221,7 @@ static void on_next_clicked(lv_event_t* e) {
                 ui_wizard_complete();
                 return;
             }
-            ui_wizard_navigate_to_step(skip_to);
-            navigating = false;
+            schedule_navigate_to_step(skip_to);
             return;
         }
     }
@@ -1288,6 +1311,6 @@ static void on_next_clicked(lv_event_t* e) {
         return;
     }
 
-    ui_wizard_navigate_to_step(next_step);
+    schedule_navigate_to_step(next_step);
     spdlog::debug("[Wizard] Next button clicked, step: {}", next_step);
 }
