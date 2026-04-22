@@ -44,8 +44,7 @@ static void on_delete(lv_event_t* e) {
     lv_obj_t* widget = lv_event_get_target_obj(e);
     auto it = s_registry.find(widget);
     if (it != s_registry.end()) {
-        // Release observer before deleting data
-        it->second->color_observer.release();
+        it->second->color_observer.reset();
         s_registry.erase(it);
         spdlog::trace("[AmsCurrentTool] Widget cleaned up");
     }

@@ -308,10 +308,7 @@ void HeatingIconAnimator::icon_delete_cb(lv_event_t* e) {
     // Stop pulse animation (references icon_)
     animator->stop_pulse();
 
-    // Release theme observer without touching the subject — during lv_deinit()
-    // the subject may already be freed, and reset() would crash trying to
-    // remove the observer from a freed linked list.
-    animator->theme_observer_.release();
+    animator->theme_observer_.reset();
 
     // Null out icon_ — the widget is already being destroyed, don't touch it further
     animator->icon_ = nullptr;

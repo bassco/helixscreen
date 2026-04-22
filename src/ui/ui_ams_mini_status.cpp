@@ -453,10 +453,8 @@ static void on_delete(lv_event_t* e) {
     if (it != s_registry.end()) {
         std::unique_ptr<AmsMiniStatusData> data(it->second);
         if (data) {
-            // release() skips lv_observer_remove() — safe during both normal
-            // widget deletion and shutdown (subjects may already be deinited).
-            data->slots_version_observer.release();
-            data->current_slot_observer.release();
+            data->slots_version_observer.reset();
+            data->current_slot_observer.reset();
         }
         // data automatically freed when unique_ptr goes out of scope
         s_registry.erase(it);
