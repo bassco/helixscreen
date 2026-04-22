@@ -75,9 +75,13 @@ inline constexpr PrinterBrand KNOWN_BRANDS[] = {
     // MUNBYN — SPP
     {"MUNBYN", false, false, false, false},
 
-    // Niimbot — BLE only, custom protocol
+    // Niimbot — BLE only, custom protocol.
+    // B-series share a 384-dot printhead; D-series have a 96-dot printhead.
     {"Niimbot", true, false, true, false},
     {"B21", true, false, true, false},
+    {"B18", true, false, true, false},
+    {"B3S", true, false, true, false},
+    {"B1",  true, false, true, false},
     {"D11", true, false, true, false},
     {"D110", true, false, true, false},
 

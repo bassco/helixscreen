@@ -1245,37 +1245,84 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                         return;
                     auto* overlay = dctx->overlay;
 
-                    // Add to device list (avoid duplicates)
-                    bool found = false;
+                    // Exact-MAC dedup: ignore if BlueZ repeats the same device.
                     for (const auto& existing : overlay->bt_devices_) {
-                        if (existing.mac == info.mac) {
-                            found = true;
+                        if (existing.mac == info.mac)
+                            return;
+                    }
+
+                    // Name-based transport resolution. Dual-mode printers (e.g.
+                    // Niimbot D110) enumerate as two BlueZ entries with the same
+                    // name: one BR/EDR half exposing only SPP/PnP, one BLE half
+                    // exposing the vendor GATT service. The brand table knows
+                    // which transport actually prints; drop the mismatched half.
+                    bool replaced = false;
+                    if (!info.name.empty() &&
+                        helix::bluetooth::find_brand(info.name.c_str()) != nullptr) {
+                        const bool brand_prefers_ble =
+                            helix::bluetooth::name_suggests_ble(info.name.c_str());
+                        const bool new_matches_brand = (info.is_ble == brand_prefers_ble);
+                        for (auto it = overlay->bt_devices_.begin();
+                             it != overlay->bt_devices_.end(); ++it) {
+                            if (it->name != info.name)
+                                continue;
+                            // Real-discovery entries are authoritative over stubs (e.g. the
+                            // saved-device stub created at overlay open with name-derived
+                            // is_ble). Replace whenever the new one matches brand transport;
+                            // drop whenever it doesn't.
+                            if (new_matches_brand) {
+                                spdlog::info("[Label Printer] Replacing {} ({} {}) with "
+                                             "brand-preferred entry ({} {})",
+                                             it->name, it->mac,
+                                             it->is_ble ? "BLE" : "Classic", info.mac,
+                                             info.is_ble ? "BLE" : "Classic");
+                                // Auto-migrate stale saved address: if user saved the
+                                // wrong-transport MAC, clear it so they re-pair correctly.
+                                auto& settings_mgr = LabelPrinterSettingsManager::instance();
+                                if (settings_mgr.get_bt_address() == it->mac &&
+                                    it->mac != info.mac) {
+                                    spdlog::warn("[Label Printer] Saved BT address {} is the "
+                                                 "wrong transport for {}; clearing so user "
+                                                 "re-pairs with {}",
+                                                 it->mac, it->name, info.mac);
+                                    settings_mgr.set_bt_address("");
+                                }
+                                *it = info;
+                                replaced = true;
+                            } else {
+                                spdlog::debug("[Label Printer] Ignoring {} ({} {}): "
+                                              "brand prefers {} transport already present",
+                                              info.name, info.mac,
+                                              info.is_ble ? "BLE" : "Classic",
+                                              brand_prefers_ble ? "BLE" : "Classic");
+                                return;
+                            }
                             break;
                         }
                     }
 
-                    if (!found) {
+                    if (!replaced) {
                         overlay->bt_devices_.push_back(info);
                         spdlog::debug("[Label Printer] BT discovered: {} ({})", info.name,
                                       info.mac);
+                    }
 
-                        // Update dropdown
-                        if (overlay->overlay_root_) {
-                            lv_obj_t* row =
-                                lv_obj_find_by_name(overlay->overlay_root_, "row_bt_printers");
-                            if (row) {
-                                lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
-                                if (dropdown) {
-                                    std::string options;
-                                    for (const auto& d : overlay->bt_devices_) {
-                                        if (!options.empty())
-                                            options += "\n";
-                                        options += bt_device_label(d.name, d.paired, !d.mac.empty(),
-                                                                   d.connected);
-                                    }
-                                    lv_dropdown_close(dropdown);
-                                    lv_dropdown_set_options(dropdown, options.c_str());
+                    // Update dropdown
+                    if (overlay->overlay_root_) {
+                        lv_obj_t* row =
+                            lv_obj_find_by_name(overlay->overlay_root_, "row_bt_printers");
+                        if (row) {
+                            lv_obj_t* dropdown = lv_obj_find_by_name(row, "dropdown");
+                            if (dropdown) {
+                                std::string options;
+                                for (const auto& d : overlay->bt_devices_) {
+                                    if (!options.empty())
+                                        options += "\n";
+                                    options += bt_device_label(d.name, d.paired, !d.mac.empty(),
+                                                               d.connected);
                                 }
+                                lv_dropdown_close(dropdown);
+                                lv_dropdown_set_options(dropdown, options.c_str());
                             }
                         }
                     }
@@ -1311,7 +1358,9 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                 if (!options.empty())
                                     options += "\n";
                                 options +=
-                                    bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                    bt_device_label(d.name, d.paired,
+                                                                   d.mac == LabelPrinterSettingsManager::instance().get_bt_address(),
+                                                                   d.connected);
                             }
                             lv_dropdown_set_options(dropdown, options.c_str());
                         }
@@ -1603,7 +1652,9 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
                             if (!options.empty())
                                 options += "\n";
                             options +=
-                                bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                bt_device_label(d.name, d.paired,
+                                                                   d.mac == LabelPrinterSettingsManager::instance().get_bt_address(),
+                                                                   d.connected);
                         }
                         lv_dropdown_set_options(dropdown, options.c_str());
                     }
@@ -1812,7 +1863,9 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                                 if (!options.empty())
                                     options += "\n";
                                 options +=
-                                    bt_device_label(d.name, d.paired, !d.mac.empty(), d.connected);
+                                    bt_device_label(d.name, d.paired,
+                                                                   d.mac == LabelPrinterSettingsManager::instance().get_bt_address(),
+                                                                   d.connected);
                             }
                             lv_dropdown_set_options(dropdown, options.c_str());
                         }

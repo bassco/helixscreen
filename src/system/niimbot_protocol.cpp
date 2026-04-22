@@ -228,12 +228,19 @@ NiimbotPrintJob niimbot_build_print_job(const LabelBitmap& bitmap, const LabelSi
 }
 
 std::vector<LabelSize> niimbot_b21_sizes() {
-    // B21: 384px (48mm) wide printhead, 203 DPI
+    // B21/B1/B3S/B18: shared 384px (48mm) wide printhead, 203 DPI.
+    // ~7.68 dots/mm convention matches existing 50x30 → 384x231 entry.
     return {
         {"50x30mm", 384, 231, 203, 0x01, 50, 30},
         {"40x30mm", 307, 231, 203, 0x01, 40, 30},
+        {"30x20mm", 231, 154, 203, 0x01, 30, 20},
+        {"30x40mm", 231, 307, 203, 0x01, 30, 40},
+        {"40x40mm", 307, 307, 203, 0x01, 40, 40},
         {"50x50mm", 384, 384, 203, 0x01, 50, 50},
         {"40x20mm", 307, 154, 203, 0x01, 40, 20},
+        {"25x30mm", 192, 231, 203, 0x01, 25, 30},
+        {"14x40mm", 108, 307, 203, 0x01, 14, 40},
+        {"14x60mm", 108, 461, 203, 0x01, 14, 60},
         {"50x80mm", 384, 615, 203, 0x01, 50, 80},
     };
 }
