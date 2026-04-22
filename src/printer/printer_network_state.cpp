@@ -100,6 +100,7 @@ void PrinterNetworkState::set_printer_connection_state_internal(int state, const
 }
 
 void PrinterNetworkState::set_network_status(int status) {
+    if (lv_subject_get_int(&network_status_) == status) return;
     spdlog::debug("[PrinterNetworkState] Network status changed: {}", status);
     lv_subject_set_int(&network_status_, status);
 }
@@ -107,6 +108,7 @@ void PrinterNetworkState::set_network_status(int status) {
 void PrinterNetworkState::set_klippy_state_internal(KlippyState state) {
     const char* state_names[] = {"READY", "STARTUP", "SHUTDOWN", "ERROR"};
     int state_int = static_cast<int>(state);
+    if (lv_subject_get_int(&klippy_state_) == state_int) return;
     spdlog::debug("[PrinterNetworkState] Klippy state changed: {} ({})", state_names[state_int],
                   state_int);
     lv_subject_set_int(&klippy_state_, state_int);

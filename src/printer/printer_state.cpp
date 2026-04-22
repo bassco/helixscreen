@@ -359,19 +359,11 @@ void PrinterState::update_from_status(const json& state) {
         led_ctrl.output_pin().update_from_status(state);
     }
 
-    // Update exclude_object state (for mid-print object exclusion)
+    // Update exclude_object state (for mid-print object exclusion). The inner
+    // setters (set_excluded_objects / set_defined_objects_with_geometry /
+    // set_current_object) already log on actual change.
     if (state.contains("exclude_object")) {
         const auto& eo = state["exclude_object"];
-
-        spdlog::debug("[PrinterState] exclude_object status update: objects={}, "
-                      "excluded_objects={}, current_object={}",
-                      eo.contains("objects") && eo["objects"].is_array() ? eo["objects"].size() : 0,
-                      eo.contains("excluded_objects") && eo["excluded_objects"].is_array()
-                          ? eo["excluded_objects"].size()
-                          : 0,
-                      eo.contains("current_object") && eo["current_object"].is_string()
-                          ? eo["current_object"].get<std::string>()
-                          : std::string("<none>"));
 
         if (eo.contains("excluded_objects") && eo["excluded_objects"].is_array()) {
             std::unordered_set<std::string> excluded;
@@ -463,7 +455,6 @@ void PrinterState::update_from_status(const json& state) {
             }
 
             network_state_.set_klippy_state_internal(new_state);
-            spdlog::debug("[PrinterState] Klippy state from webhooks: {}", klippy_state_str);
         }
 
         // Capture state_message (error/shutdown reason text)
