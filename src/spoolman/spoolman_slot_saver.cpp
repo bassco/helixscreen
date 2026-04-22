@@ -2,6 +2,7 @@
 
 #include "spoolman_slot_saver.h"
 
+#include "filament_database.h"
 #include "moonraker_api.h"
 
 #include <spdlog/spdlog.h>
@@ -69,21 +70,28 @@ void SpoolmanSlotSaver::save(const SlotInfo& original, const SlotInfo& edited,
 
         const std::string color_hex = color_to_hex(edited.color_rgb);
         const float weight = edited.remaining_weight_g;
+        // Spoolman rejects a spool POST (400) when it can't determine the spool's
+        // initial weight: no initial_weight in the request AND filament.weight is null
+        // on the newly-created filament. Prefer the slot's total_weight_g if the user
+        // specified one; otherwise fall back to the standard 1 kg consumer spool.
+        const double initial_weight =
+            edited.total_weight_g > 0 ? static_cast<double>(edited.total_weight_g) : 1000.0;
 
         find_or_create_vendor(
             edited.brand,
-            [this, edited, color_hex, weight, on_complete](int vendor_id) {
+            [this, edited, color_hex, weight, initial_weight, on_complete](int vendor_id) {
                 find_or_create_filament(
                     vendor_id, edited.material, color_hex,
-                    [this, vendor_id, weight, on_complete](int filament_id) {
+                    [this, vendor_id, weight, initial_weight, on_complete](int filament_id) {
                         nlohmann::json payload;
                         payload["filament_id"] = filament_id;
+                        payload["initial_weight"] = initial_weight;
                         if (weight > 0.0f) {
                             payload["remaining_weight"] = static_cast<double>(weight);
                         }
                         spdlog::info("[SpoolmanSlotSaver] Creating new spool "
-                                     "(filament_id={}, weight={:.1f})",
-                                     filament_id, weight);
+                                     "(filament_id={}, initial={:.1f}g, remaining={:.1f}g)",
+                                     filament_id, initial_weight, weight);
                         api_->spoolman().create_spoolman_spool(
                             payload,
                             [vendor_id, filament_id, on_complete](const SpoolInfo& info) {
@@ -341,6 +349,13 @@ void SpoolmanSlotSaver::find_or_create_filament(int vendor_id, const std::string
             payload["material"] = material;
             payload["color_hex"] = needle_color;
             payload["name"] = material;
+            // density and diameter are REQUIRED by Spoolman (no defaults in their API).
+            // Look up density from the material database; fall back to 1.24 g/cm³ (PLA).
+            // Diameter defaults to 1.75 mm — correct for ~99% of hobbyist setups.
+            auto mat_info = filament::find_material(material);
+            payload["density"] =
+                (mat_info && mat_info->density_g_cm3 > 0.0f) ? mat_info->density_g_cm3 : 1.24;
+            payload["diameter"] = 1.75;
             spdlog::info("[SpoolmanSlotSaver] Creating filament "
                          "(vendor={}, material={}, color={})",
                          vendor_id, material, needle_color);

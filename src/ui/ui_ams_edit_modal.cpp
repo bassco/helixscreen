@@ -1623,11 +1623,18 @@ void AmsEditModal::handle_save() {
         api_ = get_moonraker_api();
     }
 
-    // Sync active spool with Moonraker when assignment changes (assign or unlink)
-    // so other clients (Mainsail, Fluidd) see the change and filament tracking works.
-    // Fire-and-forget: local save proceeds regardless of server response.
-    if (original_info_.spoolman_id != working_info_.spoolman_id && api_) {
+    // Sync active spool with Moonraker on every save — covers assignment changes
+    // AND re-saves of an already-linked slot whose state Moonraker has lost
+    // (e.g. after a Moonraker restart, a Spoolman outage, or an earlier create
+    // path that didn't propagate the new ID). The underlying POST is idempotent
+    // when the ID is unchanged. Fire-and-forget: local save proceeds regardless
+    // of server response. Skipped for the new-spool-on-save path (working.id=0
+    // until creation); that case re-syncs from the create callback below.
+    if (api_ && working_info_.spoolman_id > 0) {
         sync_active_spool(api_, working_info_.spoolman_id);
+    } else if (api_ && original_info_.spoolman_id > 0 && working_info_.spoolman_id == 0) {
+        // Unassignment: propagate 0 so Moonraker clears its active spool.
+        sync_active_spool(api_, 0);
     }
 
     // Delegate to SpoolmanSlotSaver whenever either:
@@ -1675,6 +1682,14 @@ void AmsEditModal::handle_save() {
                                     }
                                     if (result.new_vendor_id != 0) {
                                         working_info_.spoolman_vendor_id = result.new_vendor_id;
+                                    }
+                                    // The early sync_active_spool() above was skipped because
+                                    // spoolman_id was 0 on both sides (creation hadn't happened
+                                    // yet). Notify Moonraker now so Mainsail/Fluidd show the
+                                    // new spool as active and filament tracking starts.
+                                    if (result.created_new_spool && result.new_spool_id != 0 &&
+                                        api_) {
+                                        sync_active_spool(api_, result.new_spool_id);
                                     }
                                     if (result.created_new_spool) {
                                         ToastManager::instance().show(
