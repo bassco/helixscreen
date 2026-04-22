@@ -661,6 +661,16 @@ void NetworkSettingsOverlay::clear_network_list() {
 
     spdlog::debug("[NetworkSettingsOverlay] Clearing network list");
 
+    // Cancel any in-progress press/scroll on this list. safe_delete_deferred_raw
+    // below reparents each child to lv_layer_top() before async-delete; the reparent
+    // detaches from networks_list_ immediately, but indev's cached scroll/press
+    // target still points at the (soon-to-be-freed) child. Without this reset,
+    // a SCROLL_THROW_BEGIN dispatched between reparent and async-delete dereferences
+    // freed widget memory — SIGBUS in libc with MALLOC_PERTURB_ poison (#850).
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_reset(indev, networks_list_);
+    }
+
     // Freeze queue to prevent background thread from enqueueing callbacks
     // targeting children we're about to delete
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();

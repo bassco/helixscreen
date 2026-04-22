@@ -373,6 +373,15 @@ void WizardWifiStep::clear_network_list() {
 
     spdlog::debug("[{}] Clearing network list", get_name());
 
+    // Cancel any in-progress press/scroll on this list. safe_delete_deferred
+    // reparents children to lv_layer_top() before async-delete, but indev's
+    // cached scroll/press target still points at the about-to-be-freed child —
+    // a SCROLL_THROW_BEGIN between reparent and async-delete hits freed memory
+    // (mirrors the NetworkSettingsOverlay fix for #850).
+    if (lv_indev_t* indev = lv_indev_active()) {
+        lv_indev_reset(indev, network_list_container_);
+    }
+
     // Freeze queue to prevent background thread from enqueueing callbacks
     // targeting children we're about to delete
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
