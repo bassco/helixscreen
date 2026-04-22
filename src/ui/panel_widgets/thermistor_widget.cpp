@@ -265,8 +265,9 @@ void ThermistorWidget::attach_single() {
     } else {
         // Re-bind observer to saved sensor
         auto& tsm = helix::sensors::TemperatureSensorManager::instance();
-        SubjectLifetime lifetime;
-        lv_subject_t* subject = tsm.get_temp_subject(selected_sensor_, lifetime);
+        temp_lifetime_.reset();
+        temp_observer_.reset();
+        lv_subject_t* subject = tsm.get_temp_subject(selected_sensor_, temp_lifetime_);
         if (subject) {
             auto token = lifetime_.token();
             temp_observer_ = helix::ui::observe_int_sync<ThermistorWidget>(
@@ -276,7 +277,7 @@ void ThermistorWidget::attach_single() {
                         return;
                     self->on_temp_changed(temp);
                 },
-                lifetime);
+                temp_lifetime_);
         }
         update_display();
     }
@@ -326,9 +327,13 @@ void ThermistorWidget::bind_carousel_sensors() {
         return;
     }
 
-    // Freeze update queue while tearing down observers and widgets
+    // Freeze update queue while tearing down observers and widgets.
+    // Lifetimes must clear BEFORE observers so weak_ptr-tracked subject-death
+    // detection in ObserverGuard::reset() correctly skips lv_observer_remove()
+    // on a recreated subject (#705 ordering rule).
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        carousel_lifetimes_.clear();
         carousel_observers_.clear();
         carousel_pages_.clear();
 
@@ -430,8 +435,9 @@ void ThermistorWidget::bind_carousel_sensors() {
                                     "C");
         carousel_pages_.push_back(cp);
 
-        // Observe temperature subject
-        SubjectLifetime lifetime;
+        // Observe temperature subject. Per-page lifetime is stored in a parallel
+        // member vector so the token outlives the local stack frame ([L084]).
+        SubjectLifetime& lifetime = carousel_lifetimes_.emplace_back();
         lv_subject_t* subject = tsm.get_temp_subject(klipper_name, lifetime);
         if (subject) {
             auto obs = helix::ui::observe_int_sync<ThermistorWidget>(
@@ -457,6 +463,10 @@ void ThermistorWidget::bind_carousel_sensors() {
             lv_label_set_text(temp_lbl, carousel_pages_.back().temp_buffer);
 
             carousel_observers_.push_back(std::move(obs));
+        } else {
+            // Subject lookup failed — drop the unused lifetime slot to keep
+            // carousel_lifetimes_ aligned with carousel_observers_.
+            carousel_lifetimes_.pop_back();
         }
     }
 
@@ -473,8 +483,11 @@ void ThermistorWidget::detach() {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
         version_observer_.reset();
+        // Lifetimes reset BEFORE observers (#705 ordering rule).
+        carousel_lifetimes_.clear();
         carousel_observers_.clear();
         carousel_pages_.clear();
+        temp_lifetime_.reset();
         temp_observer_.reset();
     }
 
@@ -516,7 +529,8 @@ void ThermistorWidget::select_sensor(const std::string& klipper_name) {
         return;
     }
 
-    // Reset existing observer
+    // Reset existing observer + lifetime (lifetime first per #705 ordering rule)
+    temp_lifetime_.reset();
     temp_observer_.reset();
 
     selected_sensor_ = klipper_name;
@@ -527,8 +541,7 @@ void ThermistorWidget::select_sensor(const std::string& klipper_name) {
 
     // Subscribe to this sensor's temperature subject
     auto& tsm = helix::sensors::TemperatureSensorManager::instance();
-    SubjectLifetime lifetime;
-    lv_subject_t* subject = tsm.get_temp_subject(klipper_name, lifetime);
+    lv_subject_t* subject = tsm.get_temp_subject(klipper_name, temp_lifetime_);
     if (subject) {
         auto token = lifetime_.token();
         temp_observer_ = helix::ui::observe_int_sync<ThermistorWidget>(
@@ -538,7 +551,7 @@ void ThermistorWidget::select_sensor(const std::string& klipper_name) {
                     return;
                 self->on_temp_changed(temp);
             },
-            lifetime);
+            temp_lifetime_);
     } else {
         spdlog::warn("[ThermistorWidget] No subject for sensor: {}", klipper_name);
     }
@@ -602,10 +615,9 @@ void ThermistorWidget::update_display() {
             lv_label_set_text(temp_label_, "--\xC2\xB0"
                                            "C");
         } else {
-            // Read current value from subject
+            // Read current value from subject (no observer — use no-lifetime overload)
             auto& tsm = helix::sensors::TemperatureSensorManager::instance();
-            SubjectLifetime lifetime;
-            lv_subject_t* subject = tsm.get_temp_subject(selected_sensor_, lifetime);
+            lv_subject_t* subject = tsm.get_temp_subject(selected_sensor_);
             if (subject) {
                 float deg = centi_to_degrees_f(lv_subject_get_int(subject));
                 format_temperature_f(deg, temp_buffer_, sizeof(temp_buffer_));

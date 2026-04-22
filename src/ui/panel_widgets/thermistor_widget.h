@@ -63,6 +63,7 @@ class ThermistorWidget : public PanelWidget {
     std::string selected_sensor_; // klipper_name (e.g., "temperature_sensor mcu_temp")
     std::string display_name_;    // Pretty name for label
     ObserverGuard temp_observer_;
+    SubjectLifetime temp_lifetime_;
     helix::AsyncLifetimeGuard lifetime_;
     char temp_buffer_[16] = {};
 
@@ -74,6 +75,7 @@ class ThermistorWidget : public PanelWidget {
     };
     std::vector<CarouselPage> carousel_pages_;
     std::vector<ObserverGuard> carousel_observers_;
+    std::vector<SubjectLifetime> carousel_lifetimes_;
     ObserverGuard version_observer_;
 
     bool binding_in_progress_ = false; // reentrancy guard for bind_carousel_sensors
