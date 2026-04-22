@@ -784,6 +784,13 @@ lv_result_t lv_xml_register_image(lv_xml_component_scope_t * scope, const char *
 
 const void * lv_xml_get_image(lv_xml_component_scope_t * scope, const char * name)
 {
+    /* Empty/missing name is expected for unset bind_src attributes and string
+     * subjects that default to "". Skip the lookup and the warning — nothing
+     * actionable, and a rebuild storm against a component with an empty
+     * default can emit dozens of these per frame (seen on K1 Max during
+     * Print Status overlay rebuild). */
+    if(name == NULL || name[0] == '\0') return NULL;
+
     if(scope == NULL) scope = lv_xml_component_get_scope("globals");
     if(scope == NULL) return NULL;
 

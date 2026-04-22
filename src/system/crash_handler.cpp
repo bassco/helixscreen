@@ -92,8 +92,12 @@ static uintptr_t s_text_end = 0;
 /// Pointer to the UpdateQueue's current callback tag (registered at init)
 static volatile const char* const* s_callback_tag_ptr = nullptr;
 
-/// Pointer to the UpdateQueue's last-completed callback tag (registered at init)
-static volatile const char* const* s_previous_tag_ptr = nullptr;
+/// UpdateQueue's ring of recently-completed callback tags (registered at init).
+/// Slot `(*s_previous_tag_next - 1) % s_previous_tag_capacity` is newest;
+/// walk backwards to emit queue_prev, queue_prev2, ...
+static volatile const char* const* s_previous_tag_ring = nullptr;
+static unsigned int s_previous_tag_capacity = 0;
+static volatile const unsigned int* s_previous_tag_next = nullptr;
 
 // =============================================================================
 // Heap snapshot cache
@@ -690,10 +694,24 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
             safe_write(fd, "\n");
         }
     }
-    if (s_previous_tag_ptr) {
-        const char* prev = const_cast<const char*>(*s_previous_tag_ptr);
-        if (prev) {
-            safe_write(fd, "queue_prev:");
+    // Walk the previous-tag ring newest→oldest. Emits queue_prev, queue_prev2,
+    // ... for each non-null slot. Stops at the first null (ring not yet wrapped).
+    if (s_previous_tag_ring && s_previous_tag_capacity > 0 && s_previous_tag_next) {
+        unsigned int next = *s_previous_tag_next;
+        // Labels for up to 8 slots; caller typically registers 4.
+        static const char* const kLabels[] = {
+            "queue_prev:",  "queue_prev2:", "queue_prev3:", "queue_prev4:",
+            "queue_prev5:", "queue_prev6:", "queue_prev7:", "queue_prev8:",
+        };
+        const unsigned int label_count = sizeof(kLabels) / sizeof(kLabels[0]);
+        const unsigned int limit =
+            s_previous_tag_capacity < label_count ? s_previous_tag_capacity : label_count;
+        for (unsigned int i = 0; i < limit; ++i) {
+            // Reading from (next - 1 - i) handles wraparound via unsigned arithmetic.
+            unsigned int idx = (next + s_previous_tag_capacity - 1 - i) % s_previous_tag_capacity;
+            const char* prev = const_cast<const char*>(s_previous_tag_ring[idx]);
+            if (!prev) break; // Unfilled slot — rest of the ring is empty.
+            safe_write(fd, kLabels[i]);
             safe_write(fd, prev);
             safe_write(fd, "\n");
         }
@@ -1000,8 +1018,12 @@ void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_pt
     s_callback_tag_ptr = tag_ptr;
 }
 
-void crash_handler::register_previous_tag_ptr(volatile const char* const* tag_ptr) {
-    s_previous_tag_ptr = tag_ptr;
+void crash_handler::register_previous_tag_ring(volatile const char* const* ring,
+                                                unsigned int capacity,
+                                                volatile const unsigned int* next) {
+    s_previous_tag_ring = ring;
+    s_previous_tag_capacity = capacity;
+    s_previous_tag_next = next;
 }
 
 void crash_handler::set_current_event(const void* target, const void* original_target,

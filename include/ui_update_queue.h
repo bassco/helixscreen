@@ -45,6 +45,7 @@
 #include <spdlog/spdlog.h>
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -114,10 +115,14 @@ class UpdateQueue {
         // Register the current callback tag pointer with the crash handler
         // so crashes inside process_pending() identify which callback was running
         crash_handler::register_callback_tag_ptr(&current_tag_);
-        // Also register the last-completed tag so post-callback crashes
-        // (heap corruption detonating on the next main-thread malloc) name
-        // the callback that most recently ran.
-        crash_handler::register_previous_tag_ptr(&previous_tag_);
+        // Also register the last-N completed tags so post-callback crashes
+        // (heap corruption detonating a few callbacks later, or on the next
+        // main-thread malloc) can pin which callback planted the corruption.
+        // Ring is written on every callback exit; crash handler walks it
+        // newest→oldest and emits queue_prev / queue_prev2 / ... lines.
+        crash_handler::register_previous_tag_ring(previous_tag_ring_,
+                                                  kPreviousTagRingSize,
+                                                  &previous_tag_next_);
 
         initialized_ = true;
         spdlog::debug("[UpdateQueue] Initialized - timer created for queue drain");
@@ -331,11 +336,15 @@ class UpdateQueue {
             } catch (...) {
                 spdlog::error("[UpdateQueue] Unknown exception in queued callback");
             }
-            // Retain previous tag so a post-callback crash (heap corruption
-            // detonating on the next main-thread malloc) still names the
-            // callback that most recently ran. current_tag_ signals "inside"
-            // vs "after" via the xor on both pointers.
-            if (current_tag_) previous_tag_ = current_tag_;
+            // Retain the N most-recently-completed tags so a post-callback
+            // crash (heap corruption detonating on the next main-thread malloc,
+            // or a few callbacks later) still names the prior sequence.
+            // current_tag_ signals "inside a callback" vs "between / after".
+            if (current_tag_) {
+                unsigned int next = previous_tag_next_;
+                previous_tag_ring_[next % kPreviousTagRingSize] = current_tag_;
+                previous_tag_next_ = next + 1;
+            }
             current_tag_ = nullptr;
             to_process.pop();
         }
@@ -354,10 +363,14 @@ class UpdateQueue {
     /// Volatile ensures the signal handler sees the current value, not a cached one.
     static inline volatile const char* current_tag_ = nullptr;
 
-    /// Tag of the most-recently-completed callback. Useful when the crashing
-    /// instruction ran AFTER process_pending() returned but was corrupted by
-    /// a prior callback — current_tag_ is null but this points at the suspect.
-    static inline volatile const char* previous_tag_ = nullptr;
+    /// Ring of the N most-recently-completed callback tags. The crash handler
+    /// walks this newest→oldest to name the prior callback sequence. Useful
+    /// when the crashing instruction ran AFTER process_pending() returned but
+    /// was corrupted by a prior callback, or when the corruption cascades a
+    /// few callbacks later. Slot `(previous_tag_next_ - 1) % N` is newest.
+    static constexpr unsigned int kPreviousTagRingSize = 4;
+    static inline volatile const char* previous_tag_ring_[kPreviousTagRingSize] = {};
+    static inline volatile unsigned int previous_tag_next_ = 0;
 
   public:
     /**
@@ -379,7 +392,9 @@ class UpdateQueue {
      * has already returned.
      */
     static const char* previous_callback_tag() {
-        return const_cast<const char*>(previous_tag_);
+        if (previous_tag_next_ == 0) return nullptr;
+        unsigned int idx = (previous_tag_next_ - 1) % kPreviousTagRingSize;
+        return const_cast<const char*>(previous_tag_ring_[idx]);
     }
 };
 

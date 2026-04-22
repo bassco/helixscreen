@@ -113,13 +113,26 @@ void write_mock_crash_file(const std::string& crash_file_path);
 void register_callback_tag_ptr(volatile const char* const* tag_ptr);
 
 /**
- * @brief Register a pointer to the last-completed callback tag
+ * @brief Register a ring of recently-completed callback tags
  *
- * Lets the signal handler emit a `queue_prev:` line when the crash happens
- * AFTER a queued callback finished — useful for pinning heap corruption
- * detected on the next main-thread malloc.
+ * Lets the signal handler emit `queue_prev:` / `queue_prev2:` / ... lines
+ * naming the most recently completed callbacks when the crash happens
+ * AFTER a queued callback finished. Useful for pinning heap corruption
+ * that detonates on the next main-thread malloc, or cascades a few
+ * callbacks later.
+ *
+ * The ring is walked newest→oldest starting at `(*next - 1) % capacity`.
+ * Producer writes slot `*next % capacity`, then stores `*next + 1` back.
+ * All three parameters are read by the signal handler, so their storage
+ * must outlive any possible crash (typically static).
+ *
+ * @param ring     Pointer to the tag-pointer array (string literals)
+ * @param capacity Number of slots in the ring (power-of-two recommended)
+ * @param next     Pointer to the write-index counter (monotonically increasing)
  */
-void register_previous_tag_ptr(volatile const char* const* tag_ptr);
+void register_previous_tag_ring(volatile const char* const* ring,
+                                unsigned int capacity,
+                                volatile const unsigned int* next);
 
 /**
  * @brief Record the LVGL event currently being dispatched
