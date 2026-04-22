@@ -8,6 +8,64 @@
       <div v-if="loading" class="loading">Loading...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <template v-else-if="data">
+        <!-- 1.0 READINESS HEADLINE: trailing 14-day session crash rate vs 1.5% threshold -->
+        <div v-if="data.trailing_14d" class="gauge-section">
+          <div class="gauge-card" :class="gaugeStatus">
+            <div class="gauge-label">Trailing 14-day session crash rate</div>
+            <div class="gauge-value">{{ (data.trailing_14d.rate * 100).toFixed(2) }}%</div>
+            <div class="gauge-sub">
+              {{ data.trailing_14d.crash_count.toLocaleString() }} crashes
+              /
+              {{ data.trailing_14d.session_count.toLocaleString() }} sessions
+              <span class="gauge-threshold">
+                · target: &lt; 1.50% for 1.0
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-platform breakdown: core platforms vs small-N platforms -->
+        <div v-if="corePlatforms.length" class="chart-section">
+          <h3>Core platforms (≥ 100 sessions)</h3>
+          <div class="platform-grid">
+            <div
+              v-for="p in corePlatforms"
+              :key="p.platform"
+              class="platform-card"
+              :class="platformRateClass(p.rate)"
+            >
+              <div class="platform-name">{{ p.platform }}</div>
+              <div class="platform-rate">{{ (p.rate * 100).toFixed(2) }}%</div>
+              <div class="platform-sub">
+                {{ p.crash_count }} crashes / {{ p.session_count.toLocaleString() }} sessions
+                <br>
+                {{ p.crashing_devices }} of {{ p.session_devices }} devices crashed
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="limitedPlatforms.length" class="chart-section">
+          <h3>
+            Limited-data platforms (&lt; 100 sessions)
+            <span class="hint">— small N; rates may be noisy</span>
+          </h3>
+          <div class="platform-grid">
+            <div
+              v-for="p in limitedPlatforms"
+              :key="p.platform"
+              class="platform-card limited"
+            >
+              <div class="platform-name">{{ p.platform }}</div>
+              <div class="platform-rate">{{ (p.rate * 100).toFixed(1) }}%</div>
+              <div class="platform-sub">
+                {{ p.crash_count }} crashes / {{ p.session_count }} sessions
+                <br>
+                {{ p.crashing_devices }} of {{ p.session_devices }} devices crashed
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="chart-section">
           <h3>Crash Rate by Version</h3>
           <BarChart :data="versionChartData" :options="barOptions" />
@@ -124,6 +182,33 @@ const signalChartData = computed(() => ({
     backgroundColor: COLORS
   }]
 }))
+
+// 1.0-readiness gauge threshold — see stability sprint plan 2026-04-22.
+const GAUGE_GREEN = 0.015 // < 1.5% sessions → green
+const GAUGE_YELLOW = 0.03 // 1.5%–3% sessions → yellow, above → red
+
+const gaugeStatus = computed(() => {
+  const r = data.value?.trailing_14d?.rate ?? 0
+  if (r < GAUGE_GREEN) return 'gauge-green'
+  if (r < GAUGE_YELLOW) return 'gauge-yellow'
+  return 'gauge-red'
+})
+
+function platformRateClass(rate: number): string {
+  if (rate < GAUGE_GREEN) return 'rate-green'
+  if (rate < GAUGE_YELLOW) return 'rate-yellow'
+  return 'rate-red'
+}
+
+// Split platforms by sample size so small-N data (CC1, Snapmaker, AD5M early on)
+// doesn't visually dominate the core fleet's rate.
+const SMALL_N_THRESHOLD = 100
+const corePlatforms = computed(() =>
+  (data.value?.by_platform ?? []).filter(p => p.session_count >= SMALL_N_THRESHOLD),
+)
+const limitedPlatforms = computed(() =>
+  (data.value?.by_platform ?? []).filter(p => p.session_count < SMALL_N_THRESHOLD),
+)
 
 async function fetchData() {
   loading.value = true
@@ -272,5 +357,122 @@ watch(() => filters.queryString, fetchData, { immediate: true })
 .badge.occurrences {
   background: rgba(245, 158, 11, 0.15);
   color: #fbbf24;
+}
+
+/* 1.0-readiness headline gauge */
+.gauge-section {
+  margin-bottom: 24px;
+}
+
+.gauge-card {
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.gauge-card.gauge-green {
+  border-left-color: #10b981;
+}
+
+.gauge-card.gauge-yellow {
+  border-left-color: #f59e0b;
+}
+
+.gauge-card.gauge-red {
+  border-left-color: #ef4444;
+}
+
+.gauge-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.gauge-value {
+  font-size: 42px;
+  font-weight: 700;
+  margin: 4px 0 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.gauge-card.gauge-green .gauge-value {
+  color: #10b981;
+}
+
+.gauge-card.gauge-yellow .gauge-value {
+  color: #f59e0b;
+}
+
+.gauge-card.gauge-red .gauge-value {
+  color: #ef4444;
+}
+
+.gauge-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.gauge-threshold {
+  margin-left: 6px;
+  font-style: italic;
+}
+
+/* Per-platform breakdown */
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.platform-card {
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+}
+
+.platform-card.rate-green { border-left-color: #10b981; }
+.platform-card.rate-yellow { border-left-color: #f59e0b; }
+.platform-card.rate-red { border-left-color: #ef4444; }
+
+.platform-card.limited {
+  border-left-color: #64748b;
+  opacity: 0.85;
+}
+
+.platform-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.platform-rate {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 2px 0 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.platform-card.rate-green .platform-rate { color: #10b981; }
+.platform-card.rate-yellow .platform-rate { color: #f59e0b; }
+.platform-card.rate-red .platform-rate { color: #ef4444; }
+.platform-card.limited .platform-rate { color: var(--text-secondary); }
+
+.platform-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.chart-section h3 .hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 8px;
 }
 </style>

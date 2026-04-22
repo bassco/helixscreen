@@ -31,6 +31,25 @@ export interface CrashesData {
   by_version: { version: string; crash_count: number; session_count: number; rate: number }[]
   by_signal: { signal: string; count: number }[]
   avg_uptime_sec: number
+  by_platform?: {
+    platform: string
+    crash_count: number
+    session_count: number
+    crashing_devices: number
+    session_devices: number
+    rate: number
+  }[]
+  trailing_14d?: {
+    crash_count: number
+    session_count: number
+    rate: number
+    by_platform: {
+      platform: string
+      crash_count: number
+      session_count: number
+      rate: number
+    }[]
+  }
 }
 
 export interface CrashListData {

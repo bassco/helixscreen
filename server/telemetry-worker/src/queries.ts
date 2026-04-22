@@ -198,6 +198,9 @@ export function crashesQueries(days: number, filters?: FilterParams): string[] {
   const dataset = "helixscreen_telemetry";
   // crash event: blob2=version, blob4=platform — custom blob map
   const f = buildFilterClause(filters, { platform: "blob4" });
+  // Session events use the default platform column layout (not blob4); keep
+  // their filter un-remapped so platform filtering still works.
+  const sessF = buildFilterClause(filters);
   return [
     // By version (crash count + session count for rate)
     `SELECT
@@ -212,12 +215,47 @@ export function crashesQueries(days: number, filters?: FilterParams): string[] {
       blob2 as ver,
       count() as session_count
     FROM ${dataset}
-    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session' AND blob2 != ''${buildFilterClause(filters)}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session' AND blob2 != ''${sessF}
     GROUP BY ver`,
     // By signal
     `SELECT blob3 as signal, count() as count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash' AND blob3 != ''${f} GROUP BY signal ORDER BY count DESC`,
     // Average uptime
     `SELECT avg(double1) as avg_uptime_sec FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash'${f}`,
+    // Crashes by platform (count + unique crashing devices).
+    // Crash events use the custom blob map: blob1=device_id, blob2=version,
+    // blob3=signal, blob4=platform.
+    `SELECT
+      blob4 as platform,
+      count() as crash_count,
+      uniqExact(blob1) as device_count
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'crash' AND blob4 != ''${f}
+    GROUP BY platform
+    ORDER BY crash_count DESC`,
+    // Sessions by platform (for per-platform rate denominator + device count).
+    // Session events use the default blob map: blob1=device_id, blob2=version,
+    // blob3=platform, blob4=model.
+    `SELECT
+      blob3 as platform,
+      count() as session_count,
+      uniqExact(blob1) as device_count
+    FROM ${dataset}
+    WHERE timestamp >= NOW() - INTERVAL '${days}' DAY AND index1 = 'session' AND blob3 != ''${sessF}
+    GROUP BY platform
+    ORDER BY session_count DESC`,
+    // Trailing 14-day rate: overall crashes (all platforms, including empty).
+    // NOTE: the per-platform queries below filter `blob3/blob4 != ''`, so the
+    // sum of per-platform counts may be slightly less than these overall
+    // totals if any events arrive with unset platform. In practice our client
+    // always sets app_platform, so the gap is zero, but the overall totals are
+    // deliberately un-filtered for truthfulness on the gauge.
+    `SELECT count() as crash_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '14' DAY AND index1 = 'crash'${f}`,
+    // Trailing 14-day rate: overall sessions
+    `SELECT count() as session_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '14' DAY AND index1 = 'session'${sessF}`,
+    // Trailing 14-day rate: per-platform crashes
+    `SELECT blob4 as platform, count() as crash_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '14' DAY AND index1 = 'crash' AND blob4 != ''${f} GROUP BY platform`,
+    // Trailing 14-day rate: per-platform sessions
+    `SELECT blob3 as platform, count() as session_count FROM ${dataset} WHERE timestamp >= NOW() - INTERVAL '14' DAY AND index1 = 'session' AND blob3 != ''${sessF} GROUP BY platform`,
   ];
 }
 

@@ -452,19 +452,92 @@ export default {
         // GET /v1/dashboard/crashes
         if (url.pathname === "/v1/dashboard/crashes") {
           const queries = crashesQueries(days, filters);
-          const [crashByVerRes, sessionByVerRes, signalRes, uptimeRes] =
-            await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
+          const [
+            crashByVerRes,
+            sessionByVerRes,
+            signalRes,
+            uptimeRes,
+            crashByPlatRes,
+            sessionByPlatRes,
+            trailing14CrashRes,
+            trailing14SessionRes,
+            trailing14CrashByPlatRes,
+            trailing14SessionByPlatRes,
+          ] = await Promise.all(queries.map((q) => executeQuery(queryConfig, q)));
 
           const crashByVer = crashByVerRes as { data: Array<{ ver: string; crash_count: number }> };
           const sessionByVer = sessionByVerRes as { data: Array<{ ver: string; session_count: number }> };
           const signalData = signalRes as { data: Array<{ signal: string; count: number }> };
           const uptimeData = uptimeRes as { data: Array<{ avg_uptime_sec: number }> };
+          const crashByPlat = crashByPlatRes as {
+            data: Array<{ platform: string; crash_count: number; device_count: number }>;
+          };
+          const sessionByPlat = sessionByPlatRes as {
+            data: Array<{ platform: string; session_count: number; device_count: number }>;
+          };
+          const trailing14Crash = trailing14CrashRes as { data: Array<{ crash_count: number }> };
+          const trailing14Session = trailing14SessionRes as { data: Array<{ session_count: number }> };
+          const trailing14CrashByPlat = trailing14CrashByPlatRes as {
+            data: Array<{ platform: string; crash_count: number }>;
+          };
+          const trailing14SessionByPlat = trailing14SessionByPlatRes as {
+            data: Array<{ platform: string; session_count: number }>;
+          };
 
           // Build session count lookup
           const sessionMap = new Map<string, number>();
           for (const row of sessionByVer.data ?? []) {
             sessionMap.set(row.ver, row.session_count);
           }
+
+          // Merge crash and session counts per platform for the headline cards.
+          // Platforms that had sessions but no crashes still appear (rate=0).
+          const platMap = new Map<
+            string,
+            {
+              platform: string;
+              crash_count: number;
+              session_count: number;
+              crashing_devices: number;
+              session_devices: number;
+            }
+          >();
+          for (const row of sessionByPlat.data ?? []) {
+            platMap.set(row.platform, {
+              platform: row.platform,
+              crash_count: 0,
+              session_count: row.session_count,
+              crashing_devices: 0,
+              session_devices: row.device_count,
+            });
+          }
+          for (const row of crashByPlat.data ?? []) {
+            const entry = platMap.get(row.platform) ?? {
+              platform: row.platform,
+              crash_count: 0,
+              session_count: 0,
+              crashing_devices: 0,
+              session_devices: 0,
+            };
+            entry.crash_count = row.crash_count;
+            entry.crashing_devices = row.device_count;
+            platMap.set(row.platform, entry);
+          }
+
+          // Same merge for the trailing-14d window. Separate from the
+          // range-scoped breakdown above so the UI can show both.
+          const platMap14 = new Map<string, { crash_count: number; session_count: number }>();
+          for (const row of trailing14SessionByPlat.data ?? []) {
+            platMap14.set(row.platform, { crash_count: 0, session_count: row.session_count });
+          }
+          for (const row of trailing14CrashByPlat.data ?? []) {
+            const entry = platMap14.get(row.platform) ?? { crash_count: 0, session_count: 0 };
+            entry.crash_count = row.crash_count;
+            platMap14.set(row.platform, entry);
+          }
+
+          const overall14Crash = trailing14Crash.data?.[0]?.crash_count ?? 0;
+          const overall14Session = trailing14Session.data?.[0]?.session_count ?? 0;
 
           return json({
             by_version: (crashByVer.data ?? []).map((r) => {
@@ -481,6 +554,25 @@ export default {
               count: r.count,
             })),
             avg_uptime_sec: uptimeData.data?.[0]?.avg_uptime_sec ?? 0,
+            by_platform: Array.from(platMap.values())
+              .map((p) => ({
+                ...p,
+                rate: p.session_count > 0 ? p.crash_count / p.session_count : 0,
+              }))
+              .sort((a, b) => b.session_count - a.session_count),
+            trailing_14d: {
+              crash_count: overall14Crash,
+              session_count: overall14Session,
+              rate: overall14Session > 0 ? overall14Crash / overall14Session : 0,
+              by_platform: Array.from(platMap14.entries())
+                .map(([platform, v]) => ({
+                  platform,
+                  crash_count: v.crash_count,
+                  session_count: v.session_count,
+                  rate: v.session_count > 0 ? v.crash_count / v.session_count : 0,
+                }))
+                .sort((a, b) => b.session_count - a.session_count),
+            },
           });
         }
 
