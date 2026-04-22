@@ -3,6 +3,7 @@
 
 #include "klipper_config_editor.h"
 
+#include "http_executor.h"
 #include "klipper_config_includes.h"
 #include "moonraker_api.h"
 
@@ -879,10 +880,12 @@ void KlipperConfigEditor::safe_multi_edit(MoonrakerAPI& api, const std::string& 
                             api.restart_firmware(
                                 [this, &api, on_success, on_error, restart_timeout_ms]() {
                                     // Step 8: Monitor reconnection (same pattern as
-                                    // safe_edit_value)
-                                    auto poll_thread = std::thread([this, &api, on_success,
-                                                                    on_error,
-                                                                    restart_timeout_ms]() {
+                                    // safe_edit_value). Route through HttpExecutor::fast()
+                                    // instead of raw std::thread — spawn failures crash
+                                    // std::terminate on AD5M (#724, #837).
+                                    helix::http::HttpExecutor::fast().submit([this, &api,
+                                                                               on_success, on_error,
+                                                                               restart_timeout_ms]() {
                                         const auto poll_interval = std::chrono::milliseconds(500);
                                         const auto timeout =
                                             std::chrono::milliseconds(restart_timeout_ms);
@@ -976,7 +979,6 @@ void KlipperConfigEditor::safe_multi_edit(MoonrakerAPI& api, const std::string& 
                                                              restore_err);
                                             });
                                     });
-                                    poll_thread.detach();
                                 },
                                 [on_error](const MoonrakerError& err) {
                                     spdlog::error("[ConfigEditor] FIRMWARE_RESTART failed: {}",
@@ -1013,10 +1015,11 @@ void KlipperConfigEditor::safe_edit_value(MoonrakerAPI& api, const std::string& 
             api.restart_firmware(
                 [this, &api, on_success, on_error, restart_timeout_ms]() {
                     // Step 3: FIRMWARE_RESTART command accepted, monitor reconnection.
-                    // Spawn a background thread to poll connection state.
+                    // Route through HttpExecutor::fast() — raw std::thread spawn crashes
+                    // with std::terminate on AD5M under thread exhaustion (#724, #837).
                     // Capture callbacks and timeout by value for thread safety.
-                    auto poll_thread = std::thread([this, &api, on_success, on_error,
-                                                    restart_timeout_ms]() {
+                    helix::http::HttpExecutor::fast().submit([this, &api, on_success, on_error,
+                                                              restart_timeout_ms]() {
                         const auto poll_interval = std::chrono::milliseconds(500);
                         const auto timeout = std::chrono::milliseconds(restart_timeout_ms);
                         const auto start = std::chrono::steady_clock::now();
@@ -1105,7 +1108,6 @@ void KlipperConfigEditor::safe_edit_value(MoonrakerAPI& api, const std::string& 
                                              restore_err);
                             });
                     });
-                    poll_thread.detach();
                 },
                 [on_error](const MoonrakerError& err) {
                     spdlog::error("[ConfigEditor] FIRMWARE_RESTART failed: {}", err.message);

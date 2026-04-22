@@ -161,7 +161,11 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
 
     // All state needed by the detached thread is captured by value/move.
     // The NiimbotBluetoothPrinter object may be destroyed before thread completes.
-    std::thread([mac, job = std::move(job), callback]() {
+    // Wrap spawn in try/catch — pthread_create EAGAIN on resource-constrained ARM
+    // (AD5M/CC1) throws std::system_error which aborts with std::terminate if it
+    // escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, job = std::move(job), callback]() {
         std::lock_guard<std::mutex> lock(s_print_mutex);
 
         auto& loader = helix::bluetooth::BluetoothLoader::instance();
@@ -317,7 +321,13 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
         helix::ui::queue_update([callback, success, error]() {
             if (callback) callback(success, error);
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("Niimbot BT: failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update([callback]() {
+            if (callback) callback(false, "System busy — please try again");
+        });
+    }
 }
 
 }  // namespace helix::label

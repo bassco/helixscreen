@@ -53,13 +53,23 @@ void BrotherQLBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
     std::string mac = mac_;
     int channel = channel_;
 
-    std::thread([mac, channel, commands = std::move(commands), callback]() {
-        auto result = helix::bluetooth::rfcomm_send(mac, channel, commands, "Brother QL BT");
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, channel, commands = std::move(commands), callback]() {
+            auto result = helix::bluetooth::rfcomm_send(mac, channel, commands, "Brother QL BT");
 
-        helix::ui::queue_update([callback, result]() {
-            if (callback) callback(result.success, result.error);
+            helix::ui::queue_update([callback, result]() {
+                if (callback) callback(result.success, result.error);
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("Brother QL BT: failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update([callback]() {
+            if (callback) callback(false, "System busy — please try again");
         });
-    }).detach();
+    }
 }
 
 }  // namespace helix::label

@@ -486,18 +486,27 @@ void QrScannerOverlay::on_camera_frame(lv_draw_buf_t* frame) {
         int qr_h = qr_height_;
         auto decode_tok = lifetime_.token();
 
-        std::thread([this, qr_buf, qr_w, qr_h, decode_tok]() {
-            auto result = qr_decoder_->decode(qr_buf->data(), qr_w, qr_h);
+        // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+        // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+        // if it escapes an LVGL event frame (#724, #837, [L083]).
+        try {
+            std::thread([this, qr_buf, qr_w, qr_h, decode_tok]() {
+                auto result = qr_decoder_->decode(qr_buf->data(), qr_w, qr_h);
+                decode_busy_ = false;
+
+                if (decode_tok.expired())
+                    return;
+
+                if (result.success && result.spool_id >= 0) {
+                    int spool_id = result.spool_id;
+                    decode_tok.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
+                }
+            }).detach();
+        } catch (const std::system_error& e) {
+            spdlog::warn("[QrScanner] Failed to spawn decode thread: {} — skipping frame",
+                         e.what());
             decode_busy_ = false;
-
-            if (decode_tok.expired())
-                return;
-
-            if (result.success && result.spool_id >= 0) {
-                int spool_id = result.spool_id;
-                decode_tok.defer([this, spool_id]() { on_spool_id_detected(spool_id); });
-            }
-        }).detach();
+        }
     }
 }
 #endif

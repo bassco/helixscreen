@@ -4,6 +4,7 @@
 #if HELIX_HAS_LABEL_PRINTER
 
 #include "ipp_printer.h"
+#include "http_executor.h"
 #include "ipp_protocol.h"
 #include "pwg_raster.h"
 #include "sheet_label_layout.h"
@@ -12,8 +13,6 @@
 #include "hv/requests.h"
 
 #include <spdlog/spdlog.h>
-
-#include <thread>
 
 namespace helix {
 
@@ -78,8 +77,11 @@ void IppPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
     spdlog::info("IPP Printer: printing to {}:{}/{}, template={}, count={}, start={}",
                  host, port, resource_path, template_index, label_count, start_position);
 
-    std::thread([host, port, resource_path, template_index, label_count,
-                 start_position, bitmap, size, callback]() {
+    // Route through HttpExecutor::fast() bounded pool — raw std::thread spawn
+    // crashes with std::terminate on AD5M under thread exhaustion (#724, #837).
+    helix::http::HttpExecutor::fast().submit(
+        [host, port, resource_path, template_index, label_count,
+         start_position, bitmap, size, callback]() {
         try {
             // Get the sheet template
             const auto& templates = label::get_sheet_templates();
@@ -203,7 +205,7 @@ void IppPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
                 callback(false, err);
             });
         }
-    }).detach();
+    });
 }
 
 } // namespace helix

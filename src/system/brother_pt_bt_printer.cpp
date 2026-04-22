@@ -80,15 +80,26 @@ void BrotherPTBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
 
     std::string mac = mac_;
 
-    std::thread([mac, commands = std::move(commands), callback]() {
-        // fallback_channel=1 preserves first-run behavior on SDP-less builds.
-        // Brother PT-E550W / P750W historically advertise SPP on channel 1.
-        auto result = helix::bluetooth::rfcomm_send(mac, 1, commands, "Brother PT BT");
-        helix::ui::queue_update([callback, result]() {
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, commands = std::move(commands), callback]() {
+            // fallback_channel=1 preserves first-run behavior on SDP-less builds.
+            // Brother PT-E550W / P750W historically advertise SPP on channel 1.
+            auto result = helix::bluetooth::rfcomm_send(mac, 1, commands, "Brother PT BT");
+            helix::ui::queue_update([callback, result]() {
+                if (callback)
+                    callback(result.success, result.error);
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[Brother PT BT] Failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update([callback]() {
             if (callback)
-                callback(result.success, result.error);
+                callback(false, "System busy — please try again");
         });
-    }).detach();
+    }
 }
 
 void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset preset,
@@ -114,8 +125,12 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
 
     std::string mac = mac_;
 
-    std::thread([mac, spool, preset, callback]() {
-        auto& loader = helix::bluetooth::BluetoothLoader::instance();
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, spool, preset, callback]() {
+            auto& loader = helix::bluetooth::BluetoothLoader::instance();
         auto* ctx = loader.get_or_create_context();
         if (!ctx) {
             helix::ui::queue_update([callback]() {
@@ -301,12 +316,19 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
             spdlog::debug("[Brother PT BT] Completion status: type={}", completion.status_type);
         }
 
-        cleanup();
+            cleanup();
+            helix::ui::queue_update([callback]() {
+                if (callback)
+                    callback(true, "");
+            });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[Brother PT BT] Failed to spawn print thread: {}", e.what());
         helix::ui::queue_update([callback]() {
             if (callback)
-                callback(true, "");
+                callback(false, "System busy — please try again");
         });
-    }).detach();
+    }
 }
 
 } // namespace helix::label

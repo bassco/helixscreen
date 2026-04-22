@@ -154,6 +154,26 @@ Never spawn a raw `std::thread` for HTTP — unbounded spawning crashed with EAG
 thread exhaustion on RatOS (#811-adjacent). See `docs/devel/MOONRAKER_ARCHITECTURE.md`
 § "HTTP Work Execution (HttpExecutor)".
 
+**No `std::thread(...).detach()` for fire-and-forget work (MANDATORY):** On
+AD5M/CC1/MIPS32, `pthread_create` returns EAGAIN under thread exhaustion; the
+`std::thread` constructor then throws `std::system_error`, which — propagating through
+an LVGL C event-dispatch frame or a `noexcept` boundary — aborts the process with
+`std::terminate without active exception`. Crashes look like unrelated code paths
+(#724 wizard camera probe, #837 debug-bundle upload, #811-adjacent HTTP storm).
+
+| Workload | ✅ Use |
+|----------|-------|
+| HTTP (REST/thumbnails/small uploads) | `helix::http::HttpExecutor::fast().submit(fn)` |
+| HTTP (bundles/gcode/large transfers) | `helix::http::HttpExecutor::slow().submit(fn)` |
+| sd-bus / BlueZ DBus call | `helix::bluetooth::BusThread::run_sync(fn)` |
+| BT-over-RFCOMM / USB print / QR decode / device discovery | `try { std::thread([...]{}).detach(); } catch (const std::system_error& e) { /* toast + error callback */ }` |
+| Long-lived worker (member variable, joined in dtor) | `std::thread` is fine — the issue is one-shot detached spawns |
+
+Before adding a new `std::thread`, grep for an existing managed pool that covers that
+domain. Adding a raw detached spawn reintroduces the anti-pattern and will crash on the
+smallest device you ship to. See `include/http_executor.h`, `include/bt_bus_thread.h`,
+memory `feedback_no_bare_threads_arm.md`, lesson [L083].
+
 **No sync widget deletion in queued callbacks (MANDATORY):** Never call these synchronous deletion APIs from inside `queue_update()` / `async_call()` / `lifetime_.defer()` / `tok.defer()` / observer callbacks (`observe_int_sync`, `observe_string` — also deferred via queue_update since #82):
 
 | ❌ BANNED inside queued callbacks | ✅ USE INSTEAD |
@@ -184,11 +204,26 @@ void MyState::init_subjects() {
 
 **Dynamic subject lifetime safety (MANDATORY):** Per-fan, per-sensor, and per-extruder subjects are **dynamic** — they can be destroyed and recreated during reconnection/rediscovery. Observing a dynamic subject without a `SubjectLifetime` token causes **use-after-free crashes** when `lv_subject_deinit()` frees observers but `ObserverGuard` still holds a dangling pointer.
 
-| ❌ CRASH | ✅ SAFE |
-|----------|---------|
-| `auto* s = state.get_fan_speed_subject(name);` | `SubjectLifetime lt;` |
-| `obs = observe_int_sync(s, this, handler);` | `auto* s = state.get_fan_speed_subject(name, lt);` |
-| | `obs = observe_int_sync(s, this, handler, lt);` |
+**The lifetime token MUST outlive the observer.** A local `SubjectLifetime lt;` paired with a member `ObserverGuard` is a UAF: when `lt` falls off the stack, the observer's `weak_ptr` is dead but the observer itself is still registered against the (potentially recreated) subject. **When you add a member `ObserverGuard` on a dynamic subject, add a paired member `SubjectLifetime` next to it in the header — do not use a local.** (Codebase-wide audit 2026-04-22 confirmed no existing violations; this rule applies to new code.)
+
+| ❌ CRASH (local lifetime + member observer) | ✅ SAFE (parallel members) |
+|---|---|
+| `// in .cpp function body:` | `// in header, alongside ObserverGuard:` |
+| `SubjectLifetime lt;` | `ObserverGuard temp_observer_;` |
+| `auto* s = tsm.get_temp_subject(n, lt);` | `SubjectLifetime temp_lifetime_;` |
+| `temp_observer_ = observe_int_sync(s,…lt);` | `// in .cpp:` |
+| `// lt dies at function exit → UAF on rediscover` | `temp_lifetime_.reset();` |
+| | `temp_observer_.reset();` |
+| | `auto* s = tsm.get_temp_subject(n, temp_lifetime_);` |
+| | `temp_observer_ = observe_int_sync(s,…temp_lifetime_);` |
+
+**For per-item observers (carousel pages, slot lists, etc.) use parallel vectors** — and keep them aligned (push/pop in lockstep):
+```cpp
+std::vector<ObserverGuard>     carousel_observers_;
+std::vector<SubjectLifetime>   carousel_lifetimes_;   // MUST clear before observers
+```
+
+**Read-only access is the only valid case for a local `SubjectLifetime`.** If you call `get_temp_subject(name, lt)` and never create an observer, the lifetime can be local — but prefer the no-lifetime overload (`tsm.get_temp_subject(name)`) which exists for exactly this case.
 
 **Dynamic subject sources** (always require lifetime token when observing):
 - `PrinterFanState::get_fan_speed_subject(name, lifetime)` — per-fan speeds
@@ -208,6 +243,15 @@ speed_observer_.reset();
 speed_observer_.reset();
 speed_lifetime_.reset();
 ```
+
+**`ObserverGuard::reset()` is the default — `release()` is NOT (MANDATORY).** Use `reset()` for all normal cleanup: panel teardown, widget `LV_EVENT_DELETE` callbacks, and repopulate paths. It internally checks `s_subjects_valid` and `lv_is_initialized()`, so it is safe even if LVGL is already torn down. `release()` is **only** for the very last pre-deinit cleanup (`StaticSubjectRegistry::register_deinit()` callbacks) where the observer ctx must be intentionally leaked because the subject is already destroyed. (Codebase-wide audit 2026-04-22 confirmed no existing violations; this rule applies to new code.)
+
+| ❌ UAF (zombie observer, deferred callback fires on stale `this`) | ✅ CORRECT |
+|---|---|
+| `// in widget LV_EVENT_DELETE callback:` | `// in widget LV_EVENT_DELETE callback:` |
+| `data->color_observer.release();` | `data->color_observer.reset();` |
+
+If you find yourself reasoning "`release()` seems safer because it skips `lv_observer_remove()`" — that's the misconception that caused 17 #579 reports. Skipping the remove call leaks the `LambdaObserverContext` and corrupts rendering state. The safety you want lives inside `reset()` already (`s_subjects_valid` + `lv_is_initialized()` guards). Don't write `release()` in new cleanup code.
 
 See `ui_observer_guard.h` for full documentation of the `SubjectLifetime` pattern.
 

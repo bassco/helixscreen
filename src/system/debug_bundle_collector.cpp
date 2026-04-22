@@ -7,6 +7,7 @@
 #include "app_globals.h"
 #include "data_root_resolver.h"
 #include "helix_version.h"
+#include "http_executor.h"
 #include "hv/requests.h"
 #include "moonraker_api.h"
 #include "platform_capabilities.h"
@@ -25,7 +26,6 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
-#include <thread>
 #include <zlib.h>
 
 using json = nlohmann::json;
@@ -871,8 +871,10 @@ std::vector<uint8_t> DebugBundleCollector::gzip_compress(const std::string& data
 // =============================================================================
 
 void DebugBundleCollector::upload_async(const BundleOptions& options, ResultCallback callback) {
-    // Detached thread for non-blocking upload
-    std::thread([options, callback = std::move(callback)]() {
+    // Large compressed upload — route through HttpExecutor::slow() (1-worker lane)
+    // to avoid head-of-line blocking REST calls AND to avoid raw std::thread spawn,
+    // which crashes with std::terminate on AD5M under thread exhaustion (#837, #724).
+    helix::http::HttpExecutor::slow().submit([options, callback = std::move(callback)]() {
         BundleResult result;
 
         try {
@@ -929,7 +931,7 @@ void DebugBundleCollector::upload_async(const BundleOptions& options, ResultCall
         }
 
         helix::ui::queue_update([callback, result]() { callback(result); });
-    }).detach();
+    });
 }
 
 } // namespace helix

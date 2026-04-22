@@ -106,38 +106,48 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
     uint16_t vid = vid_;
     uint16_t pid = pid_;
 
-    std::thread([vid, pid, commands = std::move(commands), callback]() {
-        bool success = false;
-        std::string error;
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([vid, pid, commands = std::move(commands), callback]() {
+            bool success = false;
+            std::string error;
 
-        // Find the usblp device node for this VID:PID
-        std::string dev_path = find_usblp_device(vid, pid);
-        if (dev_path.empty()) {
-            error = fmt::format("No USB printer device found for {:04x}:{:04x}. "
-                                "Is the printer turned on?",
-                                vid, pid);
-            spdlog::error("Phomemo: {}", error);
-        } else {
-            std::ofstream f(dev_path, std::ios::binary);
-            if (!f.is_open()) {
-                error = fmt::format("Cannot open {} (check permissions)", dev_path);
+            // Find the usblp device node for this VID:PID
+            std::string dev_path = find_usblp_device(vid, pid);
+            if (dev_path.empty()) {
+                error = fmt::format("No USB printer device found for {:04x}:{:04x}. "
+                                    "Is the printer turned on?",
+                                    vid, pid);
                 spdlog::error("Phomemo: {}", error);
             } else {
-                f.write(reinterpret_cast<const char*>(commands.data()),
-                        static_cast<std::streamsize>(commands.size()));
-                f.flush();
-                if (f.good()) {
-                    success = true;
-                    spdlog::info("Phomemo: sent {} bytes via {}", commands.size(), dev_path);
-                } else {
-                    error = fmt::format("Write to {} failed", dev_path);
+                std::ofstream f(dev_path, std::ios::binary);
+                if (!f.is_open()) {
+                    error = fmt::format("Cannot open {} (check permissions)", dev_path);
                     spdlog::error("Phomemo: {}", error);
+                } else {
+                    f.write(reinterpret_cast<const char*>(commands.data()),
+                            static_cast<std::streamsize>(commands.size()));
+                    f.flush();
+                    if (f.good()) {
+                        success = true;
+                        spdlog::info("Phomemo: sent {} bytes via {}", commands.size(), dev_path);
+                    } else {
+                        error = fmt::format("Write to {} failed", dev_path);
+                        spdlog::error("Phomemo: {}", error);
+                    }
                 }
             }
-        }
 
-        helix::ui::queue_update([callback, success, error]() { callback(success, error); });
-    }).detach();
+            helix::ui::queue_update(
+                [callback, success, error]() { callback(success, error); });
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("Phomemo: failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update(
+            [callback]() { callback(false, "System busy — please try again"); });
+    }
 }
 
 } // namespace helix

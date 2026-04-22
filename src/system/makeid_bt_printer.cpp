@@ -228,7 +228,11 @@ void MakeIdBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& s
     spdlog::info("MakeID BT: {} chunks to {} via RFCOMM", job.chunks.size(), mac_);
 
     std::string mac = mac_;
-    std::thread([mac, job = std::move(job), callback]() {
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, job = std::move(job), callback]() {
         std::lock_guard<std::mutex> lock(s_print_mutex);
         auto& loader = helix::bluetooth::BluetoothLoader::instance();
         bool success = false;
@@ -312,7 +316,14 @@ void MakeIdBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& s
             if (callback)
                 callback(success, error);
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("MakeID BT: failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update([callback]() {
+            if (callback)
+                callback(false, "System busy — please try again");
+        });
+    }
 }
 
 } // namespace helix::label

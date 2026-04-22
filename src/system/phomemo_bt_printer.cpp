@@ -53,7 +53,11 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
     std::string mac = mac_;
     bool use_spp = (transport_ == "spp");
 
-    std::thread([mac, use_spp, commands = std::move(commands), callback]() {
+    // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
+    // ARM (AD5M/CC1) throws std::system_error which aborts with std::terminate
+    // if it escapes an LVGL event frame (#724, #837, [L083]).
+    try {
+        std::thread([mac, use_spp, commands = std::move(commands), callback]() {
         bool success = false;
         std::string error;
 
@@ -95,7 +99,13 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
         helix::ui::queue_update([callback, success, error]() {
             if (callback) callback(success, error);
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("Phomemo BT: failed to spawn print thread: {}", e.what());
+        helix::ui::queue_update([callback]() {
+            if (callback) callback(false, "System busy — please try again");
+        });
+    }
 }
 
 }  // namespace helix::label

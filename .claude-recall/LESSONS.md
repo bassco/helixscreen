@@ -13,7 +13,7 @@
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
-- **Uses**: 29 | **Velocity**: 6.25 | **Learned**: 2025-12-14 | **Last**: 2026-04-16 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 30 | **Velocity**: 7.25 | **Learned**: 2025-12-14 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
 > After adding icon to codepoints.h: add to regen_mdi_fonts.sh, run make regen-fonts, then rebuild. Forgetting any step = missing icon
 
 ### [L011] [***--|**---] No mutex in destructors
@@ -21,7 +21,7 @@
 > Avoid mutex locks in destructors during static destruction phase. Other objects may already be destroyed, causing deadlock or crash on exit
 
 ### [L014] [***--|*****] Register all XML components
-- **Uses**: 39 | **Velocity**: 4 | **Learned**: 2025-12-14 | **Last**: 2026-04-20 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 40 | **Velocity**: 5 | **Learned**: 2025-12-14 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
 > When adding new XML components, must add lv_xml_component_register_from_file() call in main.cpp. Forgetting causes silent failures
 
 ### [L020] [***--|*----] ObserverGuard for cleanup
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 48.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-19 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 50.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [**---|***--] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 42.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-20 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 44.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-21 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -128,8 +128,8 @@
 - **Uses**: 24 | **Velocity**: 8.5 | **Learned**: 2026-02-10 | **Last**: 2026-04-19 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
-### [L065] [*----|****-] No test-only methods on production classes
-- **Uses**: 4 | **Velocity**: 2 | **Learned**: 2026-02-11 | **Last**: 2026-04-19 | **Category**: patterns
+### [L065] [**---|****-] No test-only methods on production classes
+- **Uses**: 5 | **Velocity**: 3 | **Learned**: 2026-02-11 | **Last**: 2026-04-22 | **Category**: patterns
 > WRONG: Adding public methods like reset_for_testing(), clear_startup_grace_period_for_testing() on production classes. Pollutes API, ships test code to users, creates coupling. FOUND: 40+ instances across AbortManager (15 callback simulators), sensor managers, printer state classes. RIGHT: Use friend class pattern — add 'friend class FooTestAccess;' in private section, define FooTestAccess in the test .cpp file with static methods that access private members. Example: FilamentSensorManagerTestAccess::reset(mgr) instead of mgr.reset_for_testing(). For state machine callbacks (like AbortManager), consider a testable interface/mock instead of exposing every internal transition.
 
 ### [L066] [**---|****-] LVGL flex_grow row_wrap trick
@@ -144,8 +144,8 @@
 - **Uses**: 3 | **Velocity**: 1.25 | **Learned**: 2026-02-15 | **Last**: 2026-03-25 | **Category**: lvgl
 > When deleting LVGL objects that have animations with completion callbacks, ALWAYS cancel animations FIRST (lv_anim_delete) before lv_obj_delete/lv_obj_safe_delete. The completion callback may fire synchronously during lv_anim_delete, causing use-after-free if the object is already freed. Pattern: (1) nullify member pointer, (2) clear state flags, (3) lv_anim_delete, (4) lv_obj_delete. For animations using 'this' as var: set guard flags to false BEFORE lv_anim_delete so callbacks become no-ops.
 
-### [L069] [**---|****-] Never assume lv_obj user_data ownership — it may already be set
-- **Uses**: 9 | **Velocity**: 2.5 | **Learned**: 2026-02-15 | **Last**: 2026-04-15 | **Category**: architecture
+### [L069] [***--|****-] Never assume lv_obj user_data ownership — it may already be set
+- **Uses**: 10 | **Velocity**: 3.5 | **Learned**: 2026-02-15 | **Last**: 2026-04-22 | **Category**: architecture
 > LVGL's lv_obj_set_user_data() is a single shared slot per object. Custom XML widgets, component handlers, and LVGL internals may set user_data during object creation (e.g., ui_button stores button_data_t*, severity_card stores a severity string). NEVER call delete/free on lv_obj_get_user_data() unless you are 100% certain you set it yourself on that specific object. NEVER use user_data as general-purpose storage on objects you didn't fully create — XML components and custom widgets may have claimed it already. **CRITICAL: NEVER walk parent chain checking any non-null user_data to find an instance pointer** — ui_button and other widgets set their own user_data, so the traversal will find the WRONG data and miscast it (caused SEGFAULT in AmsOperationSidebar/AmsDryerCard). Instead, walk parents checking `lv_obj_get_name()` for a specific known name, THEN read user_data from that named object. For per-item data, prefer: (1) event callback user_data (separate per-callback), (2) a C++ side container (map/vector indexed by object pointer), or (3) lv_obj_find_by_name to stash data in a hidden child label.
 
 ### [L071] [***--|*****] XML child click passthrough
@@ -160,8 +160,8 @@
 - **Uses**: 11 | **Velocity**: 3.5 | **Learned**: 2026-02-22 | **Last**: 2026-04-15 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
-### [L073] [**---|****-] ObserverGuard release vs reset
-- **Uses**: 7 | **Velocity**: 3 | **Learned**: 2026-02-22 | **Last**: 2026-04-18 | **Category**: gotcha | **Type**: constraint
+### [L073] [**---|*****] ObserverGuard release vs reset
+- **Uses**: 9 | **Velocity**: 5 | **Learned**: 2026-02-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > Use obs.reset() when subjects are ALIVE (normal cleanup, repopulate) — properly unsubscribes and frees the LambdaObserverContext, expiring weak_alive tokens so deferred callbacks are skipped. Use obs.release() ONLY when subjects may already be DESTROYED (shutdown, pre-deinit) — avoids double-free. Wrong choice = crash: reset() on dead subject = double-free, release() on live subject = zombie observer (context stays alive in LVGL, weak_alive never expires, deferred callbacks fire with stale pointers). This caused 17 crash reports (#579): release() in unregister_slot_data left zombie observers that corrupted LVGL rendering state → NEON blend SIGSEGV. Fixed by switching to reset() since subjects are alive during normal widget deletion. The pre-deinit cleanup_all_slot_data() correctly uses release().
 
 ### [L074] [***--|*****] Generation counter for deferred observer callbacks
@@ -192,11 +192,35 @@
 - **Uses**: 8 | **Velocity**: 5 | **Learned**: 2026-04-16 | **Last**: 2026-04-20 | **Category**: gotcha
 > Before asking user to scroll/tap/interact on a device: (1) verify the NEW binary is running (check PID start time or version string in logs), (2) verify logging captures to the expected destination (journalctl vs file vs console), (3) verify required state is enabled (telemetry enabled, debug log level set in helixscreen.env), (4) verify logs are accessible from SSH. Do ALL checks in one pass BEFORE involving the user. Each failed round-trip wastes the user's time and patience. On Pi: systemctl runs through journalctl, deploy-pi-fg uses SSH -t (console only), nohup loses output. Always use systemd + journalctl for production log capture.
 
-### [L081] [*----|***--] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 3 | **Velocity**: 1.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-20 | **Category**: gotcha | **Type**: constraint
+### [L081] [**---|*****] lifetime_.defer does NOT escape UpdateQueue batch
+- **Uses**: 6 | **Velocity**: 4.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / `helix::ui::async_call` (our wrapper) are thin wrappers around `queue_update` — the callback fires in the *next* `UpdateQueue::process_pending` tick, which is still a UpdateQueue batch that may contain other sync deletions. The AsyncLifetimeGuard generation counter protects against use-after-free of `this`; it does NOT prevent LVGL event-list corruption. Any comment claiming "defer outside process_pending" is wrong — fix it. Observer callbacks (`observe_int_sync`, `observe_string`) are also deferred via queue_update since #82 and share the same batch. BANNED inside any queued/deferred callback: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. USE INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's own async list, outside our batch. Multiple sync deletions in the same batch corrupt LVGL's global event linked list → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). See CLAUDE.md § "No sync widget deletion in queued callbacks" and `include/ui_utils.h`.
 
 ### [L082] [*----|-----] Percent size inside LV_SIZE_CONTENT parent collapses to 0
 - **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-20 | **Last**: 2026-04-20 | **Category**: gotcha | **Type**: constraint
 > LVGL percent sizing (`width="50%"`, `style_min_width="50%"`, etc.) resolves against the parent's content area. If the parent is `LV_SIZE_CONTENT`, the percent computes against a circular dependency and effectively becomes 0 — the child collapses. Symptom: labels with `long_mode="wrap"` and `flex_grow="1"` wrap near-per-character, making cards extremely tall; flex rows appear to only render their fixed-width children (icons, buttons) with the growing child squeezed to nothing. Fix: give the parent an explicit width (pixel or breakpoint-keyed), then let the child be `width="100%"`. Don't nest percent-sized children inside content-sized parents. Burned us when the toast stacking refactor (26573f1f2) inserted an LV_SIZE_CONTENT stack container between `lv_layer_top` and toast_root, collapsing the toast's `min_width="50%"` against the old screen-sized parent.
+
+### [L083] [*----|-----] Never `std::thread(...).detach()` for fire-and-forget work
+- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
+> On AD5M/CC1 and other resource-constrained ARM targets, `pthread_create` can return EAGAIN under thread exhaustion. The `std::thread` constructor then throws `std::system_error`; if it propagates through an LVGL C event-dispatch frame or hits a `noexcept` boundary, the process aborts with `std::terminate without active exception` — near-impossible to diagnose because the crash looks like a different code path (#724, #837 debug-bundle upload crash, #811-adjacent RatOS HTTP-thread storm).
+> **HTTP work:** route through `helix::http::HttpExecutor::fast()` (4-worker bounded pool for REST/API/thumbnails/small uploads) or `::slow()` (1-worker lane for multi-MB file transfers, debug bundles, etc.). Submitted lambdas still need `helix::ui::queue_update()` / `tok.defer()` for UI work. `include/http_executor.h`.
+> **Non-HTTP IO** (BT/USB/RFCOMM, QR decode, per-device discovery): either use an existing managed pool/BusThread for that domain, OR wrap `std::thread(...).detach()` in `try { ... } catch (const std::system_error& e) { ... callback with error ... }` so spawn failure gracefully surfaces a toast instead of terminating. `feedback_no_bare_threads_arm.md`.
+> **Member `std::thread` variables** with proper `join()` in destructor (WifiBackendNetworkManager::connect_thread_, CameraStream::stream_thread_, etc.) are fine — the issue is one-shot detached spawns hitting resource limits per operation.
+> Before grepping for `std::thread` to add a new site, check if HttpExecutor or another managed pool already serves that domain. Adding a raw detached thread reintroduces the anti-pattern and will crash on the smallest device you ship to.
+
+### [L084] [*----|-----] SubjectLifetime must be a member, never a local
+- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
+> **When writing new code** that observes a dynamic subject (per-fan/per-sensor/per-extruder), the `SubjectLifetime` token MUST outlive the observer — which means it MUST be a member, not a local. A local `SubjectLifetime lt;` inside a function paired with a member `ObserverGuard` is a UAF: when `lt` falls off the stack, the observer's `weak_ptr` is dead but the observer itself is still registered against the (potentially recreated) subject. Companion to [L077] (which states the rule) — this lesson catches the specific local-variable shape so it never gets written in the first place.
+> **Rule:** every member `ObserverGuard` on a dynamic subject MUST have a paired member `SubjectLifetime` next to it in the header. Same for vector members.
+> **For per-item collections** (carousel pages, slot lists), use parallel vectors and keep them aligned (push/pop in lockstep, clear lifetimes BEFORE observers per #705):
+>   `std::vector<ObserverGuard> carousel_observers_;`
+>   `std::vector<SubjectLifetime> carousel_lifetimes_;`
+> **Read-only one-shot reads** are the only case where a local is acceptable — but prefer the no-lifetime overload (`tsm.get_temp_subject(name)`) which exists for exactly that.
+> Reference correct member-pattern: `src/ui/panel_widgets/fan_widget.cpp:218` (`speed_lifetime_`). Historical audit (2026-04-22) found and fixed 3 violations in `thermistor_widget.cpp`; codebase is now clean.
+
+### [L085] [*----|-----] release() is NEVER the default — reset() is
+- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-22 | **Last**: 2026-04-22 | **Category**: correction | **Type**: constraint
+> **When writing new ObserverGuard cleanup code**, always use `obs.reset()`. `release()` is NOT a "safer" alternative — it skips `lv_observer_remove()` and leaks the `LambdaObserverContext`, which leaves a zombie observer in LVGL whose deferred callback will fire on stale `this`. `reset()` already handles the shutdown case via the `s_subjects_valid` static flag and `lv_is_initialized()` check, so it is safe even mid-`lv_deinit`.
+> **The ONLY correct uses of `release()`** are (a) `StaticSubjectRegistry::register_deinit()` callbacks (pre-`lv_deinit`), and (b) explicit shutdown paths where the subject is already destroyed. Widget `LV_EVENT_DELETE` callbacks during normal runtime are NOT one of those — use `reset()`.
+> **If you catch yourself reasoning "release() seems safer because it skips the observer-remove call"** — that's exactly the misconception that caused 17 #579 crash reports. The observer-remove call is the point; skipping it leaks context and corrupts rendering state. Companion to [L073] (which documents the semantics). Historical audit (2026-04-22) found and fixed 3 violations in `ui_ams_current_tool.cpp`, `ui_heating_animator.cpp`, `ui_ams_mini_status.cpp`; codebase is now clean.
 

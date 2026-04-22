@@ -1098,51 +1098,60 @@ void LabelPrinterSettingsOverlay::init_bt_printer_dropdown() {
             auto bt_token = lifetime_.token();
             auto* ctx = bt_ctx_;
             std::string addr = saved_addr;
-            std::thread([bt_token, ctx, addr]() {
-                auto& ldr = helix::bluetooth::BluetoothLoader::instance();
-                int paired_r = ldr.is_paired ? ldr.is_paired(ctx, addr.c_str()) : -1;
-                bool connected = check_bt_connected(ctx, addr);
-                spdlog::debug("[Label Printer] Async BT state: is_paired={} connected={}", paired_r,
-                              connected);
+            // Wrap spawn per feedback_no_bare_threads_arm.md (#724, #837, [L083]).
+            try {
+                std::thread([bt_token, ctx, addr]() {
+                    auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+                    int paired_r = ldr.is_paired ? ldr.is_paired(ctx, addr.c_str()) : -1;
+                    bool connected = check_bt_connected(ctx, addr);
+                    spdlog::debug("[Label Printer] Async BT state: is_paired={} connected={}",
+                                  paired_r, connected);
 
-                helix::ui::queue_update([bt_token, paired_r, connected, addr]() {
-                    if (bt_token.expired())
-                        return;
-                    auto& ov = get_label_printer_settings_overlay();
-                    for (auto& dev : ov.bt_devices_) {
-                        if (dev.mac == addr) {
-                            dev.paired = (paired_r == 1);
-                            dev.connected = connected;
-                            break;
-                        }
-                    }
-                    // Refresh dropdown with actual state
-                    if (ov.overlay_root_) {
-                        lv_obj_t* row = lv_obj_find_by_name(ov.overlay_root_, "row_bt_printers");
-                        if (row) {
-                            lv_obj_t* dd = lv_obj_find_by_name(row, "dropdown");
-                            if (dd) {
-                                std::string options;
-                                for (const auto& d : ov.bt_devices_) {
-                                    if (!options.empty())
-                                        options += "\n";
-                                    options += bt_device_label(d.name, d.paired, !d.mac.empty(),
-                                                               d.connected);
-                                }
-                                lv_dropdown_set_options(dd, options.c_str());
+                    helix::ui::queue_update([bt_token, paired_r, connected, addr]() {
+                        if (bt_token.expired())
+                            return;
+                        auto& ov = get_label_printer_settings_overlay();
+                        for (auto& dev : ov.bt_devices_) {
+                            if (dev.mac == addr) {
+                                dev.paired = (paired_r == 1);
+                                dev.connected = connected;
+                                break;
                             }
                         }
-                        // Update connect button
-                        lv_obj_t* b = lv_obj_find_by_name(ov.overlay_root_, "btn_bt_connect");
-                        if (b) {
-                            if (connected)
-                                lv_obj_add_state(b, LV_STATE_DISABLED);
-                            else
-                                lv_obj_remove_state(b, LV_STATE_DISABLED);
+                        // Refresh dropdown with actual state
+                        if (ov.overlay_root_) {
+                            lv_obj_t* row =
+                                lv_obj_find_by_name(ov.overlay_root_, "row_bt_printers");
+                            if (row) {
+                                lv_obj_t* dd = lv_obj_find_by_name(row, "dropdown");
+                                if (dd) {
+                                    std::string options;
+                                    for (const auto& d : ov.bt_devices_) {
+                                        if (!options.empty())
+                                            options += "\n";
+                                        options += bt_device_label(d.name, d.paired,
+                                                                   !d.mac.empty(), d.connected);
+                                    }
+                                    lv_dropdown_set_options(dd, options.c_str());
+                                }
+                            }
+                            // Update connect button
+                            lv_obj_t* b =
+                                lv_obj_find_by_name(ov.overlay_root_, "btn_bt_connect");
+                            if (b) {
+                                if (connected)
+                                    lv_obj_add_state(b, LV_STATE_DISABLED);
+                                else
+                                    lv_obj_remove_state(b, LV_STATE_DISABLED);
+                            }
                         }
-                    }
-                });
-            }).detach();
+                    });
+                }).detach();
+            } catch (const std::system_error& e) {
+                spdlog::warn("[Label Printer] Failed to spawn BT state-probe thread: {}",
+                             e.what());
+                // Non-fatal — UI will show cached state; user can retry manually
+            }
         }
     } else {
         lv_dropdown_set_options(dropdown, lv_tr("Press Scan to search"));
@@ -1205,7 +1214,9 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
     auto token = lifetime_.token();
 
     // Run discovery on a detached thread
-    std::thread([ctx, disc_ctx, token, &loader]() {
+    // Wrap spawn per feedback_no_bare_threads_arm.md (#724, #837, [L083]).
+    try {
+        std::thread([ctx, disc_ctx, token, &loader]() {
         loader.discover(
             ctx, 15000,
             [](const helix_bt_device* dev, void* user_data) {
@@ -1311,7 +1322,18 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
             spdlog::info("[Label Printer] BT discovery finished, {} devices found",
                          overlay->bt_devices_.size());
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[{}] Failed to spawn BT discovery thread: {}", get_name(), e.what());
+        if (bt_discovery_ctx_) {
+            bt_discovery_ctx_->alive.store(false);
+        }
+        bt_discovering_ = false;
+        lv_subject_set_int(&bt_scanning_subject_, 0);
+        ToastManager::instance().show(ToastSeverity::ERROR,
+                                      lv_tr("Could not start Bluetooth discovery"), 3000);
+        return;
+    }
 
     spdlog::info("[{}] Started Bluetooth discovery", get_name());
 }
@@ -1508,9 +1530,11 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
     auto token = lifetime_.token();
     auto* ctx = bt_ctx_;
 
-    std::thread([mac, ctx, token]() {
-        auto& ldr = helix::bluetooth::BluetoothLoader::instance();
-        auto* init_ctx = ctx;
+    // Wrap spawn per feedback_no_bare_threads_arm.md (#724, #837, [L083]).
+    try {
+        std::thread([mac, ctx, token]() {
+            auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+            auto* init_ctx = ctx;
         int ret = -1;
 
         if (ldr.pair) {
@@ -1602,7 +1626,16 @@ void LabelPrinterSettingsOverlay::handle_bt_connect() {
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 2000);
             }
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[LabelPrinterSettings] Failed to spawn pair thread: {}", e.what());
+        if (overlay_root_) {
+            lv_obj_t* btn = lv_obj_find_by_name(overlay_root_, "btn_bt_connect");
+            if (btn)
+                lv_obj_remove_state(btn, LV_STATE_DISABLED);
+        }
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 2000);
+    }
 }
 
 void LabelPrinterSettingsOverlay::on_bt_connect(lv_event_t* /*e*/) {
@@ -1727,9 +1760,11 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
     auto token = overlay.lifetime_.token();
 
     // Pair on a detached thread
-    std::thread([mac, bt_ctx, token, &overlay]() {
-        auto& ldr = helix::bluetooth::BluetoothLoader::instance();
-        int ret = ldr.pair(bt_ctx, mac.c_str());
+    // Wrap spawn per feedback_no_bare_threads_arm.md (#724, #837, [L083]).
+    try {
+        std::thread([mac, bt_ctx, token, &overlay]() {
+            auto& ldr = helix::bluetooth::BluetoothLoader::instance();
+            int ret = ldr.pair(bt_ctx, mac.c_str());
 
         // Check paired/connected state on this worker thread (D-Bus calls can
         // take seconds — must not block the UI thread)
@@ -1790,7 +1825,12 @@ void LabelPrinterSettingsOverlay::on_pair_confirm(lv_event_t* e) {
                 ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 3000);
             }
         });
-    }).detach();
+        }).detach();
+    } catch (const std::system_error& e) {
+        spdlog::error("[LabelPrinterSettings] Failed to spawn pair thread: {}", e.what());
+        ToastManager::instance().hide();
+        ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Pairing failed"), 3000);
+    }
 
     LVGL_SAFE_EVENT_CB_END();
 }
