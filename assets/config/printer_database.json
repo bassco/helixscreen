@@ -36,6 +36,13 @@
           "reason": "Exclude ForgeX firmware (separate entry)"
         },
         {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SET_EXTRUDER_SLOT",
+          "confidence": 0,
+          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
           "type": "sensor_match",
           "field": "sensors",
           "pattern": "tvoc",
@@ -102,6 +109,13 @@
       "z_offset_calibration_strategy": "firmware_managed",
       "screws_tilt_direction": "ccw",
       "heuristics": [
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SET_EXTRUDER_SLOT",
+          "confidence": 0,
+          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
         {
           "type": "macro_match",
           "field": "macros",
@@ -197,6 +211,13 @@
           "reason": "Exclude ForgeX firmware (separate entry)"
         },
         {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SET_EXTRUDER_SLOT",
+          "confidence": 0,
+          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
           "type": "led_match",
           "field": "leds",
           "pattern": "chamber_l",
@@ -284,6 +305,13 @@
       "z_offset_calibration_strategy": "firmware_managed",
       "screws_tilt_direction": "ccw",
       "heuristics": [
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "SET_EXTRUDER_SLOT",
+          "confidence": 0,
+          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
         {
           "type": "led_match",
           "field": "leds",

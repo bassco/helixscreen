@@ -2966,6 +2966,38 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
     REQUIRE(result.type_name == "FlashForge Adventurer 5X");
 }
 
+TEST_CASE_METHOD(
+    PrinterDetectorFixture,
+    "PrinterDetector: AD5X with chamber LED and generic hostname detects as AD5X, not AD5M Pro",
+    "[printer][heuristics][regression][ad5x]") {
+    // The AD5X is an enclosed printer and exposes `led chamber_light` just like the AD5M Pro.
+    // If the user has not renamed their Moonraker host and the hostname therefore lacks
+    // "ad5x", the AD5M Pro's hostname_exclude never fires. AD5M Pro's chamber-LED match
+    // (confidence 100) then ties AD5X's combined score at 100 but wins the
+    // best_single_confidence tiebreaker over AD5X's 98-confidence IFS object.
+    // The fix: AD5M variants now macro_exclude on SET_EXTRUDER_SLOT (IFS control macro),
+    // which is exclusive to the AD5X.
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {"tvocValue", "weightValue"},
+        .fans = {},
+        .leds = {"led chamber_light"}, // Real AD5X hardware has a chamber LED
+        .hostname = "flashforge",      // Generic hostname without "ad5x"
+        .printer_objects = {"zmod_ifs_switch_sensor _ifs_port_sensor_1",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_2",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_3",
+                            "zmod_ifs_switch_sensor _ifs_port_sensor_4",
+                            "gcode_macro SET_EXTRUDER_SLOT", "gcode_macro START_PRINT"},
+        .steppers = {},
+        .kinematics = "corexy",
+        .cpu_arch = "MIPS Ingenic X2600"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+}
+
 // ============================================================================
 // ForgeX vs Stock Detection Tests
 // ============================================================================
