@@ -576,6 +576,50 @@ After restart, flags on the language selection screen should show correct colors
 
 ---
 
+### Random solid colors during screen sleep (AD5X)
+
+**Symptoms:**
+- After the screen goes to sleep (idle timeout), the display shows a solid red, green, or blue fill instead of a black/off screen
+- Color may differ each time the screen sleeps
+- Touching the screen wakes it normally and the UI returns fine
+- Only affects the FlashForge Adventurer 5X
+
+**Cause:**
+A driver-level quirk in the AD5X's Allwinner display pipeline. When HelixScreen tells the screen to sleep, the display controller on some AD5X units emits a solid primary-color fill instead of a blank frame. This is not a HelixScreen rendering bug — it does not affect printing, connectivity, or anything else. We have not yet been able to reproduce it reliably on our hardware, so there is no code fix available today.
+
+**Workaround 1 — Disable screen sleep (simplest):**
+
+1. Tap the gear icon to open **Settings**
+2. Open **Display**
+3. Set **Sleep** to **Never**
+
+The screen will stay on continuously. Power the touchscreen off at the wall if you want it dark when not in use.
+
+**Workaround 2 — Keep backlight on during sleep (preserves sleep logic):**
+
+This keeps the normal sleep timeout but prevents the backlight from being cut, which avoids the color fill. The screen stays lit showing the last-drawn frame.
+
+1. SSH into your printer (or open a shell on the AD5X directly)
+2. Edit `~/helixscreen/config/helixconfig.json`
+3. Find the `"display"` section and set:
+
+   ```json
+   "sleep_backlight_off": false
+   ```
+
+4. Save the file and restart HelixScreen:
+
+   ```bash
+   sudo systemctl restart helixscreen
+   ```
+
+Caveat: the panel stays fully lit 24/7 with this option. If long-term backlight wear is a concern, prefer Workaround 1 and manually power off the screen when not needed.
+
+**Helping us fix it:**
+If you are experiencing this and are willing to help, please send a debug bundle from **Settings → Help & About → Send Debug Bundle**. Include a note that mentions the sleep color issue so we can correlate configs and logs.
+
+---
+
 ### 5GHz WiFi networks not showing
 
 **Symptoms:**

@@ -89,6 +89,55 @@ The AD5X uses the **fbdev** display backend (same as AD5M and K1). No DRM suppor
 - Color depth: 32bpp ARGB8888
 - Sleep: `FBIOBLANK` / `FB_BLANK_NORMAL` for blanking, `FB_BLANK_UNBLANK` for wake
 
+### Known Issue: Random solid colors during sleep (unresolved)
+
+Some AD5X users report a solid red/green/blue panel fill when the display
+goes to sleep, instead of a blank screen. The color appears to be random per
+sleep cycle. Not reproducible on our internal hardware so there is no code
+fix in place yet.
+
+**Probable root cause:** interaction between `FBIOBLANK FB_BLANK_NORMAL` and
+the Allwinner DE/TCON pipeline — when the framebuffer source is detached
+from the display engine, the DE appears to emit whatever color is latched in
+its default-fill register rather than going fully dark. Because
+`backlight_enable_ioctl` is `false` on AD5X (PWM polarity inversion quirk,
+#95 / #235), the backlight is dimmed via `SET_BRIGHTNESS(0)` only — and on
+some AD5X units that does not fully kill the LEDs, so the garbage fill
+stays visible.
+
+Affected cohorts:
+
+| Cohort | Config | Sleep path |
+|--------|--------|-----------|
+| Fresh install / post-#431 preset | `hardware_blank=1`, `sleep_backlight_off=true` | FBIOBLANK + backlight off — DE may emit solid color |
+| Post-wizard (pre-fix) | `hardware_blank=0`, `sleep_backlight_off=false` | Software overlay + backlight on — last frame held |
+
+Both have produced user reports of the RGB symptom. The underlying driver
+behavior is the same — LVGL stops invalidating after the overlay draws or
+the FBIOBLANK fires, and the DE pipeline goes quiet.
+
+**Wizard/preset disagreement (pending fix):** `ui_wizard_printer_identify.cpp`
+force-writes `hardware_blank=0`, `sleep_backlight_off=false`,
+`backlight_enable_ioctl=false` on wizard confirmation for AD5X and CC1,
+overriding the AD5X preset. The wizard should not be doing hardware
+manipulation — this block needs to be removed and a config migration added
+for users who already ran it. See prestonbrown/helixscreen#235,
+prestonbrown/helixscreen#431, prestonbrown/helixscreen#303 for history.
+
+**User workarounds** (documented in `docs/user/TROUBLESHOOTING.md`):
+
+1. Settings → Display → Sleep → **Never** (`sleep_sec = 0`)
+2. Edit `helixconfig.json`: set `display.sleep_backlight_off = false` to
+   keep the backlight on during sleep
+
+**Investigation TODO:**
+
+- Collect debug bundles from affected users to confirm cohort split
+- Try reordering in `enter_sleep()`: backlight → 0 *before* `FBIOBLANK`
+- Add `clear_framebuffer(0x00000000)` before creating the software overlay
+- Force `lv_refr_now()` after `create_sleep_overlay()` so there is no
+  window between overlay creation and flush
+
 ### Touch Input
 
 HelixScreen uses LVGL's built-in evdev input driver. The ZMOD ecosystem historically used tslib for touch calibration, but our built-in calibration system handles this natively.
