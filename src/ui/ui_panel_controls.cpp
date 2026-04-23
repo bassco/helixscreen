@@ -31,6 +31,7 @@
 #include "observer_factory.h"
 #include "operation_timeout_guard.h"
 #include "printer_state.h"
+#include "safety_settings_manager.h"
 #include "standard_macros.h"
 #include "static_panel_registry.h"
 #include "subject_managed_panel.h"
@@ -1425,7 +1426,6 @@ void ControlsPanel::handle_z_tilt() {
 }
 
 void ControlsPanel::execute_macro(size_t index) {
-    // Array of slots for lookup by index
     const std::optional<StandardMacroSlot>* slots[] = {&macro_1_slot_, &macro_2_slot_,
                                                        &macro_3_slot_, &macro_4_slot_};
     if (index >= 4) {
@@ -1434,14 +1434,52 @@ void ControlsPanel::execute_macro(size_t index) {
     }
 
     const auto& slot = *slots[index];
-    int button_num = static_cast<int>(index + 1);
-
     if (!slot) {
-        spdlog::debug("[{}] Macro {} clicked but no slot configured", get_name(), button_num);
+        spdlog::debug("[{}] Macro {} clicked but no slot configured", get_name(),
+                      static_cast<int>(index + 1));
+        return;
+    }
+
+    if (!helix::SafetySettingsManager::instance().get_macro_require_confirmation()) {
+        do_execute_macro(index);
         return;
     }
 
     const auto& info = StandardMacros::instance().get(*slot);
+    pending_macro_run_index_ = index;
+    std::string msg = fmt::format(lv_tr("Run {}?"), info.translated_name());
+    macro_run_confirmation_dialog_ = helix::ui::modal_show_confirmation(
+        lv_tr("Run Macro?"), msg.c_str(), ModalSeverity::Info, lv_tr("Run"),
+        [](lv_event_t* e) {
+            LVGL_SAFE_EVENT_CB_BEGIN("[ControlsPanel] macro_run_confirm_cb");
+            auto* self = static_cast<ControlsPanel*>(lv_event_get_user_data(e));
+            size_t idx = self->pending_macro_run_index_;
+            self->macro_run_confirmation_dialog_.hide();
+            self->do_execute_macro(idx);
+            LVGL_SAFE_EVENT_CB_END();
+        },
+        [](lv_event_t* e) {
+            LVGL_SAFE_EVENT_CB_BEGIN("[ControlsPanel] macro_run_cancel_cb");
+            auto* self = static_cast<ControlsPanel*>(lv_event_get_user_data(e));
+            self->macro_run_confirmation_dialog_.hide();
+            LVGL_SAFE_EVENT_CB_END();
+        },
+        this);
+}
+
+void ControlsPanel::do_execute_macro(size_t index) {
+    const std::optional<StandardMacroSlot>* slots[] = {&macro_1_slot_, &macro_2_slot_,
+                                                       &macro_3_slot_, &macro_4_slot_};
+    if (index >= 4) {
+        return;
+    }
+    const auto& slot = *slots[index];
+    if (!slot) {
+        return;
+    }
+
+    const auto& info = StandardMacros::instance().get(*slot);
+    int button_num = static_cast<int>(index + 1);
     spdlog::debug("[{}] Macro {} clicked, executing slot '{}' → {}", get_name(), button_num,
                   info.slot_name, info.get_macro());
 

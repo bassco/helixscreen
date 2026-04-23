@@ -351,6 +351,7 @@ translations:
   Completed: Completed
   Completed prints will appear here: Completed prints will appear here
   Computing calibration...: Computing calibration...
+  Confirm before running macros: Confirm before running macros
   Config-defined (read-only): Config-defined (read-only)
   Configuration added successfully.: Configuration added successfully.
   Configuration already present.: Configuration already present.
@@ -1434,6 +1435,8 @@ translations:
   Run: Run
   Run Dangerous Macro?: Run Dangerous Macro?
   Run Macro: Run Macro
+  Run Macro?: Run Macro?
+  'Run {}?': 'Run {}?'
   Run a Klipper macro when preheating this material: Run a Klipper macro when preheating this material
   Running {}...: Running {}...
   Runout Sensor: Runout Sensor
@@ -1556,6 +1559,7 @@ translations:
   'Shininess:': 'Shininess:'
   Show Printer Switcher: Show Printer Switcher
   Show Sections: Show Sections
+  Show a confirmation dialog when tapping a macro: Show a confirmation dialog when tapping a macro
   Show detailed print preparation status: Show detailed print preparation status
   Show instead of dimming: Show instead of dimming
   Show printer icon in navigation bar: Show printer icon in navigation bar

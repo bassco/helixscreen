@@ -58,6 +58,11 @@ void SafetySettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(cancel_escalation_timeout_subject_, timeout_index,
                            "settings_cancel_escalation_timeout", subjects_);
 
+    // Macro run confirmation (default: true = require confirmation before running)
+    bool macro_confirm = config->get<bool>("/safety/macro_require_confirmation", true);
+    UI_MANAGED_SUBJECT_INT(macro_require_confirmation_subject_, macro_confirm ? 1 : 0,
+                           "settings_macro_confirm", subjects_);
+
     subjects_initialized_ = true;
 
     // Self-register cleanup with StaticSubjectRegistry
@@ -65,8 +70,8 @@ void SafetySettingsManager::init_subjects() {
         "SafetySettingsManager", []() { SafetySettingsManager::instance().deinit_subjects(); });
 
     spdlog::debug("[SafetySettingsManager] Subjects initialized: estop_confirm={}, "
-                  "cancel_escalation={}, timeout_index={}",
-                  estop_confirm, cancel_escalation, timeout_index);
+                  "cancel_escalation={}, timeout_index={}, macro_confirm={}",
+                  estop_confirm, cancel_escalation, timeout_index, macro_confirm);
 }
 
 void SafetySettingsManager::deinit_subjects() {
@@ -147,4 +152,21 @@ void SafetySettingsManager::set_cancel_escalation_timeout_seconds(int seconds) {
     spdlog::debug(
         "[SafetySettingsManager] Cancel escalation timeout set to {}s (index {}) and saved",
         ESCALATION_TIMEOUT_VALUES[index], index);
+}
+
+bool SafetySettingsManager::get_macro_require_confirmation() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&macro_require_confirmation_subject_)) != 0;
+}
+
+void SafetySettingsManager::set_macro_require_confirmation(bool require) {
+    spdlog::info("[SafetySettingsManager] set_macro_require_confirmation({})", require);
+
+    lv_subject_set_int(&macro_require_confirmation_subject_, require ? 1 : 0);
+
+    Config* config = Config::get_instance();
+    config->set<bool>("/safety/macro_require_confirmation", require);
+    config->save();
+
+    spdlog::debug("[SafetySettingsManager] Macro run confirmation {} and saved",
+                  require ? "enabled" : "disabled");
 }

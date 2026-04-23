@@ -250,8 +250,10 @@ class ControlsPanel : public PanelBase {
 
     helix::ui::ModalGuard motors_confirmation_dialog_;
     helix::ui::ModalGuard save_z_offset_confirmation_dialog_;
+    helix::ui::ModalGuard macro_run_confirmation_dialog_;
     OperationTimeoutGuard operation_guard_;
     bool save_z_offset_in_progress_ = false; ///< Guard against double-click race condition
+    size_t pending_macro_run_index_ = 0;     ///< Slot index awaiting run confirmation
 
     //
     // === Dynamic UI Containers ===
@@ -419,6 +421,13 @@ class ControlsPanel : public PanelBase {
      * @param index Macro button index (0=macro_1, 1=macro_2, etc.)
      */
     void execute_macro(size_t index);
+
+    /**
+     * @brief Actually run a configured macro slot (bypasses confirmation)
+     *
+     * Called by execute_macro() directly or from the confirmation callback.
+     */
+    void do_execute_macro(size_t index);
 
     /**
      * @brief Update a single macro button's visibility and label

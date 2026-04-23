@@ -15,6 +15,7 @@ namespace helix {
  * - estop_require_confirmation (0/1)
  * - cancel_escalation_enabled (0/1)
  * - cancel_escalation_timeout (dropdown index 0-3 -> 15/30/60/120s)
+ * - macro_require_confirmation (0/1)
  *
  * Thread safety: Single-threaded, main LVGL thread only.
  */
@@ -54,6 +55,12 @@ class SafetySettingsManager {
     /** @brief Set cancel escalation timeout in seconds (clamped to valid values) */
     void set_cancel_escalation_timeout_seconds(int seconds);
 
+    /** @brief Get whether macro runs require a confirmation modal */
+    bool get_macro_require_confirmation() const;
+
+    /** @brief Set whether macro runs require a confirmation modal (updates subject + persists) */
+    void set_macro_require_confirmation(bool require);
+
     // =========================================================================
     // SUBJECT ACCESSORS (for XML binding)
     // =========================================================================
@@ -73,6 +80,11 @@ class SafetySettingsManager {
         return &cancel_escalation_timeout_subject_;
     }
 
+    /** @brief Macro confirmation subject (integer: 0=run immediately, 1=require confirm) */
+    lv_subject_t* subject_macro_require_confirmation() {
+        return &macro_require_confirmation_subject_;
+    }
+
   private:
     SafetySettingsManager();
     ~SafetySettingsManager() = default;
@@ -82,6 +94,7 @@ class SafetySettingsManager {
     lv_subject_t estop_require_confirmation_subject_;
     lv_subject_t cancel_escalation_enabled_subject_;
     lv_subject_t cancel_escalation_timeout_subject_;
+    lv_subject_t macro_require_confirmation_subject_;
 
     bool subjects_initialized_ = false;
 };

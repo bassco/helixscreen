@@ -351,6 +351,7 @@ translations:
   Completed: 完了
   Completed prints will appear here: 完了した印刷がここに表示されます
   Computing calibration...: キャリブレーション計算中...
+  Confirm before running macros: ''
   Config-defined (read-only): 設定で定義済み（読み取り専用）
   Configuration added successfully.: 設定が正常に追加されました。
   Configuration already present.: 設定は既に存在します。
@@ -1434,6 +1435,8 @@ translations:
   Run: 実行
   Run Dangerous Macro?: 危険なマクロを実行しますか？
   Run Macro: マクロを実行
+  Run Macro?: ''
+  'Run {}?': ''
   Run a Klipper macro when preheating this material: この素材の予熱時に Klipper マクロを実行
   Running {}...: '{} を実行中...'
   Runout Sensor: フィラメント切れセンサー
@@ -1556,6 +1559,7 @@ translations:
   'Shininess:': '光沢:'
   Show Printer Switcher: プリンター切替を表示
   Show Sections: セクションを表示
+  Show a confirmation dialog when tapping a macro: ''
   Show detailed print preparation status: 詳細な印刷準備ステータスを表示
   Show instead of dimming: 暗くする代わりに表示
   Show printer icon in navigation bar: ナビゲーションバーにプリンターアイコンを表示

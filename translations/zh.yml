@@ -351,6 +351,7 @@ translations:
   Completed: 已完成
   Completed prints will appear here: 已完成的打印将显示在这里
   Computing calibration...: 正在计算校准...
+  Confirm before running macros: ''
   Config-defined (read-only): 配置定义（只读）
   Configuration added successfully.: 配置添加成功。
   Configuration already present.: 配置已存在。
@@ -1434,6 +1435,8 @@ translations:
   Run: 运行
   Run Dangerous Macro?: 运行危险宏？
   Run Macro: 运行宏
+  Run Macro?: ''
+  'Run {}?': ''
   Run a Klipper macro when preheating this material: 预热此材料时运行 Klipper 宏
   Running {}...: 正在运行 {}...
   Runout Sensor: 断料传感器
@@ -1556,6 +1559,7 @@ translations:
   'Shininess:': 光泽度：
   Show Printer Switcher: 显示打印机切换器
   Show Sections: 显示区段
+  Show a confirmation dialog when tapping a macro: ''
   Show detailed print preparation status: 显示详细的打印准备状态
   Show instead of dimming: 显示而非变暗
   Show printer icon in navigation bar: 在导航栏中显示打印机图标

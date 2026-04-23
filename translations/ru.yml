@@ -351,6 +351,7 @@ translations:
   Completed: Завершено
   Completed prints will appear here: Завершённые печати появятся здесь
   Computing calibration...: Вычисление калибровки...
+  Confirm before running macros: ''
   Config-defined (read-only): Определено в конфигурации (только чтение)
   Configuration added successfully.: Конфигурация успешно добавлена.
   Configuration already present.: Конфигурация уже присутствует.
@@ -1434,6 +1435,8 @@ translations:
   Run: Запуск
   Run Dangerous Macro?: Запустить опасный макрос?
   Run Macro: Запустить макрос
+  Run Macro?: ''
+  'Run {}?': ''
   Run a Klipper macro when preheating this material: Запускать макрос Klipper при преднагреве этого материала
   Running {}...: Выполнение {}...
   Runout Sensor: Датчик окончания
@@ -1556,6 +1559,7 @@ translations:
   'Shininess:': 'Блеск:'
   Show Printer Switcher: Показывать переключатель принтеров
   Show Sections: Показать разделы
+  Show a confirmation dialog when tapping a macro: ''
   Show detailed print preparation status: Показывать детальный статус подготовки к печати
   Show instead of dimming: Показывать вместо затемнения
   Show printer icon in navigation bar: Показывать значок принтера в панели навигации

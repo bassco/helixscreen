@@ -369,6 +369,7 @@
   <translation tag="Configure timelapse recording" ru="Настроить запись таймлапса"/>
   <translation tag="Configure your printer&apos;s cooling fans" ru="Настройте вентиляторы охлаждения принтера"/>
   <translation tag="Configuring Moonraker..." ru="Настройка Moonraker..."/>
+  <translation tag="Confirm before running macros"/>
   <translation tag="Connect" ru="Подключить"/>
   <translation tag="Connect a USB label printer first" ru="Сначала подключите USB-принтер этикеток"/>
   <translation tag="Connect an ADXL345 accelerometer to calibrate" ru="Подключите акселерометр ADXL345 для калибровки"/>
@@ -1431,7 +1432,9 @@
   <translation tag="Run" ru="Запуск"/>
   <translation tag="Run Dangerous Macro?" ru="Запустить опасный макрос?"/>
   <translation tag="Run Macro" ru="Запустить макрос"/>
+  <translation tag="Run Macro?"/>
   <translation tag="Run a Klipper macro when preheating this material" ru="Запускать макрос Klipper при преднагреве этого материала"/>
+  <translation tag="Run {}?"/>
   <translation tag="Running {}..." ru="Выполнение {}..."/>
   <translation tag="Runout Sensor" ru="Датчик окончания"/>
   <translation tag="SETTINGS" ru="НАСТРОЙКИ"/>
@@ -1551,6 +1554,7 @@
   <translation tag="Shininess:" ru="Блеск:"/>
   <translation tag="Show Printer Switcher" ru="Показывать переключатель принтеров"/>
   <translation tag="Show Sections" ru="Показать разделы"/>
+  <translation tag="Show a confirmation dialog when tapping a macro"/>
   <translation tag="Show detailed print preparation status" ru="Показывать детальный статус подготовки к печати"/>
   <translation tag="Show instead of dimming" ru="Показывать вместо затемнения"/>
   <translation tag="Show printer icon in navigation bar" ru="Показывать значок принтера в панели навигации"/>

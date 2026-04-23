@@ -147,6 +147,7 @@ class MacrosPanel : public OverlayBase {
     // Macro parameter modal and dangerous macro confirmation
     helix::MacroParamModal param_modal_;
     std::string pending_dangerous_macro_; ///< Macro awaiting danger confirmation
+    std::string pending_run_macro_;       ///< Macro awaiting generic run confirmation
 
     // Subjects
     SubjectManager subjects_;

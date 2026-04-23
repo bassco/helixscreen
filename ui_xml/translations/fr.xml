@@ -369,6 +369,7 @@
   <translation tag="Configure timelapse recording" fr="Configurer l&apos;enregistrement timelapse"/>
   <translation tag="Configure your printer&apos;s cooling fans" fr="Configurer les ventilateurs de refroidissement de votre imprimante"/>
   <translation tag="Configuring Moonraker..." fr="Configuration de Moonraker..."/>
+  <translation tag="Confirm before running macros"/>
   <translation tag="Connect" fr="Connecter"/>
   <translation tag="Connect a USB label printer first" fr="Connectez d&apos;abord une imprimante d&apos;étiquettes USB"/>
   <translation tag="Connect an ADXL345 accelerometer to calibrate" fr="Connectez un accéléromètre ADXL345 pour calibrer"/>
@@ -1431,7 +1432,9 @@
   <translation tag="Run" fr="Exécuter"/>
   <translation tag="Run Dangerous Macro?" fr="Exécuter le macro dangereux ?"/>
   <translation tag="Run Macro" fr="Exécuter la macro"/>
+  <translation tag="Run Macro?"/>
   <translation tag="Run a Klipper macro when preheating this material" fr="Exécuter une macro Klipper lors du préchauffage de ce matériau"/>
+  <translation tag="Run {}?"/>
   <translation tag="Running {}..." fr="Exécution de {}..."/>
   <translation tag="Runout Sensor" fr="Capteur de fin de filament"/>
   <translation tag="SETTINGS" fr="PARAMÈTRES"/>
@@ -1551,6 +1554,7 @@
   <translation tag="Shininess:" fr="Brillance :"/>
   <translation tag="Show Printer Switcher" fr="Afficher le sélecteur d&apos;imprimante"/>
   <translation tag="Show Sections" fr="Afficher les sections"/>
+  <translation tag="Show a confirmation dialog when tapping a macro"/>
   <translation tag="Show detailed print preparation status" fr="Afficher l&apos;état détaillé de la préparation d&apos;impression"/>
   <translation tag="Show instead of dimming" fr="Afficher au lieu d&apos;atténuer"/>
   <translation tag="Show printer icon in navigation bar" fr="Afficher l&apos;icône de l&apos;imprimante dans la barre de navigation"/>

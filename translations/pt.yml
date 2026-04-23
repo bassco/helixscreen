@@ -351,6 +351,7 @@ translations:
   Completed: Concluído
   Completed prints will appear here: Impressões concluídas aparecerão aqui
   Computing calibration...: Calculando calibração...
+  Confirm before running macros: ''
   Config-defined (read-only): Definido na configuração (somente leitura)
   Configuration added successfully.: Configuração adicionada com sucesso.
   Configuration already present.: Configuração já presente.
@@ -1434,6 +1435,8 @@ translations:
   Run: Executar
   Run Dangerous Macro?: Executar Macro Perigosa?
   Run Macro: Executar macro
+  Run Macro?: ''
+  'Run {}?': ''
   Run a Klipper macro when preheating this material: Executar uma macro Klipper ao pré-aquecer este material
   Running {}...: Executando {}...
   Runout Sensor: Sensor de Fim de Filamento
@@ -1556,6 +1559,7 @@ translations:
   'Shininess:': 'Brilho:'
   Show Printer Switcher: Mostrar Seletor de Impressora
   Show Sections: Mostrar Seções
+  Show a confirmation dialog when tapping a macro: ''
   Show detailed print preparation status: Mostrar status detalhado de preparação de impressão
   Show instead of dimming: Exibir em vez de escurecer
   Show printer icon in navigation bar: Mostrar ícone da impressora na barra de navegação

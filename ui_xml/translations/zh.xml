@@ -369,6 +369,7 @@
   <translation tag="Configure timelapse recording" zh="配置延时录像"/>
   <translation tag="Configure your printer&apos;s cooling fans" zh="配置打印机的冷却风扇"/>
   <translation tag="Configuring Moonraker..." zh="正在配置 Moonraker..."/>
+  <translation tag="Confirm before running macros"/>
   <translation tag="Connect" zh="连接"/>
   <translation tag="Connect a USB label printer first" zh="请先连接 USB 标签打印机"/>
   <translation tag="Connect an ADXL345 accelerometer to calibrate" zh="连接 ADXL345 加速度计以进行校准"/>
@@ -1431,7 +1432,9 @@
   <translation tag="Run" zh="运行"/>
   <translation tag="Run Dangerous Macro?" zh="运行危险宏？"/>
   <translation tag="Run Macro" zh="运行宏"/>
+  <translation tag="Run Macro?"/>
   <translation tag="Run a Klipper macro when preheating this material" zh="预热此材料时运行 Klipper 宏"/>
+  <translation tag="Run {}?"/>
   <translation tag="Running {}..." zh="正在运行 {}..."/>
   <translation tag="Runout Sensor" zh="断料传感器"/>
   <translation tag="SETTINGS" zh="设置"/>
@@ -1551,6 +1554,7 @@
   <translation tag="Shininess:" zh="光泽度："/>
   <translation tag="Show Printer Switcher" zh="显示打印机切换器"/>
   <translation tag="Show Sections" zh="显示区段"/>
+  <translation tag="Show a confirmation dialog when tapping a macro"/>
   <translation tag="Show detailed print preparation status" zh="显示详细的打印准备状态"/>
   <translation tag="Show instead of dimming" zh="显示而非变暗"/>
   <translation tag="Show printer icon in navigation bar" zh="在导航栏中显示打印机图标"/>

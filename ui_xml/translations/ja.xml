@@ -369,6 +369,7 @@
   <translation tag="Configure timelapse recording" ja="タイムラプス録画を設定"/>
   <translation tag="Configure your printer&apos;s cooling fans" ja="プリンターの冷却ファンを設定します"/>
   <translation tag="Configuring Moonraker..." ja="Moonrakerを設定中..."/>
+  <translation tag="Confirm before running macros"/>
   <translation tag="Connect" ja="接続"/>
   <translation tag="Connect a USB label printer first" ja="先にUSBラベルプリンターを接続してください"/>
   <translation tag="Connect an ADXL345 accelerometer to calibrate" ja="キャリブレーションには ADXL345 加速度センサーを接続してください"/>
@@ -1431,7 +1432,9 @@
   <translation tag="Run" ja="実行"/>
   <translation tag="Run Dangerous Macro?" ja="危険なマクロを実行しますか？"/>
   <translation tag="Run Macro" ja="マクロを実行"/>
+  <translation tag="Run Macro?"/>
   <translation tag="Run a Klipper macro when preheating this material" ja="この素材の予熱時に Klipper マクロを実行"/>
+  <translation tag="Run {}?"/>
   <translation tag="Running {}..." ja="{} を実行中..."/>
   <translation tag="Runout Sensor" ja="フィラメント切れセンサー"/>
   <translation tag="SETTINGS" ja="設定"/>
@@ -1551,6 +1554,7 @@
   <translation tag="Shininess:" ja="光沢:"/>
   <translation tag="Show Printer Switcher" ja="プリンター切替を表示"/>
   <translation tag="Show Sections" ja="セクションを表示"/>
+  <translation tag="Show a confirmation dialog when tapping a macro"/>
   <translation tag="Show detailed print preparation status" ja="詳細な印刷準備ステータスを表示"/>
   <translation tag="Show instead of dimming" ja="暗くする代わりに表示"/>
   <translation tag="Show printer icon in navigation bar" ja="ナビゲーションバーにプリンターアイコンを表示"/>

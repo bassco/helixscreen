@@ -73,6 +73,7 @@ class SafetySettingsOverlay : public OverlayBase {
     void handle_cancel_escalation_changed(bool enabled);
     void handle_cancel_escalation_timeout_changed(int index);
     void handle_completion_alert_changed(int index);
+    void handle_macro_confirm_changed(bool enabled);
 
   private:
     //
@@ -90,6 +91,7 @@ class SafetySettingsOverlay : public OverlayBase {
     static void on_cancel_escalation_changed(lv_event_t* e);
     static void on_cancel_escalation_timeout_changed(lv_event_t* e);
     static void on_completion_alert_changed(lv_event_t* e);
+    static void on_macro_confirm_changed(lv_event_t* e);
 };
 
 /**

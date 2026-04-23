@@ -21,7 +21,9 @@
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "printer_state.h"
+#include "safety_settings_manager.h"
 
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -315,6 +317,35 @@ void MacrosPanel::fetch_params_and_run(const std::string& macro_name) {
     auto cached = helix::MacroParamCache::instance().get(macro_name);
 
     if (cached.knowledge == helix::MacroParamKnowledge::KNOWN_NO_PARAMS) {
+        // Ask for generic run confirmation when the setting is on. Skip for
+        // dangerous macros — the dangerous-macro confirm already ran upstream.
+        bool needs_confirm =
+            helix::SafetySettingsManager::instance().get_macro_require_confirmation() &&
+            !helix::is_dangerous_macro(macro_name);
+        if (needs_confirm) {
+            pending_run_macro_ = macro_name;
+            std::string msg = fmt::format(lv_tr("Run {}?"), prettify_macro_name(macro_name));
+            helix::ui::modal_show_confirmation(
+                lv_tr("Run Macro?"), msg.c_str(), ModalSeverity::Info, lv_tr("Run"),
+                [](lv_event_t* e) {
+                    LVGL_SAFE_EVENT_CB_BEGIN("[MacrosPanel] run_confirm_cb");
+                    auto* self = static_cast<MacrosPanel*>(lv_event_get_user_data(e));
+                    std::string macro = self->pending_run_macro_;
+                    self->pending_run_macro_.clear();
+                    Modal::hide(Modal::get_top());
+                    self->execute_macro(macro);
+                    LVGL_SAFE_EVENT_CB_END();
+                },
+                [](lv_event_t* e) {
+                    LVGL_SAFE_EVENT_CB_BEGIN("[MacrosPanel] run_cancel_cb");
+                    auto* self = static_cast<MacrosPanel*>(lv_event_get_user_data(e));
+                    self->pending_run_macro_.clear();
+                    Modal::hide(Modal::get_top());
+                    LVGL_SAFE_EVENT_CB_END();
+                },
+                this);
+            return;
+        }
         execute_macro(macro_name);
         return;
     }

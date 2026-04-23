@@ -73,6 +73,7 @@ void SafetySettingsOverlay::register_callbacks() {
         {"on_cancel_escalation_changed", on_cancel_escalation_changed},
         {"on_cancel_escalation_timeout_changed", on_cancel_escalation_timeout_changed},
         {"on_completion_alert_changed", on_completion_alert_changed},
+        {"on_macro_confirm_changed", on_macro_confirm_changed},
     });
 
     spdlog::debug("[{}] Callbacks registered", get_name());
@@ -211,6 +212,11 @@ void SafetySettingsOverlay::handle_completion_alert_changed(int index) {
     AudioSettingsManager::instance().set_completion_alert_mode(mode);
 }
 
+void SafetySettingsOverlay::handle_macro_confirm_changed(bool enabled) {
+    spdlog::info("[{}] Macro run confirmation toggled: {}", get_name(), enabled ? "ON" : "OFF");
+    SafetySettingsManager::instance().set_macro_require_confirmation(enabled);
+}
+
 // ============================================================================
 // STATIC CALLBACKS
 // ============================================================================
@@ -244,6 +250,14 @@ void SafetySettingsOverlay::on_completion_alert_changed(lv_event_t* e) {
     lv_obj_t* dropdown = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
     int index = static_cast<int>(lv_dropdown_get_selected(dropdown));
     get_safety_settings_overlay().handle_completion_alert_changed(index);
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void SafetySettingsOverlay::on_macro_confirm_changed(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[SafetySettingsOverlay] on_macro_confirm_changed");
+    auto* toggle = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
+    bool enabled = lv_obj_has_state(toggle, LV_STATE_CHECKED);
+    get_safety_settings_overlay().handle_macro_confirm_changed(enabled);
     LVGL_SAFE_EVENT_CB_END();
 }
 

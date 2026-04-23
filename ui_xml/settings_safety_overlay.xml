@@ -39,6 +39,16 @@
                               callback="on_cancel_escalation_timeout_changed"/>
       </lv_obj>
       <!-- ================================================================== -->
+      <!-- MACRO RUN CONFIRMATION -->
+      <!-- ================================================================== -->
+      <setting_toggle_row name="row_macro_confirm"
+                          label="Confirm before running macros"
+                          label_tag="Confirm before running macros"
+                          icon="script_text"
+                          description="Show a confirmation dialog when tapping a macro"
+                          description_tag="Show a confirmation dialog when tapping a macro"
+                          subject="settings_macro_confirm" callback="on_macro_confirm_changed"/>
+      <!-- ================================================================== -->
       <!-- PRINT COMPLETION ALERT -->
       <!-- ================================================================== -->
       <setting_dropdown_row name="row_completion_alert"
