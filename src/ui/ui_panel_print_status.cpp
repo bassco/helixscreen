@@ -35,6 +35,7 @@
 #include "injection_point_manager.h"
 #include "led/led_controller.h"
 #include "lvgl/src/others/translation/lv_translation.h"
+#include "memory_monitor.h"
 #include "memory_utils.h"
 #include "moonraker_api.h"
 #include "observer_factory.h"
@@ -69,6 +70,11 @@ static std::unique_ptr<PrintStatusPanel> g_print_status_panel;
 // is managed by OverlayBase). Declared here so teardown callback can null it.
 static lv_obj_t* s_cached_panel = nullptr;
 
+// ID of the MemoryMonitor pressure responder. 0 means "not registered".
+// Registered lazily on first push_overlay(); unregistered in the static
+// panel-destroy callback to prevent calls into a destroyed singleton.
+static helix::MemoryMonitor::PressureResponderId s_memory_responder_id = 0;
+
 using helix::ui::temperature::centi_to_degrees;
 using helix::ui::temperature::format_temperature_pair;
 
@@ -82,6 +88,10 @@ PrintStatusPanel& get_global_print_status_panel() {
     if (!g_print_status_panel) {
         g_print_status_panel = std::make_unique<PrintStatusPanel>(get_printer_state(), nullptr);
         StaticPanelRegistry::instance().register_destroy("PrintStatusPanel", []() {
+            if (s_memory_responder_id != 0) {
+                helix::MemoryMonitor::instance().remove_pressure_responder(s_memory_responder_id);
+                s_memory_responder_id = 0;
+            }
             if (s_cached_panel && g_print_status_panel) {
                 g_print_status_panel->destroy_overlay_ui(s_cached_panel);
             }
@@ -90,6 +100,30 @@ PrintStatusPanel& get_global_print_status_panel() {
         });
     }
     return *g_print_status_panel;
+}
+
+// Drop the cached widget tree if we can, to reclaim ~400-800KB.
+// Safe to call from any thread — hops to UI thread via queue_update and
+// bails out if the overlay is currently visible. No-op when there's no
+// cached tree (e.g. print status was never opened this session).
+static void try_reclaim_cached_print_status() {
+    helix::ui::queue_update([]() {
+        if (!s_cached_panel) {
+            return;
+        }
+        if (NavigationManager::instance().is_panel_in_stack(s_cached_panel)) {
+            spdlog::debug(
+                "[PrintStatusPanel] Cached tree is currently visible, skipping memory reclaim");
+            return;
+        }
+        if (!g_print_status_panel) {
+            return;
+        }
+        spdlog::warn("[PrintStatusPanel] Pressure response: destroying cached overlay tree");
+        g_print_status_panel->destroy_overlay_ui(s_cached_panel);
+        // destroy_overlay_ui() nulls s_cached_panel via its by-ref parameter;
+        // next push_overlay() will lazily recreate.
+    });
 }
 
 PrintStatusPanel::PrintStatusPanel(PrinterState& printer_state, MoonrakerAPI* api)
@@ -902,6 +936,21 @@ bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
             spdlog::info("[PrintStatusPanel] Print status overlay created (persistent, "
                          "{}MB available, {}MB total)",
                          mem.available_mb(), mem.total_mb());
+        }
+
+        // Register pressure responder once. The persistent branch above keeps the
+        // widget tree alive across overlay closes to avoid the thumbnail→3D
+        // rebuild jump — but that decision assumed plenty of RAM at startup.
+        // If pressure builds up later (slow leak, second connection, heavy file
+        // selection), drop the cached tree to reclaim memory even in persistent
+        // mode. No-op if the overlay is currently visible.
+        if (s_memory_responder_id == 0) {
+            s_memory_responder_id = helix::MemoryMonitor::instance().add_pressure_responder(
+                [](helix::MemoryPressureLevel level) {
+                    if (level >= helix::MemoryPressureLevel::warning) {
+                        try_reclaim_cached_print_status();
+                    }
+                });
         }
     }
 

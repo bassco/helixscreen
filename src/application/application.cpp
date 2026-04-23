@@ -150,6 +150,7 @@
 #include "gcode_file_modifier.h"
 #include "helix-xml/src/xml/lv_xml.h"
 #include "helix-xml/src/xml/lv_xml_translation.h"
+#include <lvgl/src/misc/cache/instance/lv_image_cache.h>
 #include "hv/hlog.h" // libhv logging - sync level with spdlog
 #include "logging_init.h"
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -668,6 +669,23 @@ int Application::run(int argc, char** argv) {
     helix::MemoryMonitor::instance().set_warning_callback(
         [](const helix::MemoryWarningEvent& event) {
             TelemetryManager::instance().record_memory_warning(event);
+        });
+
+    // Drop LVGL's decoded-image cache on critical pressure. Printer images,
+    // thumbnails, and XML-loaded PNGs live here as full ARGB8888 pixel buffers
+    // (e.g. a 300x300 printer image is ~360KB decoded). Freeing them forces
+    // the next draw to re-decode, which is cheap compared to an OOM kill.
+    // Responder fires on the monitor thread — defer to UI thread via
+    // queue_update: lv_image_cache_drop() reaches into the draw units
+    // (LV_EVENT_INVALIDATE_AREA broadcast) which is not safe off the UI thread.
+    helix::MemoryMonitor::instance().add_pressure_responder(
+        [](helix::MemoryPressureLevel level) {
+            if (level >= helix::MemoryPressureLevel::critical) {
+                helix::ui::queue_update([]() {
+                    spdlog::warn("[Application] Pressure response: dropping LVGL image cache");
+                    lv_image_cache_drop(nullptr);
+                });
+            }
         });
 
     // Phase 16b: Force full screen refresh
