@@ -20,12 +20,16 @@ All developer documentation lives here. When working on features, look up the re
 | Doc | When to read |
 |-----|-------------|
 | `UI_CONTRIBUTOR_GUIDE.md` | **Start here** for UI/layout work: breakpoints, tokens, colors, widgets, layout overrides |
+| `YOUR_FIRST_CONTRIBUTION.md` | Annotated walkthrough of a real settings overlay + pattern tour of AMS for bigger features |
+| `CONTRIBUTOR_GOTCHAS.md` | Symptom-indexed "if you see X, you forgot Y" — silent-failure traps in XML, translations, subjects |
 | `LVGL9_XML_GUIDE.md` | XML syntax, all widgets (ui_card, ui_button, ui_markdown, etc.), bindings |
 | `DEVELOPER_QUICK_REFERENCE.md` | Quick code patterns: modals, CSV parser, layout, migration |
 | `MODAL_SYSTEM.md` | ui_dialog, modal_button_row, Modal subclass pattern |
 | `THEME_SYSTEM.md` | Theme internals: style architecture, theme_core C API, adding themed widgets |
+| `THEME_CONTRIBUTOR_GUIDE.md` | For people **creating themes** — JSON schema, palette design, testing. No C++ needed. |
 | `LAYOUT_SYSTEM.md` | Layout system internals: LayoutManager C++ API, auto-detection logic |
 | `TRANSLATION_SYSTEM.md` | i18n: YAML strings -> code generation -> runtime lookups |
+| `TRANSLATION_CONTRIBUTOR_GUIDE.md` | For **translators** — how to improve existing translations or add a new language. No code needed. |
 | `UI_TESTING.md` | Headless LVGL testing, UITest utilities |
 | `GCODE_VIEWER_CONFIG.md` | GCode viewer configuration |
 | `BED_MESH_RENDERING_INTERNALS.md` | Bed mesh 3D rendering internals |

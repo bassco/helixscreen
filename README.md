@@ -22,7 +22,7 @@ Fast, beautiful, and built for every Klipper printer — from a Creality K1 to a
 
 ---
 
-**Quick Links:** [Website](https://helixscreen.org) · [Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [User Guide](docs/user/USER_GUIDE.md) · [FAQ](#faq) · [Contributing](docs/devel/DEVELOPMENT.md#contributing) · [Changelog](CHANGELOG.md) · [Discord](https://discord.gg/RZCT2StKhr)
+**Quick Links:** [Website](https://helixscreen.org) · [Features](#features) · [Screenshots](#screenshots) · [Installation](#installation) · [User Guide](docs/user/USER_GUIDE.md) · [FAQ](#faq) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Discord](https://discord.gg/RZCT2StKhr)
 
 ---
 

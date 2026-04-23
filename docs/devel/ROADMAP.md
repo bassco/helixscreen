@@ -286,6 +286,9 @@ See `docs/ARCHITECTURAL_DEBT.md` for the full register.
 - **UpdateQueue frozen TOCTOU** — the frozen flag is a safety net that works "well enough"; fixing it is fiddly atomic work for marginal gain.
 - **Static subject lifecycle** — documented, understood, tested.
 
+**Planned post-1.0 refactoring (active intent, not yet scheduled):**
+- **Dynamic overlay allocation** — migrate existing `ui_overlay_*` and `ui_settings_*` files from the `get_global_*()` + `init_global_*()` singleton pattern to on-demand construction with destroy-on-pop ownership held by NavigationManager. Saves memory on small devices (AD5M 14–20MB budget) and unblocks multi-instantiation. Mechanism unresolved: destroy-on-pop vs memory-pressure eviction, NavigationManager API changes, per-instance event callback adapter pattern. New overlays should not use the singleton pattern; see `YOUR_FIRST_CONTRIBUTION.md` § "Going forward: dynamic overlays".
+
 ---
 
 ## Design Philosophy
