@@ -300,13 +300,22 @@ class BacklightBackendAllwinner : public BacklightBackend {
         use_enable_ioctl_ = config->get<bool>("/display/backlight_enable_ioctl", true);
 
         probe_device();
-        if (available_ && use_enable_ioctl_) {
-            // Reset backlight driver state by cycling through DISABLE.
-            // On AD5M, the Allwinner DISP2 driver can get into an "inverted" state
-            // where higher brightness values = dimmer screen. Cycling through
-            // DISABLE clears this state and restores normal polarity.
+        // AD5M-specific driver quirk: DISP2 can get into "inverted" state where
+        // higher brightness = dimmer screen. Cycling DISABLE clears it. On other
+        // platforms (e.g. Sonic Pad R818) the reset logs "pwm device hdl is NULL"
+        // and can drag the display/touch pipeline down — skip it there. The
+        // sleep-path DISABLE/ENABLE is still used so sleep fully blanks the backlight.
+        if (available_ && use_enable_ioctl_ && !is_sonicpad()) {
             reset_driver_state();
         }
+    }
+
+    static bool is_sonicpad() {
+        std::ifstream f("/proc/device-tree/compatible", std::ios::binary);
+        if (!f)
+            return false;
+        std::string s((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        return s.find("allwinner,r818") != std::string::npos;
     }
 
     /**
