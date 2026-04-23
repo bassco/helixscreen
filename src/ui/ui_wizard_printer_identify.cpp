@@ -18,6 +18,7 @@
 #include "printer_images.h"
 #include "printer_name_sync.h"
 #include "static_panel_registry.h"
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 #include "wizard_config_paths.h"
 
@@ -389,6 +390,7 @@ void WizardPrinterIdentifyStep::register_callbacks() {
 
 lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
     spdlog::debug("[{}] Creating printer identification screen", get_name());
+    crash_handler::breadcrumb::note("wpi", "create_enter", 0);
 
     if (!parent) {
         spdlog::error("[{}] Cannot create: null parent", get_name());
@@ -398,6 +400,7 @@ lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
     // Create from XML
     screen_root_ =
         static_cast<lv_obj_t*>(lv_xml_create(parent, "wizard_printer_identify", nullptr));
+    crash_handler::breadcrumb::note("wpi", "xml_created", screen_root_ ? 1 : 0);
 
     if (!screen_root_) {
         spdlog::error("[{}] Failed to create from XML", get_name());
@@ -464,6 +467,7 @@ lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
     lv_obj_update_layout(screen_root_);
 
     spdlog::debug("[{}] Screen created successfully", get_name());
+    crash_handler::breadcrumb::note("wpi", "create_end", 0);
     return screen_root_;
 }
 
@@ -473,6 +477,7 @@ lv_obj_t* WizardPrinterIdentifyStep::create(lv_obj_t* parent) {
 
 void WizardPrinterIdentifyStep::cleanup() {
     spdlog::debug("[{}] Cleaning up printer identification screen", get_name());
+    crash_handler::breadcrumb::note("wpi", "cleanup_enter", 0);
 
     // Save current subject values to config
     Config* config = Config::get_instance();

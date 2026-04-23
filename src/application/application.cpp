@@ -2120,6 +2120,8 @@ void Application::setup_discovery_callbacks() {
             crash_handler::breadcrumb::note("disc", "post_set_hw", n);
             get_printer_state().init_fans(
                 hw.fans(), helix::FanRoleConfig::from_config(Config::get_instance()));
+            crash_handler::breadcrumb::note("disc", "post_init_fans",
+                                             static_cast<long>(hw.fans().size()));
 
             // Dispatch initial subscription status AFTER init_fans so fan/sensor subjects
             // exist when the status data is processed. The initial status is passed from the
@@ -2127,6 +2129,7 @@ void Application::setup_discovery_callbacks() {
             if (!(*status_snapshot).empty()) {
                 client->dispatch_status_update((*status_snapshot));
             }
+            crash_handler::breadcrumb::note("disc", "post_status_dispatch", n);
 
             get_printer_state().set_klipper_version(hw.software_version());
             get_printer_state().set_moonraker_version(hw.moonraker_version());
@@ -2136,6 +2139,7 @@ void Application::setup_discovery_callbacks() {
 
             // Populate LED chips now that hardware is discovered
             get_global_settings_panel().populate_led_chips();
+            crash_handler::breadcrumb::note("disc", "post_led_chips", n);
 
             // Fetch print hours now that connection is live, and refresh on job changes
             helix::settings::get_about_settings_overlay().fetch_print_hours();
@@ -2187,6 +2191,7 @@ void Application::setup_discovery_callbacks() {
                 helix::PowerDeviceState::instance().subscribe(*api);
                 helix::SensorState::instance().subscribe(*api);
             }
+            crash_handler::breadcrumb::note("disc", "post_subscribe", n);
 
             // Hardware validation: check config expectations vs discovered hardware
             // NOTE: use api->hardware() — the snapshot was std::move'd into it above (#789)
@@ -2201,6 +2206,7 @@ void Application::setup_discovery_callbacks() {
 
             // Save session snapshot for next comparison (even if no issues)
             validator.save_session_snapshot(Config::get_instance(), api->hardware());
+            crash_handler::breadcrumb::note("disc", "post_validate", n);
 
             // Auto-detect printer type if not already set (e.g., fresh install with preset)
             // Skip during wizard — the user selects their printer type in the identify step,
@@ -2217,6 +2223,7 @@ void Application::setup_discovery_callbacks() {
             TelemetryManager::instance().record_session();
             TelemetryManager::instance().record_settings_snapshot();
             TelemetryManager::instance().record_memory_snapshot("session_start");
+            crash_handler::breadcrumb::note("disc", "post_telemetry", n);
 
             // Fetch safety limits and build volume from Klipper config (stepper ranges,
             // min_extrude_temp, max_temp, etc.) — runs for ALL discovery completions
