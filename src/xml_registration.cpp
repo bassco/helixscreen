@@ -619,7 +619,7 @@ void register_xml_components() {
     // Upgrade nudge banner (hidden by default; C++ UpgradeBanner singleton
     // attaches an instance to lv_layer_top during Application::init and
     // toggles visibility based on UpgradeNudge state).
-    register_xml("upgrade_banner.xml");
+    register_xml("components/upgrade_banner.xml");
 
     spdlog::trace("[XML Registration] XML component registration complete");
 }
