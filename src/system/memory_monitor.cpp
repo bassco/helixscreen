@@ -308,15 +308,22 @@ void MemoryMonitor::evaluate_thresholds(const MemoryStats& stats) {
                                      pressure_level_to_string(level));
             }
 
+            // Always include our own memory footprint so logs can distinguish
+            // "we are the cause" from "we are a victim of system pressure".
+            std::string our_footprint = fmt::format(
+                "our RSS={}MB VmSize={}MB VmSwap={}MB growth_5min={:+}KB sys_avail={}MB",
+                stats.vm_rss_kb / 1024, stats.vm_size_kb / 1024, stats.vm_swap_kb / 1024, growth_kb,
+                sys_info.available_mb());
+
             switch (level) {
             case MemoryPressureLevel::elevated:
-                spdlog::info("[MemoryMonitor] ELEVATED: {}", reason);
+                spdlog::info("[MemoryMonitor] ELEVATED: {} ({})", reason, our_footprint);
                 break;
             case MemoryPressureLevel::warning:
-                spdlog::warn("[MemoryMonitor] WARNING: {}", reason);
+                spdlog::warn("[MemoryMonitor] WARNING: {} ({})", reason, our_footprint);
                 break;
             case MemoryPressureLevel::critical:
-                spdlog::error("[MemoryMonitor] CRITICAL: {}", reason);
+                spdlog::error("[MemoryMonitor] CRITICAL: {} ({})", reason, our_footprint);
                 break;
             default:
                 break;
@@ -337,7 +344,18 @@ void MemoryMonitor::fire_warning(MemoryPressureLevel level, const std::string& r
     event.stats = stats;
     event.system_info = sys_info;
     event.growth_5min_kb = growth_kb;
-    read_smaps_rollup(event.smaps);
+    bool smaps_ok = read_smaps_rollup(event.smaps);
+
+    // On warning+, log the smaps breakdown so we can tell what kind of memory
+    // we're holding (heap/anon vs mapped files vs shared). This is the
+    // diagnostic we keep wishing we had when reading crash-bundle log tails.
+    if (smaps_ok && level >= MemoryPressureLevel::warning) {
+        spdlog::warn("[MemoryMonitor] smaps: rss={}kB pss={}kB private_dirty={}kB "
+                     "private_clean={}kB shared_clean={}kB shared_dirty={}kB swap={}kB",
+                     event.smaps.rss_kb, event.smaps.pss_kb, event.smaps.private_dirty_kb,
+                     event.smaps.private_clean_kb, event.smaps.shared_clean_kb,
+                     event.smaps.shared_dirty_kb, event.smaps.swap_kb);
+    }
 
     // Copy callbacks under lock, then invoke outside to minimize hold time
     WarningCallback warning_cb;
@@ -353,12 +371,31 @@ void MemoryMonitor::fire_warning(MemoryPressureLevel level, const std::string& r
         warning_cb(event);
     }
 
+    // Snapshot RSS around the responder loop so we can log how much memory
+    // the responders actually freed. Individual responders already log what
+    // THEY did — this gives us the whole-app delta.
+    MemoryStats before_stats = stats;
+    size_t responders_fired = 0;
+
     for (const auto& [id, responder] : responders) {
         try {
             responder(level);
+            ++responders_fired;
         } catch (const std::exception& e) {
             spdlog::error("[MemoryMonitor] Pressure responder {} threw: {}", id, e.what());
         }
+    }
+
+    if (responders_fired > 0) {
+        MemoryStats after_stats = get_current_stats();
+        int64_t rss_delta_kb =
+            static_cast<int64_t>(after_stats.vm_rss_kb) - static_cast<int64_t>(before_stats.vm_rss_kb);
+        spdlog::warn("[MemoryMonitor] Pressure response complete: {} responders fired, "
+                     "RSS {}MB -> {}MB ({:+}kB)",
+                     responders_fired, before_stats.vm_rss_kb / 1024,
+                     after_stats.vm_rss_kb / 1024, rss_delta_kb);
+    } else if (level >= MemoryPressureLevel::warning) {
+        spdlog::warn("[MemoryMonitor] No pressure responders registered — nothing to free");
     }
 }
 
