@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Generate an upload keystore for Google Play Store signing.
 # The keystore is stored OUTSIDE the repo (never committed).
-# Set these env vars for CI/local builds:
-#   ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD,
-#   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#
+# Local builds read the keystore path from ANDROID_KEYSTORE_PATH.
+# CI decodes ANDROID_KEYSTORE_BASE64 into a temporary file at runtime
+# (see .github/workflows/release.yml "Materialize upload keystore" step).
 
 set -euo pipefail
 
@@ -43,8 +44,13 @@ echo "  export ANDROID_KEY_ALIAS=$KEY_ALIAS"
 echo "  export ANDROID_KEYSTORE_PASSWORD=<your store password>"
 echo "  export ANDROID_KEY_PASSWORD=<your key password>"
 echo ""
-echo "For CI (GitHub Actions), add these as repository secrets:"
-echo "  ANDROID_KEYSTORE_PATH    (base64-encode the .jks file)"
+echo "For CI (GitHub Actions), add these 4 repository secrets:"
+echo "  ANDROID_KEYSTORE_BASE64  (paste the output of: base64 -w0 $KEYSTORE_PATH)"
 echo "  ANDROID_KEY_ALIAS        ($KEY_ALIAS)"
 echo "  ANDROID_KEYSTORE_PASSWORD"
 echo "  ANDROID_KEY_PASSWORD"
+echo ""
+echo "To generate the base64-encoded keystore for the secret, run:"
+echo "  base64 -w0 $KEYSTORE_PATH | pbcopy    # macOS (copies to clipboard)"
+echo "  base64 -w0 $KEYSTORE_PATH | wl-copy   # Linux / Wayland"
+echo "  base64 -w0 $KEYSTORE_PATH > /tmp/keystore.b64   # anywhere (then cat + copy)"

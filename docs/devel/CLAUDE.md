@@ -14,6 +14,7 @@ All developer documentation lives here. When working on features, look up the re
 | `COPYRIGHT_HEADERS.md` | SPDX license headers |
 | `RELEASE_PROCESS.md` | Release workflow, versioning |
 | `CI_CD_GUIDE.md` | CI pipeline, GitHub Actions |
+| `ANDROID_PLAY_STORE.md` | Play Store publishing pipeline, one-time setup, promotion flow |
 
 ## UI & XML
 

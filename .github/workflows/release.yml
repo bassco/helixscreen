@@ -217,10 +217,25 @@ jobs:
     - name: Apply submodule patches
       run: make apply-patches
 
+    - name: Materialize upload keystore
+      id: keystore
+      env:
+        KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      run: |
+        if [ -z "$KEYSTORE_B64" ]; then
+          echo "::warning::ANDROID_KEYSTORE_BASE64 not set — build will sign with the debug keystore. Play Store will reject the resulting AAB. See docs/devel/ANDROID_PLAY_STORE.md."
+          echo "keystore_path=" >> $GITHUB_OUTPUT
+        else
+          mkdir -p "$RUNNER_TEMP/keystore"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/keystore/upload.jks"
+          echo "keystore_path=$RUNNER_TEMP/keystore/upload.jks" >> $GITHUB_OUTPUT
+          echo "Decoded keystore: $(wc -c < $RUNNER_TEMP/keystore/upload.jks) bytes"
+        fi
+
     - name: Build Android APKs (release)
       working-directory: android
       env:
-        ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
+        ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -229,7 +244,7 @@ jobs:
     - name: Build Android AAB (release)
       working-directory: android
       env:
-        ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
+        ANDROID_KEYSTORE_PATH: ${{ steps.keystore.outputs.keystore_path }}
         ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -282,6 +297,87 @@ jobs:
         name: release-android-aab
         path: release-aab/*.aab
         retention-days: 7
+
+    - name: Generate Play Store "What's new" text
+      run: |
+        bash scripts/generate-whatsnew.sh
+        mkdir -p release-whatsnew
+        # Play Store uploader (r0adkll) expects whatsnew-<locale> files in a flat dir.
+        # Fastlane source of truth is android/fastlane/metadata/android/en-US/changelogs/<versionCode>.txt
+        VERSION_CODE=$(awk -F. '{print $1*10000 + $2*100 + ($3+0)}' VERSION.txt)
+        SRC="android/fastlane/metadata/android/en-US/changelogs/${VERSION_CODE}.txt"
+        if [ -f "$SRC" ]; then
+          cp "$SRC" release-whatsnew/whatsnew-en-US
+          echo "What's new (en-US, ${VERSION_CODE}):"
+          cat release-whatsnew/whatsnew-en-US
+        else
+          echo "::warning::No whatsnew generated — $SRC missing; Play upload will use the AAB's default"
+        fi
+
+    - name: Upload Play Store whatsnew artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: release-android-whatsnew
+        path: release-whatsnew/
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # ============================================================================
+  # Publish Android AAB to Google Play Store (internal track)
+  # ============================================================================
+  # Inert until the PLAY_SERVICE_ACCOUNT_JSON secret is configured. See
+  # docs/devel/ANDROID_PLAY_STORE.md for one-time setup (service account,
+  # first manual upload, Play App Signing enrollment).
+  publish-android:
+    name: Publish to Play Store (internal)
+    needs: [build-android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Check if Play Store publishing is configured
+      id: config
+      env:
+        PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      run: |
+        if [ -z "$PLAY_JSON" ]; then
+          echo "::notice::PLAY_SERVICE_ACCOUNT_JSON not set — skipping Play Store upload (see docs/devel/ANDROID_PLAY_STORE.md to enable)"
+          echo "configured=false" >> $GITHUB_OUTPUT
+        else
+          echo "configured=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Download AAB
+      if: steps.config.outputs.configured == 'true'
+      uses: actions/download-artifact@v8
+      with:
+        name: release-android-aab
+        path: release-aab
+
+    - name: Download whatsnew
+      if: steps.config.outputs.configured == 'true'
+      uses: actions/download-artifact@v8
+      with:
+        name: release-android-whatsnew
+        path: release-whatsnew
+
+    - name: Extract version
+      if: steps.config.outputs.configured == 'true'
+      id: version
+      run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+    - name: Upload to Play Store (internal track, draft)
+      if: steps.config.outputs.configured == 'true'
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        packageName: org.helixscreen.app
+        releaseFiles: release-aab/*.aab
+        track: internal
+        status: draft
+        whatsNewDirectory: release-whatsnew
+        releaseName: ${{ steps.version.outputs.version }}
+        changesNotSentForReview: true
 
   # ============================================================================
   # Create GitHub Release with all artifacts

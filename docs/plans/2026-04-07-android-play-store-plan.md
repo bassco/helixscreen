@@ -1,5 +1,7 @@
 # Android Google Play Store Publication — Implementation Plan
 
+> **Status (2026-04-23):** Tasks 1–12 complete (code fixes, CI automation, store assets). Task 13 (Play Console submission) is in flight — Google developer account is in org review. **Live status + remaining checklist lives in `docs/devel/ANDROID_PLAY_STORE.md`** — refer there rather than here for day-to-day tracking. This plan doc is preserved for implementation history.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix Android-specific issues and publish HelixScreen to Google Play Store as an Open Beta.
