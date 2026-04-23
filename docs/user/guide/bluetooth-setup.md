@@ -1,8 +1,15 @@
 # Bluetooth Setup
 
-HelixScreen uses Bluetooth for label printing (Brother QL, Phomemo, Niimbot, MakeID). Most Raspberry Pi and BTT Pi boards have built-in Bluetooth, but it may be disabled if the UART serial port is in use — for example, to communicate with your printer's MCU.
+HelixScreen uses Bluetooth for two things:
 
-This guide covers how to check your Bluetooth status, enable it if it's disabled, and add Bluetooth via a USB dongle when the built-in adapter can't be freed up.
+- **Label printers** — Brother QL, Phomemo, Niimbot, MakeID
+- **Barcode scanners** — wireless HID scanners for filament spool tagging
+
+Most Raspberry Pi and BTT Pi boards already have Bluetooth built in. The only real complication is that the radio shares hardware with the GPIO serial port (UART), so a Klipper install that talks to its MCU over UART will usually have Bluetooth disabled to free the port up.
+
+**Good news:** if your printer's MCU is connected by **USB** (which is the most common setup — anything plugged into a USB port on the Pi qualifies), the UART is free and Bluetooth is just a few commands away. That's the path covered in **Option A** below, and it's the one you probably want.
+
+If you genuinely need the UART for your MCU and can't give it up, skip to **Option B** for the USB dongle approach.
 
 ---
 
@@ -43,7 +50,9 @@ The first (`disable-bt`) disables Bluetooth entirely and gives the full UART to 
 
 ## Option A: Enable Built-In Bluetooth (No UART Needed)
 
-If you are **not** using the UART GPIO pins for MCU communication (for example, your printer connects via USB), you can simply enable Bluetooth.
+This is the simple path. Use it if your printer's MCU connects to the Pi over **USB** (or any way that doesn't use the GPIO UART pins). Once you finish these steps you'll be able to pair both label printers and Bluetooth barcode scanners from inside HelixScreen.
+
+> **Not sure if you're using UART?** Quick test: `grep -E 'disable-bt|miniuart-bt' /boot/firmware/config.txt /boot/config.txt /boot/BoardEnv.txt 2>/dev/null`. If nothing prints, you're not using UART for serial — Option A is for you. If a `disable-bt` line shows up *and you need it for your MCU*, jump to Option B.
 
 ### Raspberry Pi (All Models)
 
@@ -189,14 +198,23 @@ Then unplug and replug the dongle.
 
 ## Verifying Bluetooth Works with HelixScreen
 
-Once Bluetooth is enabled (either built-in or via dongle):
+Once Bluetooth is enabled (either built-in or via dongle), test it from whichever feature you're setting up:
+
+**For a label printer:**
 
 1. Open HelixScreen
 2. Go to **Settings > Label Printer**
 3. Set **Connection** to **Bluetooth**
 4. Tap **Scan** — your label printer should appear in the list
 
-If "Bluetooth" doesn't appear as a connection option, HelixScreen didn't detect an adapter. Double-check with `bluetoothctl show`.
+**For a Bluetooth barcode scanner:**
+
+1. Put the scanner in pairing mode (check its manual — usually a long-press or a setup barcode)
+2. Go to **Settings > Hardware > Barcode Scanner**
+3. Tap **Scan for devices** — your scanner should appear in the list
+4. Tap to pair. See the [Barcode Scanner guide](barcode-scanner.md) for the full walkthrough.
+
+If neither feature shows a Bluetooth option, HelixScreen didn't detect an adapter. Double-check with `bluetoothctl show`.
 
 ---
 
