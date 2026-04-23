@@ -767,8 +767,21 @@ void DisplayManager::check_display_sleep() {
             wake_display();
         }
     } else if (m_display_dimmed) {
-        // Currently dimmed - wake on touch, or go to sleep if timeout exceeded
-        if (m_wake_requested || activity_detected) {
+        // Currently dimmed - wake on touch, or go to sleep if timeout exceeded.
+        // During a screensaver preview, skip activity-based dismiss for a brief
+        // grace window — otherwise the click that *launched* the preview is
+        // still fresh in lv_display_get_inactive_time() and closes it instantly.
+        bool dismiss_on_activity = activity_detected;
+#ifdef HELIX_ENABLE_SCREENSAVER
+        if (m_screensaver_is_preview) {
+            constexpr uint32_t kPreviewGraceMs = 750;
+            uint32_t elapsed = get_ticks() - m_preview_start_tick_ms;
+            if (elapsed < kPreviewGraceMs) {
+                dismiss_on_activity = false;
+            }
+        }
+#endif
+        if (m_wake_requested || dismiss_on_activity) {
             m_wake_requested = false;
             wake_display();
         } else if (sleep_timeout_sec > 0 && inactive_ms >= sleep_timeout_ms) {
@@ -834,6 +847,9 @@ void DisplayManager::wake_display() {
     m_display_dimmed = false;
 
 #ifdef HELIX_ENABLE_SCREENSAVER
+    bool was_preview = m_screensaver_is_preview;
+    m_screensaver_is_preview = false;
+    m_preview_start_tick_ms = 0;
     // Stop screensaver on wake
     if (m_screensaver_active) {
         ScreensaverManager::instance().stop();
@@ -841,6 +857,8 @@ void DisplayManager::wake_display() {
         // Resume active panel lifecycle to restart widget timers
         NavigationManager::instance().resume_active();
     }
+#else
+    constexpr bool was_preview = false;
 #endif
 
     // Gate input if waking from full sleep (not dim)
@@ -881,8 +899,11 @@ void DisplayManager::wake_display() {
     spdlog::info("[DisplayManager] Display woken from {}, brightness restored to {}%",
                  was_sleeping ? "sleep" : "dim", brightness);
 
-    // Auto-lock: show lock screen when waking from sleep or screensaver/dim
-    if ((was_sleeping || was_dimmed) && helix::LockManager::instance().auto_lock_enabled() &&
+    // Auto-lock: show lock screen when waking from sleep or screensaver/dim.
+    // Screensaver previews are user-initiated from settings — they didn't go
+    // idle, so engaging auto-lock on preview dismiss would be surprising.
+    if ((was_sleeping || was_dimmed) && !was_preview &&
+        helix::LockManager::instance().auto_lock_enabled() &&
         helix::LockManager::instance().has_pin()) {
         spdlog::info("[DisplayManager] Auto-lock engaged on wake");
         helix::LockManager::instance().lock();
@@ -894,6 +915,29 @@ void DisplayManager::wake_display() {
         cb(false);
     }
 }
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+void DisplayManager::preview_screensaver(int type) {
+    if (m_shutting_down || m_screensaver_active) {
+        return;
+    }
+    auto ss_type = static_cast<ScreensaverType>(type);
+    if (ss_type == ScreensaverType::OFF) {
+        return;
+    }
+
+    spdlog::info("[DisplayManager] Previewing screensaver type {}", type);
+    // Suspend active panel so widget timers stop updating the background
+    NavigationManager::instance().suspend_active();
+    ScreensaverManager::instance().start(ss_type);
+    // Mark display as dimmed so wake_display() runs on touch; is_preview
+    // flag suppresses auto-lock on dismiss.
+    m_display_dimmed = true;
+    m_screensaver_active = true;
+    m_screensaver_is_preview = true;
+    m_preview_start_tick_ms = get_ticks();
+}
+#endif
 
 void DisplayManager::ensure_display_on() {
     // Force display awake at startup regardless of previous state

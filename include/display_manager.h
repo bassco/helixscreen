@@ -204,6 +204,22 @@ class DisplayManager {
      */
     void restore_display_on_shutdown();
 
+#ifdef HELIX_ENABLE_SCREENSAVER
+    /**
+     * @brief Start a screensaver immediately for preview/testing
+     *
+     * Used by the settings UI to let users audition the selected screensaver
+     * without waiting for the dim timeout. The next touch dismisses it via
+     * wake_display(); auto-lock is suppressed since this is a manual preview,
+     * not an idle timeout.
+     *
+     * No-op if type is OFF or a screensaver is already active.
+     *
+     * @param type Screensaver type to preview
+     */
+    void preview_screensaver(int type);
+#endif
+
     /**
      * @brief Check if display is currently sleeping
      * @return true if backlight is off due to inactivity
@@ -433,6 +449,10 @@ class DisplayManager {
     bool m_display_dimmed = false;
 #ifdef HELIX_ENABLE_SCREENSAVER
     bool m_screensaver_active = false;
+    bool m_screensaver_is_preview = false;
+    // Tick at which preview was started; used to gate activity-based dismiss
+    // so the click that *launched* the preview doesn't immediately close it.
+    uint32_t m_preview_start_tick_ms = 0;
 #endif
     bool m_wake_requested = false; // Set by input wrapper when touch detected while sleeping
     int m_dim_timeout_sec = 600;

@@ -136,6 +136,7 @@ class DisplaySoundSettingsOverlay : public OverlayBase {
 
 #ifdef HELIX_ENABLE_SCREENSAVER
     void init_screensaver_dropdown();
+    void handle_test_screensaver();
 #endif
 
     // Sound init
@@ -200,6 +201,7 @@ class DisplaySoundSettingsOverlay : public OverlayBase {
     static void on_sleep_while_printing_changed(lv_event_t* e);
 #ifdef HELIX_ENABLE_SCREENSAVER
     static void on_screensaver_changed(lv_event_t* e);
+    static void on_test_screensaver(lv_event_t* e);
 #endif
 
     // Theme explorer

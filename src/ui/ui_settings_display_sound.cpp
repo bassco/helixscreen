@@ -19,6 +19,7 @@
 
 #include "audio_settings_manager.h"
 #include "border_radius_sizes.h"
+#include "display_manager.h"
 #include "display_settings_manager.h"
 #include "format_utils.h"
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -114,8 +115,10 @@ void DisplaySoundSettingsOverlay::register_callbacks() {
         {"on_sleep_while_printing_changed", on_sleep_while_printing_changed},
 #ifdef HELIX_ENABLE_SCREENSAVER
         {"on_screensaver_changed", on_screensaver_changed},
+        {"on_test_screensaver", on_test_screensaver},
 #else
         {"on_screensaver_changed", [](lv_event_t*) {}},
+        {"on_test_screensaver", [](lv_event_t*) {}},
 #endif
 
         // Theme explorer
@@ -1106,6 +1109,26 @@ void DisplaySoundSettingsOverlay::on_screensaver_changed(lv_event_t* e) {
     spdlog::info("[DisplaySoundSettingsOverlay] Screensaver changed to type {}", index);
     DisplaySettingsManager::instance().set_screensaver_type(index);
     LVGL_SAFE_EVENT_CB_END();
+}
+
+void DisplaySoundSettingsOverlay::on_test_screensaver(lv_event_t* /*e*/) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[DisplaySoundSettingsOverlay] on_test_screensaver");
+    get_display_sound_settings_overlay().handle_test_screensaver();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+void DisplaySoundSettingsOverlay::handle_test_screensaver() {
+    int type = DisplaySettingsManager::instance().get_screensaver_type();
+    if (type <= 0) {
+        return; // "Off" — button should have been hidden, but guard anyway
+    }
+    auto* dm = DisplayManager::instance();
+    if (!dm) {
+        spdlog::warn("[{}] DisplayManager not available, cannot preview screensaver", get_name());
+        return;
+    }
+    spdlog::info("[{}] User-initiated screensaver preview (type {})", get_name(), type);
+    dm->preview_screensaver(type);
 }
 #endif
 
