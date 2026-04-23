@@ -210,14 +210,23 @@ static void on_delete(lv_event_t* e) {
 /** Observer callback for current temperature subject */
 static void current_temp_observer_cb(lv_observer_t* observer, lv_subject_t* subject) {
     lv_obj_t* label = static_cast<lv_obj_t*>(lv_observer_get_target(observer));
-    if (!label)
+    if (!label) {
+        spdlog::debug("[temp_display] current cb: null label (subject={}, value={})",
+                      static_cast<void*>(subject),
+                      subject ? lv_subject_get_int(subject) : -1);
         return;
+    }
 
     // Get the parent container and its data
     lv_obj_t* container = lv_obj_get_parent(label);
     auto* data = get_data(container);
-    if (!data)
+    if (!data) {
+        spdlog::debug("[temp_display] current cb: no data for container (subject={}, value={}, "
+                      "label={}, container={})",
+                      static_cast<void*>(subject), lv_subject_get_int(subject),
+                      static_cast<void*>(label), static_cast<void*>(container));
         return;
+    }
 
     int centi = lv_subject_get_int(subject);
     data->current_centi = centi;
@@ -234,14 +243,23 @@ static void current_temp_observer_cb(lv_observer_t* observer, lv_subject_t* subj
 /** Observer callback for target temperature subject */
 static void target_temp_observer_cb(lv_observer_t* observer, lv_subject_t* subject) {
     lv_obj_t* label = static_cast<lv_obj_t*>(lv_observer_get_target(observer));
-    if (!label)
+    if (!label) {
+        spdlog::debug("[temp_display] target cb: null label (subject={}, value={})",
+                      static_cast<void*>(subject),
+                      subject ? lv_subject_get_int(subject) : -1);
         return;
+    }
 
     // Get the parent container and its data
     lv_obj_t* container = lv_obj_get_parent(label);
     auto* data = get_data(container);
-    if (!data)
+    if (!data) {
+        spdlog::debug("[temp_display] target cb: no data for container (subject={}, value={}, "
+                      "label={}, container={})",
+                      static_cast<void*>(subject), lv_subject_get_int(subject),
+                      static_cast<void*>(label), static_cast<void*>(container));
         return;
+    }
 
     int temp_deg = centi_to_degrees(lv_subject_get_int(subject));
 
