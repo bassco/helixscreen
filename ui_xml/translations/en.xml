@@ -1347,6 +1347,8 @@
   <translation tag="Ready" en="Ready"/>
   <translation tag="Ready to Apply" en="Ready to Apply"/>
   <translation tag="Reboot" en="Reboot"/>
+  <translation tag="Reboot failed" en="Reboot failed"/>
+  <translation tag="Reboot failed — host is still reachable" en="Reboot failed — host is still reachable"/>
   <translation tag="Rebooting..." en="Rebooting..."/>
   <translation tag="Recalibrate or view detailed results anytime in Settings." en="Recalibrate or view detailed results anytime in Settings."/>
   <translation tag="Recent Prints" en="Recent Prints"/>
@@ -1561,6 +1563,8 @@
   <translation tag="Show text labels on icon-only home screen widgets" en="Show text labels on icon-only home screen widgets"/>
   <translation tag="Shutdown" en="Shutdown"/>
   <translation tag="Shutdown / Reboot" en="Shutdown / Reboot"/>
+  <translation tag="Shutdown failed" en="Shutdown failed"/>
+  <translation tag="Shutdown failed — host is still reachable" en="Shutdown failed — host is still reachable"/>
   <translation tag="Shutting down..." en="Shutting down..."/>
   <translation tag="Side" en="Side"/>
   <translation tag="Single toggle macro. State is not tracked." en="Single toggle macro. State is not tracked."/>

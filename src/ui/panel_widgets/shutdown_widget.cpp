@@ -4,6 +4,7 @@
 #include "shutdown_widget.h"
 
 #include "ui_event_safety.h"
+#include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
 #include "moonraker_api.h"
@@ -13,6 +14,53 @@
 #include <spdlog/spdlog.h>
 
 namespace helix {
+
+namespace {
+
+// After a successful machine.shutdown/reboot, Moonraker replies OK but the
+// OS-level shutdown can silently no-op on some firmwares (observed on SonicPad
+// Jpe230 — logind.PowerOff returns without initiating the shutdown). If the
+// WebSocket has reconnected within this window, the host is clearly still up.
+constexpr uint32_t kVerificationWindowMs = 20000;
+
+struct VerifyCtx {
+    MoonrakerAPI* api;
+    bool is_reboot;
+};
+
+void verify_host_down_timer_cb(lv_timer_t* timer) {
+    std::unique_ptr<VerifyCtx> ctx(static_cast<VerifyCtx*>(lv_timer_get_user_data(timer)));
+    lv_timer_delete(timer);
+
+    if (!ctx || !ctx->api || !ctx->api->is_connected()) {
+        return;
+    }
+
+    const char* action = ctx->is_reboot ? "reboot" : "shutdown";
+    spdlog::warn("[ShutdownWidget] Host still reachable {}s after {} — {} silently failed",
+                 kVerificationWindowMs / 1000, action, action);
+
+    const char* msg = ctx->is_reboot
+                          ? lv_tr("Reboot failed — host is still reachable")
+                          : lv_tr("Shutdown failed — host is still reachable");
+    ToastManager::instance().show(ToastSeverity::ERROR, msg, 6000);
+}
+
+// Invoked from Moonraker WebSocket (background) thread. Creating an lv_timer
+// is not thread-safe, so hop to the main thread via queue_update.
+void schedule_host_down_verification(MoonrakerAPI* api, bool is_reboot) {
+    if (!api) {
+        return;
+    }
+    helix::ui::queue_update("ShutdownWidget::verify",
+                            [api, is_reboot]() {
+                                auto* ctx = new VerifyCtx{api, is_reboot};
+                                lv_timer_create(verify_host_down_timer_cb,
+                                                kVerificationWindowMs, ctx);
+                            });
+}
+
+} // namespace
 
 void register_shutdown_widget() {
     register_widget_factory("shutdown", [](const std::string&) {
@@ -76,24 +124,32 @@ void ShutdownWidget::handle_click() {
 void ShutdownWidget::execute_shutdown() {
     spdlog::info("[ShutdownWidget] Executing machine shutdown");
 
+    MoonrakerAPI* api = api_;
     api_->machine_shutdown(
-        []() {
+        [api]() {
             spdlog::info("[ShutdownWidget] Machine shutdown command sent successfully");
+            schedule_host_down_verification(api, /*is_reboot=*/false);
         },
         [](const MoonrakerError& err) {
             spdlog::error("[ShutdownWidget] Machine shutdown failed: {}", err.message);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          lv_tr("Shutdown failed"), 6000);
         });
 }
 
 void ShutdownWidget::execute_reboot() {
     spdlog::info("[ShutdownWidget] Executing machine reboot");
 
+    MoonrakerAPI* api = api_;
     api_->machine_reboot(
-        []() {
+        [api]() {
             spdlog::info("[ShutdownWidget] Machine reboot command sent successfully");
+            schedule_host_down_verification(api, /*is_reboot=*/true);
         },
         [](const MoonrakerError& err) {
             spdlog::error("[ShutdownWidget] Machine reboot failed: {}", err.message);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          lv_tr("Reboot failed"), 6000);
         });
 }
 

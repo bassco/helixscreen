@@ -5,6 +5,11 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Shutdown/Reboot verification** — the shutdown widget now verifies the host actually went down. Moonraker can reply `machine.shutdown`/`machine.reboot` with success but silently no-op on some firmwares (observed on SonicPad Jpe230, where `logind.PowerOff` returns without initiating the shutdown). If the WebSocket has reconnected 20s after a successful RPC, an error toast tells the user the host is still reachable instead of leaving the UI wedged in a state that looks like a partial shutdown.
+
 ## [0.99.43] - 2026-04-22
 
 ### Added

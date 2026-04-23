@@ -1350,6 +1350,8 @@ translations:
   Ready: Ready
   Ready to Apply: Ready to Apply
   Reboot: Reboot
+  Reboot failed: Reboot failed
+  Reboot failed — host is still reachable: Reboot failed — host is still reachable
   Rebooting...: Rebooting...
   Recalibrate or view detailed results anytime in Settings.: Recalibrate or view detailed results anytime in Settings.
   Recent Prints: Recent Prints
@@ -1566,6 +1568,8 @@ translations:
   Show text labels on icon-only home screen widgets: Show text labels on icon-only home screen widgets
   Shutdown: Shutdown
   Shutdown / Reboot: Shutdown / Reboot
+  Shutdown failed: Shutdown failed
+  Shutdown failed — host is still reachable: Shutdown failed — host is still reachable
   Shutting down...: Shutting down...
   Side: Side
   Single toggle macro. State is not tracked.: Single toggle macro. State is not tracked.
