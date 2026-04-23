@@ -947,9 +947,15 @@ bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
         if (s_memory_responder_id == 0) {
             s_memory_responder_id = helix::MemoryMonitor::instance().add_pressure_responder(
                 [](helix::MemoryPressureLevel level) {
-                    if (level >= helix::MemoryPressureLevel::warning) {
-                        try_reclaim_cached_print_status();
+                    // Pre-queue bail-out: if there's no cached tree, a
+                    // queue_update hop would just land on an empty null check.
+                    // Monitor thread reads s_cached_panel without a barrier;
+                    // pointer-sized loads are atomic on our targets, and a
+                    // false-negative is harmless (queued lambda re-checks).
+                    if (level < helix::MemoryPressureLevel::warning || !s_cached_panel) {
+                        return;
                     }
+                    try_reclaim_cached_print_status();
                 });
         }
     }

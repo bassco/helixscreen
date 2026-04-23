@@ -3,11 +3,17 @@
 
 #include "memory_monitor.h"
 
+#include "ui_update_queue.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+
+#ifdef __linux__
+#include <lvgl.h>
+#endif
 
 #ifdef __linux__
 #include <fstream>
@@ -374,8 +380,13 @@ void MemoryMonitor::fire_warning(MemoryPressureLevel level, const std::string& r
     // Snapshot RSS around the responder loop so we can log how much memory
     // the responders actually freed. Individual responders already log what
     // THEY did — this gives us the whole-app delta.
-    MemoryStats before_stats = stats;
+    //
+    // Sample RSS *immediately before* the loop (not from the outer `stats`
+    // captured at monitor_loop start) so the warning-log, smaps read, and
+    // mutex-copy time don't inflate the "before" number.
+    MemoryStats before_stats = get_current_stats();
     size_t responders_fired = 0;
+    size_t responders_threw = 0;
 
     for (const auto& [id, responder] : responders) {
         try {
@@ -383,19 +394,53 @@ void MemoryMonitor::fire_warning(MemoryPressureLevel level, const std::string& r
             ++responders_fired;
         } catch (const std::exception& e) {
             spdlog::error("[MemoryMonitor] Pressure responder {} threw: {}", id, e.what());
+            ++responders_threw;
         }
     }
 
-    if (responders_fired > 0) {
-        MemoryStats after_stats = get_current_stats();
-        int64_t rss_delta_kb =
-            static_cast<int64_t>(after_stats.vm_rss_kb) - static_cast<int64_t>(before_stats.vm_rss_kb);
-        spdlog::warn("[MemoryMonitor] Pressure response complete: {} responders fired, "
-                     "RSS {}MB -> {}MB ({:+}kB)",
-                     responders_fired, before_stats.vm_rss_kb / 1024,
-                     after_stats.vm_rss_kb / 1024, rss_delta_kb);
+    // Synchronous breadcrumb: we know the call count immediately. If the UI
+    // thread is wedged (often the cause of pressure), the deferred completion
+    // log below never runs, and this is what shows up in the tail.
+    if (responders_fired > 0 || responders_threw > 0) {
+        spdlog::warn("[MemoryMonitor] Pressure response dispatched: {} fired, {} threw",
+                     responders_fired, responders_threw);
     } else if (level >= MemoryPressureLevel::warning) {
         spdlog::warn("[MemoryMonitor] No pressure responders registered — nothing to free");
+    }
+
+    // Deferred completion log: both new responders (PrintStatusPanel tree,
+    // LVGL image cache) hop to the UI thread via queue_update, and a
+    // destroyed widget tree is actually freed by lv_obj_delete_async on the
+    // next LVGL async-handler pass. A sync get_current_stats() right after
+    // the loop would systematically undercount — the RSS delta would read
+    // "+0kB" even when multi-hundred-KB reclaim succeeded. Instead, hop
+    // through queue_update (runs in the next UpdateQueue tick, after our
+    // deferred reclaim work) and lv_async_call (runs AFTER process_pending's
+    // async-delete drain in the same lv_timer_handler pass), so the
+    // post-sample reflects sync responders, cache drops, AND widget deletes.
+    if (responders_fired > 0) {
+#ifdef __linux__
+        struct CompletionCtx {
+            size_t before_rss_kb;
+            size_t fired;
+        };
+        auto* ctx = new CompletionCtx{before_stats.vm_rss_kb, responders_fired};
+        helix::ui::queue_update([ctx]() {
+            lv_async_call(
+                [](void* ud) {
+                    auto* c = static_cast<CompletionCtx*>(ud);
+                    MemoryStats after = MemoryMonitor::get_current_stats();
+                    int64_t delta_kb = static_cast<int64_t>(after.vm_rss_kb) -
+                                       static_cast<int64_t>(c->before_rss_kb);
+                    spdlog::warn("[MemoryMonitor] Pressure response complete: {} responder(s), "
+                                 "RSS {}MB -> {}MB ({:+}kB)",
+                                 c->fired, c->before_rss_kb / 1024, after.vm_rss_kb / 1024,
+                                 delta_kb);
+                    delete c;
+                },
+                ctx);
+        });
+#endif
     }
 }
 

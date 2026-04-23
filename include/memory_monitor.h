@@ -138,7 +138,10 @@ class MemoryMonitor {
      *
      * Called from the monitor thread when a threshold is breached.
      * Responders receive only the pressure level (not full diagnostic data).
-     * Must be thread-safe — called with callback_mutex_ held.
+     * The implementation copies the responder list under callback_mutex_ and
+     * invokes callbacks OUTSIDE the lock — so responders may themselves
+     * call add/remove_pressure_responder without deadlocking. Responders
+     * still need to be thread-safe against their own state.
      *
      * @return ID for later removal
      */
