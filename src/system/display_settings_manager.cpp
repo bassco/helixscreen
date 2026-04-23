@@ -251,15 +251,23 @@ void DisplaySettingsManager::init_subjects() {
     spdlog::info("[DisplaySettingsManager] Timezone set to '{}' (index {})", tz, tz_index);
 
 #ifdef HELIX_ENABLE_SCREENSAVER
-    // Screensaver type (default: 1 = Flying Toasters)
-    // Migrate from old bool setting if new int setting doesn't exist
-    int screensaver_type = 1; // default to Flying Toasters
+    // Screensaver type — tier-aware default via supports_animations.
+    // Devices that can run smooth animations (STANDARD tier on Pi 4/5, desktop)
+    // default to Flying Toasters (1). BASIC (Pi 3B-class) and EMBEDDED (AD5M,
+    // AD5X) default to OFF (0) because animated screensavers starve Klipper's
+    // CPU budget and cause print failures.
+    // See: docs/superpowers/specs/2026-04-23-screensaver-low-tier-defaults-design.md
+    const int screensaver_default = PlatformCapabilities::detect().supports_animations ? 1 : 0;
+
+    int screensaver_type = screensaver_default;
     if (config->exists("/display/screensaver_type")) {
-        screensaver_type = config->get<int>("/display/screensaver_type", 1);
+        screensaver_type = config->get<int>("/display/screensaver_type", screensaver_default);
     } else if (config->exists("/display/screensaver_enabled")) {
-        // Migrate: true → 1 (Flying Toasters), false → 0 (Off)
+        // Legacy migration: true → tier default, false → Off.
+        // The v14→v15 migration will later flip Flying Toasters to Off on low tiers anyway,
+        // but honouring the tier default here avoids writing a value we're about to overwrite.
         bool old_enabled = config->get<bool>("/display/screensaver_enabled", true);
-        screensaver_type = old_enabled ? 1 : 0;
+        screensaver_type = old_enabled ? screensaver_default : 0;
         config->set<int>("/display/screensaver_type", screensaver_type);
         config->save();
         spdlog::info(

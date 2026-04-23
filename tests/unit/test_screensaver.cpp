@@ -3,6 +3,7 @@
 #include "../lvgl_test_fixture.h"
 #include "config.h"
 #include "display_settings_manager.h"
+#include "platform_capabilities.h"
 
 #include "../catch_amalgamated.hpp"
 
@@ -14,12 +15,14 @@ using namespace helix;
 
 #ifdef HELIX_ENABLE_SCREENSAVER
 
-TEST_CASE_METHOD(LVGLTestFixture, "Screensaver setting defaults to Flying Toasters when compiled in",
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "Screensaver defaults to tier-appropriate screensaver type when compiled in",
                  "[screensaver][display_settings]") {
     Config::get_instance();
     DisplaySettingsManager::instance().init_subjects();
 
-    REQUIRE(DisplaySettingsManager::instance().get_screensaver_type() == 1);
+    int expected = helix::PlatformCapabilities::detect().supports_animations ? 1 : 0;
+    REQUIRE(DisplaySettingsManager::instance().get_screensaver_type() == expected);
 
     DisplaySettingsManager::instance().deinit_subjects();
 }
@@ -96,8 +99,7 @@ TEST_CASE_METHOD(LVGLTestFixture, "Screensaver type options string is valid",
 
 #include "ui_screensaver.h"
 
-TEST_CASE_METHOD(LVGLTestFixture, "FlyingToasterScreensaver starts inactive",
-                 "[screensaver]") {
+TEST_CASE_METHOD(LVGLTestFixture, "FlyingToasterScreensaver starts inactive", "[screensaver]") {
     FlyingToasterScreensaver ss;
     REQUIRE(ss.is_active() == false);
 }
@@ -161,13 +163,11 @@ TEST_CASE_METHOD(LVGLTestFixture, "FlyingToasterScreensaver creates overlay on l
 
 #include "screensaver.h"
 
-TEST_CASE_METHOD(LVGLTestFixture, "ScreensaverManager starts inactive",
-                 "[screensaver]") {
+TEST_CASE_METHOD(LVGLTestFixture, "ScreensaverManager starts inactive", "[screensaver]") {
     REQUIRE(ScreensaverManager::instance().is_active() == false);
 }
 
-TEST_CASE_METHOD(LVGLTestFixture, "ScreensaverManager start/stop lifecycle",
-                 "[screensaver]") {
+TEST_CASE_METHOD(LVGLTestFixture, "ScreensaverManager start/stop lifecycle", "[screensaver]") {
     auto& mgr = ScreensaverManager::instance();
 
     SECTION("start OFF does nothing") {
