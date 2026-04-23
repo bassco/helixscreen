@@ -1266,18 +1266,18 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                              it != overlay->bt_devices_.end(); ++it) {
                             if (it->name != info.name)
                                 continue;
-                            // Real-discovery entries are authoritative over stubs (e.g. the
-                            // saved-device stub created at overlay open with name-derived
-                            // is_ble). Replace whenever the new one matches brand transport;
-                            // drop whenever it doesn't.
-                            if (new_matches_brand) {
-                                spdlog::info("[Label Printer] Replacing {} ({} {}) with "
-                                             "brand-preferred entry ({} {})",
+                            const bool existing_matches_brand =
+                                (it->is_ble == brand_prefers_ble);
+                            if (new_matches_brand && !existing_matches_brand) {
+                                // Genuine transport migration: the existing entry was
+                                // the wrong-transport half of a dual-mode device.
+                                // Replace it and clear the saved address so the user
+                                // re-pairs on the correct transport.
+                                spdlog::info("[Label Printer] Migrating {} from {} {} "
+                                             "to brand-preferred {} {}",
                                              it->name, it->mac,
                                              it->is_ble ? "BLE" : "Classic", info.mac,
                                              info.is_ble ? "BLE" : "Classic");
-                                // Auto-migrate stale saved address: if user saved the
-                                // wrong-transport MAC, clear it so they re-pair correctly.
                                 auto& settings_mgr = LabelPrinterSettingsManager::instance();
                                 if (settings_mgr.get_bt_address() == it->mac &&
                                     it->mac != info.mac) {
@@ -1289,7 +1289,20 @@ void LabelPrinterSettingsOverlay::start_bt_discovery() {
                                 }
                                 *it = info;
                                 replaced = true;
+                            } else if (new_matches_brand && existing_matches_brand) {
+                                // Same name, same transport, different MAC — same
+                                // device re-advertising with a different address
+                                // (BLE random-address rotation, e.g. Niimbot B1).
+                                // Keep the existing entry so the user's saved
+                                // pairing sticks; drop the duplicate.
+                                spdlog::debug("[Label Printer] Ignoring duplicate {} "
+                                              "advertisement for {} (existing {}, new {}) "
+                                              "— same transport, treating as RPA rotation",
+                                              info.is_ble ? "BLE" : "Classic",
+                                              info.name, it->mac, info.mac);
+                                return;
                             } else {
+                                // New entry is on the non-preferred transport; drop.
                                 spdlog::debug("[Label Printer] Ignoring {} ({} {}): "
                                               "brand prefers {} transport already present",
                                               info.name, info.mac,

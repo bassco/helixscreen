@@ -22,6 +22,11 @@ static helix_bt_context* s_ctx = nullptr;
 static int s_handle = -1;
 static std::string s_connected_mac;
 
+// Last connect error, captured before ensure_connected tears down s_ctx so
+// the caller can still surface the real BlueZ diagnostic instead of
+// "unknown error".
+static std::string s_last_connect_error;
+
 /// Try a test write to check if the connection is still alive
 static bool connection_alive(helix::bluetooth::BluetoothLoader& loader) {
     if (!s_ctx || s_handle < 0) return false;
@@ -67,15 +72,28 @@ static int ensure_connected(helix::bluetooth::BluetoothLoader& loader, const std
 
     // Create fresh connection
     s_ctx = loader.init();
-    if (!s_ctx) return -1;
+    if (!s_ctx) {
+        s_last_connect_error = "bluetooth init failed";
+        return -1;
+    }
 
     s_handle = loader.connect_ble(s_ctx, mac.c_str(), NIIMBOT_WRITE_CHAR_UUID);
     if (s_handle < 0) {
+        // Snapshot the real error before we tear down the context — the
+        // caller needs it for the toast/log, and last_error(ctx) returns
+        // nothing useful after deinit.
+        if (loader.last_error) {
+            const char* err = loader.last_error(s_ctx);
+            s_last_connect_error = (err && *err) ? err : "connect failed";
+        } else {
+            s_last_connect_error = "connect failed";
+        }
         loader.deinit(s_ctx);
         s_ctx = nullptr;
         return -1;
     }
 
+    s_last_connect_error.clear();
     s_connected_mac = mac;
     spdlog::info("Niimbot BT: new persistent connection (handle={})", s_handle);
 
@@ -193,7 +211,8 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
 
         int handle = ensure_connected(loader, mac);
         if (handle < 0) {
-            const char* err = (s_ctx && loader.last_error) ? loader.last_error(s_ctx) : "unknown error";
+            std::string err =
+                s_last_connect_error.empty() ? "unknown error" : s_last_connect_error;
             error = fmt::format("BLE connect failed: {}", err);
             spdlog::error("Niimbot BT: {}", error);
         } else {
