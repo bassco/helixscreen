@@ -893,6 +893,10 @@ void PrintStatusPanel::on_ui_destroyed() {
     pending_gcode_filename_.clear();
 }
 
+lv_obj_t* PrintStatusPanel::get_cached_overlay() {
+    return s_cached_panel;
+}
+
 bool PrintStatusPanel::push_overlay(lv_obj_t* parent_screen) {
     if (!parent_screen) {
         spdlog::error("[PrintStatusPanel] push_overlay: null parent_screen");

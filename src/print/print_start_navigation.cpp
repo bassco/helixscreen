@@ -48,8 +48,22 @@ static void on_print_state_changed_for_navigation(lv_observer_t* observer, lv_su
 
         // Defer to UI thread — this observer may fire on the WebSocket background
         // thread, and push_overlay() creates LVGL widgets which must be on UI thread.
+        //
+        // Skip if print status is already on the nav stack. This observer fires
+        // on every non-printing→PRINTING transition, including the completion→
+        // retry cycle (finished print → error/standby → new print) where the user
+        // may still be viewing print status from the previous job. Without this
+        // guard, every retry produced a "[NavigationManager] Overlay ... already
+        // in stack" warning (bundle J3WD5GQJ saw 9 of these in 11 hours). The
+        // is_panel_in_stack() check has to run on the UI thread, so it lives
+        // inside the queue_update lambda.
         spdlog::info("[PrintStartNav] Auto-navigating to print status (print started)");
         helix::ui::queue_update([]() {
+            auto* cached = PrintStatusPanel::get_cached_overlay();
+            if (cached && NavigationManager::instance().is_panel_in_stack(cached)) {
+                spdlog::debug("[PrintStartNav] Print status already on stack — skip auto-nav");
+                return;
+            }
             PrintStatusPanel::push_overlay(lv_display_get_screen_active(nullptr));
         });
     }

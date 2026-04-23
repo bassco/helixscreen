@@ -117,6 +117,19 @@ class PrintStatusPanel : public OverlayBase {
      */
     static bool push_overlay(lv_obj_t* parent_screen);
 
+    /**
+     * @brief Get the cached overlay widget pointer, if created.
+     *
+     * Exposes `s_cached_panel` to callers that need to check nav-stack
+     * membership before triggering auto-navigation (e.g. the print-start
+     * observer skipping push when the user is already viewing print status).
+     * Returns nullptr if the widget tree hasn't been created yet or was
+     * destroyed via destroy-on-close.
+     *
+     * @return cached overlay root, or nullptr
+     */
+    static lv_obj_t* get_cached_overlay();
+
   protected:
     /**
      * @brief Called after destroy_overlay_ui() deletes the widget tree
