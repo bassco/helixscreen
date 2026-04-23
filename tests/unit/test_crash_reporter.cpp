@@ -28,6 +28,15 @@ namespace fs = std::filesystem;
 // Fixture: isolated temp directory with singleton reset
 // ============================================================================
 
+// Friend-class access pattern (L065): keep test-only knobs out of the
+// production CrashReporter API.
+class CrashReporterTestAccess {
+  public:
+    static void set_isolated_log_paths(CrashReporter& cr, bool v) {
+        cr.isolated_log_paths_ = v;
+    }
+};
+
 class CrashReporterTestFixture {
   public:
     CrashReporterTestFixture() {
@@ -40,6 +49,9 @@ class CrashReporterTestFixture {
         auto& cr = CrashReporter::instance();
         cr.shutdown();
         cr.init(temp_dir_.string());
+        // Prevent dev-host system logs (journalctl, /var/log) from bleeding
+        // into assertions that expect an empty log tail.
+        CrashReporterTestAccess::set_isolated_log_paths(cr, true);
     }
 
     ~CrashReporterTestFixture() {

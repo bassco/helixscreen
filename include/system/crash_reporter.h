@@ -225,7 +225,10 @@ class CrashReporter {
 
     std::string config_dir_;
     bool initialized_ = false;
+    bool isolated_log_paths_ = false; ///< Test-only: skip system log search
 
     std::string crash_file_path() const;
     std::string report_file_path() const;
+
+    friend class CrashReporterTestAccess;
 };

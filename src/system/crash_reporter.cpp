@@ -354,11 +354,19 @@ std::string CrashReporter::get_log_tail(int num_lines) {
     // Then cascade through syslog + journalctl via helix::logs::tail_best so
     // embedded platforms (AD5M/AD5X via syslog, pi/pi32 via journald) stop
     // returning empty when they have no file sink.
-    auto paths = helix::logs::default_file_paths();
+    //
+    // Tests set isolated_log_paths_ via CrashReporterTestAccess to skip system
+    // log sources entirely, otherwise journalctl/syslog from the dev host
+    // leaks into assertions that expect an empty tail.
+    std::vector<std::string> paths;
+    if (!isolated_log_paths_) {
+        paths = helix::logs::default_file_paths();
+    }
     if (!config_dir_.empty()) {
         paths.push_back(config_dir_ + "/helix.log");
     }
-    auto result = helix::logs::tail_best(num_lines, paths);
+    auto result = isolated_log_paths_ ? helix::logs::tail_file(paths, num_lines)
+                                      : helix::logs::tail_best(num_lines, paths);
     if (result.empty()) {
         spdlog::debug("[CrashReporter] No log source produced content for log tail");
     }
@@ -549,8 +557,8 @@ std::string CrashReporter::report_to_text(const CrashReport& report) {
     }
 
     if (report.heap.present) {
-        ss << "Heap (age " << report.heap.age_ms << "ms): "
-           << "RSS=" << report.heap.rss_kb << "kB VSZ=" << report.heap.vsz_kb << "kB";
+        ss << "Heap (age " << report.heap.age_ms << "ms): " << "RSS=" << report.heap.rss_kb
+           << "kB VSZ=" << report.heap.vsz_kb << "kB";
         if (report.heap.arena_kb) {
             ss << " arena=" << report.heap.arena_kb << "kB used=" << report.heap.used_kb
                << "kB free=" << report.heap.free_kb << "kB";
