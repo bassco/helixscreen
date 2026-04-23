@@ -4,13 +4,14 @@
 
 #include "ui_screensaver.h"
 
+#include "platform_capabilities.h"
 #include "ui_utils.h"
 
-#include <draw/lv_image_decoder_private.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
 #include <cstdlib>
+#include <draw/lv_image_decoder_private.h>
 
 // Sprite asset paths
 static constexpr const char* TOASTER_FRAMES[] = {
@@ -20,15 +21,24 @@ static constexpr const char* TOASTER_FRAMES[] = {
     "A:assets/images/screensaver/toaster_3.png",
 };
 static constexpr const char* TOAST_IMG = "A:assets/images/screensaver/toast.png";
-static constexpr int NUM_TOASTER_FRAMES =
-    sizeof(TOASTER_FRAMES) / sizeof(TOASTER_FRAMES[0]);
+static constexpr int NUM_TOASTER_FRAMES = sizeof(TOASTER_FRAMES) / sizeof(TOASTER_FRAMES[0]);
 
 // CSS reference: translate(-1600px, 1600px) — fixed travel distance
 static constexpr int FLIGHT_DISTANCE = 1600;
 
-// Single timer period — ~20fps balances smoothness and CPU usage.
-// Each tick moves 26 LVGL objects, triggering dirty-region recalculation.
-static constexpr uint32_t TICK_PERIOD_MS = 50;
+// Tick period determines frames-per-second for sprite motion and flap animation.
+// Each tick traverses the active sprite list, triggering LVGL dirty-region work.
+// On STANDARD hardware, 50 ms (~20 fps) looks smooth. On BASIC/EMBEDDED, drop to
+// ~7 fps — still visually acceptable for a background screensaver, ~3× less work
+// per wall-second. Combined with SPRITE_CAP_LOW, this keeps Klipper's CPU budget
+// untouched if the user opts the screensaver back on.
+static constexpr uint32_t TICK_PERIOD_STANDARD_MS = 50;
+static constexpr uint32_t TICK_PERIOD_LOW_MS = 150;
+
+// Low-tier sprite cap — hard cap on active sprites regardless of how many are
+// defined in OBJECTS[]. The array is pre-ordered by delay/wave, so truncation
+// keeps a representative visual mix.
+static constexpr int SPRITE_CAP_LOW = 10;
 
 // Object definition matching the exact CSS classes and positions.
 // CSS uses right/top percentages. Negative right = off-screen to the right.
@@ -50,8 +60,8 @@ static constexpr uint32_t TICK_PERIOD_MS = 50;
 //   tst4: 24s, 12s delay (toast)
 
 struct ObjectDef {
-    float right_pct;  // CSS right percentage (negative = off-screen right)
-    float top_pct;    // CSS top percentage (negative = off-screen above)
+    float right_pct; // CSS right percentage (negative = off-screen right)
+    float top_pct;   // CSS top percentage (negative = off-screen above)
     bool is_toaster;
     bool reverse_flap; // alternate-reverse direction
     int fly_ms;        // flight animation duration
@@ -61,75 +71,76 @@ struct ObjectDef {
 // Exact objects from the CSS HTML, in order
 static constexpr ObjectDef OBJECTS[] = {
     // First group
-    {-0.02f, -0.17f, true,  false, 10000, 0},      // t1 p6
-    { 0.10f, -0.19f, true,  false, 24000, 0},      // t3 p7
-    { 0.20f, -0.18f, false, false, 10000, 0},      // tst1 p8
-    { 0.30f, -0.20f, true,  false, 24000, 0},      // t3 p9
-    { 0.50f, -0.18f, true,  false, 10000, 0},      // t1 p11
-    { 0.60f, -0.20f, true,  false, 24000, 0},      // t3 p12
-    {-0.17f,  0.10f, true,  true,  16000, 0},      // t2 p13
-    {-0.19f,  0.20f, false, false, 24000, 0},      // tst3 p14
-    {-0.23f,  0.50f, false, false, 16000, 0},      // tst2 p16
-    {-0.25f,  0.70f, true,  false, 10000, 0},      // t1 p17
-    { 0.10f, -0.20f, false, false, 16000, 0},      // tst2 p19
-    { 0.20f, -0.36f, false, false, 24000, 0},      // tst3 p20
-    { 0.30f, -0.24f, true,  true,  16000, 0},      // t2 p21
-    {-0.26f,  0.10f, false, false, 10000, 0},      // tst1 p24
-    { 0.40f, -0.33f, true,  false, 10000, 0},      // t1 p22
-    {-0.29f,  0.50f, false, false, 16000, 0},      // tst2 p26
-    { 0.10f, -0.56f, true,  false, 10000, 0},      // t1 p28
-    { 0.30f, -0.60f, false, false, 16000, 0},      // tst2 p30
-    {-0.46f,  0.10f, true,  true,  16000, 0},      // t2 p31
-    {-0.56f,  0.20f, true,  false, 10000, 0},      // t1 p32
-    {-0.49f,  0.30f, false, false, 24000, 0},      // tst3 p33
+    {-0.02f, -0.17f, true, false, 10000, 0}, // t1 p6
+    {0.10f, -0.19f, true, false, 24000, 0},  // t3 p7
+    {0.20f, -0.18f, false, false, 10000, 0}, // tst1 p8
+    {0.30f, -0.20f, true, false, 24000, 0},  // t3 p9
+    {0.50f, -0.18f, true, false, 10000, 0},  // t1 p11
+    {0.60f, -0.20f, true, false, 24000, 0},  // t3 p12
+    {-0.17f, 0.10f, true, true, 16000, 0},   // t2 p13
+    {-0.19f, 0.20f, false, false, 24000, 0}, // tst3 p14
+    {-0.23f, 0.50f, false, false, 16000, 0}, // tst2 p16
+    {-0.25f, 0.70f, true, false, 10000, 0},  // t1 p17
+    {0.10f, -0.20f, false, false, 16000, 0}, // tst2 p19
+    {0.20f, -0.36f, false, false, 24000, 0}, // tst3 p20
+    {0.30f, -0.24f, true, true, 16000, 0},   // t2 p21
+    {-0.26f, 0.10f, false, false, 10000, 0}, // tst1 p24
+    {0.40f, -0.33f, true, false, 10000, 0},  // t1 p22
+    {-0.29f, 0.50f, false, false, 16000, 0}, // tst2 p26
+    {0.10f, -0.56f, true, false, 10000, 0},  // t1 p28
+    {0.30f, -0.60f, false, false, 16000, 0}, // tst2 p30
+    {-0.46f, 0.10f, true, true, 16000, 0},   // t2 p31
+    {-0.56f, 0.20f, true, false, 10000, 0},  // t1 p32
+    {-0.49f, 0.30f, false, false, 24000, 0}, // tst3 p33
 
     // Wave 1: t4 (fast delayed) — 10s, 5s delay
-    { 0.00f, -0.46f, true,  false, 10000, 5000},   // t4 p27
-    { 0.40f, -0.21f, true,  false, 10000, 5000},   // t4 p10
-    {-0.36f,  0.30f, true,  false, 10000, 5000},   // t4 p25
-    { 0.20f, -0.49f, true,  false, 10000, 5000},   // t4 p29
+    {0.00f, -0.46f, true, false, 10000, 5000}, // t4 p27
+    {0.40f, -0.21f, true, false, 10000, 5000}, // t4 p10
+    {-0.36f, 0.30f, true, false, 10000, 5000}, // t4 p25
+    {0.20f, -0.49f, true, false, 10000, 5000}, // t4 p29
 
     // Wave 2: t5 — 24s, 4s delay, alternate-reverse
-    {-0.21f,  0.30f, true,  true,  24000, 4000},   // t5 p15
-    { 0.00f, -0.26f, true,  true,  24000, 4000},   // t5 p18
-    { 0.40f, -0.33f, true,  true,  24000, 4000},   // t5 p22
+    {-0.21f, 0.30f, true, true, 24000, 4000}, // t5 p15
+    {0.00f, -0.26f, true, true, 24000, 4000}, // t5 p18
+    {0.40f, -0.33f, true, true, 24000, 4000}, // t5 p22
 
     // Wave 3: t6 — 24s, 8s delay, alternate
-    {-0.02f, -0.17f, true,  false, 24000, 8000},   // t6 p6
-    { 0.50f, -0.18f, true,  false, 24000, 8000},   // t6 p11
-    {-0.21f,  0.30f, true,  false, 24000, 8000},   // t6 p15
-    { 0.10f, -0.20f, true,  false, 24000, 8000},   // t6 p19
-    { 0.60f, -0.40f, true,  false, 24000, 8000},   // t6 p23
+    {-0.02f, -0.17f, true, false, 24000, 8000}, // t6 p6
+    {0.50f, -0.18f, true, false, 24000, 8000},  // t6 p11
+    {-0.21f, 0.30f, true, false, 24000, 8000},  // t6 p15
+    {0.10f, -0.20f, true, false, 24000, 8000},  // t6 p19
+    {0.60f, -0.40f, true, false, 24000, 8000},  // t6 p23
 
     // Delayed toast: tst4 — 24s, 12s delay
-    { 0.40f, -0.21f, false, false, 24000, 12000},  // tst4 p10
-    { 0.60f, -0.40f, false, false, 24000, 12000},  // tst4 p23
-    {-0.21f,  0.30f, false, false, 24000, 12000},  // tst4 p15
+    {0.40f, -0.21f, false, false, 24000, 12000}, // tst4 p10
+    {0.60f, -0.40f, false, false, 24000, 12000}, // tst4 p23
+    {-0.21f, 0.30f, false, false, 24000, 12000}, // tst4 p15
 
     // Wave 4: t7 — 24s, 12s delay, alternate-reverse
-    { 0.10f, -0.19f, true,  true,  24000, 12000},  // t7 p7
-    { 0.60f, -0.20f, true,  true,  24000, 12000},  // t7 p12
-    {-0.23f,  0.50f, true,  true,  24000, 12000},  // t7 p16
-    { 0.20f, -0.36f, true,  true,  24000, 12000},  // t7 p20
-    {-0.26f,  0.10f, true,  true,  24000, 12000},  // t7 p24
+    {0.10f, -0.19f, true, true, 24000, 12000}, // t7 p7
+    {0.60f, -0.20f, true, true, 24000, 12000}, // t7 p12
+    {-0.23f, 0.50f, true, true, 24000, 12000}, // t7 p16
+    {0.20f, -0.36f, true, true, 24000, 12000}, // t7 p20
+    {-0.26f, 0.10f, true, true, 24000, 12000}, // t7 p24
 
     // Wave 5: t8 — 24s, 16s delay, alternate
-    { 0.20f, -0.18f, true,  false, 24000, 16000},  // t8 p8
-    {-0.17f,  0.10f, true,  false, 24000, 16000},  // t8 p13
-    {-0.25f,  0.70f, true,  false, 24000, 16000},  // t8 p17
-    {-0.36f,  0.30f, true,  false, 24000, 16000},  // t8 p25
+    {0.20f, -0.18f, true, false, 24000, 16000}, // t8 p8
+    {-0.17f, 0.10f, true, false, 24000, 16000}, // t8 p13
+    {-0.25f, 0.70f, true, false, 24000, 16000}, // t8 p17
+    {-0.36f, 0.30f, true, false, 24000, 16000}, // t8 p25
 
     // Wave 6: t9 — 24s, 20s delay, alternate-reverse
-    {-0.19f,  0.20f, true,  true,  24000, 20000},  // t9 p14
-    { 0.00f, -0.26f, true,  true,  24000, 20000},  // t9 p18
-    { 0.30f, -0.24f, true,  true,  24000, 20000},  // t9 p21
-    {-0.29f,  0.50f, true,  true,  24000, 20000},  // t9 p26
+    {-0.19f, 0.20f, true, true, 24000, 20000}, // t9 p14
+    {0.00f, -0.26f, true, true, 24000, 20000}, // t9 p18
+    {0.30f, -0.24f, true, true, 24000, 20000}, // t9 p21
+    {-0.29f, 0.50f, true, true, 24000, 20000}, // t9 p26
 };
 static constexpr int NUM_OBJECTS = sizeof(OBJECTS) / sizeof(OBJECTS[0]);
 
 int FlyingToasterScreensaver::get_scale_factor() const {
     lv_display_t* disp = lv_display_get_default();
-    if (!disp) return 256; // 1x in LVGL 256 = 100%
+    if (!disp)
+        return 256; // 1x in LVGL 256 = 100%
     int w = lv_display_get_horizontal_resolution(disp);
     return (w > 800) ? 512 : 256; // 2x on larger displays
 }
@@ -142,13 +153,18 @@ void FlyingToasterScreensaver::start() {
 
     spdlog::info("[Screensaver] Starting flying toasters");
 
+    const auto caps = helix::PlatformCapabilities::detect();
+    const bool low_tier = !caps.supports_animations;
+    m_tick_period_ms = low_tier ? TICK_PERIOD_LOW_MS : TICK_PERIOD_STANDARD_MS;
+
     m_elapsed_ms = 0;
     decode_sprites();
     create_overlay();
-    spawn_objects();
+    spawn_objects(low_tier);
 
-    // Single timer drives both flight and flap at ~30fps
-    m_tick_timer = lv_timer_create(tick_cb, TICK_PERIOD_MS, this);
+    m_tick_timer = lv_timer_create(tick_cb, m_tick_period_ms, this);
+    spdlog::info("[Screensaver] Flying toasters tick period = {}ms ({} tier)", m_tick_period_ms,
+                 helix::platform_tier_to_string(caps.tier));
 
     m_active = true;
 }
@@ -193,9 +209,10 @@ void FlyingToasterScreensaver::create_overlay() {
     lv_obj_remove_flag(m_overlay, LV_OBJ_FLAG_SCROLLABLE);
 }
 
-void FlyingToasterScreensaver::spawn_objects() {
+void FlyingToasterScreensaver::spawn_objects(bool low_tier) {
     lv_display_t* disp = lv_display_get_default();
-    if (!disp) return;
+    if (!disp)
+        return;
 
     int screen_w = lv_display_get_horizontal_resolution(disp);
     int screen_h = lv_display_get_vertical_resolution(disp);
@@ -205,9 +222,11 @@ void FlyingToasterScreensaver::spawn_objects() {
         obj_size = obj_size * scale / 256;
     }
 
-    m_objects.reserve(NUM_OBJECTS);
+    const int active_count = low_tier ? std::min(NUM_OBJECTS, SPRITE_CAP_LOW) : NUM_OBJECTS;
 
-    for (int i = 0; i < NUM_OBJECTS; i++) {
+    m_objects.reserve(active_count);
+
+    for (int i = 0; i < active_count; i++) {
         const auto& def = OBJECTS[i];
 
         // Convert CSS right/top percentages to LVGL left/top coordinates.
@@ -220,19 +239,19 @@ void FlyingToasterScreensaver::spawn_objects() {
         int start_x = static_cast<int>(screen_w * (1.0f - def.right_pct)) - obj_size;
         int start_y = static_cast<int>(screen_h * def.top_pct);
 
-        create_flying_object(start_x, start_y, def.is_toaster,
-                             def.reverse_flap, def.fly_ms, def.delay_ms);
+        create_flying_object(start_x, start_y, def.is_toaster, def.reverse_flap, def.fly_ms,
+                             def.delay_ms);
     }
 
-    spdlog::debug("[Screensaver] Spawned {} flying objects ({}x{} screen, {}px sprites)",
-                  m_objects.size(), screen_w, screen_h, obj_size);
+    spdlog::debug("[Screensaver] Spawned {}/{} flying objects ({}x{} screen, {}px sprites, "
+                  "low_tier={})",
+                  m_objects.size(), NUM_OBJECTS, screen_w, screen_h, obj_size, low_tier);
 }
 
-void FlyingToasterScreensaver::create_flying_object(
-    int start_x, int start_y, bool is_toaster,
-    bool reverse_flap, int speed_ms, int delay_ms) {
-
-    if (!m_overlay) return;
+void FlyingToasterScreensaver::create_flying_object(int start_x, int start_y, bool is_toaster,
+                                                    bool reverse_flap, int speed_ms, int delay_ms) {
+    if (!m_overlay)
+        return;
 
     lv_obj_t* img = lv_image_create(m_overlay);
 
@@ -275,9 +294,10 @@ void FlyingToasterScreensaver::create_flying_object(
 
 void FlyingToasterScreensaver::tick_cb(lv_timer_t* timer) {
     auto* self = static_cast<FlyingToasterScreensaver*>(lv_timer_get_user_data(timer));
-    if (!self || !self->m_active) return;
+    if (!self || !self->m_active)
+        return;
 
-    self->m_elapsed_ms += TICK_PERIOD_MS;
+    self->m_elapsed_ms += self->m_tick_period_ms;
 
     lv_display_t* disp = lv_display_get_default();
     int screen_w = disp ? lv_display_get_horizontal_resolution(disp) : 800;
@@ -289,7 +309,8 @@ void FlyingToasterScreensaver::tick_cb(lv_timer_t* timer) {
     }
 
     for (auto& obj : self->m_objects) {
-        if (!obj.img) continue;
+        if (!obj.img)
+            continue;
 
         // Skip objects still in their start delay
         if (self->m_elapsed_ms < static_cast<uint32_t>(obj.delay_ms)) {
@@ -305,8 +326,8 @@ void FlyingToasterScreensaver::tick_cb(lv_timer_t* timer) {
         auto new_y = static_cast<int16_t>(obj.start_y + dy);
 
         // Hide objects that are entirely off-screen (LVGL skips hidden objects in render)
-        bool on_screen = (new_x + obj_size > 0 && new_x < screen_w &&
-                          new_y + obj_size > 0 && new_y < screen_h);
+        bool on_screen =
+            (new_x + obj_size > 0 && new_x < screen_w && new_y + obj_size > 0 && new_y < screen_h);
         if (!on_screen) {
             if (!lv_obj_has_flag(obj.img, LV_OBJ_FLAG_HIDDEN))
                 lv_obj_add_flag(obj.img, LV_OBJ_FLAG_HIDDEN);
@@ -324,10 +345,12 @@ void FlyingToasterScreensaver::tick_cb(lv_timer_t* timer) {
         }
 
         // Flap wing frames (toasters only)
-        if (!obj.is_toaster) continue;
+        if (!obj.is_toaster)
+            continue;
 
         obj.flap_counter++;
-        if (obj.flap_counter < obj.ticks_per_flap) continue;
+        if (obj.flap_counter < obj.ticks_per_flap)
+            continue;
         obj.flap_counter = 0;
 
         // Advance frame: 0→1→2→3→2→1→0 (ping-pong)
@@ -364,7 +387,8 @@ void FlyingToasterScreensaver::decode_sprites() {
             lv_image_decoder_close(&dsc);
         } else {
             spdlog::warn("[Screensaver] Failed to pre-decode {}", TOASTER_FRAMES[i]);
-            if (res == LV_RESULT_OK) lv_image_decoder_close(&dsc);
+            if (res == LV_RESULT_OK)
+                lv_image_decoder_close(&dsc);
         }
     }
 
@@ -376,7 +400,8 @@ void FlyingToasterScreensaver::decode_sprites() {
             lv_image_decoder_close(&dsc);
         } else {
             spdlog::warn("[Screensaver] Failed to pre-decode {}", TOAST_IMG);
-            if (res == LV_RESULT_OK) lv_image_decoder_close(&dsc);
+            if (res == LV_RESULT_OK)
+                lv_image_decoder_close(&dsc);
         }
     }
 

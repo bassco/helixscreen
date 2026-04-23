@@ -6,9 +6,8 @@
 
 #include "screensaver.h"
 
-#include <lvgl.h>
-
 #include <cstdint>
+#include <lvgl.h>
 #include <vector>
 
 /**
@@ -22,9 +21,9 @@
  *   stop()   — Delete everything, clean shutdown
  *   is_active() — Check if screensaver is currently running
  *
- * All animation (flight + wing flap) is driven by a single lv_timer at ~30fps
- * to minimize CPU usage. Positions are computed from elapsed time rather than
- * using per-object LVGL animations.
+ * All animation (flight + wing flap) is driven by a single lv_timer: ~20 fps on
+ * STANDARD hardware, ~7 fps on BASIC/EMBEDDED to reduce dirty-region CPU cost.
+ * Positions are computed from elapsed time rather than using per-object LVGL animations.
  */
 class FlyingToasterScreensaver : public Screensaver {
   public:
@@ -41,13 +40,16 @@ class FlyingToasterScreensaver : public Screensaver {
     void stop() override;
 
     /** @brief Check if screensaver is currently active */
-    bool is_active() const override { return m_active; }
+    bool is_active() const override {
+        return m_active;
+    }
 
     /** @brief Return FLYING_TOASTERS type */
-    ScreensaverType type() const override { return ScreensaverType::FLYING_TOASTERS; }
+    ScreensaverType type() const override {
+        return ScreensaverType::FLYING_TOASTERS;
+    }
 
   private:
-
     struct FlyingObject {
         lv_obj_t* img;
         bool is_toaster;
@@ -69,11 +71,11 @@ class FlyingToasterScreensaver : public Screensaver {
     void create_overlay();
 
     /** @brief Spawn all flying objects with staggered positions and delays */
-    void spawn_objects();
+    void spawn_objects(bool low_tier);
 
     /** @brief Create a single flying object */
-    void create_flying_object(int start_x, int start_y, bool is_toaster,
-                              bool reverse_flap, int speed_ms, int delay_ms);
+    void create_flying_object(int start_x, int start_y, bool is_toaster, bool reverse_flap,
+                              int speed_ms, int delay_ms);
 
     /** @brief Single timer callback driving all animation (flight + flap) */
     static void tick_cb(lv_timer_t* timer);
@@ -92,9 +94,10 @@ class FlyingToasterScreensaver : public Screensaver {
     std::vector<FlyingObject> m_objects;
     lv_timer_t* m_tick_timer = nullptr;
     uint32_t m_elapsed_ms = 0;
+    uint32_t m_tick_period_ms = 50; // actual period set at start() time
 
     // Pre-decoded sprite buffers (avoid per-frame PNG file I/O + decompression)
-    lv_draw_buf_t* m_decoded_frames[4] = {};  // toaster_0..3
+    lv_draw_buf_t* m_decoded_frames[4] = {}; // toaster_0..3
     lv_draw_buf_t* m_decoded_toast = nullptr;
 };
 
