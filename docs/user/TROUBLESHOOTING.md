@@ -750,7 +750,7 @@ Note that this is a separate problem from the phantom click *after* a scroll (se
 
 **Cause:** Some capacitive touch controllers generate a phantom "clicked" event when the finger is released after scrolling. Common on FlashForge AD5M/AD5X displays.
 
-**Solution:** Enable the scroll guard, which ignores taps for 80ms after a scroll ends:
+**Solution:** Enable the scroll guard, which ignores taps for 80 ms after a scroll ends:
 
 ```json
 // /opt/helixscreen/config/settings.json
@@ -762,6 +762,19 @@ Note that this is a separate problem from the phantom click *after* a scroll (se
 ```
 
 This is enabled by default on AD5M and AD5X via their hardware presets. If you see this on other hardware, enable it manually (or test with `HELIX_SCROLL_GUARD=1 helix-screen`).
+
+**Still getting phantom clicks with the guard enabled?** The 80 ms cooldown works for most capacitive controllers but some need longer. Raise `scroll_guard_cooldown_ms` (range 20–500):
+
+```json
+{
+  "input": {
+    "scroll_guard": true,
+    "scroll_guard_cooldown_ms": 150
+  }
+}
+```
+
+Or test temporarily with `HELIX_SCROLL_GUARD_COOLDOWN_MS=150 helix-screen`. Try 120, 150, then 200; stop at the smallest value that eliminates the phantom tap, since going higher will start swallowing legitimate taps that closely follow a scroll.
 
 ---
 

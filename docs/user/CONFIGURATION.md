@@ -406,6 +406,7 @@ Located in the `input` section:
     "scroll_limit": 10,
     "jitter_threshold": 5,
     "scroll_guard": false,
+    "scroll_guard_cooldown_ms": 80,
     "touch_device": "",
     "force_calibration": false
   }
@@ -451,7 +452,13 @@ Can also be overridden with the `HELIX_TOUCH_JITTER` environment variable.
 ### `scroll_guard`
 **Type:** boolean
 **Default:** `false` (overridden to `true` by AD5M/AD5X presets)
-**Description:** Suppresses the phantom "clicked" event some capacitive touch controllers generate when the finger lifts at the end of a scroll gesture. Common on FlashForge AD5M and AD5X displays — you scroll a list, lift your finger, and whatever button is now under where your finger was fires. When enabled, HelixScreen ignores taps for 80 ms after a scroll ends. Can also be overridden with the `HELIX_SCROLL_GUARD` environment variable (`1` to enable).
+**Description:** Suppresses the phantom "clicked" event some capacitive touch controllers generate when the finger lifts at the end of a scroll gesture. Common on FlashForge AD5M and AD5X displays — you scroll a list, lift your finger, and whatever button is now under where your finger was fires. When enabled, HelixScreen ignores taps for the cooldown window (default 80 ms — see `scroll_guard_cooldown_ms`) after a scroll ends. Can also be overridden with the `HELIX_SCROLL_GUARD` environment variable (`1` to enable).
+
+### `scroll_guard_cooldown_ms`
+**Type:** integer
+**Default:** `80`
+**Range:** `20` - `500`
+**Description:** How long (in milliseconds) `scroll_guard` suppresses taps after a scroll gesture ends. Only takes effect when `scroll_guard` is enabled. The default handles most capacitive controllers that re-press briefly during lift-off; if you still see phantom clicks right as you lift your finger, try raising to `150` or `200`. Going too high will swallow legitimate taps that closely follow a scroll, so raise gradually. Can also be overridden with the `HELIX_SCROLL_GUARD_COOLDOWN_MS` environment variable.
 
 ### `force_calibration`
 **Type:** boolean
@@ -1475,6 +1482,7 @@ Environment="HELIX_TOUCH_DEVICE=/dev/input/event0"
     "scroll_limit": 10,
     "jitter_threshold": 5,
     "scroll_guard": false,
+    "scroll_guard_cooldown_ms": 80,
     "touch_device": "",
     "force_calibration": false
   },

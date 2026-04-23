@@ -134,13 +134,26 @@ bool init_lvgl(int width, int height, LvglContext& ctx) {
             scroll_guard = (std::string(env_guard) == "1" || std::string(env_guard) == "true");
         }
 
+        // Cooldown window for the post-scroll click guard. 80 ms matches most
+        // controllers; raise if users still see phantom taps at lift-off.
+        int scroll_guard_cooldown = cfg->get<int>(
+            "/input/scroll_guard_cooldown_ms",
+            static_cast<int>(TouchJitterFilter::SCROLL_GUARD_COOLDOWN_MS_DEFAULT));
+        const char* env_cooldown = std::getenv("HELIX_SCROLL_GUARD_COOLDOWN_MS");
+        if (env_cooldown) {
+            scroll_guard_cooldown = std::atoi(env_cooldown);
+        }
+        scroll_guard_cooldown = std::clamp(scroll_guard_cooldown, 20, 500);
+
         if (jitter_threshold > 0) {
             spdlog::info("[LVGL] Touch jitter filter: {}px dead zone", jitter_threshold);
             s_jitter_ctx.jitter.threshold_sq = jitter_threshold * jitter_threshold;
             s_jitter_ctx.jitter.scroll_guard_enabled = scroll_guard;
+            s_jitter_ctx.jitter.scroll_guard_cooldown_ms =
+                static_cast<uint32_t>(scroll_guard_cooldown);
             if (scroll_guard) {
                 spdlog::info("[LVGL] Post-scroll click guard: {}ms cooldown",
-                             TouchJitterFilter::SCROLL_GUARD_COOLDOWN_MS);
+                             scroll_guard_cooldown);
             }
             s_jitter_ctx.original_read_cb = lv_indev_get_read_cb(ctx.pointer);
             lv_indev_set_read_cb(ctx.pointer, jitter_read_cb);

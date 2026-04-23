@@ -21,7 +21,12 @@ struct TouchJitterFilter {
     /// lifting a finger from a capacitive touchscreen after scrolling.
     /// The contact area changes during lift, causing some controllers to
     /// briefly report release→repress before the final release.
-    static constexpr uint32_t SCROLL_GUARD_COOLDOWN_MS = 80;
+    ///
+    /// The cooldown window is configurable via /input/scroll_guard_cooldown_ms
+    /// (or HELIX_SCROLL_GUARD_COOLDOWN_MS) in case 80 ms is insufficient for a
+    /// given touch controller.
+    static constexpr uint32_t SCROLL_GUARD_COOLDOWN_MS_DEFAULT = 80;
+    uint32_t scroll_guard_cooldown_ms = SCROLL_GUARD_COOLDOWN_MS_DEFAULT;
     uint32_t scroll_release_tick = 0;  ///< lv_tick_get() when scroll touch ended
     bool scroll_guard_enabled = false; ///< Enable post-scroll click guard
     bool was_scrolling = false; ///< True if the touch that just ended had breakout (drag/scroll)
@@ -82,7 +87,7 @@ struct TouchJitterFilter {
 
         if (state == LV_INDEV_STATE_PRESSED && scroll_release_tick > 0) {
             uint32_t elapsed = lv_tick_elaps(scroll_release_tick);
-            if (elapsed < SCROLL_GUARD_COOLDOWN_MS) {
+            if (elapsed < scroll_guard_cooldown_ms) {
                 // Ghost press during cooldown — suppress
                 state = LV_INDEV_STATE_RELEASED;
                 return true;
