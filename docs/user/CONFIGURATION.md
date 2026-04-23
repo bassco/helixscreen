@@ -404,7 +404,7 @@ Located in the `input` section:
   "input": {
     "scroll_throw": 25,
     "scroll_limit": 10,
-    "jitter_threshold": 15,
+    "jitter_threshold": 5,
     "scroll_guard": false,
     "touch_device": "",
     "force_calibration": false
@@ -412,17 +412,24 @@ Located in the `input` section:
 }
 ```
 
+> **Tuning touch feel:** These four settings interact. See **[Touch Feel — Which Setting Do I Tune?](TROUBLESHOOTING.md#touch-feel--which-setting-do-i-tune)** in the troubleshooting guide for a symptom → setting map.
+
 ### `scroll_throw`
 **Type:** integer
 **Default:** `25`
-**Range:** `1` - `99`
-**Description:** Scroll momentum decay rate. Higher values = faster decay (less "throw"). Default LVGL is 10; we use 25 for better touchscreen feel.
+**Range:** `5` - `50` (UI-clamped)
+**Description:** Scroll momentum decay rate — how quickly a flicked list coasts to a stop. Higher values = faster decay (less "throw"). LVGL's native default is 10; we use 25 because touchscreens feel sluggish with long coasting. Lower it if lists feel too "sticky" at the end of a flick.
 
 ### `scroll_limit`
 **Type:** integer
 **Default:** `10`
-**Range:** `1` - `50`
-**Description:** Pixels of movement required before scrolling starts. Lower = more responsive. Matches LVGL's default of 10.
+**Range:** `1` - `20` (UI-clamped)
+**Description:** Pixels of finger movement required before a gesture is treated as a scroll instead of a tap. Below this threshold LVGL still thinks you're pressing a widget, and releasing will fire a click. Above it, the press is cancelled and scroll engages.
+
+- **Lower** = scroll engages sooner. Fixes phantom clicks that fire when scrolling a list with a short, slow swipe.
+- **Higher** = more deliberate gesture required. Reduces accidental scrolls when you meant to tap, but makes short-travel scrolls feel unresponsive.
+
+Matches LVGL's native default of 10.
 
 ### `touch_device`
 **Type:** string
@@ -432,14 +439,19 @@ Located in the `input` section:
 
 ### `jitter_threshold`
 **Type:** integer
-**Default:** `15`
+**Default:** `5`
 **Range:** `0` - `200`
-**Description:** Touch jitter filter dead zone in pixels. Suppresses small coordinate jitter from noisy touch controllers (e.g., Goodix GT9xx) that would cause taps to be misread as swipes. Set to `0` to disable. Can also be overridden with the `HELIX_TOUCH_JITTER` environment variable.
+**Description:** Touch jitter filter dead zone in pixels. Capacitive touch controllers (notably Goodix GT9xx on FlashForge displays) report 2–5 px of coordinate drift even with a stationary finger. Without filtering, that drift accumulates past `scroll_limit` and a stationary tap gets cancelled as if it were a scroll. The filter freezes reported coordinates to the initial press point while movement stays within this radius.
+
+- **Raise** if stationary taps are still being misread as swipes or scrolls on a noisy panel (typical fix: 15–25).
+- **Lower / 0** if the filter is suppressing intentional short-travel gestures.
+
+Can also be overridden with the `HELIX_TOUCH_JITTER` environment variable.
 
 ### `scroll_guard`
 **Type:** boolean
-**Default:** `false`
-**Description:** Suppress spurious tap events after scrolling. Some capacitive touch controllers (common on FlashForge AD5M/AD5X) generate a phantom "clicked" event when you lift your finger after a scroll gesture, causing accidental button presses. When enabled, HelixScreen ignores taps for 80ms after a scroll ends. Enabled by default in AD5M/AD5X presets. Can also be overridden with the `HELIX_SCROLL_GUARD` environment variable (`1` to enable).
+**Default:** `false` (overridden to `true` by AD5M/AD5X presets)
+**Description:** Suppresses the phantom "clicked" event some capacitive touch controllers generate when the finger lifts at the end of a scroll gesture. Common on FlashForge AD5M and AD5X displays — you scroll a list, lift your finger, and whatever button is now under where your finger was fires. When enabled, HelixScreen ignores taps for 80 ms after a scroll ends. Can also be overridden with the `HELIX_SCROLL_GUARD` environment variable (`1` to enable).
 
 ### `force_calibration`
 **Type:** boolean
@@ -1461,6 +1473,7 @@ Environment="HELIX_TOUCH_DEVICE=/dev/input/event0"
   "input": {
     "scroll_throw": 25,
     "scroll_limit": 10,
+    "jitter_threshold": 5,
     "scroll_guard": false,
     "touch_device": "",
     "force_calibration": false

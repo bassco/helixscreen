@@ -425,11 +425,18 @@ Suppresses small coordinate jitter from noisy touch controllers (e.g., Goodix GT
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HELIX_TOUCH_JITTER` | Dead-zone threshold in pixels. Coordinate changes within this distance are suppressed. | `15` |
+| `HELIX_TOUCH_JITTER` | Dead-zone threshold in pixels. Coordinate changes within this distance are suppressed. | `5` |
+| `HELIX_SCROLL_GUARD` | Enables the post-scroll click guard (80 ms cooldown after a scroll ends). | (unset; preset-controlled) |
 
 **How it works:** When a finger is pressed, the filter records the initial position. Subsequent coordinate reports within the dead zone are snapped back to the last stable position. Once movement exceeds the threshold, the new position becomes the anchor. On release, the last stable position is reported.
 
-**Config file equivalent:** `/input/jitter_threshold` (integer, default `15`, set to `0` to disable)
+**Config file equivalents:**
+- `/input/jitter_threshold` (integer, default `5`, set to `0` to disable)
+- `/input/scroll_guard` (boolean, default `false`; FlashForge AD5M and AD5X presets set it to `true`)
+- `/input/scroll_limit` (integer, default `10`, range 1–20 — pixels before LVGL commits to scrolling)
+- `/input/scroll_throw` (integer, default `25`, range 5–50 — scroll momentum decay; higher = faster stop)
+
+Migration history: `jitter_threshold` was 15 before config v3, then reset to 5 in the v2→v3 migration because the larger dead zone added perceptible drag to intentional gestures. The filter is cheap enough to stay on by default; most users never touch it.
 
 **Example:**
 ```bash
@@ -438,6 +445,9 @@ HELIX_TOUCH_JITTER=25 ./build/bin/helix-screen
 
 # Disable the jitter filter entirely
 HELIX_TOUCH_JITTER=0 ./build/bin/helix-screen
+
+# Force the post-scroll click guard on for a non-FlashForge panel
+HELIX_SCROLL_GUARD=1 ./build/bin/helix-screen
 ```
 
 ---

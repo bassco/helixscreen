@@ -673,6 +673,24 @@ sudo usermod -aG input $USER
 
 ---
 
+### Touch Feel — Which Setting Do I Tune?
+
+Three separate settings control the feel of taps vs. scrolls. Match the symptom to the right knob before changing anything — they have different effects and tuning the wrong one makes things worse.
+
+| Symptom | What's happening | Setting to change | Direction |
+|---|---|---|---|
+| Stationary taps register as swipes/scrolls | Touch controller drifts a few pixels while finger is still, crossing the scroll threshold | `jitter_threshold` | **Raise** (e.g., 15–25) |
+| You scroll a list and a button in it fires mid-gesture | Finger released before moving far enough to commit to scroll, so the press becomes a click | `scroll_limit` | **Lower** (e.g., 5) |
+| You scroll, lift your finger, and a button fires right as you lift | Touch controller reports release→re-press on lift-off | `scroll_guard` | **Set to `true`** |
+| Lists feel sluggish — long coast after a flick | Scroll momentum decays too slowly | `scroll_throw` | **Raise** (e.g., 35) |
+| Short flicks never travel far enough — list barely moves | Momentum decays too fast | `scroll_throw` | **Lower** (e.g., 15) |
+
+All four live under `input` in `/opt/helixscreen/config/settings.json` — see [CONFIGURATION.md § Input Configuration](CONFIGURATION.md#input) for full reference.
+
+FlashForge AD5M and AD5X presets ship with `scroll_guard: true` out of the box. Other platforms default to `false`.
+
+---
+
 ### Taps Register as Swipes
 
 **Symptoms:**
@@ -682,7 +700,7 @@ sudo usermod -aG input $USER
 
 **Cause:** Noisy touch controller (common with Goodix GT9xx and similar capacitive controllers) reports jittery coordinates even when the finger is stationary. The small coordinate changes exceed LVGL's scroll detection threshold.
 
-**Solution:** HelixScreen includes a jitter filter (enabled by default, 15px dead zone) that suppresses this noise. If taps still register as swipes, increase the threshold:
+**Solution:** HelixScreen includes a jitter filter (enabled by default, 5 px dead zone) that suppresses this noise. If taps still register as swipes on your panel, raise the threshold:
 
 ```json
 // /opt/helixscreen/config/settings.json
@@ -698,7 +716,31 @@ Or test temporarily with an environment variable:
 HELIX_TOUCH_JITTER=25 helix-screen
 ```
 
-Set to `0` to disable the filter if it interferes with intentional touch gestures.
+Set to `0` to disable the filter if it interferes with intentional short-travel gestures.
+
+### Unintended Clicks While Scrolling
+
+**Symptoms:**
+- You drag a list to scroll and a button in the middle of it fires instead
+- The list jumps a little, but the click on whatever was under your finger still goes through
+- Happens with short or slow swipes more than long, fast flicks
+
+**Cause:** LVGL treats the first few pixels of finger movement as a "press" on the widget under your finger. Only after you've moved past `scroll_limit` pixels does it cancel the press and commit to a scroll. If you release before reaching that threshold, the press becomes a click.
+
+**Solution:** Lower `scroll_limit` so scrolling engages sooner.
+
+```json
+// /opt/helixscreen/config/settings.json
+{
+  "input": {
+    "scroll_limit": 5
+  }
+}
+```
+
+Default is 10; the UI accepts values from 1 to 20. Going too low will make intentional taps feel twitchy — any slight finger wobble will start a scroll — so settle on the lowest value that feels correct, not the smallest possible.
+
+Note that this is a separate problem from the phantom click *after* a scroll (see below) and from taps being misread as swipes (see above).
 
 ### Accidental Button Presses After Scrolling
 
@@ -719,7 +761,7 @@ Set to `0` to disable the filter if it interferes with intentional touch gesture
 }
 ```
 
-This is enabled by default on AD5M and AD5X via their hardware presets. If you see this on other hardware, enable it manually.
+This is enabled by default on AD5M and AD5X via their hardware presets. If you see this on other hardware, enable it manually (or test with `HELIX_SCROLL_GUARD=1 helix-screen`).
 
 ---
 
