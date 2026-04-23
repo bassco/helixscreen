@@ -566,9 +566,14 @@ class MoonrakerClient : public hv::WebSocketClient, public IMoonrakerClient {
      * Callers capture a weak_ptr from this. When the client is destroyed,
      * the shared_ptr is reset first, so weak_ptr::lock() returns nullptr.
      * Used by SubscriptionGuard to avoid calling into a destroyed client.
+     *
+     * This is distinct from the internal WebSocket-callback guard (which is
+     * also reset on disconnect to cancel in-flight libhv callbacks). Clients
+     * of SubscriptionGuard only care about *object* destruction, not
+     * disconnect/reconnect cycles.
      */
     std::weak_ptr<bool> lifetime_weak() const {
-        return lifetime_guard_;
+        return destruction_guard_;
     }
 
     // ========== Methods used by composed classes ==========
@@ -692,11 +697,16 @@ class MoonrakerClient : public hv::WebSocketClient, public IMoonrakerClient {
     std::chrono::steady_clock::time_point reconnect_started_at_{};
     static constexpr int MAX_RECONNECT_STALL_MS = 60000;
 
-    // Lifetime guard for safe callback execution
-    // Callbacks capture a weak_ptr to this sentinel. When the destructor runs,
-    // it resets the shared_ptr FIRST, causing all weak_ptr::lock() calls to
-    // return nullptr, preventing callbacks from accessing destroyed members.
+    // WebSocket callback cancellation guard. Reset on BOTH disconnect and
+    // destruction so in-flight libhv callbacks (onopen/onmessage/onclose)
+    // early-return on either event. Internal use only.
     std::shared_ptr<bool> lifetime_guard_ = std::make_shared<bool>(true);
+
+    // Object-destruction guard. Reset ONLY in the destructor. Exposed via
+    // lifetime_weak() for SubscriptionGuard and other holders that need to
+    // detect that the MoonrakerClient instance itself is gone — not that it
+    // merely dropped a WebSocket connection.
+    std::shared_ptr<bool> destruction_guard_ = std::make_shared<bool>(true);
 };
 
 } // namespace helix

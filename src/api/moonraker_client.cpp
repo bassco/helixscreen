@@ -150,8 +150,11 @@ MoonrakerClient::~MoonrakerClient() {
         std::unique_lock<std::shared_mutex> lk(callback_lifecycle_mutex_);
     } // Release immediately — just needed to wait for in-flight callbacks
 
-    // Now safe to reset lifetime guard (no callbacks can be mid-execution)
+    // Now safe to reset lifetime guards (no callbacks can be mid-execution).
+    // destruction_guard_ signals object destruction to SubscriptionGuard and
+    // other external holders; lifetime_guard_ covers WS callbacks.
     lifetime_guard_.reset();
+    destruction_guard_.reset();
 
     // Disable auto-reconnect BEFORE closing - prevents libhv from attempting
     // reconnection after we've started destruction (avoids stderr "No route to host")
