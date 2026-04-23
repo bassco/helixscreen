@@ -337,11 +337,22 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
             }
             colors_[i] = incoming;
 
-            // Latch port_presence for non-empty colors from save_variables,
-            // same logic as parse_adventurer_json. Without per-port sensors,
-            // a non-empty color in the IFS variables means filament is present.
-            if (!incoming.empty() && !has_per_port_sensors_) {
-                port_presence_[i] = true;
+            // Infer port_presence from save_variables colors, same logic as
+            // parse_adventurer_json. Without per-port sensors, a non-empty
+            // color means filament is present; an empty color means the spool
+            // has been ejected. Only clear on eject when the system is IDLE so
+            // a transient read mid-unload cannot wipe presence (mirrors the
+            // #631 fix in the native ZMOD path).
+            if (!has_per_port_sensors_) {
+                if (!incoming.empty()) {
+                    port_presence_[i] = true;
+                } else if (port_presence_[i] &&
+                           system_info_.action == AmsAction::IDLE) {
+                    spdlog::info("{} Slot {} eject detected (empty color in "
+                                 "save_variables)",
+                                 backend_log_tag(), i);
+                    port_presence_[i] = false;
+                }
             }
         }
     }

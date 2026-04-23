@@ -1481,6 +1481,24 @@ TEST_CASE("AD5X IFS port_presence inferred from save_variables colors", "[ams][a
         REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 3));
     }
 
+    SECTION("empty color after latched clears port_presence (spool eject)") {
+        // First populate all 4 slots — presence latches true
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
+        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 1));
+        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 2));
+
+        // User ejects slots 1 and 2 — colors become empty in save_variables
+        json vars = standard_variables();
+        vars["less_waste_colors"] = json::array({"FF0000", "", "", "FFFFFF"});
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
+
+        // Slots 1 and 2 should clear; 0 and 3 remain latched
+        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 1));
+        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 2));
+        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 3));
+    }
+
     SECTION("slots with color data show as AVAILABLE not EMPTY") {
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
 
