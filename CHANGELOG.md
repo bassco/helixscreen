@@ -5,10 +5,35 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.99.44] - 2026-04-23
+
+### Added
+- **SonicPad hardware brightness** — Creality Sonic Pad (allwinner,r818) now gets real backlight control via `/dev/disp` DISP2 ioctls. The AD5M-specific boot-time PWM-inversion reset is skipped on SonicPad, where it logged "pwm device hdl is NULL" and dragged the display pipeline.
+- **Shutdown/Reboot verification** — the shutdown widget now verifies the host actually went down. Moonraker can reply `machine.shutdown`/`machine.reboot` with success but silently no-op on some firmwares (observed on SonicPad Jpe230). If the WebSocket has reconnected 20s after a successful RPC, an error toast tells the user the host is still reachable.
+- **Test Screensaver button** in Settings lets you audition the selected screensaver without waiting for the dim timeout.
+- **"Confirm before running" macro toggle** (Settings → Safety & Notifications, default on) gates macro execution behind a confirmation dialog. Skipped when params are required or when the macro is flagged dangerous.
+- **Memory pressure responders for print status tree and LVGL image cache** — on warning+, the cached print-status widget tree (~400–800 KB) is destroyed when off the nav stack; on critical, the LVGL decoded-image cache is dropped.
+- **Memory-monitor diagnostics** — pressure log lines now include our RSS/VmSize/VmSwap, 5-min growth, and system-available; on warning+ the `smaps_rollup` breakdown is dumped; a post-response summary reports the whole-app RSS delta so operators can see whether responders actually recovered memory.
+- **Configurable scroll_guard cooldown** — `/input/scroll_guard_cooldown_ms` (and `HELIX_SCROLL_GUARD_COOLDOWN_MS`), clamped to 20–500 ms. Default stays 80 ms; AD5X users still seeing phantom clicks at lift-off can try 150–200 without a code change.
+- **AD5X fresh installs ship the AMS widget on the home grid by default** — previously fell through to the generic default layout whose filament/AMS swap depended on `ams_slot_count` being live at wizard-completion time. Existing installs keep their saved layout.
+- **Android Play Store publishing pipeline** — CI now builds and uploads signed AABs to Google Play end-to-end, gated on the Play service-account secret.
+- **Contributor doc set** — CONTRIBUTOR_GOTCHAS.md, YOUR_FIRST_CONTRIBUTION.md, THEME_CONTRIBUTOR_GUIDE.md, TRANSLATION_CONTRIBUTOR_GUIDE.md, and a CONTRIBUTING.md front door at the repo root.
+
+### Fixed
+- **Text-input null-font crash** ([#853], [#864]) — `text_font` is now bound at creation time so a forced theme refresh can't land a null font pointer on the widget mid-layout.
+- **Upgrade banner missing / floating "Update" + "X" buttons on every panel** — `upgrade_banner.xml` was registered with the wrong path (it lives under `ui_xml/components/`), and the banner also used an unregistered `<ui_icon>` tag that desynced the XML parser's parent stack and left the child buttons parented to the top layer. Rebuilt against theme tokens matching `toast_notification.xml`.
+- **Stuck AMS widget at (-1,-1) with filament sensor occupying its cell** — a one-shot home-panel migration swaps AMS into filament's cell on any page where AMS is enabled-but-unplaced while filament is placed. Fixes existing installs caught by the `build_default_grid` timing window before the AD5X preset ship.
+- **AD5M detected over AD5X when a chamber LED is present** — added `macro_exclude` on `SET_EXTRUDER_SLOT` (unique to AD5X IFS) to the four AD5M-family entries, so AD5X no longer loses the tiebreak to AD5M Pro when both fingerprints score 100.
+- **AD5X IFS: ejected spool still shown as full** on the `GET_ZCOLOR` / save_variables path — mirrored the #631 eject-clear into `parse_save_variables` (only when IDLE).
+- **Niimbot BLE re-pair required on every restart** — the label printer overlay's brand-based dedup mistook Niimbot's rotating BLE random address for a "wrong transport" migration and cleared the saved MAC. Same-transport duplicates are now dropped; the saved MAC sticks. Real BlueZ errors also now surface instead of "unknown error" from post-teardown reads.
+- **Moonraker subscription leak across reconnects** — `lifetime_weak()` was handing `SubscriptionGuard` the same guard that `disconnect()` resets, so every reconnect looked like "client destroyed" and the real unsubscribe was skipped. Split into two guards.
+- **WiFi wizard step re-entry hardening** — `apply_ethernet_status` and the deferred scan callback now early-out when the step is mid-teardown. Not a root-cause fix for the heap corruption in MCPKABEE/QLCCZKRQ, but removes a known re-entry race.
+- **Print status panel "already in stack" warning spam** on long sessions — the print-start auto-push now checks `is_panel_in_stack()` before queuing.
 
 ### Changed
-- **Shutdown/Reboot verification** — the shutdown widget now verifies the host actually went down. Moonraker can reply `machine.shutdown`/`machine.reboot` with success but silently no-op on some firmwares (observed on SonicPad Jpe230, where `logind.PowerOff` returns without initiating the shutdown). If the WebSocket has reconnected 20s after a successful RPC, an error toast tells the user the host is still reachable instead of leaving the UI wedged in a state that looks like a partial shutdown.
+- **Crash-capture breadcrumbs** — finer-grained wifi-step tags (`create_enter`, `xml_create`, `scan_fire`, `populate_begin`, `cleanup_enter` under a `wifi` category), plus post-Moonraker-connect discovery and printer-identify breadcrumbs. Diagnostic only.
+- **Touch-feel documentation** — CONFIGURATION.md, TROUBLESHOOTING.md, and ENVIRONMENT_VARIABLES.md now carry a symptom → setting table for `scroll_limit`, `scroll_throw`, `jitter_threshold`, and `scroll_guard`, plus a new "Unintended Clicks While Scrolling" troubleshooting entry. The docs also listed the `jitter_threshold` default as 15 (has been 5 since v2→v3); corrected along with two clamp-range typos.
+- **Bluetooth setup guide** covers USB barcode scanners and USB-MCU users.
 
 ## [0.99.43] - 2026-04-22
 
@@ -3251,6 +3276,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.44]: https://github.com/prestonbrown/helixscreen/compare/v0.99.43...v0.99.44
 [0.99.43]: https://github.com/prestonbrown/helixscreen/compare/v0.99.42...v0.99.43
 [0.99.42]: https://github.com/prestonbrown/helixscreen/compare/v0.99.41...v0.99.42
 [0.99.41]: https://github.com/prestonbrown/helixscreen/compare/v0.99.40...v0.99.41
