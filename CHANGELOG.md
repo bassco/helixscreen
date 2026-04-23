@@ -5,6 +5,15 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Animated screensaver is now disabled by default on Raspberry Pi 3B-class (BASIC tier) and AD5M / AD5X (EMBEDDED tier) hardware to prevent print failures from CPU contention with Klipper. Users upgrading with Flying Toasters still enabled on these tiers are migrated to Off with a one-time notification; the setting can be re-enabled under Settings → Display. When re-enabled on these tiers, the screensaver runs at a reduced frame rate (~7 fps) with fewer sprites (Flying Toasters capped at 10) to stay out of the print loop's way.
+
+### Fixed
+- AD5X identify-wizard sleep regression: removed the wizard block that force-wrote stale pre-#431 display values on every confirmation. New v14→v15 config migration restores the AD5X backlight-off sleep preset for users polluted by the pre-fix wizard. Resolves the "random RGB colors during sleep" symptom documented in `FLASHFORGE_AD5X_SUPPORT.md`.
+- AFC `LANE_UNLOAD` requests are now serialized: tapping Eject on multiple lanes in quick succession queues the requests and runs them one-at-a-time instead of overlapping AFC macros. Mitigates Turtle_1 "Timer too close" shutdowns from competing stepper / LED-animation work.
+
 ## [0.99.49] - 2026-04-26
 
 A targeted hotfix release for AD5X (ZMOD firmware) and other platforms with aggressive supervisor lifecycles. Real-time triage of bundle EE8X6GSK plus a live SSH session on the affected printer revealed a crash-loop chain combining three independent bugs: ZMOD's display-handoff Klipper macro periodically `killall`s helix-screen, our SIGTERM handler ran the full `Application::shutdown()` teardown, the teardown crashed with SIGBUS in late-stage cleanup (the crash handler was uninstalled in the first line of `shutdown()`, so no diagnostic landed on disk), and the watchdog burned through restart credits leaving a blank screen. All three sides are now hardened.
