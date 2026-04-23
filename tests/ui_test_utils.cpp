@@ -797,6 +797,13 @@ std::string get_helix_cache_dir(const std::string& subdir) {
     return path;
 }
 
+// Stub for app_get_install_root (tests don't have a resolvable install layout)
+// Returns empty string — matches the production fallback when the exe is not
+// under a recognized /bin or /build/bin directory.
+std::string app_get_install_root() {
+    return "";
+}
+
 // Stub for get_moonraker_manager (tests don't have manager)
 MoonrakerManager* get_moonraker_manager() {
     return nullptr;

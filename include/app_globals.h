@@ -295,3 +295,13 @@ std::function<void()> get_wizard_cancel_callback();
  * @return Full path to cache directory, or empty string on failure
  */
 std::string get_helix_cache_dir(const std::string& subdir);
+
+/**
+ * @brief Returns the installation root directory (containing bin/, ui_xml/, assets/).
+ *
+ * Derived from the cached executable path populated by app_store_argv().
+ * Returns empty string if the path cannot be resolved (e.g., executable is
+ * not under a recognized /bin or /build/bin directory).
+ * Result is cached after first call.
+ */
+std::string app_get_install_root();

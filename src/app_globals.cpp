@@ -21,6 +21,7 @@
 #include "ui_modal.h"
 
 #include "config.h"
+#include "data_root_resolver.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
 #include "printer_state.h"
@@ -428,4 +429,11 @@ std::string get_helix_cache_dir(const std::string& subdir) {
 
     spdlog::error("[App Globals] Failed to create cache directory for '{}'", subdir);
     return "";
+}
+
+std::string app_get_install_root() {
+    static const std::string cached = []() {
+        return helix::resolve_data_root_from_exe(g_executable_path);
+    }();
+    return cached;
 }
