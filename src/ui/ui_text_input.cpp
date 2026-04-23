@@ -14,6 +14,7 @@
 
 #include "ui_text_input.h"
 
+#include "theme_manager.h"
 #include "ui_fonts.h"
 #include "ui_icon_codepoints.h"
 #include "ui_keyboard_manager.h"
@@ -217,6 +218,11 @@ static void* ui_text_input_create(lv_xml_parser_state_t* state, const char** att
     LV_UNUSED(attrs);
     lv_obj_t* parent = static_cast<lv_obj_t*>(lv_xml_state_get_parent(state));
     lv_obj_t* textarea = lv_textarea_create(parent);
+
+    // Resolve text_font at creation so forced style refreshes (e.g. theme preview)
+    // cannot catch inner label/placeholder/cursor children with a NULL font, which
+    // crashes lv_font_get_line_height() during layout recalculation.
+    lv_obj_set_style_text_font(textarea, theme_manager_get_font("font_body"), LV_PART_MAIN);
 
     // Apply responsive padding for consistent height across screen sizes
     const char* pad_ver = lv_xml_get_const(nullptr, "space_md");
