@@ -19,7 +19,6 @@
 
 #include "app_constants.h"
 #include "asset_manager.h"
-#include "http_executor.h"
 #include "cjk_font_manager.h"
 #include "translation_loader.h"
 #include "config.h"
@@ -28,6 +27,7 @@
 #include "environment_config.h"
 #include "hardware_validator.h"
 #include "helix_version.h"
+#include "http_executor.h"
 #include "job_queue_state.h"
 #include "keyboard_shortcuts.h"
 #include "layout_manager.h"
@@ -2890,6 +2890,14 @@ int Application::main_loop() {
     loop_config.benchmark_report_interval_ms = 5000;
     m_loop_handler.init(loop_config, start_time);
 
+    // Show one-time post-migration notice before entering the main loop.
+    // Splash handoff timing risk on target hardware (AD5M, Pi 3B) is theoretical —
+    // verify on real hardware as part of Task 5 manual checks. If it's an issue,
+    // move this call after the post-splash refresh block or defer via lv_async_call.
+#ifdef HELIX_ENABLE_SCREENSAVER
+    show_screensaver_migration_notice_if_pending();
+#endif
+
     // Main event loop
     while (lv_display_get_next(nullptr) && !app_quit_requested()) {
         uint32_t current_tick = DisplayManager::get_ticks();
@@ -3093,6 +3101,36 @@ void Application::on_enter_foreground() {
 
     spdlog::info("[Application] Foreground resume complete");
 }
+
+#ifdef HELIX_ENABLE_SCREENSAVER
+void Application::show_screensaver_migration_notice_if_pending() {
+    auto* cfg = Config::get_instance();
+    if (!cfg)
+        return;
+
+    if (!cfg->exists("/display/screensaver_migration_notice_pending")) {
+        return;
+    }
+    bool pending = cfg->get<bool>("/display/screensaver_migration_notice_pending", false);
+    if (!pending)
+        return;
+
+    spdlog::info("[Application] Showing one-time screensaver migration notice");
+
+    helix::ui::modal_show_alert(
+        lv_tr("Screensaver disabled"),
+        lv_tr("The animated screensaver has been turned off on this device to prevent "
+              "it from interfering with prints. You can re-enable it in "
+              "Settings > Display."),
+        ModalSeverity::Info, lv_tr("OK"));
+
+    // Clear the flag so this notice never appears again.
+    cfg->set<bool>("/display/screensaver_migration_notice_pending", false);
+    cfg->save();
+    spdlog::info("[Screensaver] Post-migration notice shown and dismissed; "
+                 "flag cleared and persisted");
+}
+#endif // HELIX_ENABLE_SCREENSAVER
 
 void Application::handle_keyboard_shortcuts() {
 #ifdef HELIX_DISPLAY_SDL
