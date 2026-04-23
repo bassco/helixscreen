@@ -172,6 +172,15 @@ class PanelWidgetConfig {
     /// assets/config/panel_widgets/<preset>/<panel_id>.json. Returns true if a
     /// seed was found and applied. Used only on fresh installs (no saved config).
     bool try_populate_from_preset_seed();
+
+    /// One-shot migration for installs stuck in the pre-ef580203d state where
+    /// the filament widget captured a grid cell before ams_slot_count reported
+    /// live, leaving the ams widget enabled but at (-1,-1) with no way to
+    /// surface it. If that exact pattern is detected on any page, swap ams
+    /// into filament's grid position and disable filament. Self-gating: the
+    /// condition no longer holds after the swap. No-op on every other layout.
+    /// Returns true if any page was mutated.
+    bool migrate_stuck_ams_filament_swap();
 };
 
 } // namespace helix

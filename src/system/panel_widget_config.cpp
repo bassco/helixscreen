@@ -184,6 +184,10 @@ void PanelWidgetConfig::load() {
             save();
         }
 
+        if (panel_id_ == "home" && migrate_stuck_ams_filament_swap()) {
+            save();
+        }
+
         loaded_ = true;
         return;
     }
@@ -213,6 +217,10 @@ void PanelWidgetConfig::load() {
         page.widgets = std::move(entries);
         pages_.push_back(std::move(page));
         next_page_id_ = 1;
+
+        if (panel_id_ == "home") {
+            migrate_stuck_ams_filament_swap();
+        }
 
         // Migrate to new format on disk
         save();
@@ -643,6 +651,37 @@ std::vector<PanelWidgetEntry> PanelWidgetConfig::build_default_grid() {
     }
 
     return result;
+}
+
+bool PanelWidgetConfig::migrate_stuck_ams_filament_swap() {
+    bool mutated = false;
+    for (auto& page : pages_) {
+        PanelWidgetEntry* ams = nullptr;
+        PanelWidgetEntry* fil = nullptr;
+        for (auto& entry : page.widgets) {
+            if (entry.id == "ams")
+                ams = &entry;
+            else if (entry.id == "filament")
+                fil = &entry;
+        }
+        if (!ams || !fil)
+            continue;
+        if (!ams->enabled || ams->has_grid_position())
+            continue;
+        if (!fil->enabled || !fil->has_grid_position())
+            continue;
+
+        spdlog::info("[PanelWidgetConfig] Migrating stuck ams/filament on page '{}': "
+                     "ams(-1,-1) + filament({},{}) → ams({},{}), filament disabled",
+                     page.id, fil->col, fil->row, fil->col, fil->row);
+        ams->col = fil->col;
+        ams->row = fil->row;
+        fil->enabled = false;
+        fil->col = -1;
+        fil->row = -1;
+        mutated = true;
+    }
+    return mutated;
 }
 
 bool PanelWidgetConfig::is_grid_format() const {

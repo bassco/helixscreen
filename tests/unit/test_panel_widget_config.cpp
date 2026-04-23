@@ -1699,3 +1699,207 @@ TEST_CASE_METHOD(PanelWidgetConfigFixture,
     REQUIRE_FALSE(wc.remove_page(99));
     REQUIRE(wc.page_count() == 2);
 }
+
+// ============================================================================
+// migrate_stuck_ams_filament_swap — repair for pre-ef580203d stuck state
+// ============================================================================
+
+namespace {
+
+/// Find an entry by id within a vector. Returns nullptr if missing.
+const PanelWidgetEntry* find_entry(const std::vector<PanelWidgetEntry>& v, const char* id) {
+    auto it = std::find_if(v.begin(), v.end(),
+                           [id](const PanelWidgetEntry& e) { return e.id == id; });
+    return it == v.end() ? nullptr : &*it;
+}
+
+} // namespace
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: stuck ams(-1,-1) + filament placed → swap",
+                 "[panel_widget][widget_config][migration]") {
+    // Exact pattern from bundle C4XWB3ET: ams enabled but unplaced,
+    // filament enabled at (3,3) grid position.
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+        {{"id", "printer_image"}, {"enabled", true}, {"col", 0}, {"row", 0}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto* ams = find_entry(wc.entries(), "ams");
+    const auto* fil = find_entry(wc.entries(), "filament");
+    REQUIRE(ams);
+    REQUIRE(fil);
+    REQUIRE(ams->enabled);
+    REQUIRE(ams->col == 3);
+    REQUIRE(ams->row == 3);
+    REQUIRE_FALSE(fil->enabled);
+    REQUIRE(fil->col == -1);
+    REQUIRE(fil->row == -1);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration is self-gating on subsequent load",
+                 "[panel_widget][widget_config][migration]") {
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc1("home", config);
+    wc1.load();
+
+    // Second load on the now-migrated config should leave state untouched.
+    PanelWidgetConfig wc2("home", config);
+    wc2.load();
+
+    const auto* ams = find_entry(wc2.entries(), "ams");
+    const auto* fil = find_entry(wc2.entries(), "filament");
+    REQUIRE(ams);
+    REQUIRE(fil);
+    REQUIRE(ams->col == 3);
+    REQUIRE(ams->row == 3);
+    REQUIRE_FALSE(fil->enabled);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration no-op when ams is disabled",
+                 "[panel_widget][widget_config][migration]") {
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", false}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto* fil = find_entry(wc.entries(), "filament");
+    REQUIRE(fil);
+    REQUIRE(fil->enabled);
+    REQUIRE(fil->col == 3);
+    REQUIRE(fil->row == 3);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration no-op when ams already placed",
+                 "[panel_widget][widget_config][migration]") {
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", 2}, {"row", 1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto* ams = find_entry(wc.entries(), "ams");
+    const auto* fil = find_entry(wc.entries(), "filament");
+    REQUIRE(ams);
+    REQUIRE(fil);
+    REQUIRE(ams->col == 2);
+    REQUIRE(ams->row == 1);
+    REQUIRE(fil->enabled);
+    REQUIRE(fil->col == 3);
+    REQUIRE(fil->row == 3);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration no-op when filament is disabled",
+                 "[panel_widget][widget_config][migration]") {
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", false}, {"col", 3}, {"row", 3}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto* ams = find_entry(wc.entries(), "ams");
+    REQUIRE(ams);
+    REQUIRE(ams->col == -1);
+    REQUIRE(ams->row == -1);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration no-op when filament is unplaced",
+                 "[panel_widget][widget_config][migration]") {
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+    });
+    setup_with_pages({{"main", widgets}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto* ams = find_entry(wc.entries(), "ams");
+    const auto* fil = find_entry(wc.entries(), "filament");
+    REQUIRE(ams);
+    REQUIRE(fil);
+    REQUIRE(ams->col == -1);
+    REQUIRE(fil->col == -1);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration per-page on multi-page home",
+                 "[panel_widget][widget_config][migration][multipage]") {
+    json page0 = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+    });
+    // Page 1 has filament placed but ams disabled — must be left alone
+    json page1 = json::array({
+        {{"id", "ams"}, {"enabled", false}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 1}, {"row", 2}},
+    });
+    setup_with_pages({{"main", page0}, {"extra", page1}});
+
+    PanelWidgetConfig wc("home", config);
+    wc.load();
+
+    const auto& p0 = wc.page_entries(0);
+    const auto& p1 = wc.page_entries(1);
+    const auto* p0_ams = find_entry(p0, "ams");
+    const auto* p0_fil = find_entry(p0, "filament");
+    const auto* p1_fil = find_entry(p1, "filament");
+    REQUIRE(p0_ams);
+    REQUIRE(p0_fil);
+    REQUIRE(p1_fil);
+    REQUIRE(p0_ams->col == 3);
+    REQUIRE(p0_ams->row == 3);
+    REQUIRE_FALSE(p0_fil->enabled);
+    // page 1 untouched
+    REQUIRE(p1_fil->enabled);
+    REQUIRE(p1_fil->col == 1);
+    REQUIRE(p1_fil->row == 2);
+}
+
+TEST_CASE_METHOD(PanelWidgetConfigFixture,
+                 "PanelWidgetConfig: migration does not run for non-home panels",
+                 "[panel_widget][widget_config][migration]") {
+    // Same stuck pattern but for a non-home panel should be a no-op —
+    // only home grid has the filament/ams swap convention.
+    json widgets = json::array({
+        {{"id", "ams"}, {"enabled", true}, {"col", -1}, {"row", -1}},
+        {{"id", "filament"}, {"enabled", true}, {"col", 3}, {"row", 3}},
+    });
+    setup_with_pages({{"main", widgets}}, 0, -1, "other_panel");
+
+    PanelWidgetConfig wc("other_panel", config);
+    wc.load();
+
+    const auto* ams = find_entry(wc.entries(), "ams");
+    const auto* fil = find_entry(wc.entries(), "filament");
+    REQUIRE(ams);
+    REQUIRE(fil);
+    REQUIRE(ams->col == -1);
+    REQUIRE(fil->enabled);
+    REQUIRE(fil->col == 3);
+}
