@@ -13,6 +13,7 @@
 
 #include "config.h"
 #include "ethernet_manager.h"
+#include "system/crash_handler.h"
 #include "lvgl/lvgl.h"
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
@@ -211,6 +212,7 @@ void WizardWifiStep::update_ethernet_status() {
     }
 
     // Async probe — callback returns on worker thread; marshal to UI via tok.defer().
+    crash_handler::breadcrumb::note("wifi", "eth_probe_fire");
     auto tok = lifetime_.token();
     ethernet_manager_->get_info_async([this, tok](const EthernetInfo& info) {
         if (tok.expired()) return;
@@ -225,7 +227,11 @@ void WizardWifiStep::update_ethernet_status() {
             // been invalidated yet. If we revisit this step, init_subjects()
             // will re-seed ethernet_status_ to "Checking..."; there's nothing
             // to lose by skipping a stale update.
-            if (cleanup_called_ || !screen_root_) return;
+            if (cleanup_called_ || !screen_root_) {
+                crash_handler::breadcrumb::note("wifi", "eth_apply_skip");
+                return;
+            }
+            crash_handler::breadcrumb::note("wifi", "eth_apply_run");
             if (info_copy.connected) {
                 char status_buf[128];
                 snprintf(status_buf, sizeof(status_buf), lv_tr("Connected (%s)"),
@@ -250,9 +256,12 @@ void WizardWifiStep::update_ethernet_status() {
 
 void WizardWifiStep::populate_network_list(const std::vector<WiFiNetwork>& networks) {
     spdlog::debug("[{}] Populating network list with {} networks", get_name(), networks.size());
+    crash_handler::breadcrumb::note("wifi", "populate_begin",
+                                    static_cast<long>(networks.size()));
 
     if (!network_list_container_) {
         LOG_ERROR_INTERNAL("Network list container not found");
+        crash_handler::breadcrumb::note("wifi", "populate_skip_no_container");
         return;
     }
 
@@ -373,6 +382,8 @@ void WizardWifiStep::populate_network_list(const std::vector<WiFiNetwork>& netwo
     spdlog::trace("[{}] Restored scroll position: {}px", get_name(), scroll_y);
 
     spdlog::debug("[{}] Populated {} network items", get_name(), sorted_networks.size());
+    crash_handler::breadcrumb::note("wifi", "populate_end",
+                                    static_cast<long>(sorted_networks.size()));
 }
 
 void WizardWifiStep::clear_network_list() {
@@ -795,6 +806,7 @@ void WizardWifiStep::register_callbacks() {
 
 lv_obj_t* WizardWifiStep::create(lv_obj_t* parent) {
     spdlog::debug("[{}] Creating WiFi setup screen", get_name());
+    crash_handler::breadcrumb::note("wifi", "create_enter");
 
     // Reset cleanup flag when (re)creating the screen
     cleanup_called_ = false;
@@ -812,12 +824,15 @@ lv_obj_t* WizardWifiStep::create(lv_obj_t* parent) {
         spdlog::debug("[{}] Registered wifi_network_item component", get_name());
     }
 
+    crash_handler::breadcrumb::note("wifi", "xml_create");
     screen_root_ = static_cast<lv_obj_t*>(lv_xml_create(parent, "wizard_wifi_setup", nullptr));
 
     if (!screen_root_) {
         LOG_ERROR_INTERNAL("Failed to create wizard_wifi_setup from XML");
+        crash_handler::breadcrumb::note("wifi", "xml_create_null");
         return nullptr;
     }
+    crash_handler::breadcrumb::note("wifi", "xml_create_ok");
 
     network_list_container_ = lv_obj_find_by_name(screen_root_, "network_list_container");
     if (!network_list_container_) {
@@ -830,6 +845,7 @@ lv_obj_t* WizardWifiStep::create(lv_obj_t* parent) {
     lv_obj_update_layout(screen_root_);
 
     spdlog::debug("[{}] WiFi screen created successfully", get_name());
+    crash_handler::breadcrumb::note("wifi", "create_ok");
     return screen_root_;
 }
 
@@ -839,6 +855,7 @@ lv_obj_t* WizardWifiStep::create(lv_obj_t* parent) {
 
 void WizardWifiStep::init_wifi_manager() {
     spdlog::debug("[{}] Initializing WiFi and Ethernet managers", get_name());
+    crash_handler::breadcrumb::note("wifi", "init_mgr_enter");
 
     wifi_manager_ = get_wifi_manager();
 
@@ -889,6 +906,7 @@ void WizardWifiStep::init_wifi_manager() {
 
             // Start a scan to populate the network list
             lv_subject_set_int(&wifi_scanning_, 1);
+            crash_handler::breadcrumb::note("wifi", "scan_fire");
             auto token = lifetime_.token();
             wifi_manager_->start_scan([this, token](const std::vector<WiFiNetwork>& networks) {
                 if (token.expired()) {
@@ -899,7 +917,12 @@ void WizardWifiStep::init_wifi_manager() {
                 cached_networks_ = networks;
                 // Marshal to UI thread via token.defer() — TOCTOU-safe lifetime
                 // guard + UI thread safety
-                token.defer([this]() {
+                token.defer("WizardWifiStep::apply_scan", [this]() {
+                    if (cleanup_called_ || !screen_root_) {
+                        crash_handler::breadcrumb::note("wifi", "scan_apply_skip");
+                        return;
+                    }
+                    crash_handler::breadcrumb::note("wifi", "scan_apply_run");
                     lv_subject_set_int(&wifi_scanning_, 0);
                     if (!cached_networks_.empty()) {
                         populate_network_list(cached_networks_);
@@ -912,6 +935,7 @@ void WizardWifiStep::init_wifi_manager() {
     }
 
     spdlog::debug("[{}] WiFi and Ethernet managers initialized", get_name());
+    crash_handler::breadcrumb::note("wifi", "init_mgr_ok");
 }
 
 // ============================================================================
@@ -977,6 +1001,7 @@ void WizardWifiStep::hide_password_modal() {
 
 void WizardWifiStep::cleanup() {
     spdlog::debug("[{}] Cleaning up WiFi screen", get_name());
+    crash_handler::breadcrumb::note("wifi", "cleanup_enter");
 
     // Mark as cleaned up FIRST to invalidate any pending async callbacks
     cleanup_called_ = true;
@@ -1003,4 +1028,5 @@ void WizardWifiStep::cleanup() {
     current_network_is_secured_ = false;
 
     spdlog::debug("[{}] Cleanup complete", get_name());
+    crash_handler::breadcrumb::note("wifi", "cleanup_ok");
 }
