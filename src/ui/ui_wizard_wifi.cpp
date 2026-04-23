@@ -216,6 +216,16 @@ void WizardWifiStep::update_ethernet_status() {
         if (tok.expired()) return;
         EthernetInfo info_copy = info;
         tok.defer("WizardWifiStep::apply_ethernet_status", [this, info_copy]() {
+            // Belt-and-suspenders: tok.defer already skips on generation
+            // mismatch, but queue_prev=apply_ethernet_status shows up in
+            // heap-corruption crashes on wizard step revisit across two
+            // distinct users/platforms (v0.99.43 MCPKABEE ad5x, QLCCZKRQ
+            // pi32). Guard against the window where the step's widgets are
+            // torn down but a fresh token from init_wifi_manager hasn't
+            // been invalidated yet. If we revisit this step, init_subjects()
+            // will re-seed ethernet_status_ to "Checking..."; there's nothing
+            // to lose by skipping a stale update.
+            if (cleanup_called_ || !screen_root_) return;
             if (info_copy.connected) {
                 char status_buf[128];
                 snprintf(status_buf, sizeof(status_buf), lv_tr("Connected (%s)"),
