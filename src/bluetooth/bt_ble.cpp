@@ -374,30 +374,58 @@ extern "C" int helix_bt_connect_ble(helix_bt_context* ctx, const char* mac,
     bool fatal_connect_failure = false;
 
     // Step 1: Connect() to the device.
-    try {
-        ctx->bus_thread->run_sync([&](sd_bus* bus) {
-            sd_bus_error error = SD_BUS_ERROR_NULL;
-            r = sd_bus_call_method(bus,
-                                   "org.bluez",
-                                   device_path.c_str(),
-                                   "org.bluez.Device1",
-                                   "Connect",
-                                   &error,
-                                   nullptr,
-                                   "");
-            if (r < 0 &&
-                !sd_bus_error_has_name(&error, "org.bluez.Error.AlreadyConnected")) {
-                err = error.message ? error.message : "BLE connect failed";
-                fatal_connect_failure = true;
-            } else {
-                r = 0;
-            }
-            sd_bus_error_free(&error);
-        });
-    } catch (const std::exception& e) {
-        err = e.what();
-        r = -EIO;
-        fatal_connect_failure = true;
+    //
+    // org.bluez.Device1.Connect() lets BlueZ pick transport (BR/EDR first when
+    // the device is cached as dual-mode). For BLE-only devices that were
+    // previously paired classic or whose advertising confuses BlueZ, this
+    // produces "br-connection-profile-unavailable" even though the LE GATT
+    // service is present. When we detect that failure mode we retry with
+    // ConnectProfile(write_uuid), which forces the LE transport for the
+    // specific GATT characteristic UUID we actually care about.
+    auto do_connect = [&](const char* method, const char* signature,
+                          const char* uuid_arg) {
+        err.clear();
+        fatal_connect_failure = false;
+        try {
+            ctx->bus_thread->run_sync([&](sd_bus* bus) {
+                sd_bus_error error = SD_BUS_ERROR_NULL;
+                if (signature && uuid_arg) {
+                    r = sd_bus_call_method(bus, "org.bluez", device_path.c_str(),
+                                           "org.bluez.Device1", method, &error,
+                                           nullptr, signature, uuid_arg);
+                } else {
+                    r = sd_bus_call_method(bus, "org.bluez", device_path.c_str(),
+                                           "org.bluez.Device1", method, &error,
+                                           nullptr, "");
+                }
+                if (r < 0 &&
+                    !sd_bus_error_has_name(&error, "org.bluez.Error.AlreadyConnected")) {
+                    err = error.message ? error.message : "BLE connect failed";
+                    fatal_connect_failure = true;
+                } else {
+                    r = 0;
+                }
+                sd_bus_error_free(&error);
+            });
+        } catch (const std::exception& e) {
+            err = e.what();
+            r = -EIO;
+            fatal_connect_failure = true;
+        }
+    };
+
+    do_connect("Connect", nullptr, nullptr);
+
+    // Known BlueZ BR/EDR transport failures — fall back to ConnectProfile(uuid)
+    // which is LE-only for GATT service UUIDs. Strings come from
+    // btd_error_*() in bluez's src/error.c and all carry the "br-connection-"
+    // prefix.
+    if (fatal_connect_failure &&
+        err.find("br-connection-") != std::string::npos) {
+        fprintf(stderr,
+                "[bt] Device1.Connect failed (%s), retrying via ConnectProfile(%s)\n",
+                err.c_str(), write_uuid);
+        do_connect("ConnectProfile", "s", write_uuid);
     }
 
     if (fatal_connect_failure) {
