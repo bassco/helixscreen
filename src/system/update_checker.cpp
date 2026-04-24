@@ -363,31 +363,6 @@ void populate_release_urls_from_manifest(const json& platform_asset,
 }
 
 /**
- * @brief Resolve the install root directory from /proc/self/exe.
- *
- * Strips /bin/helix-screen from the exe path to get the install root
- * (e.g., /home/pbrown/helixscreen).  Returns empty string on failure.
- */
-std::string resolve_install_root() {
-    char exe_buf[PATH_MAX] = {};
-    ssize_t exe_len = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
-    if (exe_len <= 0) {
-        return {};
-    }
-    exe_buf[exe_len] = '\0';
-    std::string exe_path(exe_buf);
-    auto slash = exe_path.rfind('/');
-    if (slash == std::string::npos) {
-        return {};
-    }
-    std::string bin_dir = exe_path.substr(0, slash);
-    if (bin_dir.size() >= 4 && bin_dir.substr(bin_dir.size() - 4) == "/bin") {
-        return bin_dir.substr(0, bin_dir.size() - 4);
-    }
-    return {};
-}
-
-/**
  * @brief Execute a command safely via fork/exec (no shell interpretation)
  *
  * Avoids command injection by bypassing the shell entirely.
@@ -503,7 +478,7 @@ int safe_exec(const std::vector<std::string>& args, bool capture_stderr = false)
  * up at startup since we know the new version launched successfully.
  */
 void cleanup_stale_old_install() {
-    std::string install_root = resolve_install_root();
+    std::string install_root = app_get_install_root();
     if (install_root.empty()) {
         return;
     }
@@ -1299,9 +1274,9 @@ void UpdateChecker::do_install(const std::string& tarball_path) {
     report_download_status(DownloadStatus::Installing, 100, "");
 
     // Resolve install root BEFORE install.sh runs.  After the installer swaps
-    // the directory, /proc/self/exe shows "(deleted)" and resolve_install_root()
+    // the directory, /proc/self/exe shows "(deleted)" and app_get_install_root()
     // fails.  We need this path to chdir() after install.sh finishes (see below).
-    const std::string install_root = resolve_install_root();
+    const std::string install_root = app_get_install_root();
 
     // Safety net: copy config to fallback dir BEFORE calling install.sh.
     // The installer backs up config to TMP_DIR, but under systemd's PrivateTmp=true
@@ -1758,10 +1733,10 @@ void UpdateChecker::handle_external_update_complete() {
 
     if (!supervised) {
         // No watchdog/systemd — fork+exec the new binary before exiting.
-        // resolve_install_root() strips the " (deleted)" suffix from /proc/self/exe
+        // app_get_install_root() strips the " (deleted)" suffix from /proc/self/exe
         // to get the filesystem path where Moonraker extracted the new binary.
         char** argv = app_get_stored_argv();
-        std::string install_root = resolve_install_root();
+        std::string install_root = app_get_install_root();
         std::string bin_path = install_root.empty() ? "" : install_root + "/bin/helix-screen";
 
         if (!bin_path.empty() && argv) {
