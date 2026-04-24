@@ -247,6 +247,7 @@ translations:
   CRITICAL: CRITICAL
   CURRENT SELECTION: CURRENT SELECTION
   CUSTOM IMAGES: CUSTOM IMAGES
+  Cache Dir: Cache Dir
   Calibrate: Calibrate
   Calibrate All: Calibrate All
   Calibrate X: Calibrate X
@@ -351,6 +352,7 @@ translations:
   Completed: Completed
   Completed prints will appear here: Completed prints will appear here
   Computing calibration...: Computing calibration...
+  Config Dir: Config Dir
   Confirm before running macros: Confirm before running macros
   Config-defined (read-only): Config-defined (read-only)
   Configuration added successfully.: Configuration added successfully.
@@ -827,6 +829,7 @@ translations:
   Install: Install
   Install HelixPrint Plugin: Install HelixPrint Plugin
   Install Plugin: Install Plugin
+  Install Root: Install Root
   Install Update: Install Update
   'Install the HelixPrint plugin to enable fast G-code modifications. Run this command via SSH on your printer:': 'Install the HelixPrint plugin to enable fast G-code modifications. Run this command via SSH on your printer:'
   Install the timelapse plugin via SSH,\nthen tap \"Check Again\".: Install the timelapse plugin via SSH,\nthen tap \"Check Again\".

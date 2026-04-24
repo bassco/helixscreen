@@ -247,6 +247,7 @@
   <translation tag="CRITICAL" en="CRITICAL"/>
   <translation tag="CURRENT SELECTION" en="CURRENT SELECTION"/>
   <translation tag="CUSTOM IMAGES" en="CUSTOM IMAGES"/>
+  <translation tag="Cache Dir" en="Cache Dir"/>
   <translation tag="Calibrate" en="Calibrate"/>
   <translation tag="Calibrate All" en="Calibrate All"/>
   <translation tag="Calibrate X" en="Calibrate X"/>
@@ -351,6 +352,7 @@
   <translation tag="Completed" en="Completed"/>
   <translation tag="Completed prints will appear here" en="Completed prints will appear here"/>
   <translation tag="Computing calibration..." en="Computing calibration..."/>
+  <translation tag="Config Dir" en="Config Dir"/>
   <translation tag="Config-defined (read-only)" en="Config-defined (read-only)"/>
   <translation tag="Configuration added successfully." en="Configuration added successfully."/>
   <translation tag="Configuration already present." en="Configuration already present."/>
@@ -826,6 +828,7 @@
   <translation tag="Install" en="Install"/>
   <translation tag="Install HelixPrint Plugin" en="Install HelixPrint Plugin"/>
   <translation tag="Install Plugin" en="Install Plugin"/>
+  <translation tag="Install Root" en="Install Root"/>
   <translation tag="Install Update" en="Install Update"/>
   <translation tag="Install the HelixPrint plugin to enable fast G-code modifications. Run this command via SSH on your printer:" en="Install the HelixPrint plugin to enable fast G-code modifications. Run this command via SSH on your printer:"/>
   <translation tag="Install the timelapse plugin via SSH,\nthen tap \&quot;Check Again\&quot;." en="Install the timelapse plugin via SSH,\nthen tap \&quot;Check Again\&quot;."/>
