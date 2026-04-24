@@ -120,6 +120,16 @@ void AboutSettingsOverlay::init_subjects() {
                  "\xc2\xa9 2025\xe2\x80\x93%s 356C LLC", compile_year);
         UI_MANAGED_SUBJECT_STRING(about_copyright_subject_, about_copyright_buf_,
                                   about_copyright_buf_, "about_copyright", subjects_);
+
+        UI_MANAGED_SUBJECT_STRING(install_root_value_subject_, install_root_value_buf_,
+                                  app_get_install_root().c_str(),
+                                  "install_root_value", subjects_);
+        UI_MANAGED_SUBJECT_STRING(config_dir_value_subject_, config_dir_value_buf_,
+                                  app_get_config_dir().c_str(),
+                                  "config_dir_value", subjects_);
+        UI_MANAGED_SUBJECT_STRING(cache_dir_value_subject_, cache_dir_value_buf_,
+                                  app_get_cache_dir().c_str(),
+                                  "cache_dir_value", subjects_);
     });
 }
 
