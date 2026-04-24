@@ -100,7 +100,7 @@
         <bind_flag_if_eq subject="settings_is_android" flag="hidden" ref_value="1"/>
         <setting_info_row name="row_install_root"
                           label="Install Root" label_tag="Install Root"
-                          icon="folder">
+                          icon="folder_home">
           <text_muted name="value" bind_text="install_root_value"/>
         </setting_info_row>
       </lv_obj>

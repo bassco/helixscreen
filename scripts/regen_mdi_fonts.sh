@@ -253,6 +253,7 @@ MDI_ICONS+=",0xF0E4F"    # lightbulb-off
 # Folder navigation icons (for file browser)
 MDI_ICONS+=",0xF19F0"    # folder-arrow-up (parent directory)
 MDI_ICONS+=",0xF19F3"    # folder-arrow-up-outline
+MDI_ICONS+=",0xF10B5"    # folder-home (install root in About)
 
 # Graduated lightbulb icons (brightness levels)
 MDI_ICONS+=",0xF0336"    # lightbulb-outline (OFF state)
