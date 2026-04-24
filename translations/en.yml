@@ -66,7 +66,6 @@ translations:
   = Tighten: = Tighten
   ABS: ABS
   ACCELEROMETERS: ACCELEROMETERS
-  ACE: ACE
   ACTIONS: ACTIONS
   ADXL: ADXL
   AFC: AFC
@@ -79,7 +78,6 @@ translations:
   AFC reset failed: AFC reset failed
   ALL DEVICES: ALL DEVICES
   AMS: AMS
-  AMS Management: AMS Management
   'AMS is busy: {}': 'AMS is busy: {}'
   AMS not available: AMS not available
   API not available: API not available
@@ -109,6 +107,7 @@ translations:
   Add Hidden Network: Add Hidden Network
   Add Vendor: Add Vendor
   Add Widget: Add Widget
+  Added to Spoolman: Added to Spoolman
   Address: Address
   Adjust screen brightness level: Adjust screen brightness level
   Adjust screws, then re-probe.: Adjust screws, then re-probe.
@@ -124,6 +123,7 @@ translations:
   All axes homed: All axes homed
   Allow display to sleep during active prints: Allow display to sleep during active prints
   Allwinner: Allwinner
+  Already connecting — wait a moment and try again: Already connecting — wait a moment and try again
   Ambient Transfer: Ambient Transfer
   An accelerometer was detected on your printer.: An accelerometer was detected on your printer.
   An error occurred during calibration.: An error occurred during calibration.
@@ -152,7 +152,6 @@ translations:
   Auto-Detect: Auto-Detect
   Auto-Heat on Load: Auto-Heat on Load
   Auto-detect: Auto-detect
-  Auto-detect (default): Auto-detect (default)
   Auto-lock: Auto-lock
   Auto-poll for weight updates: Auto-poll for weight updates
   Auto-probe or manually check screw heights: Auto-probe or manually check screw heights
@@ -202,6 +201,7 @@ translations:
   Black: Black
   Bluetooth: Bluetooth
   Bluetooth initialization failed: Bluetooth initialization failed
+  Bluetooth is not available on this device: Bluetooth is not available on this device
   Bluetooth not available: Bluetooth not available
   Bluetooth not initialized: Bluetooth not initialized
   Bluetooth printer forgotten: Bluetooth printer forgotten
@@ -269,6 +269,7 @@ translations:
   Calibration started: Calibration started
   Calibration timed out. Please try again.: Calibration timed out. Please try again.
   Camera: Camera
+  Can't connect — try forgetting and re-pairing the printer: Can't connect — try forgetting and re-pairing the printer
   Cancel: Cancel
   Cancel Escalation: Cancel Escalation
   Cancel Print: Cancel Print
@@ -297,12 +298,10 @@ translations:
   Chamber heater not found in printer configuration: Chamber heater not found in printer configuration
   Chamber heating to %d°C...: Chamber heating to %d°C...
   Chamber target set to {}°C: Chamber target set to {}°C
-  'Chamber:': 'Chamber:'
   Change: Change
   Change LED color based on printer state: Change LED color based on printer state
   Change PIN: Change PIN
   Change Printer Host: Change Printer Host
-  Change Saved Spool: Change Saved Spool
   Changes apply immediately. Adjust during print for tuning.: Changes apply immediately. Adjust during print for tuning.
   Changes are temporary and reset on printer reboot: Changes are temporary and reset on printer reboot
   Changes can be reversed anytime using the Macro Viewer.: Changes can be reversed anytime using the Macro Viewer.
@@ -316,7 +315,6 @@ translations:
   Checking slots...: Checking slots...
   Checking timelapse plugin...: Checking timelapse plugin...
   Choose 12-hour or 24-hour time display: Choose 12-hour or 24-hour time display
-  Choose Saved Spool: Choose Saved Spool
   Choose Spool: Choose Spool
   Choose an existing filament, or tap + New to create one.: Choose an existing filament, or tap + New to create one.
   Choose display language: Choose display language
@@ -353,7 +351,6 @@ translations:
   Completed prints will appear here: Completed prints will appear here
   Computing calibration...: Computing calibration...
   Config Dir: Config Dir
-  Confirm before running macros: Confirm before running macros
   Config-defined (read-only): Config-defined (read-only)
   Configuration added successfully.: Configuration added successfully.
   Configuration already present.: Configuration already present.
@@ -372,6 +369,7 @@ translations:
   Configure timelapse recording: Configure timelapse recording
   Configure your printer's cooling fans: Configure your printer's cooling fans
   Configuring Moonraker...: Configuring Moonraker...
+  Confirm before running macros: Confirm before running macros
   Connect: Connect
   Connect a USB label printer first: Connect a USB label printer first
   Connect an ADXL345 accelerometer to calibrate: Connect an ADXL345 accelerometer to calibrate
@@ -400,7 +398,6 @@ translations:
   Console: Console
   Control optional print start features: Control optional print start features
   Control power relays and smart outlets: Control power relays and smart outlets
-  Control power switches and relays: Control power switches and relays
   Controlled by hardware sensor: Controlled by hardware sensor
   Controller: Controller
   Cool Down: Cool Down
@@ -409,7 +406,6 @@ translations:
   Copy Command: Copy Command
   Copy failed - use SSH manually: Copy failed - use SSH manually
   Corner roundness: Corner roundness
-  Corner roundness (0 = sharp, 40 = very round): Corner roundness (0 = sharp, 40 = very round)
   Correction (Ki): Correction (Ki)
   Could not analyze PRINT_START macro. Some print options may be unavailable.: Could not analyze PRINT_START macro. Some print options may be unavailable.
   Could not check webcam status.\nCheck printer connection.: Could not check webcam status.\nCheck printer connection.
@@ -417,6 +413,7 @@ translations:
   Could not reach Spoolman at: Could not reach Spoolman at
   Could not start Bluetooth discovery: Could not start Bluetooth discovery
   Could not verify Spoolman status. Moonraker may still be restarting.: Could not verify Spoolman status. Moonraker may still be restarting.
+  Couldn't update Spoolman — saved locally: Couldn't update Spoolman — saved locally
   Cover open: Cover open
   Crash report sent — thank you!: Crash report sent — thank you!
   Creality CFS: Creality CFS
@@ -490,7 +487,6 @@ translations:
   Dismiss: Dismiss
   Display & Sound: Display & Sound
   Display Mode: Display Mode
-  Display Settings: Display Settings
   Display Sleep: Display Sleep
   Do not power off your printer.: Do not power off your printer.
   Do not touch the printer during calibration: Do not touch the printer during calibration
@@ -637,7 +633,6 @@ translations:
   'Failed to resume print: {}': 'Failed to resume print: {}'
   'Failed to resume: {}': 'Failed to resume: {}'
   Failed to save LED configuration: Failed to save LED configuration
-  Failed to save changes to Spoolman: Failed to save changes to Spoolman
   Failed to save config.: Failed to save config.
   Failed to save configuration: Failed to save configuration
   Failed to save fan configuration: Failed to save fan configuration
@@ -734,7 +729,6 @@ translations:
   Gray: Gray
   Guides and reference: Guides and reference
   H: H
-  HELP & SUPPORT: HELP & SUPPORT
   HUMIDITY SENSORS: HUMIDITY SENSORS
   Hang on, we'll be right back!: Hang on, we'll be right back!
   Happy Hare MMU: Happy Hare MMU
@@ -765,7 +759,6 @@ translations:
   Heating Nozzle...: Heating Nozzle...
   Heating to %d\xC2\xB0C... %.0f\xC2\xB0C: Heating to %d\xC2\xB0C... %.0f\xC2\xB0C
   Heating to %d°C...: Heating to %d°C...
-  Heating to target...: Heating to target...
   Heating to {}°C for {}...: Heating to {}°C for {}...
   Heating to {}°C...: Heating to {}°C...
   Heating...: Heating...
@@ -776,7 +769,6 @@ translations:
   Help & About: Help & About
   Help Improve HelixScreen: Help Improve HelixScreen
   Help improve HelixScreen?: Help improve HelixScreen?
-  Higher = faster: Higher = faster
   Home: Home
   Home failed: Home failed
   Homing AFC system...: Homing AFC system...
@@ -839,7 +831,6 @@ translations:
   Installing...: Installing...
   Intensity: Intensity
   Interactive probe calibration: Interactive probe calibration
-  Interactive probe offset adjustment: Interactive probe offset adjustment
   'Internal error: no scan result': 'Internal error: no scan result'
   Invalid port number: Invalid port number
   Issue description: Issue description
@@ -864,7 +855,6 @@ translations:
   LED Settings: LED Settings
   LED Strip: LED Strip
   LED on at Start: LED on at Start
-  LED settings coming soon: LED settings coming soon
   LEDs: LEDs
   LEDs controlled by the light button: LEDs controlled by the light button
   LOADED: LOADED
@@ -892,10 +882,10 @@ translations:
   Leveling Gantry...: Leveling Gantry...
   Lifetime Print Stats: Lifetime Print Stats
   Light: Light
+  Listen to all theme sounds: Listen to all theme sounds
   Load: Load
   Load Filament: Load Filament
   'Load failed: {}': 'Load failed: {}'
-  Load filament macro not configured: Load filament macro not configured
   Load may still be running — response timed out: Load may still be running — response timed out
   Load the required filaments or start anyway?: Load the required filaments or start anyway?
   Loaded: Loaded
@@ -918,6 +908,7 @@ translations:
   Log Level: Log Level
   Loosen Path A belt.: Loosen Path A belt.
   Loosen Path B belt.: Loosen Path B belt.
+  Lost connection during print — try again: Lost connection during print — try again
   'Lot # (optional)': 'Lot # (optional)'
   Lot/Batch Nr: Lot/Batch Nr
   M to toggle: M to toggle
@@ -928,7 +919,6 @@ translations:
   MCU, host, and auxiliary temperature monitoring: MCU, host, and auxiliary temperature monitoring
   MDI Icons: MDI Icons
   MISSING CONFIGURED: MISSING CONFIGURED
-  MOTION: MOTION
   MPC: MPC
   Machine Limits: Machine Limits
   Macro: Macro
@@ -984,8 +974,6 @@ translations:
   Measure belt path frequencies: Measure belt path frequencies
   Measured: Measured
   Measurement Failed: Measurement Failed
-  Measuring thermal response...: Measuring thermal response...
-  Median: Median
   Memory (MB): Memory (MB)
   Mesh Complete: Mesh Complete
   Mesh saved as '{}': Mesh saved as '{}'
@@ -1012,14 +1000,12 @@ translations:
   Multi-Filament: Multi-Filament
   Multi-Filament Overview: Multi-Filament Overview
   Multi-Filament System Management: Multi-Filament System Management
-  'Multi-Filament:': 'Multi-Filament:'
   Multi-Material: Multi-Material
   Multi-Material System Detected: Multi-Material System Detected
   Must home axes first: Must home axes first
   My Custom Theme: My Custom Theme
   My Panel: My Panel
   NEWLY DISCOVERED: NEWLY DISCOVERED
-  NOTIFICATIONS: NOTIFICATIONS
   Name: Name
   Name (optional): Name (optional)
   Named actions in the LED control panel (long-press).: Named actions in the LED control panel (long-press).
@@ -1044,6 +1030,7 @@ translations:
   No AMS connected: No AMS connected
   No AMS system connected: No AMS system connected
   No AMS system connected.: No AMS system connected.
+  No Bluetooth printer selected — pick one in settings: No Bluetooth printer selected — pick one in settings
   No Bluetooth printers found: No Bluetooth printers found
   No Camera: No Camera
   No Filament Detected: No Filament Detected
@@ -1055,13 +1042,11 @@ translations:
   No Power Devices: No Power Devices
   No Spool: No Spool
   No Spools: No Spools
-  No USB HID devices detected.: No USB HID devices detected.
   No USB printers found: No USB printers found
   No buffer data available: No buffer data available
   No camera — use USB barcode scanner: No camera — use USB barcode scanner
   No changes selected.\n\nClick Cancel to close.: No changes selected.\n\nClick Cancel to close.
   No changes to revert: No changes to revert
-  No devices detected.: No devices detected.
   No dryer available. Store filament in a sealed dry box with desiccant for best results.: No dryer available. Store filament in a sealed dry box with desiccant for best results.
   No effects available: No effects available
   No events queued: No events queued
@@ -1089,6 +1074,7 @@ translations:
   No print history found: No print history found
   No print history yet: No print history yet
   No print start macro found: No print start macro found
+  No printer configured — check printer settings: No printer configured — check printer settings
   No printer connection: No printer connection
   No printers found: No printers found
   No prints yet: No prints yet
@@ -1125,11 +1111,6 @@ translations:
   Nozzle Temps: Nozzle Temps
   Nozzle heater turned off: Nozzle heater turned off
   Nozzle target set to {}°C: Nozzle target set to {}°C
-  'Nozzle too cold for extrude ({}°C, min: {}°C)': 'Nozzle too cold for extrude ({}°C, min: {}°C)'
-  'Nozzle too cold for filament load ({}°C, min: {}°C)': 'Nozzle too cold for filament load ({}°C, min: {}°C)'
-  'Nozzle too cold for filament unload ({}°C, min: {}°C)': 'Nozzle too cold for filament unload ({}°C, min: {}°C)'
-  'Nozzle too cold for purge ({}°C, min: {}°C)': 'Nozzle too cold for purge ({}°C, min: {}°C)'
-  'Nozzle too cold for retract ({}°C, min: {}°C)': 'Nozzle too cold for retract ({}°C, min: {}°C)'
   Nozzle °C: Nozzle °C
   'Nozzle:': 'Nozzle:'
   OD: OD
@@ -1150,7 +1131,6 @@ translations:
   Optimizes temperature control for stable, consistent heating.: Optimizes temperature control for stable, consistent heating.
   Optional - select your main lighting source, or skip if your printer doesn't have one: Optional - select your main lighting source, or skip if your printer doesn't have one
   Or Enter Manually: Or Enter Manually
-  Oscillating around target...: Oscillating around target...
   Oscillating... cycle %d/%d: Oscillating... cycle %d/%d
   Out of range: Out of range
   Output Mode: Output Mode
@@ -1163,9 +1143,7 @@ translations:
   PID: PID
   PLA: PLA
   PLA - Black: PLA - Black
-  POWER: POWER
   PRE-PRINT STEPS: PRE-PRINT STEPS
-  PRINTER: PRINTER
   PRINTERS: PRINTERS
   PROBE SENSORS: PROBE SENSORS
   Pair: Pair
@@ -1174,7 +1152,6 @@ translations:
   Pair with: Pair with
   Paired: Paired
   Paired successfully: Paired successfully
-  'Paired, but scanner is not usable. BlueZ refused the HID ': 'Paired, but scanner is not usable. BlueZ refused the HID '
   Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.: Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again.
   Pairing failed: Pairing failed
   Pairing...: Pairing...
@@ -1208,15 +1185,11 @@ translations:
   Place plugins in the plugins directory to extend HelixScreen: Place plugins in the plugins directory to extend HelixScreen
   Placed: Placed
   Play / stop Crockett's Theme: Play / stop Crockett's Theme
-  Play a test beep: Play a test beep
   Please enter a theme name: Please enter a theme name
   Please enter a valid port (1-65535).: Please enter a valid port (1-65535).
   Please enter an IP address or hostname.: Please enter an IP address or hostname.
   Please wait while the printer homes and probes.: Please wait while the printer homes and probes.
   Please wait while the printer probes each screw position.: Please wait while the printer probes each screw position.
-  Plug in a USB scanner and tap Refresh, or scan for Bluetooth devices.: Plug in a USB scanner and tap Refresh, or scan for Bluetooth devices.
-  Plug in a USB scanner and tap Refresh.: Plug in a USB scanner and tap Refresh.
-  Plug in your scanner and tap Refresh.: Plug in your scanner and tap Refresh.
   Plugin already installed: Plugin already installed
   Plugin disabled: Plugin disabled
   Plugin installed successfully: Plugin installed successfully
@@ -1230,7 +1203,6 @@ translations:
   Port: Port
   Position: Position
   Power: Power
-  Power Control: Power Control
   Power Devices: Power Devices
   'Pre-print command failed: {}': 'Pre-print command failed: {}'
   Preheat Macro: Preheat Macro
@@ -1247,12 +1219,12 @@ translations:
   Presets: Presets
   Press Scan to search: Press Scan to search
   'Pressure:': 'Pressure:'
+  Preview Sounds: Preview Sounds
   Previous: Previous
   Price: Price
   Primary: Primary
   Print: Print
   Print Cancelled: Print Cancelled
-  Print Complete: Print Complete
   Print Complete!: Print Complete!
   Print Completion Alert: Print Completion Alert
   Print Details: Print Details
@@ -1270,6 +1242,7 @@ translations:
   Print Tuning: Print Tuning
   Print failed: Print failed
   'Print preparation failed: {}': 'Print preparation failed: {}'
+  Print server rejected the job — check printer status: Print server rejected the job — check printer status
   Printer: Printer
   Printer Error: Printer Error
   Printer Firmware Disconnected: Printer Firmware Disconnected
@@ -1289,7 +1262,10 @@ translations:
   'Printer Setup: Touch Calibration': 'Printer Setup: Touch Calibration'
   Printer Shutdown: Printer Shutdown
   Printer Type: Printer Type
+  Printer didn't respond — make sure it's on and in range: Printer didn't respond — make sure it's on and in range
+  Printer doesn't expose the expected service — wrong device?: Printer doesn't expose the expected service — wrong device?
   Printer image set to auto-detect: Printer image set to auto-detect
+  Printer is not paired — pair it first: Printer is not paired — pair it first
   Printer name: Printer name
   Printer ready: Printer ready
   Printers: Printers
@@ -1303,11 +1279,9 @@ translations:
   'Private:': 'Private:'
   Probe: Probe
   Probe Accuracy Failed: Probe Accuracy Failed
-  Probe Accuracy Results: Probe Accuracy Results
   Probe Accuracy Test: Probe Accuracy Test
   Probe Management: Probe Management
   Probe Speed: Probe Speed
-  Probe bed surface for compensation: Probe bed surface for compensation
   Probe controls, accuracy test, and settings: Probe controls, accuracy test, and settings
   Probing Bed Mesh: Probing Bed Mesh
   Probing Bed Screws...: Probing Bed Screws...
@@ -1326,7 +1300,6 @@ translations:
   Purge macro not configured: Purge macro not configured
   Purge may still be running — response timed out: Purge may still be running — response timed out
   Purging nozzle: Purging nozzle
-  Purging nozzle...: Purging nozzle...
   Purging {}mm...: Purging {}mm...
   Purging...: Purging...
   QGL: QGL
@@ -1348,7 +1321,6 @@ translations:
   Quick Button 4: Quick Button 4
   Quick actions, calibration, speed: Quick actions, calibration, speed
   'RSS:': 'RSS:'
-  Range: Range
   Re-probe: Re-probe
   Ready: Ready
   Ready to Apply: Ready to Apply
@@ -1368,7 +1340,6 @@ translations:
   Recovery failed: Recovery failed
   Reduce ringing and ghosting artifacts: Reduce ringing and ghosting artifacts
   Reduce vibration artifacts like ringing and ghosting: Reduce vibration artifacts like ringing and ghosting
-  Refining stability...: Refining stability...
   Refresh: Refresh
   Refresh Interval: Refresh Interval
   Release all stepper motors. Position will be lost.: Release all stepper motors. Position will be lost.
@@ -1441,8 +1412,8 @@ translations:
   Run Dangerous Macro?: Run Dangerous Macro?
   Run Macro: Run Macro
   Run Macro?: Run Macro?
-  'Run {}?': 'Run {}?'
   Run a Klipper macro when preheating this material: Run a Klipper macro when preheating this material
+  'Run {}?': 'Run {}?'
   Running {}...: Running {}...
   Runout Sensor: Runout Sensor
   SETTINGS: SETTINGS
@@ -1454,7 +1425,6 @@ translations:
   STOP: STOP
   STYLE PROPERTIES: STYLE PROPERTIES
   SWITCH SENSORS: SWITCH SENSORS
-  SYSTEM: SYSTEM
   Safety & Notifications: Safety & Notifications
   Sample: Sample
   Sample %d/%d: Sample %d/%d
@@ -1471,7 +1441,6 @@ translations:
   Save Z-Offset?: Save Z-Offset?
   Save changes to persist them across restarts?: Save changes to persist them across restarts?
   'Save failed: {}': 'Save failed: {}'
-  Saved: Saved
   Saved Z-Offset: Saved Z-Offset
   Saved to crash_report.txt (QR not available): Saved to crash_report.txt (QR not available)
   Saved to printer configuration.: Saved to printer configuration.
@@ -1481,7 +1450,6 @@ translations:
   Saving config... Klipper will restart.: Saving config... Klipper will restart.
   Saving will restart Klipper and CANCEL any active print!: Saving will restart Klipper and CANCEL any active print!
   Scan: Scan
-  Scan Bluetooth: Scan Bluetooth
   Scan Cal: Scan Cal
   Scan QR Code: Scan QR Code
   Scan Spool QR Code: Scan Spool QR Code
@@ -1490,8 +1458,6 @@ translations:
   Scanner: Scanner
   ? Scanner bonded but didn't attach as a keyboard. Try turning the scanner off and on, then tap Pair again. If that fails, add ClassicBondedOnly=false to /etc/bluetooth/input.conf.
   : Scanner bonded but didn't attach as a keyboard. Try turning the scanner off and on, then tap Pair again. If that fails, add ClassicBondedOnly=false to /etc/bluetooth/input.conf.
-  ? Scanner paired but can't receive input. Put the scanner in pairing mode (see its manual — usually a setup barcode or a button hold) and tap Pair again.
-  : Scanner paired but can't receive input. Put the scanner in pairing mode (see its manual — usually a setup barcode or a button hold) and tap Pair again.
   Scanning for networks...: Scanning for networks...
   Scanning...: Scanning...
   'Score: 0': 'Score: 0'
@@ -1501,7 +1467,6 @@ translations:
   Screen sleeps after the selected period of inactivity: Screen sleeps after the selected period of inactivity
   Screensaver: Screensaver
   Screws Tilt: Screws Tilt
-  Scroll Speed: Scroll Speed
   Search filename...: Search filename...
   Search spools...: Search spools...
   Search vendors...: Search vendors...
@@ -1516,10 +1481,8 @@ translations:
   Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.: Select 'None' if you don't have a filament sensor, or if you don't want to pause on runout.
   Select Fan: Select Fan
   Select G-Code File: Select G-Code File
-  Select Power Device: Select Power Device
   Select Sensor: Select Sensor
   Select Sensors: Select Sensors
-  Select Slot: Select Slot
   Select Spool: Select Spool
   Select a filament slot to load: Select a filament slot to load
   Select fan: Select fan
@@ -1588,7 +1551,6 @@ translations:
   Snapmaker SnapSwap: Snapmaker SnapSwap
   Soft: Soft
   Some settings will take effect after restart.: Some settings will take effect after restart.
-  Sound Settings: Sound Settings
   Sound Theme: Sound Theme
   Sounds: Sounds
   Source: Source
@@ -1646,7 +1608,6 @@ translations:
   Stop Drying: Stop Drying
   Stop Print?: Stop Print?
   Stop failed: Stop failed
-  Stops all motion: Stops all motion
   Stops all motion. Requires firmware restart.: Stops all motion. Requires firmware restart.
   Stow: Stow
   Strobe LED: Strobe LED
@@ -1696,7 +1657,7 @@ translations:
   Test Connection: Test Connection
   Test Network: Test Network
   Test Print: Test Print
-  Test Sound: Test Sound
+  Test Screensaver: Test Screensaver
   Test Tracker: Test Tracker
   Test label printed: Test label printed
   'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining': 'Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining'
@@ -1713,7 +1674,6 @@ translations:
   Theme Preset: Theme Preset
   Theme changes apply after restart.: Theme changes apply after restart.
   Theme reset to defaults: Theme reset to defaults
-  Theme, brightness, and sleep settings: Theme, brightness, and sleep settings
   'These tools have incompatible materials loaded:': 'These tools have incompatible materials loaded:'
   'These tools have no matching filament loaded:': 'These tools have no matching filament loaded:'
   This calibration uses the paper friction method to set your Z-offset.: This calibration uses the paper friction method to set your Z-offset.
@@ -1779,7 +1739,6 @@ translations:
   'Troubleshooting:': 'Troubleshooting:'
   Try adjusting your search or filters: Try adjusting your search or filters
   Tune: Tune
-  Tuning control parameters...: Tuning control parameters...
   Tuning tower enabled - start a print to test: Tuning tower enabled - start a print to test
   Turbo: Turbo
   Turn Off: Turn Off
@@ -1790,6 +1749,7 @@ translations:
   UI Sounds: UI Sounds
   USB: USB
   USB DEVICES: USB DEVICES
+  USB printer access denied — check permissions: USB printer access denied — check permissions
   Understanding Results: Understanding Results
   Uninstall HelixPrint Plugin: Uninstall HelixPrint Plugin
   'Uninstall: Coming soon': 'Uninstall: Coming soon'
@@ -1802,7 +1762,6 @@ translations:
   Unload: Unload
   Unload Filament: Unload Filament
   'Unload failed: {}': 'Unload failed: {}'
-  Unload filament macro not configured: Unload filament macro not configured
   Unload macro not configured: Unload macro not configured
   Unload may still be running — response timed out: Unload may still be running — response timed out
   Unloading before bypass...: Unloading before bypass...
@@ -1812,6 +1771,7 @@ translations:
   Unmapped: Unmapped
   Unretract Extra: Unretract Extra
   Unretract Speed: Unretract Speed
+  Update: Update
   Update Available: Update Available
   Update Channel: Update Channel
   Update Failed: Update Failed
@@ -1825,7 +1785,6 @@ translations:
   Use Android native keyboard for text input: Use Android native keyboard for text input
   Use G10/G11 firmware retraction: Use G10/G11 firmware retraction
   Use printer type to select image: Use printer type to select image
-  Uses name-based priority: Uses name-based priority
   Value must be between {:.0f} and {:.0f}: Value must be between {:.0f} and {:.0f}
   Velocity and acceleration limits: Velocity and acceleration limits
   Vendor: Vendor
@@ -1851,7 +1810,6 @@ translations:
   View print statistics and job history: View print statistics and job history
   Visual Fine-Tuning: Visual Fine-Tuning
   Volume: Volume
-  Volume, themes, and UI sounds: Volume, themes, and UI sounds
   WIDTH SENSORS: WIDTH SENSORS
   WLED: WLED
   Waiting for Moonraker...: Waiting for Moonraker...
@@ -1876,7 +1834,6 @@ translations:
   WiFi Disabled: WiFi Disabled
   WiFi Enabled: WiFi Enabled
   WiFi Network: WiFi Network
-  WiFi and Ethernet: WiFi and Ethernet
   WiFi and Ethernet configuration: WiFi and Ethernet configuration
   WiFi control unavailable: WiFi control unavailable
   WiFi hardware unavailable: WiFi hardware unavailable

@@ -66,7 +66,6 @@
   <translation tag="= Tighten" ru="= Затянуть"/>
   <translation tag="ABS" ru="ABS"/>
   <translation tag="ACCELEROMETERS" ru="АКСЕЛЕРОМЕТРЫ"/>
-  <translation tag="ACE" ru="ACE"/>
   <translation tag="ACTIONS" ru="ДЕЙСТВИЯ"/>
   <translation tag="ADXL" ru="ADXL"/>
   <translation tag="AFC" ru="AFC"/>
@@ -79,7 +78,6 @@
   <translation tag="AFC reset failed" ru="Ошибка сброса AFC"/>
   <translation tag="ALL DEVICES" ru="ВСЕ УСТРОЙСТВА"/>
   <translation tag="AMS" ru="AMS"/>
-  <translation tag="AMS Management" ru="Управление AMS"/>
   <translation tag="AMS is busy: {}" ru="AMS занят: {}"/>
   <translation tag="AMS not available" ru="AMS недоступен"/>
   <translation tag="API not available" ru="API недоступен"/>
@@ -109,6 +107,7 @@
   <translation tag="Add Hidden Network" ru="Добавить скрытую сеть"/>
   <translation tag="Add Vendor" ru="Добавить производителя"/>
   <translation tag="Add Widget" ru="Добавить виджет"/>
+  <translation tag="Added to Spoolman" ru="Добавлено в Spoolman"/>
   <translation tag="Address" ru="Адрес"/>
   <translation tag="Adjust screen brightness level" ru="Настроить уровень яркости экрана"/>
   <translation tag="Adjust screws, then re-probe." ru="Отрегулируйте винты, затем перепроверьте."/>
@@ -124,6 +123,7 @@
   <translation tag="All axes homed" ru="Все оси запаркованы"/>
   <translation tag="Allow display to sleep during active prints" ru="Разрешить спящий режим дисплея во время печати"/>
   <translation tag="Allwinner" ru="Allwinner"/>
+  <translation tag="Already connecting — wait a moment and try again" ru="Подключение уже выполняется — подождите и попробуйте снова"/>
   <translation tag="Ambient Transfer" ru="Теплообмен с окружающей средой"/>
   <translation tag="An accelerometer was detected on your printer." ru="На вашем принтере обнаружен акселерометр."/>
   <translation tag="An error occurred during calibration." ru="Во время калибровки произошла ошибка."/>
@@ -152,7 +152,6 @@
   <translation tag="Auto-Detect" ru="Автоопределение"/>
   <translation tag="Auto-Heat on Load" ru="Автонагрев при загрузке"/>
   <translation tag="Auto-detect" ru="Автоопределение"/>
-  <translation tag="Auto-detect (default)"/>
   <translation tag="Auto-lock" ru="Автоблокировка"/>
   <translation tag="Auto-poll for weight updates" ru="Автоопрос обновлений веса"/>
   <translation tag="Auto-probe or manually check screw heights" ru="Автозондирование или ручная проверка высоты винтов"/>
@@ -167,7 +166,7 @@
   <translation tag="BETA" ru="BETA"/>
   <translation tag="BLTouch Controls" ru="Управление BLTouch"/>
   <translation tag="BLUETOOTH PRINTERS" ru="BLUETOOTH-ПРИНТЕРЫ"/>
-  <translation tag="BLUETOOTH SCANNERS"/>
+  <translation tag="BLUETOOTH SCANNERS" ru="BLUETOOTH-СКАНЕРЫ"/>
   <translation tag="Back" ru="Назад"/>
   <translation tag="Back to Results" ru="Назад к результатам"/>
   <translation tag="Barcode Scanner" ru="Сканер штрих-кодов"/>
@@ -179,7 +178,7 @@
   <translation tag="Bed Leveling" ru="Выравнивание стола"/>
   <translation tag="Bed Mesh" ru="Сетка стола"/>
   <translation tag="Bed Mesh Render" ru="Рендер сетки стола"/>
-  <translation tag="Bed Mesh..."/>
+  <translation tag="Bed Mesh..." ru="Сетка стола..."/>
   <translation tag="Bed Moves" ru="Стол движется"/>
   <translation tag="Bed Screw Adjustment" ru="Регулировка винтов стола"/>
   <translation tag="Bed Screws" ru="Винты стола"/>
@@ -202,12 +201,13 @@
   <translation tag="Black" ru="Чёрный"/>
   <translation tag="Bluetooth" ru="Bluetooth"/>
   <translation tag="Bluetooth initialization failed" ru="Ошибка инициализации Bluetooth"/>
+  <translation tag="Bluetooth is not available on this device" ru="Bluetooth недоступен на этом устройстве"/>
   <translation tag="Bluetooth not available" ru="Bluetooth недоступен"/>
   <translation tag="Bluetooth not initialized" ru="Bluetooth не инициализирован"/>
-  <translation tag="Bluetooth printer forgotten"/>
-  <translation tag="Bluetooth scanner forgotten"/>
+  <translation tag="Bluetooth printer forgotten" ru="Bluetooth-принтер забыт"/>
+  <translation tag="Bluetooth scanner forgotten" ru="Bluetooth-сканер забыт"/>
   <translation tag="Body text supports longer guidance while staying readable." ru="Основной текст поддерживает развёрнутые инструкции, оставаясь читаемым."/>
-  <translation tag="Bold"/>
+  <translation tag="Bold" ru="Жирный"/>
   <translation tag="Border Opacity" ru="Прозрачность границы"/>
   <translation tag="Border Radius" ru="Радиус скругления"/>
   <translation tag="Border Width" ru="Толщина границы"/>
@@ -245,8 +245,9 @@
   <translation tag="CONNECTION TYPE" ru="ТИП ПОДКЛЮЧЕНИЯ"/>
   <translation tag="CONTROLLABLE FANS" ru="УПРАВЛЯЕМЫЕ ВЕНТИЛЯТОРЫ"/>
   <translation tag="CRITICAL" ru="КРИТИЧНО"/>
-  <translation tag="CURRENT SELECTION"/>
+  <translation tag="CURRENT SELECTION" ru="ТЕКУЩИЙ ВЫБОР"/>
   <translation tag="CUSTOM IMAGES" ru="СВОИ ИЗОБРАЖЕНИЯ"/>
+  <translation tag="Cache Dir" ru="Директория кэша"/>
   <translation tag="Calibrate" ru="Калибровать"/>
   <translation tag="Calibrate All" ru="Калибровать всё"/>
   <translation tag="Calibrate X" ru="Калибровать X"/>
@@ -268,6 +269,7 @@
   <translation tag="Calibration started" ru="Калибровка запущена"/>
   <translation tag="Calibration timed out. Please try again." ru="Время истекло. Попробуйте снова."/>
   <translation tag="Camera" ru="Камера"/>
+  <translation tag="Can&apos;t connect — try forgetting and re-pairing the printer" ru="Не удаётся подключиться — забудьте принтер и выполните сопряжение заново"/>
   <translation tag="Cancel" ru="Отмена"/>
   <translation tag="Cancel Escalation" ru="Отменить эскалацию"/>
   <translation tag="Cancel Print" ru="Отменить печать"/>
@@ -296,12 +298,10 @@
   <translation tag="Chamber heater not found in printer configuration" ru="Нагреватель камеры не найден в конфигурации принтера"/>
   <translation tag="Chamber heating to %d°C..." ru="Нагрев камеры до %d°C..."/>
   <translation tag="Chamber target set to {}°C" ru="Целевая температура камеры установлена на {}°C"/>
-  <translation tag="Chamber:" ru="Камера:"/>
   <translation tag="Change" ru="Изменить"/>
   <translation tag="Change LED color based on printer state" ru="Менять цвет LED в зависимости от состояния принтера"/>
   <translation tag="Change PIN" ru="Изменить PIN"/>
   <translation tag="Change Printer Host" ru="Изменить хост принтера"/>
-  <translation tag="Change Saved Spool" ru="Изменить сохранённую катушку"/>
   <translation tag="Changes apply immediately. Adjust during print for tuning." ru="Изменения применяются немедленно. Корректируйте во время печати."/>
   <translation tag="Changes are temporary and reset on printer reboot" ru="Изменения временные и сбрасываются при перезагрузке принтера"/>
   <translation tag="Changes can be reversed anytime using the Macro Viewer." ru="Изменения можно отменить в любое время через Macro Viewer."/>
@@ -315,7 +315,6 @@
   <translation tag="Checking slots..." ru="Проверка слотов..."/>
   <translation tag="Checking timelapse plugin..." ru="Проверка плагина таймлапса..."/>
   <translation tag="Choose 12-hour or 24-hour time display" ru="Выберите 12-часовой или 24-часовой формат времени"/>
-  <translation tag="Choose Saved Spool" ru="Выбрать сохранённую катушку"/>
   <translation tag="Choose Spool" ru="Выбрать катушку"/>
   <translation tag="Choose an existing filament, or tap + New to create one." ru="Выберите существующий филамент или нажмите + Новый, чтобы создать."/>
   <translation tag="Choose display language" ru="Выберите язык интерфейса"/>
@@ -351,6 +350,7 @@
   <translation tag="Completed" ru="Завершено"/>
   <translation tag="Completed prints will appear here" ru="Завершённые печати появятся здесь"/>
   <translation tag="Computing calibration..." ru="Вычисление калибровки..."/>
+  <translation tag="Config Dir" ru="Директория конфигурации"/>
   <translation tag="Config-defined (read-only)" ru="Определено в конфигурации (только чтение)"/>
   <translation tag="Configuration added successfully." ru="Конфигурация успешно добавлена."/>
   <translation tag="Configuration already present." ru="Конфигурация уже присутствует."/>
@@ -369,7 +369,7 @@
   <translation tag="Configure timelapse recording" ru="Настроить запись таймлапса"/>
   <translation tag="Configure your printer&apos;s cooling fans" ru="Настройте вентиляторы охлаждения принтера"/>
   <translation tag="Configuring Moonraker..." ru="Настройка Moonraker..."/>
-  <translation tag="Confirm before running macros"/>
+  <translation tag="Confirm before running macros" ru="Подтверждать перед запуском макросов"/>
   <translation tag="Connect" ru="Подключить"/>
   <translation tag="Connect a USB label printer first" ru="Сначала подключите USB-принтер этикеток"/>
   <translation tag="Connect an ADXL345 accelerometer to calibrate" ru="Подключите акселерометр ADXL345 для калибровки"/>
@@ -398,7 +398,6 @@
   <translation tag="Console" ru="Консоль"/>
   <translation tag="Control optional print start features" ru="Управление дополнительными функциями начала печати"/>
   <translation tag="Control power relays and smart outlets" ru="Управление реле и умными розетками"/>
-  <translation tag="Control power switches and relays" ru="Управление выключателями и реле"/>
   <translation tag="Controlled by hardware sensor" ru="Управляется аппаратным датчиком"/>
   <translation tag="Controller" ru="Контроллер"/>
   <translation tag="Cool Down" ru="Охладить"/>
@@ -406,15 +405,15 @@
   <translation tag="Copied to clipboard!" ru="Скопировано в буфер обмена!"/>
   <translation tag="Copy Command" ru="Копировать команду"/>
   <translation tag="Copy failed - use SSH manually" ru="Ошибка копирования - используйте SSH вручную"/>
-  <translation tag="Corner roundness"/>
-  <translation tag="Corner roundness (0 = sharp, 40 = very round)" ru="Скругление углов (0 = острые, 40 = очень круглые)"/>
+  <translation tag="Corner roundness" ru="Скругление углов"/>
   <translation tag="Correction (Ki)" ru="Коррекция (Ki)"/>
   <translation tag="Could not analyze PRINT_START macro. Some print options may be unavailable." ru="Не удалось проанализировать макрос PRINT_START. Некоторые параметры печати могут быть недоступны."/>
   <translation tag="Could not check webcam status.\nCheck printer connection." ru="Не удалось проверить статус веб-камеры.\nПроверьте подключение принтера."/>
-  <translation tag="Could not forget device"/>
+  <translation tag="Could not forget device" ru="Не удалось забыть устройство"/>
   <translation tag="Could not reach Spoolman at" ru="Не удалось связаться со Spoolman по адресу"/>
-  <translation tag="Could not start Bluetooth discovery"/>
+  <translation tag="Could not start Bluetooth discovery" ru="Не удалось запустить поиск Bluetooth"/>
   <translation tag="Could not verify Spoolman status. Moonraker may still be restarting." ru="Не удалось проверить статус Spoolman. Moonraker может ещё перезапускаться."/>
+  <translation tag="Couldn&apos;t update Spoolman — saved locally" ru="Не удалось обновить Spoolman — сохранено локально"/>
   <translation tag="Cover open" ru="Крышка открыта"/>
   <translation tag="Crash report sent — thank you!" ru="Отчёт об ошибке отправлен — спасибо!"/>
   <translation tag="Creality CFS" ru="Creality CFS"/>
@@ -488,7 +487,6 @@
   <translation tag="Dismiss" ru="Отклонить"/>
   <translation tag="Display &amp; Sound" ru="Дисплей и звук"/>
   <translation tag="Display Mode" ru="Режим отображения"/>
-  <translation tag="Display Settings" ru="Настройки дисплея"/>
   <translation tag="Display Sleep" ru="Спящий режим экрана"/>
   <translation tag="Do not power off your printer." ru="Не выключайте принтер."/>
   <translation tag="Do not touch the printer during calibration" ru="Не трогайте принтер во время калибровки"/>
@@ -607,7 +605,7 @@
   <translation tag="Failed to enable tuning tower" ru="Не удалось включить башню настройки"/>
   <translation tag="Failed to exclude &apos;{}&apos;: {}" ru="Не удалось исключить &apos;{}&apos;: {}"/>
   <translation tag="Failed to get limits" ru="Не удалось получить ограничения"/>
-  <translation tag="Failed to load G-code preview"/>
+  <translation tag="Failed to load G-code preview" ru="Не удалось загрузить предпросмотр G-code"/>
   <translation tag="Failed to load fan configuration screen" ru="Не удалось загрузить экран настройки вентилятора"/>
   <translation tag="Failed to load fan control overlay" ru="Не удалось загрузить управление вентилятором"/>
   <translation tag="Failed to load file details" ru="Не удалось загрузить данные файла"/>
@@ -635,7 +633,6 @@
   <translation tag="Failed to resume print: {}" ru="Не удалось возобновить печать: {}"/>
   <translation tag="Failed to resume: {}" ru="Не удалось возобновить: {}"/>
   <translation tag="Failed to save LED configuration" ru="Не удалось сохранить настройки LED"/>
-  <translation tag="Failed to save changes to Spoolman" ru="Не удалось сохранить изменения в Spoolman"/>
   <translation tag="Failed to save config." ru="Не удалось сохранить конфигурацию."/>
   <translation tag="Failed to save configuration" ru="Не удалось сохранить конфигурацию"/>
   <translation tag="Failed to save fan configuration" ru="Не удалось сохранить настройки вентилятора"/>
@@ -710,7 +707,7 @@
   <translation tag="Flow change failed: {}" ru="Ошибка изменения потока: {}"/>
   <translation tag="Flowguard" ru="Flowguard"/>
   <translation tag="Flying Toasters" ru="Летающие тостеры"/>
-  <translation tag="Forget"/>
+  <translation tag="Forget" ru="Забыть"/>
   <translation tag="Forming tip..." ru="Формирование кончика..."/>
   <translation tag="Found %zu printers" ru="Найдено %zu принтеров"/>
   <translation tag="Found 1 printer" ru="Найден 1 принтер"/>
@@ -718,7 +715,7 @@
   <translation tag="Freq Graph" ru="График частот"/>
   <translation tag="Frequency Delta" ru="Разница частот"/>
   <translation tag="Front" ru="Спереди"/>
-  <translation tag="Full"/>
+  <translation tag="Full" ru="Полный"/>
   <translation tag="G-code Console" ru="Консоль G-code"/>
   <translation tag="G-code Preview" ru="Просмотр G-code"/>
   <translation tag="G-code commands will appear here" ru="Здесь будут отображаться G-code команды"/>
@@ -732,7 +729,6 @@
   <translation tag="Gray" ru="Серый"/>
   <translation tag="Guides and reference" ru="Руководства и справка"/>
   <translation tag="H" ru="Х"/>
-  <translation tag="HELP &amp; SUPPORT" ru="ПОМОЩЬ И ПОДДЕРЖКА"/>
   <translation tag="HUMIDITY SENSORS" ru="ДАТЧИКИ ВЛАЖНОСТИ"/>
   <translation tag="Hang on, we&apos;ll be right back!" ru="Подождите, мы скоро вернёмся!"/>
   <translation tag="Happy Hare MMU" ru="Happy Hare MMU"/>
@@ -762,7 +758,6 @@
   <translation tag="Heating Nozzle..." ru="Нагрев сопла..."/>
   <translation tag="Heating to %d\xC2\xB0C... %.0f\xC2\xB0C" ru="Нагрев до %d\xC2\xB0C... %.0f\xC2\xB0C"/>
   <translation tag="Heating to %d°C..." ru="Нагрев до %d°C..."/>
-  <translation tag="Heating to target..." ru="Нагрев до целевой температуры..."/>
   <translation tag="Heating to {}°C for {}..." ru="Нагрев до {}°C в течение {}..."/>
   <translation tag="Heating to {}°C..." ru="Нагрев до {}°C..."/>
   <translation tag="Heating..." ru="Нагрев..."/>
@@ -773,7 +768,6 @@
   <translation tag="Help &amp; About" ru="Помощь и о программе"/>
   <translation tag="Help Improve HelixScreen" ru="Помогите улучшить HelixScreen"/>
   <translation tag="Help improve HelixScreen?" ru="Помочь улучшить HelixScreen?"/>
-  <translation tag="Higher = faster" ru="Выше = быстрее"/>
   <translation tag="Home" ru="Главная"/>
   <translation tag="Home failed" ru="Парковка не удалась"/>
   <translation tag="Homing AFC system..." ru="Парковка системы AFC..."/>
@@ -826,6 +820,7 @@
   <translation tag="Install" ru="Установить"/>
   <translation tag="Install HelixPrint Plugin" ru="Установить плагин HelixPrint"/>
   <translation tag="Install Plugin" ru="Установить плагин"/>
+  <translation tag="Install Root" ru="Корень установки"/>
   <translation tag="Install Update" ru="Установить обновление"/>
   <translation tag="Install the HelixPrint plugin to enable fast G-code modifications. Run this command via SSH on your printer:" ru="Установите плагин HelixPrint для быстрой модификации G-code. Выполните эту команду через SSH на вашем принтере:"/>
   <translation tag="Install the timelapse plugin via SSH,\nthen tap \&quot;Check Again\&quot;." ru="Установите плагин таймлапс через SSH,\nзатем нажмите &quot;Проверить снова&quot;."/>
@@ -835,14 +830,13 @@
   <translation tag="Installing..." ru="Установка..."/>
   <translation tag="Intensity" ru="Интенсивность"/>
   <translation tag="Interactive probe calibration" ru="Интерактивная калибровка зонда"/>
-  <translation tag="Interactive probe offset adjustment" ru="Интерактивная настройка смещения датчика"/>
   <translation tag="Internal error: no scan result" ru="Внутренняя ошибка: нет результата сканирования"/>
   <translation tag="Invalid port number" ru="Неверный номер порта"/>
   <translation tag="Issue description" ru="Описание проблемы"/>
   <translation tag="Job Queue" ru="Очередь заданий"/>
   <translation tag="Join the HelixScreen community on Discord for discussion, tips, troubleshooting help, and feature requests." ru="Присоединяйтесь к сообществу HelixScreen в Discord для обсуждений, советов, помощи в устранении неполадок и предложений новых функций."/>
   <translation tag="Just now" ru="Только что"/>
-  <translation tag="KEYBOARD LAYOUT"/>
+  <translation tag="KEYBOARD LAYOUT" ru="РАСКЛАДКА КЛАВИАТУРЫ"/>
   <translation tag="KLICKY CONTROLS" ru="УПРАВЛЕНИЕ KLICKY"/>
   <translation tag="Keep Printing" ru="Продолжить печать"/>
   <translation tag="Keep Required" ru="Оставить обязательным"/>
@@ -859,7 +853,6 @@
   <translation tag="LED Settings" ru="Настройки LED"/>
   <translation tag="LED Strip" ru="LED-лента"/>
   <translation tag="LED on at Start" ru="Включать LED при старте"/>
-  <translation tag="LED settings coming soon" ru="Настройки LED скоро появятся"/>
   <translation tag="LEDs" ru="LED"/>
   <translation tag="LEDs controlled by the light button" ru="LED, управляемые кнопкой света"/>
   <translation tag="LOADED" ru="ЗАГРУЖЕН"/>
@@ -881,16 +874,16 @@
   <translation tag="Layer mode captures one frame per layer change. Best for most prints." ru="Послойный режим захватывает один кадр на каждую смену слоя. Лучший выбор для большинства печатей."/>
   <translation tag="Layer:" ru="Слой:"/>
   <translation tag="Layers" ru="Слои"/>
-  <translation tag="Layout"/>
+  <translation tag="Layout" ru="Раскладка"/>
   <translation tag="Learn More" ru="Подробнее"/>
   <translation tag="Length:" ru="Длина:"/>
   <translation tag="Leveling Gantry..." ru="Выравнивание портала..."/>
   <translation tag="Lifetime Print Stats" ru="Статистика за всё время"/>
   <translation tag="Light" ru="Подсветка"/>
+  <translation tag="Listen to all theme sounds" ru="Прослушать все звуки темы"/>
   <translation tag="Load" ru="Загрузить"/>
   <translation tag="Load Filament" ru="Загрузить филамент"/>
   <translation tag="Load failed: {}" ru="Ошибка загрузки: {}"/>
-  <translation tag="Load filament macro not configured" ru="Макрос загрузки филамента не настроен"/>
   <translation tag="Load may still be running — response timed out" ru="Загрузка может ещё выполняться — время ожидания истекло"/>
   <translation tag="Load the required filaments or start anyway?" ru="Загрузить нужные филаменты или начать без них?"/>
   <translation tag="Loaded" ru="Загружен"/>
@@ -913,6 +906,7 @@
   <translation tag="Log Level" ru="Уровень журнала"/>
   <translation tag="Loosen Path A belt." ru="Ослабьте ремень Пути A."/>
   <translation tag="Loosen Path B belt." ru="Ослабьте ремень Пути B."/>
+  <translation tag="Lost connection during print — try again" ru="Потеряно соединение во время печати — попробуйте снова"/>
   <translation tag="Lot # (optional)" ru="Партия # (необязательно)"/>
   <translation tag="Lot/Batch Nr" ru="Nr. партии/серии"/>
   <translation tag="M to toggle" ru="M для переключения"/>
@@ -923,7 +917,6 @@
   <translation tag="MCU, host, and auxiliary temperature monitoring" ru="Мониторинг температуры MCU, хоста и вспомогательных датчиков"/>
   <translation tag="MDI Icons" ru="Иконки MDI"/>
   <translation tag="MISSING CONFIGURED" ru="ОТСУТСТВУЕТ НАСТРОЕННОЕ"/>
-  <translation tag="MOTION" ru="ДВИЖЕНИЕ"/>
   <translation tag="MPC" ru="MPC"/>
   <translation tag="Machine Limits" ru="Ограничения принтера"/>
   <translation tag="Macro" ru="Макрос"/>
@@ -963,7 +956,7 @@
   <translation tag="Material" ru="Материал"/>
   <translation tag="Material Comfort" ru="Комфорт материала"/>
   <translation tag="Material Design Spinner" ru="Индикатор загрузки Material Design"/>
-  <translation tag="Material Mismatch"/>
+  <translation tag="Material Mismatch" ru="Несоответствие материала"/>
   <translation tag="Material Temperatures" ru="Температуры материалов"/>
   <translation tag="Max" ru="Макс"/>
   <translation tag="Max Accel" ru="Макс. ускор."/>
@@ -979,14 +972,12 @@
   <translation tag="Measure belt path frequencies" ru="Измерить частоты путей ремня"/>
   <translation tag="Measured" ru="Измерено"/>
   <translation tag="Measurement Failed" ru="Измерение не удалось"/>
-  <translation tag="Measuring thermal response..." ru="Измерение тепловой реакции..."/>
-  <translation tag="Median" ru="Медиана"/>
   <translation tag="Memory (MB)" ru="Память (МБ)"/>
   <translation tag="Mesh Complete" ru="Сетка завершена"/>
   <translation tag="Mesh saved as &apos;{}&apos;" ru="Сетка сохранена как &apos;{}&apos;"/>
   <translation tag="Method" ru="Метод"/>
   <translation tag="Min" ru="Мин"/>
-  <translation tag="Minimal"/>
+  <translation tag="Minimal" ru="Минимальный"/>
   <translation tag="Minimum" ru="Минимум"/>
   <translation tag="Mode" ru="Режим"/>
   <translation tag="Modified" ru="Изменён"/>
@@ -1006,14 +997,12 @@
   <translation tag="Multi-Filament" ru="Мульти-филамент"/>
   <translation tag="Multi-Filament Overview" ru="Обзор мульти-филамента"/>
   <translation tag="Multi-Filament System Management" ru="Управление мульти-филаментной системой"/>
-  <translation tag="Multi-Filament:" ru="Мульти-филамент:"/>
   <translation tag="Multi-Material" ru="Мульти-материал"/>
   <translation tag="Multi-Material System Detected" ru="Обнаружена мульти-материальная система"/>
   <translation tag="Must home axes first" ru="Сначала необходимо запарковать оси"/>
   <translation tag="My Custom Theme" ru="Моя тема"/>
   <translation tag="My Panel" ru="Моя панель"/>
   <translation tag="NEWLY DISCOVERED" ru="НЕДАВНО ОБНАРУЖЕНО"/>
-  <translation tag="NOTIFICATIONS" ru="УВЕДОМЛЕНИЯ"/>
   <translation tag="Name" ru="Название"/>
   <translation tag="Name (optional)" ru="Название (необязательно)"/>
   <translation tag="Named actions in the LED control panel (long-press)." ru="Именованные действия в панели управления LED (долгое нажатие)."/>
@@ -1038,6 +1027,7 @@
   <translation tag="No AMS connected" ru="AMS не подключена"/>
   <translation tag="No AMS system connected" ru="AMS-система не подключена"/>
   <translation tag="No AMS system connected." ru="AMS-система не подключена."/>
+  <translation tag="No Bluetooth printer selected — pick one in settings" ru="Bluetooth-принтер не выбран — выберите его в настройках"/>
   <translation tag="No Bluetooth printers found" ru="Bluetooth-принтеры не найдены"/>
   <translation tag="No Camera" ru="Нет камеры"/>
   <translation tag="No Filament Detected" ru="Филамент не обнаружен"/>
@@ -1049,13 +1039,11 @@
   <translation tag="No Power Devices" ru="Нет устройств питания"/>
   <translation tag="No Spool" ru="Нет катушки"/>
   <translation tag="No Spools" ru="Нет катушек"/>
-  <translation tag="No USB HID devices detected." ru="USB HID устройства не обнаружены."/>
   <translation tag="No USB printers found" ru="USB-принтеры не найдены"/>
   <translation tag="No buffer data available" ru="Данные буфера недоступны"/>
   <translation tag="No camera — use USB barcode scanner" ru="Нет камеры — используйте USB сканер штрих-кодов"/>
   <translation tag="No changes selected.\n\nClick Cancel to close." ru="Изменения не выбраны.\n\nНажмите «Отмена», чтобы закрыть."/>
   <translation tag="No changes to revert" ru="Нет изменений для отката"/>
-  <translation tag="No devices detected."/>
   <translation tag="No dryer available. Store filament in a sealed dry box with desiccant for best results." ru="Сушилка недоступна. Храните филамент в герметичном контейнере с влагопоглотителем для лучших результатов."/>
   <translation tag="No effects available" ru="Нет доступных эффектов"/>
   <translation tag="No events queued" ru="Нет событий в очереди"/>
@@ -1077,12 +1065,13 @@
   <translation tag="No network. Scan QR code to report on your phone." ru="Нет сети. Отсканируйте QR-код, чтобы отправить отчёт с телефона."/>
   <translation tag="No networks found" ru="Сети не найдены"/>
   <translation tag="No notifications" ru="Нет уведомлений"/>
-  <translation tag="No objects defined for this print"/>
+  <translation tag="No objects defined for this print" ru="Для этой печати не определены объекты"/>
   <translation tag="No plugins found" ru="Плагины не найдены"/>
   <translation tag="No preview" ru="Нет предпросмотра"/>
   <translation tag="No print history found" ru="История печати не найдена"/>
   <translation tag="No print history yet" ru="Истории печати пока нет"/>
   <translation tag="No print start macro found" ru="Макрос старта печати не найден"/>
+  <translation tag="No printer configured — check printer settings" ru="Принтер не настроен — проверьте настройки принтера"/>
   <translation tag="No printer connection" ru="Нет подключения к принтеру"/>
   <translation tag="No printers found" ru="Принтеры не найдены"/>
   <translation tag="No prints yet" ru="Нет печатей"/>
@@ -1119,11 +1108,6 @@
   <translation tag="Nozzle Temps" ru="Темп. сопел"/>
   <translation tag="Nozzle heater turned off" ru="Нагреватель сопла выключен"/>
   <translation tag="Nozzle target set to {}°C" ru="Целевая температура сопла {}°C"/>
-  <translation tag="Nozzle too cold for extrude ({}°C, min: {}°C)" ru="Сопло слишком холодное для экструзии ({}°C, мин: {}°C)"/>
-  <translation tag="Nozzle too cold for filament load ({}°C, min: {}°C)" ru="Сопло слишком холодное для загрузки филамента ({}°C, мин: {}°C)"/>
-  <translation tag="Nozzle too cold for filament unload ({}°C, min: {}°C)" ru="Сопло слишком холодное для выгрузки филамента ({}°C, мин: {}°C)"/>
-  <translation tag="Nozzle too cold for purge ({}°C, min: {}°C)" ru="Сопло слишком холодное для прочистки ({}°C, мин: {}°C)"/>
-  <translation tag="Nozzle too cold for retract ({}°C, min: {}°C)" ru="Сопло слишком холодное для ретракта ({}°C, мин: {}°C)"/>
   <translation tag="Nozzle °C" ru="Сопло °C"/>
   <translation tag="Nozzle:" ru="Сопло:"/>
   <translation tag="OD" ru="OD"/>
@@ -1144,7 +1128,6 @@
   <translation tag="Optimizes temperature control for stable, consistent heating." ru="Оптимизирует контроль температуры для стабильного и равномерного нагрева."/>
   <translation tag="Optional - select your main lighting source, or skip if your printer doesn&apos;t have one" ru="Необязательно — выберите основной источник освещения или пропустите, если его нет"/>
   <translation tag="Or Enter Manually" ru="Или введите вручную"/>
-  <translation tag="Oscillating around target..." ru="Колебания вокруг цели..."/>
   <translation tag="Oscillating... cycle %d/%d" ru="Осцилляция... цикл %d/%d"/>
   <translation tag="Out of range" ru="Вне диапазона"/>
   <translation tag="Output Mode" ru="Режим вывода"/>
@@ -1157,18 +1140,15 @@
   <translation tag="PID" ru="PID"/>
   <translation tag="PLA" ru="PLA"/>
   <translation tag="PLA - Black" ru="PLA - Чёрный"/>
-  <translation tag="POWER" ru="ПИТАНИЕ"/>
   <translation tag="PRE-PRINT STEPS" ru="ЭТАПЫ ПОДГОТОВКИ"/>
-  <translation tag="PRINTER" ru="ПРИНТЕР"/>
   <translation tag="PRINTERS" ru="ПРИНТЕРЫ"/>
   <translation tag="PROBE SENSORS" ru="ДАТЧИКИ ЗОНДА"/>
   <translation tag="Pair" ru="Сопряжение"/>
   <translation tag="Pair Bluetooth Printer" ru="Подключить Bluetooth-принтер"/>
-  <translation tag="Pair Bluetooth Scanner"/>
+  <translation tag="Pair Bluetooth Scanner" ru="Подключить Bluetooth-сканер"/>
   <translation tag="Pair with" ru="Сопряжение с"/>
   <translation tag="Paired" ru="Сопряжено"/>
   <translation tag="Paired successfully" ru="Сопряжение выполнено"/>
-  <translation tag="Paired, but scanner is not usable. BlueZ refused the HID "/>
   <translation tag="Pairing did not complete — the scanner did not bond. Try turning it off and on, then tap Pair again." ru="Сопряжение не завершено — сканер не привязан. Попробуйте выключить и снова включить его, затем нажмите «Сопряжение» ещё раз."/>
   <translation tag="Pairing failed" ru="Ошибка сопряжения"/>
   <translation tag="Pairing..." ru="Сопряжение..."/>
@@ -1197,20 +1177,16 @@
   <translation tag="Phomemo M110" ru="Phomemo M110"/>
   <translation tag="Pick" ru="Выбрать"/>
   <translation tag="Pick Color" ru="Выбрать цвет"/>
-  <translation tag="Pill"/>
+  <translation tag="Pill" ru="Овал"/>
   <translation tag="Place image files (PNG, JPEG, BMP, GIF) in config/custom_images/. Max size: 2048×2048 pixels." ru="Поместите файлы изображений (PNG, JPEG, BMP, GIF) в config/custom_images/. Макс. размер: 2048×2048 пикселей."/>
   <translation tag="Place plugins in the plugins directory to extend HelixScreen" ru="Поместите плагины в директорию plugins для расширения HelixScreen"/>
   <translation tag="Placed" ru="Добавлено"/>
   <translation tag="Play / stop Crockett&apos;s Theme" ru="Play / stop Crockett&apos;s Theme"/>
-  <translation tag="Play a test beep" ru="Воспроизвести тестовый сигнал"/>
   <translation tag="Please enter a theme name" ru="Введите название темы"/>
   <translation tag="Please enter a valid port (1-65535)." ru="Введите корректный порт (1-65535)."/>
   <translation tag="Please enter an IP address or hostname." ru="Введите IP-адрес или имя хоста."/>
   <translation tag="Please wait while the printer homes and probes." ru="Пожалуйста, подождите, пока принтер паркуется и зондирует."/>
   <translation tag="Please wait while the printer probes each screw position." ru="Пожалуйста, подождите, пока принтер возьмет пробу на позиции каждого винта."/>
-  <translation tag="Plug in a USB scanner and tap Refresh, or scan for Bluetooth devices."/>
-  <translation tag="Plug in a USB scanner and tap Refresh."/>
-  <translation tag="Plug in your scanner and tap Refresh." ru="Подключите сканер и нажмите «Обновить»."/>
   <translation tag="Plugin already installed" ru="Плагин уже установлен"/>
   <translation tag="Plugin disabled" ru="Плагин отключен"/>
   <translation tag="Plugin installed successfully" ru="Плагин успешно установлен"/>
@@ -1224,7 +1200,6 @@
   <translation tag="Port" ru="Порт"/>
   <translation tag="Position" ru="Позиция"/>
   <translation tag="Power" ru="Питание"/>
-  <translation tag="Power Control" ru="Управление питанием"/>
   <translation tag="Power Devices" ru="Устройства питания"/>
   <translation tag="Pre-print command failed: {}" ru="Ошибка команды перед печатью: {}"/>
   <translation tag="Preheat Macro" ru="Макрос преднагрева"/>
@@ -1241,12 +1216,12 @@
   <translation tag="Presets" ru="Пресеты"/>
   <translation tag="Press Scan to search" ru="Нажмите «Поиск» для сканирования"/>
   <translation tag="Pressure:" ru="Давление:"/>
+  <translation tag="Preview Sounds" ru="Предпросмотр звуков"/>
   <translation tag="Previous" ru="Назад"/>
   <translation tag="Price" ru="Цена"/>
   <translation tag="Primary" ru="Основной"/>
   <translation tag="Print" ru="Печать"/>
   <translation tag="Print Cancelled" ru="Печать отменена"/>
-  <translation tag="Print Complete" ru="Печать завершена"/>
   <translation tag="Print Complete!" ru="Печать завершена!"/>
   <translation tag="Print Completion Alert" ru="Уведомление о завершении печати"/>
   <translation tag="Print Details" ru="Информация о печати"/>
@@ -1264,6 +1239,7 @@
   <translation tag="Print Tuning" ru="Настройка печати"/>
   <translation tag="Print failed" ru="Печать не удалась"/>
   <translation tag="Print preparation failed: {}" ru="Ошибка подготовки печати: {}"/>
+  <translation tag="Print server rejected the job — check printer status" ru="Сервер печати отклонил задание — проверьте статус принтера"/>
   <translation tag="Printer" ru="Принтер"/>
   <translation tag="Printer Error" ru="Ошибка принтера"/>
   <translation tag="Printer Firmware Disconnected" ru="Прошивка принтера отключена"/>
@@ -1283,7 +1259,10 @@
   <translation tag="Printer Setup: Touch Calibration" ru="Настройка принтера: Калибровка сенсора"/>
   <translation tag="Printer Shutdown" ru="Остановка принтера"/>
   <translation tag="Printer Type" ru="Тип принтера"/>
+  <translation tag="Printer didn&apos;t respond — make sure it&apos;s on and in range" ru="Принтер не ответил — убедитесь, что он включён и в зоне доступа"/>
+  <translation tag="Printer doesn&apos;t expose the expected service — wrong device?" ru="Принтер не предоставляет ожидаемый сервис — не то устройство?"/>
   <translation tag="Printer image set to auto-detect" ru="Изображение принтера — автоопределение"/>
+  <translation tag="Printer is not paired — pair it first" ru="Принтер не сопряжён — сначала выполните сопряжение"/>
   <translation tag="Printer name" ru="Название принтера"/>
   <translation tag="Printer ready" ru="Принтер готов"/>
   <translation tag="Printers" ru="Принтеры"/>
@@ -1297,11 +1276,9 @@
   <translation tag="Private:" ru="Закрытая:"/>
   <translation tag="Probe" ru="Зонд"/>
   <translation tag="Probe Accuracy Failed" ru="Ошибка теста точности зонда"/>
-  <translation tag="Probe Accuracy Results" ru="Результаты точности зонда"/>
   <translation tag="Probe Accuracy Test" ru="Тест точности датчика"/>
   <translation tag="Probe Management" ru="Управление датчиком"/>
   <translation tag="Probe Speed" ru="Скорость зонда"/>
-  <translation tag="Probe bed surface for compensation" ru="Зондировать поверхность стола для компенсации"/>
   <translation tag="Probe controls, accuracy test, and settings" ru="Управление датчиком, тест точности и настройки"/>
   <translation tag="Probing Bed Mesh" ru="Зондирование сетки стола"/>
   <translation tag="Probing Bed Screws..." ru="Проверка винтов стола..."/>
@@ -1320,7 +1297,6 @@
   <translation tag="Purge macro not configured" ru="Макрос прочистки не настроен"/>
   <translation tag="Purge may still be running — response timed out" ru="Прочистка может ещё выполняться — время ожидания истекло"/>
   <translation tag="Purging nozzle" ru="Продувка сопла"/>
-  <translation tag="Purging nozzle..." ru="Прочистка сопла..."/>
   <translation tag="Purging {}mm..." ru="Прочистка {}мм..."/>
   <translation tag="Purging..." ru="Продувка..."/>
   <translation tag="QGL" ru="QGL"/>
@@ -1342,11 +1318,12 @@
   <translation tag="Quick Button 4" ru="Быстрая кнопка 4"/>
   <translation tag="Quick actions, calibration, speed" ru="Быстрые действия, калибровка, скорость"/>
   <translation tag="RSS:" ru="RSS:"/>
-  <translation tag="Range" ru="Диапазон"/>
   <translation tag="Re-probe" ru="Перепроверить"/>
   <translation tag="Ready" ru="Готов"/>
   <translation tag="Ready to Apply" ru="Готово к применению"/>
   <translation tag="Reboot" ru="Перезагрузка"/>
+  <translation tag="Reboot failed" ru="Ошибка перезагрузки"/>
+  <translation tag="Reboot failed — host is still reachable" ru="Ошибка перезагрузки — хост всё ещё доступен"/>
   <translation tag="Rebooting..." ru="Перезагрузка..."/>
   <translation tag="Recalibrate or view detailed results anytime in Settings." ru="Перекалибруйте или просмотрите подробные результаты в любое время в Настройках."/>
   <translation tag="Recent Prints" ru="Недавние печати"/>
@@ -1360,7 +1337,6 @@
   <translation tag="Recovery failed" ru="Восстановление не удалось"/>
   <translation tag="Reduce ringing and ghosting artifacts" ru="Уменьшить артефакты звона и двоения"/>
   <translation tag="Reduce vibration artifacts like ringing and ghosting" ru="Уменьшить артефакты вибрации, такие как звон и двоение"/>
-  <translation tag="Refining stability..." ru="Уточнение стабильности..."/>
   <translation tag="Refresh" ru="Обновить"/>
   <translation tag="Refresh Interval" ru="Интервал обновления"/>
   <translation tag="Release all stepper motors. Position will be lost." ru="Отпустить все шаговые моторы. Позиция будет потеряна."/>
@@ -1380,7 +1356,7 @@
   <translation tag="Rename failed at save step" ru="Ошибка переименования при сохранении"/>
   <translation tag="Render Now" ru="Отрендерить сейчас"/>
   <translation tag="Rendering timelapse..." ru="Рендеринг таймлапса..."/>
-  <translation tag="Replay Welcome Tour"/>
+  <translation tag="Replay Welcome Tour" ru="Повторить приветственный тур"/>
   <translation tag="Report saved to crash_report.txt" ru="Отчёт сохранён в crash_report.txt"/>
   <translation tag="Reprint" ru="Повторить печать"/>
   <translation tag="Reprint Last" ru="Перепечатать последнюю"/>
@@ -1428,13 +1404,13 @@
   <translation tag="Role:" ru="Тип:"/>
   <translation tag="Rotation" ru="Поворот"/>
   <translation tag="Rotation: %d\xc2\xb0 - %ds remaining (or wait to retry)" ru="Поворот: %d\xc2\xb0 - осталось %ds (или подождите для повтора)"/>
-  <translation tag="Rounded"/>
+  <translation tag="Rounded" ru="Скруглённый"/>
   <translation tag="Run" ru="Запуск"/>
   <translation tag="Run Dangerous Macro?" ru="Запустить опасный макрос?"/>
   <translation tag="Run Macro" ru="Запустить макрос"/>
-  <translation tag="Run Macro?"/>
+  <translation tag="Run Macro?" ru="Запустить макрос?"/>
   <translation tag="Run a Klipper macro when preheating this material" ru="Запускать макрос Klipper при преднагреве этого материала"/>
-  <translation tag="Run {}?"/>
+  <translation tag="Run {}?" ru="Запустить {}?"/>
   <translation tag="Running {}..." ru="Выполнение {}..."/>
   <translation tag="Runout Sensor" ru="Датчик окончания"/>
   <translation tag="SETTINGS" ru="НАСТРОЙКИ"/>
@@ -1446,7 +1422,6 @@
   <translation tag="STOP" ru="СТОП"/>
   <translation tag="STYLE PROPERTIES" ru="СВОЙСТВА СТИЛЯ"/>
   <translation tag="SWITCH SENSORS" ru="КОНЦЕВЫЕ ДАТЧИКИ"/>
-  <translation tag="SYSTEM" ru="СИСТЕМА"/>
   <translation tag="Safety &amp; Notifications" ru="Безопасность и уведомления"/>
   <translation tag="Sample" ru="Образец"/>
   <translation tag="Sample %d/%d" ru="Образец %d/%d"/>
@@ -1463,7 +1438,6 @@
   <translation tag="Save Z-Offset?" ru="Сохранить Z-Offset?"/>
   <translation tag="Save changes to persist them across restarts?" ru="Сохранить изменения, чтобы они сохранились после перезапуска?"/>
   <translation tag="Save failed: {}" ru="Ошибка сохранения: {}"/>
-  <translation tag="Saved"/>
   <translation tag="Saved Z-Offset" ru="Сохранённый Z-Offset"/>
   <translation tag="Saved to crash_report.txt (QR not available)" ru="Сохранено в crash_report.txt (QR недоступен)"/>
   <translation tag="Saved to printer configuration." ru="Сохранено в конфигурацию принтера."/>
@@ -1472,16 +1446,14 @@
   <translation tag="Saving Z-offset..." ru="Сохранение Z-offset..."/>
   <translation tag="Saving config... Klipper will restart." ru="Сохранение конфигурации... Klipper перезапустится."/>
   <translation tag="Saving will restart Klipper and CANCEL any active print!" ru="Сохранение перезапустит Klipper и ОТМЕНИТ любую активную печать!"/>
-  <translation tag="Scan"/>
-  <translation tag="Scan Bluetooth"/>
+  <translation tag="Scan" ru="Поиск"/>
   <translation tag="Scan Cal" ru="Кал. скана"/>
   <translation tag="Scan QR Code" ru="Сканировать QR-код"/>
   <translation tag="Scan Spool QR Code" ru="Сканировать QR-код катушки"/>
   <translation tag="Scan and select a Bluetooth printer first" ru="Сначала найдите и выберите Bluetooth-принтер"/>
   <translation tag="Scan for Printers" ru="Поиск принтеров"/>
-  <translation tag="Scanner"/>
+  <translation tag="Scanner" ru="Сканер"/>
   <translation tag="Scanner bonded but didn&apos;t attach as a keyboard. Try turning the scanner off and on, then tap Pair again. If that fails, add ClassicBondedOnly=false to /etc/bluetooth/input.conf." ru="Сканер сопряжён, но не подключился как клавиатура. Попробуйте выключить и включить сканер, затем снова нажмите Pair. Если не поможет, добавьте ClassicBondedOnly=false в /etc/bluetooth/input.conf."/>
-  <translation tag="Scanner paired but can&apos;t receive input. Put the scanner in pairing mode (see its manual — usually a setup barcode or a button hold) and tap Pair again." ru="Сканер сопряжён, но не получает ввод. Переведите сканер в режим сопряжения (см. его руководство — обычно это настроечный штрих-код или удержание кнопки) и снова нажмите Pair."/>
   <translation tag="Scanning for networks..." ru="Поиск сетей..."/>
   <translation tag="Scanning..." ru="Сканирование..."/>
   <translation tag="Score: 0" ru="Счёт: 0"/>
@@ -1491,7 +1463,6 @@
   <translation tag="Screen sleeps after the selected period of inactivity" ru="Экран затемнится после выбранного периода простоя"/>
   <translation tag="Screensaver" ru="Заставка"/>
   <translation tag="Screws Tilt" ru="Наклон винтов"/>
-  <translation tag="Scroll Speed" ru="Скорость прокрутки"/>
   <translation tag="Search filename..." ru="Поиск файла..."/>
   <translation tag="Search spools..." ru="Поиск катушек..."/>
   <translation tag="Search vendors..." ru="Поиск производителей..."/>
@@ -1501,15 +1472,13 @@
   <translation tag="Security" ru="Безопасность"/>
   <translation tag="Security, network, host, and administration" ru="Безопасность, сеть, хост и администрирование"/>
   <translation tag="See exactly what data will be sent" ru="Посмотрите, какие именно данные будут отправлены"/>
-  <translation tag="See the quick tour of HelixScreen again"/>
+  <translation tag="See the quick tour of HelixScreen again" ru="Посмотреть краткий тур по HelixScreen снова"/>
   <translation tag="Select" ru="Выбрать"/>
   <translation tag="Select &apos;None&apos; if you don&apos;t have a filament sensor, or if you don&apos;t want to pause on runout." ru="Выберите &apos;Нет&apos;, если у вас нет датчика филамента или пауза по окончании филамента не нужна."/>
   <translation tag="Select Fan" ru="Выбрать вентилятор"/>
   <translation tag="Select G-Code File" ru="Выбрать файл G-Code"/>
-  <translation tag="Select Power Device" ru="Выбрать устройство питания"/>
   <translation tag="Select Sensor" ru="Выбрать датчик"/>
   <translation tag="Select Sensors" ru="Выбрать датчики"/>
-  <translation tag="Select Slot" ru="Выбрать слот"/>
   <translation tag="Select Spool" ru="Выбрать катушку"/>
   <translation tag="Select a filament slot to load" ru="Выберите слот филамента для загрузки"/>
   <translation tag="Select fan" ru="Выберите вентилятор"/>
@@ -1522,7 +1491,7 @@
   <translation tag="Select which devices the home screen power button controls" ru="Выберите устройства для кнопки питания на главном экране"/>
   <translation tag="Select which sensor triggers pause on filament runout" ru="Выберите датчик, который ставит на паузу при окончании филамента"/>
   <translation tag="Select your preferred language" ru="Выберите предпочитаемый язык"/>
-  <translation tag="Selected"/>
+  <translation tag="Selected" ru="Выбрано"/>
   <translation tag="Selecting slot..." ru="Выбор слота..."/>
   <translation tag="Self-Test" ru="Самотестирование"/>
   <translation tag="Semantic Size Parameter Tests" ru="Тесты семантических параметров размера"/>
@@ -1554,13 +1523,15 @@
   <translation tag="Shininess:" ru="Блеск:"/>
   <translation tag="Show Printer Switcher" ru="Показывать переключатель принтеров"/>
   <translation tag="Show Sections" ru="Показать разделы"/>
-  <translation tag="Show a confirmation dialog when tapping a macro"/>
+  <translation tag="Show a confirmation dialog when tapping a macro" ru="Показывать диалог подтверждения при нажатии на макрос"/>
   <translation tag="Show detailed print preparation status" ru="Показывать детальный статус подготовки к печати"/>
   <translation tag="Show instead of dimming" ru="Показывать вместо затемнения"/>
   <translation tag="Show printer icon in navigation bar" ru="Показывать значок принтера в панели навигации"/>
   <translation tag="Show text labels on icon-only home screen widgets" ru="Показывать текстовые подписи на виджетах главного экрана"/>
   <translation tag="Shutdown" ru="Выключение"/>
   <translation tag="Shutdown / Reboot" ru="Выключение / Перезагрузка"/>
+  <translation tag="Shutdown failed" ru="Ошибка выключения"/>
+  <translation tag="Shutdown failed — host is still reachable" ru="Ошибка выключения — хост всё ещё доступен"/>
   <translation tag="Shutting down..." ru="Выключение..."/>
   <translation tag="Side" ru="Сбоку"/>
   <translation tag="Single toggle macro. State is not tracked." ru="Один макрос переключения. Состояние не отслеживается."/>
@@ -1574,9 +1545,8 @@
   <translation tag="Slot {} updated" ru="Слот {} обновлён"/>
   <translation tag="Small labels help keep controls calm and focused." ru="Мелкие надписи помогают сохранять элементы управления аккуратными."/>
   <translation tag="Snapmaker SnapSwap" ru="Snapmaker SnapSwap"/>
-  <translation tag="Soft"/>
+  <translation tag="Soft" ru="Мягкий"/>
   <translation tag="Some settings will take effect after restart." ru="Некоторые настройки вступят в силу после перезапуска."/>
-  <translation tag="Sound Settings" ru="Настройки звука"/>
   <translation tag="Sound Theme" ru="Звуковая тема"/>
   <translation tag="Sounds" ru="Звуки"/>
   <translation tag="Source" ru="Источник"/>
@@ -1634,11 +1604,10 @@
   <translation tag="Stop Drying" ru="Остановить сушку"/>
   <translation tag="Stop Print?" ru="Остановить печать?"/>
   <translation tag="Stop failed" ru="Ошибка остановки"/>
-  <translation tag="Stops all motion" ru="Остановить всё движение"/>
   <translation tag="Stops all motion. Requires firmware restart." ru="Останавливает всё движение. Требуется перезапуск прошивки."/>
   <translation tag="Stow" ru="Убрать"/>
   <translation tag="Strobe LED" ru="Стробоскоп"/>
-  <translation tag="Subtle"/>
+  <translation tag="Subtle" ru="Сдержанный"/>
   <translation tag="Success" ru="Успех"/>
   <translation tag="Success Rate" ru="Процент успеха"/>
   <translation tag="Success!" ru="Успешно!"/>
@@ -1653,7 +1622,7 @@
   <translation tag="Sync with Spoolman" ru="Синхронизация со Spoolman"/>
   <translation tag="Sysfs" ru="Sysfs"/>
   <translation tag="System" ru="Система"/>
-  <translation tag="System Keyboard"/>
+  <translation tag="System Keyboard" ru="Системная клавиатура"/>
   <translation tag="System detected" ru="Обнаружена система"/>
   <translation tag="TD-1 filament color detection" ru="Определение цвета филамента TD-1"/>
   <translation tag="TEMPERATURE SENSORS" ru="ДАТЧИКИ ТЕМПЕРАТУРЫ"/>
@@ -1684,7 +1653,7 @@
   <translation tag="Test Connection" ru="Тест соединения"/>
   <translation tag="Test Network" ru="Тест сети"/>
   <translation tag="Test Print" ru="Тестовая печать"/>
-  <translation tag="Test Sound" ru="Тестовый звук"/>
+  <translation tag="Test Screensaver" ru="Проверить заставку"/>
   <translation tag="Test Tracker" ru="Test Tracker"/>
   <translation tag="Test label printed" ru="Тестовая этикетка напечатана"/>
   <translation tag="Testing rotation: %d\xc2\xb0 (%d/%d) - %ds remaining" ru="Тест поворота: %d\xc2\xb0 (%d/%d) - осталось %ds"/>
@@ -1700,12 +1669,11 @@
   <translation tag="Theme Preset" ru="Пресет темы"/>
   <translation tag="Theme changes apply after restart." ru="Изменения темы применяются после перезапуска."/>
   <translation tag="Theme reset to defaults" ru="Тема сброшена к настройкам по умолчанию"/>
-  <translation tag="Theme, brightness, and sleep settings" ru="Тема, яркость и настройки сна"/>
-  <translation tag="These tools have incompatible materials loaded:"/>
+  <translation tag="These tools have incompatible materials loaded:" ru="В этих инструментах загружены несовместимые материалы:"/>
   <translation tag="These tools have no matching filament loaded:" ru="В этих инструментах нет подходящего филамента:"/>
   <translation tag="This calibration uses the paper friction method to set your Z-offset." ru="Эта калибровка использует метод трения бумаги об сопло для установки Z-смещения."/>
   <translation tag="This cannot be undone." ru="Это действие нельзя отменить."/>
-  <translation tag="This file was sliced for {} but {} is loaded."/>
+  <translation tag="This file was sliced for {} but {} is loaded." ru="Файл нарезан для {}, но загружен {}."/>
   <translation tag="This is exactly the data that will be sent" ru="Это именно те данные, которые будут отправлены"/>
   <translation tag="This is what data would be sent if enabled" ru="Эти данные были бы отправлены при включении"/>
   <translation tag="This may take up to 30 seconds" ru="Это может занять до 30 секунд"/>
@@ -1762,7 +1730,6 @@
   <translation tag="Troubleshooting:" ru="Устранение неполадок:"/>
   <translation tag="Try adjusting your search or filters" ru="Попробуйте изменить поиск или фильтры"/>
   <translation tag="Tune" ru="Настройка"/>
-  <translation tag="Tuning control parameters..." ru="Настройка параметров управления..."/>
   <translation tag="Tuning tower enabled - start a print to test" ru="Башня настройки включена — начните печать для теста"/>
   <translation tag="Turbo" ru="Турбо"/>
   <translation tag="Turn Off" ru="Выключить"/>
@@ -1772,7 +1739,8 @@
   <translation tag="Type to preview input field..." ru="Введите для предпросмотра поля ввода..."/>
   <translation tag="UI Sounds" ru="Звуки интерфейса"/>
   <translation tag="USB" ru="USB"/>
-  <translation tag="USB DEVICES"/>
+  <translation tag="USB DEVICES" ru="USB-УСТРОЙСТВА"/>
+  <translation tag="USB printer access denied — check permissions" ru="Доступ к USB-принтеру запрещён — проверьте разрешения"/>
   <translation tag="Understanding Results" ru="Понимание результатов"/>
   <translation tag="Uninstall HelixPrint Plugin" ru="Удалить плагин HelixPrint"/>
   <translation tag="Uninstall: Coming soon" ru="Удаление: Скоро появится"/>
@@ -1785,7 +1753,6 @@
   <translation tag="Unload" ru="Выгрузить"/>
   <translation tag="Unload Filament" ru="Выгрузить филамент"/>
   <translation tag="Unload failed: {}" ru="Ошибка выгрузки: {}"/>
-  <translation tag="Unload filament macro not configured" ru="Макрос выгрузки филамента не настроен"/>
   <translation tag="Unload macro not configured" ru="Макрос выгрузки не настроен"/>
   <translation tag="Unload may still be running — response timed out" ru="Выгрузка может ещё выполняться — время ожидания истекло"/>
   <translation tag="Unloading before bypass..." ru="Выгрузка перед байпасом..."/>
@@ -1795,6 +1762,7 @@
   <translation tag="Unmapped" ru="Не назначен"/>
   <translation tag="Unretract Extra" ru="Дополнительная подача"/>
   <translation tag="Unretract Speed" ru="Скорость возврата"/>
+  <translation tag="Update" ru="Обновить"/>
   <translation tag="Update Available" ru="Доступно обновление"/>
   <translation tag="Update Channel" ru="Канал обновлений"/>
   <translation tag="Update Failed" ru="Ошибка обновления"/>
@@ -1805,10 +1773,9 @@
   <translation tag="Upload Debug Bundle" ru="Отправить пакет диагностики"/>
   <translation tag="Upload Failed" ru="Ошибка отправки"/>
   <translation tag="Upload gcode files to get started" ru="Загрузите gcode-файлы для начала"/>
-  <translation tag="Use Android native keyboard for text input"/>
+  <translation tag="Use Android native keyboard for text input" ru="Использовать нативную клавиатуру Android для ввода текста"/>
   <translation tag="Use G10/G11 firmware retraction" ru="Использовать аппаратный ретракт G10/G11"/>
   <translation tag="Use printer type to select image" ru="Использовать тип принтера для выбора изображения"/>
-  <translation tag="Uses name-based priority"/>
   <translation tag="Value must be between {:.0f} and {:.0f}" ru="Значение должно быть от {:.0f} до {:.0f}"/>
   <translation tag="Velocity and acceleration limits" ru="Ограничения скорости и ускорения"/>
   <translation tag="Vendor" ru="Производитель"/>
@@ -1834,7 +1801,6 @@
   <translation tag="View print statistics and job history" ru="Просмотр статистики печати и истории заданий"/>
   <translation tag="Visual Fine-Tuning" ru="Визуальная тонкая настройка"/>
   <translation tag="Volume" ru="Громкость"/>
-  <translation tag="Volume, themes, and UI sounds" ru="Громкость, темы и звуки интерфейса"/>
   <translation tag="WIDTH SENSORS" ru="ДАТЧИКИ ШИРИНЫ"/>
   <translation tag="WLED" ru="WLED"/>
   <translation tag="Waiting for Moonraker..." ru="Ожидание Moonraker..."/>
@@ -1857,7 +1823,6 @@
   <translation tag="WiFi Disabled" ru="WiFi отключён"/>
   <translation tag="WiFi Enabled" ru="WiFi включён"/>
   <translation tag="WiFi Network" ru="Сеть WiFi"/>
-  <translation tag="WiFi and Ethernet" ru="WiFi и Ethernet"/>
   <translation tag="WiFi and Ethernet configuration" ru="Настройка WiFi и Ethernet"/>
   <translation tag="WiFi control unavailable" ru="Управление WiFi недоступно"/>
   <translation tag="WiFi hardware unavailable" ru="Оборудование WiFi недоступно"/>
@@ -1913,7 +1878,7 @@
   <translation tag="Z:" ru="Z:"/>
   <translation tag="Z: 0.000" ru="Z: 0.000"/>
   <translation tag="Zoom" ru="Масштаб"/>
-  <translation tag="bed"/>
+  <translation tag="bed" ru="стол"/>
   <translation tag="by Preston Brown" ru="by Preston Brown"/>
   <translation tag="disable" ru="отключить"/>
   <translation tag="disabled" ru="отключено"/>
@@ -1925,9 +1890,9 @@
   <translation tag="layers" ru="слои"/>
   <translation tag="left" ru="осталось"/>
   <translation tag="mm before clog" ru="мм до засора"/>
-  <translation tag="needs"/>
+  <translation tag="needs" ru="требуется"/>
   <translation tag="not detected" ru="не обнаружено"/>
-  <translation tag="nozzle"/>
+  <translation tag="nozzle" ru="сопло"/>
   <translation tag="of" ru="из"/>
   <translation tag="off" ru="выкл"/>
   <translation tag="prints" ru="печатей"/>
@@ -1936,22 +1901,22 @@
   <translation tag="set to" ru="установлено на"/>
   <translation tag="started" ru="запущено"/>
   <translation tag="tall" ru="высотой"/>
-  <translation tag="tour.step.advanced.body"/>
-  <translation tag="tour.step.advanced.title"/>
-  <translation tag="tour.step.controls.body"/>
-  <translation tag="tour.step.controls.title"/>
-  <translation tag="tour.step.customize.body"/>
-  <translation tag="tour.step.customize.title"/>
-  <translation tag="tour.step.filament.body"/>
-  <translation tag="tour.step.filament.title"/>
-  <translation tag="tour.step.home_grid.body"/>
-  <translation tag="tour.step.home_grid.title"/>
-  <translation tag="tour.step.print.body"/>
-  <translation tag="tour.step.print.title"/>
-  <translation tag="tour.step.settings.body"/>
-  <translation tag="tour.step.settings.title"/>
-  <translation tag="tour.step.welcome.body"/>
-  <translation tag="tour.step.welcome.title"/>
+  <translation tag="tour.step.advanced.body" ru="Макросы, консоль G-code, инструменты калибровки (PID, Input Shaper, Z-смещение), обновления прошивки и утилиты для разработчиков."/>
+  <translation tag="tour.step.advanced.title" ru="Дополнительно"/>
+  <translation tag="tour.step.controls.body" ru="Перемещайте печатающую головку, паркуйте оси, выравнивайте стол и точно настраивайте температуры, вентиляторы и другие параметры движения."/>
+  <translation tag="tour.step.controls.title" ru="Управление"/>
+  <translation tag="tour.step.customize.body" ru="Долгое нажатие на любую плитку переводит в режим редактирования — переставляйте, изменяйте размер, удаляйте или добавляйте виджеты, а также добавляйте дополнительные страницы под свой макет."/>
+  <translation tag="tour.step.customize.title" ru="Настройте главный экран"/>
+  <translation tag="tour.step.filament.body" ru="Загружайте, выгружайте и меняйте катушки. Просматривайте вашу мультифиламентную систему одним взглядом, сопоставляйте цвета со слотами и отслеживайте датчики окончания филамента."/>
+  <translation tag="tour.step.filament.title" ru="Филамент"/>
+  <translation tag="tour.step.home_grid.body" ru="Нажмите на любую плитку, чтобы открыть её полные элементы управления или переключить состояние."/>
+  <translation tag="tour.step.home_grid.title" ru="Ваш принтер одним взглядом"/>
+  <translation tag="tour.step.print.body" ru="Отслеживайте выполняющиеся печати — оставшееся время, текущий слой и прогресс. Нажмите, чтобы приостановить, возобновить или отменить активное задание."/>
+  <translation tag="tour.step.print.title" ru="Статус печати"/>
+  <translation tag="tour.step.settings.body" ru="Сеть, дисплей, звук, настройка принтера и многое другое. Этот тур можно повторить в любой момент из раздела «Справка и о программе»."/>
+  <translation tag="tour.step.settings.title" ru="Настройки"/>
+  <translation tag="tour.step.welcome.body" ru="Давайте устроим краткий тур, чтобы вы могли быстро находить всё нужное."/>
+  <translation tag="tour.step.welcome.title" ru="Добро пожаловать в HelixScreen"/>
   <translation tag="used" ru="использ."/>
   <translation tag="v{} is available. Tap to update." ru="v{} доступна. Нажмите для обновления."/>
   <translation tag="{} axis homed" ru="Ось {} запаркована"/>
