@@ -8,13 +8,12 @@ How the CI pipeline ships `helix-screen` to Google Play, and the one-time manual
 - In-repo automation (CI builds signed AAB, generates whatsnew from CHANGELOG, publishes to internal track when service-account secret is set).
 - Upload keystore generated and backed up at `~/.android-keystore/helixscreen-upload.jks`; four keystore-related GitHub secrets set (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`).
 - Store assets committed: 8 phone screenshots, 1024×500 feature graphic, 512×512 store icon, title / short / full descriptions. Fastlane metadata at `android/fastlane/metadata/android/en-US/`.
-- Privacy policy (`docs/user/PRIVACY_POLICY.md`) reviewed — platform-neutral, no content rewrite needed.
+- Privacy policy published at `https://helixscreen.org/legal/privacy/` (platform-neutral; applies to Android as-is).
+- Google Play Developer account org verification **cleared** (356C LLC).
 
-**In progress / waiting on external parties:**
-- ⏳ Google Play Developer account **in org verification**. Google quotes 1–2 business days, sometimes longer. No action on our side until it clears.
-- ⏳ Privacy policy not yet published at `https://helixscreen.org/privacy` (website repo work, unrelated to Google's timeline — can happen any time).
+**Warning — v0.99.43 AAB is debug-signed.** Secrets were added at 16:39 UTC on 2026-04-23; v0.99.43 built at 23:15 UTC on 2026-04-22, before the secrets were present, so its keystore step fell back to the Android Debug keystore. Play Store will reject it. **First manual upload must use v0.99.44 or later** — those are the first releases signed with the real upload keystore.
 
-**Blocked on verification completing:**
+**Blocked on first manual upload (user):**
 - Create the HelixScreen app record in Play Console.
 - Upload listing text + store icon + feature graphic + 8 screenshots via Play Console UI.
 - First manual AAB upload to the internal track (Google requires this before the Publishing API accepts uploads). Grab the AAB from whichever GitHub release is most recent at that point — CI already signs it with the upload keystore.
@@ -55,12 +54,12 @@ The listing text (title / descriptions / screenshots) is **not** synced by the w
 
 Before the first run of `publish-android` can succeed, the following must be done by hand. Tick each item as it completes.
 
-- [~] **Google Play Developer account** — registered 2026-04-23 as `356C LLC`; currently in Google's org verification queue (1–2 business days).
-- [ ] **Create the app in Play Console** — name "HelixScreen", default language English (US), free, app type = App. *Blocked on org verification.*
+- [x] **Google Play Developer account** — registered 2026-04-23 as `356C LLC`; org verification cleared same day.
+- [ ] **Create the app in Play Console** — name "HelixScreen", default language English (US), free, app type = App.
 - [ ] **Complete Play Console declarations** — target audience, data safety, content rating (expected: Everyone), ads (none), government/COVID/financial questionnaires.
 - [ ] **Upload listing assets manually** — title, short/full description, store icon, feature graphic, and 8 screenshots from `android/fastlane/metadata/android/en-US/`. Use the text in the `.txt` files verbatim so Play Console matches the repo.
-- [ ] **Privacy policy URL** — publish `docs/user/PRIVACY_POLICY.md` at `https://helixscreen.org/privacy` (separate repo — website pipeline) and paste that URL into Play Console. The existing policy is platform-neutral and applies to the Android app as-is; no content rewrite needed. The Play Console "Data Safety" questionnaire is separate from the privacy policy URL — fill it out based on what Section 4 of the policy describes (opt-in telemetry; no PII; encrypted in transit; users can request deletion of local queue). *Can be done any time; independent of Google verification.*
-- [ ] **First manual AAB upload** — Google requires one manual AAB upload before the Publishing API will accept uploads. Download the `.aab` from the most recent GitHub release and upload it to the internal track via the Play Console UI. This also triggers the **Play App Signing** enrollment prompt — accept it.
+- [x] **Privacy policy URL** — `https://helixscreen.org/legal/privacy/` is live. Paste that URL into Play Console → App content → Privacy policy. The Play Console "Data Safety" questionnaire is separate from the privacy policy URL — fill it out based on what Section 4 of the policy describes (opt-in telemetry; no PII; encrypted in transit; users can request deletion of local queue).
+- [ ] **First manual AAB upload** — Google requires one manual AAB upload before the Publishing API will accept uploads. **Use v0.99.44 or later** — v0.99.43 and earlier are debug-signed and will be rejected. Download `helixscreen-android-v<VERSION>.aab` from the GitHub release and upload it to the internal track via the Play Console UI. This also triggers the **Play App Signing** enrollment prompt — accept it.
 - [ ] **Generate a service account for the API** — in Google Cloud Console (linked to the Play Developer account):
   1. Create a new service account named e.g. `helixscreen-ci`.
   2. Enable the "Google Play Android Developer API" for the project.
