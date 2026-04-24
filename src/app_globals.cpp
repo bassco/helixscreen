@@ -437,3 +437,12 @@ std::string app_get_install_root() {
     }();
     return cached;
 }
+
+std::string app_get_cache_dir() {
+    static const std::string cached = []() {
+        std::string p = get_helix_cache_dir("");  // base, no subdir
+        while (p.size() > 1 && p.back() == '/') p.pop_back();
+        return p;
+    }();
+    return cached;
+}

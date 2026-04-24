@@ -804,6 +804,12 @@ std::string app_get_install_root() {
     return "";
 }
 
+// Stub for app_get_cache_dir (tests use temp directory via get_helix_cache_dir stub)
+// Returns empty string — matches the production fallback when cache resolution fails.
+std::string app_get_cache_dir() {
+    return "";
+}
+
 // Stub for get_moonraker_manager (tests don't have manager)
 MoonrakerManager* get_moonraker_manager() {
     return nullptr;

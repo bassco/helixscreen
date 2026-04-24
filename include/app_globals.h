@@ -305,3 +305,10 @@ std::string get_helix_cache_dir(const std::string& subdir);
  * Result is cached after first call.
  */
 std::string app_get_install_root();
+
+// Returns the cache directory (thumbnails, update tarballs, transient
+// assets). Resolved via the same platform-specific hierarchy as
+// get_helix_cache_dir(""), with any trailing slash stripped for display.
+// Never returns empty — falls back to /tmp/helix_ or similar.
+// Result is cached after first call.
+std::string app_get_cache_dir();
