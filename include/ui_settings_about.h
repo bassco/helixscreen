@@ -121,6 +121,9 @@ class AboutSettingsOverlay : public OverlayBase {
     lv_subject_t about_version_description_subject_{};
     lv_subject_t printer_value_subject_{};
     lv_subject_t print_hours_value_subject_{};
+    lv_subject_t install_root_value_subject_{};
+    lv_subject_t config_dir_value_subject_{};
+    lv_subject_t cache_dir_value_subject_{};
     lv_subject_t update_current_version_subject_{};
     lv_subject_t about_copyright_subject_{};
 
@@ -129,6 +132,9 @@ class AboutSettingsOverlay : public OverlayBase {
     char about_version_description_buf_[48];
     char printer_value_buf_[64];
     char print_hours_value_buf_[32];
+    char install_root_value_buf_[256];
+    char config_dir_value_buf_[256];
+    char cache_dir_value_buf_[256];
     char update_current_version_buf_[32];
     char about_copyright_buf_[48];
 
