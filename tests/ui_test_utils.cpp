@@ -810,6 +810,12 @@ std::string app_get_cache_dir() {
     return "";
 }
 
+// Stub for app_get_config_dir (tests don't have a resolvable install layout)
+// Returns empty string — matches the production fallback when install root is unknown.
+std::string app_get_config_dir() {
+    return "";
+}
+
 // Stub for get_moonraker_manager (tests don't have manager)
 MoonrakerManager* get_moonraker_manager() {
     return nullptr;

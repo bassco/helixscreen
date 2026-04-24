@@ -446,3 +446,19 @@ std::string app_get_cache_dir() {
     }();
     return cached;
 }
+
+std::string app_get_config_dir() {
+    static const std::string cached = []() {
+        std::string cfg = helix::get_user_config_dir();  // "config" or $HELIX_CONFIG_DIR
+        while (cfg.size() > 1 && cfg.back() == '/') cfg.pop_back();
+        if (!cfg.empty() && cfg.front() == '/') {
+            return cfg;  // absolute already
+        }
+        const std::string root = app_get_install_root();
+        if (!root.empty()) {
+            return root + "/" + cfg;
+        }
+        return cfg;  // best-effort relative fallback
+    }();
+    return cached;
+}

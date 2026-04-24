@@ -26,3 +26,12 @@ TEST_CASE("app_get_cache_dir returns a non-empty absolute path", "[app_globals][
     (void)cache;
     SUCCEED("app_get_cache_dir() returned without crashing");
 }
+
+TEST_CASE("app_get_config_dir returns without crashing", "[app_globals][paths]") {
+    // Note: in the test binary, ui_test_utils.cpp stubs this to return "",
+    // so this test smoke-checks the production interface only. The
+    // underlying helix::get_user_config_dir() is exercised by its own tests.
+    const std::string cfg = app_get_config_dir();
+    (void)cfg;
+    SUCCEED("app_get_config_dir() returned without crashing");
+}

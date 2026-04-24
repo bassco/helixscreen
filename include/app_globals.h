@@ -312,3 +312,10 @@ std::string app_get_install_root();
 // Never returns empty — falls back to /tmp/helix_ or similar.
 // Result is cached after first call.
 std::string app_get_cache_dir();
+
+// Returns the config directory (settings.json, printer_database.json,
+// helixscreen.env). If HELIX_CONFIG_DIR is set, returns it verbatim.
+// Otherwise joins the install root with "config" to form an absolute path.
+// Falls back to the relative "config" when install root is unknown.
+// Result is cached after first call.
+std::string app_get_config_dir();
