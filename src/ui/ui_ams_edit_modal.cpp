@@ -918,7 +918,9 @@ void AmsEditModal::handle_print_label() {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
         } else {
             spdlog::error("[AmsEditModal] Print failed: {}", error);
-            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          helix::friendly_label_printer_error(error).c_str(),
+                                          5000);
         }
     };
 

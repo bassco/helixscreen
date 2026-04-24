@@ -842,7 +842,9 @@ void SpoolmanPanel::print_label_for_spool(int spool_id) {
             ToastManager::instance().show(ToastSeverity::SUCCESS, lv_tr("Label printed"), 2000);
         } else {
             spdlog::error("[SpoolmanPanel] Print failed: {}", error);
-            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          helix::friendly_label_printer_error(error).c_str(),
+                                          5000);
         }
     };
 

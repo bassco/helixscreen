@@ -17,6 +17,17 @@ namespace helix {
 /// Callback fires on UI thread.
 void print_spool_label(const SpoolInfo& spool, PrintCallback callback);
 
+/// Translate a raw label-printer error string into a user-actionable toast message.
+///
+/// Raw error strings come from BlueZ D-Bus ("br-connection-profile-unavailable",
+/// "Connection timed out"), our Niimbot protocol layer ("cmd[3] 0x20 response
+/// timeout"), the BLE GATT layer ("GATT characteristic not found"), CUPS/IPP,
+/// and USB — none of which mean anything to the user. This maps known
+/// signatures to actionable advice; unknown errors fall back to a generic
+/// "Print failed". Result is already run through lv_tr() and safe to show
+/// directly in a toast.
+std::string friendly_label_printer_error(const std::string& raw);
+
 /**
  * Score how likely a discovered printer is to be a label printer.
  * Higher scores = more likely. 0 = definitely not a label printer.

@@ -1017,7 +1017,9 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
                                           2000);
         } else {
             spdlog::error("[LabelPrinterSettings] Test print failed: {}", error);
-            ToastManager::instance().show(ToastSeverity::ERROR, lv_tr("Print failed"), 3000);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          helix::friendly_label_printer_error(error).c_str(),
+                                          5000);
         }
 
         // Re-enable test print button via subject

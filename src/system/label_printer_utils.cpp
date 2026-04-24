@@ -5,6 +5,7 @@
 
 #include "label_printer_utils.h"
 
+#include "lvgl.h"
 #include "bluetooth_loader.h"
 #include "brother_pt_bt_printer.h"
 #include "brother_pt_protocol.h"
@@ -29,6 +30,7 @@
 #include "usb_printer_detector.h"
 
 #include <algorithm>
+#include <cctype>
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -257,6 +259,76 @@ void print_spool_label(const SpoolInfo& spool, PrintCallback callback) {
             net_printer.print_label(host, port, bitmap, actual_size, callback);
         });
     }
+}
+
+std::string friendly_label_printer_error(const std::string& raw) {
+    if (raw.empty()) {
+        return lv_tr("Print failed");
+    }
+
+    // Normalize to lowercase so case variation across backends doesn't cause
+    // the intended branch to be skipped (makeid emits "Write failed at chunk"
+    // with a capital W; niimbot/phomemo BT emit "BLE write failed" lowercase).
+    std::string lower = raw;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    // BR/EDR transport wedged — stale pairing or dual-mode confusion. The
+    // ConnectProfile fallback in bt_ble.cpp already retries LE once, so if we
+    // still see this the device is genuinely unreachable on both transports.
+    if (lower.find("br-connection-") != std::string::npos) {
+        return lv_tr("Can't connect — try forgetting and re-pairing the printer");
+    }
+    // BlueZ Connect() re-entered while a previous attempt is still pending.
+    // User tapped Test Print twice; wait and retry.
+    if (lower.find("in progress") != std::string::npos ||
+        lower.find("inprogress") != std::string::npos) {
+        return lv_tr("Already connecting — wait a moment and try again");
+    }
+    // Peripheral off / out of range / asleep.
+    if (lower.find("timed out") != std::string::npos ||
+        lower.find("timeout") != std::string::npos ||
+        lower.find("host is down") != std::string::npos) {
+        return lv_tr("Printer didn't respond — make sure it's on and in range");
+    }
+    // GATT service missing — device advertises but doesn't expose the write
+    // characteristic we expect. Usually means wrong device selected.
+    if (lower.find("gatt characteristic not found") != std::string::npos) {
+        return lv_tr("Printer doesn't expose the expected service — wrong device?");
+    }
+    // Not paired / authorization dropped.
+    if (lower.find("not authorized") != std::string::npos ||
+        lower.find("notauthorized") != std::string::npos ||
+        lower.find("not paired") != std::string::npos) {
+        return lv_tr("Printer is not paired — pair it first");
+    }
+    // Host-side setup problems.
+    if (lower.find("bluetooth not available") != std::string::npos) {
+        return lv_tr("Bluetooth is not available on this device");
+    }
+    // Bluetooth-specific "not configured" only. USB/IPP "not configured"
+    // strings fall through to the generic config branch below.
+    if (lower.find("bluetooth device not configured") != std::string::npos) {
+        return lv_tr("No Bluetooth printer selected — pick one in settings");
+    }
+    if (lower.find("not configured") != std::string::npos) {
+        return lv_tr("No printer configured — check printer settings");
+    }
+    // USB access issues (phomemo USB path emits "Cannot open /dev/usb/...").
+    if (lower.find("/dev/usb") != std::string::npos ||
+        lower.find("check permissions") != std::string::npos) {
+        return lv_tr("USB printer access denied — check permissions");
+    }
+    // Mid-print write failure — connection dropped / USB write error.
+    if (lower.find("write failed") != std::string::npos ||
+        lower.find("write to ") != std::string::npos) {
+        return lv_tr("Lost connection during print — try again");
+    }
+    // CUPS/IPP network errors.
+    if (lower.find("http") != std::string::npos || lower.find("ipp") != std::string::npos) {
+        return lv_tr("Print server rejected the job — check printer status");
+    }
+    return lv_tr("Print failed");
 }
 
 } // namespace helix
