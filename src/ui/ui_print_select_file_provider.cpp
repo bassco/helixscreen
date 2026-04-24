@@ -46,7 +46,7 @@ void PrintSelectFileProvider::refresh_files(const std::string& current_path,
 
     current_path_ = current_path;
 
-    spdlog::debug("[FileProvider] Refreshing file list from Moonraker (path: '{}')...",
+    spdlog::trace("[FileProvider] Refreshing file list from Moonraker (path: '{}')...",
                   current_path.empty() ? "/" : current_path);
 
     // Build map of existing file data to preserve thumbnails/metadata
@@ -66,14 +66,14 @@ void PrintSelectFileProvider::refresh_files(const std::string& current_path,
         // Success callback
         [self, existing_data = std::move(existing_data), path_copy, on_ready,
          on_err](const std::vector<FileInfo>& files) {
-            spdlog::debug("[FileProvider] Moonraker returned {} raw items for path='{}'",
+            spdlog::trace("[FileProvider] Moonraker returned {} raw items for path='{}'",
                           files.size(), path_copy.empty() ? "/" : path_copy);
             for (size_t i = 0; i < files.size() && i < 30; ++i) {
-                spdlog::debug("[FileProvider]   raw[{}]: '{}' (dir={}, modified={:.0f})", i,
+                spdlog::trace("[FileProvider]   raw[{}]: '{}' (dir={}, modified={:.0f})", i,
                               files[i].filename, files[i].is_dir, files[i].modified);
             }
             if (files.size() > 30) {
-                spdlog::debug("[FileProvider]   ... and {} more raw items", files.size() - 30);
+                spdlog::trace("[FileProvider]   ... and {} more raw items", files.size() - 30);
             }
 
             std::vector<PrintFileData> file_list;
@@ -163,8 +163,8 @@ void PrintSelectFileProvider::refresh_files(const std::string& current_path,
                 else
                     file_count++;
             }
-            spdlog::info("[FileProvider] File list updated: {} directories, {} printable files",
-                         dir_count, file_count);
+            spdlog::trace("[FileProvider] File list updated: {} directories, {} printable files",
+                          dir_count, file_count);
 
             // Deliver results via callback (metadata_fetched is now in each file struct)
             if (on_ready) {

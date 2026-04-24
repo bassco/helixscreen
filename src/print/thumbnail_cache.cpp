@@ -217,7 +217,7 @@ std::string ThumbnailCache::get_if_cached(const std::string& relative_path,
         }
     }
 
-    spdlog::trace("[ThumbnailCache] Cache hit for {}", relative_path);
+    spdlog::debug("[ThumbnailCache] Cache hit for {}", relative_path);
     return to_lvgl_path(cache_path);
 }
 
@@ -344,7 +344,7 @@ void ThumbnailCache::fetch(MoonrakerAPI* api, const std::string& relative_path,
     if (is_lvgl_path(relative_path)) {
         std::string local_path = relative_path.substr(2);
         if (std::filesystem::exists(local_path)) {
-            spdlog::trace("[ThumbnailCache] Already LVGL path: {}", relative_path);
+            spdlog::debug("[ThumbnailCache] Already LVGL path: {}", relative_path);
             if (on_success) {
                 on_success(relative_path);
             }
@@ -356,7 +356,7 @@ void ThumbnailCache::fetch(MoonrakerAPI* api, const std::string& relative_path,
 
     // Check local filesystem first (might be a local file path in mock mode)
     if (std::filesystem::exists(relative_path)) {
-        spdlog::trace("[ThumbnailCache] Local file exists: {}", relative_path);
+        spdlog::debug("[ThumbnailCache] Local file exists: {}", relative_path);
         if (on_success) {
             on_success(to_lvgl_path(relative_path));
         }
@@ -394,13 +394,13 @@ void ThumbnailCache::fetch(MoonrakerAPI* api, const std::string& relative_path,
     evict_if_needed();
 
     std::string cache_path = get_cache_path(relative_path);
-    spdlog::trace("[ThumbnailCache] Downloading {} -> {}", relative_path, cache_path);
+    spdlog::debug("[ThumbnailCache] Downloading {} -> {}", relative_path, cache_path);
 
     api->transfers().download_thumbnail(
         relative_path, cache_path,
         // Success callback
         [this, on_success, relative_path](const std::string& local_path) {
-            spdlog::trace("[ThumbnailCache] Downloaded {} to {}", relative_path, local_path);
+            spdlog::debug("[ThumbnailCache] Downloaded {} to {}", relative_path, local_path);
             // Check if we need eviction after download
             evict_if_needed();
             if (on_success) {
@@ -617,7 +617,7 @@ void ThumbnailCache::fetch_optimized(MoonrakerAPI* api, const std::string& relat
     // Step 1: Check for pre-scaled .bin (instant return if fresh)
     std::string optimized = get_if_optimized(relative_path, target, source_modified);
     if (!optimized.empty()) {
-        spdlog::trace("[ThumbnailCache] Pre-scaled cache hit: {}", optimized);
+        spdlog::debug("[ThumbnailCache] Pre-scaled cache hit: {}", optimized);
         if (on_success) {
             on_success(optimized);
         }
@@ -628,7 +628,7 @@ void ThumbnailCache::fetch_optimized(MoonrakerAPI* api, const std::string& relat
     std::string cached_png = get_if_cached(relative_path, source_modified);
     if (!cached_png.empty()) {
         // PNG exists and is fresh, queue for pre-scaling
-        spdlog::trace("[ThumbnailCache] PNG cached, queuing pre-scale: {}", relative_path);
+        spdlog::debug("[ThumbnailCache] PNG cached, queuing pre-scale: {}", relative_path);
         process_and_callback(cached_png, relative_path, target, on_success, on_error);
         return;
     }
@@ -654,7 +654,7 @@ void ThumbnailCache::fetch_optimized(MoonrakerAPI* api, const std::string& relat
     evict_if_needed();
 
     std::string cache_path = get_cache_path(relative_path);
-    spdlog::trace("[ThumbnailCache] Downloading for optimization: {} -> {}", relative_path,
+    spdlog::debug("[ThumbnailCache] Downloading for optimization: {} -> {}", relative_path,
                   cache_path);
 
     // Capture target and callbacks for the download completion handler
@@ -662,7 +662,7 @@ void ThumbnailCache::fetch_optimized(MoonrakerAPI* api, const std::string& relat
         relative_path, cache_path,
         // Success callback - PNG downloaded, now pre-scale it
         [this, on_success, on_error, relative_path, target](const std::string& local_path) {
-            spdlog::trace("[ThumbnailCache] Downloaded, now pre-scaling: {}", local_path);
+            spdlog::debug("[ThumbnailCache] Downloaded, now pre-scaling: {}", local_path);
             evict_if_needed();
 
             // Process the downloaded PNG

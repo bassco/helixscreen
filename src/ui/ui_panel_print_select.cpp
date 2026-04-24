@@ -428,14 +428,14 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
     file_provider_->set_api(api_);
     file_provider_->set_on_files_ready([self, token = self->lifetime_.token()](
                                            std::vector<PrintFileData>&& files) {
-        spdlog::debug("[{}] on_files_ready callback: received {} items from provider",
+        spdlog::trace("[{}] on_files_ready callback: received {} items from provider",
                       self->get_name(), files.size());
         for (size_t i = 0; i < files.size() && i < 30; ++i) {
-            spdlog::debug("[{}]   file[{}]: '{}' (dir={}, modified={})", self->get_name(), i,
+            spdlog::trace("[{}]   file[{}]: '{}' (dir={}, modified={})", self->get_name(), i,
                           files[i].filename, files[i].is_dir, files[i].modified_timestamp);
         }
         if (files.size() > 30) {
-            spdlog::debug("[{}]   ... and {} more items", self->get_name(), files.size() - 30);
+            spdlog::trace("[{}]   ... and {} more items", self->get_name(), files.size() - 30);
         }
 
         // CRITICAL: Defer ALL work to main thread
@@ -457,7 +457,7 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
             }
             auto* panel = c->panel;
 
-            spdlog::debug("[{}] on_files_ready: applying {} files on main thread",
+            spdlog::trace("[{}] on_files_ready: applying {} files on main thread",
                           panel->get_name(), c->files.size());
 
             panel->refresh_in_flight_ = false;
@@ -543,7 +543,7 @@ void PrintSelectPanel::setup(lv_obj_t* panel, lv_obj_t* parent_screen) {
                     panel->populate_list_view(same_dir);
                 }
             } else {
-                spdlog::debug("[{}] File list unchanged, skipping repopulation", panel->get_name());
+                spdlog::trace("[{}] File list unchanged, skipping repopulation", panel->get_name());
             }
             panel->last_populated_path_ = panel->current_path_;
 
@@ -931,7 +931,7 @@ void PrintSelectPanel::refresh_files(bool force) {
         return;
     }
 
-    spdlog::debug("[{}] refresh_files() called for path='{}', existing_count={}{}", get_name(),
+    spdlog::trace("[{}] refresh_files() called for path='{}', existing_count={}{}", get_name(),
                   current_path_.empty() ? "/" : current_path_, file_list_.size(),
                   force ? " (forced)" : "");
 
@@ -1147,6 +1147,9 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
     const ThumbnailInfo* best_thumb = metadata.get_best_thumbnail(target.width, target.height);
     std::string thumb_path =
         resolve_thumbnail_path(best_thumb ? best_thumb->relative_path : "", current_path_);
+    spdlog::debug("[{}] Metadata thumbnails for {}: count={}, selected='{}' -> '{}'", get_name(),
+                  filename, metadata.thumbnails.size(),
+                  best_thumb ? best_thumb->relative_path : "(none)", thumb_path);
 
     // Include predicted pre-print overhead (heating, homing, bed mesh, etc.)
     // in the total time estimate so users see realistic wall-clock time
@@ -1266,11 +1269,11 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
                 if (d->thumb_is_local) {
                     // Local file exists - use directly (mock mode)
                     self->file_list_[d->index].thumbnail_path = "A:" + d->thumb_path;
-                    spdlog::trace("[{}] Using local thumbnail for {}: {}", self->get_name(),
+                    spdlog::debug("[{}] Using local thumbnail for {}: {}", self->get_name(),
                                   d->filename, self->file_list_[d->index].thumbnail_path);
                 } else {
                     // Remote path - use semantic API for card view thumbnails
-                    spdlog::trace("[{}] Fetching card thumbnail for {}: {}", self->get_name(),
+                    spdlog::debug("[{}] Fetching card thumbnail for {}: {}", self->get_name(),
                                   d->filename, d->thumb_path);
 
                     size_t file_idx = d->index;
@@ -1348,7 +1351,7 @@ void PrintSelectPanel::process_metadata_result(size_t i, const std::string& file
                 // Skip if we already have a thumbnail for this file (avoids re-extracting
                 // 100KB of gcode on every scroll cycle — major perf issue on AD5M)
                 if (!self->file_list_[d->index].thumbnail_path.empty()) {
-                    spdlog::trace("[{}] Skipping gcode extraction for {} (already have thumbnail)",
+                    spdlog::debug("[{}] Skipping gcode extraction for {} (already have thumbnail)",
                                   self->get_name(), d->filename);
                 } else {
                     size_t file_idx = d->index;
@@ -1552,7 +1555,7 @@ void PrintSelectPanel::set_api(MoonrakerAPI* api) {
                 }
                 bool is_usb_active = panel->usb_source_ && panel->usb_source_->is_usb_active();
                 if (!is_usb_active) {
-                    spdlog::debug("[{}] Polling fallback: refreshing file list (current_count={})",
+                    spdlog::trace("[{}] Polling fallback: refreshing file list (current_count={})",
                                   panel->get_name(), panel->file_list_.size());
                     panel->refresh_files();
                 }
