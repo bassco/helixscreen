@@ -5,6 +5,32 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.45] - 2026-04-25
+
+A defensive-hardening release. The dominant theme is converting hard-to-debug LVGL crashes into logged anomalies that telemetry can act on, plus a scope-aware shutdown/reboot UX for users running multiple Klipper hosts.
+
+### Added
+- **Scope-aware shutdown/reboot modal** with split-button dual-host UX. When you have more than one host (e.g., a satellite Klipper running over MCU-share), the shutdown widget now lets you target Just This Printer or Both Hosts. Selecting Both chains the second action on the first host's ack; the host_identity cache is invalidated on each action so subsequent shutdowns don't bounce off stale state.
+- **Label printer error toasts** — raw BlueZ / vendor error strings are now mapped to actionable toast messages ("Niimbot is busy printing — wait for the current job" instead of `org.bluez.Error.Failed: Operation already in progress`).
+- **About panel: install root, config dir, cache dir rows** — pull from the new `app_globals` helpers, with a folder-home MDI glyph for the Install Root row.
+
+### Fixed
+- **L081-family LVGL crashes** ([#190], [#80], [#776], [#840], [#873]–[#878]) — `lv_event_mark_deleted` now bails defensively when `event_head` is corrupt (chain depth > 256 or pointer misaligned), reporting via `helix_lvgl_anomaly` with the head/target/depth context and a hex backtrace instead of segfaulting. Combined with the new async-delete breadcrumb hook (below), the next crash report from this family will name the widget being torn down at corruption time.
+- **Markdown null-deref on tight-memory devices** ([#879]) — md4c could null-deref deep inside `md_analyze_inlines` when an internal allocation failed (observed on K1, 209 MB RAM). The observer text path now short-circuits empty/null inputs and caps input length at 256 KB before handing off to md4c.
+- **Wizard step transition UAF** ([#871]) — style transitions queued by the previous step's widgets could fire `trans_anim_start_cb` on a freed widget after `lv_obj_clean`. The wizard now walks the subtree and cancels every pending animation before the clean.
+- **Print Select detail view: clear thumbnail by passing nullptr** — passing the buffer pointer instead of nullptr left the image cache thinking the slot was still live.
+- **Advanced panel: timelapse-setup row visibility race** — nested `bind_flag_if_eq` / `bind_flag_if_not_eq` on the same widget produced a last-one-wins race; the row is now nested inside a parent that owns the visibility binding.
+- **Modal button row: danger styling now renders** — the `primary_variant` XML prop wasn't wired through, so destructive modals ("Delete profile") rendered with primary blue instead of danger red.
+- **SDL sound: resize mix buffer before unpausing audio device** — fixes a transient pop / silence on the first sound after device init.
+- **Bluetooth BLE-only device connect** — fall back to `ConnectProfile` when `Connect` fails on BR/EDR-less peripherals, instead of surfacing a generic "connection refused".
+- **About panel: Install Root row icon** — was referencing `folder_home` which isn't in the MDI font subset; falls back to the shipped `folder` glyph.
+
+### Changed
+- **Crash-capture diagnostics** — LVGL async-delete now leaves an `async_d <class> <ptr>` breadcrumb naming the root widget being torn down (#840 diagnostic). Breadcrumb ring doubled from 64 to 128 slots, plus gated cache-eviction crumbs (#851 family). Pure diagnostics; no behavioral change.
+- **i18n** — UI strings synced across 8 locales; 59 dead keys dropped from translation files.
+- **Logging** — thumbnail flow is now visible at debug; the 5-second poll log is quieted.
+- **CI** — stable-tag releases now dispatch a docs deploy to helixscreen-website automatically.
+
 ## [0.99.44] - 2026-04-23
 
 ### Added
@@ -3276,6 +3302,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.45]: https://github.com/prestonbrown/helixscreen/compare/v0.99.44...v0.99.45
 [0.99.44]: https://github.com/prestonbrown/helixscreen/compare/v0.99.43...v0.99.44
 [0.99.43]: https://github.com/prestonbrown/helixscreen/compare/v0.99.42...v0.99.43
 [0.99.42]: https://github.com/prestonbrown/helixscreen/compare/v0.99.41...v0.99.42
