@@ -9,7 +9,7 @@
 ## Active Lessons
 
 ### [L008] [***--|*****] Design tokens and semantic widgets
-- **Uses**: 23 | **Velocity**: 7 | **Learned**: 2025-12-14 | **Last**: 2026-04-20 | **Category**: pattern | **Type**: informational
+- **Uses**: 25 | **Velocity**: 9 | **Learned**: 2025-12-14 | **Last**: 2026-04-23 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
@@ -37,11 +37,11 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 50.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 53.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-23 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
-### [L039] [**---|***--] Unique XML callback names
-- **Uses**: 6 | **Velocity**: 1.5 | **Learned**: 2025-12-30 | **Last**: 2026-04-15 | **Category**: pattern | **Type**: constraint
+### [L039] [**---|****-] Unique XML callback names
+- **Uses**: 7 | **Velocity**: 2.5 | **Learned**: 2025-12-30 | **Last**: 2026-04-23 | **Category**: pattern | **Type**: constraint
 > All XML event_cb callback names must be globally unique using on_<component>_<action> pattern. LVGL's XML callback registry is a flat global namespace with no scoping. Generic names like on_modal_ok_clicked cause collisions when multiple components register handlers.
 
 ### [L040] [***--|****-] Inline XML attrs override bind_style
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 44.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-21 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 47.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-23 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -125,7 +125,7 @@
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [***--|*****] Commit generated translation artifacts
-- **Uses**: 24 | **Velocity**: 8.5 | **Learned**: 2026-02-10 | **Last**: 2026-04-19 | **Category**: i18n
+- **Uses**: 26 | **Velocity**: 10.5 | **Learned**: 2026-02-10 | **Last**: 2026-04-23 | **Category**: i18n
 > After syncing translation YAML files, must also regenerate and commit the compiled artifacts: src/generated/lv_i18n_translations.c, src/generated/lv_i18n_translations.h, and ui_xml/translations/translations.xml. These are tracked in git (not gitignored) for cross-compilation support. The build regenerates them automatically, but they won't be staged unless you explicitly add them.
 
 ### [L065] [**---|****-] No test-only methods on production classes
@@ -137,7 +137,7 @@
 > When using flex_grow on a container with flex_flow=row_wrap, LVGL calculates wrap points based on the container's natural (content) width, NOT the flex-allocated width. Fix: set width="1" + flex_grow="1" — forces LVGL to use the grown width for wrapping. Without this, children overflow instead of wrapping.
 
 ### [L067] [***--|*****] Wrap C++ UI strings in lv_tr()
-- **Uses**: 14 | **Velocity**: 5.75 | **Learned**: 2026-02-14 | **Last**: 2026-04-19 | **Category**: ui
+- **Uses**: 15 | **Velocity**: 6.75 | **Learned**: 2026-02-14 | **Last**: 2026-04-23 | **Category**: ui
 > All user-visible English strings in C++ code must be wrapped in lv_tr() for i18n. Dropdown options are concatenated strings so they're harder to translate - but labels, help text, toasts, etc. must use lv_tr().
 
 ### [L068] [*----|***--] Cancel LVGL animations before object deletion
@@ -153,11 +153,11 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 22 | **Velocity**: 8.75 | **Learned**: 2026-02-17 | **Last**: 2026-04-19 | **Category**: i18n
+- **Uses**: 23 | **Velocity**: 9.75 | **Learned**: 2026-02-17 | **Last**: 2026-04-23 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
-### [L072] [***--|****-] Never capture bare this in async/WebSocket callbacks
-- **Uses**: 11 | **Velocity**: 3.5 | **Learned**: 2026-02-22 | **Last**: 2026-04-15 | **Category**: gotcha | **Type**: constraint
+### [L072] [***--|*****] Never capture bare this in async/WebSocket callbacks
+- **Uses**: 12 | **Velocity**: 4.5 | **Learned**: 2026-02-22 | **Last**: 2026-04-24 | **Category**: gotcha | **Type**: constraint
 > Callbacks passed to execute_gcode(), send_jsonrpc(), or any Moonraker API call fire from the WebSocket thread AFTER the widget/panel may be destroyed. NEVER capture [this] — use weak_ptr<bool> alive guard or capture value copies only. Pattern: `std::weak_ptr<bool> weak = alive_; api->call([weak, name_copy]() { if (weak.expired()) return; ... });`
 
 ### [L073] [***--|*****] ObserverGuard release vs reset
@@ -189,15 +189,15 @@
 > LVGL 9.5 changed the draw pipeline: DRAW_TASK_ADDED callbacks fire during rendering (AFTER DRAW_MAIN_END/DRAW_POST), so lv_draw_rect/lv_draw_triangle/lv_draw_fill calls from within them produce NO visible output. This broke chart gradient fills that worked in 9.4-pre. Fix: use DRAW_MAIN_END to draw custom fills, computing pixel positions from chart data directly via lv_chart_get_y_array() + lv_map(). Also: lv_draw_fill VER gradient frac=0 is BOTTOM of rect, frac=255 is TOP (counterintuitive). Use lv_draw_fill instead of lv_draw_rect for gradient-only fills to avoid solid bg_color bleeding through.
 
 ### [L080] [**---|*****] Verify deployment chain before user interaction
-- **Uses**: 8 | **Velocity**: 5 | **Learned**: 2026-04-16 | **Last**: 2026-04-20 | **Category**: gotcha
+- **Uses**: 9 | **Velocity**: 6 | **Learned**: 2026-04-16 | **Last**: 2026-04-23 | **Category**: gotcha
 > Before asking user to scroll/tap/interact on a device: (1) verify the NEW binary is running (check PID start time or version string in logs), (2) verify logging captures to the expected destination (journalctl vs file vs console), (3) verify required state is enabled (telemetry enabled, debug log level set in helixscreen.env), (4) verify logs are accessible from SSH. Do ALL checks in one pass BEFORE involving the user. Each failed round-trip wastes the user's time and patience. On Pi: systemctl runs through journalctl, deploy-pi-fg uses SSH -t (console only), nohup loses output. Always use systemd + journalctl for production log capture.
 
-### [L081] [**---|*****] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 6 | **Velocity**: 4.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-21 | **Category**: gotcha | **Type**: constraint
+### [L081] [***--|*****] lifetime_.defer does NOT escape UpdateQueue batch
+- **Uses**: 11 | **Velocity**: 9.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-24 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / `helix::ui::async_call` (our wrapper) are thin wrappers around `queue_update` — the callback fires in the *next* `UpdateQueue::process_pending` tick, which is still a UpdateQueue batch that may contain other sync deletions. The AsyncLifetimeGuard generation counter protects against use-after-free of `this`; it does NOT prevent LVGL event-list corruption. Any comment claiming "defer outside process_pending" is wrong — fix it. Observer callbacks (`observe_int_sync`, `observe_string`) are also deferred via queue_update since #82 and share the same batch. BANNED inside any queued/deferred callback: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. USE INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's own async list, outside our batch. Multiple sync deletions in the same batch corrupt LVGL's global event linked list → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). See CLAUDE.md § "No sync widget deletion in queued callbacks" and `include/ui_utils.h`.
 
-### [L082] [*----|-----] Percent size inside LV_SIZE_CONTENT parent collapses to 0
-- **Uses**: 1 | **Velocity**: 0 | **Learned**: 2026-04-20 | **Last**: 2026-04-20 | **Category**: gotcha | **Type**: constraint
+### [L082] [*----|***--] Percent size inside LV_SIZE_CONTENT parent collapses to 0
+- **Uses**: 2 | **Velocity**: 1 | **Learned**: 2026-04-20 | **Last**: 2026-04-22 | **Category**: gotcha | **Type**: constraint
 > LVGL percent sizing (`width="50%"`, `style_min_width="50%"`, etc.) resolves against the parent's content area. If the parent is `LV_SIZE_CONTENT`, the percent computes against a circular dependency and effectively becomes 0 — the child collapses. Symptom: labels with `long_mode="wrap"` and `flex_grow="1"` wrap near-per-character, making cards extremely tall; flex rows appear to only render their fixed-width children (icons, buttons) with the growing child squeezed to nothing. Fix: give the parent an explicit width (pixel or breakpoint-keyed), then let the child be `width="100%"`. Don't nest percent-sized children inside content-sized parents. Burned us when the toast stacking refactor (26573f1f2) inserted an LV_SIZE_CONTENT stack container between `lv_layer_top` and toast_root, collapsing the toast's `min_width="50%"` against the old screen-sized parent.
 
 ### [L083] [*----|****-] Never `std::thread(...).detach()` for fire-and-forget work
