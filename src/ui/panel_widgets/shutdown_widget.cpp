@@ -78,6 +78,11 @@ void schedule_host_down_verification(MoonrakerAPI* api, bool is_reboot) {
 // ShutdownModal::on_show(), then read the user_data pointer set there.
 // LVGL XML appends an instance suffix to view names (e.g. "shutdown_modal_#0"),
 // so we match the prefix and require the next char be the suffix delimiter or end.
+//
+// `lv_event_get_current_target_obj(e)` returns the listener-attached object —
+// for an XML <event_cb> registered on <ui_split_button>, that's the split
+// button itself. We don't depend on which descendant emitted the event; the
+// walk-up only needs to reach the named view-root ancestor (per L069).
 ShutdownModal* find_shutdown_modal(lv_event_t* e) {
     constexpr const char* kViewName = "shutdown_modal";
     constexpr size_t kViewNameLen = 14;
@@ -279,17 +284,51 @@ void ShutdownWidget::execute_screen_reboot() {
 }
 
 void ShutdownWidget::execute_both_shutdown() {
-    spdlog::info("[ShutdownWidget] Executing both shutdown (printer + screen)");
-    // Fire printer shutdown first (Moonraker async); local shutdown is
-    // synchronous-then-system-kills-us, so do it last.
-    execute_printer_shutdown();
-    execute_screen_shutdown();
+    spdlog::info("[ShutdownWidget] Executing both shutdown — printer first, screen on ack");
+    // Wait for the Moonraker call's ack (fires on the WS background thread)
+    // before invoking SystemPower::shutdown_local on the local kernel —
+    // otherwise the local kernel can SIGTERM us before libhv flushes the
+    // queued WS frame, leaving the printer up. Fire screen on both success
+    // AND error: the user said "Both", so we power down the screen even if
+    // the printer side reported a failure.
+    auto tok = lifetime_.token();
+    MoonrakerAPI* api = api_;
+    api_->machine_shutdown(
+        [this, tok, api]() {
+            spdlog::info("[ShutdownWidget] Printer shutdown ack'd — now shutting down screen");
+            schedule_host_down_verification(api, /*is_reboot=*/false);
+            if (tok.expired()) return;
+            tok.defer([this]() { execute_screen_shutdown(); });
+        },
+        [this, tok](const MoonrakerError& err) {
+            spdlog::error("[ShutdownWidget] Printer shutdown failed: {} — proceeding with screen anyway",
+                          err.message);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          lv_tr("Shutdown failed"), 6000);
+            if (tok.expired()) return;
+            tok.defer([this]() { execute_screen_shutdown(); });
+        });
 }
 
 void ShutdownWidget::execute_both_reboot() {
-    spdlog::info("[ShutdownWidget] Executing both reboot (printer + screen)");
-    execute_printer_reboot();
-    execute_screen_reboot();
+    spdlog::info("[ShutdownWidget] Executing both reboot — printer first, screen on ack");
+    auto tok = lifetime_.token();
+    MoonrakerAPI* api = api_;
+    api_->machine_reboot(
+        [this, tok, api]() {
+            spdlog::info("[ShutdownWidget] Printer reboot ack'd — now rebooting screen");
+            schedule_host_down_verification(api, /*is_reboot=*/true);
+            if (tok.expired()) return;
+            tok.defer([this]() { execute_screen_reboot(); });
+        },
+        [this, tok](const MoonrakerError& err) {
+            spdlog::error("[ShutdownWidget] Printer reboot failed: {} — proceeding with screen anyway",
+                          err.message);
+            ToastManager::instance().show(ToastSeverity::ERROR,
+                                          lv_tr("Reboot failed"), 6000);
+            if (tok.expired()) return;
+            tok.defer([this]() { execute_screen_reboot(); });
+        });
 }
 
 void ShutdownWidget::shutdown_clicked_cb(lv_event_t* e) {

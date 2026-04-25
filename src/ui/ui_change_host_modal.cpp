@@ -8,6 +8,7 @@
 
 #include "app_globals.h"
 #include "config.h"
+#include "host_identity.h"
 #include "lvgl/lvgl.h"
 #include "moonraker_client.h"
 #include "theme_manager.h"
@@ -282,6 +283,9 @@ void ChangeHostModal::handle_save() {
         config->set(config->df() + "moonraker_port", port);
         config->save();
         spdlog::info("[ChangeHostModal] Saved new host: {}:{}", ip, port);
+        // moonraker_host changed — flush the same-host detection cache so the
+        // shutdown widget picks up the new value on next open.
+        helix::invalidate_host_identity_cache();
     }
 
     // Close modal first — on_hide() removes observers and clears state
