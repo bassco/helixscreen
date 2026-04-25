@@ -142,6 +142,7 @@
   <translation tag="Applying..." ja="適用中..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." ja="この印刷をキャンセルしますか？すべての進行状況が失われます。"/>
   <translation tag="Are you sure? This will power off or restart the printer host." ja="よろしいですか？プリンターホストの電源がオフまたは再起動されます。"/>
+  <translation tag="Are you sure? This will power off or restart this device."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" ja="Klipper マクロを割り当ててオン/オフ、トグル、プリセットで LED を制御"/>
   <translation tag="Assign a role to enable sensor monitoring" ja="センサー監視を有効にするには役割を割り当ててください"/>
   <translation tag="Assisting" ja="アシスト中"/>
@@ -322,6 +323,7 @@
   <translation tag="Choose rendering mode for G-code visualization" ja="G-codeの視覚化レンダリングモードを選択"/>
   <translation tag="Choose rendering mode for bed mesh visualization" ja="ベッドメッシュの視覚化レンダリングモードを選択"/>
   <translation tag="Choose sound style" ja="サウンドスタイルを選択"/>
+  <translation tag="Choose what to power off or restart."/>
   <translation tag="Clean Nozzle" ja="ノズル清掃"/>
   <translation tag="Cleaning Nozzle..." ja="ノズル清掃中..."/>
   <translation tag="Clear" ja="クリア"/>
@@ -1382,7 +1384,10 @@
   <translation tag="Restarting HelixScreen..." ja="HelixScreenを再起動中..."/>
   <translation tag="Restarting Klipper..." ja="Klipper を再起動中..."/>
   <translation tag="Restarting Moonraker..." ja="Moonrakerを再起動中..."/>
+  <translation tag="Restarting printer..."/>
+  <translation tag="Restarting screen..."/>
   <translation tag="Restarting with the new version..." ja="新しいバージョンで再起動中..."/>
+  <translation tag="Restarting..."/>
   <translation tag="Resume" ja="再開"/>
   <translation tag="Resume Print" ja="印刷を再開"/>
   <translation tag="Resume macro not configured" ja="再開マクロが未設定です"/>
@@ -1460,6 +1465,8 @@
   <translation tag="Screen Dim" ja="画面減光"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" ja="一定時間操作がないと画面の明るさが下がります"/>
   <translation tag="Screen lock and PIN settings" ja="画面ロックと PIN の設定"/>
+  <translation tag="Screen reboot failed"/>
+  <translation tag="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" ja="選択した時間操作がないと画面が減光します"/>
   <translation tag="Screensaver" ja="スクリーンセーバー"/>
   <translation tag="Screws Tilt" ja="ネジ傾き"/>
@@ -1532,6 +1539,8 @@
   <translation tag="Shutdown / Reboot" ja="シャットダウン / 再起動"/>
   <translation tag="Shutdown failed" ja="シャットダウンに失敗しました"/>
   <translation tag="Shutdown failed — host is still reachable" ja="シャットダウンに失敗しました — ホストに依然として到達可能です"/>
+  <translation tag="Shutting down printer..."/>
+  <translation tag="Shutting down screen..."/>
   <translation tag="Shutting down..." ja="シャットダウン中..."/>
   <translation tag="Side" ja="側面"/>
   <translation tag="Single toggle macro. State is not tracked." ja="単一のトグルマクロ。状態は追跡されません。"/>

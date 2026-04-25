@@ -142,6 +142,7 @@
   <translation tag="Applying..." ru="Применение..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." ru="Вы уверены, что хотите отменить печать? Весь прогресс будет потерян."/>
   <translation tag="Are you sure? This will power off or restart the printer host." ru="Вы уверены? Это выключит или перезагрузит хост принтера."/>
+  <translation tag="Are you sure? This will power off or restart this device."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" ru="Назначьте макросы Klipper для управления LED через вкл/выкл, переключение или пресеты"/>
   <translation tag="Assign a role to enable sensor monitoring" ru="Назначьте роль для мониторинга датчика"/>
   <translation tag="Assisting" ru="Помощь"/>
@@ -322,6 +323,7 @@
   <translation tag="Choose rendering mode for G-code visualization" ru="Выберите режим рендеринга для визуализации G-code"/>
   <translation tag="Choose rendering mode for bed mesh visualization" ru="Выберите режим рендеринга для визуализации сетки стола"/>
   <translation tag="Choose sound style" ru="Выберите стиль звука"/>
+  <translation tag="Choose what to power off or restart."/>
   <translation tag="Clean Nozzle" ru="Очистить сопло"/>
   <translation tag="Cleaning Nozzle..." ru="Очистка сопла..."/>
   <translation tag="Clear" ru="Очистить"/>
@@ -1382,7 +1384,10 @@
   <translation tag="Restarting HelixScreen..." ru="Перезапуск HelixScreen..."/>
   <translation tag="Restarting Klipper..." ru="Перезапуск Klipper..."/>
   <translation tag="Restarting Moonraker..." ru="Перезапуск Moonraker..."/>
+  <translation tag="Restarting printer..."/>
+  <translation tag="Restarting screen..."/>
   <translation tag="Restarting with the new version..." ru="Перезапуск с новой версией..."/>
+  <translation tag="Restarting..."/>
   <translation tag="Resume" ru="Продолжить"/>
   <translation tag="Resume Print" ru="Продолжить печать"/>
   <translation tag="Resume macro not configured" ru="Макрос возобновления не настроен"/>
@@ -1460,6 +1465,8 @@
   <translation tag="Screen Dim" ru="Затемнение экрана"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" ru="Экран затемняется после периода простоя"/>
   <translation tag="Screen lock and PIN settings" ru="Блокировка экрана и настройки PIN"/>
+  <translation tag="Screen reboot failed"/>
+  <translation tag="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" ru="Экран затемнится после выбранного периода простоя"/>
   <translation tag="Screensaver" ru="Заставка"/>
   <translation tag="Screws Tilt" ru="Наклон винтов"/>
@@ -1532,6 +1539,8 @@
   <translation tag="Shutdown / Reboot" ru="Выключение / Перезагрузка"/>
   <translation tag="Shutdown failed" ru="Ошибка выключения"/>
   <translation tag="Shutdown failed — host is still reachable" ru="Ошибка выключения — хост всё ещё доступен"/>
+  <translation tag="Shutting down printer..."/>
+  <translation tag="Shutting down screen..."/>
   <translation tag="Shutting down..." ru="Выключение..."/>
   <translation tag="Side" ru="Сбоку"/>
   <translation tag="Single toggle macro. State is not tracked." ru="Один макрос переключения. Состояние не отслеживается."/>

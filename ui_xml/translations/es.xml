@@ -142,6 +142,7 @@
   <translation tag="Applying..." es="Aplicando..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." es="¿Está seguro de que desea cancelar esta impresión? Todo el progreso se perderá."/>
   <translation tag="Are you sure? This will power off or restart the printer host." es="¿Está seguro? Esto apagará o reiniciará el host de la impresora."/>
+  <translation tag="Are you sure? This will power off or restart this device."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" es="Asignar macros de Klipper para controlar LEDs vía encendido/apagado, alternar o preajustes"/>
   <translation tag="Assign a role to enable sensor monitoring" es="Asigne un rol para habilitar el monitoreo del sensor"/>
   <translation tag="Assisting" es="Asistiendo"/>
@@ -322,6 +323,7 @@
   <translation tag="Choose rendering mode for G-code visualization" es="Elija el modo de renderizado para la visualización de G-code"/>
   <translation tag="Choose rendering mode for bed mesh visualization" es="Elija el modo de renderizado para la visualización de malla de cama"/>
   <translation tag="Choose sound style" es="Elegir estilo de sonido"/>
+  <translation tag="Choose what to power off or restart."/>
   <translation tag="Clean Nozzle" es="Limpiar Boquilla"/>
   <translation tag="Cleaning Nozzle..." es="Limpiando boquilla..."/>
   <translation tag="Clear" es="Borrar"/>
@@ -1382,7 +1384,10 @@
   <translation tag="Restarting HelixScreen..." es="Reiniciando HelixScreen..."/>
   <translation tag="Restarting Klipper..." es="Reiniciando Klipper..."/>
   <translation tag="Restarting Moonraker..." es="Reiniciando Moonraker..."/>
+  <translation tag="Restarting printer..."/>
+  <translation tag="Restarting screen..."/>
   <translation tag="Restarting with the new version..." es="Reiniciando con la nueva versión..."/>
+  <translation tag="Restarting..."/>
   <translation tag="Resume" es="Reanudar"/>
   <translation tag="Resume Print" es="Reanudar Impresión"/>
   <translation tag="Resume macro not configured" es="Macro de reanudación no configurado"/>
@@ -1460,6 +1465,8 @@
   <translation tag="Screen Dim" es="Atenuación de Pantalla"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" es="La pantalla atenúa el brillo después de un período de inactividad"/>
   <translation tag="Screen lock and PIN settings" es="Bloqueo de pantalla y configuración de PIN"/>
+  <translation tag="Screen reboot failed"/>
+  <translation tag="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" es="La pantalla se atenuará después del período de inactividad seleccionado"/>
   <translation tag="Screensaver" es="Salvapantallas"/>
   <translation tag="Screws Tilt" es="Inclinación de Tornillos"/>
@@ -1532,6 +1539,8 @@
   <translation tag="Shutdown / Reboot" es="Apagar / Reiniciar"/>
   <translation tag="Shutdown failed" es="Error al apagar"/>
   <translation tag="Shutdown failed — host is still reachable" es="Error al apagar — el host sigue accesible"/>
+  <translation tag="Shutting down printer..."/>
+  <translation tag="Shutting down screen..."/>
   <translation tag="Shutting down..." es="Apagando..."/>
   <translation tag="Side" es="Lado"/>
   <translation tag="Single toggle macro. State is not tracked." es="Macro de alternancia único. El estado no se rastrea."/>

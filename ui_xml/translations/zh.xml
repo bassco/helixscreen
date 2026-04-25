@@ -142,6 +142,7 @@
   <translation tag="Applying..." zh="正在应用..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." zh="确定要取消此打印吗？所有进度将丢失。"/>
   <translation tag="Are you sure? This will power off or restart the printer host." zh="确定吗？这将关闭或重启打印机主机。"/>
+  <translation tag="Are you sure? This will power off or restart this device."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" zh="分配 Klipper 宏通过开/关、切换或预设控制 LED"/>
   <translation tag="Assign a role to enable sensor monitoring" zh="分配角色以启用传感器监控"/>
   <translation tag="Assisting" zh="辅助中"/>
@@ -322,6 +323,7 @@
   <translation tag="Choose rendering mode for G-code visualization" zh="选择 G-code 可视化的渲染模式"/>
   <translation tag="Choose rendering mode for bed mesh visualization" zh="选择热床网格可视化的渲染模式"/>
   <translation tag="Choose sound style" zh="选择声音风格"/>
+  <translation tag="Choose what to power off or restart."/>
   <translation tag="Clean Nozzle" zh="清洁喷嘴"/>
   <translation tag="Cleaning Nozzle..." zh="正在清洁喷嘴..."/>
   <translation tag="Clear" zh="清除"/>
@@ -1382,7 +1384,10 @@
   <translation tag="Restarting HelixScreen..." zh="正在重启 HelixScreen…"/>
   <translation tag="Restarting Klipper..." zh="正在重启 Klipper..."/>
   <translation tag="Restarting Moonraker..." zh="正在重启 Moonraker..."/>
+  <translation tag="Restarting printer..."/>
+  <translation tag="Restarting screen..."/>
   <translation tag="Restarting with the new version..." zh="正在以新版本重启..."/>
+  <translation tag="Restarting..."/>
   <translation tag="Resume" zh="恢复"/>
   <translation tag="Resume Print" zh="恢复打印"/>
   <translation tag="Resume macro not configured" zh="恢复宏未配置"/>
@@ -1460,6 +1465,8 @@
   <translation tag="Screen Dim" zh="屏幕变暗"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" zh="一段时间不活动后屏幕会降低亮度"/>
   <translation tag="Screen lock and PIN settings" zh="屏幕锁定和 PIN 设置"/>
+  <translation tag="Screen reboot failed"/>
+  <translation tag="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" zh="在选定的不活动时间后屏幕将变暗"/>
   <translation tag="Screensaver" zh="屏保"/>
   <translation tag="Screws Tilt" zh="螺丝倾斜"/>
@@ -1532,6 +1539,8 @@
   <translation tag="Shutdown / Reboot" zh="关机 / 重启"/>
   <translation tag="Shutdown failed" zh="关机失败"/>
   <translation tag="Shutdown failed — host is still reachable" zh="关机失败 — 主机仍可访问"/>
+  <translation tag="Shutting down printer..."/>
+  <translation tag="Shutting down screen..."/>
   <translation tag="Shutting down..." zh="正在关机..."/>
   <translation tag="Side" zh="侧面"/>
   <translation tag="Single toggle macro. State is not tracked." zh="单个切换宏。不跟踪状态。"/>

@@ -142,6 +142,7 @@
   <translation tag="Applying..." de="Wird angewendet..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." de="Sind Sie sicher, dass Sie diesen Druck abbrechen möchten? Der gesamte Fortschritt geht verloren."/>
   <translation tag="Are you sure? This will power off or restart the printer host." de="Sind Sie sicher? Dies schaltet den Drucker-Host aus oder startet ihn neu."/>
+  <translation tag="Are you sure? This will power off or restart this device."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" de="Klipper-Makros zuweisen, um LEDs per Ein/Aus, Umschalten oder Voreinstellungen zu steuern"/>
   <translation tag="Assign a role to enable sensor monitoring" de="Rolle zuweisen, um Sensorüberwachung zu aktivieren"/>
   <translation tag="Assisting" de="Unterstützend"/>
@@ -322,6 +323,7 @@
   <translation tag="Choose rendering mode for G-code visualization" de="Darstellungsmodus für G-Code-Visualisierung wählen"/>
   <translation tag="Choose rendering mode for bed mesh visualization" de="Darstellungsmodus für Bettnetz-Visualisierung wählen"/>
   <translation tag="Choose sound style" de="Klangstil auswählen"/>
+  <translation tag="Choose what to power off or restart."/>
   <translation tag="Clean Nozzle" de="Düse reinigen"/>
   <translation tag="Cleaning Nozzle..." de="Düse reinigen..."/>
   <translation tag="Clear" de="Löschen"/>
@@ -1382,7 +1384,10 @@
   <translation tag="Restarting HelixScreen..." de="HelixScreen wird neu gestartet..."/>
   <translation tag="Restarting Klipper..." de="Klipper wird neu gestartet..."/>
   <translation tag="Restarting Moonraker..." de="Moonraker wird neu gestartet..."/>
+  <translation tag="Restarting printer..."/>
+  <translation tag="Restarting screen..."/>
   <translation tag="Restarting with the new version..." de="Neustart mit der neuen Version..."/>
+  <translation tag="Restarting..."/>
   <translation tag="Resume" de="Fortsetzen"/>
   <translation tag="Resume Print" de="Druck fortsetzen"/>
   <translation tag="Resume macro not configured" de="Fortsetzen-Makro nicht konfiguriert"/>
@@ -1460,6 +1465,8 @@
   <translation tag="Screen Dim" de="Bildschirm dimmen"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" de="Bildschirm dimmt nach Inaktivitätszeitraum auf niedrigere Helligkeit"/>
   <translation tag="Screen lock and PIN settings" de="Bildschirmsperre und PIN-Einstellungen"/>
+  <translation tag="Screen reboot failed"/>
+  <translation tag="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" de="Bildschirm dimmt nach dem gewählten Inaktivitätszeitraum"/>
   <translation tag="Screensaver" de="Bildschirmschoner"/>
   <translation tag="Screws Tilt" de="Schraubenneigung"/>
@@ -1532,6 +1539,8 @@
   <translation tag="Shutdown / Reboot" de="Herunterfahren / Neustart"/>
   <translation tag="Shutdown failed" de="Herunterfahren fehlgeschlagen"/>
   <translation tag="Shutdown failed — host is still reachable" de="Herunterfahren fehlgeschlagen — Host ist weiterhin erreichbar"/>
+  <translation tag="Shutting down printer..."/>
+  <translation tag="Shutting down screen..."/>
   <translation tag="Shutting down..." de="Wird heruntergefahren..."/>
   <translation tag="Side" de="Seite"/>
   <translation tag="Single toggle macro. State is not tracked." de="Einzelnes Umschalt-Makro. Status wird nicht verfolgt."/>
