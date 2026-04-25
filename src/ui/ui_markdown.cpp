@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include <cstring>
+#include <string>
 
 namespace {
 
@@ -101,8 +102,25 @@ void markdown_text_observer_cb(lv_observer_t* observer, lv_subject_t* subject) {
     }
 
     const char* text = lv_subject_get_string(subject);
+    // Skip empty/null inputs — md4c on tight-memory devices (e.g. K1, 209 MB RAM)
+    // can null-deref deep inside md_analyze_inlines when an internal malloc fails.
+    // Cap pathological lengths defensively too; release notes / telemetry text
+    // is well under 64 KB in practice.
+    if (!text || !*text) {
+        lv_markdown_set_text(md_widget, "");
+        return;
+    }
+    constexpr size_t kMarkdownMaxBytes = 256 * 1024;
+    size_t len = strlen(text);
+    if (len > kMarkdownMaxBytes) {
+        spdlog::warn("[ui_markdown] Truncating oversized markdown ({} bytes > {} cap)",
+                     len, kMarkdownMaxBytes);
+        std::string truncated(text, kMarkdownMaxBytes);
+        lv_markdown_set_text(md_widget, truncated.c_str());
+        return;
+    }
     lv_markdown_set_text(md_widget, text);
-    spdlog::trace("[ui_markdown] Observer updated text ({} bytes)", text ? strlen(text) : 0);
+    spdlog::trace("[ui_markdown] Observer updated text ({} bytes)", len);
 }
 
 /**
