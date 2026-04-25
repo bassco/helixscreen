@@ -142,6 +142,7 @@ translations:
   Applying...: Applicazione in corso...
   Are you sure you want to cancel this print? All progress will be lost.: Sei sicuro di voler annullare questa stampa? Tutto il progresso verrà perso.
   Are you sure? This will power off or restart the printer host.: Sei sicuro? Questo spegnerà o riavvierà l'host della stampante.
+  Are you sure? This will power off or restart this device.: ''
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Assegna macro Klipper per controllare LED tramite on/off, alternanza o preset
   Assign a role to enable sensor monitoring: Assegna un ruolo per abilitare il monitoraggio del sensore
   Assisting: Assistenza
@@ -322,6 +323,7 @@ translations:
   Choose rendering mode for G-code visualization: Scegli modalità di rendering per visualizzazione G-code
   Choose rendering mode for bed mesh visualization: Scegli modalità di rendering per visualizzazione mesh piano
   Choose sound style: Scegli stile sonoro
+  Choose what to power off or restart.: ''
   Clean Nozzle: Pulisci ugello
   Cleaning Nozzle...: Pulizia ugello...
   Clear: Cancella
@@ -1385,7 +1387,10 @@ translations:
   Restarting HelixScreen...: Riavvio HelixScreen...
   Restarting Klipper...: Riavvio Klipper...
   Restarting Moonraker...: Riavvio Moonraker...
+  Restarting printer...: ''
+  Restarting screen...: ''
   Restarting with the new version...: Riavvio con la nuova versione...
+  Restarting...: ''
   Resume: Riprendi
   Resume Print: Riprendi stampa
   Resume macro not configured: Macro ripresa non configurata
@@ -1464,6 +1469,8 @@ translations:
   Screen Dim: Attenuazione schermo
   Screen dims to lower brightness after period of inactivity: Lo schermo si attenua dopo un periodo di inattività
   Screen lock and PIN settings: Blocco schermo e impostazioni PIN
+  Screen reboot failed: ''
+  Screen shutdown failed: ''
   Screen sleeps after the selected period of inactivity: Lo schermo si attenuerà dopo il periodo di inattività selezionato
   Screensaver: Salvaschermo
   Screws Tilt: Inclinazione viti
@@ -1536,6 +1543,8 @@ translations:
   Shutdown / Reboot: Spegni / Riavvia
   Shutdown failed: 'Spegnimento fallito'
   Shutdown failed — host is still reachable: 'Spegnimento fallito — l''host è ancora raggiungibile'
+  Shutting down printer...: ''
+  Shutting down screen...: ''
   Shutting down...: Spegnimento in corso...
   Side: Lato
   Single toggle macro. State is not tracked.: Singola macro toggle. Lo stato non è tracciato.

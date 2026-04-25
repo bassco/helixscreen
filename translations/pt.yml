@@ -142,6 +142,7 @@ translations:
   Applying...: Aplicando...
   Are you sure you want to cancel this print? All progress will be lost.: Tem certeza de que deseja cancelar esta impressão? Todo o progresso será perdido.
   Are you sure? This will power off or restart the printer host.: Tem certeza? Isso desligará ou reiniciará o host da impressora.
+  Are you sure? This will power off or restart this device.: ''
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Atribuir macros Klipper para controlar LEDs via ligar/desligar, alternar ou predefinições
   Assign a role to enable sensor monitoring: Atribua uma função para habilitar o monitoramento do sensor
   Assisting: Assistindo
@@ -322,6 +323,7 @@ translations:
   Choose rendering mode for G-code visualization: Escolha o modo de renderização para visualização do G-code
   Choose rendering mode for bed mesh visualization: Escolha o modo de renderização para visualização da malha da mesa
   Choose sound style: Escolher estilo de som
+  Choose what to power off or restart.: ''
   Clean Nozzle: Limpar Bico
   Cleaning Nozzle...: Limpando bocal...
   Clear: Limpar
@@ -1385,7 +1387,10 @@ translations:
   Restarting HelixScreen...: Reiniciando HelixScreen...
   Restarting Klipper...: Reiniciando Klipper...
   Restarting Moonraker...: Reiniciando Moonraker...
+  Restarting printer...: ''
+  Restarting screen...: ''
   Restarting with the new version...: Reiniciando com a nova versão...
+  Restarting...: ''
   Resume: Retomar
   Resume Print: Retomar Impressão
   Resume macro not configured: Macro de retomada não configurado
@@ -1464,6 +1469,8 @@ translations:
   Screen Dim: Escurecimento da Tela
   Screen dims to lower brightness after period of inactivity: A tela escurece para menor brilho após período de inatividade
   Screen lock and PIN settings: Configurações de bloqueio de tela e PIN
+  Screen reboot failed: ''
+  Screen shutdown failed: ''
   Screen sleeps after the selected period of inactivity: A tela escurecerá após o período selecionado de inatividade
   Screensaver: Protetor de Tela
   Screws Tilt: Inclinação dos Parafusos
@@ -1536,6 +1543,8 @@ translations:
   Shutdown / Reboot: Desligar / Reiniciar
   Shutdown failed: 'Falha ao desligar'
   Shutdown failed — host is still reachable: 'Falha ao desligar — o host ainda está acessível'
+  Shutting down printer...: ''
+  Shutting down screen...: ''
   Shutting down...: Desligando...
   Side: Lateral
   Single toggle macro. State is not tracked.: Macro de alternância única. O estado não é rastreado.

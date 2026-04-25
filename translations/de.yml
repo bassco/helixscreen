@@ -142,6 +142,7 @@ translations:
   Applying...: Wird angewendet...
   Are you sure you want to cancel this print? All progress will be lost.: Sind Sie sicher, dass Sie diesen Druck abbrechen möchten? Der gesamte Fortschritt geht verloren.
   Are you sure? This will power off or restart the printer host.: Sind Sie sicher? Dies schaltet den Drucker-Host aus oder startet ihn neu.
+  Are you sure? This will power off or restart this device.: ''
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Klipper-Makros zuweisen, um LEDs per Ein/Aus, Umschalten oder Voreinstellungen zu steuern
   Assign a role to enable sensor monitoring: Rolle zuweisen, um Sensorüberwachung zu aktivieren
   Assisting: Unterstützend
@@ -322,6 +323,7 @@ translations:
   Choose rendering mode for G-code visualization: Darstellungsmodus für G-Code-Visualisierung wählen
   Choose rendering mode for bed mesh visualization: Darstellungsmodus für Bettnetz-Visualisierung wählen
   Choose sound style: Klangstil auswählen
+  Choose what to power off or restart.: ''
   Clean Nozzle: Düse reinigen
   Cleaning Nozzle...: Düse reinigen...
   Clear: Löschen
@@ -1385,7 +1387,10 @@ translations:
   Restarting HelixScreen...: HelixScreen wird neu gestartet...
   Restarting Klipper...: Klipper wird neu gestartet...
   Restarting Moonraker...: Moonraker wird neu gestartet...
+  Restarting printer...: ''
+  Restarting screen...: ''
   Restarting with the new version...: Neustart mit der neuen Version...
+  Restarting...: ''
   Resume: Fortsetzen
   Resume Print: Druck fortsetzen
   Resume macro not configured: Fortsetzen-Makro nicht konfiguriert
@@ -1464,6 +1469,8 @@ translations:
   Screen Dim: Bildschirm dimmen
   Screen dims to lower brightness after period of inactivity: Bildschirm dimmt nach Inaktivitätszeitraum auf niedrigere Helligkeit
   Screen lock and PIN settings: Bildschirmsperre und PIN-Einstellungen
+  Screen reboot failed: ''
+  Screen shutdown failed: ''
   Screen sleeps after the selected period of inactivity: Bildschirm dimmt nach dem gewählten Inaktivitätszeitraum
   Screensaver: Bildschirmschoner
   Screws Tilt: Schraubenneigung
@@ -1536,6 +1543,8 @@ translations:
   Shutdown / Reboot: Herunterfahren / Neustart
   Shutdown failed: 'Herunterfahren fehlgeschlagen'
   Shutdown failed — host is still reachable: 'Herunterfahren fehlgeschlagen — Host ist weiterhin erreichbar'
+  Shutting down printer...: ''
+  Shutting down screen...: ''
   Shutting down...: Wird heruntergefahren...
   Side: Seite
   Single toggle macro. State is not tracked.: Einzelnes Umschalt-Makro. Status wird nicht verfolgt.

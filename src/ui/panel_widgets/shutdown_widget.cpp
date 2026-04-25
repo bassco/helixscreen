@@ -7,15 +7,29 @@
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
 
+#include "config.h"
+#include "host_identity.h"
 #include "moonraker_api.h"
 #include "panel_widget_manager.h"
 #include "panel_widget_registry.h"
+#include "runtime_config.h"
+#include "system_power.h"
+#include "ui_shutdown_modal.h"
+#include "ui_split_button.h"
 
 #include <spdlog/spdlog.h>
+
+#include <cstring>
 
 namespace helix {
 
 namespace {
+
+// Split-button dropdown indices (must match XML option order:
+// "Both\nPrinter\nScreen" in shutdown_modal.xml).
+constexpr uint32_t kScopeBoth    = 0;
+constexpr uint32_t kScopePrinter = 1;
+constexpr uint32_t kScopeScreen  = 2;
 
 // After a successful machine.shutdown/reboot, Moonraker replies OK but the
 // OS-level shutdown can silently no-op on some firmwares (observed on SonicPad
@@ -60,6 +74,66 @@ void schedule_host_down_verification(MoonrakerAPI* api, bool is_reboot) {
                             });
 }
 
+// Walk up from the clicked button to the view root stamped in
+// ShutdownModal::on_show(), then read the user_data pointer set there.
+// LVGL XML appends an instance suffix to view names (e.g. "shutdown_modal_#0"),
+// so we match the prefix and require the next char be the suffix delimiter or end.
+ShutdownModal* find_shutdown_modal(lv_event_t* e) {
+    constexpr const char* kViewName = "shutdown_modal";
+    constexpr size_t kViewNameLen = 14;
+    lv_obj_t* obj = lv_event_get_current_target_obj(e);
+    while (obj) {
+        const char* name = lv_obj_get_name(obj);
+        if (name && std::strncmp(name, kViewName, kViewNameLen) == 0
+            && (name[kViewNameLen] == '\0' || name[kViewNameLen] == '_')) {
+            return static_cast<ShutdownModal*>(lv_obj_get_user_data(obj));
+        }
+        obj = lv_obj_get_parent(obj);
+    }
+    return nullptr;
+}
+
+// Single-scope mode uses these directly (XML modal_button_row callbacks
+// in the ref_value=0 button row). Dual-scope dispatches via the split-button
+// callbacks below.
+void on_shutdown_printer_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[ShutdownModal] shutdown_printer");
+    if (auto* m = find_shutdown_modal(e)) m->fire_printer_shutdown();
+    LVGL_SAFE_EVENT_CB_END();
+}
+void on_reboot_printer_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[ShutdownModal] reboot_printer");
+    if (auto* m = find_shutdown_modal(e)) m->fire_printer_reboot();
+    LVGL_SAFE_EVENT_CB_END();
+}
+
+// Split-button dispatchers (dual-scope mode). The split button's selected
+// dropdown index encodes the scope (kScopeBoth/kScopePrinter/kScopeScreen).
+void on_restart_split_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[ShutdownModal] restart_split");
+    auto* m = find_shutdown_modal(e);
+    lv_obj_t* sb = lv_event_get_current_target_obj(e);
+    if (!m || !sb) return;
+    switch (ui_split_button_get_selected(sb)) {
+        case kScopeBoth:    m->fire_both_reboot();    break;
+        case kScopePrinter: m->fire_printer_reboot(); break;
+        case kScopeScreen:  m->fire_screen_reboot();  break;
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+void on_shutdown_split_clicked(lv_event_t* e) {
+    LVGL_SAFE_EVENT_CB_BEGIN("[ShutdownModal] shutdown_split");
+    auto* m = find_shutdown_modal(e);
+    lv_obj_t* sb = lv_event_get_current_target_obj(e);
+    if (!m || !sb) return;
+    switch (ui_split_button_get_selected(sb)) {
+        case kScopeBoth:    m->fire_both_shutdown();    break;
+        case kScopePrinter: m->fire_printer_shutdown(); break;
+        case kScopeScreen:  m->fire_screen_shutdown();  break;
+    }
+    LVGL_SAFE_EVENT_CB_END();
+}
+
 } // namespace
 
 void register_shutdown_widget() {
@@ -70,6 +144,10 @@ void register_shutdown_widget() {
 
     // Register XML event callback at startup (before any XML is parsed)
     lv_xml_register_event_cb(nullptr, "shutdown_clicked_cb", ShutdownWidget::shutdown_clicked_cb);
+    lv_xml_register_event_cb(nullptr, "on_shutdown_printer_clicked", on_shutdown_printer_clicked);
+    lv_xml_register_event_cb(nullptr, "on_reboot_printer_clicked",   on_reboot_printer_clicked);
+    lv_xml_register_event_cb(nullptr, "on_restart_split_clicked",    on_restart_split_clicked);
+    lv_xml_register_event_cb(nullptr, "on_shutdown_split_clicked",   on_shutdown_split_clicked);
 }
 
 ShutdownWidget::ShutdownWidget(MoonrakerAPI* api) : api_(api) {}
@@ -116,12 +194,29 @@ void ShutdownWidget::handle_click() {
         return;
     }
 
-    shutdown_modal_.set_callbacks([this]() { execute_shutdown(); }, [this]() { execute_reboot(); });
+    std::string host;
+    if (Config* cfg = Config::get_instance()) {
+        host = cfg->get<std::string>(cfg->df() + "moonraker_host", "localhost");
+    }
+
+    if (helix::is_moonraker_on_same_host(host)) {
+        shutdown_modal_.set_single_callbacks(
+            [this]() { execute_printer_shutdown(); },
+            [this]() { execute_printer_reboot(); });
+    } else {
+        shutdown_modal_.set_dual_callbacks(
+            [this]() { execute_both_shutdown(); },
+            [this]() { execute_both_reboot(); },
+            [this]() { execute_printer_shutdown(); },
+            [this]() { execute_printer_reboot(); },
+            [this]() { execute_screen_shutdown(); },
+            [this]() { execute_screen_reboot(); });
+    }
 
     shutdown_modal_.show(lv_screen_active());
 }
 
-void ShutdownWidget::execute_shutdown() {
+void ShutdownWidget::execute_printer_shutdown() {
     spdlog::info("[ShutdownWidget] Executing machine shutdown");
 
     MoonrakerAPI* api = api_;
@@ -137,7 +232,7 @@ void ShutdownWidget::execute_shutdown() {
         });
 }
 
-void ShutdownWidget::execute_reboot() {
+void ShutdownWidget::execute_printer_reboot() {
     spdlog::info("[ShutdownWidget] Executing machine reboot");
 
     MoonrakerAPI* api = api_;
@@ -151,6 +246,50 @@ void ShutdownWidget::execute_reboot() {
             ToastManager::instance().show(ToastSeverity::ERROR,
                                           lv_tr("Reboot failed"), 6000);
         });
+}
+
+void ShutdownWidget::execute_screen_shutdown() {
+    spdlog::info("[ShutdownWidget] Executing local screen shutdown");
+    if (auto* rc = get_runtime_config(); rc && rc->test_mode) {
+        spdlog::warn("[ShutdownWidget] TEST MODE: skipping SystemPower::shutdown_local() — "
+                     "would have powered off the dev host");
+        ToastManager::instance().show(ToastSeverity::INFO,
+                                      "TEST: would shut down screen", 4000);
+        return;
+    }
+    if (!helix::SystemPower::shutdown_local()) {
+        ToastManager::instance().show(ToastSeverity::ERROR,
+                                      lv_tr("Screen shutdown failed"), 6000);
+    }
+}
+
+void ShutdownWidget::execute_screen_reboot() {
+    spdlog::info("[ShutdownWidget] Executing local screen reboot");
+    if (auto* rc = get_runtime_config(); rc && rc->test_mode) {
+        spdlog::warn("[ShutdownWidget] TEST MODE: skipping SystemPower::reboot_local() — "
+                     "would have rebooted the dev host");
+        ToastManager::instance().show(ToastSeverity::INFO,
+                                      "TEST: would reboot screen", 4000);
+        return;
+    }
+    if (!helix::SystemPower::reboot_local()) {
+        ToastManager::instance().show(ToastSeverity::ERROR,
+                                      lv_tr("Screen reboot failed"), 6000);
+    }
+}
+
+void ShutdownWidget::execute_both_shutdown() {
+    spdlog::info("[ShutdownWidget] Executing both shutdown (printer + screen)");
+    // Fire printer shutdown first (Moonraker async); local shutdown is
+    // synchronous-then-system-kills-us, so do it last.
+    execute_printer_shutdown();
+    execute_screen_shutdown();
+}
+
+void ShutdownWidget::execute_both_reboot() {
+    spdlog::info("[ShutdownWidget] Executing both reboot (printer + screen)");
+    execute_printer_reboot();
+    execute_screen_reboot();
 }
 
 void ShutdownWidget::shutdown_clicked_cb(lv_event_t* e) {

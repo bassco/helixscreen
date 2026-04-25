@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include "static_subject_registry.h"
 #include "ui_modal.h"
+#include "ui_split_button.h"
 
 #include <spdlog/spdlog.h>
 
@@ -11,19 +13,35 @@
 
 /**
  * @file ui_shutdown_modal.h
- * @brief Confirmation dialog for shutdown/reboot with pending state spinner.
+ * @brief Scope-aware confirmation dialog for shutdown/reboot.
  *
- * Uses modal_button_row for Shutdown|Reboot, X button for dismiss.
- * State transitions driven by shutdown_pending subject (static, shared
- * across all instances since only one modal is visible at a time).
- * XML bind_flag_if_not_eq bindings handle all visibility.
+ * Single subject drives the XML (multiple bind_flag bindings on one element
+ * race — last observer wins — so we collapse scope×pending into one value):
+ *
+ *   shutdown_view_state:
+ *     0 = single-scope confirm  (same host: one row of buttons)
+ *     1 = dual-scope confirm    (separate hosts: Both / Printer / Screen rows)
+ *     2 = screen shutting down  (progress spinner)
+ *     3 = screen rebooting      (progress spinner)
+ *     4 = printer shutting down (progress spinner)
+ *     5 = printer rebooting     (progress spinner)
+ *     6 = both shutting down    (progress spinner)
+ *     7 = both rebooting        (progress spinner)
+ *
+ * In single-scope mode, both buttons invoke on_printer_*_cb_ — the host
+ * running helixscreen IS the printer host, so Moonraker's machine.shutdown
+ * brings the screen down with it.
+ *
+ * In dual-scope mode the widget composes the "both" callbacks itself
+ * (printer Moonraker + local SystemPower), so the modal doesn't need to
+ * know — it just fires the callback that was wired to each button.
  */
 class ShutdownModal : public Modal {
   public:
     using ActionCallback = std::function<void()>;
 
     ShutdownModal() {
-        init_subject();
+        init_subjects();
     }
 
     const char* get_name() const override {
@@ -33,56 +51,101 @@ class ShutdownModal : public Modal {
         return "shutdown_modal";
     }
 
-    void set_callbacks(ActionCallback on_shutdown, ActionCallback on_reboot) {
-        on_shutdown_cb_ = std::move(on_shutdown);
-        on_reboot_cb_ = std::move(on_reboot);
+    /// Single-scope (same host) — uses printer callbacks for both buttons.
+    void set_single_callbacks(ActionCallback on_shutdown, ActionCallback on_reboot) {
+        mode_ = Mode::Single;
+        on_printer_shutdown_cb_ = std::move(on_shutdown);
+        on_printer_reboot_cb_   = std::move(on_reboot);
+        on_screen_shutdown_cb_  = nullptr;
+        on_screen_reboot_cb_    = nullptr;
+        on_both_shutdown_cb_    = nullptr;
+        on_both_reboot_cb_      = nullptr;
+        lv_subject_set_int(&view_state_subject_, 0);
     }
+
+    /// Dual-scope (separate hosts) — six distinct callbacks: Both, Printer, Screen.
+    void set_dual_callbacks(ActionCallback both_shutdown,
+                            ActionCallback both_reboot,
+                            ActionCallback printer_shutdown,
+                            ActionCallback printer_reboot,
+                            ActionCallback screen_shutdown,
+                            ActionCallback screen_reboot) {
+        mode_ = Mode::Dual;
+        on_both_shutdown_cb_    = std::move(both_shutdown);
+        on_both_reboot_cb_      = std::move(both_reboot);
+        on_printer_shutdown_cb_ = std::move(printer_shutdown);
+        on_printer_reboot_cb_   = std::move(printer_reboot);
+        on_screen_shutdown_cb_  = std::move(screen_shutdown);
+        on_screen_reboot_cb_    = std::move(screen_reboot);
+        lv_subject_set_int(&view_state_subject_, 1);
+    }
+
+    // Invoked from XML event callback free functions (registered in
+    // shutdown_widget.cpp). Public so those free functions can reach them
+    // after looking the modal up via the view root's user_data.
+    void fire_screen_shutdown()  { lv_subject_set_int(&view_state_subject_, 2); if (on_screen_shutdown_cb_)  on_screen_shutdown_cb_(); }
+    void fire_screen_reboot()    { lv_subject_set_int(&view_state_subject_, 3); if (on_screen_reboot_cb_)    on_screen_reboot_cb_(); }
+    void fire_printer_shutdown() { lv_subject_set_int(&view_state_subject_, 4); if (on_printer_shutdown_cb_) on_printer_shutdown_cb_(); }
+    void fire_printer_reboot()   { lv_subject_set_int(&view_state_subject_, 5); if (on_printer_reboot_cb_)   on_printer_reboot_cb_(); }
+    void fire_both_shutdown()    { lv_subject_set_int(&view_state_subject_, 6); if (on_both_shutdown_cb_)    on_both_shutdown_cb_(); }
+    void fire_both_reboot()      { lv_subject_set_int(&view_state_subject_, 7); if (on_both_reboot_cb_)      on_both_reboot_cb_(); }
 
   protected:
     void on_show() override {
-        lv_subject_set_int(&pending_subject_, 0);
-
+        // Reset to confirm state for current mode; setter was called before show().
+        lv_subject_set_int(&view_state_subject_, mode_ == Mode::Single ? 0 : 1);
         wire_cancel_button("btn_close");
-        wire_ok_button("btn_primary");
-        wire_tertiary_button("btn_secondary");
-    }
-
-    void on_ok() override {
-        spdlog::info("[ShutdownModal] Shutdown confirmed");
-        lv_subject_set_int(&pending_subject_, 1);
-        if (on_shutdown_cb_)
-            on_shutdown_cb_();
-    }
-
-    void on_tertiary() override {
-        spdlog::info("[ShutdownModal] Reboot confirmed");
-        lv_subject_set_int(&pending_subject_, 2);
-        if (on_reboot_cb_)
-            on_reboot_cb_();
+        // Stamp this on the view root so XML event callbacks can walk up
+        // from a clicked button and recover the owning modal instance.
+        if (dialog_) {
+            lv_obj_set_user_data(dialog_, this);
+            // Reset split-button selections to "Both" each time the dual-scope
+            // modal opens — XML's selected="0" only applies at parse time, so
+            // a leftover "Printer" selection from a previous open would persist
+            // otherwise.
+            if (mode_ == Mode::Dual) {
+                if (lv_obj_t* sb = lv_obj_find_by_name(dialog_, "split_restart")) {
+                    ui_split_button_set_selected(sb, 0);
+                }
+                if (lv_obj_t* sb = lv_obj_find_by_name(dialog_, "split_shutdown")) {
+                    ui_split_button_set_selected(sb, 0);
+                }
+            }
+        }
     }
 
   private:
-    ActionCallback on_shutdown_cb_;
-    ActionCallback on_reboot_cb_;
+    enum class Mode { Single, Dual };
+    Mode mode_ = Mode::Single;
 
-    // Static subject shared across all instances — only one modal visible at a time
-    static inline lv_subject_t pending_subject_{};
-    static inline bool subject_initialized_ = false;
+    ActionCallback on_screen_shutdown_cb_;
+    ActionCallback on_screen_reboot_cb_;
+    ActionCallback on_printer_shutdown_cb_;
+    ActionCallback on_printer_reboot_cb_;
+    ActionCallback on_both_shutdown_cb_;
+    ActionCallback on_both_reboot_cb_;
 
-    static void init_subject() {
-        if (subject_initialized_)
-            return;
-        subject_initialized_ = true;
+    static inline lv_subject_t view_state_subject_{};
+    static inline bool subjects_initialized_ = false;
 
-        lv_subject_init_int(&pending_subject_, 0);
+    static void init_subjects() {
+        if (subjects_initialized_) return;
+        subjects_initialized_ = true;
 
-        // Register into component scope so XML bindings can find it
+        lv_subject_init_int(&view_state_subject_, 0);
+
         auto* scope = lv_xml_component_get_scope("shutdown_modal");
         if (scope) {
-            lv_xml_register_subject(scope, "shutdown_pending", &pending_subject_);
+            lv_xml_register_subject(scope, "shutdown_view_state", &view_state_subject_);
         } else {
             spdlog::warn("[ShutdownModal] Component scope not found — "
                          "ensure shutdown_modal.xml is registered first");
         }
+
+        StaticSubjectRegistry::instance().register_deinit("ShutdownModal", []() {
+            if (!subjects_initialized_) return;
+            lv_subject_deinit(&view_state_subject_);
+            subjects_initialized_ = false;
+        });
     }
 };

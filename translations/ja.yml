@@ -142,6 +142,7 @@ translations:
   Applying...: 適用中...
   Are you sure you want to cancel this print? All progress will be lost.: この印刷をキャンセルしますか？すべての進行状況が失われます。
   Are you sure? This will power off or restart the printer host.: よろしいですか？プリンターホストの電源がオフまたは再起動されます。
+  Are you sure? This will power off or restart this device.: ''
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Klipper マクロを割り当ててオン/オフ、トグル、プリセットで LED を制御
   Assign a role to enable sensor monitoring: センサー監視を有効にするには役割を割り当ててください
   Assisting: アシスト中
@@ -322,6 +323,7 @@ translations:
   Choose rendering mode for G-code visualization: G-codeの視覚化レンダリングモードを選択
   Choose rendering mode for bed mesh visualization: ベッドメッシュの視覚化レンダリングモードを選択
   Choose sound style: サウンドスタイルを選択
+  Choose what to power off or restart.: ''
   Clean Nozzle: ノズル清掃
   Cleaning Nozzle...: ノズル清掃中...
   Clear: クリア
@@ -1385,7 +1387,10 @@ translations:
   Restarting HelixScreen...: HelixScreenを再起動中...
   Restarting Klipper...: Klipper を再起動中...
   Restarting Moonraker...: Moonrakerを再起動中...
+  Restarting printer...: ''
+  Restarting screen...: ''
   Restarting with the new version...: 新しいバージョンで再起動中...
+  Restarting...: ''
   Resume: 再開
   Resume Print: 印刷を再開
   Resume macro not configured: 再開マクロが未設定です
@@ -1464,6 +1469,8 @@ translations:
   Screen Dim: 画面減光
   Screen dims to lower brightness after period of inactivity: 一定時間操作がないと画面の明るさが下がります
   Screen lock and PIN settings: 画面ロックと PIN の設定
+  Screen reboot failed: ''
+  Screen shutdown failed: ''
   Screen sleeps after the selected period of inactivity: 選択した時間操作がないと画面が減光します
   Screensaver: スクリーンセーバー
   Screws Tilt: ネジ傾き
@@ -1536,6 +1543,8 @@ translations:
   Shutdown / Reboot: シャットダウン / 再起動
   Shutdown failed: 'シャットダウンに失敗しました'
   Shutdown failed — host is still reachable: 'シャットダウンに失敗しました — ホストに依然として到達可能です'
+  Shutting down printer...: ''
+  Shutting down screen...: ''
   Shutting down...: シャットダウン中...
   Side: 側面
   Single toggle macro. State is not tracked.: 単一のトグルマクロ。状態は追跡されません。

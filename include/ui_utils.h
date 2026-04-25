@@ -254,9 +254,23 @@ inline void safe_delete_deferred_raw(lv_obj_t* obj) {
 inline void safe_clean_children(lv_obj_t* container) {
     if (!container)
         return;
+    // During shutdown safe_delete_deferred_raw early-returns without
+    // detaching the child, so the count never drops and the loop spins
+    // forever. Same guards as the helper itself — bail and let lv_deinit
+    // handle final cleanup.
+    if (!lv_is_initialized() || !lv_display_get_next(nullptr) ||
+        StaticPanelRegistry::is_destroying_all()) {
+        return;
+    }
     lv_obj_update_layout(container);
     while (lv_obj_get_child_count(container) > 0) {
+        const uint32_t before = lv_obj_get_child_count(container);
         safe_delete_deferred_raw(lv_obj_get_child(container, 0));
+        // Defensive: if a child can't be detached (e.g. invalid parent
+        // chain), the helper silently no-ops — stop rather than spin.
+        if (lv_obj_get_child_count(container) >= before) {
+            break;
+        }
     }
 }
 

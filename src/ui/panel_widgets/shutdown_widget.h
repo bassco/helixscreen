@@ -41,8 +41,12 @@ class ShutdownWidget : public PanelWidget {
     helix::AsyncLifetimeGuard lifetime_;
 
     void handle_click();
-    void execute_shutdown();
-    void execute_reboot();
+    void execute_printer_shutdown();
+    void execute_printer_reboot();
+    void execute_screen_shutdown();
+    void execute_screen_reboot();
+    void execute_both_shutdown();
+    void execute_both_reboot();
 };
 
 void register_shutdown_widget();

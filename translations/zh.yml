@@ -142,6 +142,7 @@ translations:
   Applying...: 正在应用...
   Are you sure you want to cancel this print? All progress will be lost.: 确定要取消此打印吗？所有进度将丢失。
   Are you sure? This will power off or restart the printer host.: 确定吗？这将关闭或重启打印机主机。
+  Are you sure? This will power off or restart this device.: ''
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: 分配 Klipper 宏通过开/关、切换或预设控制 LED
   Assign a role to enable sensor monitoring: 分配角色以启用传感器监控
   Assisting: 辅助中
@@ -322,6 +323,7 @@ translations:
   Choose rendering mode for G-code visualization: 选择 G-code 可视化的渲染模式
   Choose rendering mode for bed mesh visualization: 选择热床网格可视化的渲染模式
   Choose sound style: 选择声音风格
+  Choose what to power off or restart.: ''
   Clean Nozzle: 清洁喷嘴
   Cleaning Nozzle...: 正在清洁喷嘴...
   Clear: 清除
@@ -1385,7 +1387,10 @@ translations:
   Restarting HelixScreen...: 正在重启 HelixScreen…
   Restarting Klipper...: 正在重启 Klipper...
   Restarting Moonraker...: 正在重启 Moonraker...
+  Restarting printer...: ''
+  Restarting screen...: ''
   Restarting with the new version...: 正在以新版本重启...
+  Restarting...: ''
   Resume: 恢复
   Resume Print: 恢复打印
   Resume macro not configured: 恢复宏未配置
@@ -1464,6 +1469,8 @@ translations:
   Screen Dim: 屏幕变暗
   Screen dims to lower brightness after period of inactivity: 一段时间不活动后屏幕会降低亮度
   Screen lock and PIN settings: 屏幕锁定和 PIN 设置
+  Screen reboot failed: ''
+  Screen shutdown failed: ''
   Screen sleeps after the selected period of inactivity: 在选定的不活动时间后屏幕将变暗
   Screensaver: 屏保
   Screws Tilt: 螺丝倾斜
@@ -1536,6 +1543,8 @@ translations:
   Shutdown / Reboot: 关机 / 重启
   Shutdown failed: '关机失败'
   Shutdown failed — host is still reachable: '关机失败 — 主机仍可访问'
+  Shutting down printer...: ''
+  Shutting down screen...: ''
   Shutting down...: 正在关机...
   Side: 侧面
   Single toggle macro. State is not tracked.: 单个切换宏。不跟踪状态。
