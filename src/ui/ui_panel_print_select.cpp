@@ -1823,9 +1823,12 @@ void PrintSelectPanel::set_selected_file(const char* filename, const char* thumb
                 lv_obj_add_flag(thumb_img, LV_OBJ_FLAG_HIDDEN);
             if (no_thumb)
                 lv_obj_remove_flag(no_thumb, LV_OBJ_FLAG_HIDDEN);
+            // Notify with nullptr, not the buffer: lv_image_src_get_type
+            // classifies a buffer whose byte[0]<0x20 as LV_IMAGE_SRC_VARIABLE,
+            // and decoders then read the leftover bytes past the cleared first
+            // byte as if they were lv_image_dsc_t fields (SEGV in is_jpg).
             selected_detail_thumbnail_buffer_[0] = '\0';
-            lv_subject_set_pointer(&selected_detail_thumbnail_subject_,
-                                   selected_detail_thumbnail_buffer_);
+            lv_subject_set_pointer(&selected_detail_thumbnail_subject_, nullptr);
             if (gradient)
                 lv_obj_set_style_image_opa(gradient, LV_OPA_TRANSP, 0);
         }
