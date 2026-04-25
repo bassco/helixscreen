@@ -136,6 +136,21 @@ static void ui_wizard_cleanup_current_screen();
 static const char* get_step_title_from_xml(int step);
 static const char* get_step_subtitle_from_xml(int step);
 static void ui_wizard_precalculate_skips();
+static void ui_wizard_purge_subtree_anims(lv_obj_t* root);
+
+// Recursively call lv_anim_delete(obj, NULL) on every descendant of `root` so
+// that any pending or in-flight animation targeting the subtree is cancelled
+// before the tree is destroyed. lv_obj_destructor's per-widget anim cancel
+// only catches anims keyed on that exact obj — style transitions are keyed on
+// internal style transition records and survive widget deletion otherwise.
+static void ui_wizard_purge_subtree_anims(lv_obj_t* root) {
+    if (!root) return;
+    lv_anim_delete(root, nullptr);
+    uint32_t n = lv_obj_get_child_count(root);
+    for (uint32_t i = 0; i < n; ++i) {
+        ui_wizard_purge_subtree_anims(lv_obj_get_child(root, static_cast<int32_t>(i)));
+    }
+}
 
 // Async navigation: defer ui_wizard_navigate_to_step() from click handlers so
 // lv_obj_clean() doesn't run inside LVGL's indev_proc_release traversal — that
@@ -796,6 +811,15 @@ static void ui_wizard_load_screen(int step) {
         ui_wizard_cleanup_current_screen();
         crash_handler::breadcrumb::note("wiz", "drain_begin", static_cast<long>(step));
         helix::ui::UpdateQueue::instance().drain();
+        // Cancel every pending animation targeting any descendant of the wizard
+        // content container before deletion. Style transitions (lv_obj_set_style_*
+        // with a transition descriptor) queue animations that aren't tied to the
+        // styled widget — `lv_anim_delete(obj, NULL)` in the destructor doesn't
+        // catch them, so a delayed `trans_anim_start_cb` can fire on a freed
+        // widget after the next step has rebuilt the tree at the same address
+        // (#871).
+        crash_handler::breadcrumb::note("wiz", "anim_purge", static_cast<long>(step));
+        ui_wizard_purge_subtree_anims(content);
         crash_handler::breadcrumb::note("wiz", "clean_begin", static_cast<long>(step));
         lv_obj_clean(content);
         crash_handler::breadcrumb::note("wiz", "clean_end", static_cast<long>(step));
