@@ -5,6 +5,7 @@
 
 #include "memory_monitor.h"
 #include "memory_utils.h"
+#include "system/crash_handler.h"
 
 #include <spdlog/spdlog.h>
 
@@ -584,9 +585,15 @@ void GCodeStreamingController::clear_cache() {
 }
 
 void GCodeStreamingController::respond_to_memory_pressure() {
+    size_t before = cache_.memory_usage_bytes();
     cache_.respond_to_pressure(0.5f);
+    size_t after = cache_.memory_usage_bytes();
     spdlog::warn("[StreamingController] Responded to memory pressure, cache now at {:.1f}MB",
-                 static_cast<double>(cache_.memory_usage_bytes()) / (1024 * 1024));
+                 static_cast<double>(after) / (1024 * 1024));
+    if (before > after) {
+        crash_handler::breadcrumb::note("stream_evict", "press",
+                                        static_cast<long>(before - after));
+    }
 }
 
 // =============================================================================

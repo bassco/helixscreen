@@ -696,23 +696,23 @@ std::vector<std::string> capture_breadcrumb_dump() {
 
 } // namespace
 
-TEST_CASE("Crash: breadcrumb ring keeps the newest 64 entries on wraparound",
+TEST_CASE("Crash: breadcrumb ring keeps the newest 128 entries on wraparound",
           "[telemetry][crash]") {
     // Drain the ring first — static state leaks across test cases. Writing
-    // 64 drain entries pushes any residual application breadcrumbs out.
-    for (int i = 0; i < 64; ++i) {
+    // ring-size drain entries pushes any residual application breadcrumbs out.
+    for (int i = 0; i < 128; ++i) {
         crash_handler::breadcrumb::note("drain", "drain");
     }
 
-    // Write 70 distinguishable entries; the ring holds 64, so entries 0..5
+    // Write 134 distinguishable entries; the ring holds 128, so entries 0..5
     // should be overwritten. Encode the index as the detail suffix so we
     // can extract it from the dumped subject string.
-    for (int i = 0; i < 70; ++i) {
+    for (int i = 0; i < 134; ++i) {
         crash_handler::breadcrumb::note("t", "entry", i);
     }
 
     auto lines = capture_breadcrumb_dump();
-    REQUIRE(lines.size() == 64);
+    REQUIRE(lines.size() == 128);
 
     auto extract_index = [](const std::string& line) -> int {
         auto pos = line.rfind(' ');
@@ -721,7 +721,7 @@ TEST_CASE("Crash: breadcrumb ring keeps the newest 64 entries on wraparound",
     };
 
     REQUIRE(extract_index(lines.front()) == 6);
-    REQUIRE(extract_index(lines.back()) == 69);
+    REQUIRE(extract_index(lines.back()) == 133);
 
     // Indices must be strictly monotonic — order preservation matters for
     // correlating with the crash location further down the log.
@@ -732,7 +732,7 @@ TEST_CASE("Crash: breadcrumb ring keeps the newest 64 entries on wraparound",
 
 TEST_CASE("Crash: breadcrumb category/subject are truncated with null terminator",
           "[telemetry][crash]") {
-    for (int i = 0; i < 64; ++i) {
+    for (int i = 0; i < 128; ++i) {
         crash_handler::breadcrumb::note("drain", "drain");
     }
 

@@ -3,6 +3,8 @@
 
 #include "gcode_layer_cache.h"
 
+#include "system/crash_handler.h"
+
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -391,6 +393,8 @@ void GCodeLayerCache::respond_to_pressure(float emergency_factor) {
                  static_cast<double>(emergency_budget) / (1024 * 1024));
 
     // Evict until under emergency budget
+    size_t freed_total = 0;
+    size_t evicted_count = 0;
     while (current_memory_ > emergency_budget && !lru_order_.empty()) {
         size_t oldest = lru_order_.back();
         lru_order_.pop_back();
@@ -401,8 +405,18 @@ void GCodeLayerCache::respond_to_pressure(float emergency_factor) {
             size_t freed = it->second.memory_bytes;
             cache_.erase(it);
             subtract_memory(freed);
+            freed_total += freed;
+            ++evicted_count;
             spdlog::debug("[LayerCache] Emergency evict layer {} ({} bytes)", oldest, freed);
         }
+    }
+    if (evicted_count > 0) {
+        // Correlate eviction with subsequent dangling-pointer SEGVs (#851 family).
+        // Detail is bytes freed; layer count goes in the subject.
+        char layers[24];
+        std::snprintf(layers, sizeof(layers), "%luL", static_cast<unsigned long>(evicted_count));
+        crash_handler::breadcrumb::note("layercache_evict", layers,
+                                        static_cast<long>(freed_total));
     }
 }
 

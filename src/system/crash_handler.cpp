@@ -147,8 +147,11 @@ struct BreadcrumbSlot {
     char subject[60]; // null-terminated, truncated
 };
 
-/// Ring size: 64 slots × 72 bytes = 4608 bytes static.
-static constexpr size_t kBreadcrumbRingSize = 64;
+/// Ring size: 128 slots × 72 bytes = 9216 bytes static.
+/// Doubled from 64 to absorb growth in crumb sites (eviction, pressure
+/// response, thumbnail set_src) without displacing nav/overlay context
+/// during sustained pressure cycles.
+static constexpr size_t kBreadcrumbRingSize = 128;
 static BreadcrumbSlot s_breadcrumb_ring[kBreadcrumbRingSize] = {};
 
 /// Monotonically-incrementing write index. Modulo ring size gives slot.
@@ -1037,6 +1040,15 @@ void crash_handler::set_current_event(const void* target, const void* original_t
 extern "C" void helix_crash_note_event(const void* target, const void* original_target,
                                        unsigned int code) {
     crash_handler::set_current_event(target, original_target, code);
+}
+
+// C-ABI bridge for LVGL — see include/system/crash_handler.h
+extern "C" void helix_crash_note_async_del(const void* obj, const char* class_name) {
+    // Subject = class name (truncated to 59 chars by breadcrumb slot).
+    // Detail  = pointer as long, for correlation with destructor `obj` via
+    //           addr2line on the next bundle resolve.
+    crash_handler::breadcrumb::note("async_d", class_name ? class_name : "?",
+                                    reinterpret_cast<long>(obj));
 }
 
 void crash_handler::refresh_heap_snapshot() noexcept {

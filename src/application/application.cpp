@@ -683,6 +683,7 @@ int Application::run(int argc, char** argv) {
             if (level >= helix::MemoryPressureLevel::critical) {
                 helix::ui::queue_update([]() {
                     spdlog::warn("[Application] Pressure response: dropping LVGL image cache");
+                    crash_handler::breadcrumb::note("lvgl_imgcache", "drop");
                     lv_image_cache_drop(nullptr);
                 });
             }
