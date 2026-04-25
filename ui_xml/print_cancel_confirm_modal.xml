@@ -24,6 +24,6 @@
     <!-- Button row -->
     <modal_button_row secondary_text="Keep Printing"
                       secondary_callback="on_print_cancel_dismiss" primary_text="Stop"
-                      primary_callback="on_print_cancel_confirm" primary_bg_color="#danger"/>
+                      primary_callback="on_print_cancel_confirm" primary_variant="danger"/>
   </view>
 </component>

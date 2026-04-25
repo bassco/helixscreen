@@ -28,6 +28,6 @@
     <!-- Button row -->
     <modal_button_row secondary_text="Cancel"
                       secondary_callback="on_z_offset_cancel" primary_text="Save &amp; Restart"
-                      primary_callback="on_z_offset_save" primary_bg_color="#danger"/>
+                      primary_callback="on_z_offset_save" primary_variant="danger"/>
   </view>
 </component>

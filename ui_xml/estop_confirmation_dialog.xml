@@ -25,6 +25,6 @@
     <!-- Button row -->
     <modal_button_row secondary_text="Cancel"
                       secondary_callback="estop_dialog_cancel_clicked" primary_text="STOP"
-                      primary_callback="estop_dialog_confirm_clicked" primary_bg_color="#danger"/>
+                      primary_callback="estop_dialog_confirm_clicked" primary_variant="danger"/>
   </view>
 </component>

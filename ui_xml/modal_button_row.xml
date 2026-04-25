@@ -9,7 +9,7 @@
     <prop name="secondary_callback" type="string"/>
     <prop name="primary_icon" type="string" default=""/>
     <prop name="secondary_icon" type="string" default=""/>
-    <prop name="primary_bg_color" type="string" default=""/>
+    <prop name="primary_variant" type="string" default="primary"/>
     <prop name="show_secondary" type="string" default="true"/>
   </api>
   <view extends="lv_obj" width="100%" height="content" style_pad_all="0" style_pad_gap="0" flex_flow="column">
@@ -25,8 +25,10 @@
       </ui_button>
       <!-- Vertical divider -->
       <divider_vertical/>
-      <!-- Primary button (same border-width suppression as secondary). -->
-      <ui_button name="btn_primary" height="100%" flex_grow="1" style_radius="0" style_border_width="0" focusable="false" icon="$primary_icon" text="$primary_text" translation_tag="$primary_tag">
+      <!-- Primary button (same border-width suppression as secondary).
+           variant="primary" by default; pass primary_variant="danger" for
+           destructive actions (Shutdown, Cancel Print, etc.). -->
+      <ui_button name="btn_primary" variant="$primary_variant" height="100%" flex_grow="1" style_radius="0" style_border_width="0" focusable="false" icon="$primary_icon" text="$primary_text" translation_tag="$primary_tag">
         <event_cb trigger="clicked" callback="$primary_callback"/>
       </ui_button>
     </lv_obj>
