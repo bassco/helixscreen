@@ -244,3 +244,12 @@ void dump_to_fd(int fd) noexcept;
 extern "C" void helix_crash_note_event(const void* target,
                                        const void* original_target,
                                        unsigned int code);
+
+// C-ABI bridge for LVGL (C source) to breadcrumb an async-delete drain.
+// Called from lv_obj_delete_async_cb at the moment the root of an async-
+// scheduled destruction subtree starts tearing down. Names the class and
+// pointer — survives to crash-time when #840-class SIGBUS fires inside
+// lv_event_mark_deleted during obj_delete_core recursion into children.
+// Low-frequency site (one per async-scheduled root, not per child).
+extern "C" void helix_crash_note_async_del(const void* obj,
+                                           const char* class_name);

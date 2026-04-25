@@ -1,0 +1,37 @@
+diff --git a/src/core/lv_obj_tree.c b/src/core/lv_obj_tree.c
+--- a/src/core/lv_obj_tree.c
++++ b/src/core/lv_obj_tree.c
+@@ -19,6 +19,14 @@
+  * with backtrace + device context for remote crash diagnostics. */
+ extern void helix_lvgl_anomaly(const char * code, const char * context);
+
++/* Breadcrumb hook provided by crash_handler.cpp — records the root of an
++ * async-scheduled destruction subtree at the moment tear-down starts. Weak
++ * so LVGL demos/tests link without the helix-side symbol. Captures #840-
++ * class SIGBUS context: the child widget that blows up inside
++ * lv_event_mark_deleted is a descendant of the pointer recorded here. */
++__attribute__((weak))
++extern void helix_crash_note_async_del(const void * obj, const char * class_name);
++
+ /*********************
+  *      DEFINES
+  *********************/
+@@ -694,6 +702,17 @@ static void lv_obj_delete_async_cb(void * obj)
+         helix_lvgl_anomaly("obj_delete_async_cb_invalid", "");
+         return;
+     }
+
++    /* Breadcrumb the root of this async-destruction subtree. If a crash
++     * fires downstream inside obj_delete_core's recursion into children
++     * (e.g. #840-class SIGBUS in lv_event_mark_deleted+0x3c), the crumb
++     * ring names the root pointer + class, which addr2line can correlate
++     * against the destructor's `obj` argument at crash time. */
++    if(helix_crash_note_async_del) {
++        lv_obj_t * lvobj = (lv_obj_t *)obj;
++        const char * cls_name = (lvobj->class_p && lvobj->class_p->name) ? lvobj->class_p->name : "?";
++        helix_crash_note_async_del(obj, cls_name);
++    }
++
+     lv_obj_delete(obj);
+ }
+
