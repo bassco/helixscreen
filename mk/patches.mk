@@ -505,6 +505,13 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL event crash-diagnostic hook patch already applied$(RESET)"; \
 	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_event_mark_deleted_defensive.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL lv_event_mark_deleted defensive bail patch...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_event_mark_deleted_defensive.patch && \
+		echo "$(GREEN)✓ lv_event_mark_deleted defensive bail patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL lv_event_mark_deleted defensive bail patch already applied$(RESET)"; \
+	fi
 	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_style_null_guards.patch 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL style NULL guards patch (null style pointers in transitions/cache)...$(RESET)"; \
 		git -C $(LVGL_DIR) apply ../../patches/lvgl_style_null_guards.patch && \
