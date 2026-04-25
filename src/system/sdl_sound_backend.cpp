@@ -38,8 +38,12 @@ bool SDLSoundBackend::initialize() {
     }
 
     sample_rate_ = obtained.freq;
-    SDL_PauseAudioDevice(device_id_, 0); // Start playback
+    // Resize the mix buffer BEFORE unpausing — SDL's audio thread starts
+    // calling audio_callback the instant playback unpauses, and the callback
+    // memsets mix_buf_.data(). If the callback fires before the resize,
+    // data() is nullptr and the memset segfaults the audio thread.
     mix_buf_.resize(obtained.samples);
+    SDL_PauseAudioDevice(device_id_, 0); // Start playback
     initialized_ = true;
 
     spdlog::info("[SDLSound] Audio initialized: {} Hz, {} samples buffer", sample_rate_,
