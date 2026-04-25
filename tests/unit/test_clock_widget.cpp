@@ -459,18 +459,23 @@ TEST_CASE("Locale set language caching", "[clock_widget][i18n]") {
 // Tests for the widget rebuild + activation fix
 // ---------------------------------------------------------------------------
 
-/// Mock PanelWidget that tracks on_activate/on_deactivate calls
+/// Mock PanelWidget that tracks on_activate/on_deactivate calls.
+/// Optional external_detach_counter survives the widget's destruction so
+/// tests can verify detach() was called even after the unique_ptr freed it.
 class MockWidget : public PanelWidget {
   public:
     int activate_count = 0;
     int deactivate_count = 0;
     bool attached = false;
+    int* external_detach_counter = nullptr;
 
     void attach(lv_obj_t* /*widget_obj*/, lv_obj_t* /*parent_screen*/) override {
         attached = true;
     }
     void detach() override {
         attached = false;
+        if (external_detach_counter)
+            ++*external_detach_counter;
     }
     void on_activate() override {
         activate_count++;
@@ -551,6 +556,12 @@ TEST_CASE("Widget rebuild activation contract", "[panel_widget][lifecycle]") {
         auto* first_mock = static_cast<MockWidget*>(active_widgets[0].get());
         REQUIRE(first_mock->activate_count == 1);
 
+        // Hook detach observer BEFORE rebuild — populate_widgets() clears the
+        // vector and frees first_mock, so we can't read first_mock->attached
+        // after the rebuild without a UAF.
+        int first_detach_count = 0;
+        first_mock->external_detach_counter = &first_detach_count;
+
         // Rebuild while panel is active (simulates gate observer or settings change)
         populate_widgets();
         auto* new_mock = static_cast<MockWidget*>(active_widgets[0].get());
@@ -558,7 +569,7 @@ TEST_CASE("Widget rebuild activation contract", "[panel_widget][lifecycle]") {
         // New widget should have been activated during populate
         REQUIRE(new_mock->activate_count == 1);
         // Old widget should have been detached (not deactivated — detach handles cleanup)
-        REQUIRE(first_mock->attached == false);
+        REQUIRE(first_detach_count == 1);
     }
 
     SECTION("multiple rebuilds while active: each batch gets activated") {
