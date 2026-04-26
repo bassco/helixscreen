@@ -836,17 +836,29 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     // Step 5: Subscribe to all discovered objects + core objects
     json subscription_objects;
 
-    // Core non-optional objects
-    subscription_objects["print_stats"] = nullptr;
-    subscription_objects["virtual_sdcard"] = nullptr;
-    subscription_objects["toolhead"] = nullptr;
-    subscription_objects["gcode_move"] = nullptr;
-    subscription_objects["motion_report"] = nullptr;
-    subscription_objects["system_stats"] = nullptr;
-    subscription_objects["display_status"] = nullptr;
+    // Core non-optional objects — narrow each to the fields HelixScreen
+    // parsers actually read. Klipper publishes notify_status_update on every
+    // subscribed-field change, and several of these (toolhead, gcode_move,
+    // motion_report) update on every motion step (~100Hz during a print) —
+    // nullptr would have us receiving every internal field per step.
+    subscription_objects["print_stats"] =
+        json::array({"state", "filename", "filament_used", "print_duration",
+                     "total_duration", "estimated_time", "info"});
+    subscription_objects["virtual_sdcard"] =
+        json::array({"progress", "layer", "layer_count", "file_position", "is_active"});
+    subscription_objects["toolhead"] =
+        json::array({"position", "homed_axes", "kinematics", "extruder",
+                     "axis_minimum", "axis_maximum"});
+    subscription_objects["gcode_move"] = json::array(
+        {"gcode_position", "speed", "speed_factor", "extrude_factor", "homing_origin"});
+    subscription_objects["motion_report"] = json::array({"live_extruder_velocity"});
+    subscription_objects["display_status"] = json::array({"message", "progress"});
+
+    // system_stats and idle_timeout were previously subscribed with nullptr but
+    // no parser ever reads them — drop the subscription entirely.
 
     // Klipper firmware state (shutdown/error detection + state_message)
-    subscription_objects["webhooks"] = nullptr;
+    subscription_objects["webhooks"] = json::array({"state", "state_message"});
 
     // All discovered heaters (extruders, beds, generic heaters)
     for (const auto& heater : heaters_) {
@@ -870,14 +882,22 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         spdlog::debug("[MoonrakerDiscoverySequence] Subscribing to fan_feedback for RPM data");
     }
 
-    // All discovered LEDs
+    // All discovered LEDs (neopixel/dotstar/led).
+    // We read color_data for live LED tile color + RGBW capability; everything
+    // else (config_layers, etc.) is static topology and can be left to the
+    // initial config fetch.
     for (const auto& led : leds_) {
-        subscription_objects[led] = nullptr;
+        subscription_objects[led] = json::array({"color_data"});
     }
 
-    // All discovered LED effects (for tracking active/enabled state)
+    // All discovered LED effects (klipper-led_effect plugin objects).
+    // We only read `enabled`. Klipper otherwise publishes per-frame animation
+    // state on every effect tick — subscribing to nullptr would have us
+    // receiving (and Klipper serialising) hundreds of messages per second on
+    // hardware with many led_effects (e.g. AFC BoxTurtle: 2 effects × 8 lanes
+    // = 46 effect objects updating in lockstep with the print).
     for (const auto& effect : hw.led_effects()) {
-        subscription_objects[effect] = nullptr;
+        subscription_objects[effect] = json::array({"enabled"});
     }
 
     // Bed mesh (for 3D visualization)
@@ -941,10 +961,69 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         spdlog::info("[Moonraker Client] Subscribing to MMU object (Happy Hare)");
     }
 
-    // All discovered AFC objects (AFC, AFC_stepper, AFC_hub, AFC_extruder)
-    // These provide lane status, sensor states, and filament info for MMU support
+    // All discovered AFC objects — narrow per object-type to the fields the
+    // AmsBackendAfc parsers actually read. nullptr here would cost dearly:
+    // an AFC BoxTurtle setup typically has ~9 AFC_* objects, all updated by
+    // the firmware on every lane state change. AFC_led is currently subscribed
+    // but never parsed by HelixScreen; skip it entirely.
+    //
+    // Field lists mirror parse_afc_state / parse_afc_stepper / parse_afc_hub /
+    // parse_afc_buffer / parse_afc_extruder / parse_afc_unit_object in
+    // src/printer/ams_backend_afc.cpp. Keep these in sync when adding parser
+    // fields.
+    static const json afc_state_fields = json::array(
+        {"connected",      "bypass_state",        "quiet_mode",
+         "current_load",   "current_lane",        "current_state",
+         "current_tool",   "current_toolchange",  "error_state",
+         "filament_loaded", "lane_loaded",        "led_state",
+         "message",        "name",                "number_of_toolchanges",
+         "num_extruders",  "status",              "system",
+         "tool_sensor_after_extruder",            "tool_stn",
+         "tool_stn_unload",                       "type",
+         "units",          "lanes",               "hubs",
+         "extruders",      "buffers"});
+    static const json afc_stepper_fields = json::array(
+        {"buffer_status", "color",         "dist_hub",     "extruder",
+         "filament_status", "hub",         "load",         "loaded_to_hub",
+         "map",           "material",      "prep",         "runout_lane",
+         "spool_id",      "status",        "tool_loaded",  "weight"});
+    static const json afc_hub_fields = json::array({"state", "afc_bowden_length"});
+    static const json afc_buffer_fields = json::array(
+        {"state", "distance_to_fault", "error_sensitivity",
+         "fault_detection_enabled", "lanes"});
+    static const json afc_extruder_fields =
+        json::array({"lane_loaded", "tool_end_status", "tool_start_status"});
+    static const json afc_unit_fields =
+        json::array({"lanes", "extruders", "hubs", "buffers"});
+
+    int afc_skipped = 0;
     for (const auto& afc_obj : afc_objects_) {
-        subscription_objects[afc_obj] = nullptr;
+        // Top-level "AFC" (no space, no underscore-suffix) — system state
+        if (afc_obj == "AFC" || afc_obj == "afc") {
+            subscription_objects[afc_obj] = afc_state_fields;
+        } else if (afc_obj.rfind("AFC_stepper ", 0) == 0 ||
+                   afc_obj.rfind("AFC_lane ", 0) == 0) {
+            subscription_objects[afc_obj] = afc_stepper_fields;
+        } else if (afc_obj.rfind("AFC_hub ", 0) == 0) {
+            subscription_objects[afc_obj] = afc_hub_fields;
+        } else if (afc_obj.rfind("AFC_buffer ", 0) == 0) {
+            subscription_objects[afc_obj] = afc_buffer_fields;
+        } else if (afc_obj.rfind("AFC_extruder ", 0) == 0) {
+            subscription_objects[afc_obj] = afc_extruder_fields;
+        } else if (afc_obj.rfind("AFC_led ", 0) == 0) {
+            // Not parsed anywhere in HelixScreen — skip subscription entirely
+            ++afc_skipped;
+            continue;
+        } else {
+            // Unit-level object: AFC_BoxTurtle, AFC_OpenAMS, AFC_vivid,
+            // AFC_NightOwl, etc. — parse_afc_unit_object reads only topology
+            // arrays.
+            subscription_objects[afc_obj] = afc_unit_fields;
+        }
+    }
+    if (afc_skipped > 0) {
+        spdlog::debug("[Moonraker Client] Skipped {} unparsed AFC_led object(s) from subscription",
+                      afc_skipped);
     }
 
     // AD5X IFS requires save_variables for filament state (colors, types, tool mapping)
