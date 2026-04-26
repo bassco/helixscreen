@@ -138,13 +138,30 @@ static const char* get_step_subtitle_from_xml(int step);
 static void ui_wizard_precalculate_skips();
 static void ui_wizard_purge_subtree_anims(lv_obj_t* root);
 
-// Recursively call lv_anim_delete(obj, NULL) on every descendant of `root` so
-// that any pending or in-flight animation targeting the subtree is cancelled
-// before the tree is destroyed. lv_obj_destructor's per-widget anim cancel
-// only catches anims keyed on that exact obj — style transitions are keyed on
-// internal style transition records and survive widget deletion otherwise.
+// Recursively cancel every pending/in-flight animation targeting the subtree
+// before the tree is destroyed. Two distinct cancellation calls are needed:
+//
+//   1. `lv_anim_delete(obj, NULL)` matches anims whose `var == obj`
+//      (lv_anim_set_var(&a, obj)) — direct property animations.
+//
+//   2. `lv_obj_remove_style_all(obj)` triggers `trans_delete` per `is_trans`
+//      style entry on the obj, which calls `lv_anim_delete(tr, NULL)` for
+//      the matching style-transition animation. Style transitions set
+//      `var = tr` (a `trans_t*`, see `lv_obj_style_create_transition` in
+//      `lv_obj_style.c:465`) — `lv_anim_delete(obj, NULL)` cannot match
+//      them. The previous fix relied on (1) alone, leaving transition
+//      anims live; a delayed `trans_anim_start_cb` then SEGVs in
+//      `lv_obj_get_style_prop` on the freed `trans_t` after the next
+//      step rebuilds the tree (#871, #880, bundle XBPDDJVK on v0.99.45).
+//
+// Mirror `lv_obj_destructor`'s pattern: disable style refresh around the
+// `remove_style_all` call so we don't kick off invalidations on widgets
+// that are about to be destroyed by `lv_obj_clean` immediately after.
 static void ui_wizard_purge_subtree_anims(lv_obj_t* root) {
     if (!root) return;
+    lv_obj_enable_style_refresh(false);
+    lv_obj_remove_style_all(root);
+    lv_obj_enable_style_refresh(true);
     lv_anim_delete(root, nullptr);
     uint32_t n = lv_obj_get_child_count(root);
     for (uint32_t i = 0; i < n; ++i) {
