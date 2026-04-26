@@ -794,6 +794,28 @@ TEST_CASE("UpdateChecker get_download_path returns valid path", "[update_checker
     checker.shutdown();
 }
 
+TEST_CASE("UpdateChecker required_download_space_bytes scales with download size",
+          "[update_checker]") {
+    using UC = UpdateChecker;
+
+    // Unknown size → fixed default
+    auto unknown = UC::required_download_space_bytes(0);
+    REQUIRE(unknown >= 200ULL * 1024 * 1024);
+
+    // Tiny download → safety floor
+    auto tiny = UC::required_download_space_bytes(1024);
+    REQUIRE(tiny >= 50ULL * 1024 * 1024);
+
+    // Realistic 70 MB download → 1.2x + buffer ≈ 94 MB
+    auto realistic = UC::required_download_space_bytes(70ULL * 1024 * 1024);
+    REQUIRE(realistic > 70ULL * 1024 * 1024);
+    REQUIRE(realistic < 110ULL * 1024 * 1024);
+
+    // Large download → scales up
+    auto large = UC::required_download_space_bytes(500ULL * 1024 * 1024);
+    REQUIRE(large > 500ULL * 1024 * 1024);
+}
+
 TEST_CASE("UpdateChecker get_platform_asset_name format", "[update_checker]") {
     auto& checker = UpdateChecker::instance();
     checker.init();

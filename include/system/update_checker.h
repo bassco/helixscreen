@@ -61,6 +61,7 @@ class UpdateChecker {
         std::string release_notes; ///< Body markdown
         std::string published_at;  ///< ISO 8601 timestamp
         std::string sha256;        ///< SHA-256 hash (for dev channel verification)
+        size_t download_bytes = 0; ///< Asset size in bytes (0 if unknown)
     };
 
     /**
@@ -187,7 +188,26 @@ class UpdateChecker {
     // Download state reporting (public for tests and SettingsPanel)
     void report_download_status(DownloadStatus status, int progress, const std::string& text,
                                 const std::string& error = "");
-    std::string get_download_path() const;
+    /// Diagnostic info about candidate selection — populated even when no
+    /// candidate met the free-space threshold, so callers can build a
+    /// useful error message.
+    struct DownloadPathDiag {
+        std::string best_dir;        // best candidate found (regardless of threshold)
+        size_t best_free_bytes = 0;  // its free space
+        size_t threshold_bytes = 0;  // threshold required
+    };
+    /// @param diag Optional diagnostic out-param (for error reporting)
+    /// @param threshold_bytes Required free bytes; 0 → use a 200 MB default
+    ///        for callers without a known download size.
+    std::string get_download_path(DownloadPathDiag* diag = nullptr,
+                                  size_t threshold_bytes = 0) const;
+
+    /// Compute the disk-space threshold for an in-app download.
+    /// Returns 1.2x download_bytes + a small buffer when known, else a fixed
+    /// default sized for current release archives. Always honors a 50 MB
+    /// safety floor.
+    static size_t required_download_space_bytes(size_t download_bytes);
+
     std::string get_platform_asset_name() const;
 
     /** @brief Get the configured update channel */
