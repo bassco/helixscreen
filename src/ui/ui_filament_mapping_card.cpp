@@ -129,9 +129,12 @@ void FilamentMappingCard::rebuild_compact_view() {
         return;
     }
 
+    // [L081] freeze+drain handles UpdateQueue concurrency, but LVGL's own
+    // event-dispatch loop (modal on_mappings_updated → here) is the other
+    // batch we have to escape. safe_clean_children async-deletes via LVGL.
     auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
     helix::ui::UpdateQueue::instance().drain();
-    lv_obj_clean(rows_container_);
+    helix::ui::safe_clean_children(rows_container_);
 
     // Pill layout, sizing, padding, fonts all live in
     // ui_xml/components/filament_mapping_pill.xml — tune visuals without

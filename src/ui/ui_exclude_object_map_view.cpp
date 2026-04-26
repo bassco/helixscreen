@@ -7,6 +7,7 @@
 #include "observer_factory.h"
 #include "printer_excluded_objects_state.h"
 #include "theme_manager.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -322,10 +323,11 @@ void ExcludeObjectMapView::build_object_rects() {
     if (!object_container_ || !state_ || !mapper_)
         return;
 
-    // Flush pending layout before cleaning — observer callbacks can run between
-    // layout passes, causing use-after-free in layout_update_core (#711).
+    // build_object_rects runs from defined_version_obs_ (observe_int_sync,
+    // deferred via UpdateQueue) — sync clean inside that batch corrupts
+    // LVGL's event linked list (#878). Use the async-clean helper. [L081]
     lv_obj_update_layout(object_container_);
-    lv_obj_clean(object_container_);
+    helix::ui::safe_clean_children(object_container_);
     object_rects_.clear();
 
     const auto& defined = state_->get_defined_objects();
@@ -674,7 +676,7 @@ void ExcludeObjectMapView::build_key_bar() {
         return;
 
     lv_obj_update_layout(key_bar_);
-    lv_obj_clean(key_bar_);
+    helix::ui::safe_clean_children(key_bar_); // [L081] same observer path as build_object_rects
 
     if (!state_)
         return;

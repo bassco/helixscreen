@@ -572,8 +572,9 @@ void AmsPanel::rebuild_backend_selector() {
 
     lv_obj_remove_flag(row, LV_OBJ_FLAG_HIDDEN);
 
-    // Clear existing children
-    lv_obj_clean(row);
+    // Clear existing children. rebuild_backend_selector runs from
+    // backend_count_observer_ via lifetime_.defer (UpdateQueue batch). [L081]
+    helix::ui::safe_clean_children(row);
 
     for (int i = 0; i < count; ++i) {
         auto* backend = ams.get_backend(i);

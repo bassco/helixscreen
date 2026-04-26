@@ -13,6 +13,7 @@
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_status_pill.h"
+#include "ui_utils.h"
 
 #include "ams_backend.h"
 #include "ams_state.h"
@@ -197,7 +198,7 @@ void AmsDeviceOperationsOverlay::update_from_backend() {
         lv_subject_copy_string(&status_subject_, status_buf_);
 
         if (section_list_container_) {
-            lv_obj_clean(section_list_container_);
+            helix::ui::safe_clean_children(section_list_container_); // [L081]
         }
         cached_sections_.clear();
         return;
@@ -253,7 +254,7 @@ void AmsDeviceOperationsOverlay::populate_section_list() {
         return;
     }
 
-    lv_obj_clean(section_list_container_);
+    helix::ui::safe_clean_children(section_list_container_); // [L081]
     cached_sections_.clear();
 
     AmsBackend* backend = AmsState::instance().get_backend();

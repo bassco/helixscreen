@@ -8,6 +8,7 @@
 #include "ui_callback_helpers.h"
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
+#include "ui_utils.h"
 
 #include "filament_database.h"
 #include "material_settings_manager.h"
@@ -202,8 +203,11 @@ void MaterialTempsOverlay::populate_material_list() {
         return;
     }
 
-    // Clear existing children
-    lv_obj_clean(list_view_);
+    // Clear existing children. Using safe_clean_children rather than
+    // lv_obj_clean because populate_material_list() runs from inside
+    // LV_EVENT_CLICKED dispatch (handle_save / handle_back / handle_reset);
+    // a sync clean in that context corrupts LVGL's event linked list. [L081]
+    helix::ui::safe_clean_children(list_view_);
 
     // Sort materials alphabetically by name
     std::vector<size_t> indices(filament::MATERIAL_COUNT);
