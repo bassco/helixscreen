@@ -825,15 +825,11 @@ void MoonrakerDiscoverySequence::continue_discovery_objects(uint64_t seq) {
     );
 }
 
-void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
-    // Snapshot hardware_ once under lock for all reads in this method (#777)
-    PrinterDiscovery hw;
-    {
-        std::lock_guard<std::mutex> lock(hardware_mutex_);
-        hw = hardware_;
-    }
-
-    // Step 5: Subscribe to all discovered objects + core objects
+json MoonrakerDiscoverySequence::build_subscription_objects(
+    const PrinterDiscovery& hw, const std::vector<std::string>& heaters,
+    const std::vector<std::string>& sensors, const std::vector<std::string>& fans,
+    const std::vector<std::string>& leds, const std::vector<std::string>& afc_objects,
+    const std::vector<std::string>& filament_sensors) {
     json subscription_objects;
 
     // Core non-optional objects — narrow each to the fields HelixScreen
@@ -847,8 +843,7 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     subscription_objects["virtual_sdcard"] =
         json::array({"progress", "layer", "layer_count", "file_position", "is_active"});
     subscription_objects["toolhead"] =
-        json::array({"position", "homed_axes", "kinematics", "extruder",
-                     "axis_minimum", "axis_maximum"});
+        json::array({"position", "homed_axes", "kinematics", "extruder", "max_velocity"});
     subscription_objects["gcode_move"] = json::array(
         {"gcode_position", "speed", "speed_factor", "extrude_factor", "homing_origin"});
     subscription_objects["motion_report"] = json::array({"live_extruder_velocity"});
@@ -863,14 +858,14 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     // All discovered heaters (extruders, beds, generic heaters).
     // PrinterTemperatureState reads only temperature + target.
     static const json heater_fields = json::array({"temperature", "target"});
-    for (const auto& heater : heaters_) {
+    for (const auto& heater : heaters) {
         subscription_objects[heater] = heater_fields;
     }
 
-    // All discovered sensors. temperature_fan also lives in fans_ and is
+    // All discovered sensors. temperature_fan also lives in fans and is
     // overwritten in the fans loop below with the union of fields.
     static const json temp_sensor_fields = json::array({"temperature"});
-    for (const auto& sensor : sensors_) {
+    for (const auto& sensor : sensors) {
         subscription_objects[sensor] = temp_sensor_fields;
     }
 
@@ -883,8 +878,7 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     static const json fan_speed_fields = json::array({"speed"});
     static const json temp_fan_fields = json::array({"temperature", "target", "speed"});
     static const json output_pin_value_fields = json::array({"value"});
-    spdlog::info("[Moonraker Client] Subscribing to {} fans: {}", fans_.size(), json(fans_).dump());
-    for (const auto& fan : fans_) {
+    for (const auto& fan : fans) {
         if (fan.rfind("temperature_fan ", 0) == 0) {
             subscription_objects[fan] = temp_fan_fields;
         } else if (fan.rfind("output_pin ", 0) == 0) {
@@ -900,14 +894,13 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
             json::array({"fan0_speed", "fan1_speed", "fan2_speed", "fan3_speed", "fan4_speed",
                          "fan5_speed", "fan6_speed", "fan7_speed", "fan8_speed", "fan9_speed"});
         subscription_objects["fan_feedback"] = fan_feedback_fields;
-        spdlog::debug("[MoonrakerDiscoverySequence] Subscribing to fan_feedback for RPM data");
     }
 
     // All discovered LEDs. Native LEDs (neopixel/dotstar/led) report color_data;
     // output_pin LEDs report a single value. Other config fields are static
     // topology already fetched at startup.
     static const json led_color_fields = json::array({"color_data"});
-    for (const auto& led : leds_) {
+    for (const auto& led : leds) {
         if (led.rfind("output_pin ", 0) == 0) {
             subscription_objects[led] = output_pin_value_fields;
         } else {
@@ -989,7 +982,6 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
                                                    "slicer_tool_map",
                                                    "toolchange_purge_volume",
                                                    "leds"});
-        spdlog::info("[Moonraker Client] Subscribing to MMU object (Happy Hare)");
     }
 
     // All discovered AFC objects — narrow per object-type to the fields the
@@ -1027,8 +1019,7 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     static const json afc_unit_fields =
         json::array({"lanes", "extruders", "hubs", "buffers"});
 
-    int afc_skipped = 0;
-    for (const auto& afc_obj : afc_objects_) {
+    for (const auto& afc_obj : afc_objects) {
         // Top-level "AFC" (no space, no underscore-suffix) — system state
         if (afc_obj == "AFC" || afc_obj == "afc") {
             subscription_objects[afc_obj] = afc_state_fields;
@@ -1043,7 +1034,6 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
             subscription_objects[afc_obj] = afc_extruder_fields;
         } else if (afc_obj.rfind("AFC_led ", 0) == 0) {
             // Not parsed anywhere in HelixScreen — skip subscription entirely
-            ++afc_skipped;
             continue;
         } else {
             // Unit-level object: AFC_BoxTurtle, AFC_OpenAMS, AFC_vivid,
@@ -1052,29 +1042,22 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
             subscription_objects[afc_obj] = afc_unit_fields;
         }
     }
-    if (afc_skipped > 0) {
-        spdlog::debug("[Moonraker Client] Skipped {} unparsed AFC_led object(s) from subscription",
-                      afc_skipped);
-    }
 
     // AD5X IFS requires save_variables for filament state (colors, types, tool mapping)
     if (hw.mmu_type() == AmsType::AD5X_IFS) {
         subscription_objects["save_variables"] = nullptr;
-        spdlog::info("[Moonraker Client] Subscribing to save_variables (AD5X IFS)");
     }
 
     // ACE (Anycubic ACE Pro — ValgACE/BunnyACE/DuckACE Klipper drivers)
     // The ace object provides slot colors, materials, status, dryer state via get_status()
     if (hw.mmu_type() == AmsType::ACE) {
         subscription_objects["ace"] = nullptr;
-        spdlog::info("[Moonraker Client] Subscribing to ace object (Anycubic ACE)");
     }
 
     // CFS (Creality Filament System) — K2 series with RS-485 CFS units
     if (hw.mmu_type() == AmsType::CFS) {
         subscription_objects["box"] = nullptr;
         subscription_objects["motor_control"] = nullptr;
-        spdlog::info("[Moonraker Client] Subscribing to box + motor_control (CFS)");
     }
 
     // Snapmaker U1 SnapSwap — RFID filament, feed modules, task config, extruder states
@@ -1087,14 +1070,13 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         for (int i = 0; i < 4; ++i) {
             subscription_objects[fmt::format("filament_motion_sensor e{}_filament", i)] = nullptr;
         }
-        spdlog::info("[Moonraker Client] Subscribing to Snapmaker filament + feed objects");
     }
 
     // All discovered filament sensors (filament_switch_sensor, filament_motion_sensor).
     // FilamentSensorManager reads filament_detected + enabled + detection_count.
     static const json filament_sensor_fields =
         json::array({"filament_detected", "enabled", "detection_count"});
-    for (const auto& sensor : filament_sensors_) {
+    for (const auto& sensor : filament_sensors) {
         subscription_objects[sensor] = filament_sensor_fields;
     }
 
@@ -1104,8 +1086,6 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         for (const auto& sensor : hw.width_sensor_objects()) {
             subscription_objects[sensor] = width_sensor_fields;
         }
-        spdlog::info("[Moonraker Client] Subscribing to {} width sensors",
-                     hw.width_sensor_objects().size());
     }
 
     // Toolchanger + per-tool objects. AmsBackendToolchanger reads
@@ -1125,8 +1105,6 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         for (const auto& tool_name : hw.tool_names()) {
             subscription_objects["tool " + tool_name] = tool_fields;
         }
-        spdlog::info("[Moonraker Client] Subscribing to toolchanger + {} tool objects",
-                     hw.tool_names().size());
     }
 
     // Firmware retraction. PrinterCalibrationState reads the four tunable
@@ -1142,6 +1120,60 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     subscription_objects["gcode_macro _START_PRINT"] = json::array({"print_started"});
     subscription_objects["gcode_macro START_PRINT"] = json::array({"preparation_done"});
     subscription_objects["gcode_macro _HELIX_STATE"] = json::array({"print_started"});
+
+    return subscription_objects;
+}
+
+void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
+    // Snapshot hardware_ once under lock for all reads in this method (#777)
+    PrinterDiscovery hw;
+    {
+        std::lock_guard<std::mutex> lock(hardware_mutex_);
+        hw = hardware_;
+    }
+
+    // Step 5: Subscribe to all discovered objects + core objects. The pure
+    // helper builds the full objects map; per-section logging stays here.
+    json subscription_objects = build_subscription_objects(
+        hw, heaters_, sensors_, fans_, leds_, afc_objects_, filament_sensors_);
+
+    spdlog::info("[Moonraker Client] Subscribing to {} fans: {}", fans_.size(),
+                 json(fans_).dump());
+    if (hw.has_fan_feedback()) {
+        spdlog::debug("[MoonrakerDiscoverySequence] Subscribing to fan_feedback for RPM data");
+    }
+    if (hw.has_mmu()) {
+        spdlog::info("[Moonraker Client] Subscribing to MMU object (Happy Hare)");
+    }
+    int afc_led_skipped = 0;
+    for (const auto& afc_obj : afc_objects_) {
+        if (afc_obj.rfind("AFC_led ", 0) == 0)
+            ++afc_led_skipped;
+    }
+    if (afc_led_skipped > 0) {
+        spdlog::debug("[Moonraker Client] Skipped {} unparsed AFC_led object(s) from subscription",
+                      afc_led_skipped);
+    }
+    if (hw.mmu_type() == AmsType::AD5X_IFS) {
+        spdlog::info("[Moonraker Client] Subscribing to save_variables (AD5X IFS)");
+    }
+    if (hw.mmu_type() == AmsType::ACE) {
+        spdlog::info("[Moonraker Client] Subscribing to ace object (Anycubic ACE)");
+    }
+    if (hw.mmu_type() == AmsType::CFS) {
+        spdlog::info("[Moonraker Client] Subscribing to box + motor_control (CFS)");
+    }
+    if (hw.mmu_type() == AmsType::SNAPMAKER) {
+        spdlog::info("[Moonraker Client] Subscribing to Snapmaker filament + feed objects");
+    }
+    if (hw.has_width_sensors()) {
+        spdlog::info("[Moonraker Client] Subscribing to {} width sensors",
+                     hw.width_sensor_objects().size());
+    }
+    if (hw.has_tool_changer()) {
+        spdlog::info("[Moonraker Client] Subscribing to toolchanger + {} tool objects",
+                     hw.tool_names().size());
+    }
 
     json subscribe_params = {{"objects", subscription_objects}};
     size_t num_subscribed = subscription_objects.size();

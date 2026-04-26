@@ -253,6 +253,25 @@ class MoonrakerDiscoverySequence {
      */
     void complete_discovery_subscription(uint64_t seq);
 
+  public:
+    /**
+     * @brief Pure helper: build the `printer.objects.subscribe` objects map
+     *
+     * Translates the discovered hardware into the JSON-RPC `objects` argument,
+     * narrowing each object to just the fields HelixScreen parsers actually
+     * read. Exposed publicly so unit tests can lock the field lists against
+     * regression — production code calls it from
+     * complete_discovery_subscription() with the live discovery vectors.
+     *
+     * Pure (no I/O, no logging, no member access) — depends only on its args.
+     */
+    static nlohmann::json build_subscription_objects(
+        const PrinterDiscovery& hw, const std::vector<std::string>& heaters,
+        const std::vector<std::string>& sensors, const std::vector<std::string>& fans,
+        const std::vector<std::string>& leds, const std::vector<std::string>& afc_objects,
+        const std::vector<std::string>& filament_sensors);
+
+  private:
     MoonrakerClient& client_;
 
     // Discovery sequence callbacks (stored once in start(), used by chained methods)
