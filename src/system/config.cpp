@@ -13,6 +13,7 @@
 
 #include "app_constants.h"
 #include "config_backup.h"
+#include "data_root_resolver.h"
 #include "printer_detector.h"
 #include "runtime_config.h"
 #include "wizard_config_paths.h"
@@ -1432,20 +1433,24 @@ bool Config::apply_preset_file(const std::string& preset_name) {
         return false;
     }
 
-    // Locate preset file relative to config directory
-    namespace fs = std::filesystem;
-    fs::path preset_path = fs::path(path).parent_path() / "presets" / (preset_name + ".json");
+    // Resolve via find_readable so the writable user dir wins, then fall back
+    // to the shipped read-only seed bundle at $HELIX_DATA_DIR/assets/config/presets/.
+    // The seed location is where install tarballs land presets — looking only in
+    // the writable config dir would miss every preset on a fresh install.
+    std::string preset_relpath = std::string("presets/") + preset_name + ".json";
+    std::string preset_path = helix::find_readable(preset_relpath);
     if (!fs::exists(preset_path)) {
-        spdlog::warn("[Config] Preset file not found: {}", preset_path.string());
+        spdlog::warn("[Config] Preset file not found: {} (looked in writable + seed bundle)",
+                     preset_path);
         return false;
     }
 
     // Load and parse preset JSON
     json preset_json;
     try {
-        preset_json = json::parse(std::fstream(preset_path.string()));
+        preset_json = json::parse(std::fstream(preset_path));
     } catch (const json::exception& e) {
-        spdlog::error("[Config] Failed to parse preset '{}': {}", preset_path.string(), e.what());
+        spdlog::error("[Config] Failed to parse preset '{}': {}", preset_path, e.what());
         return false;
     }
 

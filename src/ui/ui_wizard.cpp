@@ -125,6 +125,18 @@ static bool skips_precalculated = false;
 // Preset mode: skip hardware steps and show telemetry instead of summary
 static bool preset_mode = false;
 
+/// Decide whether the wizard should run in preset mode for the active config.
+/// Preset mode requires (a) a preset name set in config, and (b) this is the
+/// initial-printer setup — secondary printers added via the printer manager
+/// always go through the full hardware-pick flow regardless of preset.
+/// All three sites that update preset_mode (init_subjects, on_next_clicked,
+/// precalculate_skips) call this single helper to avoid polarity drift.
+static bool wizard_preset_mode_eligible(Config* cfg) {
+    if (!cfg)
+        return false;
+    return cfg->has_preset() && cfg->get_printer_ids().size() <= 1;
+}
+
 // Guard against rapid double-clicks during navigation
 static bool navigating = false;
 
@@ -289,17 +301,15 @@ static bool wizard_subjects_initialized = false;
 void ui_wizard_init_subjects() {
     spdlog::debug("[Wizard] Initializing subjects");
 
-    // Check if running in preset mode (pre-configured printer package)
-    // Preset mode only applies to the initial printer setup — secondary printers
-    // added via the printer manager always need the full wizard flow.
+    // Check if running in preset mode (pre-configured printer package).
+    // Single source of truth for the eligibility condition lives in
+    // wizard_preset_mode_eligible() — the three refresh sites all share it.
     auto* cfg = Config::get_instance();
-    preset_mode = cfg->has_preset();
-    if (preset_mode && cfg->get_printer_ids().size() > 1) {
-        preset_mode = false;
-        spdlog::info("[Wizard] Disabled preset mode for secondary printer setup");
-    }
+    preset_mode = wizard_preset_mode_eligible(cfg);
     if (preset_mode) {
         spdlog::info("[Wizard] Preset mode active (preset: {})", cfg->get_preset());
+    } else if (cfg && cfg->has_preset() && cfg->get_printer_ids().size() > 1) {
+        spdlog::info("[Wizard] Disabled preset mode for secondary printer setup");
     }
 
     // Initialize subjects with defaults using managed macros for RAII cleanup
@@ -689,6 +699,17 @@ void ui_wizard_refresh_header_translations() {
 static void ui_wizard_precalculate_skips() {
     spdlog::info("[Wizard] Pre-calculating step skips based on hardware data");
 
+    // Refresh preset_mode from config every time we precalc — the printer-identify
+    // step (#4) can apply a preset on cleanup, so the value captured at wizard init
+    // (in init_subjects) is stale if a fresh-install detection just landed a preset
+    // file. Without this re-read the wizard runs every hardware step on a known
+    // printer.
+    bool fresh_preset_mode = wizard_preset_mode_eligible(Config::get_instance());
+    if (fresh_preset_mode != preset_mode) {
+        spdlog::info("[Wizard] preset_mode refreshed: {} -> {}", preset_mode, fresh_preset_mode);
+        preset_mode = fresh_preset_mode;
+    }
+
     if (preset_mode) {
         // Preset mode: skip all hardware steps and summary, show telemetry
         printer_identify_step_skipped = true;
@@ -861,6 +882,42 @@ static void ui_wizard_load_screen(int step) {
         crash_handler::breadcrumb::note("wiz", "clean_end", static_cast<long>(step));
     }
     spdlog::debug("[Wizard] Cleared wizard_content container");
+
+    // Printer-identify step (#4) applies a preset on cleanup based on the user's
+    // pick (or the auto-detection result). On a fresh install this is the first
+    // moment a preset can possibly be applied — at the time we left step 3 and
+    // pre-calculated skips, no preset existed yet. Re-precalc here so newly
+    // skippable hardware steps (heater, fan, AMS, LED, filament, input shaper,
+    // summary) collapse, then forward to the next non-skipped step if our
+    // requested destination is now in that skip set.
+    if (current_screen_step == 4 && step >= 5) {
+        ui_wizard_precalculate_skips();
+        auto skips = get_current_skip_flags();
+        int redirected = step;
+        while (redirected >= 0 && redirected < 13 &&
+               ((redirected == 5 && skips.heater_select) ||
+                (redirected == 6 && skips.fan_select) ||
+                (redirected == 7 && skips.ams) ||
+                (redirected == 8 && skips.led) ||
+                (redirected == 9 && skips.filament) ||
+                (redirected == 10 && skips.input_shaper) ||
+                (redirected == 11 && skips.summary))) {
+            redirected = helix::wizard_next_step(redirected, skips);
+            if (redirected == -1)
+                break;
+        }
+        if (redirected != step) {
+            spdlog::info("[Wizard] Preset applied during step 4 cleanup; redirecting "
+                         "step {} -> {}", step, redirected);
+            current_screen_step = -1; // suppress double-cleanup
+            if (redirected == -1) {
+                ui_wizard_complete();
+                return;
+            }
+            ui_wizard_navigate_to_step(redirected);
+            return;
+        }
+    }
 
     // Set title and subtitle from XML metadata (no more hardcoded strings!)
     // Use lv_tr() to translate the title/subtitle dynamically based on current language
@@ -1267,7 +1324,15 @@ static void on_next_clicked(lv_event_t* e) {
         }
     }
 
-    // Preset mode: auto-validate connection before showing step 3
+    // Preset mode: auto-validate connection before showing step 3.
+    // Refresh preset_mode here too — auto-detection on Moonraker discovery may have
+    // applied a preset between wizard init (where preset_mode was first captured)
+    // and now. Without this, a fresh install of a preset printer (ForgeX AD5M Pro,
+    // CC1, etc.) would still show the connection step even though the preset is
+    // already in config.
+    if (next_step == 3 && wizard_preset_mode_eligible(Config::get_instance())) {
+        preset_mode = true;
+    }
     if (preset_mode && next_step == 3) {
         MoonrakerClient* client = get_moonraker_client();
         if (client && client->get_connection_state() == ConnectionState::CONNECTED) {

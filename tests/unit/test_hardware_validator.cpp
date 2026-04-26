@@ -367,6 +367,7 @@ TEST_CASE("HardwareValidator - New fan discovery", "[hardware][validator]") {
     }
 }
 
+
 TEST_CASE("HardwareValidator - Session changes", "[hardware][validator]") {
     SECTION("Detects hardware removed since last session") {
         // Create a "previous" snapshot with LED
@@ -543,6 +544,42 @@ class HardwareValidatorConfigFixture {
     }
 };
 } // namespace helix
+
+// Regression: ForgeX AD5M Pro preset assigns five fan roles (part, hotend,
+// chamber, exhaust, aux). validate_new_hardware historically only checked
+// part/hotend/chamber/exhaust — the aux fan surfaced as "new hardware" on
+// every boot even though the preset legitimately mapped it to a role.
+TEST_CASE_METHOD(HardwareValidatorConfigFixture,
+                 "HardwareValidator - aux fan role is recognized as configured",
+                 "[hardware][validator][regression]") {
+    setup_printer_data({{"moonraker_host", "127.0.0.1"},
+                        {"moonraker_port", 7125},
+                        {"fans",
+                         {{"part", "fan"},
+                          {"hotend", "heater_fan hotend_fan"},
+                          {"chamber", "fan_generic chamber_fan"},
+                          {"exhaust", "fan_generic external_fan"},
+                          {"aux", "fan_generic internal_fan"}}},
+                        {"hardware",
+                         {{"optional", json::array()},
+                          {"expected", json::array()},
+                          {"last_snapshot", json::object()}}}});
+
+    MoonrakerClientMock client;
+    client.set_heaters({"extruder", "heater_bed"});
+    client.set_fans({"fan", "heater_fan hotend_fan", "fan_generic chamber_fan",
+                     "fan_generic external_fan", "fan_generic internal_fan"});
+
+    HardwareValidator validator;
+    auto result = validator.validate(&config, client.hardware());
+
+    // Every fan in the discovery is mapped to a role in config — none should
+    // surface as newly discovered.
+    for (const auto& issue : result.newly_discovered) {
+        INFO("unexpected new fan: " << issue.hardware_name);
+        REQUIRE(issue.hardware_type != HardwareType::FAN);
+    }
+}
 
 TEST_CASE_METHOD(HardwareValidatorConfigFixture,
                  "HardwareValidator - is_hardware_optional with empty config",

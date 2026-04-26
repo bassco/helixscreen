@@ -476,6 +476,19 @@ void HardwareValidator::validate_configured_hardware(Config* config,
     } catch (...) {
     }
 
+    // Check configured fan (aux) — symmetric with the aux slot in validate_new_hardware.
+    // Some presets (e.g. AD5M Pro ForgeX) map a fifth fan role; without this check a
+    // missing aux fan would silently disappear rather than surface as a hardware issue.
+    try {
+        std::string aux_fan = config->get<std::string>(config->df() + "fans/aux", "");
+        if (!aux_fan.empty() && !contains_name(fans, aux_fan) &&
+            !is_hardware_optional(config, aux_fan)) {
+            result.expected_missing.push_back(HardwareIssue::warning(
+                aux_fan, HardwareType::FAN, "Configured aux fan not found"));
+        }
+    } catch (...) {
+    }
+
     // Check configured LEDs (array format: LED_SELECTED, legacy single: LED_STRIP)
     try {
         std::vector<std::string> configured_leds;
@@ -664,6 +677,7 @@ void HardwareValidator::validate_new_hardware(Config* config,
         add_fan("hotend", "");
         add_fan("chamber", "");
         add_fan("exhaust", "");
+        add_fan("aux", "");
     }
 
     for (const auto& fan : discovered_fans) {

@@ -2194,8 +2194,26 @@ void Application::setup_discovery_callbacks() {
             }
             crash_handler::breadcrumb::note("disc", "post_subscribe", n);
 
-            // Hardware validation: check config expectations vs discovered hardware
-            // NOTE: use api->hardware() — the snapshot was std::move'd into it above (#789)
+            // Auto-detect printer type if not already set (e.g., fresh install with preset).
+            // MUST run BEFORE HardwareValidator::validate — otherwise the validator checks
+            // the scaffolded defaults (fans/part="fan", fans/hotend="heater_fan hotend_fan")
+            // against the discovered hardware and flags them as missing, even though the
+            // preset that's about to be applied would map those slots to the correct
+            // device-specific names. Runs even while the wizard is active so the preset
+            // lands BEFORE the wizard hits its connection / printer-identify steps —
+            // that's the only path for preset_mode to become true on a fresh install of
+            // a known printer like the ForgeX AD5M Pro. auto_detect_and_save self-guards
+            // on PRINTER_TYPE already being set, so a user's manual pick in the identify
+            // step (which writes PRINTER_TYPE on cleanup) won't be overwritten by a later
+            // discovery callback.
+            // NOTE: use api->hardware() — snapshot was std::move'd into it above (#789).
+            // Reading *snapshot here would pass an empty/moved-from PrinterDiscovery and
+            // detection would fail with "0 sensors, 0 fans, hostname ''" (#802).
+            PrinterDetector::auto_detect_and_save(api->hardware(), Config::get_instance());
+
+            // Hardware validation: check config expectations vs discovered hardware.
+            // Now uses the post-preset config so preset-mapped fan/heater names are
+            // checked against discovery, not the pre-preset scaffolded defaults.
             HardwareValidator validator;
             auto validation_result = validator.validate(Config::get_instance(), api->hardware());
             get_printer_state().set_hardware_validation_result(validation_result);
@@ -2208,16 +2226,6 @@ void Application::setup_discovery_callbacks() {
             // Save session snapshot for next comparison (even if no issues)
             validator.save_session_snapshot(Config::get_instance(), api->hardware());
             crash_handler::breadcrumb::note("disc", "post_validate", n);
-
-            // Auto-detect printer type if not already set (e.g., fresh install with preset)
-            // Skip during wizard — the user selects their printer type in the identify step,
-            // and auto-detection here would overwrite PRINTER_TYPE before they choose.
-            if (!is_wizard_active()) {
-                // NOTE: use api->hardware() — snapshot was std::move'd into it above (#789).
-                // Reading *snapshot here would pass an empty/moved-from PrinterDiscovery and
-                // detection would fail with "0 sensors, 0 fans, hostname ''" (#802).
-                PrinterDetector::auto_detect_and_save(api->hardware(), Config::get_instance());
-            }
 
             // Record telemetry session event now that hardware data is available
             // (hardware_profile is deferred until after build volume is fetched below)
@@ -2458,10 +2466,17 @@ bool Application::connect_moonraker() {
     // Determine if we should connect
     std::string saved_host = m_config->get<std::string>(m_config->df() + "moonraker_host", "");
     bool has_cli_url = !m_args.moonraker_url.empty();
-    // In test mode, still respect wizard state - don't connect until wizard completes
+    // Always connect at boot when we have a host (fresh-install scaffold seeds
+    // moonraker_host=127.0.0.1, so embedded devices can reach Moonraker without
+    // user intervention). Connecting during the wizard is what lets auto-detection
+    // run early — without this, the preset can't be applied until the connection
+    // step's manual auto-probe, defeating the purpose of preset_mode skipping
+    // hardware steps. The wizard's connection step still re-uses this connection
+    // (or replaces it if the user changed the host).
+    // In test mode, gate on m_wizard_active so unit/integration tests that
+    // launch with --wizard don't race against fixture setup.
     bool should_connect =
-        has_cli_url || (get_runtime_config()->test_mode && !m_wizard_active) ||
-        (!m_args.force_wizard && !m_config->is_wizard_required() && !saved_host.empty());
+        has_cli_url || (get_runtime_config()->test_mode && !m_wizard_active) || !saved_host.empty();
 
     if (!should_connect) {
         return true; // Not connecting is not an error

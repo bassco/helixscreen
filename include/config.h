@@ -76,6 +76,7 @@ class Config {
     friend class ThermistorConfigFixture;
     friend class MultiInstanceMigrationFixture;
     friend class PresetConfigFixture;
+    friend class VariantPresetFixture;
 
   public:
     /**

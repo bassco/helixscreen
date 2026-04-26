@@ -3482,3 +3482,144 @@ TEST_CASE("PrinterDetector: print_start_default_phases empty for printer without
     auto phases = PrinterDetector::get_print_start_default_phases("Voron 2.4");
     REQUIRE(phases.empty());
 }
+
+// ============================================================================
+// apply_preset_with_variants — ZMOD vs ForgeX firmware variants
+// ============================================================================
+
+namespace helix {
+
+/// Set up the env vars + temp dir + symlink to the shipped printer DB so
+/// apply_preset_with_variants finds the seed-bundle preset files via
+/// helix::find_readable. Mirrors PresetConfigFixture in test_config_preset.cpp
+/// but local to this file to avoid cross-file fixture coupling.
+class VariantPresetFixture {
+  protected:
+    Config config;
+    std::string temp_dir;
+    std::string saved_config_dir_;
+    std::string saved_data_dir_;
+    bool had_config_dir_ = false;
+    bool had_data_dir_ = false;
+
+    void SetUp() {
+        namespace fs = std::filesystem;
+        temp_dir = (fs::temp_directory_path() / "helix_variant_test").string();
+        fs::create_directories(temp_dir + "/presets");
+        fs::create_directories(temp_dir + "/assets/config/presets");
+
+        if (const char* prev = std::getenv("HELIX_CONFIG_DIR")) {
+            saved_config_dir_ = prev;
+            had_config_dir_ = true;
+        }
+        if (const char* prev = std::getenv("HELIX_DATA_DIR")) {
+            saved_data_dir_ = prev;
+            had_data_dir_ = true;
+        }
+        setenv("HELIX_CONFIG_DIR", temp_dir.c_str(), 1);
+        setenv("HELIX_DATA_DIR", temp_dir.c_str(), 1);
+
+        std::error_code ec;
+        fs::path real_db = fs::current_path() / "assets" / "config" / "printer_database.json";
+        if (fs::exists(real_db)) {
+            fs::path linked = fs::path(temp_dir) / "assets" / "config" / "printer_database.json";
+            fs::create_symlink(real_db, linked, ec);
+            if (ec) {
+                fs::copy_file(real_db, linked, fs::copy_options::overwrite_existing, ec);
+            }
+        }
+
+        config.path = temp_dir + "/settings.json";
+        config.active_printer_id_ = "default";
+        config.data = {{"active_printer_id", "default"},
+                       {"printers",
+                        {{"default", {{"moonraker_host", "127.0.0.1"}, {"wizard_completed", false}}}}}};
+    }
+
+    void TearDown() {
+        std::filesystem::remove_all(temp_dir);
+        if (had_config_dir_)
+            setenv("HELIX_CONFIG_DIR", saved_config_dir_.c_str(), 1);
+        else
+            unsetenv("HELIX_CONFIG_DIR");
+        if (had_data_dir_)
+            setenv("HELIX_DATA_DIR", saved_data_dir_.c_str(), 1);
+        else
+            unsetenv("HELIX_DATA_DIR");
+    }
+
+    void write_seed_preset(const std::string& name, const std::string& part_fan_role) {
+        std::string path = temp_dir + "/assets/config/presets/" + name + ".json";
+        std::ofstream f(path);
+        f << R"({"preset": ")" << name
+          << R"(", "wizard_completed": false, "printer": {"fans": {"part": ")" << part_fan_role
+          << R"("}, "heaters": {"bed": "heater_bed"}}})";
+    }
+};
+
+} // namespace helix
+
+TEST_CASE_METHOD(helix::VariantPresetFixture,
+                 "apply_preset_with_variants: ZMOD signature picks _zmod variant for non-ForgeX preset",
+                 "[printer_detector][variant]") {
+    SetUp();
+    write_seed_preset("ad5m_pro", "fan");
+    write_seed_preset("ad5m_pro_zmod", "fan_generic fanM106");
+
+    helix::PrinterDiscovery hw;
+    hw.set_printer_objects({"fan_generic fanM106", "extruder", "heater_bed"});
+
+    std::string applied =
+        PrinterDetector::apply_preset_with_variants(&config, "ad5m_pro", hw);
+
+    REQUIRE(applied == "ad5m_pro_zmod");
+    REQUIRE(config.get<std::string>(config.df() + "fans/part", "") == "fan_generic fanM106");
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(helix::VariantPresetFixture,
+                 "apply_preset_with_variants: ForgeX preset never tries _zmod variant",
+                 "[printer_detector][variant][regression]") {
+    // ForgeX and ZMOD are mutually-exclusive firmware mods that happen to
+    // share the `fan_generic fanM106` rename. The detector must not append
+    // `_zmod` to a `_forgex` preset just because fanM106 is present.
+    SetUp();
+    write_seed_preset("ad5m_pro_forgex", "fan_generic fanM106");
+    // Also provide a "wrong" variant that should NOT be picked even if
+    // present — this catches regressions in the suffix-suppression logic.
+    write_seed_preset("ad5m_pro_forgex_zmod", "WRONG_SHOULD_NOT_BE_PICKED");
+
+    helix::PrinterDiscovery hw;
+    hw.set_printer_objects({"fan_generic fanM106", "extruder", "heater_bed"});
+
+    std::string applied =
+        PrinterDetector::apply_preset_with_variants(&config, "ad5m_pro_forgex", hw);
+
+    REQUIRE(applied == "ad5m_pro_forgex");
+    REQUIRE(config.get<std::string>(config.df() + "fans/part", "") == "fan_generic fanM106");
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(helix::VariantPresetFixture,
+                 "apply_preset_with_variants: substring _forgex without suffix does not suppress _zmod",
+                 "[printer_detector][variant]") {
+    // Tightening: the suppression must be a SUFFIX match, not substring. A
+    // preset name like "ad5m_pro_forgex_special" (hypothetical future preset)
+    // ending in something other than "_forgex" should still attempt the
+    // _zmod variant when ZMOD signatures are present.
+    SetUp();
+    write_seed_preset("ad5m_forgex_special", "fan");
+    write_seed_preset("ad5m_forgex_special_zmod", "fan_generic fanM106");
+
+    helix::PrinterDiscovery hw;
+    hw.set_printer_objects({"fan_generic fanM106", "extruder", "heater_bed"});
+
+    std::string applied =
+        PrinterDetector::apply_preset_with_variants(&config, "ad5m_forgex_special", hw);
+
+    REQUIRE(applied == "ad5m_forgex_special_zmod");
+
+    TearDown();
+}

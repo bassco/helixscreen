@@ -16,11 +16,44 @@ class PresetConfigFixture {
   protected:
     Config config;
     std::string temp_dir;
+    std::string saved_config_dir_;
+    std::string saved_data_dir_;
+    bool had_config_dir_ = false;
+    bool had_data_dir_ = false;
 
     void SetUp() {
         // Create temp directory for test config and presets
         temp_dir = (fs::temp_directory_path() / "helix_preset_test").string();
         fs::create_directories(temp_dir + "/presets");
+        fs::create_directories(temp_dir + "/assets/config/presets");
+
+        // apply_preset_file resolves preset path via helix::find_readable, which
+        // checks $HELIX_CONFIG_DIR first then falls back to
+        // $HELIX_DATA_DIR/assets/config/. Point both env vars at temp_dir so
+        // find_readable lands inside our sandbox.
+        if (const char* prev = std::getenv("HELIX_CONFIG_DIR")) {
+            saved_config_dir_ = prev;
+            had_config_dir_ = true;
+        }
+        if (const char* prev = std::getenv("HELIX_DATA_DIR")) {
+            saved_data_dir_ = prev;
+            had_data_dir_ = true;
+        }
+        setenv("HELIX_CONFIG_DIR", temp_dir.c_str(), 1);
+        setenv("HELIX_DATA_DIR", temp_dir.c_str(), 1);
+
+        // Ensure the shipped printer_database.json is reachable from the
+        // sandboxed HELIX_DATA_DIR so DB-aware tests (e.g. preset → printer
+        // type lookup) continue to work.
+        std::error_code ec;
+        fs::path real_db = fs::current_path() / "assets" / "config" / "printer_database.json";
+        if (fs::exists(real_db)) {
+            fs::path linked = fs::path(temp_dir) / "assets" / "config" / "printer_database.json";
+            fs::create_symlink(real_db, linked, ec);
+            if (ec) {
+                fs::copy_file(real_db, linked, fs::copy_options::overwrite_existing, ec);
+            }
+        }
 
         // Set config path so apply_preset_file can find presets/ relative to it
         config.path = temp_dir + "/settings.json";
@@ -48,10 +81,29 @@ class PresetConfigFixture {
 
     void TearDown() {
         fs::remove_all(temp_dir);
+        if (had_config_dir_) {
+            setenv("HELIX_CONFIG_DIR", saved_config_dir_.c_str(), 1);
+        } else {
+            unsetenv("HELIX_CONFIG_DIR");
+        }
+        if (had_data_dir_) {
+            setenv("HELIX_DATA_DIR", saved_data_dir_.c_str(), 1);
+        } else {
+            unsetenv("HELIX_DATA_DIR");
+        }
     }
 
     void write_preset(const std::string& name, const nlohmann::json& preset_json) {
         std::string path = temp_dir + "/presets/" + name + ".json";
+        std::ofstream f(path);
+        f << preset_json.dump(2);
+    }
+
+    /// Write the preset only to the read-only seed bundle location.
+    /// On a fresh install, the writable dir has no presets/ subtree at all —
+    /// install tarballs land them under <install>/assets/config/presets/.
+    void write_seed_preset(const std::string& name, const nlohmann::json& preset_json) {
+        std::string path = temp_dir + "/assets/config/presets/" + name + ".json";
         std::ofstream f(path);
         f << preset_json.dump(2);
     }
@@ -293,6 +345,71 @@ TEST_CASE_METHOD(PresetConfigFixture,
     REQUIRE(data()["display"]["sleep_backlight_off"] == true);
     // Existing display setting should be preserved
     REQUIRE(data()["display"]["animations_enabled"] == false);
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file finds preset shipped only in read-only seed bundle",
+                 "[config][preset][regression]") {
+    // Fresh install: install tarball lands presets under
+    // <install>/assets/config/presets/, NOT under the writable user config dir.
+    // Without find_readable() fallback, apply_preset_file misses the preset and
+    // the wizard runs every hardware step on a known printer (forgex AD5M Pro
+    // first-install bug, 2026-04).
+    SetUp();
+
+    json preset = {{"printer",
+                    {{"fans",
+                      {{"hotend", "heater_fan hotend_fan"},
+                       {"part", "fan"},
+                       {"chamber", "fan_generic chamber_fan"},
+                       {"exhaust", "fan_generic external_fan"},
+                       {"aux", "fan_generic internal_fan"}}},
+                     {"heaters", {{"bed", "heater_bed"}, {"hotend", "extruder"}}},
+                     {"temp_sensors", {{"bed", "heater_bed"}, {"hotend", "extruder"}}},
+                     {"leds", {{"strip", "led chamber_light"}}},
+                     {"hardware",
+                      {{"expected",
+                        {"heater_bed", "extruder", "fan", "heater_fan hotend_fan",
+                         "fan_generic internal_fan", "fan_generic chamber_fan",
+                         "fan_generic external_fan", "led chamber_light",
+                         "controller_fan driver_fan",
+                         "filament_switch_sensor e0_sensor"}}}}}}};
+
+    write_seed_preset("ad5m_pro_forgex", preset);
+    REQUIRE_FALSE(fs::exists(temp_dir + "/presets/ad5m_pro_forgex.json"));
+    REQUIRE(fs::exists(temp_dir + "/assets/config/presets/ad5m_pro_forgex.json"));
+
+    REQUIRE(config.apply_preset_file("ad5m_pro_forgex") == true);
+
+    auto& pd = printer_data();
+    REQUIRE(pd["fans"]["aux"] == "fan_generic internal_fan");
+    REQUIRE(pd["fans"]["chamber"] == "fan_generic chamber_fan");
+    REQUIRE(pd["leds"]["strip"] == "led chamber_light");
+    REQUIRE(pd["hardware"]["expected"].size() == 10);
+
+    TearDown();
+}
+
+TEST_CASE_METHOD(PresetConfigFixture,
+                 "Config::apply_preset_file prefers writable preset over seed bundle",
+                 "[config][preset][regression]") {
+    // If a user has a writable override at <config>/presets/X.json, it should
+    // win over the shipped seed at <data>/assets/config/presets/X.json. This
+    // matches find_readable's user-dir-first ordering.
+    SetUp();
+
+    json seed_preset = {
+        {"printer", {{"fans", {{"hotend", "from_seed"}}}, {"heaters", {{"bed", "heater_bed"}}}}}};
+    json user_preset = {
+        {"printer", {{"fans", {{"hotend", "from_user"}}}, {"heaters", {{"bed", "heater_bed"}}}}}};
+
+    write_seed_preset("override_preset", seed_preset);
+    write_preset("override_preset", user_preset);
+
+    REQUIRE(config.apply_preset_file("override_preset") == true);
+    REQUIRE(printer_data()["fans"]["hotend"] == "from_user");
 
     TearDown();
 }

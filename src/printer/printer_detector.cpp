@@ -882,8 +882,25 @@ std::string PrinterDetector::apply_preset_with_variants(helix::Config* config,
     // Firmware-variant detection: ZMOD renames standard Klipper objects
     // (e.g. "fan" → "fan_generic fanM106"). Probe for the variant signature
     // and prefer the "_zmod" preset when present.
+    //
+    // ForgeX is a DIFFERENT firmware modification — mutually exclusive with ZMOD.
+    // ForgeX happens to use the same `fan_generic fanM106` / `heater_fan heat_fan`
+    // names for its part/hotend fans, so the fanM106 marker alone is NOT a
+    // ZMOD discriminator. If the printer DB resolved a `_forgex` preset, the
+    // detector already locked onto ForgeX (typically via SUPPORT_FORGE_X macro
+    // or the chamber-LED heuristic) — never try a `_zmod` variant on top of
+    // that, it would either miss-load or compound rename errors.
     auto& objects = discovery.printer_objects();
+    // Match the variant suffix exactly (preset name ends with `_forgex`) rather
+    // than substring — a future preset whose name happens to contain "_forgex"
+    // for unrelated reasons should not silently disable ZMOD detection.
+    static constexpr const char* kForgeXSuffix = "_forgex";
+    constexpr size_t kForgeXLen = 7; // strlen("_forgex")
+    bool preset_is_forgex = preset.size() >= kForgeXLen &&
+                            preset.compare(preset.size() - kForgeXLen, kForgeXLen, kForgeXSuffix) ==
+                                0;
     bool is_zmod =
+        !preset_is_forgex &&
         std::find(objects.begin(), objects.end(), "fan_generic fanM106") != objects.end();
 
     std::string applied = preset;

@@ -22,8 +22,8 @@
       "hotend": "extruder"
     },
     "fans": {
-      "hotend": "heater_fan hotend_fan",
-      "part": "fan"
+      "hotend": "heater_fan heat_fan",
+      "part": "fan_generic fanM106"
     },
     "filament_sensors": {
       "master_enabled": true,
@@ -40,8 +40,8 @@
       "expected": [
         "heater_bed",
         "extruder",
-        "fan",
-        "heater_fan hotend_fan",
+        "fan_generic fanM106",
+        "heater_fan heat_fan",
         "controller_fan driver_fan",
         "filament_switch_sensor e0_sensor"
       ]
