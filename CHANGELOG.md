@@ -5,6 +5,25 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.48] - 2026-04-26
+
+A performance and correctness patch. Headlines: drastically narrowed Moonraker subscriptions (the prior nullptr-everything pattern was firing per-frame led_effect notifications on AFC hardware — a Voron Trident bundle showed 46 LED-effect objects updating per render frame); a tangle of six interlocking fixes to the wizard preset path so AD5M Pro on ForgeX firmware actually skips hardware steps on fresh install; and a UAF / OOB-read fix for a shared-component XML callback collision caught in bundle SSHGTVZQ.
+
+### Added
+- **Jog soft-stops driven by kinematic envelope** — `MotionPanel::jog()` now refuses moves that would push the toolhead past `toolhead.axis_minimum`/`axis_maximum` and toasts the user. Skipped when bounds aren't published yet or the axis isn't homed.
+
+### Fixed
+- **Wizard preset application: AD5M Pro ForgeX skipping hardware steps on fresh install** — six interlocking issues (preset path resolution, late `preset_mode` capture, Moonraker connect gated behind wizard, validate-before-detect ordering, wrong fan names in `ad5m_*_forgex.json`, `_zmod` probe firing on `_forgex` preset, missing aux fan slot recognition).
+- **Layer-source precedence within a status update** — slicer `SET_PRINT_STATS_INFO` now wins over `virtual_sdcard.layer` within the same tick (sdcard branch was running second and silently overwriting). Across updates, last source still wins.
+- **`toolhead.max_velocity` subscription regression** — caught in code review of subscription narrowing; `max_velocity_` would have stuck at its initial value, breaking the print-tune overlay and machine-limits panel after every reconnect. Field list is now locked by a 19-case / 178-assertion regression test naming each parser file it mirrors.
+- **XML callback name collision could SEGV on click** (bundle SSHGTVZQ, Qidi Q2, pi) — first-write-wins for `lv_xml_register_event_cb` meant two C++ owners registering the same callback name globally for a shared XML component (e.g., `WizardWifiStep` + `NetworkSettingsOverlay` on `wifi_network_item`) silently dropped the second registration. The first owner's handler then fired against the second owner's `user_data`, casting a small struct as a much larger one and reading ~400 bytes past valid memory. Now last-write-wins.
+
+### Changed
+- **Moonraker subscription narrowing — heaters, fans, sensors, tools, macros** — eliminated the remaining `nullptr` (= all-fields) subscriptions in the discovery sequence. Narrowed to the actual fields each parser consumes (heaters → `{temperature, target}`, standard fans → `{speed}`, native LEDs → `{color_data}`, etc.). Dropped `idle_timeout` entirely (no parser reads it).
+- **Moonraker subscription narrowing — `led_effect`, AFC, core motion** — biggest perf win on AFC/BoxTurtle: a Voron Trident bundle showed 46 `led_effect` objects firing per-frame animation updates because we'd been subscribing with `nullptr`. Now `led_effect` is just `[enabled]`. Also narrowed all `AFC*` objects to their parser fields, and the per-step core motion objects (`toolhead`, `gcode_move`, `motion_report`).
+- **Launcher `nice +10` when co-hosted with Klipper/Moonraker** — `helix-launcher.sh` reduces UI process priority on shared-CPU hardware (Pi, SonicPad, AD5M class) so the printer control loop keeps CPU headroom for stepper timing and MCU comms. Detection is process-based (`pgrep -f`) with a Unix-socket fallback. Standalone displays (remote-display SonicPad, dev workstation, kiosk pointed at a network printer) are unaffected. Override with `HELIX_NICE=<n>` in `helixscreen.env`; `HELIX_NICE=0` disables.
+- **`make clean-tests` now wipes the PCH and all sanitizer test binaries** — recover from a sanitizer-contaminated tree without `make clean`. Previously, ASan/TSan test runs reused the PCH compiled with `-fsanitize=address`, and a subsequent `make test-run` would fail with "ASan runtime does not come first."
+
 ## [0.99.47] - 2026-04-26
 
 A defensive-hardening patch release continuing the L081 (`lv_event_mark_deleted` SEGV/SIGBUS) eradication campaign begun in v0.99.45/v0.99.46. Sweeps the remaining unsafe `lv_obj_clean()` callsites that escape UpdateQueue batches, plugs lifetime gaps in two control panel callbacks, and lands a stress harness that will catch regressions of the multiple-async-delete-per-tick race plugged in v0.99.46.
@@ -3333,6 +3352,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.48]: https://github.com/prestonbrown/helixscreen/compare/v0.99.47...v0.99.48
 [0.99.47]: https://github.com/prestonbrown/helixscreen/compare/v0.99.46...v0.99.47
 [0.99.46]: https://github.com/prestonbrown/helixscreen/compare/v0.99.45...v0.99.46
 [0.99.45]: https://github.com/prestonbrown/helixscreen/compare/v0.99.44...v0.99.45
