@@ -97,28 +97,38 @@ void WizardConnectionStep::set_mdns_discovery(std::unique_ptr<IMdnsDiscovery> di
 void WizardConnectionStep::init_subjects() {
     spdlog::debug("[{}] Initializing subjects", get_name());
 
-    // Load existing values from config if available
-    Config* config = Config::get_instance();
-    std::string default_ip = helix::is_android_platform() ? "" : "127.0.0.1";
-    std::string default_port = "7125"; // Default Moonraker port
+    // Seed the buffers ONLY on first init. On revisits we want to preserve
+    // whatever the user already typed (or the value most recently written via
+    // the bind_text two-way sync). Otherwise navigating away and back wipes
+    // unsaved input. The buffer IS the subject's storage — preserving the
+    // buffer preserves the user's in-progress entry.
+    if (!subjects_initialized_) {
+        Config* config = Config::get_instance();
+        std::string default_ip = helix::is_android_platform() ? "" : "127.0.0.1";
+        std::string default_port = "7125"; // Default Moonraker port
 
-    try {
-        default_ip =
-            config->get<std::string>(config->df() + helix::wizard::MOONRAKER_HOST, default_ip);
-        int port_num = config->get<int>(config->df() + helix::wizard::MOONRAKER_PORT, 7125);
-        default_port = std::to_string(port_num);
+        try {
+            default_ip =
+                config->get<std::string>(config->df() + helix::wizard::MOONRAKER_HOST, default_ip);
+            int port_num = config->get<int>(config->df() + helix::wizard::MOONRAKER_PORT, 7125);
+            default_port = std::to_string(port_num);
 
-        spdlog::debug("[{}] Loaded from config: {}:{}", get_name(), default_ip, default_port);
-    } catch (const std::exception& e) {
-        spdlog::debug("[{}] No existing config, using defaults: {}", get_name(), e.what());
+            spdlog::debug("[{}] Loaded from config: {}:{}", get_name(), default_ip, default_port);
+        } catch (const std::exception& e) {
+            spdlog::debug("[{}] No existing config, using defaults: {}", get_name(), e.what());
+        }
+
+        // Initialize with values from config or defaults
+        strncpy(connection_ip_buffer_, default_ip.c_str(), sizeof(connection_ip_buffer_) - 1);
+        connection_ip_buffer_[sizeof(connection_ip_buffer_) - 1] = '\0';
+
+        strncpy(connection_port_buffer_, default_port.c_str(),
+                sizeof(connection_port_buffer_) - 1);
+        connection_port_buffer_[sizeof(connection_port_buffer_) - 1] = '\0';
+    } else {
+        spdlog::debug("[{}] Re-init: preserving buffer (IP='{}', Port='{}')", get_name(),
+                      connection_ip_buffer_, connection_port_buffer_);
     }
-
-    // Initialize with values from config or defaults
-    strncpy(connection_ip_buffer_, default_ip.c_str(), sizeof(connection_ip_buffer_) - 1);
-    connection_ip_buffer_[sizeof(connection_ip_buffer_) - 1] = '\0';
-
-    strncpy(connection_port_buffer_, default_port.c_str(), sizeof(connection_port_buffer_) - 1);
-    connection_port_buffer_[sizeof(connection_port_buffer_) - 1] = '\0';
 
     UI_SUBJECT_INIT_AND_REGISTER_STRING(connection_ip_, connection_ip_buffer_,
                                         connection_ip_buffer_, "connection_ip");
@@ -142,13 +152,8 @@ void WizardConnectionStep::init_subjects() {
     connection_validated_ = false;
     subjects_initialized_ = true;
 
-    // Check if we have a saved configuration
-    if (!default_ip.empty() && !default_port.empty()) {
-        spdlog::debug("[{}] Have saved config, but needs validation", get_name());
-    }
-
-    spdlog::debug("[{}] Subjects initialized (IP: {}, Port: {})", get_name(),
-                  default_ip.empty() ? "<empty>" : default_ip, default_port);
+    spdlog::debug("[{}] Subjects initialized (IP: '{}', Port: '{}')", get_name(),
+                  connection_ip_buffer_, connection_port_buffer_);
 }
 
 // ============================================================================
@@ -788,13 +793,19 @@ lv_obj_t* WizardConnectionStep::create(lv_obj_t* parent) {
         LOG_ERROR_INTERNAL("[{}] Test button not found in XML", get_name());
     }
 
-    // Find input fields and attach change handlers + keyboard support
+    // Find input fields and attach change handlers + keyboard support.
+    // Pre-fill is driven by the underlying buffer, NOT by lv_subject_get_string,
+    // because the subject's value can be transiently empty during XML creation
+    // (bind_text observer-on-add ordering). The buffer is the source of truth:
+    // it's seeded from config/defaults on first init and preserved across
+    // step revisits by the subjects_initialized_ guard in init_subjects().
     lv_obj_t* ip_input = lv_obj_find_by_name(screen_root_, "ip_input");
     if (ip_input) {
-        const char* ip_text = lv_subject_get_string(&connection_ip_);
-        if (ip_text && strlen(ip_text) > 0) {
-            lv_textarea_set_text(ip_input, ip_text);
-            spdlog::debug("[{}] Pre-filled IP input: {}", get_name(), ip_text);
+        if (connection_ip_buffer_[0] != '\0') {
+            lv_textarea_set_text(ip_input, connection_ip_buffer_);
+            // Keep subject in sync so any observers see the same value.
+            lv_subject_copy_string(&connection_ip_, connection_ip_buffer_);
+            spdlog::debug("[{}] Pre-filled IP input: {}", get_name(), connection_ip_buffer_);
         }
         lv_obj_add_event_cb(ip_input, on_ip_input_changed_static, LV_EVENT_VALUE_CHANGED, this);
         spdlog::debug("[{}] IP input configured", get_name());
@@ -806,10 +817,10 @@ lv_obj_t* WizardConnectionStep::create(lv_obj_t* parent) {
         // with bind_text two-way binding — set_text adds chars one-by-one, each fires
         // VALUE_CHANGED, and the observer cascade truncates the text. Port sanitization
         // is handled by sanitize_port() at all read sites instead.
-        const char* port_text = lv_subject_get_string(&connection_port_);
-        if (port_text && strlen(port_text) > 0) {
-            lv_textarea_set_text(port_input, port_text);
-            spdlog::debug("[{}] Pre-filled port input: {}", get_name(), port_text);
+        if (connection_port_buffer_[0] != '\0') {
+            lv_textarea_set_text(port_input, connection_port_buffer_);
+            lv_subject_copy_string(&connection_port_, connection_port_buffer_);
+            spdlog::debug("[{}] Pre-filled port input: {}", get_name(), connection_port_buffer_);
         }
         lv_obj_add_event_cb(port_input, on_port_input_changed_static, LV_EVENT_VALUE_CHANGED, this);
         spdlog::debug("[{}] Port input configured", get_name());
