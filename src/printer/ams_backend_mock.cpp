@@ -710,6 +710,8 @@ AmsError AmsBackendMock::set_slot_info(int slot_index, const SlotInfo& info, boo
             return AmsErrorHelper::invalid_slot(slot_index, slots_.slot_count() - 1);
         }
 
+        int old_mapped_tool = entry->info.mapped_tool;
+
         // Update filament info
         entry->info.color_name = info.color_name;
         entry->info.color_rgb = info.color_rgb;
@@ -722,6 +724,10 @@ AmsError AmsBackendMock::set_slot_info(int slot_index, const SlotInfo& info, boo
         entry->info.nozzle_temp_min = info.nozzle_temp_min;
         entry->info.nozzle_temp_max = info.nozzle_temp_max;
         entry->info.bed_temp = info.bed_temp;
+        // Tool mapping change goes through registry so reverse maps stay consistent.
+        if (info.mapped_tool != old_mapped_tool && info.mapped_tool >= 0) {
+            slots_.set_tool_mapping(slot_index, info.mapped_tool);
+        }
 
         spdlog::trace("[AmsBackendMock] Updated slot {} info", slot_index);
     }

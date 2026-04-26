@@ -423,6 +423,59 @@ TEST_CASE("Happy Hare persistence: skips command when all values are default/emp
     REQUIRE(helper.captured_gcodes.empty());
 }
 
+TEST_CASE("Happy Hare persistence: MMU_TTG_MAP fires when mapped_tool changes via set_slot_info",
+          "[ams][happy_hare][persistence]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    // Default mapping for slot 0 is T0. Remap to T2 through the slot edit path.
+    SlotInfo info;
+    info.mapped_tool = 2;
+
+    helper.set_slot_info(0, info);
+
+    REQUIRE(helper.has_gcode("MMU_TTG_MAP TOOL=2 GATE=0"));
+}
+
+TEST_CASE("Happy Hare persistence: MMU_TTG_MAP not fired when mapped_tool unchanged",
+          "[ams][happy_hare][persistence]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    // Slot 0 already maps to T0. Setting same value with other dirty fields must not
+    // emit MMU_TTG_MAP.
+    SlotInfo info;
+    info.mapped_tool = 0;
+    info.material = "PLA";
+
+    helper.set_slot_info(0, info);
+
+    for (const auto& gcode : helper.captured_gcodes) {
+        REQUIRE(gcode.rfind("MMU_TTG_MAP ", 0) != 0);
+    }
+}
+
+TEST_CASE("Happy Hare persistence: MMU_TTG_MAP not fired when caller leaves mapped_tool default "
+          "(-1)",
+          "[ams][happy_hare][persistence]") {
+    AmsBackendHappyHareTestHelper helper;
+    helper.initialize_test_gates(4);
+
+    // Spoolman polling builds a SlotInfo from the existing slot, but a misuse
+    // (default-constructed SlotInfo) must NOT clobber the live mapping.
+    SlotInfo info; // mapped_tool defaults to -1
+    info.material = "PLA";
+
+    helper.set_slot_info(2, info);
+
+    for (const auto& gcode : helper.captured_gcodes) {
+        REQUIRE(gcode.rfind("MMU_TTG_MAP ", 0) != 0);
+    }
+    const auto* entry = helper.get_slot_entry(2);
+    REQUIRE(entry != nullptr);
+    REQUIRE(entry->info.mapped_tool == 2);
+}
+
 TEST_CASE("Happy Hare persistence: different gate indices", "[ams][happy_hare][persistence]") {
     AmsBackendHappyHareTestHelper helper;
     helper.initialize_test_gates(8);

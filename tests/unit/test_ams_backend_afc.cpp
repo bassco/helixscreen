@@ -891,6 +891,79 @@ TEST_CASE("AFC persistence: SET_SPOOL_ID clear with empty string", "[ams][afc][p
     REQUIRE(helper.has_gcode("SET_SPOOL_ID LANE=lane1 SPOOL_ID="));
 }
 
+TEST_CASE("AFC persistence: SET_MAP fires when mapped_tool changes via set_slot_info",
+          "[ams][afc][persistence]") {
+    AmsBackendAfcTestHelper helper;
+
+    helper.set_afc_version("1.0.20");
+    helper.initialize_test_lanes_with_slots(4);
+
+    // Helper seeds slot 0 → T0 by default. Remap it to T2 through the slot edit path.
+    SlotInfo info;
+    info.mapped_tool = 2;
+
+    helper.set_slot_info(0, info);
+
+    REQUIRE(helper.has_gcode("SET_MAP LANE=lane1 MAP=T2"));
+}
+
+TEST_CASE("AFC persistence: SET_MAP not fired when mapped_tool unchanged",
+          "[ams][afc][persistence]") {
+    AmsBackendAfcTestHelper helper;
+
+    helper.set_afc_version("1.0.20");
+    helper.initialize_test_lanes_with_slots(4);
+
+    // Default mapping for slot 0 is T0. Setting same value should not emit SET_MAP.
+    SlotInfo info;
+    info.mapped_tool = 0;
+    info.material = "PLA";
+
+    helper.set_slot_info(0, info);
+
+    for (const auto& gcode : helper.captured_gcodes) {
+        REQUIRE(gcode.rfind("SET_MAP ", 0) != 0);
+    }
+}
+
+TEST_CASE("AFC persistence: SET_MAP not fired when caller leaves mapped_tool default (-1)",
+          "[ams][afc][persistence]") {
+    AmsBackendAfcTestHelper helper;
+
+    helper.set_afc_version("1.0.20");
+    helper.initialize_test_lanes_with_slots(4);
+
+    // Spoolman polling and consumption_sink build a SlotInfo from the existing slot,
+    // but a misuse (default-constructed SlotInfo) must NOT clobber the live mapping.
+    // The guard is `info.mapped_tool >= 0` — so mapped_tool=-1 is a no-op.
+    SlotInfo info; // mapped_tool defaults to -1
+    info.material = "PLA";
+
+    helper.set_slot_info(2, info);
+
+    for (const auto& gcode : helper.captured_gcodes) {
+        REQUIRE(gcode.rfind("SET_MAP ", 0) != 0);
+    }
+    // Live registry mapping for slot 2 must still be T2 (the seeded default).
+    REQUIRE(helper.get_slot_mapped_tool(2) == 2);
+}
+
+TEST_CASE("AFC persistence: mapped_tool change updates registry reverse map",
+          "[ams][afc][persistence]") {
+    AmsBackendAfcTestHelper helper;
+
+    helper.set_afc_version("1.0.20");
+    helper.initialize_test_lanes_with_slots(4);
+
+    // Remap slot 0 from T0 → T2 via the slot edit path. Registry should reflect it
+    // so future tool-changes (T2 → which slot?) resolve correctly.
+    SlotInfo info;
+    info.mapped_tool = 2;
+    helper.set_slot_info(0, info);
+
+    REQUIRE(helper.get_slot_mapped_tool(0) == 2);
+}
+
 TEST_CASE("AFC persistence: sends gcode even with unknown version", "[ams][afc][persistence]") {
     AmsBackendAfcTestHelper helper;
 

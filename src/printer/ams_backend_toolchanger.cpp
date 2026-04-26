@@ -445,25 +445,48 @@ AmsError AmsBackendToolChanger::cancel() {
 
 AmsError AmsBackendToolChanger::set_slot_info(int slot_index, const SlotInfo& info,
                                               bool /*persist*/) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    int old_mapped_tool = -1;
+    std::string physical_tool_name;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    AmsError slot_valid = validate_slot_index(slot_index);
-    if (!slot_valid) {
-        return slot_valid;
+        AmsError slot_valid = validate_slot_index(slot_index);
+        if (!slot_valid) {
+            return slot_valid;
+        }
+
+        // Update local state (for UI display)
+        if (!system_info_.units.empty() &&
+            slot_index < static_cast<int>(system_info_.units[0].slots.size())) {
+            auto& slot = system_info_.units[0].slots[slot_index];
+            old_mapped_tool = slot.mapped_tool;
+            slot.color_rgb = info.color_rgb;
+            slot.color_name = info.color_name;
+            slot.material = info.material;
+            slot.brand = info.brand;
+            slot.spoolman_id = info.spoolman_id;
+            slot.spool_name = info.spool_name;
+            slot.remaining_weight_g = info.remaining_weight_g;
+            slot.total_weight_g = info.total_weight_g;
+
+            // Tool mapping change: persist via ASSIGN_TOOL outside the lock.
+            // slot.mapped_tool stores "which G-code tool number activates this physical
+            // tool"; the gcode says "T<info.mapped_tool> now activates tool_names_[slot]".
+            if (info.mapped_tool != old_mapped_tool && info.mapped_tool >= 0 &&
+                info.mapped_tool < static_cast<int>(system_info_.tool_to_slot_map.size()) &&
+                slot_index < static_cast<int>(tool_names_.size())) {
+                slot.mapped_tool = info.mapped_tool;
+                system_info_.tool_to_slot_map[info.mapped_tool] = slot_index;
+                physical_tool_name = tool_names_[slot_index];
+            }
+        }
     }
 
-    // Update local state (for UI display)
-    if (!system_info_.units.empty() &&
-        slot_index < static_cast<int>(system_info_.units[0].slots.size())) {
-        auto& slot = system_info_.units[0].slots[slot_index];
-        slot.color_rgb = info.color_rgb;
-        slot.color_name = info.color_name;
-        slot.material = info.material;
-        slot.brand = info.brand;
-        slot.spoolman_id = info.spoolman_id;
-        slot.spool_name = info.spool_name;
-        slot.remaining_weight_g = info.remaining_weight_g;
-        slot.total_weight_g = info.total_weight_g;
+    if (!physical_tool_name.empty()) {
+        spdlog::info("[AMS ToolChanger] Remap via slot edit: T{} -> physical {} (slot {})",
+                     info.mapped_tool, physical_tool_name, slot_index);
+        return execute_gcode(
+            fmt::format("ASSIGN_TOOL TOOL={} N={}", physical_tool_name, info.mapped_tool));
     }
 
     return AmsErrorHelper::success();

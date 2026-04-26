@@ -1672,6 +1672,7 @@ AmsError AmsBackendHappyHare::cancel() {
 
 AmsError AmsBackendHappyHare::set_slot_info(int slot_index, const SlotInfo& info, bool persist) {
     int old_spoolman_id = 0;
+    int old_mapped_tool = -1;
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
@@ -1688,8 +1689,9 @@ AmsError AmsBackendHappyHare::set_slot_info(int slot_index, const SlotInfo& info
 
         auto& slot = entry->info;
 
-        // Capture old spoolman_id BEFORE updating (needed to detect clearing)
+        // Capture old values BEFORE updating (needed to detect clears / remaps)
         old_spoolman_id = slot.spoolman_id;
+        old_mapped_tool = slot.mapped_tool;
 
         // Detect whether anything actually changed
         bool changed = slot.color_name != info.color_name || slot.color_rgb != info.color_rgb ||
@@ -1699,7 +1701,8 @@ AmsError AmsBackendHappyHare::set_slot_info(int slot_index, const SlotInfo& info
                        slot.total_weight_g != info.total_weight_g ||
                        slot.nozzle_temp_min != info.nozzle_temp_min ||
                        slot.nozzle_temp_max != info.nozzle_temp_max ||
-                       slot.bed_temp != info.bed_temp;
+                       slot.bed_temp != info.bed_temp ||
+                       slot.mapped_tool != info.mapped_tool;
 
         // Update local state
         slot.color_name = info.color_name;
@@ -1713,6 +1716,10 @@ AmsError AmsBackendHappyHare::set_slot_info(int slot_index, const SlotInfo& info
         slot.nozzle_temp_min = info.nozzle_temp_min;
         slot.nozzle_temp_max = info.nozzle_temp_max;
         slot.bed_temp = info.bed_temp;
+        // Tool mapping change goes through registry so reverse maps stay consistent.
+        if (info.mapped_tool != old_mapped_tool && info.mapped_tool >= 0) {
+            slots_.set_tool_mapping(slot_index, info.mapped_tool);
+        }
 
         if (changed) {
             spdlog::info("[AMS HappyHare] Updated slot {} info: {} {}", slot_index, info.material,
@@ -1758,6 +1765,14 @@ AmsError AmsBackendHappyHare::set_slot_info(int slot_index, const SlotInfo& info
         if (has_changes) {
             execute_gcode(cmd);
             spdlog::debug("[AMS HappyHare] Sent: {}", cmd);
+        }
+
+        // Tool-to-gate mapping is a separate Happy Hare concern from MMU_GATE_MAP
+        // (which is filament metadata). Emit MMU_TTG_MAP whenever the slot edit
+        // path changes mapped_tool — mirrors set_tool_mapping() for the modal flow.
+        if (info.mapped_tool != old_mapped_tool && info.mapped_tool >= 0) {
+            execute_gcode(
+                fmt::format("MMU_TTG_MAP TOOL={} GATE={}", info.mapped_tool, slot_index));
         }
     }
 
