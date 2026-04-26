@@ -860,34 +860,59 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
     // Klipper firmware state (shutdown/error detection + state_message)
     subscription_objects["webhooks"] = json::array({"state", "state_message"});
 
-    // All discovered heaters (extruders, beds, generic heaters)
+    // All discovered heaters (extruders, beds, generic heaters).
+    // PrinterTemperatureState reads only temperature + target.
+    static const json heater_fields = json::array({"temperature", "target"});
     for (const auto& heater : heaters_) {
-        subscription_objects[heater] = nullptr;
+        subscription_objects[heater] = heater_fields;
     }
 
-    // All discovered sensors
+    // All discovered sensors. temperature_fan also lives in fans_ and is
+    // overwritten in the fans loop below with the union of fields.
+    static const json temp_sensor_fields = json::array({"temperature"});
     for (const auto& sensor : sensors_) {
-        subscription_objects[sensor] = nullptr;
+        subscription_objects[sensor] = temp_sensor_fields;
     }
 
-    // All discovered fans
+    // All discovered fans. Klipper publishes fan speed updates whenever PWM
+    // duty changes — without narrowing, every config field would also stream
+    // back per update. Field shape varies by object type:
+    //   - "fan", heater_fan, fan_generic, controller_fan: { "speed" }
+    //   - temperature_fan: { "temperature", "target", "speed" } (also a sensor)
+    //   - output_pin: { "value" } (Creality-style)
+    static const json fan_speed_fields = json::array({"speed"});
+    static const json temp_fan_fields = json::array({"temperature", "target", "speed"});
+    static const json output_pin_value_fields = json::array({"value"});
     spdlog::info("[Moonraker Client] Subscribing to {} fans: {}", fans_.size(), json(fans_).dump());
     for (const auto& fan : fans_) {
-        subscription_objects[fan] = nullptr;
+        if (fan.rfind("temperature_fan ", 0) == 0) {
+            subscription_objects[fan] = temp_fan_fields;
+        } else if (fan.rfind("output_pin ", 0) == 0) {
+            subscription_objects[fan] = output_pin_value_fields;
+        } else {
+            subscription_objects[fan] = fan_speed_fields;
+        }
     }
 
-    // Subscribe to fan_feedback if available (Creality tachometer module)
+    // Creality tachometer module — PrinterFanState reads fan0_speed..fan9_speed.
     if (hw.has_fan_feedback()) {
-        subscription_objects["fan_feedback"] = nullptr;
+        static const json fan_feedback_fields =
+            json::array({"fan0_speed", "fan1_speed", "fan2_speed", "fan3_speed", "fan4_speed",
+                         "fan5_speed", "fan6_speed", "fan7_speed", "fan8_speed", "fan9_speed"});
+        subscription_objects["fan_feedback"] = fan_feedback_fields;
         spdlog::debug("[MoonrakerDiscoverySequence] Subscribing to fan_feedback for RPM data");
     }
 
-    // All discovered LEDs (neopixel/dotstar/led).
-    // We read color_data for live LED tile color + RGBW capability; everything
-    // else (config_layers, etc.) is static topology and can be left to the
-    // initial config fetch.
+    // All discovered LEDs. Native LEDs (neopixel/dotstar/led) report color_data;
+    // output_pin LEDs report a single value. Other config fields are static
+    // topology already fetched at startup.
+    static const json led_color_fields = json::array({"color_data"});
     for (const auto& led : leds_) {
-        subscription_objects[led] = json::array({"color_data"});
+        if (led.rfind("output_pin ", 0) == 0) {
+            subscription_objects[led] = output_pin_value_fields;
+        } else {
+            subscription_objects[led] = led_color_fields;
+        }
     }
 
     // All discovered LED effects (klipper-led_effect plugin objects).
@@ -900,20 +925,26 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         subscription_objects[effect] = json::array({"enabled"});
     }
 
-    // Bed mesh (for 3D visualization)
-    subscription_objects["bed_mesh"] = nullptr;
+    // Bed mesh (for 3D visualization). MoonrakerAdvancedAPI reads only the
+    // profile/topology fields; the rest of `bed_mesh` is internal state.
+    subscription_objects["bed_mesh"] = json::array(
+        {"profile_name", "probed_matrix", "mesh_min", "mesh_max", "mesh_params", "profiles"});
 
-    // Exclude object (for mid-print object exclusion)
-    subscription_objects["exclude_object"] = nullptr;
+    // Exclude object (for mid-print object exclusion). PrinterState reads
+    // excluded_objects + objects (with name/center/polygon) + current_object.
+    subscription_objects["exclude_object"] =
+        json::array({"objects", "excluded_objects", "current_object"});
 
-    // Manual probe (for Z-offset calibration - PROBE_CALIBRATE, Z_ENDSTOP_CALIBRATE)
-    subscription_objects["manual_probe"] = nullptr;
+    // Manual probe (Z-offset calibration). PrinterCalibrationState reads
+    // is_active + z_position.
+    subscription_objects["manual_probe"] = json::array({"is_active", "z_position"});
 
-    // Stepper enable state (for motor enabled/disabled detection - updates immediately on M84)
-    subscription_objects["stepper_enable"] = nullptr;
+    // Stepper enable state (for motor enabled/disabled detection on M84).
+    subscription_objects["stepper_enable"] = json::array({"steppers"});
 
-    // Idle timeout (for printer activity state - Ready/Printing/Idle)
-    subscription_objects["idle_timeout"] = nullptr;
+    // idle_timeout: previously subscribed with nullptr, but no parser ever
+    // reads it. Skip — the mock generates a `state` field but no production
+    // code consumes the subscription. (system_stats also dropped above.)
 
     // Happy Hare MMU object (gate status, colors, materials, filament info)
     // Subscribe to specific fields only — nullptr means ALL fields, which causes
@@ -1059,44 +1090,58 @@ void MoonrakerDiscoverySequence::complete_discovery_subscription(uint64_t seq) {
         spdlog::info("[Moonraker Client] Subscribing to Snapmaker filament + feed objects");
     }
 
-    // All discovered filament sensors (filament_switch_sensor, filament_motion_sensor)
-    // These provide runout detection and encoder motion data
+    // All discovered filament sensors (filament_switch_sensor, filament_motion_sensor).
+    // FilamentSensorManager reads filament_detected + enabled + detection_count.
+    static const json filament_sensor_fields =
+        json::array({"filament_detected", "enabled", "detection_count"});
     for (const auto& sensor : filament_sensors_) {
-        subscription_objects[sensor] = nullptr;
+        subscription_objects[sensor] = filament_sensor_fields;
     }
 
-    // All discovered width sensors (hall_filament_width_sensor, tsl1401cl_filament_width_sensor)
-    // These provide filament diameter measurement for flow compensation
+    // All discovered width sensors. WidthSensorManager reads Diameter + Raw.
     if (hw.has_width_sensors()) {
+        static const json width_sensor_fields = json::array({"Diameter", "Raw"});
         for (const auto& sensor : hw.width_sensor_objects()) {
-            subscription_objects[sensor] = nullptr;
+            subscription_objects[sensor] = width_sensor_fields;
         }
         spdlog::info("[Moonraker Client] Subscribing to {} width sensors",
                      hw.width_sensor_objects().size());
     }
 
-    // All discovered tool objects (for toolchanger support)
+    // Toolchanger + per-tool objects. AmsBackendToolchanger reads
+    // status/tool_number/tool_numbers; ToolState reads tool active/mounted/
+    // detect_state + gcode_*_offset + extruder + fan.
     if (hw.has_tool_changer()) {
-        subscription_objects["toolchanger"] = nullptr;
+        subscription_objects["toolchanger"] =
+            json::array({"status", "tool_number", "tool_numbers"});
+        static const json tool_fields = json::array({"active",
+                                                     "mounted",
+                                                     "detect_state",
+                                                     "gcode_x_offset",
+                                                     "gcode_y_offset",
+                                                     "gcode_z_offset",
+                                                     "extruder",
+                                                     "fan"});
         for (const auto& tool_name : hw.tool_names()) {
-            subscription_objects["tool " + tool_name] = nullptr;
+            subscription_objects["tool " + tool_name] = tool_fields;
         }
         spdlog::info("[Moonraker Client] Subscribing to toolchanger + {} tool objects",
                      hw.tool_names().size());
     }
 
-    // Firmware retraction settings (if printer has firmware_retraction module)
+    // Firmware retraction. PrinterCalibrationState reads the four tunable
+    // fields; the rest of the firmware_retraction object is static.
     if (hw.has_firmware_retraction()) {
-        subscription_objects["firmware_retraction"] = nullptr;
+        subscription_objects["firmware_retraction"] = json::array(
+            {"retract_length", "retract_speed", "unretract_extra_length", "unretract_speed"});
     }
 
-    // Print start macros (for detecting when prep phase completes)
-    // These are optional - printers without these macros will silently not receive updates
-    // AD5M/KAMP macros:
-    subscription_objects["gcode_macro _START_PRINT"] = nullptr;
-    subscription_objects["gcode_macro START_PRINT"] = nullptr;
-    // HelixScreen custom macro:
-    subscription_objects["gcode_macro _HELIX_STATE"] = nullptr;
+    // Print start macros — only the boolean flags PrintStartCollector reads.
+    // Other variables on these macros (slicer args, profile names, etc.) are
+    // irrelevant to the start-detection logic.
+    subscription_objects["gcode_macro _START_PRINT"] = json::array({"print_started"});
+    subscription_objects["gcode_macro START_PRINT"] = json::array({"preparation_done"});
+    subscription_objects["gcode_macro _HELIX_STATE"] = json::array({"print_started"});
 
     json subscribe_params = {{"objects", subscription_objects}};
     size_t num_subscribed = subscription_objects.size();
