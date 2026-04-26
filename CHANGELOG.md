@@ -5,6 +5,22 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.46] - 2026-04-26
+
+A targeted fix release. The headline is the ASAN-confirmed root-cause fix for the chronic wizard step-transition crash family that has driven roughly half a dozen patch attempts since v0.99.34. With AddressSanitizer wired into the Pi cross-build, two distinct heap-use-after-frees were caught within minutes of human interaction with the wizard — replacing weeks of victim-site whack-a-mole.
+
+### Fixed
+- **Wizard step-transition heap corruption — root cause** ([#880], [#871], [#870], [#872], [#873], [#874], [#875], [#877]) — `WizardConnectionStep::auto_probe_timer_` is a one-shot LVGL timer; LVGL deletes one-shot timers internally after the callback returns, but `attempt_auto_probe()` only nulled the member pointer on its non-early-return path. When the timer fired and early-returned (no IP yet), the member was left pointing into freed memory. On back-nav from the Connection step, `cleanup()` called `lv_timer_set_cb(nullptr)` against the freed timer, corrupting LVGL's timer linked list and the heap region behind it. Downstream effects manifested as crashes in `lv_event_mark_deleted`, `trans_anim_start_cb`, `lv_draw_sw_blend_image`, and the wider LVGL anim/event/render paths. The member is now nulled at the start of the timer callback, before any path can early-return. ASAN-confirmed.
+- **Test Connection click crash** — the libhv WebSocket `onopen` lambda captured `const char* url` directly, but callers pass a stack-local `std::string`'s `.c_str()`. The lambda fires on a libhv worker thread after the caller's scope unwinds, and spdlog's format-arg processing strlen'd the freed buffer. Lambda now captures by string-copy. ASAN-confirmed.
+- **Connection step IP/port pre-fill** — fields appeared empty on every visit (instead of showing 127.0.0.1/7125 or the saved config) and lost user-typed values on back/forward navigation. `init_subjects()` now seeds buffers only on first init so user input survives re-visits, and `create()` drives pre-fill from the buffer (the source of truth) rather than the subject (which can be transiently empty during XML widget construction).
+- **AD5M Wi-Fi step on first launch** — Forge-X firmware doesn't auto-load the Realtek RTL8821CU USB driver, and wpa_supplicant only starts after the user has supplied credentials via the stock UI. Fresh installs running HelixScreen as the launcher therefore never enumerated `wlan0` and reported "no WiFi hardware found." Platform hooks now insmod `8821cu.ko` and start `wpa_supplicant` in `platform_pre_start()`, both idempotent. No-op on AD5M boards without a USB Wi-Fi dongle.
+- **Wizard subtree purge regression** — the v0.99.45 fix to cancel style transitions during cleanup recursed into the root container and stripped its flex layout, collapsing new step content into a thin column. Root container now only gets `lv_anim_delete`; descendants still get the full style strip.
+- **AMS `set_slot_info` clobbered `mapped_tool`** when the caller didn't pass it; persists across calls now. Horizontal card scrolling on the AMS panel also restored.
+
+### Changed
+- **AddressSanitizer build for Pi** — new `make pi-asan-docker` target produces a fully-instrumented binary (LVGL, helix-xml, libhv, helix-screen) with `-static-libasan` for self-contained deployment. Output to `build/pi-asan/` so it doesn't clobber regular builds. Strip is forced off; debug info is split into a separate `.debug` file kept on the build host for symbol resolution.
+- **Wizard step-transition stress harness** — Catch2 fixture (`tests/unit/test_wizard_step_stress.cpp`) drives `ui_wizard_navigate_to_step` programmatically in 2↔3 bounces and full-sweep patterns, configurable via `WIZARD_STRESS_ITERATIONS`. Tagged `[wizard][stress][.ui_integration]` — hidden from default test runs.
+
 ## [0.99.45] - 2026-04-25
 
 A defensive-hardening release. The dominant theme is converting hard-to-debug LVGL crashes into logged anomalies that telemetry can act on, plus a scope-aware shutdown/reboot UX for users running multiple Klipper hosts.
@@ -3302,6 +3318,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.46]: https://github.com/prestonbrown/helixscreen/compare/v0.99.45...v0.99.46
 [0.99.45]: https://github.com/prestonbrown/helixscreen/compare/v0.99.44...v0.99.45
 [0.99.44]: https://github.com/prestonbrown/helixscreen/compare/v0.99.43...v0.99.44
 [0.99.43]: https://github.com/prestonbrown/helixscreen/compare/v0.99.42...v0.99.43
