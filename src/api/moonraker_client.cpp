@@ -363,8 +363,12 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
 
     // Connection opened callback
     // Wrap entire callback body in try-catch to prevent any exception from escaping to libhv
-    // Capture weak_ptr to lifetime_guard_ to safely detect destruction from event loop thread
-    onopen = [this, weak_guard = std::weak_ptr<bool>(lifetime_guard_), on_connected, url]() {
+    // Capture weak_ptr to lifetime_guard_ to safely detect destruction from event loop thread.
+    // url is captured BY STRING COPY — capturing the const char* directly would dangle once the
+    // caller's stack-local URL string (e.g. ws_url in WizardConnectionStep::handle_test_connection_clicked)
+    // is destroyed. Surfaced by ASAN as heap-use-after-free in spdlog format on the libhv worker thread.
+    onopen = [this, weak_guard = std::weak_ptr<bool>(lifetime_guard_), on_connected,
+              url_owned = std::string(url ? url : "")]() {
         try {
             // Acquire shared lock to prevent destructor from proceeding while we execute.
             // try_to_lock ensures we never block if destructor holds the exclusive lock.
@@ -380,7 +384,7 @@ int MoonrakerClient::connect(const char* url, std::function<void()> on_connected
             }
 
             // Note: getHttpResponse() available here if needed for upgrade response inspection
-            spdlog::debug("[Moonraker Client] WebSocket connected to {}", url);
+            spdlog::debug("[Moonraker Client] WebSocket connected to {}", url_owned);
 
             // Check if this is a reconnection (was_connected_ is true from previous session)
             // Emit RECONNECTED event BEFORE updating was_connected_
