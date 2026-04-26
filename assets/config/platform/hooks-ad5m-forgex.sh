@@ -134,7 +134,8 @@ platform_wait_for_services() {
 # idempotent — runs only when needed, mirrors Forge-X's own behaviour, and
 # is a no-op on AD5M boards without a USB WiFi adapter.
 platform_load_wifi_driver() {
-    if ip link show 2>/dev/null | grep -q "wlan"; then
+    # ip(8) isn't always installed on AD5M Forge-X — fall back to /sys/class/net.
+    if ls /sys/class/net 2>/dev/null | grep -q "^wlan"; then
         return 0  # interface already up — nothing to do
     fi
     if [ ! -x /sbin/insmod ]; then
@@ -151,6 +152,28 @@ platform_load_wifi_driver() {
     done
 }
 
+# Ensure wpa_supplicant daemon is running so helix-screen's WiFi backend has
+# a control socket to talk to. Forge-X's wifi_connect.sh starts wpa_supplicant
+# only once the user has provided WiFi credentials via stock UI; on a fresh
+# install where helix-screen's wizard handles WiFi setup, the daemon never
+# starts on its own and the backend reports SERVICE_NOT_RUNNING. Idempotent:
+# checks for existing pid + socket before starting.
+platform_start_wpa_supplicant() {
+    # Skip if already running with a valid control socket
+    if [ -S /var/run/wpa_supplicant/wlan0 ] && pidof wpa_supplicant >/dev/null 2>&1; then
+        return 0
+    fi
+    if ! ls /sys/class/net 2>/dev/null | grep -q "^wlan"; then
+        return 0  # no interface to bind to
+    fi
+    if [ ! -x /usr/sbin/wpa_supplicant ] || [ ! -f /etc/wpa_supplicant.conf ]; then
+        return 0  # binary or config missing, nothing we can do
+    fi
+    mkdir -p /var/run/wpa_supplicant
+    echo "Starting wpa_supplicant daemon..."
+    /usr/sbin/wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant.conf 2>&1 || true
+}
+
 # Pre-start setup: set the active flag so ForgeX knows HelixScreen owns the display.
 # This must happen BEFORE stopping competing UIs or enabling backlight, because
 # ForgeX's screen.sh could run at any time via Klipper's delayed_gcode.
@@ -158,6 +181,7 @@ platform_pre_start() {
     export HELIX_CACHE_DIR="/data/helixscreen/cache"
     touch /tmp/helixscreen_active
     platform_load_wifi_driver
+    platform_start_wpa_supplicant
 }
 
 # Wait for ForgeX boot sequence to complete before starting helix-screen.
