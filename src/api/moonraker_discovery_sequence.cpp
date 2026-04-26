@@ -840,10 +840,15 @@ json MoonrakerDiscoverySequence::build_subscription_objects(
     subscription_objects["print_stats"] =
         json::array({"state", "filename", "filament_used", "print_duration",
                      "total_duration", "estimated_time", "info"});
-    subscription_objects["virtual_sdcard"] =
-        json::array({"progress", "layer", "layer_count", "file_position", "is_active"});
+    // virtual_sdcard.progress drives the progress bar. layer / layer_count
+    // are the FALLBACK source for layer tracking — preferred source is
+    // print_stats.info.{current_layer,total_layer} (slicer-supplied via
+    // SET_PRINT_STATS_INFO), with virtual_sdcard.layer / layer_count taking
+    // over when info isn't populated. PrinterPrintState reads both.
+    subscription_objects["virtual_sdcard"] = json::array({"progress", "layer", "layer_count"});
     subscription_objects["toolhead"] =
-        json::array({"position", "homed_axes", "kinematics", "extruder", "max_velocity"});
+        json::array({"position", "homed_axes", "kinematics", "extruder", "max_velocity",
+                     "axis_minimum", "axis_maximum"});
     subscription_objects["gcode_move"] = json::array(
         {"gcode_position", "speed", "speed_factor", "extrude_factor", "homing_origin"});
     subscription_objects["motion_report"] = json::array({"live_extruder_velocity"});

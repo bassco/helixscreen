@@ -261,6 +261,59 @@ TEST_CASE("Layer tracking: virtual_sdcard.layer updates subject",
 }
 
 // ============================================================================
+// Source precedence: print_stats.info > virtual_sdcard
+// ============================================================================
+//
+// When both sources arrive in the same status update, slicer-supplied data
+// (print_stats.info.current_layer / total_layer via SET_PRINT_STATS_INFO)
+// must win over the Klipper-side virtual_sdcard fallback. Previously the
+// virtual_sdcard branch ran second and silently overwrote the info value —
+// preventing slicers that emit accurate per-feature layer numbering from
+// being trusted on printers that also report sdcard layers.
+
+TEST_CASE("Layer tracking: print_stats.info wins over virtual_sdcard in same update",
+          "[layer_tracking][precedence]") {
+    lv_init_safe();
+    PrinterState& state = get_printer_state();
+    PrinterStateTestAccess::reset(state);
+    state.init_subjects(false);
+
+    json printing = {{"print_stats", {{"state", "printing"}}}};
+    state.update_from_status(printing);
+
+    SECTION("info.current_layer beats virtual_sdcard.layer when both present") {
+        json combined = {
+            {"print_stats", {{"info", {{"current_layer", 42}, {"total_layer", 200}}}}},
+            {"virtual_sdcard", {{"progress", 0.21}, {"layer", 999}, {"layer_count", 9999}}}};
+        state.update_from_status(combined);
+
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 42);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_total_subject()) == 200);
+    }
+
+    SECTION("virtual_sdcard takes over when info missing in subsequent update") {
+        // First update: info-only — sets layer to 10
+        json info_only = {{"print_stats", {{"info", {{"current_layer", 10}, {"total_layer", 100}}}}}};
+        state.update_from_status(info_only);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 10);
+
+        // Second update: virtual_sdcard only — should now drive layer
+        json sdcard_only = {{"virtual_sdcard", {{"progress", 0.5}, {"layer", 50}, {"layer_count", 100}}}};
+        state.update_from_status(sdcard_only);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 50);
+    }
+
+    SECTION("partial info — only current_layer set — still prefers info, sdcard fills total") {
+        json partial = {{"print_stats", {{"info", {{"current_layer", 7}}}}},
+                        {"virtual_sdcard", {{"progress", 0.0}, {"layer", 99}, {"layer_count", 150}}}};
+        state.update_from_status(partial);
+
+        REQUIRE(lv_subject_get_int(state.get_print_layer_current_subject()) == 7);
+        REQUIRE(lv_subject_get_int(state.get_print_layer_total_subject()) == 150);
+    }
+}
+
+// ============================================================================
 // Progress-based layer estimation fallback
 // ============================================================================
 

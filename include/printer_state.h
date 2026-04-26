@@ -910,6 +910,11 @@ class PrinterState {
         motion_state_.clear_pending_z_offset_delta();
     }
 
+    /// Kinematic envelope (mm) from toolhead.axis_minimum / axis_maximum.
+    [[nodiscard]] AxisBounds get_axis_bounds() const {
+        return motion_state_.get_axis_bounds();
+    }
+
     // Printer connection state subjects (Moonraker WebSocket) - delegated to PrinterNetworkState
     lv_subject_t* get_printer_connection_state_subject() {
         return network_state_.get_printer_connection_state_subject();

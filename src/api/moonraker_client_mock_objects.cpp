@@ -225,6 +225,8 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                                           {"max_z_velocity", 40.0},
                                           {"max_z_accel", 1000.0},
                                           {"position", {0.0, 0.0, 0.0, 0.0}},
+                                          {"axis_minimum", {0.0, 0.0, 0.0, 0.0}},
+                                          {"axis_maximum", {235.0, 235.0, 250.0, 0.0}},
                                           {"homed_axes", "xyz"}};
             }
 
@@ -377,6 +379,8 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                                           {"max_accel_to_decel", 5000.0},
                                           {"square_corner_velocity", 5.0},
                                           {"position", {0.0, 0.0, 0.0, 0.0}},
+                                          {"axis_minimum", {0.0, 0.0, 0.0, 0.0}},
+                                          {"axis_maximum", {235.0, 235.0, 250.0, 0.0}},
                                           {"homed_axes", "xyz"},
                                           {"print_time", 0.0},
                                           {"estimated_print_time", 0.0},
@@ -396,12 +400,65 @@ void register_object_handlers(std::unordered_map<std::string, MethodHandler>& re
                 status_obj["fan"] = {{"speed", 0.0}, {"rpm", nullptr}};
             }
 
+            // Print-start / state macros — the discovery sequence subscribes to
+            // these to learn when the slicer prep phase has completed and the
+            // actual print has started. Emit the boolean flag fields the
+            // PrintStartCollector parser expects.
+            if (objects.contains("gcode_macro _START_PRINT")) {
+                status_obj["gcode_macro _START_PRINT"] = {{"print_started", false}};
+            }
+            if (objects.contains("gcode_macro START_PRINT")) {
+                status_obj["gcode_macro START_PRINT"] = {{"preparation_done", false}};
+            }
+            if (objects.contains("gcode_macro _HELIX_STATE")) {
+                status_obj["gcode_macro _HELIX_STATE"] = {{"print_started", false}};
+            }
+
+            // fan_feedback (Creality tachometer module — fan0_speed..fan9_speed RPM).
+            if (objects.contains("fan_feedback")) {
+                status_obj["fan_feedback"] = {{"fan0_speed", 0.0}, {"fan1_speed", 0.0},
+                                              {"fan2_speed", 0.0}, {"fan3_speed", 0.0},
+                                              {"fan4_speed", 0.0}, {"fan5_speed", 0.0},
+                                              {"fan6_speed", 0.0}, {"fan7_speed", 0.0},
+                                              {"fan8_speed", 0.0}, {"fan9_speed", 0.0}};
+            }
+
             // Width sensors (hall_filament_width_sensor, tsl1401cl_filament_width_sensor)
             for (auto it = objects.begin(); it != objects.end(); ++it) {
                 if (it.key().find("filament_width_sensor") != std::string::npos ||
                     it.key().find("fila_switch") != std::string::npos) {
                     status_obj[it.key()] = {
                         {"Diameter", 1.75}, {"Raw", 500.0}, {"is_active", true}};
+                }
+            }
+
+            // Filament runout sensors — emit detection_count alongside the
+            // detected/enabled flags so the FilamentSensorManager reads it.
+            for (auto it = objects.begin(); it != objects.end(); ++it) {
+                if (it.key().rfind("filament_switch_sensor ", 0) == 0 ||
+                    it.key().rfind("filament_motion_sensor ", 0) == 0) {
+                    status_obj[it.key()] = {
+                        {"filament_detected", true}, {"enabled", true}, {"detection_count", 0}};
+                }
+            }
+
+            // Toolchanger + per-tool objects — emit when discovered so
+            // ToolState parsers can populate AmsState.
+            if (objects.contains("toolchanger")) {
+                status_obj["toolchanger"] = {{"status", "ready"},
+                                             {"tool_number", 0},
+                                             {"tool_numbers", json::array({0})}};
+            }
+            for (auto it = objects.begin(); it != objects.end(); ++it) {
+                if (it.key().rfind("tool ", 0) == 0) {
+                    status_obj[it.key()] = {{"active", false},
+                                            {"mounted", true},
+                                            {"detect_state", "OK"},
+                                            {"gcode_x_offset", 0.0},
+                                            {"gcode_y_offset", 0.0},
+                                            {"gcode_z_offset", 0.0},
+                                            {"extruder", "extruder"},
+                                            {"fan", "fan"}};
                 }
             }
 

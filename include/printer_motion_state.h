@@ -10,6 +10,21 @@
 namespace helix {
 
 /**
+ * @brief Kinematic envelope from `toolhead.axis_minimum` / `axis_maximum` (mm)
+ *
+ * Has-bits distinguish "Klipper hasn't sent us this yet" from "Klipper said 0".
+ * Only valid for the duration of a connection — reset on reconnect.
+ */
+struct AxisBounds {
+    float x_min = 0.0f, x_max = 0.0f;
+    float y_min = 0.0f, y_max = 0.0f;
+    float z_min = 0.0f, z_max = 0.0f;
+    bool has_x = false;
+    bool has_y = false;
+    bool has_z = false;
+};
+
+/**
  * @brief Manages motion-related subjects for printer state
  *
  * Extracted from PrinterState as part of god class decomposition.
@@ -105,6 +120,12 @@ class PrinterMotionState {
     bool has_pending_z_offset_adjustment() const;
     void clear_pending_z_offset_delta();
 
+    /// Kinematic envelope (mm) from toolhead.axis_minimum/axis_maximum.
+    /// has_x/y/z is false until the first subscription update arrives.
+    [[nodiscard]] AxisBounds get_axis_bounds() const {
+        return axis_bounds_;
+    }
+
   private:
     friend class PrinterMotionStateTestAccess;
 
@@ -136,6 +157,9 @@ class PrinterMotionState {
     // Z-offset subjects
     lv_subject_t gcode_z_offset_{};
     lv_subject_t pending_z_offset_delta_{};
+
+    // Kinematic envelope (not subjects — read on demand by jog clamping etc.)
+    AxisBounds axis_bounds_{};
 };
 
 } // namespace helix

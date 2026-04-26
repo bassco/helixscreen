@@ -176,6 +176,15 @@ void PrinterPrintState::reset_for_new_print() {
 }
 
 void PrinterPrintState::update_from_status(const nlohmann::json& status) {
+    // Layer tracking has two sources within a single status update:
+    //   primary  — print_stats.info.{current_layer,total_layer} (slicer
+    //              SET_PRINT_STATS_INFO; authoritative when present)
+    //   fallback — virtual_sdcard.{layer,layer_count} (Klipper-side; populated
+    //              only when sdcard print is active)
+    // If both arrive in the same update, primary wins. These flags are
+    // per-update, scoped to this function call.
+    bool current_layer_from_info = false;
+    bool total_layer_from_info = false;
     // IMPORTANT: Process print_stats BEFORE virtual_sdcard.
     // The print_state_enum_ observer fires synchronously and reads print_progress_
     // for mid-print detection (should_start_print_collector). If virtual_sdcard is
@@ -290,6 +299,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                                   current_layer);
                     lv_subject_set_int(&print_layer_current_, current_layer);
                 }
+                current_layer_from_info = true;
             }
 
             if (info.contains("total_layer") && info["total_layer"].is_number()) {
@@ -299,6 +309,7 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                                   total_layer);
                     lv_subject_set_int(&print_layer_total_, total_layer);
                 }
+                total_layer_from_info = true;
             }
         } else if (stats.contains("info")) {
             spdlog::debug("[LayerTracker] print_stats.info is null/missing - slicer may not emit "
@@ -522,8 +533,13 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                 }
             }
 
-            // Use virtual_sdcard layer data if available (more accurate than estimation)
-            if (sdcard.contains("layer") && sdcard["layer"].is_number_integer()) {
+            // virtual_sdcard.layer / layer_count are the FALLBACK source —
+            // skip them when print_stats.info already provided the value in
+            // this same update, since slicer-supplied values are
+            // authoritative (cancel-stale-progress semantics during
+            // pause/resume, etc.).
+            if (!current_layer_from_info && sdcard.contains("layer") &&
+                sdcard["layer"].is_number_integer()) {
                 int vsd_layer = sdcard["layer"].get<int>();
                 if (!has_real_layer_data_) {
                     spdlog::info("[LayerTracker] Receiving real layer data from virtual_sdcard");
@@ -535,7 +551,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
                     lv_subject_set_int(&print_layer_current_, vsd_layer);
                 }
             }
-            if (sdcard.contains("layer_count") && sdcard["layer_count"].is_number_integer()) {
+            if (!total_layer_from_info && sdcard.contains("layer_count") &&
+                sdcard["layer_count"].is_number_integer()) {
                 int vsd_total = sdcard["layer_count"].get<int>();
                 if (vsd_total != lv_subject_get_int(&print_layer_total_)) {
                     spdlog::debug("[LayerTracker] total_layer={} (from virtual_sdcard)", vsd_total);

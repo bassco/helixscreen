@@ -3006,6 +3006,8 @@ void MoonrakerClientMock::dispatch_initial_state() {
         {"toolhead",
          {{"position", {x, y, z, 0.0}},
           {"homed_axes", homed},
+          {"axis_minimum", {0.0, 0.0, 0.0, 0.0}},
+          {"axis_maximum", {235.0, 235.0, 250.0, 0.0}},
           {"kinematics", discovery_.hardware().kinematics()}}},
         {"gcode_move",
          {{"gcode_position", {x, y, z, 0.0}}, // Commanded position (same as toolhead in mock)
@@ -3674,6 +3676,8 @@ void MoonrakerClientMock::temperature_simulation_loop() {
             {"toolhead",
              {{"position", {x, y, z, 0.0}},
               {"homed_axes", homed},
+              {"axis_minimum", {0.0, 0.0, 0.0, 0.0}},
+              {"axis_maximum", {235.0, 235.0, 250.0, 0.0}},
               {"kinematics", discovery_.hardware().kinematics()}}},
             {"gcode_move",
              {{"gcode_position", {x, y, z, 0.0}}, // Commanded position (same as toolhead in mock)

@@ -63,6 +63,7 @@ void PrinterMotionState::deinit_subjects() {
     spdlog::debug("[PrinterMotionState] Deinitializing subjects");
     subjects_.deinit_all();
     subjects_initialized_ = false;
+    axis_bounds_ = AxisBounds{};
 }
 
 void PrinterMotionState::update_from_status(const nlohmann::json& status) {
@@ -94,6 +95,30 @@ void PrinterMotionState::update_from_status(const nlohmann::json& status) {
             int max_vel = static_cast<int>(toolhead["max_velocity"].get<double>());
             if (lv_subject_get_int(&max_velocity_) != max_vel) {
                 lv_subject_set_int(&max_velocity_, max_vel);
+            }
+        }
+
+        // Kinematic envelope — set has-bits when first values arrive so jog
+        // clamping can tell "Klipper hasn't told us yet" from "limit is 0".
+        if (toolhead.contains("axis_minimum") && toolhead.contains("axis_maximum") &&
+            toolhead["axis_minimum"].is_array() && toolhead["axis_maximum"].is_array() &&
+            toolhead["axis_minimum"].size() >= 3 && toolhead["axis_maximum"].size() >= 3) {
+            const auto& mn = toolhead["axis_minimum"];
+            const auto& mx = toolhead["axis_maximum"];
+            if (mn[0].is_number() && mx[0].is_number()) {
+                axis_bounds_.x_min = mn[0].get<float>();
+                axis_bounds_.x_max = mx[0].get<float>();
+                axis_bounds_.has_x = true;
+            }
+            if (mn[1].is_number() && mx[1].is_number()) {
+                axis_bounds_.y_min = mn[1].get<float>();
+                axis_bounds_.y_max = mx[1].get<float>();
+                axis_bounds_.has_y = true;
+            }
+            if (mn[2].is_number() && mx[2].is_number()) {
+                axis_bounds_.z_min = mn[2].get<float>();
+                axis_bounds_.z_max = mx[2].get<float>();
+                axis_bounds_.has_z = true;
             }
         }
 

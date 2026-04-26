@@ -638,6 +638,33 @@ void MotionPanel::jog(JogDirection direction, float distance_mm) {
         break;
     }
 
+    // Soft-stop: refuse moves that would exceed the kinematic envelope
+    // (toolhead.axis_minimum / axis_maximum). Skip when bounds aren't known
+    // yet (fresh connect) or the axis isn't homed — current_x/y is only
+    // meaningful after homing.
+    helix::AxisBounds bounds = get_printer_state().get_axis_bounds();
+    const char* homed_axes = lv_subject_get_string(get_printer_state().get_homed_axes_subject());
+    bool x_homed = homed_axes && strchr(homed_axes, 'x') != nullptr;
+    bool y_homed = homed_axes && strchr(homed_axes, 'y') != nullptr;
+    if (dx != 0.0f && bounds.has_x && x_homed) {
+        float target = current_x_ + dx;
+        if (target < bounds.x_min || target > bounds.x_max) {
+            spdlog::debug("[{}] Suppressing X jog: {:.2f}+{:+.2f}={:.2f} outside [{:.2f},{:.2f}]",
+                          get_name(), current_x_, dx, target, bounds.x_min, bounds.x_max);
+            NOTIFY_WARNING(lv_tr("X jog blocked at bed edge"));
+            return;
+        }
+    }
+    if (dy != 0.0f && bounds.has_y && y_homed) {
+        float target = current_y_ + dy;
+        if (target < bounds.y_min || target > bounds.y_max) {
+            spdlog::debug("[{}] Suppressing Y jog: {:.2f}+{:+.2f}={:.2f} outside [{:.2f},{:.2f}]",
+                          get_name(), current_y_, dy, target, bounds.y_min, bounds.y_max);
+            NOTIFY_WARNING(lv_tr("Y jog blocked at bed edge"));
+            return;
+        }
+    }
+
     // Send jog commands via Moonraker API
     MoonrakerAPI* api = get_moonraker_api();
     if (api) {

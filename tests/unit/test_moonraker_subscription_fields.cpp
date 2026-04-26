@@ -83,10 +83,13 @@ TEST_CASE("Subscription: core motion objects subscribe every field their parsers
     json subs = fx.build();
 
     SECTION("toolhead — printer_motion_state.cpp lines 70-107") {
-        // Parser reads: position, max_velocity, homed_axes
+        // Parser reads: position, max_velocity, homed_axes,
+        //               axis_minimum, axis_maximum (kinematic envelope)
         REQUIRE(has_field(subs, "toolhead", "position"));
         REQUIRE(has_field(subs, "toolhead", "max_velocity"));
         REQUIRE(has_field(subs, "toolhead", "homed_axes"));
+        REQUIRE(has_field(subs, "toolhead", "axis_minimum"));
+        REQUIRE(has_field(subs, "toolhead", "axis_maximum"));
     }
 
     SECTION("gcode_move — printer_motion_state.cpp lines 117-167") {
@@ -134,7 +137,9 @@ TEST_CASE("Subscription: virtual_sdcard fields cover printer_print_state reads",
     DiscoveryFixture fx;
     json subs = fx.build();
 
-    // Reads progress + layer + layer_count
+    // virtual_sdcard provides: progress (always), layer / layer_count
+    // (fallback for SET_PRINT_STATS_INFO-less slicers — see
+    // PrinterPrintState::update_from_status precedence logic).
     REQUIRE(has_field(subs, "virtual_sdcard", "progress"));
     REQUIRE(has_field(subs, "virtual_sdcard", "layer"));
     REQUIRE(has_field(subs, "virtual_sdcard", "layer_count"));
