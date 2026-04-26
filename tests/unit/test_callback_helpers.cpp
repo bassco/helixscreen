@@ -63,6 +63,50 @@ TEST_CASE_METHOD(LVGLTestFixture, "register_xml_callbacks handles single entry",
     REQUIRE(retrieved == test_callback_a);
 }
 
+// Regression: bundle SSHGTVZQ (Qidi Q2 / v0.99.46 / pi). WizardWifiStep
+// registered `on_network_item_clicked` globally during add-printer; when
+// NetworkSettingsOverlay later tried to register the same name for clicks on
+// its own wifi_network_item instances, lv_xml_register_event_cb's
+// first-write-wins semantics silently dropped the second registration. Items
+// created by NetworkSettingsOverlay::populate_network_list still bound to the
+// wizard's static handler, which cast NetworkSettingsItemData{ssid, is_secured}
+// as the larger WifiWizardNetworkItemData and SEGV'd dereferencing
+// item_data->parent.
+//
+// This test reproduces the dispatch path: register Owner A under a shared
+// name, register Owner B under the same name, then go through the same
+// codepath the XML parser uses to bind a callback to a widget at instance
+// creation (lv_xml_get_event_cb -> lv_obj_add_event_cb) and fire a synthetic
+// click. Owner B's handler must run; Owner A's must not. Under the original
+// first-write-wins behavior this test would dispatch to Owner A and fail.
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "shared callback name: later registration wins at widget bind time",
+                 "[callback_helpers][regression][bundle_SSHGTVZQ]") {
+    g_callback_a_count = 0;
+    g_callback_b_count = 0;
+
+    // Owner A (e.g. WizardWifiStep) registers first.
+    lv_xml_register_event_cb(nullptr, "shared_click_cb", test_callback_a);
+    REQUIRE(lv_xml_get_event_cb(nullptr, "shared_click_cb") == test_callback_a);
+
+    // Owner B (e.g. NetworkSettingsOverlay) registers the same name later.
+    // Under first-write-wins this would be silently dropped — the bug.
+    lv_xml_register_event_cb(nullptr, "shared_click_cb", test_callback_b);
+
+    // Owner B then creates a widget. lv_obj_xml_event_cb_apply in the XML
+    // parser does exactly this lookup-and-bind pair at instance creation, so
+    // we mimic it directly.
+    lv_obj_t* item = lv_obj_create(test_screen());
+    lv_event_cb_t bound = lv_xml_get_event_cb(nullptr, "shared_click_cb");
+    REQUIRE(bound == test_callback_b);
+    lv_obj_add_event_cb(item, bound, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_send_event(item, LV_EVENT_CLICKED, nullptr);
+
+    REQUIRE(g_callback_b_count == 1);
+    REQUIRE(g_callback_a_count == 0);
+}
+
 // ============================================================================
 // find_required_widget Tests
 // ============================================================================
