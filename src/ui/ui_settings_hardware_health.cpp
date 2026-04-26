@@ -14,6 +14,7 @@
 #include "ui_severity_card.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "config.h"
 #include "hardware_validator.h"
@@ -173,7 +174,7 @@ void HardwareHealthOverlay::populate_hardware_issues() {
         }
 
         // Clear existing children
-        lv_obj_clean(list);
+        helix::ui::safe_clean_children(list);
 
         // Add issue rows
         for (const auto& issue : issues) {
@@ -319,10 +320,10 @@ void HardwareHealthOverlay::handle_hardware_action(const char* hardware_name, bo
         if (printer_state_) {
             printer_state_->remove_hardware_issue(hw_name);
         }
-        // SAFETY: Defer rebuild outside process_pending() — the Ignore button that fired
-        // this event is a child of the list being cleaned by populate_hardware_issues().
-        // lv_async_call runs at the start of the next lv_timer_handler cycle when
-        // event_head is guaranteed NULL, preventing LVGL event list corruption (issue #190).
+        // The Ignore button that fired this event is a child of the list cleaned by
+        // populate_hardware_issues(). Defer the rebuild off the click stack; the actual
+        // batch-escape comes from safe_clean_children() inside populate_hardware_issues
+        // which routes per-child deletes through lv_obj_delete_async [L081].
         lifetime_.defer("HardwareHealthOverlay::rebuild", [this]() {
             if (is_created() && is_visible())
                 populate_hardware_issues();
@@ -369,9 +370,8 @@ void HardwareHealthOverlay::handle_hardware_save_confirm() {
     if (printer_state_) {
         printer_state_->remove_hardware_issue(pending_hardware_save_);
     }
-    // SAFETY: Defer rebuild outside process_pending() for consistency with the Ignore path.
-    // lv_async_call runs at the start of the next lv_timer_handler cycle when
-    // event_head is guaranteed NULL, preventing LVGL event list corruption (issue #190).
+    // Defer rebuild for consistency with the Ignore path. The actual batch-escape
+    // comes from safe_clean_children() inside populate_hardware_issues [L081].
     {
         lifetime_.defer("HardwareHealthOverlay::rebuild", [this]() {
             if (is_created() && is_visible())

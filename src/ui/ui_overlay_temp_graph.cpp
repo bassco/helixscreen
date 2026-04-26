@@ -175,7 +175,7 @@ void TempGraphOverlay::on_deactivate() {
 
     // Clear chip row
     if (chip_row_) {
-        lv_obj_clean(chip_row_);
+        helix::ui::safe_clean_children(chip_row_);
     }
 
     spdlog::debug("[TempGraphOverlay] Deactivated");
@@ -358,7 +358,7 @@ void TempGraphOverlay::create_chips() {
     if (!chip_row_)
         return;
 
-    lv_obj_clean(chip_row_);
+    helix::ui::safe_clean_children(chip_row_);
 
     for (size_t i = 0; i < series_.size(); ++i) {
         auto& s = series_[i];

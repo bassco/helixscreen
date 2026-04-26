@@ -610,7 +610,7 @@ void ConsolePanel::clear_entries() {
         lv_obj_set_parent(empty_state_, lv_obj_get_parent(console_container_));
         lv_obj_add_flag(empty_state_, LV_OBJ_FLAG_HIDDEN);
     }
-    lv_obj_clean(console_container_);
+    helix::ui::safe_clean_children(console_container_);
     if (empty_state_) {
         lv_obj_set_parent(empty_state_, console_container_);
         lv_obj_remove_flag(empty_state_, LV_OBJ_FLAG_HIDDEN);

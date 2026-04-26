@@ -9,6 +9,7 @@
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "static_panel_registry.h"
@@ -591,7 +592,7 @@ void TimelapseVideosOverlay::clear_video_grid() {
     if (video_grid_container_) {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_clean(video_grid_container_);
+        helix::ui::safe_clean_children(video_grid_container_);
     }
     videos_.clear();
 }

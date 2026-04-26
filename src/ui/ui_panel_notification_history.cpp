@@ -10,6 +10,7 @@
 #include "ui_panel_common.h"
 #include "ui_severity_card.h"
 #include "ui_subject_registry.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "printer_state.h"
@@ -113,7 +114,7 @@ void NotificationHistoryPanel::refresh() {
 
     // Clear existing items from content area
     // Action strings are freed automatically via LV_EVENT_DELETE callbacks
-    lv_obj_clean(overlay_content);
+    helix::ui::safe_clean_children(overlay_content);
 
     // Update has_entries subject - XML bindings handle visibility reactively
     bool has_entries = !entries.empty();

@@ -11,6 +11,7 @@
 #include "ui_event_safety.h"
 #include "ui_nav_manager.h"
 #include "ui_toast_manager.h"
+#include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "static_panel_registry.h"
@@ -192,7 +193,7 @@ void TelemetryDataOverlay::populate_events() {
     }
 
     // Clear existing children
-    lv_obj_clean(event_list);
+    helix::ui::safe_clean_children(event_list);
 
     auto& telemetry = TelemetryManager::instance();
     auto snapshot = telemetry.get_queue_snapshot();

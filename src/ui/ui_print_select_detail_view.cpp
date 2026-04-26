@@ -617,7 +617,7 @@ void PrintSelectDetailView::update_color_swatches(const std::vector<std::string>
     }
 
     // Clear existing swatches
-    lv_obj_clean(color_swatches_row_);
+    helix::ui::safe_clean_children(color_swatches_row_);
 
     // Create swatches for each color
     for (size_t i = 0; i < colors.size(); ++i) {

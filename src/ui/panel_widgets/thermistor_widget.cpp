@@ -340,7 +340,7 @@ void ThermistorWidget::bind_carousel_sensors() {
         auto* state_ptr = ui_carousel_get_state(carousel);
         if (state_ptr && state_ptr->scroll_container) {
             helix::ui::UpdateQueue::instance().drain();
-            lv_obj_clean(state_ptr->scroll_container);
+            helix::ui::safe_clean_children(state_ptr->scroll_container);
             state_ptr->real_tiles.clear();
             ui_carousel_rebuild_indicators(carousel);
         }

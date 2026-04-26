@@ -438,7 +438,7 @@ void LedSettingsOverlay::rebuild_macro_edit_controls(lv_obj_t* container, int in
     if (!container)
         return;
 
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& led_ctrl = helix::led::LedController::instance();
     const auto& macros = led_ctrl.configured_macros();
@@ -1142,7 +1142,7 @@ void LedSettingsOverlay::populate_auto_state_rows() {
         return;
 
     // Clear existing rows
-    lv_obj_clean(container);
+    helix::ui::safe_clean_children(container);
 
     auto& auto_state = helix::led::LedAutoState::instance();
 

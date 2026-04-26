@@ -13,6 +13,7 @@
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -146,7 +147,7 @@ void PrinterListOverlay::populate_printer_list() {
     {
         auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
         helix::ui::UpdateQueue::instance().drain();
-        lv_obj_clean(container);
+        helix::ui::safe_clean_children(container);
     }
 
     for (const auto& id : printer_ids) {

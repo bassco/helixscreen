@@ -3,6 +3,7 @@
 #include "ui_filament_mapping_modal.h"
 
 #include "ui_fonts.h"
+#include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
 #include "settings_manager.h"
@@ -90,7 +91,7 @@ void FilamentMappingModal::rebuild_rows() {
     // Hide picker before destroying trigger widgets it may reference
     slot_picker_.hide();
 
-    lv_obj_clean(tool_list_);
+    helix::ui::safe_clean_children(tool_list_);
     toggle_switch_ = nullptr;
 
     trigger_widgets_.clear();

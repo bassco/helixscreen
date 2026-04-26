@@ -996,7 +996,7 @@ void LedControlOverlay::handle_strip_selected(const std::string& strip_id) {
     if (selected_backend_type_ == LedBackendType::WLED) {
         // WLED strip selected: rebuild WLED section, update visibility
         if (wled_presets_container_) {
-            lv_obj_clean(wled_presets_container_);
+            helix::ui::safe_clean_children(wled_presets_container_);
             populate_wled();
         }
 
@@ -1016,7 +1016,7 @@ void LedControlOverlay::handle_strip_selected(const std::string& strip_id) {
     } else if (selected_backend_type_ == LedBackendType::MACRO) {
         // Macro strip selected: rebuild macro controls for this specific macro
         if (macro_buttons_container_) {
-            lv_obj_clean(macro_buttons_container_);
+            helix::ui::safe_clean_children(macro_buttons_container_);
             std::string macro_key = strip_id.substr(6);
             for (const auto& m : controller.macro().macros()) {
                 if (m.display_name == macro_key) {
@@ -1035,7 +1035,7 @@ void LedControlOverlay::handle_strip_selected(const std::string& strip_id) {
 
         // Rebuild effects for the newly selected strip
         if (effects_container_) {
-            lv_obj_clean(effects_container_);
+            helix::ui::safe_clean_children(effects_container_);
             populate_effects();
         }
     }

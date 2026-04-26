@@ -13,6 +13,7 @@
 #include "ui_keyboard_manager.h"
 #include "ui_nav_manager.h"
 #include "ui_text_input.h"
+#include "ui_utils.h"
 
 #include "ams_backend.h"
 #include "ams_state.h"
@@ -159,7 +160,7 @@ void AmsDeviceSectionDetailOverlay::refresh() {
     spdlog::debug("[{}] Refreshing section '{}' from backend", get_name(), section_id_);
 
     // Clear existing controls
-    lv_obj_clean(actions_container_);
+    helix::ui::safe_clean_children(actions_container_);
     action_ids_.clear();
 
     AmsBackend* backend = AmsState::instance().get_backend();

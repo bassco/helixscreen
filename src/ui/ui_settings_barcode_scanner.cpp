@@ -13,6 +13,7 @@
 #include "ui_nav_manager.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 #include "usb_scanner_monitor.h"
 
 #include <spdlog/fmt/fmt.h>
@@ -344,7 +345,7 @@ void BarcodeScannerSettingsOverlay::add_auto_detect_row(lv_obj_t* container) {
 }
 
 void BarcodeScannerSettingsOverlay::populate_device_list() {
-    if (usb_list_) lv_obj_clean(usb_list_);
+    if (usb_list_) helix::ui::safe_clean_children(usb_list_);
     if (!usb_list_) return;
 
     // Auto-detect always first

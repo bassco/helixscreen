@@ -417,7 +417,7 @@ void ams_detail_update_labels(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int
     if (!w.labels_layer || slot_count <= 4)
         return;
 
-    lv_obj_clean(w.labels_layer);
+    helix::ui::safe_clean_children(w.labels_layer);
 
     int32_t slot_spacing = layout.slot_width - layout.overlap;
 
@@ -440,7 +440,7 @@ void ams_detail_update_badges(AmsDetailWidgets& w, lv_obj_t* slot_widgets[], int
 
     // Clean stale badges from previous unit view (badges are reparented here
     // from slot widgets, so they persist across unit switches if not cleaned)
-    lv_obj_clean(w.badge_layer);
+    helix::ui::safe_clean_children(w.badge_layer);
 
     int32_t slot_spacing = layout.slot_width - layout.overlap;
 

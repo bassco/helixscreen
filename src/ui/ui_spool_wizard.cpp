@@ -12,6 +12,7 @@
 #include "ui_subject_registry.h"
 #include "ui_toast_manager.h"
 #include "ui_update_queue.h"
+#include "ui_utils.h"
 
 #include "app_globals.h"
 #include "filament_database.h"
@@ -886,7 +887,7 @@ void SpoolWizardOverlay::populate_vendor_list() {
     }
 
     // Clear existing rows
-    lv_obj_clean(vendor_list);
+    helix::ui::safe_clean_children(vendor_list);
 
     for (size_t i = 0; i < filtered_vendors_.size(); i++) {
         const auto& vendor = filtered_vendors_[i];
@@ -1404,7 +1405,7 @@ void SpoolWizardOverlay::populate_filament_list() {
     }
 
     // Clear existing rows
-    lv_obj_clean(filament_list);
+    helix::ui::safe_clean_children(filament_list);
 
     for (size_t i = 0; i < all_filaments_.size(); i++) {
         const auto& fil = all_filaments_[i];

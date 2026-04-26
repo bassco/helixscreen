@@ -10,6 +10,7 @@
 #include "helix-xml/src/xml/parsers/lv_xml_obj_parser.h"
 #include "lvgl/lvgl.h"
 #include "theme_manager.h"
+#include "ui_utils.h"
 
 #include <spdlog/spdlog.h>
 
@@ -444,7 +445,7 @@ void ui_carousel_rebuild_indicators(lv_obj_t* carousel) {
     }
 
     // Clear existing dots
-    lv_obj_clean(state->indicator_row);
+    helix::ui::safe_clean_children(state->indicator_row);
 
     // Use real_page_count for indicator dots when set
     int count = (state->real_page_count >= 0) ? state->real_page_count
