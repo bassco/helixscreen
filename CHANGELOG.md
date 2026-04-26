@@ -5,6 +5,21 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.47] - 2026-04-26
+
+A defensive-hardening patch release continuing the L081 (`lv_event_mark_deleted` SEGV/SIGBUS) eradication campaign begun in v0.99.45/v0.99.46. Sweeps the remaining unsafe `lv_obj_clean()` callsites that escape UpdateQueue batches, plugs lifetime gaps in two control panel callbacks, and lands a stress harness that will catch regressions of the multiple-async-delete-per-tick race plugged in v0.99.46.
+
+### Fixed
+- **L081 family (`lv_event_mark_deleted` SEGV/SIGBUS) — final sweep** ([#873]–[#878]) — 18 remaining `lv_obj_clean()` callsites that ran inside event-dispatch frames or queued callbacks were converted to `safe_clean_children()` so child deletion happens via `lv_obj_delete_async()` rather than synchronously inside an LVGL event-list iteration. Pairs with v0.99.46's wizard root-cause fix to close the #840-adjacent crash family.
+- **Container child cleanup escapes event-dispatch batch** — top-level containers cleaned during input-event handling now defer child deletion to the next async tick, eliminating the multiple-sync-delete-per-tick race that corrupted LVGL's global event linked list.
+- **Z-offset save and flow up/down callbacks lacked lifetime guards** — the controls panel could fire on a freed `MotionPanel` if a save/flow tap landed during teardown. All three callbacks now use `tok.defer()` with lifetime tokens, matching the rest of the panel.
+- **Updater "no space" check used a hardcoded 50 MB floor** — but the current pi32 zip is 69 MB, so users could pass the precheck and fail mid-stream. The check now uses the asset size from the GitHub/R2 manifest with a 1.2× headroom and a 200 MB fallback for unknown-size assets, plus an actionable error message naming the asset and the shortfall (driven by bundle 7ZGHW5KX where systemd namespace weirdness caused statvfs to misreport free space).
+- **Debug bundles missed helixscreen log on ZMOD AD5X** — log lives at `/opt/config/mod_data/log/helixscreen.log` (real path `/usr/data/config/mod_data/log/`); both are now in the log-tail cascade.
+- **About panel: licenses container border radius** — was hardcoded; now uses the `#border_radius` design token so it matches the rest of the panel.
+
+### Changed
+- **action_prompt_modal show/hide stress harness** — `tests/unit/test_action_prompt_modal_stress.cpp` adds seven Catch2 variants (rapid show/hide, #877 burst pattern, alternating shapes, stacked-under-base, click-driven hide, single-tick drain, queue_update racer) tagged `[stress][action_prompt][.ui_integration]`. Will trip if the multiple-async-delete-per-tick race is reintroduced. Override iteration count via `ACTION_PROMPT_STRESS_ITERATIONS`.
+
 ## [0.99.46] - 2026-04-26
 
 A targeted fix release. The headline is the ASAN-confirmed root-cause fix for the chronic wizard step-transition crash family that has driven roughly half a dozen patch attempts since v0.99.34. With AddressSanitizer wired into the Pi cross-build, two distinct heap-use-after-frees were caught within minutes of human interaction with the wizard — replacing weeks of victim-site whack-a-mole.
@@ -3318,6 +3333,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.47]: https://github.com/prestonbrown/helixscreen/compare/v0.99.46...v0.99.47
 [0.99.46]: https://github.com/prestonbrown/helixscreen/compare/v0.99.45...v0.99.46
 [0.99.45]: https://github.com/prestonbrown/helixscreen/compare/v0.99.44...v0.99.45
 [0.99.44]: https://github.com/prestonbrown/helixscreen/compare/v0.99.43...v0.99.44
