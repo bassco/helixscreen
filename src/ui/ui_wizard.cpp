@@ -157,15 +157,34 @@ static void ui_wizard_purge_subtree_anims(lv_obj_t* root);
 // Mirror `lv_obj_destructor`'s pattern: disable style refresh around the
 // `remove_style_all` call so we don't kick off invalidations on widgets
 // that are about to be destroyed by `lv_obj_clean` immediately after.
+//
+// IMPORTANT: `remove_style_all` is only safe on descendants — they're
+// about to be deleted by `lv_obj_clean`. The root container itself
+// SURVIVES the clean and must keep its flex/layout styles, otherwise
+// the next step's widgets are added to a styleless container and the
+// layout collapses (regression caught on AD5M after the first attempt
+// at this fix). The recursion descends through children only; for the
+// initial call we visit the root just for `lv_anim_delete`.
+static void ui_wizard_purge_subtree_anims_recursive(lv_obj_t* obj) {
+    if (!obj) return;
+    lv_obj_enable_style_refresh(false);
+    lv_obj_remove_style_all(obj);
+    lv_obj_enable_style_refresh(true);
+    lv_anim_delete(obj, nullptr);
+    uint32_t n = lv_obj_get_child_count(obj);
+    for (uint32_t i = 0; i < n; ++i) {
+        ui_wizard_purge_subtree_anims_recursive(lv_obj_get_child(obj, static_cast<int32_t>(i)));
+    }
+}
+
 static void ui_wizard_purge_subtree_anims(lv_obj_t* root) {
     if (!root) return;
-    lv_obj_enable_style_refresh(false);
-    lv_obj_remove_style_all(root);
-    lv_obj_enable_style_refresh(true);
+    // Cancel anims targeting the root itself (var == root) but DO NOT
+    // strip its styles — root survives the upcoming lv_obj_clean.
     lv_anim_delete(root, nullptr);
     uint32_t n = lv_obj_get_child_count(root);
     for (uint32_t i = 0; i < n; ++i) {
-        ui_wizard_purge_subtree_anims(lv_obj_get_child(root, static_cast<int32_t>(i)));
+        ui_wizard_purge_subtree_anims_recursive(lv_obj_get_child(root, static_cast<int32_t>(i)));
     }
 }
 
