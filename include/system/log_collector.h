@@ -9,7 +9,8 @@
 /// Unified log-tail collection for crash reporter and debug bundle.
 ///
 /// Three sources, tried in order:
-///   1. File-based logs at XDG / /var/log / /tmp paths (desktop + systems with file sink)
+///   1. File-based logs at /var/log, XDG, /opt/config/mod_data (ZMOD AD5X), /tmp
+///      (desktop + systems with file sink, plus stdout-redirected init scripts)
 ///   2. Syslog at /var/log/messages or /var/log/syslog (embedded: AD5M, AD5X, K1)
 ///   3. systemd journal via `journalctl SYSLOG_IDENTIFIER=helix-screen` (pi, pi32)
 ///

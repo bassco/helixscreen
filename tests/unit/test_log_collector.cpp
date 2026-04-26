@@ -217,6 +217,27 @@ TEST_CASE("helix::logs::default_file_paths always includes /var/log and /tmp", "
     REQUIRE(paths.back() == "/tmp/helixscreen.log");
 }
 
+TEST_CASE("helix::logs::default_file_paths includes ZMOD AD5X mod_data locations",
+          "[log_collector]") {
+    // ZMOD's S80helixscreen init script writes stdout/stderr to
+    // /opt/config/mod_data/log/helixscreen.log; /opt/config is a symlink to
+    // /usr/data/config on AD5X. Both spellings need to be in the cascade or
+    // every AD5X debug bundle ships without helix-screen logs.
+    auto paths = helix::logs::default_file_paths();
+    bool has_opt = false;
+    bool has_usr_data = false;
+    for (const auto& p : paths) {
+        if (p == "/opt/config/mod_data/log/helixscreen.log") {
+            has_opt = true;
+        }
+        if (p == "/usr/data/config/mod_data/log/helixscreen.log") {
+            has_usr_data = true;
+        }
+    }
+    REQUIRE(has_opt);
+    REQUIRE(has_usr_data);
+}
+
 TEST_CASE("helix::logs::default_file_paths honors XDG_DATA_HOME when set", "[log_collector]") {
     setenv("XDG_DATA_HOME", "/custom/xdg", 1);
     auto paths = helix::logs::default_file_paths();

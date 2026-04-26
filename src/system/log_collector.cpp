@@ -105,7 +105,8 @@ std::string run_capture_tail(const std::string& cmd, int max_lines, std::string_
 
 std::vector<std::string> default_file_paths() {
     // Resolution order mirrors logging_init.cpp::resolve_log_file_path():
-    // /var/log → XDG_DATA_HOME → HOME/.local/share → /tmp. First readable wins.
+    // /var/log → XDG_DATA_HOME → HOME/.local/share → ZMOD-style mod_data → /tmp.
+    // First readable wins.
     std::vector<std::string> paths = {
         "/var/log/helix-screen.log",
     };
@@ -116,6 +117,13 @@ std::vector<std::string> default_file_paths() {
     if (const char* home = std::getenv("HOME"); home && home[0] != '\0') {
         paths.push_back(std::string(home) + "/.local/share/helix-screen/helix.log");
     }
+    // ZMOD AD5X / AD5M: ghzserg's S80helixscreen init script redirects
+    // stdout/stderr to /opt/config/mod_data/log/helixscreen.log (and /opt/config
+    // is a symlink/bind-mount to /usr/data/config). Spdlog's stdout sink, which
+    // we always add when enable_console=true, lands here. Without these paths
+    // every AD5X debug bundle ships with no helix-screen log at all.
+    paths.emplace_back("/opt/config/mod_data/log/helixscreen.log");
+    paths.emplace_back("/usr/data/config/mod_data/log/helixscreen.log");
     paths.emplace_back("/tmp/helixscreen.log");
     return paths;
 }
