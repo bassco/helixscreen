@@ -120,6 +120,9 @@ RestartSec=3
 LimitNOFILE=65536
 LimitNPROC=4096
 
+# Note: niceness (when co-hosted with Klipper/Moonraker) is applied in
+# helix-launcher.sh so the systemd and SysV/BusyBox paths share one rule.
+
 # Security hardening
 # Full INSTALL_DIR + its parent are writable so in-app self-updates can do
 # an atomic directory swap (mv old; mv new) instead of a racy in-place

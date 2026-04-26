@@ -38,6 +38,21 @@
 
 set -e
 
+# Co-hosted-with-Klipper detection — used below (just before exec) to decide
+# whether to nice the UI down. Defined here, called late, so platform hooks
+# and the init script's platform_wait_for_services have had time to bring
+# Klipper / Moonraker up before we look for them.
+helix_klipper_co_hosted() {
+    if command -v pgrep >/dev/null 2>&1; then
+        pgrep -f '[k]lippy\.py'    >/dev/null 2>&1 && return 0
+        pgrep -f '[m]oonraker\.py' >/dev/null 2>&1 && return 0
+    fi
+    # Fallback for systems without pgrep -f: check default unix sockets.
+    [ -S /tmp/klippy_uds ]      && return 0
+    [ -S /tmp/moonraker.sock ]  && return 0
+    return 1
+}
+
 # Stop firmware display-management services that conflict with HelixScreen.
 # Creality SonicPad/Nebula Pad ships display-sleep.sh which polls X11 DPMS via
 # xset. When X isn't running (fbdev mode), xset fails and the script interprets
@@ -343,6 +358,25 @@ fi
 if [ "${HELIX_SKIP_SPLASH:-0}" = "1" ]; then
     EXTRA_FLAGS="${EXTRA_FLAGS} --skip-splash"
     log "Splash screen disabled (HELIX_SKIP_SPLASH=1)"
+fi
+
+# Run UI at reduced priority (nice +10) when co-hosted with Klipper/Moonraker
+# so the printer control loop keeps CPU headroom for stepper timing and MCU
+# comms. Skipped on standalone displays (remote SonicPad, dev workstation,
+# kiosk pointed at a network printer). Done HERE — after platform hooks and
+# the SysV init's platform_wait_for_services — so Klipper has had time to
+# come up before we probe for it. Children inherit the nice value, so the
+# watchdog, helix-screen, and splash all run at +10. Raising nice is
+# unprivileged, so this works as the non-root service user.
+# Override with HELIX_NICE=<n> in helixscreen.env (HELIX_NICE=0 disables).
+if helix_klipper_co_hosted; then
+    _helix_nice="${HELIX_NICE:-10}"
+    if [ "${_helix_nice}" != "0" ]; then
+        if renice "${_helix_nice}" $$ >/dev/null 2>&1; then
+            log "Co-hosted with Klipper/Moonraker — running at nice +${_helix_nice}"
+        fi
+    fi
+    unset _helix_nice
 fi
 
 # Run main application (via watchdog if available for crash recovery)
