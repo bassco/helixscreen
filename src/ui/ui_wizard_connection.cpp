@@ -444,6 +444,13 @@ bool WizardConnectionStep::should_auto_probe() const {
 void WizardConnectionStep::auto_probe_timer_cb(lv_timer_t* timer) {
     auto* self = static_cast<WizardConnectionStep*>(lv_timer_get_user_data(timer));
     if (self) {
+        // The timer is one-shot — LVGL deletes it immediately after this callback
+        // returns. Null our member pointer FIRST so any path through
+        // attempt_auto_probe() (including early-returns) can't leave a dangling
+        // pointer that cleanup() later tries to cancel. ASAN-confirmed UAF
+        // (heap-use-after-free in lv_timer_set_cb via lv_timer_cancel_safe) when
+        // attempt_auto_probe early-returned on empty probe_ip.
+        self->auto_probe_timer_ = nullptr;
         self->attempt_auto_probe();
     }
 }
