@@ -340,8 +340,12 @@ bool WiFiManager::supports_5ghz() {
 // ============================================================================
 
 bool WiFiManager::has_hardware() {
-    // Backend creation handles hardware availability
-    return (backend_ != nullptr);
+    // Backend pointer alone isn't authoritative — on AD5M and similar
+    // devices the wpa_supplicant binary is present (so backend_ is non-null)
+    // but no wlan* interface exists in /sys/class/net. Defer to the
+    // backend's synchronous probe so callers get the truth before the
+    // async init has had a chance to fire INIT_FAILED.
+    return backend_ && backend_->has_hardware();
 }
 
 bool WiFiManager::is_enabled() {

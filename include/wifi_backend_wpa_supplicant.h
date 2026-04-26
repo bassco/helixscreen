@@ -99,6 +99,14 @@ class WifiBackendWpaSupplicant : public WifiBackend, private hv::EventLoopThread
     bool is_running() const override;
 
     /**
+     * @brief Synchronously probe /sys/class/net for a WiFi interface
+     *
+     * Authoritative answer for callers (wizard, network settings) that need
+     * to know before async init completes. Wraps check_wifi_hardware().
+     */
+    bool has_hardware() override;
+
+    /**
      * @brief Register event callback
      *
      * Translates standard event names to wpa_supplicant-specific events:

@@ -265,6 +265,23 @@ class WifiBackend {
      */
     virtual bool is_running() const = 0;
 
+    /**
+     * @brief Synchronously probe for WiFi hardware
+     *
+     * Returns true if the platform has at least one WiFi interface. Backends
+     * that can determine this cheaply (e.g. wpa_supplicant via /sys/class/net)
+     * should override to give callers an authoritative answer before
+     * start_async() completes — `has_hardware()` is queried on the wizard's
+     * UI thread synchronously, and a default-true fallback would lie on
+     * platforms like AD5M (wpa_supplicant binary present but no wlan*).
+     *
+     * Default returns true — backends that cannot probe assume hardware
+     * exists. wpa_supplicant overrides via check_wifi_hardware() (#880-adj).
+     */
+    virtual bool has_hardware() {
+        return true;
+    }
+
     // ========================================================================
     // Event System
     // ========================================================================

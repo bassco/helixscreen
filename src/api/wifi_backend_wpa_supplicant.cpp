@@ -758,6 +758,10 @@ bool WifiBackendWpaSupplicant::is_running() const {
     return init_complete_.load();
 }
 
+bool WifiBackendWpaSupplicant::has_hardware() {
+    return check_wifi_hardware().success();
+}
+
 WiFiError WifiBackendWpaSupplicant::trigger_scan() {
     if (!is_running()) {
         return WiFiError(WiFiResult::NOT_INITIALIZED, "Backend not started",
