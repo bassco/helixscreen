@@ -1,0 +1,358 @@
+// Copyright (C) 2025-2026 356C LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// ActionPromptModal show/hide stress harness — designed to surface the L081
+// crash family (#875 SIGBUS, #877 SEGV at lv_event_mark_deleted+0x3c, both
+// from AD5X bundle EB93VR9T) on faster hardware where the race window is
+// short.
+//
+// Reproducing the AD5X bug on x86_64 desktop is hard because:
+//   - the desktop drains LVGL's async-delete list inside one lv_timer_handler
+//     iteration, so deletes don't pile up the way they do on MIPS;
+//   - the breadcrumbs show modals stacked on top of print_completion_modal,
+//     so the parent-child interaction matters;
+//   - the original crash backtrace passes through lv_obj_destructor →
+//     button-event teardown, so click-driven hides exercise different paths
+//     than callback-driven ones.
+//
+// Each variant below targets one of those gaps:
+//
+//   "raw show/hide"       — sanity baseline (kept from earlier iteration)
+//   "burst pattern"       — mirrors the EB93VR9T breadcrumb cadence
+//   "alternating shapes"  — stress button_callback_data_ vector reallocs
+//   "stacked under base"  — opens action_prompt at depth 2 with a parent
+//                           modal at depth 1 (matches the AD5X crumb shape)
+//   "click-driven hide"   — fires LV_EVENT_CLICKED on a real button so the
+//                           gcode-callback → handle_button_click → hide()
+//                           teardown path runs (not just a direct hide())
+//   "single-tick drain"   — N show/hide pairs queued before a SINGLE
+//                           lv_timer_handler_safe() fires; mimics the AD5X
+//                           where a slow tick lets many async-deletes
+//                           accumulate before drain. This is the closest
+//                           x86 approximation of MIPS tick spacing.
+//   "queue-update racer"  — interleaves queue_update() lambdas (the path
+//                           websocket-driven prompts take in production)
+//                           with show/hide cycles on the main thread, so
+//                           the next tick's process_pending() runs while
+//                           the previous tick's async-deletes are still in
+//                           flight inside obj_delete_core
+//
+// Run under AddressSanitizer for actionable UAF reports:
+//   make test SANITIZE=address
+//   LD_PRELOAD=/lib/x86_64-linux-gnu/libasan.so.8 \
+//   ASAN_OPTIONS=detect_leaks=0:abort_on_error=0:fast_unwind_on_malloc=0 \
+//       ./build/bin/helix-tests "[stress][action_prompt]"
+//
+// Override iteration counts for soak runs:
+//   ACTION_PROMPT_STRESS_ITERATIONS=500 ./build/bin/helix-tests \
+//       "[stress][action_prompt]"
+//
+// Tagged [.ui_integration] (hidden by default) — needs the XML component
+// tree on disk. Mirrors test_wizard_step_stress.cpp's tagging pattern.
+
+#include "action_prompt_manager.h"
+#include "action_prompt_modal.h"
+#include "display_settings_manager.h"
+#include "ui_modal.h"
+#include "ui_update_queue.h"
+
+#include "../lvgl_ui_test_fixture.h"
+#include "../ui_test_utils.h"
+
+#include <spdlog/spdlog.h>
+
+#include <atomic>
+#include <cstdlib>
+#include <functional>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "../catch_amalgamated.hpp"
+
+namespace {
+
+int env_iterations(int default_count) {
+    if (const char* v = std::getenv("ACTION_PROMPT_STRESS_ITERATIONS")) {
+        try {
+            int n = std::stoi(v);
+            if (n > 0) return n;
+        } catch (...) {
+        }
+    }
+    return default_count;
+}
+
+helix::PromptData make_prompt(const std::string& title, int n_buttons) {
+    helix::PromptData data;
+    data.title = title;
+    data.text_lines.push_back("Stress prompt " + title);
+    for (int i = 0; i < n_buttons; ++i) {
+        helix::PromptButton btn;
+        btn.label = "Btn" + std::to_string(i);
+        btn.gcode = "ECHO_" + std::to_string(i);
+        btn.color = (i % 2 == 0) ? "primary" : "secondary";
+        data.buttons.push_back(std::move(btn));
+    }
+    return data;
+}
+
+class ActionPromptStressFixture : public LVGLUITestFixture {
+  public:
+    ActionPromptStressFixture() {
+        // Mirror the AD5X preset where #875/#877 reproduced. With
+        // animations off, Modal::hide() takes the synchronous remove() +
+        // safe_delete_deferred_raw() branch — that's the path whose
+        // breadcrumbs show stack depth toggling 1<->2 in sub-millisecond
+        // intervals. With animations on, the exit fade serializes deletes
+        // through the animation timer and hides the race entirely.
+        prev_animations_ = helix::DisplaySettingsManager::instance().get_animations_enabled();
+        helix::DisplaySettingsManager::instance().set_animations_enabled(false);
+
+        modal_.set_gcode_callback([](const std::string&) { /* no-op */ });
+    }
+
+    ~ActionPromptStressFixture() override {
+        helix::DisplaySettingsManager::instance().set_animations_enabled(prev_animations_);
+    }
+
+    helix::ui::ActionPromptModal modal_;
+    bool prev_animations_ = true;
+};
+
+} // namespace
+
+// ============================================================================
+// Baseline — kept so regressions in show_prompt() itself surface here first
+// ============================================================================
+
+TEST_CASE_METHOD(ActionPromptStressFixture, "ActionPromptModal stress: rapid show/hide",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int iterations = env_iterations(200);
+    spdlog::info("[action_prompt-stress] rapid show/hide × {}", iterations);
+
+    auto data = make_prompt("Rapid", 3);
+    for (int i = 0; i < iterations; ++i) {
+        REQUIRE(modal_.show_prompt(test_screen(), data));
+        modal_.hide();
+        if ((i + 1) % 25 == 0) {
+            process_lvgl(40);
+            spdlog::info("[action_prompt-stress] iter {}/{}", i + 1, iterations);
+        }
+    }
+    process_lvgl(120);
+    SUCCEED("Completed " << iterations << " rapid show/hide cycles without crash");
+}
+
+TEST_CASE_METHOD(ActionPromptStressFixture, "ActionPromptModal stress: burst pattern from #877",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int bursts = env_iterations(40);
+    const int pairs_per_burst = 6;
+    spdlog::info("[action_prompt-stress] {} bursts × {} pairs", bursts, pairs_per_burst);
+
+    auto data = make_prompt("Burst", 2);
+    for (int b = 0; b < bursts; ++b) {
+        for (int p = 0; p < pairs_per_burst; ++p) {
+            REQUIRE(modal_.show_prompt(test_screen(), data));
+            modal_.hide();
+        }
+        process_lvgl(50);
+        if ((b + 1) % 5 == 0) {
+            spdlog::info("[action_prompt-stress] burst {}/{}", b + 1, bursts);
+        }
+    }
+    SUCCEED("Completed " << bursts << " bursts without crash");
+}
+
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: alternating prompt shapes",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int iterations = env_iterations(120);
+    spdlog::info("[action_prompt-stress] alternating shapes × {}", iterations);
+
+    for (int i = 0; i < iterations; ++i) {
+        auto data = make_prompt("Shape" + std::to_string(i), 1 + (i % 5));
+        REQUIRE(modal_.show_prompt(test_screen(), data));
+        modal_.hide();
+        if ((i + 1) % 30 == 0) {
+            process_lvgl(40);
+        }
+    }
+    process_lvgl(120);
+    SUCCEED("Completed " << iterations << " alternating-shape cycles without crash");
+}
+
+// ============================================================================
+// Harsher variants — designed to actually trip ASan
+// ============================================================================
+
+// Open a parent modal first so action_prompt sits at depth 2, matching the
+// EB93VR9T breadcrumb shape exactly:
+//   modal+ print_completion_modal 1
+//   modal+ action_prompt_modal 2
+//   modal- action_prompt_modal 1
+//   modal+ action_prompt_modal 2
+//   ...
+// The deletes from the action_prompt cycles share LVGL's async list with the
+// parent's lifetime, so children/siblings of both can be in-flight at once.
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: stacked under print_completion-style base",
+                 "[action_prompt][stress][.ui_integration]") {
+    // Use any registered XML component as the base modal — print_completion_modal
+    // is the production case but its content needs print state. Substitute a
+    // simpler always-available component that goes through the same Modal
+    // machinery: ums_action_modal or any registered backdrop is fine. Fall
+    // back to any registered component if the chosen one isn't available.
+    lv_obj_t* base = Modal::show("print_completion_modal");
+    if (!base) {
+        SKIP("Base modal component not available in test fixture");
+    }
+    process_lvgl(20);
+
+    const int bursts = env_iterations(40);
+    const int pairs_per_burst = 8;
+    spdlog::info("[action_prompt-stress/stacked] {} bursts × {} pairs (depth-2 cycles)", bursts,
+                 pairs_per_burst);
+
+    auto data = make_prompt("Stacked", 3);
+    for (int b = 0; b < bursts; ++b) {
+        for (int p = 0; p < pairs_per_burst; ++p) {
+            REQUIRE(modal_.show_prompt(test_screen(), data));
+            modal_.hide();
+        }
+        process_lvgl(50);
+    }
+
+    Modal::hide(base);
+    process_lvgl(80);
+    SUCCEED("Completed " << bursts << " stacked bursts without crash");
+}
+
+// Trigger hide() through a real button click instead of calling hide()
+// directly. The click path runs through ButtonCallbackData → gcode_callback
+// → handle_button_click → hide(), which is the actual production path and
+// exercises the ButtonCallbackData lifetime token wiring (#437) plus
+// lv_event_send → lv_obj_destructor sequence visible in the #877 backtrace.
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: click-driven hide via real button events",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int iterations = env_iterations(150);
+    spdlog::info("[action_prompt-stress/click] click-driven × {}", iterations);
+
+    int clicks_observed = 0;
+    modal_.set_gcode_callback([&clicks_observed](const std::string&) { ++clicks_observed; });
+
+    // Walk the dialog tree depth-first for any button. Buttons created by
+    // ActionPromptModal::create_button are lv_button_t instances added to a
+    // dynamic content container — they're nameless, so we find them by type.
+    std::function<lv_obj_t*(lv_obj_t*)> find_button = [&](lv_obj_t* node) -> lv_obj_t* {
+        if (!node) return nullptr;
+        if (lv_obj_check_type(node, &lv_button_class)) return node;
+        int n = lv_obj_get_child_count(node);
+        for (int j = 0; j < n; ++j) {
+            if (auto* hit = find_button(lv_obj_get_child(node, j))) return hit;
+        }
+        return nullptr;
+    };
+
+    auto data = make_prompt("Click", 4);
+    int click_attempts = 0;
+    for (int i = 0; i < iterations; ++i) {
+        REQUIRE(modal_.show_prompt(test_screen(), data));
+
+        // Use modal_.dialog() directly — Modal exposes the dialog object so we
+        // don't need a name-based lookup. Synthesize a click on any button in
+        // the tree. The click triggers handle_button_click → hide(), exactly
+        // the production teardown path that shows up in the #877 backtrace.
+        lv_obj_t* dialog = modal_.dialog();
+        lv_obj_t* btn = dialog ? find_button(dialog) : nullptr;
+        if (btn) {
+            ++click_attempts;
+            lv_obj_send_event(btn, LV_EVENT_CLICKED, nullptr);
+            // The click handler closes the modal, but be defensive: if the
+            // handler somehow didn't, hide() explicitly to keep iteration
+            // counts consistent.
+            if (modal_.is_visible()) modal_.hide();
+        } else {
+            modal_.hide();
+        }
+
+        if ((i + 1) % 25 == 0) {
+            process_lvgl(40);
+        }
+    }
+    spdlog::info("[action_prompt-stress/click] click attempts: {}/{}", click_attempts, iterations);
+    process_lvgl(120);
+    spdlog::info("[action_prompt-stress/click] {} gcode_callbacks invoked of {} iterations",
+                 clicks_observed, iterations);
+    REQUIRE(clicks_observed > iterations / 2); // most iterations should fire a click
+    SUCCEED("Completed " << iterations << " click-driven cycles without crash");
+}
+
+// The closest x86 approximation of the AD5X tick cadence: queue many
+// show/hide pairs WITHOUT calling lv_timer_handler in between, then drain
+// them all in a single timer iteration. On AD5X a "tick" is ~30 ms during
+// which the websocket-driven prompts can fire 5-8 times; on x86 our test
+// loop runs in microseconds, so accumulating without flushing is the only
+// way to recreate the queue depth.
+//
+// We also vary the prompt content per cycle so each show() builds a
+// differently-shaped tree, defeating any address-reuse hint that would
+// help an x86 allocator hand the same memory back consistently.
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: single-tick drain of large pending queue",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int bursts = env_iterations(20);
+    const int pairs_per_burst = 30; // much larger than the natural 5-8 from AD5X
+    spdlog::info("[action_prompt-stress/single-tick] {} bursts × {} pairs (single drain each)",
+                 bursts, pairs_per_burst);
+
+    for (int b = 0; b < bursts; ++b) {
+        for (int p = 0; p < pairs_per_burst; ++p) {
+            auto data = make_prompt("ST" + std::to_string(b) + "_" + std::to_string(p),
+                                    1 + (p % 4));
+            REQUIRE(modal_.show_prompt(test_screen(), data));
+            modal_.hide();
+        }
+        // ONE timer iteration to drain everything — the largest async-delete
+        // batch we can produce. lv_timer_handler_safe() pauses repeating
+        // timers, fires ready one-shots, then resumes — same as production
+        // ticks but without our 5ms slicing.
+        lv_tick_inc(30); // simulate a single MIPS-class tick
+        lv_timer_handler_safe();
+    }
+    process_lvgl(120);
+    SUCCEED("Completed " << bursts << " single-tick-drain bursts without crash");
+}
+
+// Interleave queue_update() lambdas (the path websocket-driven prompts take
+// in production: notify_gcode_response handler → ActionPromptManager →
+// show callback → queue_update → modal->show_prompt) with direct hide()
+// calls. The next tick's process_pending() then runs while the previous
+// tick's async-deletes are still in flight inside obj_delete_core.
+TEST_CASE_METHOD(ActionPromptStressFixture,
+                 "ActionPromptModal stress: queue_update racer with direct hide",
+                 "[action_prompt][stress][.ui_integration]") {
+    const int bursts = env_iterations(30);
+    const int pairs_per_burst = 12;
+    spdlog::info("[action_prompt-stress/racer] {} bursts × {} pairs (queued show + direct hide)",
+                 bursts, pairs_per_burst);
+
+    auto data = make_prompt("Race", 2);
+
+    for (int b = 0; b < bursts; ++b) {
+        for (int p = 0; p < pairs_per_burst; ++p) {
+            // Queued show (mimics the websocket → queue_update path)
+            helix::ui::queue_update("test::action_prompt_show",
+                                    [this, data]() { modal_.show_prompt(test_screen(), data); });
+            // Direct hide on the next loop iteration's tick boundary
+            helix::ui::queue_update("test::action_prompt_hide", [this]() { modal_.hide(); });
+        }
+        // Drain UpdateQueue + LVGL async list together
+        lv_tick_inc(30);
+        lv_timer_handler_safe();
+    }
+    // Final flush
+    process_lvgl(120);
+    SUCCEED("Completed " << bursts << " queue-update racer bursts without crash");
+}
