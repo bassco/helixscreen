@@ -349,9 +349,9 @@ ifneq ($(CROSS_COMPILE),)
 	fi; \
 	(cd $(LIBHV_DIR) && \
 		CC="$(CC)" CXX="$(CXX)" AR="$(AR)" \
-		CFLAGS="$(TARGET_CFLAGS)$$OPENSSL_INC" \
-		CXXFLAGS="$(TARGET_CFLAGS)$$OPENSSL_INC" \
-		LDFLAGS="$$OPENSSL_LIB_DIR" \
+		CFLAGS="$(TARGET_CFLAGS) $(SANITIZE_FLAGS)$$OPENSSL_INC" \
+		CXXFLAGS="$(TARGET_CFLAGS) $(SANITIZE_FLAGS)$$OPENSSL_INC" \
+		LDFLAGS="$$OPENSSL_LIB_DIR $(SANITIZE_FLAGS)" \
 		./configure --with-http-client $(if $(filter yes,$(ENABLE_SSL)),--with-openssl)); \
 	# libhv's nested make has been flaky under cross toolchains when run with
 	# inherited/parallel jobserver flags; keep only this sub-build serialized.

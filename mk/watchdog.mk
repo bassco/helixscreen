@@ -32,6 +32,16 @@ ifeq ($(STRIP_BINARY),yes)
     WATCHDOG_LDFLAGS += -s
 endif
 
+# AddressSanitizer linker flags must reach watchdog too — its .o files were
+# compiled with -fsanitize=address (via CXXFLAGS) so the ASAN runtime needs
+# to be linked in. Static so the binary is self-contained on the target.
+ifeq ($(SANITIZE),address)
+    WATCHDOG_LDFLAGS += $(SANITIZE_FLAGS)
+    ifneq ($(CROSS_COMPILE),)
+        WATCHDOG_LDFLAGS += -static-libasan
+    endif
+endif
+
 # Add platform-specific libraries for display backend
 ifneq ($(UNAME_S),Darwin)
     # Linux: may need DRM/input libraries

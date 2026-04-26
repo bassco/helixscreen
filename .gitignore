@@ -135,3 +135,6 @@ config/.helix-screen.lock
 .superpowers/
 docs/superpowers/
 .claude/scratchpad/
+
+# Local crash artifacts (preserved across compactions for ASAN investigation)
+.crash-files/

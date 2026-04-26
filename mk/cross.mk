@@ -675,7 +675,12 @@ endif
 
 # Override build directories when BUILD_SUBDIR is set (cross-compilation or
 # native platform targets like x86-both where CROSS_COMPILE is empty).
+# When SANITIZE=address, suffix with -asan so instrumented builds don't
+# clobber the regular build tree (different objects, different libhv.a).
 ifneq ($(BUILD_SUBDIR),)
+    ifeq ($(SANITIZE),address)
+        BUILD_SUBDIR := $(BUILD_SUBDIR)-asan
+    endif
     BUILD_DIR := build/$(BUILD_SUBDIR)
     BIN_DIR := $(BUILD_DIR)/bin
     OBJ_DIR := $(BUILD_DIR)/obj
@@ -776,6 +781,23 @@ endif
 
 ifdef TARGET_LDFLAGS
     LDFLAGS += $(TARGET_LDFLAGS)
+endif
+
+# Apply AddressSanitizer flags AFTER target/submodule flag merge so the main
+# binary AND in-tree subprojects (LVGL, helix-xml, ThorVG) all get
+# instrumented. For cross-compile, statically link libasan so the deployed
+# binary is self-contained and the device doesn't need libasan installed.
+# Strip is disabled because ASAN reports rely on symbol info in the binary.
+ifeq ($(SANITIZE),address)
+    CFLAGS += $(SANITIZE_FLAGS)
+    CXXFLAGS += $(SANITIZE_FLAGS)
+    SUBMODULE_CFLAGS += $(SANITIZE_FLAGS)
+    SUBMODULE_CXXFLAGS += $(SANITIZE_FLAGS)
+    LDFLAGS += $(SANITIZE_FLAGS)
+    ifneq ($(CROSS_COMPILE),)
+        LDFLAGS += -static-libasan
+    endif
+    STRIP_BINARY := no
 endif
 
 # Display backend defines (used by display_backend.cpp and lv_conf.h for conditional compilation)
@@ -956,6 +978,21 @@ pi-docker: ensure-docker
 	$(call ensure-ccache-dir,pi)
 	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi) helixscreen/toolchain-pi \
 		make PLATFORM_TARGET=pi SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
+	@$(MAKE) --no-print-directory maybe-stop-colima
+
+# AddressSanitizer build for the Pi (DRM). Output lands in build/pi-asan/.
+# Uses -static-libasan (via mk/cross.mk SANITIZE block) so the binary is
+# self-contained — no libasan install needed on the device. For sharper stack
+# traces, override OPT: `make pi-asan-docker OPT=1`.
+pi-asan-docker: ensure-docker
+	@echo "$(CYAN)$(BOLD)Cross-compiling Pi with AddressSanitizer via Docker...$(RESET)"
+	@if ! docker image inspect helixscreen/toolchain-pi >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker image not found. Building toolchain first...$(RESET)"; \
+		$(MAKE) docker-toolchain-pi; \
+	fi
+	$(call ensure-ccache-dir,pi-asan)
+	$(Q)scripts/cross-compile-lock.sh docker run --rm --user $$(id -u):$$(id -g) -v "$(PWD)":/src -w /src $(call docker-ccache-args,pi-asan) helixscreen/toolchain-pi \
+		make PLATFORM_TARGET=pi SANITIZE=address SKIP_OPTIONAL_DEPS=1 -j$(NPROC_DOCKER_RUN)
 	@$(MAKE) --no-print-directory maybe-stop-colima
 
 pi-fbdev-docker: ensure-docker
@@ -1472,6 +1509,40 @@ pi-ssh:
 
 # Full cycle: build + deploy + run in foreground
 pi-test: pi-docker deploy-pi-fg
+
+# =============================================================================
+# Pi AddressSanitizer Deployment Targets
+# =============================================================================
+# Deploys the SANITIZE=address build (build/pi-asan/bin/) and starts the
+# binary with ASAN_OPTIONS configured for the wizard-transition investigation.
+# Suppressions file is shipped to the device alongside the binary.
+
+.PHONY: deploy-pi-asan deploy-pi-asan-fg pi-asan-test
+
+# Pi-side ASAN runtime config. detect_leaks=0 because LSan trips on every
+# normal LVGL image cache entry; abort_on_error=1 so the first UAF takes the
+# process down with a coredump-style report; fast_unwind_on_malloc=0 makes
+# stack traces reliable at the cost of speed (worth it for a stress run).
+PI_ASAN_OPTIONS ?= suppressions=$(PI_DEPLOY_DIR)/asan.supp:detect_leaks=0:abort_on_error=1:fast_unwind_on_malloc=0:print_stacktrace=1:halt_on_error=1:strip_path_prefix=/src/
+
+deploy-pi-asan:
+	@test -f build/pi-asan/bin/helix-screen || { echo "$(RED)Error: build/pi-asan/bin/helix-screen not found. Run 'make pi-asan-docker' first.$(RESET)"; exit 1; }
+	$(call deploy-common,$(PI_SSH_TARGET),$(PI_DEPLOY_DIR),build/pi-asan/bin)
+	@echo "$(CYAN)Shipping ASAN suppressions...$(RESET)"
+	$(Q)rsync -avzz tests/asan.supp $(PI_SSH_TARGET):$(PI_DEPLOY_DIR)/
+	@echo "$(GREEN)✓ Deployed ASAN build to $(PI_HOST):$(PI_DEPLOY_DIR)$(RESET)"
+	@echo "$(YELLOW)Note: do NOT systemd-restart — ASAN binaries need ASAN_OPTIONS in env.$(RESET)"
+
+# Run the ASAN binary in the foreground with ASAN_OPTIONS injected.
+# Output stays attached to your terminal so you see the ASAN report immediately
+# when (if) the wizard navigation provokes a heap error.
+deploy-pi-asan-fg: deploy-pi-asan
+	@echo "$(CYAN)Starting helix-screen on $(PI_HOST) under AddressSanitizer...$(RESET)"
+	@echo "$(DIM)ASAN_OPTIONS=$(PI_ASAN_OPTIONS)$(RESET)"
+	ssh -t $(PI_SSH_TARGET) "cd $(PI_DEPLOY_DIR) && ASAN_OPTIONS='$(PI_ASAN_OPTIONS)' ./bin/helix-launcher.sh --debug --log-dest=console"
+
+# Full cycle: ASAN build + deploy + run in foreground.
+pi-asan-test: pi-asan-docker deploy-pi-asan-fg
 
 # =============================================================================
 # Pi 32-bit Deployment Targets

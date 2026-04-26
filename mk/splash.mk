@@ -26,6 +26,15 @@ ifeq ($(STRIP_BINARY),yes)
     SPLASH_LDFLAGS += -s
 endif
 
+# AddressSanitizer linker flags must reach splash too — see watchdog.mk for
+# the same pattern and rationale.
+ifeq ($(SANITIZE),address)
+    SPLASH_LDFLAGS += $(SANITIZE_FLAGS)
+    ifneq ($(CROSS_COMPILE),)
+        SPLASH_LDFLAGS += -static-libasan
+    endif
+endif
+
 # Add platform-specific libraries for display backend
 ifneq ($(UNAME_S),Darwin)
     # Linux: may need DRM/input libraries

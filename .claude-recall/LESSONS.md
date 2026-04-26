@@ -9,7 +9,7 @@
 ## Active Lessons
 
 ### [L008] [***--|*****] Design tokens and semantic widgets
-- **Uses**: 25 | **Velocity**: 9 | **Learned**: 2025-12-14 | **Last**: 2026-04-23 | **Category**: pattern | **Type**: informational
+- **Uses**: 26 | **Velocity**: 10 | **Learned**: 2025-12-14 | **Last**: 2026-04-25 | **Category**: pattern | **Type**: informational
 > No hardcoded colors or spacing. Prefer semantic widgets (ui_card, ui_button, text_*, divider_*) which apply tokens automatically. Don't redundantly specify their built-in defaults (e.g., style_radius on ui_card, button_height on ui_button). See docs/LVGL9_XML_GUIDE.md "Custom Semantic Widgets" for defaults.
 
 ### [L009] [***--|*****] Icon font sync workflow
@@ -37,7 +37,7 @@
 > Text-only buttons: use `align="center"` on child. Icon+text buttons with flex_flow="row": need ALL THREE flex properties - style_flex_main_place="center" (horizontal), style_flex_cross_place="center" (vertical align items), style_flex_track_place="center" (vertical position of row). Missing track_place causes content to sit at top.
 
 ### [L031] [*****|*****] XML no recompile
-- **Uses**: 100 | **Velocity**: 53.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-23 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 56.251875 | **Learned**: 2025-12-27 | **Last**: 2026-04-25 | **Category**: gotcha | **Type**: constraint
 > XML files are loaded at RUNTIME - never rebuild after XML-only changes. Just relaunch the app. This includes layout changes, styling, bindings, event callbacks - anything in ui_xml/*.xml. Only rebuild when C++ code changes.
 
 ### [L039] [**---|****-] Unique XML callback names
@@ -104,7 +104,7 @@
 > **ALWAYS** cancel animations before deletion (see L068).
 
 ### [L060] [*****|*****] Interactive UI testing requires user
-- **Uses**: 100 | **Velocity**: 47.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-23 | **Category**: correction | **Type**: constraint
+- **Uses**: 100 | **Velocity**: 49.5025 | **Learned**: 2026-02-01 | **Last**: 2026-04-25 | **Category**: correction | **Type**: constraint
 > NEVER use timed delays expecting automatic navigation. THE EXACT PATTERN THAT WORKS:
 > **Step 1** - Start app with Bash tool using `run_in_background: true`:
 > ```bash
@@ -193,7 +193,7 @@
 > Before asking user to scroll/tap/interact on a device: (1) verify the NEW binary is running (check PID start time or version string in logs), (2) verify logging captures to the expected destination (journalctl vs file vs console), (3) verify required state is enabled (telemetry enabled, debug log level set in helixscreen.env), (4) verify logs are accessible from SSH. Do ALL checks in one pass BEFORE involving the user. Each failed round-trip wastes the user's time and patience. On Pi: systemctl runs through journalctl, deploy-pi-fg uses SSH -t (console only), nohup loses output. Always use systemd + journalctl for production log capture.
 
 ### [L081] [***--|*****] lifetime_.defer does NOT escape UpdateQueue batch
-- **Uses**: 12 | **Velocity**: 10.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-25 | **Category**: gotcha | **Type**: constraint
+- **Uses**: 13 | **Velocity**: 11.5 | **Learned**: 2026-04-18 | **Last**: 2026-04-25 | **Category**: gotcha | **Type**: constraint
 > `lifetime_.defer` / `tok.defer` / `helix::ui::async_call` (our wrapper) are thin wrappers around `queue_update` — the callback fires in the *next* `UpdateQueue::process_pending` tick, which is still a UpdateQueue batch that may contain other sync deletions. The AsyncLifetimeGuard generation counter protects against use-after-free of `this`; it does NOT prevent LVGL event-list corruption. Any comment claiming "defer outside process_pending" is wrong — fix it. Observer callbacks (`observe_int_sync`, `observe_string`) are also deferred via queue_update since #82 and share the same batch. BANNED inside any queued/deferred callback: `safe_delete(ptr)`, `lv_obj_delete(obj)`, `lv_obj_clean(container)`. USE INSTEAD: `safe_delete_deferred(ptr)`, `lv_obj_delete_async(obj)`, `helix::ui::safe_clean_children(container)` — all route through LVGL's own async list, outside our batch. Multiple sync deletions in the same batch corrupt LVGL's global event linked list → SIGSEGV in `lv_event_mark_deleted` (#776, #190, #80). See CLAUDE.md § "No sync widget deletion in queued callbacks" and `include/ui_utils.h`.
 
 ### [L082] [*----|***--] Percent size inside LV_SIZE_CONTENT parent collapses to 0

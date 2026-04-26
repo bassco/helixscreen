@@ -211,12 +211,15 @@ ifeq ($(WERROR),1)
 endif
 
 # Address Sanitizer support for debugging heap corruption
-# Usage: make SANITIZE=address
+# Usage: make SANITIZE=address (native), or `make pi-asan-docker` (cross).
+# We only DEFINE the flag variable here; mk/cross.mk applies it after
+# TARGET_CFLAGS and SUBMODULE_CFLAGS have been merged so LVGL, helix-xml,
+# and other in-tree subprojects get instrumented too. _FORTIFY_SOURCE is
+# disabled in this mode because it conflicts with ASAN's libc wrappers.
 ifeq ($(SANITIZE),address)
     SANITIZE_FLAGS := -fsanitize=address -fno-omit-frame-pointer
-    CFLAGS += $(SANITIZE_FLAGS)
-    CXXFLAGS += $(SANITIZE_FLAGS)
-    LDFLAGS += $(SANITIZE_FLAGS)
+    CFLAGS := $(filter-out -D_FORTIFY_SOURCE=2,$(CFLAGS))
+    CXXFLAGS := $(filter-out -D_FORTIFY_SOURCE=2,$(CXXFLAGS))
 endif
 
 # Submodule flags - suppress warnings from third-party code we don't control
@@ -728,6 +731,17 @@ else ifeq ($(PLATFORM_TARGET),native)
 endif
 CXXFLAGS += $(ALSA_CXXFLAGS)
 LDFLAGS += $(ALSA_LIBS)
+
+# Re-apply AddressSanitizer linker flags AFTER the per-platform LDFLAGS
+# composition above (lines 580-694) — those use `LDFLAGS :=` which clobbers
+# anything cross.mk's SANITIZE block injected. Must come last so platform
+# library lists are present alongside ASAN runtime.
+ifeq ($(SANITIZE),address)
+    LDFLAGS += $(SANITIZE_FLAGS)
+    ifneq ($(CROSS_COMPILE),)
+        LDFLAGS += -static-libasan
+    endif
+endif
 
 # Sound system — synth, sequencer, backends (PWM/M300/SDL/ALSA), themes
 # Tracker player — MOD/MED file playback with PCM samples (requires HELIX_HAS_SOUND)
