@@ -1027,15 +1027,22 @@ void ControlsPanel::handle_save_z_offset_confirm() {
 
     NOTIFY_INFO(lv_tr("Saving Z-offset..."));
 
+    auto tok = lifetime_.token();
     helix::zoffset::apply_and_save(
         api_, strategy,
-        [this, offset_mm]() {
+        [this, tok, offset_mm]() {
+            if (tok.expired())
+                return;
             NOTIFY_SUCCESS(lv_tr("Z-offset saved ({:+.3f}mm). Klipper restarting..."), offset_mm);
-            save_z_offset_in_progress_ = false;
+            tok.defer("ControlsPanel::save_z_offset_done",
+                      [this]() { save_z_offset_in_progress_ = false; });
         },
-        [this](const std::string& error) {
+        [this, tok](const std::string& error) {
+            if (tok.expired())
+                return;
             NOTIFY_ERROR("{}", error);
-            save_z_offset_in_progress_ = false;
+            tok.defer("ControlsPanel::save_z_offset_done",
+                      [this]() { save_z_offset_in_progress_ = false; });
         });
 }
 
@@ -1578,19 +1585,16 @@ void ControlsPanel::handle_flow_up() {
 
     char gcode[32];
     std::snprintf(gcode, sizeof(gcode), "M221 S%d", new_flow);
+    auto tok = lifetime_.token();
     api_->execute_gcode(
         gcode,
-        [this, new_flow]() {
-            struct Ctx {
-                ControlsPanel* panel;
-                int flow;
-            };
-            auto ctx = std::make_unique<Ctx>(Ctx{this, new_flow});
-            helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
-                helix::format::format_percent(c->flow, c->panel->flow_override_buf_,
-                                              sizeof(c->panel->flow_override_buf_));
-                lv_subject_copy_string(&c->panel->flow_override_subject_,
-                                       c->panel->flow_override_buf_);
+        [this, tok, new_flow]() {
+            if (tok.expired())
+                return;
+            tok.defer("ControlsPanel::flow_display_update", [this, new_flow]() {
+                helix::format::format_percent(new_flow, flow_override_buf_,
+                                              sizeof(flow_override_buf_));
+                lv_subject_copy_string(&flow_override_subject_, flow_override_buf_);
             });
         },
         [](const MoonrakerError& err) {
@@ -1612,19 +1616,16 @@ void ControlsPanel::handle_flow_down() {
 
     char gcode[32];
     std::snprintf(gcode, sizeof(gcode), "M221 S%d", new_flow);
+    auto tok = lifetime_.token();
     api_->execute_gcode(
         gcode,
-        [this, new_flow]() {
-            struct Ctx {
-                ControlsPanel* panel;
-                int flow;
-            };
-            auto ctx = std::make_unique<Ctx>(Ctx{this, new_flow});
-            helix::ui::queue_update<Ctx>(std::move(ctx), [](Ctx* c) {
-                helix::format::format_percent(c->flow, c->panel->flow_override_buf_,
-                                              sizeof(c->panel->flow_override_buf_));
-                lv_subject_copy_string(&c->panel->flow_override_subject_,
-                                       c->panel->flow_override_buf_);
+        [this, tok, new_flow]() {
+            if (tok.expired())
+                return;
+            tok.defer("ControlsPanel::flow_display_update", [this, new_flow]() {
+                helix::format::format_percent(new_flow, flow_override_buf_,
+                                              sizeof(flow_override_buf_));
+                lv_subject_copy_string(&flow_override_subject_, flow_override_buf_);
             });
         },
         [](const MoonrakerError& err) {
