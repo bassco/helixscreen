@@ -123,12 +123,41 @@ platform_wait_for_services() {
     return 1
 }
 
+# Load the Realtek 8821cu USB WiFi driver if (a) the .ko exists, (b) no
+# wlan* interface is already up, and (c) /sbin/insmod is available.
+#
+# Forge-X's own auto_run.sh insmods /lib/modules/8821cu.ko at boot, but on
+# customised setups (e.g., where helix-screen replaces the stock UI launcher
+# and auto_run.sh is short-circuited) the driver never loads. The user then
+# sees `wlan0` missing → check_wifi_hardware() reports "No WiFi hardware
+# found" even though the dongle is plugged in. This hook makes the load
+# idempotent — runs only when needed, mirrors Forge-X's own behaviour, and
+# is a no-op on AD5M boards without a USB WiFi adapter.
+platform_load_wifi_driver() {
+    if ip link show 2>/dev/null | grep -q "wlan"; then
+        return 0  # interface already up — nothing to do
+    fi
+    if [ ! -x /sbin/insmod ]; then
+        return 0  # no insmod, can't help
+    fi
+    # Try the modules-tree path first, fall back to Forge-X's symlinked copy.
+    for ko in /lib/modules/$(uname -r)/8821cu.ko /lib/modules/8821cu.ko; do
+        if [ -f "$ko" ]; then
+            echo "Loading WiFi driver: $ko"
+            /sbin/insmod "$ko" 2>&1 || true
+            sleep 1  # USB enumeration after driver bind
+            return 0
+        fi
+    done
+}
+
 # Pre-start setup: set the active flag so ForgeX knows HelixScreen owns the display.
 # This must happen BEFORE stopping competing UIs or enabling backlight, because
 # ForgeX's screen.sh could run at any time via Klipper's delayed_gcode.
 platform_pre_start() {
     export HELIX_CACHE_DIR="/data/helixscreen/cache"
     touch /tmp/helixscreen_active
+    platform_load_wifi_driver
 }
 
 # Wait for ForgeX boot sequence to complete before starting helix-screen.

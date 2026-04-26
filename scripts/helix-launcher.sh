@@ -258,6 +258,22 @@ if [ ! -x "${MAIN_BIN}" ]; then
 fi
 log "Selected binary: $(basename "${MAIN_BIN}")"
 
+# Source platform hooks if present and run platform_pre_start. The init
+# script (S90helixscreen) also runs this on production boot, but dev deploys
+# (`make deploy-*` → restart launcher directly) bypass init.d, so the
+# launcher needs to fire it too — otherwise platform-specific setup like
+# stopping the stock UI or loading the WiFi driver never happens during
+# iterative testing. Calls are idempotent (active flag is just a touch,
+# load functions check before acting), so production boot stays correct.
+PLATFORM_HOOKS="${INSTALL_DIR}/platform/hooks.sh"
+if [ -f "${PLATFORM_HOOKS}" ]; then
+    # shellcheck disable=SC1090  # path depends on INSTALL_DIR
+    . "${PLATFORM_HOOKS}"
+    if command -v platform_pre_start >/dev/null 2>&1; then
+        platform_pre_start || true
+    fi
+fi
+
 # Check if watchdog is available (embedded targets only, provides crash recovery)
 USE_WATCHDOG=0
 if [ -x "${WATCHDOG_BIN}" ]; then
