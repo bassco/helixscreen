@@ -823,10 +823,15 @@ lv_result_t lv_xml_register_event_cb(lv_xml_component_scope_t * scope, const cha
         return LV_RESULT_INVALID;
     }
 
+    /* Last-write-wins: replace existing entry so a later owner can override an earlier one.
+     * Original first-write-wins caused crashes when a shared XML component (e.g.
+     * wifi_network_item) is used by two C++ classes with different user_data layouts —
+     * the second class's registration was silently dropped, the first class's handler
+     * fired against the wrong struct, and the cast crashed on dereference. */
     lv_xml_event_cb_t * e;
     LV_LL_READ(&scope->event_ll, e) {
         if(lv_streq(e->name, name)) {
-            LV_LOG_INFO("Event_cb `%s` is already registered. Don't register it again.", name);
+            e->cb = cb;
             return LV_RESULT_OK;
         }
     }
