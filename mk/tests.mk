@@ -154,10 +154,29 @@ TEST_APP_OBJS := $(filter-out \
 # Test Targets
 # ============================================================================
 
-# Clean test artifacts
+# Clean test artifacts (test objects, PCH, all test binary variants).
+#
+# Wipes $(OBJ_DIR)/tests/ recursively so stale .o/.ccj/.d files from
+# prior sanitizer runs, reordered test sources, or removed test files
+# don't linger and pollute the link.
+#
+# Also removes the PCH ($(PCH)). The sanitizer targets (test-asan,
+# test-tsan) recurse with CXXFLAGS+=ASAN_FLAGS but reuse the same PCH
+# path, so the PCH gets compiled with -fsanitize=address. Without
+# removing it here, a subsequent `make test-run` reuses the tainted
+# PCH and produces a binary that needs libasan to start (every shard
+# fails on startup with "ASan runtime does not come first").
+#
+# Note: app objects in $(OBJ_DIR)/*.o linked into the test binary are
+# NOT cleaned here. test-asan/test-tsan also compile those with
+# sanitizer flags into the same paths. If a sanitizer run contaminated
+# the tree, run `make clean` to fully recover, and consider
+# CCACHE_DISABLE=1 if ccache is serving stale instrumented objects.
 clean-tests:
 	$(ECHO) "$(YELLOW)Cleaning test artifacts...$(RESET)"
-	$(Q)rm -f $(TEST_BIN) $(TEST_MAIN_OBJ) $(CATCH2_OBJ) $(UI_TEST_UTILS_OBJ) $(LVGL_TEST_FIXTURE_OBJ) $(HELIX_TEST_FIXTURE_OBJ) $(TEST_FIXTURES_OBJ) $(LVGL_UI_TEST_FIXTURE_OBJ) $(TEST_OBJS)
+	$(Q)rm -rf $(OBJ_DIR)/tests
+	$(Q)rm -f $(TEST_BIN) $(TEST_ASAN_BIN) $(TEST_TSAN_BIN)
+	$(Q)rm -f $(PCH)
 	$(ECHO) "$(GREEN)✓ Test artifacts cleaned$(RESET)"
 
 # Build tests — delegates to $(TEST_BIN) which handles -j detection via Phase 1
