@@ -120,7 +120,11 @@ class UpdateQueue {
         // main-thread malloc) can pin which callback planted the corruption.
         // Ring is written on every callback exit; crash handler walks it
         // newest→oldest and emits queue_prev / queue_prev2 / ... lines.
+        // High-frequency repeats (e.g. TSM::update_subjects per WebSocket tick)
+        // coalesce into a single slot with a count, preserving runway for
+        // distinct callbacks above.
         crash_handler::register_previous_tag_ring(previous_tag_ring_,
+                                                  previous_tag_count_ring_,
                                                   kPreviousTagRingSize,
                                                   &previous_tag_next_);
 
@@ -340,10 +344,23 @@ class UpdateQueue {
             // crash (heap corruption detonating on the next main-thread malloc,
             // or a few callbacks later) still names the prior sequence.
             // current_tag_ signals "inside a callback" vs "between / after".
+            //
+            // Coalesce consecutive identical tags: if the just-finished tag
+            // matches the newest slot, bump that slot's count instead of
+            // advancing. Tags are string literals so pointer-equality is
+            // sufficient and signal-safe. This keeps high-frequency producers
+            // (e.g. TSM::update_subjects per WebSocket tick) from flooding the
+            // ring and burying genuinely distinct callbacks.
             if (current_tag_) {
                 unsigned int next = previous_tag_next_;
-                previous_tag_ring_[next % kPreviousTagRingSize] = current_tag_;
-                previous_tag_next_ = next + 1;
+                if (next > 0 &&
+                    previous_tag_ring_[(next - 1) % kPreviousTagRingSize] == current_tag_) {
+                    previous_tag_count_ring_[(next - 1) % kPreviousTagRingSize] += 1;
+                } else {
+                    previous_tag_ring_[next % kPreviousTagRingSize] = current_tag_;
+                    previous_tag_count_ring_[next % kPreviousTagRingSize] = 1;
+                    previous_tag_next_ = next + 1;
+                }
             }
             current_tag_ = nullptr;
             to_process.pop();
@@ -368,8 +385,12 @@ class UpdateQueue {
     /// when the crashing instruction ran AFTER process_pending() returned but
     /// was corrupted by a prior callback, or when the corruption cascades a
     /// few callbacks later. Slot `(previous_tag_next_ - 1) % N` is newest.
+    /// `previous_tag_count_ring_[i]` records how many consecutive callbacks
+    /// shared slot `i`'s tag — coalesce keeps the ring representative when
+    /// high-frequency producers (TSM, etc.) dominate the queue.
     static constexpr unsigned int kPreviousTagRingSize = 4;
     static inline volatile const char* previous_tag_ring_[kPreviousTagRingSize] = {};
+    static inline volatile uint32_t previous_tag_count_ring_[kPreviousTagRingSize] = {};
     static inline volatile unsigned int previous_tag_next_ = 0;
 
   public:

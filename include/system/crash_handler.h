@@ -27,6 +27,7 @@
  * @endcode
  */
 
+#include <cstdint>
 #include <string>
 
 #include "hv/json.hpp"
@@ -141,14 +142,23 @@ void register_callback_tag_ptr(volatile const char* const* tag_ptr);
  *
  * The ring is walked newest→oldest starting at `(*next - 1) % capacity`.
  * Producer writes slot `*next % capacity`, then stores `*next + 1` back.
- * All three parameters are read by the signal handler, so their storage
+ * All four parameters are read by the signal handler, so their storage
  * must outlive any possible crash (typically static).
  *
- * @param ring     Pointer to the tag-pointer array (string literals)
- * @param capacity Number of slots in the ring (power-of-two recommended)
- * @param next     Pointer to the write-index counter (monotonically increasing)
+ * `count_ring[i]` records how many consecutive identical-tag callbacks
+ * share slot `i`. The producer coalesces repeats by bumping the count
+ * instead of advancing — high-frequency callbacks (per-WebSocket-tick
+ * temperature updates, etc.) collapse into a single slot tagged
+ * `tag (xN)`, preserving runway for distinct prior callbacks. Pass
+ * `nullptr` for `count_ring` to disable counts (legacy behavior).
+ *
+ * @param ring       Pointer to the tag-pointer array (string literals)
+ * @param count_ring Parallel array of repeat counts (or nullptr to disable)
+ * @param capacity   Number of slots in the ring (power-of-two recommended)
+ * @param next       Pointer to the write-index counter (monotonically increasing)
  */
 void register_previous_tag_ring(volatile const char* const* ring,
+                                volatile const uint32_t* count_ring,
                                 unsigned int capacity,
                                 volatile const unsigned int* next);
 

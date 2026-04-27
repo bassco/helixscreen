@@ -95,7 +95,11 @@ static volatile const char* const* s_callback_tag_ptr = nullptr;
 /// UpdateQueue's ring of recently-completed callback tags (registered at init).
 /// Slot `(*s_previous_tag_next - 1) % s_previous_tag_capacity` is newest;
 /// walk backwards to emit queue_prev, queue_prev2, ...
+/// `s_previous_tag_count_ring[i]` is the number of consecutive identical-tag
+/// callbacks coalesced into slot `i` (1 = single, N>1 = repeats). May be null
+/// when the producer didn't register counts — emitter falls back to no-suffix.
 static volatile const char* const* s_previous_tag_ring = nullptr;
+static volatile const uint32_t* s_previous_tag_count_ring = nullptr;
 static unsigned int s_previous_tag_capacity = 0;
 static volatile const unsigned int* s_previous_tag_next = nullptr;
 
@@ -721,6 +725,20 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
             if (!prev) break; // Unfilled slot — rest of the ring is empty.
             safe_write(fd, kLabels[i]);
             safe_write(fd, prev);
+            // Append " (xN)" when the producer coalesced N>1 consecutive
+            // identical tags into this slot. Skip the suffix for N<=1 to keep
+            // single-shot tags clean. Reading the count is racy with the
+            // producer mid-increment; worst case we report off-by-one, which
+            // is acceptable for diagnostics.
+            if (s_previous_tag_count_ring) {
+                uint32_t count = s_previous_tag_count_ring[idx];
+                if (count > 1) {
+                    safe_write(fd, " (x");
+                    safe_write(fd, int_to_str(num_buf, sizeof(num_buf),
+                                              static_cast<long>(count)));
+                    safe_write(fd, ")");
+                }
+            }
             safe_write(fd, "\n");
         }
     }
@@ -1031,9 +1049,11 @@ void crash_handler::register_callback_tag_ptr(volatile const char* const* tag_pt
 }
 
 void crash_handler::register_previous_tag_ring(volatile const char* const* ring,
+                                                volatile const uint32_t* count_ring,
                                                 unsigned int capacity,
                                                 volatile const unsigned int* next) {
     s_previous_tag_ring = ring;
+    s_previous_tag_count_ring = count_ring;
     s_previous_tag_capacity = capacity;
     s_previous_tag_next = next;
 }
