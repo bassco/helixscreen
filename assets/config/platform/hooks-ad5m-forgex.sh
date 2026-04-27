@@ -135,9 +135,11 @@ platform_wait_for_services() {
 # is a no-op on AD5M boards without a USB WiFi adapter.
 platform_load_wifi_driver() {
     # ip(8) isn't always installed on AD5M Forge-X — fall back to /sys/class/net.
-    if ls /sys/class/net 2>/dev/null | grep -q "^wlan"; then
-        return 0  # interface already up — nothing to do
-    fi
+    # POSIX glob (no `ls | grep`): if no wlan* exists, the loop sees the
+    # literal pattern and `[ -e ]` is false. (shellcheck SC2010)
+    for ifc in /sys/class/net/wlan*; do
+        [ -e "$ifc" ] && return 0  # interface already up — nothing to do
+    done
     if [ ! -x /sbin/insmod ]; then
         return 0  # no insmod, can't help
     fi
@@ -163,7 +165,12 @@ platform_start_wpa_supplicant() {
     if [ -S /var/run/wpa_supplicant/wlan0 ] && pidof wpa_supplicant >/dev/null 2>&1; then
         return 0
     fi
-    if ! ls /sys/class/net 2>/dev/null | grep -q "^wlan"; then
+    # POSIX glob (no `ls | grep`, shellcheck SC2010): bail if no wlan* exists.
+    has_wlan=0
+    for ifc in /sys/class/net/wlan*; do
+        [ -e "$ifc" ] && { has_wlan=1; break; }
+    done
+    if [ "$has_wlan" -eq 0 ]; then
         return 0  # no interface to bind to
     fi
     if [ ! -x /usr/sbin/wpa_supplicant ] || [ ! -f /etc/wpa_supplicant.conf ]; then

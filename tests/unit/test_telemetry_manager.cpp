@@ -23,7 +23,9 @@
 #include <unistd.h>
 
 #include "../catch_amalgamated.hpp"
+#include "config.h"
 #include "hv/json.hpp"
+#include "ui_update_queue.h"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -50,9 +52,27 @@ class TelemetryTestFixture {
                      std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
         fs::create_directories(temp_dir_);
 
-        // Reset telemetry manager to clean state for each test
         auto& tm = TelemetryManager::instance();
         tm.shutdown();
+
+        // Drain any deferred UI callbacks queued by prior tests. Some of those
+        // callbacks (settings observers, panel-change notifiers) can route into
+        // TelemetryManager::record_* and end up enqueuing a phantom event in
+        // the next test. Drain happens BEFORE init so callbacks see the
+        // !initialized_ guard and bail out before touching the queue.
+        helix::ui::UpdateQueue::instance().drain();
+
+        // Reset Config's /telemetry_enabled to false BEFORE init() so the
+        // singleton reload at the end of init() lands at a known false state.
+        // Without this, a prior test's set_enabled(true) persisted into the
+        // global Config, init() reloaded it as true, and any error/setting
+        // change between init() and our explicit set_enabled(false) below
+        // would gate-pass and enqueue (off-by-one queue size on macOS where
+        // the whole suite shares one process).
+        if (auto* cfg = helix::Config::get_instance()) {
+            cfg->set<bool>("/telemetry_enabled", false);
+        }
+
         tm.init(temp_dir_.string());
         tm.set_enabled(false);
         tm.clear_queue();

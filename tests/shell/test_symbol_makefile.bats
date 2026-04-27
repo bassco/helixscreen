@@ -31,7 +31,9 @@ setup_file() {
 @test "LDFLAGS does not contain -s for cross-compile builds" {
     # Verify the old LDFLAGS += -s pattern is gone
     # Check the actual Makefile source, not make output (which varies by host)
-    ! grep -q 'LDFLAGS += -s' Makefile
+    # Match -s as a complete flag (followed by end-of-line or whitespace) so
+    # legitimate flags like -static-libasan don't trip the assertion.
+    ! grep -qE 'LDFLAGS \+= -s($|[[:space:]])' Makefile
 }
 
 @test "STRIP_CMD is defined when STRIP_BINARY=yes" {
