@@ -16,11 +16,19 @@ env:
   CXX: ccache clang++
 
 jobs:
+  gate:
+    name: Upstream gate
+    if: github.repository == 'prestonbrown/helixscreen'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running on upstream repo"
+
   # ===========================================================================
   # Shared build step — produces binary + test binary as artifacts
   # ===========================================================================
   build:
     name: Build
+    needs: gate
     runs-on: ubuntu-22.04
     timeout-minutes: 180
 
@@ -199,6 +207,7 @@ jobs:
   # ===========================================================================
   test-shell:
     name: Shell Tests (BATS)
+    needs: gate
     runs-on: ubuntu-22.04
     timeout-minutes: 15
 
@@ -220,6 +229,7 @@ jobs:
   # ===========================================================================
   test-asan:
     name: AddressSanitizer
+    needs: gate
     runs-on: ubuntu-22.04
     timeout-minutes: 240
 
@@ -302,6 +312,7 @@ jobs:
   # ===========================================================================
   test-tsan:
     name: ThreadSanitizer
+    needs: gate
     runs-on: ubuntu-22.04
     timeout-minutes: 240
 
@@ -387,6 +398,7 @@ jobs:
   # ===========================================================================
   test-python:
     name: Python Tests
+    needs: gate
     runs-on: ubuntu-22.04
     timeout-minutes: 10
 
@@ -413,6 +425,7 @@ jobs:
   # ===========================================================================
   test-macos:
     name: macOS Tests
+    needs: gate
     runs-on: macos-14
     timeout-minutes: 120
 
