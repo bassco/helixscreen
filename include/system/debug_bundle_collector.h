@@ -44,6 +44,9 @@ class DebugBundleCollector {
     /// Read crash_report.txt from config_dir (persists after crash.txt consumed)
     static std::string collect_crash_report_txt(const std::string& config_dir);
 
+    /// Read raw crash.txt from config_dir (active crash, before next-boot rotation)
+    static std::string collect_crash_txt(const std::string& config_dir);
+
     /// Read crash_history.json from config_dir (past crash submissions)
     static nlohmann::json collect_crash_history(const std::string& config_dir);
 

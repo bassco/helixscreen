@@ -231,12 +231,30 @@ void invalidate_all_recursive(lv_obj_t* obj) {
 }
 
 /**
- * @brief Signal handler for SIGINT/SIGTERM — requests graceful quit
+ * @brief Signal handler for SIGINT/SIGTERM
  *
- * Uses app_request_quit_signal_safe() which only sets the volatile quit
- * flag, avoiding spdlog and other non-async-signal-safe calls.
+ * SIGINT (Ctrl+C from terminal): set quit flag, let main loop drain into
+ * Application::shutdown() for full graceful teardown.
+ *
+ * SIGTERM (supervisor kill — systemd, watchdog, ZMOD's killall cycle, etc.):
+ * fast-exit immediately. The supervisor only cares about a clean exit code,
+ * not whether we ran teardown. Skipping Application::shutdown() avoids
+ * fragile teardown paths (LVGL deinit, observer cleanup, static destructors)
+ * that have triggered SIGBUS on resource-constrained MIPS/ARM devices when
+ * external supervisors aggressively respawn us. Persisted state (settings,
+ * telemetry queue, crash history) is written on each change, so nothing is
+ * lost by skipping the explicit flush.
+ *
+ * Async-signal-safe: only write(2) and _exit(2) used — no spdlog.
  */
-void graceful_quit_signal_handler(int /*sig*/) {
+void graceful_quit_signal_handler(int sig) {
+    if (sig == SIGTERM) {
+        static const char msg[] = "[Application] SIGTERM — fast exit\n";
+        ssize_t n = write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        (void)n; // suppress unused-result warning
+        _exit(0);
+    }
+    // SIGINT and any other caught signal: graceful path
     app_request_quit_signal_safe();
 }
 
@@ -3581,11 +3599,12 @@ void Application::shutdown() {
     }
     m_shutdown_complete = true;
 
-    // Uninstall crash handler (clean shutdown is not a crash)
-    crash_handler::uninstall();
-
     // Clean shutdown means no crash loop -- remove the marker file
     std::filesystem::remove(crash_marker_path());
+
+    // Crash handler stays installed through teardown so any SIGBUS/SIGSEGV
+    // during widget deletion, observer cleanup, or lv_deinit still produces
+    // a crash.txt. Uninstalled at the very end of shutdown(), below.
 
     // Stop hot reloader thread before anything else
     if (m_hot_reloader) {
@@ -3750,6 +3769,10 @@ void Application::shutdown() {
     // Shutdown display (calls lv_deinit). All observer callbacks were already
     // removed above, so widget deletion is clean — no observer linked list access.
     m_display.reset();
+
+    // Uninstall crash handler last — clean shutdown reached this point, so a
+    // SIGBUS/SIGSEGV after this is the kernel's problem, not ours.
+    crash_handler::uninstall();
 
     spdlog::info("[Application] Shutdown complete");
 }

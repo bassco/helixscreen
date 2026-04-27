@@ -464,8 +464,13 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     // These are all async-signal-safe
     int fd = open(s_crash_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (fd < 0) {
-        // Cannot write crash file; just exit
-        _exit(128 + sig);
+        // Primary path unwritable (chroot/overlay/PrivateTmp/missing parent
+        // dir). Fall back to stderr — fd=2 is always open and gets captured
+        // by both journald (systemd) and the watchdog's stderr pipe, so the
+        // diagnostic still reaches a log even if no file lands on disk.
+        // Marker prefix lets the watchdog/journal scan recognize it.
+        safe_write(STDERR_FILENO, "\n=== HELIX_CRASH_DUMP ===\n");
+        fd = STDERR_FILENO;
     }
 
     char num_buf[32];
@@ -998,7 +1003,11 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ucontext) {
     __android_log_print(ANDROID_LOG_FATAL, "HelixScreen", "CRASH: signal %d", sig);
 #endif
 
-    close(fd);
+    // Don't close STDERR_FILENO — that's the stderr fallback path and other
+    // signal handling / kernel default action still needs it open.
+    if (fd != STDERR_FILENO) {
+        close(fd);
+    }
 
     // Re-raise with default handler so the process exits with the correct status
     // and generates a core dump if configured

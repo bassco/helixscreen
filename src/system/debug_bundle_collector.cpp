@@ -83,20 +83,25 @@ json DebugBundleCollector::collect(const BundleOptions& options) {
         spdlog::warn("[DebugBundle] Failed to collect crash.txt: {}", e.what());
     }
 
-    // Crash data: report text, history, and device ID for R2 cross-referencing
+    // Crash data: report text, history, and device ID for R2 cross-referencing.
+    // Use the canonical resolver so we look in the same directory CrashReporter
+    // wrote to (honors $HELIX_CONFIG_DIR set by ZMOD/RatOS/etc.).
     try {
-        std::string config_dir = "config";
-        const char* home = std::getenv("HOME");
-        if (home && home[0] != '\0') {
-            std::string home_config = std::string(home) + "/helixscreen/config";
-            if (std::filesystem::exists(home_config)) {
-                config_dir = home_config;
-            }
-        }
+        const std::string config_dir = helix::get_user_config_dir();
 
         auto crash_report = collect_crash_report_txt(config_dir);
         if (!crash_report.empty()) {
             bundle["crash_report"] = crash_report;
+        }
+
+        // Fallback: include the raw active crash.txt if the reporter hasn't
+        // produced a human-readable crash_report.txt yet. This happens when the
+        // watchdog auto-restarts faster than the reporter can run on next boot,
+        // or when a fresh crash hasn't been processed at the time the user
+        // uploads the bundle.
+        auto crash_txt = collect_crash_txt(config_dir);
+        if (!crash_txt.empty()) {
+            bundle["crash_txt"] = crash_txt;
         }
 
         auto crash_history = CrashHistory::instance().to_json();
@@ -761,6 +766,31 @@ std::string DebugBundleCollector::collect_crash_report_txt(const std::string& co
         return result;
     } catch (const std::exception& e) {
         spdlog::debug("[DebugBundle] Failed to read crash_report.txt: {}", e.what());
+        return {};
+    }
+}
+
+std::string DebugBundleCollector::collect_crash_txt(const std::string& config_dir) {
+    // Raw signal-handler dump (JSON written by crash_handler::install). Present
+    // when the user uploads a bundle after a crash but before next-boot
+    // reporting has had a chance to rotate it into crash_1.txt.
+    std::string path = config_dir + "/crash.txt";
+    try {
+        std::ifstream file(path);
+        if (!file.good()) {
+            return {};
+        }
+
+        std::ostringstream content;
+        content << file.rdbuf();
+        std::string result = content.str();
+
+        if (!result.empty()) {
+            spdlog::debug("[DebugBundle] Read crash.txt from {}", path);
+        }
+        return result;
+    } catch (const std::exception& e) {
+        spdlog::debug("[DebugBundle] Failed to read crash.txt: {}", e.what());
         return {};
     }
 }
