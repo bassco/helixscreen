@@ -2480,7 +2480,7 @@ download_file() {
 # Extract "version" value from manifest JSON on stdin
 # Uses POSIX basic regex only (BusyBox compatible)
 parse_manifest_version() {
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
 # Extract platform asset URL from manifest JSON on stdin
@@ -2489,7 +2489,7 @@ parse_manifest_version() {
 parse_manifest_platform_url() {
     local platform=$1
     grep "helixscreen-${platform}-" | \
-        sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+        sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
 # Validate an archive is readable and not truncated.
@@ -4124,7 +4124,7 @@ write_release_info() {
     # Try to detect version from binary
     local version=""
     if [ -x "${INSTALL_DIR}/bin/helix-screen" ]; then
-        version=$("${INSTALL_DIR}/bin/helix-screen" --version 2>/dev/null | head -1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+[^ ]*' || echo "")
+        version=$("${INSTALL_DIR}/bin/helix-screen" --version 2>/dev/null | head -n 1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+[^ ]*' || echo "")
     fi
 
     if [ -z "$version" ]; then

@@ -150,7 +150,7 @@ download_file() {
 # Extract "version" value from manifest JSON on stdin
 # Uses POSIX basic regex only (BusyBox compatible)
 parse_manifest_version() {
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
 # Extract platform asset URL from manifest JSON on stdin
@@ -159,7 +159,7 @@ parse_manifest_version() {
 parse_manifest_platform_url() {
     local platform=$1
     grep "helixscreen-${platform}-" | \
-        sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+        sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
 }
 
 # Validate an archive is readable and not truncated.
