@@ -105,6 +105,7 @@ void MoonrakerManager::shutdown() {
     m_print_start_phase_observer.release();
     m_print_bed_target_fallback_observer.release();
     m_print_ext_target_fallback_observer.release();
+    m_print_duration_observer.release();
 
     // Destroy client FIRST: its destructor waits for in-flight libhv callbacks
     // to finish. connect() lambdas hold raw pointers to m_api and m_macro_analysis,
