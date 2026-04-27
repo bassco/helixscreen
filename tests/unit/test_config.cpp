@@ -1996,6 +1996,139 @@ TEST_CASE("Config: v13→v14 is a no-op when no legacy file exists",
     std::filesystem::remove_all(temp_dir);
 }
 
+// v14→v15: AD5X with stale wizard-era display overrides must be restored to
+// preset values. Post-wizard users had hardware_blank=0, sleep_backlight_off=false
+// which caused sleep-mode RGB color artifacts. See FLASHFORGE_AD5X_SUPPORT.md.
+TEST_CASE_METHOD(ConfigTestFixture,
+                 "Config: v14→v15 restores AD5X sleep preset after wizard override",
+                 "[core][config][migration][versioning]") {
+    std::string temp_dir = std::filesystem::temp_directory_path().string() +
+                           "/helix_migration_v15_" + std::to_string(rand());
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    // Simulate an AD5X user at v14 whose identify wizard ran AFTER the v12→v13
+    // migration and wrote the stale (pre-#431) display config values.
+    json v14_config = {{"config_version", 14},
+                       {"preset", "ad5x"},
+                       {"display",
+                        {{"hardware_blank", 0},
+                         {"sleep_backlight_off", false},
+                         {"backlight_enable_ioctl", false}}},
+                       {"printer", {{"moonraker_host", "127.0.0.1"}}}};
+    {
+        std::ofstream o(temp_path);
+        o << v14_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/display/hardware_blank") == 1);
+    REQUIRE(test_config.get<bool>("/display/sleep_backlight_off") == true);
+    REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+// Multi-printer variant: the printer type lives under /printers/<id>/type
+// instead of the top-level preset key. Migration must detect both shapes.
+TEST_CASE_METHOD(ConfigTestFixture,
+                 "Config: v14→v15 restores AD5X sleep preset (multi-printer config)",
+                 "[core][config][migration][versioning]") {
+    std::string temp_dir = std::filesystem::temp_directory_path().string() +
+                           "/helix_migration_v15_mp_" + std::to_string(rand());
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v14_config = {
+        {"config_version", 14},
+        {"display",
+         {{"hardware_blank", 0},
+          {"sleep_backlight_off", false},
+          {"backlight_enable_ioctl", false}}},
+        {"printers",
+         {{"my-ad5x", {{"type", "FlashForge Adventurer 5X"}, {"moonraker_host", "127.0.0.1"}}}}}};
+    {
+        std::ofstream o(temp_path);
+        o << v14_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/display/hardware_blank") == 1);
+    REQUIRE(test_config.get<bool>("/display/sleep_backlight_off") == true);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+// Workaround-2 case: user intentionally set sleep_backlight_off=false but left
+// hardware_blank at preset default (1). Migration must NOT overwrite their
+// chosen workaround — detection requires BOTH stale values.
+TEST_CASE_METHOD(ConfigTestFixture,
+                 "Config: v14→v15 preserves user workaround (sleep_backlight_off=false only)",
+                 "[core][config][migration][versioning]") {
+    std::string temp_dir = std::filesystem::temp_directory_path().string() +
+                           "/helix_migration_v15_workaround_" + std::to_string(rand());
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    json v14_config = {{"config_version", 14},
+                       {"preset", "ad5x"},
+                       {"display",
+                        {{"hardware_blank", 1},            // preset default
+                         {"sleep_backlight_off", false}}}, // user's workaround
+                       {"printer", {{"moonraker_host", "127.0.0.1"}}}};
+    {
+        std::ofstream o(temp_path);
+        o << v14_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/display/hardware_blank") == 1);
+    REQUIRE(test_config.get<bool>("/display/sleep_backlight_off") == false);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
+// Non-AD5X printers must not be touched by the migration.
+TEST_CASE_METHOD(ConfigTestFixture, "Config: v14→v15 does not affect non-AD5X printers",
+                 "[core][config][migration][versioning]") {
+    std::string temp_dir = std::filesystem::temp_directory_path().string() +
+                           "/helix_migration_v15_cc1_" + std::to_string(rand());
+    std::filesystem::create_directories(temp_dir);
+    std::string temp_path = temp_dir + "/test_config.json";
+
+    // CC1 preset legitimately has hardware_blank=0, sleep_backlight_off=false.
+    // Migration must leave it alone.
+    json v14_config = {{"config_version", 14},
+                       {"preset", "cc1"},
+                       {"display",
+                        {{"hardware_blank", 0},
+                         {"sleep_backlight_off", false},
+                         {"backlight_enable_ioctl", false}}},
+                       {"printer", {{"moonraker_host", "127.0.0.1"}}}};
+    {
+        std::ofstream o(temp_path);
+        o << v14_config.dump(2);
+    }
+
+    BackupGuard guard;
+    Config test_config;
+    test_config.init(temp_path);
+
+    REQUIRE(test_config.get<int>("/display/hardware_blank") == 0);
+    REQUIRE(test_config.get<bool>("/display/sleep_backlight_off") == false);
+
+    std::filesystem::remove_all(temp_dir);
+}
+
 TEST_CASE("Config: v4→v5 migration preserves explicit show_printer_switcher setting",
           "[core][config][migration][v5]") {
     std::string temp_dir = "/tmp/helix_test_v4_to_v5_explicit";

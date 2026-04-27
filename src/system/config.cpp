@@ -637,6 +637,40 @@ static void migrate_v13_to_v14(json& config, const std::string& config_path) {
     }
 }
 
+/// v14→v15: Re-apply AD5X sleep preset for users whose printer-identify wizard
+/// ran AFTER the v12→v13 migration. The wizard (pre-fix) force-wrote the stale
+/// pre-#431 display config on every confirmation, undoing the v13 restore for
+/// any AD5X user who ran it. The wizard block has been removed in the same
+/// release that introduces this migration. Detection condition is identical to
+/// v12→v13 so the fix is idempotent if the wizard is re-run on an older build.
+static void migrate_v14_to_v15(json& config) {
+    bool is_ad5x = false;
+    if (config.value("preset", "") == "ad5x") {
+        is_ad5x = true;
+    } else if (config.contains("printers") && config["printers"].is_object()) {
+        for (auto& [printer_id, printer] : config["printers"].items()) {
+            if (printer.is_object() && printer.value("type", "") == "FlashForge Adventurer 5X") {
+                is_ad5x = true;
+                break;
+            }
+        }
+    }
+    if (!is_ad5x)
+        return;
+
+    if (!config.contains("display") || !config["display"].is_object())
+        return;
+
+    auto& display = config["display"];
+    if (display.value("sleep_backlight_off", true) == false &&
+        display.value("hardware_blank", -1) == 0) {
+        display["sleep_backlight_off"] = true;
+        display["hardware_blank"] = 1;
+        spdlog::info("[Config] Migration v15: re-applied AD5X backlight-off sleep "
+                     "after wizard-override removal");
+    }
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config, const std::string& config_path = "") {
     int version = 0;
@@ -672,6 +706,8 @@ static void run_versioned_migrations(json& config, const std::string& config_pat
         migrate_v12_to_v13(config);
     if (version < 14)
         migrate_v13_to_v14(config, config_path);
+    if (version < 15)
+        migrate_v14_to_v15(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }

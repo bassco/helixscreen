@@ -535,17 +535,14 @@ void WizardPrinterIdentifyStep::cleanup() {
             }
         }
 
-        // Apply platform-specific display config overrides.
-        // Some Allwinner platforms can't recover from backlight power-off during
-        // sleep — wake-on-touch fails because the display controller loses state.
-        // AD5X: issue #235, CC1: backlight_enable_ioctl already disabled in preset
-        if (type_name == "FlashForge Adventurer 5X" || type_name == "Elegoo Centauri Carbon") {
-            config->set<bool>("/display/backlight_enable_ioctl", false);
-            config->set<int>("/display/hardware_blank", 0);
-            config->set<bool>("/display/sleep_backlight_off", false);
-            spdlog::info("[{}] Applied {} display overrides (no backlight disable during sleep)",
-                         get_name(), type_name);
-        }
+        // Display/backlight hardware settings are the responsibility of the
+        // printer preset (assets/config/presets/*.json), not the identify
+        // wizard. Previously this block force-wrote AD5X/CC1-specific display
+        // overrides on every confirmation, which contradicted the ad5x preset
+        // after #431 and caused user-visible sleep bugs — see
+        // docs/devel/printers/FLASHFORGE_AD5X_SUPPORT.md "Known Issue: Random
+        // solid colors during sleep". Config migration v14→v15 cleans up stale
+        // values for users who ran the pre-fix wizard.
 
         // Persist config changes
         if (config->save()) {
