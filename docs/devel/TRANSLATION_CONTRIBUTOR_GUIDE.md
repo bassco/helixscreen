@@ -63,15 +63,66 @@ Rules:
 
 ## Improving an existing translation
 
-If you see a string that's translated awkwardly, plainly wrong, or inconsistent with how that term is used elsewhere in HelixScreen, you can fix it.
+If a string is translated awkwardly, plainly wrong, or inconsistent with how that term is used elsewhere in HelixScreen, you can fix it. This is the most common contribution to HelixScreen and the lowest-friction one — you don't need to install anything, clone the repo, or run any commands. You can do the whole thing from your browser in a few minutes.
 
-1. **Open the YAML file** for the language — `translations/<lang>.yml`.
-2. **Find the English key** (ctrl-F or grep).
-3. **Edit the value** — the right-hand side — to the improved translation.
-4. **Test** locally (see below).
-5. **Submit a PR** with a description of what changed and why.
+### The fast path: fix one string on github.com
 
-If you're improving many strings in one pass (a general pass over a language that feels stiff), group them by panel or feature in separate commits — it makes review and rollback easier.
+1. **Open the file for your language on GitHub.** Direct links:
+
+   | Language | File |
+   |---|---|
+   | German | [translations/de.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/de.yml) |
+   | Spanish | [translations/es.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/es.yml) |
+   | French | [translations/fr.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/fr.yml) |
+   | Italian | [translations/it.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/it.yml) |
+   | Japanese | [translations/ja.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/ja.yml) |
+   | Portuguese | [translations/pt.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/pt.yml) |
+   | Russian | [translations/ru.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/ru.yml) |
+   | Chinese | [translations/zh.yml](https://github.com/prestonbrown/helixscreen/blob/main/translations/zh.yml) |
+
+2. **Click the pencil icon** ✏️ at the top-right of the file view. You'll need a GitHub account (free, takes two minutes). If you've never edited this repo before, GitHub will quietly fork it for you and drop you into an in-browser editor — there's nothing to set up.
+
+3. **Find the string you want to fix.** Press <kbd>Ctrl</kbd>-<kbd>F</kbd> (<kbd>Cmd</kbd>-<kbd>F</kbd> on Mac) and search for the *English* version of what you saw on the screen. Each line looks like:
+
+   ```yaml
+     "Print Time": "Druckzeit"
+   ```
+
+   - **Left side** (the *key*) is the English source. **Don't change it.**
+   - **Right side** (the *value*) is the current translation. **That's the only part you edit.**
+
+4. **Edit the right-hand side only.** A few rules:
+   - Keep the surrounding `"` quotes and the `:` separator.
+   - Keep any format placeholders — `%d`, `%s`, `%u`, `%lu`, `%.2f`, `{count}`, `{0}` — exactly as they appear. You can *move* them in the string to fit your language's grammar, but don't rename or remove them.
+   - Keep leading/trailing spaces inside the quotes if they're already there. They're usually deliberate (alignment, punctuation spacing).
+   - If the value is split across multiple lines (a `one:` / `few:` / `many:` / `other:` block), it's a plural form — see [TRANSLATION_SYSTEM.md § Plural Rules](TRANSLATION_SYSTEM.md#plural-rules).
+
+5. **Scroll to the bottom** and find the "Commit changes" box. Fill it in:
+   - **Commit title:** `i18n(<lang>): fix <short description>` — for example, `i18n(de): fix Print Time wording`.
+   - **Extended description:** one sentence saying *why* the new wording is better, if it's not obvious. ("The old translation literally means 'pressure time'.") Skip if it's just a typo fix.
+
+6. **Select "Create a new branch for this commit and start a pull request,"** then click **Propose changes**. GitHub walks you through opening the pull request — the defaults are fine. In the PR description, briefly mention:
+   - Your relationship to the language (native speaker, fluent, professional translator).
+   - Anything you weren't sure about and want a second opinion on.
+
+7. **Submit and you're done.** A maintainer will review, rebuild locally to check the new string still fits on the screen, and merge. If something needs adjustment they'll comment on the PR — you can edit the same file again on your PR's branch and it'll update automatically.
+
+That's it. No build, no clone, no command line.
+
+### Fixing many strings in one pass
+
+If you're doing a sweep — half a panel's worth of fixes, or a full re-pass over a language that feels stiff — the in-browser editor still works, but it gets tedious past a dozen edits. If you're comfortable with git:
+
+```bash
+git clone https://github.com/prestonbrown/helixscreen.git
+cd helixscreen
+# edit translations/<lang>.yml in your editor of choice
+# commit, push to a branch on your fork, open a PR
+```
+
+Group changes into separate commits by panel or feature ("filament panel," "settings overlay," "wizard"). That makes review easier and lets a maintainer roll back one area without losing the rest if something turns out wrong.
+
+If you don't want to set up git but still need to make a lot of edits, you can also download the file from GitHub, edit it locally in any text editor, and re-upload it through the github.com edit flow above by replacing the whole file's contents — though for very large changes a clone is genuinely easier.
 
 ---
 
