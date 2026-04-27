@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **K1C boot logo persisted on SimpleAF firmware** ([#890]) — `boot_display` was only killed when `/etc/init.d/S99start_app` existed, but SimpleAF removes that script while keeping `S12boot_display` in place. The Creality boot logo now stops on all K1 firmware variants when HelixScreen takes over.
-
 ## [0.99.50] - 2026-04-27
 
-A perf and stability patch. Headlines: animated screensaver now defaults to Off on BASIC (Pi 3B-class) and EMBEDDED (AD5M / AD5X) tiers to keep the CPU out of Klipper's print loop, with a one-time migration notice and reduced frame rate when users re-enable on those tiers; another sweep of L081-family teardown crashes (`lv_event_mark_deleted`); plus targeted fixes for AD5X IFS color sync, AFC `LANE_UNLOAD` serialization, and the Z-offset probe sequence.
+A perf and stability patch. Headlines: animated screensaver now defaults to Off on BASIC (Pi 3B-class) and EMBEDDED (AD5M / AD5X) tiers to keep the CPU out of Klipper's print loop, with a one-time migration notice and reduced frame rate when users re-enable on those tiers; another sweep of L081-family teardown crashes (`lv_event_mark_deleted`); plus targeted fixes for AD5X IFS color sync, AFC `LANE_UNLOAD` serialization, and the Z-offset probe sequence. Re-tagged after the initial CI release build broke on cross-compile targets and a SonicPad user reported the shutdown widget was unreachable when Moonraker failed to connect.
 
 ### Fixed
+- **Release build broken on cross-compile targets** — the v15→v16 screensaver migration referenced `PlatformCapabilities::detect()` and `platform_tier_to_string()` unconditionally in `config.cpp`. Those symbols ship in helix-screen but not in `helix-splash` / `helix-watchdog`'s extra-obj lists, so every cross-compile target (pi32, ad5m, etc.) failed at link time on the auxiliary binaries. Both call sites are now gated behind the existing `HELIX_SPLASH_ONLY` / `HELIX_WATCHDOG` guard — splash/watchdog don't render the screensaver and treat the migration as a no-op.
+- **Shutdown widget unusable when Moonraker can't be reached** — feedback from a SonicPad user: when Klipper failed to boot, the WebSocket never connected and the shutdown button stayed disabled, leaving the hardware switch as the only way to power off. The button is now always clickable; in same-host single-scope mode (helix-screen and Moonraker on the same device) the buttons fall back to `SystemPower::shutdown_local()` / `reboot_local()` (logind → systemctl) when the RPC isn't available. Dual-scope users on a remote screen already had a Screen-only path; ungating the button makes it reachable when the printer is unresponsive.
+- **K1C boot logo persisted on SimpleAF firmware** ([#890]) — `boot_display` was only killed when `/etc/init.d/S99start_app` existed, but SimpleAF removes that script while keeping `S12boot_display` in place. The Creality boot logo now stops on all K1 firmware variants when HelixScreen takes over.
 - **AD5X identify-wizard sleep regression** — removed the wizard block that force-wrote stale pre-#431 display values on every confirmation. New v14→v15 config migration restores the AD5X backlight-off sleep preset for users polluted by the pre-fix wizard. Resolves the "random RGB colors during sleep" symptom documented in `FLASHFORGE_AD5X_SUPPORT.md`.
 - **AD5X IFS color and material type sync** — slot color/type changes from the panel now use Flashforge's `CHANGE_ZCOLOR` macro so the IFS controller actually receives the update.
 - **AFC `LANE_UNLOAD` requests are now serialized** — tapping Eject on multiple lanes in quick succession queues the requests and runs them one-at-a-time instead of overlapping AFC macros. Mitigates Turtle_1 "Timer too close" shutdowns from competing stepper / LED-animation work.
@@ -27,6 +27,7 @@ A perf and stability patch. Headlines: animated screensaver now defaults to Off 
 ### Changed
 - **Animated screensaver disabled by default on BASIC and EMBEDDED tiers** — Raspberry Pi 3B-class (BASIC) and AD5M / AD5X (EMBEDDED) hardware now ship with the screensaver off to prevent print failures from CPU contention with Klipper. Users upgrading with Flying Toasters still enabled on these tiers are migrated to Off with a one-time notification; the setting can be re-enabled under Settings → Display. When re-enabled on these tiers, the screensaver runs at a reduced frame rate (~7 fps) with fewer sprites (Flying Toasters capped at 10) to stay out of the print loop's way.
 - **Spool canvas scroll smoothness** — dedup pass, LRU pixel cache, and a sqrt LUT in the canvas pixel renderer. Noticeable on filament panel scroll on EMBEDDED-tier hardware.
+- **Crash bundle `queue_prev` ring coalesces consecutive identical tags** — high-frequency callbacks (e.g. `TSM::update_subjects` per WebSocket tick) used to fill all four slots and bury genuinely distinct prior callbacks. The producer now bumps a parallel count on tag-pointer match instead of advancing the ring; emitted as `queue_prev: tag (xN)` when N > 1. Restores diagnostic runway for tracing post-callback heap corruption (#840 / #851 family).
 
 ## [0.99.49] - 2026-04-26
 
