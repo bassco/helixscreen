@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **K1C boot logo persisted on SimpleAF firmware** ([#890]) — `boot_display` was only killed when `/etc/init.d/S99start_app` existed, but SimpleAF removes that script while keeping `S12boot_display` in place. The Creality boot logo now stops on all K1 firmware variants when HelixScreen takes over.
+
 ## [0.99.50] - 2026-04-27
 
 A perf and stability patch. Headlines: animated screensaver now defaults to Off on BASIC (Pi 3B-class) and EMBEDDED (AD5M / AD5X) tiers to keep the CPU out of Klipper's print loop, with a one-time migration notice and reduced frame rate when users re-enable on those tiers; another sweep of L081-family teardown crashes (`lv_event_mark_deleted`); plus targeted fixes for AD5X IFS color sync, AFC `LANE_UNLOAD` serialization, and the Z-offset probe sequence.

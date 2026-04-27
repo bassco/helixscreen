@@ -4,6 +4,12 @@
 # Platform hooks: Creality K1 / K1C / K1 Max / K1 SE
 
 platform_stop_competing_uis() {
+    # boot_display (started by /etc/init.d/S12boot_display) draws the Creality
+    # boot logo on all K1 firmware variants. On stock firmware it's stopped by
+    # S99start_app's stop_boot_display(), but SimpleAF removes S99start_app
+    # while leaving S12boot_display in place — so kill it unconditionally.
+    killall boot_display 2>/dev/null || true
+
     # Stop and persistently disable stock Creality UI (display-server, Monitor, etc.)
     # S99start_app launches the entire stock UI stack; if it remains executable it
     # will respawn every boot since it runs after S99helixscreen alphabetically.
@@ -15,8 +21,7 @@ platform_stop_competing_uis() {
         fi
         # Kill any remaining stock UI processes (full list from S99start_app)
         for proc in display-server Monitor master-server audio-server \
-                    wifi-server app-server upgrade-server web-server \
-                    boot_display; do
+                    wifi-server app-server upgrade-server web-server; do
             killall "$proc" 2>/dev/null || true
         done
     fi
