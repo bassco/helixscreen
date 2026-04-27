@@ -252,12 +252,14 @@ void set_forced_tier_for_migration(std::optional<helix::PlatformTier> tier) {
 
 namespace {
 
+#if !defined(HELIX_SPLASH_ONLY) && !defined(HELIX_WATCHDOG)
 static helix::PlatformTier current_tier_for_migration() {
     if (g_forced_tier_for_migration.has_value()) {
         return *g_forced_tier_for_migration;
     }
     return helix::PlatformCapabilities::detect().tier;
 }
+#endif
 
 /// Migration v0→v1: Sound support added — default sounds OFF for existing configs.
 /// Before sound actually worked, configs had sounds_enabled: true as a harmless default.
@@ -704,6 +706,12 @@ static void migrate_v14_to_v15(json& config) {
 /// the same problem, and silently flipping an explicit user choice is worse than
 /// leaving a slightly expensive screensaver running on their preferred setting.
 static void migrate_v15_to_v16(json& config) {
+#if defined(HELIX_SPLASH_ONLY) || defined(HELIX_WATCHDOG)
+    // Splash and watchdog don't render the screensaver and don't link the
+    // PlatformCapabilities object code. The version still advances; the next
+    // helix-screen run will surface the migration notice if applicable.
+    (void)config;
+#else
     using helix::PlatformTier;
     PlatformTier tier = current_tier_for_migration();
     if (tier != PlatformTier::BASIC && tier != PlatformTier::EMBEDDED) {
@@ -725,6 +733,7 @@ static void migrate_v15_to_v16(json& config) {
     spdlog::info("[Config] Migration v16: screensaver disabled on {} tier "
                  "(was Flying Toasters); notice queued",
                  helix::platform_tier_to_string(tier));
+#endif
 }
 
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
