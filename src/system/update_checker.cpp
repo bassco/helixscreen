@@ -851,7 +851,24 @@ std::string UpdateChecker::get_download_path(DownloadPathDiag* diag,
     // gcode storage on an embedded device.
     std::vector<std::string> candidates;
 
-    // Environment variables first
+    // Install root partition — by definition writable (the running binary
+    // lives there) and on most embedded devices it sits on the largest
+    // dedicated user partition, e.g. CC1 /user-resource (~6 GB),
+    // Snapmaker U1 /opt/lava, K1/K2 /usr/data. The standard temp/data
+    // fallbacks below routinely miss this because they assume FHS layout.
+    // We add both the install dir and its parent — both yield the same
+    // f_bavail (same filesystem) but the parent helps when an installer
+    // tightens permissions on the install dir itself.
+    const std::string install_root = app_get_install_root();
+    if (!install_root.empty()) {
+        candidates.emplace_back(install_root);
+        const auto last_slash = install_root.find_last_of('/');
+        if (last_slash != std::string::npos && last_slash > 0) {
+            candidates.emplace_back(install_root.substr(0, last_slash));
+        }
+    }
+
+    // Environment variables next
     for (const char* env_name : {"TMPDIR", "TMP", "TEMP"}) {
         const char* val = std::getenv(env_name);
         if (val != nullptr && val[0] != '\0') {
