@@ -131,6 +131,26 @@ class Ad5xIfsTestAccess {
         std::lock_guard<std::mutex> lock(b.mutex_);
         b.dirty_[idx] = val;
     }
+    // Seed firmware-state arrays directly. parse_save_variables no longer
+    // writes colors_[]/materials_[] (those come from CHANGE_ZCOLOR/GET_ZCOLOR
+    // exclusively now); tests that previously seeded via _IFS_VARS save_variables
+    // should use these helpers and then re-run update_slot_from_state via
+    // handle_status, parse_adventurer_json, or apply_zcolor_result.
+    static void set_color(AmsBackendAd5xIfs& b, size_t idx, const std::string& hex) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.colors_[idx] = hex;
+        b.update_slot_from_state(static_cast<int>(idx));
+    }
+    static void set_material(AmsBackendAd5xIfs& b, size_t idx, const std::string& mat) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.materials_[idx] = mat;
+        b.update_slot_from_state(static_cast<int>(idx));
+    }
+    static void set_port_presence(AmsBackendAd5xIfs& b, size_t idx, bool val) {
+        std::lock_guard<std::mutex> lock(b.mutex_);
+        b.port_presence_[idx] = val;
+        b.update_slot_from_state(static_cast<int>(idx));
+    }
     static AmsBackendAd5xIfs::ZColorSilentResult
     parse_zcolor_silent(const std::vector<std::string>& lines) {
         return AmsBackendAd5xIfs::parse_zcolor_silent(lines);
@@ -218,13 +238,38 @@ static json make_motion_sensor(bool detected) {
         {"filament_motion_sensor ifs_motion_sensor", json{{"filament_detected", detected}}}};
 }
 
-// Standard test variables representing a typical IFS configuration
+// Standard test variables representing a typical IFS configuration. Note:
+// `<prefix>_colors` and `<prefix>_types` are no longer consumed by
+// parse_save_variables (they live in lessWaste/bambufy's private namespace,
+// which zmod doesn't read). Tests that need colors/materials seeded must
+// also call seed_standard_colors() — the entries in this map are kept so
+// existing tests that simulate notifies still pass through unchanged for the
+// fields parse_save_variables still cares about (tools, current_tool,
+// external).
 static json standard_variables() {
     return json{{"less_waste_colors", json::array({"FF0000", "00FF00", "0000FF", "FFFFFF"})},
                 {"less_waste_types", json::array({"PLA", "PETG", "ABS", "TPU"})},
                 {"less_waste_tools", json::array({1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5})},
                 {"less_waste_current_tool", 0},
                 {"less_waste_external", 0}};
+}
+
+// Seed colors_/materials_/port_presence_ to match standard_variables() — the
+// shape that parse_save_variables used to populate. Use after constructing a
+// backend to give tests a deterministic firmware-truth baseline.
+static void seed_standard_colors(AmsBackendAd5xIfs& b) {
+    Ad5xIfsTestAccess::set_color(b, 0, "FF0000");
+    Ad5xIfsTestAccess::set_color(b, 1, "00FF00");
+    Ad5xIfsTestAccess::set_color(b, 2, "0000FF");
+    Ad5xIfsTestAccess::set_color(b, 3, "FFFFFF");
+    Ad5xIfsTestAccess::set_material(b, 0, "PLA");
+    Ad5xIfsTestAccess::set_material(b, 1, "PETG");
+    Ad5xIfsTestAccess::set_material(b, 2, "ABS");
+    Ad5xIfsTestAccess::set_material(b, 3, "TPU");
+    Ad5xIfsTestAccess::set_port_presence(b, 0, true);
+    Ad5xIfsTestAccess::set_port_presence(b, 1, true);
+    Ad5xIfsTestAccess::set_port_presence(b, 2, true);
+    Ad5xIfsTestAccess::set_port_presence(b, 3, true);
 }
 
 // ==========================================================================
@@ -249,7 +294,10 @@ TEST_CASE("AD5X IFS parse_save_variables full JSON", "[ams][ad5x_ifs]") {
     REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == 0);
     REQUIRE_FALSE(Ad5xIfsTestAccess::external_mode(backend));
 
-    // After handle_status, slot info should reflect parsed data
+    // Color/material seeded separately — parse_save_variables does not write
+    // colors_[]/materials_[] anymore (those live in zmod's authoritative state,
+    // not in lessWaste/bambufy's private namespace).
+    seed_standard_colors(backend);
     Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
 
     auto info = backend.get_slot_info(0);
@@ -299,37 +347,26 @@ TEST_CASE("AD5X IFS color hex parsing", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
     SECTION("lowercase hex works") {
-        auto vars = standard_variables();
-        vars["less_waste_colors"] = json::array({"ff0000", "00ff00", "0000ff", "ffffff"});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
+        Ad5xIfsTestAccess::set_color(backend, 0, "ff0000");
 
         auto info = backend.get_slot_info(0);
         REQUIRE(info.color_rgb == 0xFF0000);
     }
 
     SECTION("mixed case hex works") {
-        auto vars = standard_variables();
-        vars["less_waste_colors"] = json::array({"Ff0000", "00Ff00", "0000Ff", "FfFfFf"});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
+        Ad5xIfsTestAccess::set_color(backend, 0, "Ff0000");
 
         auto info = backend.get_slot_info(0);
         REQUIRE(info.color_rgb == 0xFF0000);
     }
 
-    SECTION("empty string defaults to no change") {
-        auto vars = standard_variables();
-        // First set known colors
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
+    SECTION("empty string leaves color unchanged") {
+        // Seed slot 1 with a known color, then attempt to overwrite slot 0
+        // with empty hex — update_slot_from_state's stoul fallback skips the
+        // parse, so other slots are unaffected.
+        Ad5xIfsTestAccess::set_color(backend, 1, "00FF00");
+        Ad5xIfsTestAccess::set_color(backend, 0, "");
 
-        // Now parse with empty — color array element is empty string,
-        // stoul will throw and color_rgb stays at previous value
-        auto vars2 = standard_variables();
-        vars2["less_waste_colors"] = json::array({"", "00FF00", "0000FF", "FFFFFF"});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars2));
-
-        // Slot 0 color should remain from the first parse since empty string
-        // is stored in colors_[] (empty) but update_slot_from_state skips
-        // parsing when the hex is empty
         auto info = backend.get_slot_info(1);
         REQUIRE(info.color_rgb == 0x00FF00);
     }
@@ -549,10 +586,13 @@ TEST_CASE("AD5X IFS bypass mode", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS build_color_list_value format", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
-    Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
+    seed_standard_colors(backend);
 
     std::string colors = Ad5xIfsTestAccess::build_colors(backend);
-    // Expected: Python list literal with outer double quotes
+    // Expected: Python list literal with outer double quotes. Function is no
+    // longer wired into the color write path (CHANGE_ZCOLOR is per-slot), but
+    // it remains for any future _IFS_VARS payload that legitimately needs the
+    // shape — keep the formatter test as a regression guard.
     REQUIRE(colors == "\"['FF0000', '00FF00', '0000FF', 'FFFFFF']\"");
 }
 
@@ -729,16 +769,15 @@ TEST_CASE("AD5X IFS path segments", "[ams][ad5x_ifs]") {
     }
 
     SECTION("get_slot_filament_segment: empty slot → NONE") {
-        // Use variables where slot 2 has no color data (truly empty)
-        json vars = standard_variables();
-        vars["less_waste_colors"][2] = "";
-        vars["less_waste_types"][2] = "";
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
+        // Slot 2 with port_presence_=false → NONE.
+        Ad5xIfsTestAccess::set_port_presence(backend, 2, false);
+        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
         REQUIRE(backend.get_slot_filament_segment(2) == PathSegment::NONE);
     }
 
     SECTION("get_slot_filament_segment: non-active slot with color data → HUB") {
-        // Slot 2 has color data in save_variables → inferred present → HUB
+        // Slot 2 with port_presence_=true and not the active slot → HUB.
+        seed_standard_colors(backend);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
         REQUIRE(backend.get_slot_filament_segment(2) == PathSegment::HUB);
     }
@@ -778,6 +817,7 @@ TEST_CASE("AD5X IFS handles wrapped notify_status_update", "[ams][ad5x_ifs]") {
     }
 
     SECTION("wrapped save_variables updates state") {
+        seed_standard_colors(backend);
         auto wrapped = wrap_notification(make_save_variables(standard_variables()));
         Ad5xIfsTestAccess::handle_status(backend, wrapped);
 
@@ -895,11 +935,14 @@ TEST_CASE("AD5X IFS variable prefix auto-detection", "[ams][ad5x_ifs]") {
         vars["bambufy_current_tool"] = 0;
         vars["bambufy_external"] = 0;
 
+        seed_standard_colors(backend);
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
 
         REQUIRE(Ad5xIfsTestAccess::var_prefix(backend) == "bambufy");
         REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == 0);
 
+        // Color/material sourced from CHANGE_ZCOLOR/GET_ZCOLOR (seeded above),
+        // not from <prefix>_colors.
         auto info = backend.get_slot_info(0);
         REQUIRE(info.color_rgb == 0xFF0000);
         REQUIRE(info.material == "PLA");
@@ -948,6 +991,11 @@ TEST_CASE("AD5X IFS motion sensor completes load/unload", "[ams][ad5x_ifs]") {
 TEST_CASE("AD5X IFS native ZMOD infers active slot from head sensor", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
 
+    // Seed colors_ + port_presence_ to simulate the post-GET_ZCOLOR / Adventurer5M
+    // state. parse_save_variables no longer sets these fields (they live in
+    // zmod's namespace, not lessWaste's).
+    seed_standard_colors(backend);
+
     // No per-port sensors — only motion sensor and save_variables
     json notification;
     notification["save_variables"] = json{{"variables", standard_variables()}};
@@ -960,8 +1008,7 @@ TEST_CASE("AD5X IFS native ZMOD infers active slot from head sensor", "[ams][ad5
     auto info = backend.get_slot_info(0);
     REQUIRE(info.status == SlotStatus::LOADED);
 
-    // Non-active slots with color data in save_variables are AVAILABLE (not EMPTY),
-    // because port_presence is inferred from the IFS variable color data.
+    // Non-active slots with port_presence_ true are AVAILABLE (not EMPTY).
     auto info1 = backend.get_slot_info(1);
     REQUIRE(info1.status == SlotStatus::AVAILABLE);
 }
@@ -1404,140 +1451,13 @@ TEST_CASE("AD5X IFS parse_adventurer_json infers presence for native ZMOD", "[am
     }
 }
 
-// ==========================================================================
-// Dirty flag race: parse_save_variables clears dirty on value match (#716)
-// ==========================================================================
-
-TEST_CASE("AD5X IFS dirty flag cleared when save_variables match local edit", "[ams][ad5x_ifs]") {
-    AmsBackendAd5xIfs backend(nullptr, nullptr);
-
-    // Seed with initial save_variables
-    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-
-    // User edits slot 0
-    SlotInfo edit;
-    edit.color_rgb = 0x00FF00;
-    edit.material = "PETG";
-    backend.set_slot_info(0, edit, false);
-    REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
-
-    SECTION("stale save_variables do NOT clear dirty") {
-        // Simulate stale save_variables (old color still "FF0000")
-        Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
-
-        // Dirty must remain set
-        REQUIRE(Ad5xIfsTestAccess::dirty(backend, 0));
-
-        // Local edit must be preserved
-        auto info = backend.get_slot_info(0);
-        REQUIRE(info.color_rgb == 0x00FF00);
-        REQUIRE(info.material == "PETG");
-    }
-
-    SECTION("matching save_variables clear dirty") {
-        // Simulate Klipper processing our edit — save_variables now contain new color
-        auto vars = standard_variables();
-        vars["bambufy_colors"][0] = "00FF00";
-        vars["bambufy_types"][0] = "PETG";
-        Ad5xIfsTestAccess::parse_vars(backend, vars);
-
-        // Dirty should be cleared — Klipper confirmed our value
-        REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 0));
-    }
-
-    SECTION("case-insensitive match works") {
-        auto vars = standard_variables();
-        vars["bambufy_colors"][0] = "00ff00"; // lowercase from Klipper
-        Ad5xIfsTestAccess::parse_vars(backend, vars);
-
-        REQUIRE_FALSE(Ad5xIfsTestAccess::dirty(backend, 0));
-    }
-}
-
-// ==========================================================================
-// Port presence inference from save_variables and set_slot_info
-// ==========================================================================
-
-TEST_CASE("AD5X IFS port_presence inferred from save_variables colors", "[ams][ad5x_ifs]") {
-    AmsBackendAd5xIfs backend(nullptr, nullptr);
-
-    SECTION("non-empty colors latch port_presence true") {
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-        // All 4 slots have colors in standard_variables → all present
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 1));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 2));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 3));
-    }
-
-    SECTION("empty color strings do not latch port_presence") {
-        json vars = standard_variables();
-        vars["less_waste_colors"] = json::array({"FF0000", "", "", ""});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
-
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 1));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 2));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 3));
-    }
-
-    SECTION("empty color after latched clears port_presence (spool eject)") {
-        // First populate all 4 slots — presence latches true
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 1));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 2));
-
-        // User ejects slots 1 and 2 — colors become empty in save_variables
-        json vars = standard_variables();
-        vars["less_waste_colors"] = json::array({"FF0000", "", "", "FFFFFF"});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
-
-        // Slots 1 and 2 should clear; 0 and 3 remain latched
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 1));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 2));
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 3));
-    }
-
-    SECTION("slots with color data show as AVAILABLE not EMPTY") {
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-
-        // Active slot (T0 → port 1 → slot 0) without head filament → AVAILABLE
-        auto info0 = backend.get_slot_info(0);
-        REQUIRE(info0.status == SlotStatus::AVAILABLE);
-
-        // Non-active slot with color data → AVAILABLE
-        auto info1 = backend.get_slot_info(1);
-        REQUIRE(info1.status == SlotStatus::AVAILABLE);
-    }
-
-    SECTION("slots without color data remain EMPTY") {
-        json vars = standard_variables();
-        vars["less_waste_colors"] = json::array({"FF0000", "", "", ""});
-        vars["less_waste_types"] = json::array({"PLA", "", "", ""});
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(vars));
-
-        auto info0 = backend.get_slot_info(0);
-        REQUIRE(info0.status == SlotStatus::AVAILABLE);
-
-        auto info1 = backend.get_slot_info(1);
-        REQUIRE(info1.status == SlotStatus::EMPTY);
-    }
-
-    SECTION("per-port sensor printers skip save_variables presence inference") {
-        // Feed per-port sensor data first to set has_per_port_sensors_ = true
-        Ad5xIfsTestAccess::handle_status(backend, make_port_sensor(1, true));
-        REQUIRE(Ad5xIfsTestAccess::has_per_port_sensors(backend));
-
-        // Now feed save_variables — colors should NOT latch port_presence
-        // because per-port sensors are authoritative
-        Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
-
-        // Port 1 has sensor data → present; port 2 has no sensor data → not present
-        REQUIRE(Ad5xIfsTestAccess::port_presence(backend, 0));
-        REQUIRE_FALSE(Ad5xIfsTestAccess::port_presence(backend, 1));
-    }
-}
+// NOTE: tests previously here exercised parse_save_variables's color/type
+// reads from <prefix>_colors / <prefix>_types — including the dirty-flag
+// round-trip and port_presence inference from color emptiness. Those code
+// paths were removed when CHANGE_ZCOLOR / GET_ZCOLOR became the sole
+// color/type source (lessWaste/bambufy save_variables don't reflect zmod's
+// authoritative state). The remaining set_slot_info port_presence tests
+// below cover the local-edit branch that still drives presence inference.
 
 TEST_CASE("AD5X IFS set_slot_info updates port_presence", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);

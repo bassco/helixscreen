@@ -141,38 +141,39 @@ void AmsBackendAd5xIfs::on_started() {
 
             // Safety net: if parse_save_variables somehow set has_ifs_vars_ despite
             // the latch (shouldn't happen), force it back off for missing macros.
-            bool need_zcolor = false;
+            // has_ifs_vars_ now only gates tool-mapping / current_tool / external
+            // reads from save_variables — color/type writes use CHANGE_ZCOLOR for
+            // every user regardless.
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 if (!macro_exists && has_ifs_vars_) {
                     spdlog::warn("{} save_variables contain {}_ data but _IFS_VARS macro "
-                                 "not found — falling back to native ZMOD",
+                                 "not found — clearing has_ifs_vars_ (tool-mapping "
+                                 "from save_variables disabled)",
                                  backend_log_tag(), var_prefix_);
                     has_ifs_vars_ = false;
                 }
-                need_zcolor = !has_ifs_vars_;
             }
-            if (need_zcolor) {
-                spdlog::info("{} No _IFS_VARS data found, reading Adventurer5M.json (native ZMOD)",
+
+            // Adventurer5M.json + GET_ZCOLOR SILENT=1 are zmod's authoritative
+            // color/type sources for ALL AD5X IFS users. lessWaste/bambufy
+            // _IFS_VARS save_variables (less_waste_colors / bambufy_colors)
+            // live in a private namespace zmod does not read, so we never
+            // trust them for color/type — only for tool-mapping and friends.
+            // Register the listeners + fire the initial query unconditionally.
+            spdlog::info("{} Reading Adventurer5M.json + GET_ZCOLOR SILENT=1 for color truth",
+                         backend_log_tag());
+            read_adventurer_json();
+            register_zcolor_listener();
+            // notify_klippy_ready catches startup and FIRMWARE_RESTART; it's
+            // the point at which zmod is initialised and GET_ZCOLOR returns
+            // populated results.
+            register_klippy_ready_listener();
+            if (klippy_ready) {
+                schedule_zcolor_query();
+            } else {
+                spdlog::info("{} Deferring GET_ZCOLOR SILENT=1 until klippy ready",
                              backend_log_tag());
-                read_adventurer_json();
-                register_zcolor_listener();
-                // GET_ZCOLOR SILENT=1 is the only source of live per-port presence
-                // on native ZMOD. Adventurer5M.json persists colors but NOT
-                // load/unload state. See project_ifs_data_sources.md.
-                //
-                // Only fire the query now if klippy is already ready — otherwise zmod
-                // hasn't initialised and GET_ZCOLOR returns an empty response, which
-                // apply_zcolor_result() (rightly) refuses to treat as "no slots loaded".
-                // The notify_klippy_ready handler below catches the startup/ready
-                // transition (and FIRMWARE_RESTART) and fires the query then.
-                register_klippy_ready_listener();
-                if (klippy_ready) {
-                    schedule_zcolor_query();
-                } else {
-                    spdlog::info("{} Deferring GET_ZCOLOR SILENT=1 until klippy ready",
-                                 backend_log_tag());
-                }
             }
         });
 }
@@ -286,6 +287,24 @@ void AmsBackendAd5xIfs::handle_status_update(const json& notification) {
     if (state_changed) {
         emit_event(EVENT_STATE_CHANGED);
     }
+
+    // Freshness backstop: zmod can mutate its color state via the on-printer
+    // "Select print materials" dialog. That path may not always echo a
+    // CHANGE_ZCOLOR token through notify_gcode_response (zmod's dialog handler
+    // is in the closed-source zmod_color.py). Without this kick, edits made
+    // outside HelixScreen would only refresh on klippy_ready / load/unload
+    // completion. Piggyback on notify_status_update — they arrive at sub-
+    // second cadence on a connected printer — and rate-limit via steady_clock.
+    //
+    // schedule_zcolor_query() is itself debounced (500ms) and idempotent, so
+    // overlapping triggers from the gcode-echo listener or load/unload
+    // completion coalesce harmlessly.
+    constexpr auto kZColorRefreshInterval = std::chrono::seconds(15);
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_zcolor_refresh_kick_ >= kZColorRefreshInterval) {
+        last_zcolor_refresh_kick_ = now;
+        schedule_zcolor_query();
+    }
 }
 
 void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
@@ -312,62 +331,21 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
 
     const std::string p = var_prefix_;
 
-    // Colors: array of hex strings ["FF0000", "00FF00", ...]
-    if (vars.contains(p + "_colors") && vars[p + "_colors"].is_array()) {
-        const auto& colors = vars[p + "_colors"];
-        for (size_t i = 0; i < std::min(colors.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
-            if (!colors[i].is_string())
-                continue;
-            std::string incoming = colors[i].get<std::string>();
-            if (dirty_[i]) {
-                // Slot was edited locally. Check if Klipper has persisted our value.
-                // Case-insensitive compare: Klipper may normalize case.
-                bool match = std::equal(incoming.begin(), incoming.end(), colors_[i].begin(),
-                                        colors_[i].end(),
-                                        [](char a, char b) { return toupper(a) == toupper(b); });
-                if (match) {
-                    spdlog::debug("{} Slot {} dirty cleared — Klipper confirmed color {}",
-                                  backend_log_tag(), i, incoming);
-                    dirty_[i] = false;
-                } else {
-                    spdlog::debug("{} Slot {} still dirty — incoming color '{}' != local '{}'",
-                                  backend_log_tag(), i, incoming, colors_[i]);
-                }
-                continue;
-            }
-            colors_[i] = incoming;
-
-            // Infer port_presence from save_variables colors, same logic as
-            // parse_adventurer_json. Without per-port sensors, a non-empty
-            // color means filament is present; an empty color means the spool
-            // has been ejected. Only clear on eject when the system is IDLE so
-            // a transient read mid-unload cannot wipe presence (mirrors the
-            // #631 fix in the native ZMOD path).
-            if (!has_per_port_sensors_) {
-                if (!incoming.empty()) {
-                    port_presence_[i] = true;
-                } else if (port_presence_[i] &&
-                           system_info_.action == AmsAction::IDLE) {
-                    spdlog::info("{} Slot {} eject detected (empty color in "
-                                 "save_variables)",
-                                 backend_log_tag(), i);
-                    port_presence_[i] = false;
-                }
-            }
-        }
-    }
-
-    // Materials: array of type strings ["PLA", "PETG", ...]
-    // Dirty is cleared by the color match path above — _IFS_VARS writes both
-    // colors and types atomically, so they arrive in the same status update.
-    if (vars.contains(p + "_types") && vars[p + "_types"].is_array()) {
-        const auto& types = vars[p + "_types"];
-        for (size_t i = 0; i < std::min(types.size(), static_cast<size_t>(NUM_PORTS)); ++i) {
-            if (types[i].is_string() && !dirty_[i]) {
-                materials_[i] = types[i].get<std::string>();
-            }
-        }
-    }
+    // NOTE on colors/types: <prefix>_colors and <prefix>_types live in the
+    // lessWaste/bambufy plugin's PRIVATE save_variables namespace. zmod does
+    // NOT read them — its authoritative color/type store is its own in-memory
+    // state, persisted to Adventurer5M.json, mutated only by CHANGE_ZCOLOR.
+    // Trusting <prefix>_colors here was poisoning colors_[]/materials_[] with
+    // values that diverged silently from zmod's truth (raza's debug bundle
+    // ZYYRVVTG showed Adventurer5M.json and less_waste_colors out of sync).
+    // Color/type reads now come from GET_ZCOLOR SILENT=1 (live) and
+    // Adventurer5M.json (boot snapshot) only. set_slot_info() correspondingly
+    // writes via CHANGE_ZCOLOR rather than _IFS_VARS, so the dirty_-clearing
+    // round-trip that lived in this branch is no longer needed.
+    //
+    // The fields below — tools, current_tool, external — DO live only in the
+    // plugin's save_variables namespace (no other Moonraker-visible source),
+    // so we keep reading them.
 
     // Tool mapping: 16-element array, index=tool, value=port (1-4, 5=unmapped)
     if (vars.contains(p + "_tools") && vars[p + "_tools"].is_array()) {
@@ -1063,37 +1041,32 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
                 });
         }
 
-        bool use_ifs_vars;
+        // CHANGE_ZCOLOR is zmod's canonical setter for slot color + material.
+        // It updates zmod's in-memory color state AND persists Adventurer5M.json
+        // in one shot. This is the right write target regardless of whether
+        // lessWaste/bambufy is also installed — those plugins maintain a
+        // private save_variables namespace that zmod does not read, so the
+        // previous _IFS_VARS write path silently desynchronized HelixScreen
+        // edits from zmod's "Select print materials" dialog (raza's bundle
+        // ZYYRVVTG showed three-way divergence between Adventurer5M.json,
+        // less_waste_colors, and HelixScreen's override store).
+        std::string hex_for_gcode;
+        std::string mat_for_gcode;
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            use_ifs_vars = has_ifs_vars_;
+            hex_for_gcode = colors_[idx].empty() ? std::string("808080") : colors_[idx];
+            mat_for_gcode = materials_[idx].empty() ? std::string("PLA") : materials_[idx];
         }
-
-        if (use_ifs_vars) {
-            // lessWaste/bambufy: bulk update all slots via _IFS_VARS macro
-            std::string color_val, type_val;
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                color_val = build_color_list_value();
-                type_val = build_type_list_value();
-            }
-
-            // execute_gcode is async — these always return success immediately.
-            // dirty_ stays true until parse_save_variables sees the updated
-            // value come back from Klipper, preventing stale notify_status_update
-            // events from reverting our edit (#716).
-            write_ifs_var("colors", color_val);
-            write_ifs_var("types", type_val);
-        } else {
-            // Native ZMOD: per-slot update via Adventurer5M.json
-            auto err = write_adventurer_json(slot_index);
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                dirty_[idx] = false;
-            }
-            if (!err.success())
-                return err;
+        const int port = slot_index + 1; // CHANGE_ZCOLOR uses 1-based slot numbering
+        std::string change_zcolor = "CHANGE_ZCOLOR SLOT=" + std::to_string(port) +
+                                    " HEX=" + hex_for_gcode + " TYPE=" + mat_for_gcode;
+        auto err = execute_gcode(change_zcolor);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            dirty_[idx] = false;
         }
+        if (!err.success())
+            return err;
     }
 
     emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));

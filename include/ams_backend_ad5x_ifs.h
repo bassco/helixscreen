@@ -309,6 +309,14 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     static constexpr int ACTION_TIMEOUT_SECONDS = 90;
     std::chrono::steady_clock::time_point action_start_time_;
 
+    // Freshness backstop for zmod-side color edits. handle_status_update kicks
+    // a schedule_zcolor_query() if at least 15s have elapsed since the last
+    // kick — covers the case where zmod's on-printer color dialog mutates
+    // state without echoing a CHANGE_ZCOLOR token through notify_gcode_response.
+    // Default-constructed time_point is the epoch, so the first status update
+    // after backend start unconditionally fires a query.
+    std::chrono::steady_clock::time_point last_zcolor_refresh_kick_{};
+
     // User-provided per-slot metadata (brand, spool name, spoolman IDs, remaining
     // weight, etc.) layered over firmware-reported state.
     //
