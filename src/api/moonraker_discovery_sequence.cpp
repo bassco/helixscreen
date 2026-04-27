@@ -345,7 +345,13 @@ void MoonrakerDiscoverySequence::continue_discovery_objects(uint64_t seq) {
                     }
                 }
 
-                // Fire-and-forget webcam detection - independent of components list
+                // Fire-and-forget webcam detection - independent of components list.
+                // Skipped on platforms without a camera widget (HELIX_HAS_CAMERA=0:
+                // AD5M/AD5X/CC1/K1/K2/MIPS/SnapmakerU1). On AD5X specifically, the
+                // firmware's H.264 codec driver crashes the kernel on v4l2_open
+                // (dma_coherent_mem_available NULL deref → process killed by SIGBUS),
+                // so even probing for a webcam is unwanted.
+#if HELIX_HAS_CAMERA
                 client_.send_jsonrpc(
                     "server.webcams.list", json::object(),
                     [](json response) {
@@ -474,6 +480,12 @@ void MoonrakerDiscoverySequence::continue_discovery_objects(uint64_t seq) {
                     },
                     0,     // default timeout
                     true); // silent — webcams not always configured
+#else
+                // No camera widget on this platform — explicitly mark unavailable
+                // so any consumer that observes the subject sees a definitive
+                // "no" instead of the default-constructed initial state.
+                get_printer_state().set_webcam_available(false);
+#endif // HELIX_HAS_CAMERA
 
                 // Fire-and-forget power device detection
                 discover_power_devices();
