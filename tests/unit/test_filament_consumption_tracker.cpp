@@ -83,6 +83,10 @@ TEST_CASE("set_external_spool_info_in_memory does not write settings",
     REQUIRE(persisted->remaining_weight_g == 750.0f);
 
     ams.clear_external_spool_info();
+    // Clear singleton state set by Config::init() above so the next test
+    // doesn't see a stale path/active_printer_id_ pointing at a temp dir
+    // that's about to vanish (tour-test wizard_completed read regression).
+    Config::get_instance()->clear_path();
     std::filesystem::remove_all(temp_dir);
 }
 
