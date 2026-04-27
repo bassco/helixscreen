@@ -5,6 +5,19 @@ All notable changes to HelixScreen will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.99.49] - 2026-04-26
+
+A targeted hotfix release for AD5X (ZMOD firmware) and other platforms with aggressive supervisor lifecycles. Real-time triage of bundle EE8X6GSK plus a live SSH session on the affected printer revealed a crash-loop chain combining three independent bugs: ZMOD's display-handoff Klipper macro periodically `killall`s helix-screen, our SIGTERM handler ran the full `Application::shutdown()` teardown, the teardown crashed with SIGBUS in late-stage cleanup (the crash handler was uninstalled in the first line of `shutdown()`, so no diagnostic landed on disk), and the watchdog burned through restart credits leaving a blank screen. All three sides are now hardened.
+
+### Fixed
+- **HelixScreen no longer crash-loops on platforms whose firmware aggressively respawns the UI process (AD5X / ZMOD)** — SIGTERM now triggers immediate `_exit(0)` without running `Application::shutdown()`. External supervisors only care about a clean exit code, not whether teardown ran. Skipping the fragile teardown path (LVGL deinit, observer cleanup, static destructors) avoids the L081-family SIGBUS that ZMOD's killall-and-respawn cycle was hitting on AD5X every ~20 s after Klipper restart. SIGINT (Ctrl+C from terminal) keeps the graceful shutdown path. Persisted state (settings, telemetry queue, crash history) is written on each change so nothing is lost.
+- **Crash handler stays installed through the entire shutdown sequence** — `crash_handler::uninstall()` was the *first* line of `Application::shutdown()`; now the *last*. Any SIGBUS/SIGSEGV during widget deletion, observer cleanup, or `lv_deinit` is now captured to `crash.txt` instead of falling through to the kernel default with no diagnostic. Critical for surfacing the L081-family teardown crashes seen post-v0.99.46.
+- **Crash diagnostics survive misconfigured config dirs (chroot, overlay, PrivateTmp)** — when the signal handler can't `open()` the primary crash path, it now falls back to writing the dump to stderr (with `=== HELIX_CRASH_DUMP ===` marker prefix). Stderr is always open and gets captured by both journald (systemd) and the watchdog's stderr pipe, so users on platforms where `$HELIX_CONFIG_DIR` resolves to a non-writable layer no longer get silent diagnostic blackouts.
+- **Debug bundles now include crash data on platforms that set `$HELIX_CONFIG_DIR`** (ZMOD, RatOS, etc.) — collector previously used an ad-hoc `$HOME/helixscreen/config` probe that missed overlay installs entirely. Now uses the canonical `helix::get_user_config_dir()` resolver, matching where the crash handler writes. New `crash_txt` bundle key includes the raw signal-handler dump even when the next-boot reporter hasn't run yet.
+- **Webcam discovery skipped on platforms without a camera widget** — Moonraker `server.webcams.list` and the local-endpoint probes (127.0.0.1:8080/8081/4408) now respect the `HELIX_HAS_CAMERA` compile-time gate. Skipped on AD5M/AD5X/CC1/K1/K2/MIPS/SnapmakerU1. On AD5X specifically, the firmware's kernel H.264 codec driver crashes on every `v4l2_open` (`dma_coherent_mem_available` NULL+12 deref) — we never opened `/dev/video*` directly so this isn't the trigger for the recent crash family, but probing for a webcam we can't render is wasted RPC.
+- **Installer disk-check uses POSIX `head -n 1`** so BusyBox doesn't reject `head -1` (AD5M/AD5X/K1/K2).
+- **Updater download-directory candidate list now includes the install root** — previously skipped install-root candidates, breaking updates on platforms where the install root is the only writable location.
+
 ## [0.99.48] - 2026-04-26
 
 A performance and correctness patch. Headlines: drastically narrowed Moonraker subscriptions (the prior nullptr-everything pattern was firing per-frame led_effect notifications on AFC hardware — a Voron Trident bundle showed 46 LED-effect objects updating per render frame); a tangle of six interlocking fixes to the wizard preset path so AD5M Pro on ForgeX firmware actually skips hardware steps on fresh install; and a UAF / OOB-read fix for a shared-component XML callback collision caught in bundle SSHGTVZQ.
@@ -3352,6 +3365,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.49]: https://github.com/prestonbrown/helixscreen/compare/v0.99.48...v0.99.49
 [0.99.48]: https://github.com/prestonbrown/helixscreen/compare/v0.99.47...v0.99.48
 [0.99.47]: https://github.com/prestonbrown/helixscreen/compare/v0.99.46...v0.99.47
 [0.99.46]: https://github.com/prestonbrown/helixscreen/compare/v0.99.45...v0.99.46
