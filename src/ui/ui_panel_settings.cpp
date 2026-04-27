@@ -1082,6 +1082,10 @@ void SettingsPanel::handle_factory_reset_clicked() {
             // Start hidden
             lv_obj_add_flag(factory_reset_dialog_, LV_OBJ_FLAG_HIDDEN);
 
+            // Register as a function-based (nullptr-lifecycle) overlay so
+            // crash crumbs show "anon" instead of "unreg".
+            NavigationManager::instance().register_overlay_instance(factory_reset_dialog_, nullptr);
+
             // Register close callback to delete dialog when animation completes.
             // Must use safe_delete_deferred — this lambda runs inside
             // UpdateQueue::process_pending(), and synchronous deletion

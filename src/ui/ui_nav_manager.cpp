@@ -1387,9 +1387,23 @@ void NavigationManager::push_overlay(lv_obj_t* overlay_panel, bool hide_previous
 
         bool is_first_overlay = (mgr.panel_stack_.size() == 1);
 
-        // Track overlay opens for telemetry panel_usage event
+        // Track overlay opens for telemetry panel_usage event.
+        // Breadcrumb distinguishes three cases so crash analysis can tell
+        // an intentional callback-based overlay from a missing-registration bug:
+        //   - lifecycle present  -> use IPanelLifecycle::get_name()
+        //   - registered w/ null -> "anon" (function-based, e.g. keypad,
+        //                          notification, theme_explorer, factory_reset)
+        //   - not registered     -> "unreg" (caller forgot register_overlay_instance)
+        auto inst_it = mgr.overlay_instances_.find(overlay_panel);
+        bool registered = inst_it != mgr.overlay_instances_.end() ||
+                          mgr.persistent_overlay_instances_.count(overlay_panel) > 0;
         auto* lc = mgr.resolve_overlay_lifecycle(overlay_panel);
-        std::string overlay_name = lc ? lc->get_name() : "unknown";
+        std::string overlay_name = lc ? lc->get_name() : (registered ? "anon" : "unreg");
+        if (!registered) {
+            spdlog::warn("[NavigationManager] push_overlay({}): no register_overlay_instance "
+                         "call before push — overlay invisible to lifecycle machinery",
+                         (void*)overlay_panel);
+        }
         TelemetryManager::instance().notify_overlay_opened(overlay_name);
         crash_handler::breadcrumb::note("overlay+", overlay_name.c_str());
 
@@ -1481,9 +1495,13 @@ void NavigationManager::push_overlay_zoom_from(lv_obj_t* overlay_panel, lv_area_
 
         bool is_first_overlay = (mgr.panel_stack_.size() == 1);
 
-        // Track overlay opens for telemetry panel_usage event
+        // Track overlay opens for telemetry panel_usage event.
+        // See push_overlay() above for the three-way distinction.
+        auto inst_it = mgr.overlay_instances_.find(overlay_panel);
+        bool registered = inst_it != mgr.overlay_instances_.end() ||
+                          mgr.persistent_overlay_instances_.count(overlay_panel) > 0;
         auto* lc = mgr.resolve_overlay_lifecycle(overlay_panel);
-        std::string overlay_name = lc ? lc->get_name() : "unknown";
+        std::string overlay_name = lc ? lc->get_name() : (registered ? "anon" : "unreg");
         TelemetryManager::instance().notify_overlay_opened(overlay_name);
         crash_handler::breadcrumb::note("overlay+", overlay_name.c_str());
 
