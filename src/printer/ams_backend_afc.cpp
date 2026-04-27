@@ -2293,11 +2293,90 @@ AmsError AmsBackendAfc::eject_lane(int slot_index) {
         }
     }
 
+    return enqueue_lane_unload(lane_name);
+}
+
+AmsError AmsBackendAfc::enqueue_lane_unload(const std::string& lane_name) {
+    bool fire_now = false;
+    {
+        std::lock_guard<std::mutex> lock(eject_queue_mutex_);
+        if (eject_in_flight_) {
+            // Avoid enqueuing duplicate consecutive entries — UI repeat-tap.
+            if (pending_eject_lanes_.empty() || pending_eject_lanes_.back() != lane_name) {
+                pending_eject_lanes_.push_back(lane_name);
+            }
+            spdlog::info("[AMS AFC] Queued LANE_UNLOAD lane={} (queue depth: {})", lane_name,
+                         pending_eject_lanes_.size());
+        } else {
+            eject_in_flight_ = true;
+            fire_now = true;
+        }
+    }
+    if (fire_now) {
+        dispatch_lane_unload(lane_name);
+    }
+    return AmsErrorHelper::success();
+}
+
+void AmsBackendAfc::dispatch_lane_unload(const std::string& lane_name) {
+    if (!api_) {
+        spdlog::error("[AMS AFC] Cannot fire LANE_UNLOAD: api_ is null");
+        on_lane_unload_done();
+        return;
+    }
     spdlog::info("[AMS AFC] Ejecting lane {}", lane_name);
-    return execute_gcode("LANE_UNLOAD LANE=" + lane_name);
+    auto tok = lifetime_.token();
+    api_->execute_gcode(
+        "LANE_UNLOAD LANE=" + lane_name,
+        [this, tok, lane_name]() {
+            if (tok.expired()) {
+                return;
+            }
+            spdlog::debug("[AMS AFC] LANE_UNLOAD lane={} completed", lane_name);
+            on_lane_unload_done();
+        },
+        [this, tok, lane_name](const MoonrakerError& err) {
+            if (tok.expired()) {
+                return;
+            }
+            if (err.type == MoonrakerErrorType::TIMEOUT) {
+                spdlog::warn("[AMS AFC] LANE_UNLOAD lane={} response timed out (may still be "
+                             "running): {}",
+                             lane_name, err.message);
+            } else {
+                spdlog::error("[AMS AFC] LANE_UNLOAD lane={} failed: {}", lane_name, err.message);
+            }
+            on_lane_unload_done();
+        },
+        MoonrakerAPI::AMS_OPERATION_TIMEOUT_MS);
+}
+
+void AmsBackendAfc::on_lane_unload_done() {
+    std::string next_lane;
+    {
+        std::lock_guard<std::mutex> lock(eject_queue_mutex_);
+        if (pending_eject_lanes_.empty()) {
+            eject_in_flight_ = false;
+            return;
+        }
+        next_lane = std::move(pending_eject_lanes_.front());
+        pending_eject_lanes_.pop_front();
+    }
+    dispatch_lane_unload(next_lane);
 }
 
 AmsError AmsBackendAfc::cancel() {
+    // Drop any queued LANE_UNLOAD requests — the user wants to abort, not chain
+    // through a pile of pending ejects after RESET_FAILURE.
+    {
+        std::lock_guard<std::mutex> lock(eject_queue_mutex_);
+        if (!pending_eject_lanes_.empty()) {
+            spdlog::info("[AMS AFC] Cancel: discarding {} queued LANE_UNLOAD request(s)",
+                         pending_eject_lanes_.size());
+            pending_eject_lanes_.clear();
+        }
+    }
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
 

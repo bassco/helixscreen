@@ -202,6 +202,37 @@ class AmsBackendAfcTestHelper : public AmsBackendAfc {
         return AmsErrorHelper::success();
     }
 
+    // ------------------------------------------------------------------
+    // LANE_UNLOAD dispatch capture
+    //
+    // The production dispatch_lane_unload() goes through api_->execute_gcode()
+    // with success/error callbacks (the queue drains when Moonraker reports
+    // completion). In tests, api_ is null. Override to capture the gcode AND
+    // immediately signal completion so the queue advances synchronously —
+    // letting tests assert on order/contents without async plumbing.
+    //
+    // Tests that need to inspect serialization should set
+    // `defer_lane_unload_complete = true` and call `complete_pending_unload()`
+    // manually to step through the queue one entry at a time.
+    bool defer_lane_unload_complete = false;
+    int pending_unload_completions = 0;
+
+    void dispatch_lane_unload(const std::string& lane_name) override {
+        captured_gcodes.push_back("LANE_UNLOAD LANE=" + lane_name);
+        if (defer_lane_unload_complete) {
+            ++pending_unload_completions;
+        } else {
+            on_lane_unload_done();
+        }
+    }
+
+    void complete_pending_unload() {
+        if (pending_unload_completions > 0) {
+            --pending_unload_completions;
+        }
+        on_lane_unload_done();
+    }
+
     void clear_captured_gcodes() {
         captured_gcodes.clear();
     }
@@ -2780,6 +2811,100 @@ TEST_CASE("AFC eject_lane fails when not running", "[ams][afc][eject]") {
 
     REQUIRE_FALSE(result.success());
     REQUIRE(result.result == AmsResult::NOT_CONNECTED);
+}
+
+// LANE_UNLOAD serialization
+//
+// Rapid-fire LANE_UNLOAD commands overlap their lane LED animations and stepper
+// work on AFC's MCU and were a contributor to Klippy "Timer too close"
+// shutdowns when a user tapped Eject on multiple lanes in quick succession.
+// eject_lane() now queues consecutive requests and dispatches them one at a
+// time, with the next one fired only when the previous completes.
+
+TEST_CASE("AFC eject_lane serializes consecutive ejects (only first dispatches)",
+          "[ams][afc][eject][serialization]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.defer_lane_unload_complete = true;
+
+    REQUIRE(helper.eject_lane(0).success());
+    REQUIRE(helper.eject_lane(1).success());
+    REQUIRE(helper.eject_lane(2).success());
+    REQUIRE(helper.eject_lane(3).success());
+
+    // Only the first eject should have dispatched — the rest are queued.
+    REQUIRE(helper.captured_gcodes.size() == 1);
+    REQUIRE(helper.captured_gcodes[0] == "LANE_UNLOAD LANE=lane1");
+}
+
+TEST_CASE("AFC eject_lane drains queue in order on each completion",
+          "[ams][afc][eject][serialization]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.defer_lane_unload_complete = true;
+
+    REQUIRE(helper.eject_lane(0).success());
+    REQUIRE(helper.eject_lane(1).success());
+    REQUIRE(helper.eject_lane(2).success());
+    REQUIRE(helper.eject_lane(3).success());
+
+    // After each completion, the next queued eject should fire.
+    helper.complete_pending_unload();
+    REQUIRE(helper.captured_gcodes.size() == 2);
+    REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane2");
+
+    helper.complete_pending_unload();
+    REQUIRE(helper.captured_gcodes.size() == 3);
+    REQUIRE(helper.captured_gcodes[2] == "LANE_UNLOAD LANE=lane3");
+
+    helper.complete_pending_unload();
+    REQUIRE(helper.captured_gcodes.size() == 4);
+    REQUIRE(helper.captured_gcodes[3] == "LANE_UNLOAD LANE=lane4");
+
+    // Queue empty — further completions do nothing.
+    helper.complete_pending_unload();
+    REQUIRE(helper.captured_gcodes.size() == 4);
+}
+
+TEST_CASE("AFC eject_lane deduplicates consecutive duplicate slot requests",
+          "[ams][afc][eject][serialization]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.defer_lane_unload_complete = true;
+
+    REQUIRE(helper.eject_lane(0).success());
+    // Repeat-tap the same lane while the first is still running.
+    REQUIRE(helper.eject_lane(1).success());
+    REQUIRE(helper.eject_lane(1).success()); // dup — should be coalesced
+    REQUIRE(helper.eject_lane(1).success()); // dup — should be coalesced
+
+    helper.complete_pending_unload();
+    helper.complete_pending_unload();
+
+    // Expected dispatches: lane1, lane2 (only one lane2, despite three taps).
+    REQUIRE(helper.captured_gcodes.size() == 2);
+    REQUIRE(helper.captured_gcodes[0] == "LANE_UNLOAD LANE=lane1");
+    REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane2");
+}
+
+TEST_CASE("AFC eject_lane fires next eject after previous completes (synchronous mode)",
+          "[ams][afc][eject][serialization]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    // Default: defer_lane_unload_complete = false → completion fires synchronously.
+
+    REQUIRE(helper.eject_lane(0).success());
+    REQUIRE(helper.eject_lane(1).success());
+
+    // Synchronous completion means by the time eject_lane returns, the queue
+    // has fully drained and both gcodes have dispatched.
+    REQUIRE(helper.captured_gcodes.size() == 2);
+    REQUIRE(helper.captured_gcodes[0] == "LANE_UNLOAD LANE=lane1");
+    REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane2");
 }
 
 TEST_CASE("AFC supports_lane_eject returns true", "[ams][afc][capability]") {

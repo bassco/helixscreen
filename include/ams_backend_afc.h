@@ -8,7 +8,9 @@
 #include "async_lifetime_guard.h"
 #include "slot_registry.h"
 
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -552,4 +554,36 @@ class AmsBackendAfc : public AmsSubscriptionBackend {
     float get_macro_var_float(const std::string& key, float default_val) const;
     /// Helper to get macro variable as bool
     bool get_macro_var_bool(const std::string& key, bool default_val) const;
+
+    // ------------------------------------------------------------------
+    // LANE_UNLOAD serialization
+    //
+    // Firing several LANE_UNLOAD macros back-to-back overlaps their lane LED
+    // animations and stepper steps on AFC's MCU (Turtle_1), which contributed
+    // to Klippy "Timer too close" shutdowns when a user tapped Eject on
+    // multiple lanes in quick succession. We instead queue eject requests and
+    // run them one at a time — when the in-flight LANE_UNLOAD completes
+    // (Moonraker fires our success/error callback), we pop the next from the
+    // queue and dispatch it.
+    // ------------------------------------------------------------------
+    std::mutex eject_queue_mutex_;
+    std::deque<std::string> pending_eject_lanes_;
+    bool eject_in_flight_{false};
+
+    /// Queue or immediately fire a LANE_UNLOAD for the given lane. Returns
+    /// success on enqueue — the caller does not need to re-issue if a previous
+    /// eject is still running.
+    AmsError enqueue_lane_unload(const std::string& lane_name);
+
+  protected:
+    /// Dispatch a LANE_UNLOAD via api_->execute_gcode with completion callbacks
+    /// that drain the queue. Caller must have set eject_in_flight_ = true.
+    /// Virtual + protected so tests can override (api_ is null in unit tests).
+    virtual void dispatch_lane_unload(const std::string& lane_name);
+
+    /// Called from the gcode-completion callback (success or error). Pops the
+    /// next queued eject (if any) and dispatches it; otherwise clears the
+    /// in-flight flag. Protected so test overrides of dispatch_lane_unload can
+    /// signal completion.
+    void on_lane_unload_done();
 };
