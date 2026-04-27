@@ -3794,9 +3794,20 @@ void Application::shutdown() {
     // These are file-scope statics not tracked by StaticSubjectRegistry.
     theme_manager_deinit();
 
-    // Destroy MoonrakerManager (releases its ObserverGuards and client).
-    // Safe here: LVGL subjects are deinitialized but lv_deinit() hasn't run yet,
-    // so lv_observer_remove() can still operate on the observer linked lists.
+    // Invalidate all ObserverGuards so any reset() call in surviving destructors
+    // releases instead of calling lv_observer_remove() on freed observer pointers.
+    // CRITICAL: lv_subject_deinit() (called via deinit_all() above) iterates
+    // subs_ll and calls lv_observer_remove() on EACH observer, FREEING each one.
+    // Without this guard, MoonrakerManager's ObserverGuard members destruct below
+    // and call lv_observer_remove(observer_) on freed memory → SIGSEGV at
+    // lv_observer.c:584 in lv_ll_remove(&observer->subject->subs_ll, observer).
+    // This UAF chain is the L081 family seen in #888 (Snapmaker U1), #891 (AD5X),
+    // and #893 (Pi). teardown_printer_state() has carried this guard since #816/#673;
+    // the global shutdown path was missing it.
+    ObserverGuard::invalidate_all();
+
+    // Destroy MoonrakerManager (its ObserverGuards now release without
+    // touching freed observer memory thanks to invalidate_all() above).
     m_moonraker.reset();
 
     // MoonrakerManager is gone, so no code path can submit new HTTP work.
