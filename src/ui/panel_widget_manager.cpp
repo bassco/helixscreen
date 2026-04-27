@@ -779,18 +779,32 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
     // automatically tracks any new gated widget added in the future. Plus
     // klippy_state, which drives firmware_restart conditional injection.
     //
-    // Each observer fires rebuild_cb directly, no time-based coalescing:
-    //   * observe_int_sync defers via UpdateQueue, so multiple subjects
-    //     changing in the same tick produce multiple sequential rebuild_cb
-    //     calls in the next drain — but populate_page short-circuits when
-    //     compute_visible_widget_ids matches the cached ID list, so the
-    //     duplicates are near-free (one map walk + N lv_subject_get_int).
+    // Each observer schedules a coalesced rebuild via lv_async_call:
+    //   * The first gate firing in a tick sets rebuild_pending_[panel_id]=true
+    //     and queues ONE async rebuild. Subsequent firings in the same tick
+    //     see the flag and skip — the queued rebuild will see all their values
+    //     when it runs.
+    //   * The async rebuild clears the flag at the start, so any gate firing
+    //     AFTER the rebuild begins (e.g. a late-arriving capability subject)
+    //     re-queues another rebuild on the next tick.
+    //   * Without coalescing, N back-to-back firings produced N populate_page
+    //     calls in the same UpdateQueue tick. Each call ran safe_clean_children,
+    //     queuing async deletes for that pass's children. The accumulated
+    //     N×children async-delete backlog then corrupted LVGL's event list
+    //     during processing, crashing inside unsubscribe_on_delete_cb on
+    //     resource-constrained MIPS hardware (AD5X bundles XG9QJ3V9, PFEHDEXF —
+    //     L081 family).
+    //   * lv_async_call escapes the UpdateQueue batch and runs on LVGL's own
+    //     async list, so the deferred rebuild is not in the same batch as
+    //     the gate-observer callbacks that scheduled it. This mirrors the
+    //     "safe escape routes" pattern documented in CLAUDE.md.
     //   * The 2-second coalesce timer this replaced was a timing guess that
     //     fired before late-arriving capability subjects landed (e.g.
     //     printer_has_led on a busy Voron arrives 3-5s into discovery), then
-    //     skipped because the cached list still showed "~gated". Direct
-    //     dispatch eliminates the guesswork: the rebuild that runs after
-    //     the *last* relevant subject change is the one that wins.
+    //     skipped because the cached list still showed "~gated". This
+    //     async-coalesce pattern combines the correctness of direct dispatch
+    //     with safety against backlog corruption.
+    rebuild_pending_[panel_id] = false;
     std::vector<const char*> gate_names;
     for (const auto& def : get_all_widget_defs()) {
         if (!def.hardware_gate_subject)
@@ -813,12 +827,46 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
             spdlog::trace("[PanelWidgetManager] Gate subject '{}' not registered yet", name);
             continue;
         }
+        // Capture panel_id by value into the lambda so the async rebuild
+        // can find the right rebuild_pending_ entry even if `this` outlives
+        // a particular panel registration.
         observers.push_back(observe_int_sync<PanelWidgetManager>(
             subject, this,
-            [rebuild_cb, name](PanelWidgetManager* /*self*/, int value) {
+            [rebuild_cb, name, panel_id](PanelWidgetManager* self, int value) {
                 spdlog::debug("[PanelWidgetManager] gate '{}' -> {} (rebuild)", name, value);
                 crash_handler::breadcrumb::note("gate", name, value);
-                rebuild_cb();
+
+                // Coalesce: if a rebuild is already queued for this tick,
+                // skip — the queued rebuild will read the latest gate values
+                // when it runs.
+                auto it = self->rebuild_pending_.find(panel_id);
+                if (it != self->rebuild_pending_.end() && it->second) {
+                    return;
+                }
+                self->rebuild_pending_[panel_id] = true;
+
+                // Schedule the rebuild via lv_async_call so it runs on LVGL's
+                // async list — outside the UpdateQueue batch that delivered
+                // this gate firing. The closure heap-allocates a small struct
+                // holding the captures; the async callback owns and frees it.
+                struct AsyncCtx {
+                    PanelWidgetManager* mgr;
+                    std::string panel_id;
+                    RebuildCallback rebuild_cb;
+                };
+                auto* ctx = new AsyncCtx{self, panel_id, rebuild_cb};
+                lv_async_call(
+                    [](void* ud) {
+                        auto* c = static_cast<AsyncCtx*>(ud);
+                        // Clear the flag BEFORE running the rebuild so any
+                        // late-arriving gate firing while rebuild_cb is still
+                        // executing can re-queue another rebuild for the next
+                        // tick.
+                        c->mgr->rebuild_pending_[c->panel_id] = false;
+                        c->rebuild_cb();
+                        delete c;
+                    },
+                    ctx);
             }));
         spdlog::trace("[PanelWidgetManager] Observing gate subject '{}' for panel '{}'", name,
                       panel_id);

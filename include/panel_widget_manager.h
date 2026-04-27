@@ -116,6 +116,15 @@ class PanelWidgetManager {
     /// Per-panel gate observers that trigger widget rebuilds on hardware changes
     std::unordered_map<std::string, std::vector<ObserverGuard>> gate_observers_;
 
+    /// Per-panel "rebuild already pending in this tick" flag — coalesces N gate
+    /// observers firing back-to-back in one UpdateQueue tick into a single
+    /// deferred rebuild. Without this, each firing triggers its own
+    /// populate_page → safe_clean_children → lv_obj_delete_async cycle, and
+    /// the resulting backlog of N×children async deletes corrupts LVGL's
+    /// event list (L081 family). Cleared at the start of the deferred
+    /// rebuild so any gate firing AFTER the rebuild starts re-queues another.
+    std::unordered_map<std::string, bool> rebuild_pending_;
+
     /// Per-panel grid descriptor arrays — must persist while the grid layout is active
     /// on the associated container. Keyed by panel_id to support multiple panels.
     struct GridDescriptors {
