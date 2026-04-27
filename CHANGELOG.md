@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Animated screensaver is now disabled by default on Raspberry Pi 3B-class (BASIC tier) and AD5M / AD5X (EMBEDDED tier) hardware to prevent print failures from CPU contention with Klipper. Users upgrading with Flying Toasters still enabled on these tiers are migrated to Off with a one-time notification; the setting can be re-enabled under Settings → Display. When re-enabled on these tiers, the screensaver runs at a reduced frame rate (~7 fps) with fewer sprites (Flying Toasters capped at 10) to stay out of the print loop's way.
+## [0.99.50] - 2026-04-27
+
+A perf and stability patch. Headlines: animated screensaver now defaults to Off on BASIC (Pi 3B-class) and EMBEDDED (AD5M / AD5X) tiers to keep the CPU out of Klipper's print loop, with a one-time migration notice and reduced frame rate when users re-enable on those tiers; another sweep of L081-family teardown crashes (`lv_event_mark_deleted`); plus targeted fixes for AD5X IFS color sync, AFC `LANE_UNLOAD` serialization, and the Z-offset probe sequence.
 
 ### Fixed
-- AD5X identify-wizard sleep regression: removed the wizard block that force-wrote stale pre-#431 display values on every confirmation. New v14→v15 config migration restores the AD5X backlight-off sleep preset for users polluted by the pre-fix wizard. Resolves the "random RGB colors during sleep" symptom documented in `FLASHFORGE_AD5X_SUPPORT.md`.
-- AFC `LANE_UNLOAD` requests are now serialized: tapping Eject on multiple lanes in quick succession queues the requests and runs them one-at-a-time instead of overlapping AFC macros. Mitigates Turtle_1 "Timer too close" shutdowns from competing stepper / LED-animation work.
+- **AD5X identify-wizard sleep regression** — removed the wizard block that force-wrote stale pre-#431 display values on every confirmation. New v14→v15 config migration restores the AD5X backlight-off sleep preset for users polluted by the pre-fix wizard. Resolves the "random RGB colors during sleep" symptom documented in `FLASHFORGE_AD5X_SUPPORT.md`.
+- **AD5X IFS color and material type sync** — slot color/type changes from the panel now use Flashforge's `CHANGE_ZCOLOR` macro so the IFS controller actually receives the update.
+- **AFC `LANE_UNLOAD` requests are now serialized** — tapping Eject on multiple lanes in quick succession queues the requests and runs them one-at-a-time instead of overlapping AFC macros. Mitigates Turtle_1 "Timer too close" shutdowns from competing stepper / LED-animation work.
+- **Shutdown crash with active observer chains** ([#893]) — `Application::shutdown()` now invalidates `ObserverGuard`s *before* tearing down `MoonrakerManager`. The prior teardown order let pending subject notifications fire callbacks against destroyed Moonraker state, producing L081-family crashes during exit.
+- **`MoonrakerManager::m_print_duration_observer` not released on shutdown** ([#888]) — observer lingered through the static destructor chain; explicit release on shutdown closes the dangling-observer window.
+- **Temp graph chart deletion now async** ([#867]) — chart child cleanup during temp-graph teardown moved off the synchronous LVGL event-list iteration path, with breadcrumb logging for any remaining anomalies.
+- **L081 family: panel gate observer rebuilds coalesced via `lv_async_call`** — multiple gate-state subject changes within a single tick now produce one rebuild instead of N synchronous rebuilds, eliminating the multi-sync-delete-per-tick pattern that corrupts LVGL's global event linked list.
+- **Z-offset wizard no longer auto-prefixes `CLEAN_NOZZLE` to `PROBE_CALIBRATE`** — the auto-prefix fired on printers without a wipe macro, hanging the calibration sequence. Users with a wipe macro can wire it into their start gcode.
+
+### Changed
+- **Animated screensaver disabled by default on BASIC and EMBEDDED tiers** — Raspberry Pi 3B-class (BASIC) and AD5M / AD5X (EMBEDDED) hardware now ship with the screensaver off to prevent print failures from CPU contention with Klipper. Users upgrading with Flying Toasters still enabled on these tiers are migrated to Off with a one-time notification; the setting can be re-enabled under Settings → Display. When re-enabled on these tiers, the screensaver runs at a reduced frame rate (~7 fps) with fewer sprites (Flying Toasters capped at 10) to stay out of the print loop's way.
+- **Spool canvas scroll smoothness** — dedup pass, LRU pixel cache, and a sqrt LUT in the canvas pixel renderer. Noticeable on filament panel scroll on EMBEDDED-tier hardware.
 
 ## [0.99.49] - 2026-04-26
 
@@ -3374,6 +3385,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.50]: https://github.com/prestonbrown/helixscreen/compare/v0.99.49...v0.99.50
 [0.99.49]: https://github.com/prestonbrown/helixscreen/compare/v0.99.48...v0.99.49
 [0.99.48]: https://github.com/prestonbrown/helixscreen/compare/v0.99.47...v0.99.48
 [0.99.47]: https://github.com/prestonbrown/helixscreen/compare/v0.99.46...v0.99.47
