@@ -100,6 +100,20 @@ class Config {
     void init(const std::string& config_path);
 
     /**
+     * @brief Clear the configured save path (test isolation)
+     *
+     * Empties the persistence path so subsequent save() calls become
+     * no-ops. Used by test fixtures that init() the singleton with a
+     * temp directory and then delete that directory — without this,
+     * a later save() in another test would fail (parent dir gone),
+     * trigger CONFIG_RECORD_ERROR, and enqueue a phantom telemetry
+     * event in tests that expect a clean queue.
+     */
+    void clear_path() {
+        path.clear();
+    }
+
+    /**
      * @brief Get configuration value at JSON pointer path
      *
      * Throws nlohmann::json::exception if path doesn't exist.

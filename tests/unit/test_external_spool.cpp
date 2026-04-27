@@ -46,6 +46,13 @@ struct TempConfigFixture {
     }
 
     ~TempConfigFixture() {
+        // Clear the Config singleton's path BEFORE removing temp_dir so any
+        // subsequent test that triggers Config::save() doesn't try to write
+        // to a now-deleted directory and fail. A failed save inside e.g.
+        // TelemetryManager::set_enabled(true) calls CONFIG_RECORD_ERROR
+        // which enqueues a phantom telemetry event in the next test's
+        // queue, breaking queue-size assertions.
+        Config::get_instance()->clear_path();
         std::filesystem::remove_all(temp_dir);
     }
 };

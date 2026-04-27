@@ -69,7 +69,17 @@ class TelemetryTestFixture {
         // change between init() and our explicit set_enabled(false) below
         // would gate-pass and enqueue (off-by-one queue size on macOS where
         // the whole suite shares one process).
+        //
+        // Also clear the Config singleton's path. Some prior tests
+        // (test_external_spool.cpp's TempConfigFixture, test_filament_
+        // consumption_tracker.cpp) call Config::get_instance()->init(<temp_dir>)
+        // and then delete the directory. The singleton retains a now-dangling
+        // path; subsequent set_enabled(true) → Config::save() fails its
+        // ofstream open, calls CONFIG_RECORD_ERROR, and enqueues a phantom
+        // telemetry "file_io" event between our clear_queue() and the test's
+        // first assertion. Empty path makes save() a no-op (line 1426).
         if (auto* cfg = helix::Config::get_instance()) {
+            cfg->clear_path();
             cfg->set<bool>("/telemetry_enabled", false);
         }
 
