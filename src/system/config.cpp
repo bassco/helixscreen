@@ -13,7 +13,9 @@
 
 #include "app_constants.h"
 #include "config_backup.h"
+#include "config_testing.h"
 #include "data_root_resolver.h"
+#include "platform_capabilities.h"
 #include "printer_detector.h"
 #include "runtime_config.h"
 #include "wizard_config_paths.h"
@@ -25,6 +27,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 #include <sys/stat.h>
 // C++17 filesystem - use std::filesystem if available, fall back to experimental
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
@@ -232,6 +235,29 @@ bool migrate_config_keys(json& data,
 // ============================================================================
 // Versioned config migrations
 // ============================================================================
+
+} // end anonymous namespace
+
+// Test injection seam: allows unit tests to force a platform tier classification
+// without monkey-patching /proc. Production code never sets this.
+namespace {
+static std::optional<helix::PlatformTier> g_forced_tier_for_migration;
+} // namespace
+
+namespace helix::config_testing {
+void set_forced_tier_for_migration(std::optional<helix::PlatformTier> tier) {
+    g_forced_tier_for_migration = tier;
+}
+} // namespace helix::config_testing
+
+namespace {
+
+static helix::PlatformTier current_tier_for_migration() {
+    if (g_forced_tier_for_migration.has_value()) {
+        return *g_forced_tier_for_migration;
+    }
+    return helix::PlatformCapabilities::detect().tier;
+}
 
 /// Migration v0→v1: Sound support added — default sounds OFF for existing configs.
 /// Before sound actually worked, configs had sounds_enabled: true as a harmless default.
@@ -671,6 +697,36 @@ static void migrate_v14_to_v15(json& config) {
     }
 }
 
+/// v15 → v16: Turn the screensaver off on BASIC/EMBEDDED tiers where Flying Toasters
+/// causes Klipper print failures. Queues a one-time info modal via a transient flag
+/// consumed by Application post-boot. Only affects type 1 (Flying Toasters); types 2/3
+/// (Starfield, Pipes 3D) are left untouched because we have no evidence they cause
+/// the same problem, and silently flipping an explicit user choice is worse than
+/// leaving a slightly expensive screensaver running on their preferred setting.
+static void migrate_v15_to_v16(json& config) {
+    using helix::PlatformTier;
+    PlatformTier tier = current_tier_for_migration();
+    if (tier != PlatformTier::BASIC && tier != PlatformTier::EMBEDDED) {
+        return; // STANDARD hardware keeps its setting
+    }
+
+    if (!config.contains("display") || !config["display"].is_object()) {
+        return;
+    }
+    auto& display = config["display"];
+
+    int current_type = display.value("screensaver_type", 0);
+    if (current_type != 1) {
+        return; // only migrate Flying Toasters
+    }
+
+    display["screensaver_type"] = 0;
+    display["screensaver_migration_notice_pending"] = true;
+    spdlog::info("[Config] Migration v16: screensaver disabled on {} tier "
+                 "(was Flying Toasters); notice queued",
+                 helix::platform_tier_to_string(tier));
+}
+
 /// Run all versioned migrations in sequence from current version to CURRENT_CONFIG_VERSION
 static void run_versioned_migrations(json& config, const std::string& config_path = "") {
     int version = 0;
@@ -708,6 +764,8 @@ static void run_versioned_migrations(json& config, const std::string& config_pat
         migrate_v13_to_v14(config, config_path);
     if (version < 15)
         migrate_v14_to_v15(config);
+    if (version < 16)
+        migrate_v15_to_v16(config);
 
     config["config_version"] = CURRENT_CONFIG_VERSION;
 }

@@ -3,6 +3,7 @@
 
 #include "app_constants.h"
 #include "config.h"
+#include "config_testing.h"
 #include "static_subject_registry.h"
 #include "wizard_config_paths.h"
 
@@ -2984,4 +2985,191 @@ TEST_CASE("Config: v11→v12 migration does not overwrite canonical keys already
     REQUIRE_FALSE(test_config.exists("/printers/k1c/printer/chamber_sensor"));
 
     std::filesystem::remove_all(temp_dir);
+}
+
+// ============================================================================
+// v15→v16 migration: screensaver off on BASIC/EMBEDDED tier with Flying Toasters
+// ============================================================================
+
+TEST_CASE("Config: v15→v16 migration disables Flying Toasters on constrained tiers",
+          "[config][migration][v16]") {
+    struct TierGuard {
+        ~TierGuard() {
+            helix::config_testing::set_forced_tier_for_migration(std::nullopt);
+        }
+    };
+    TierGuard _tier_guard; // Ensures override is reset even if a SECTION fails
+
+    SECTION("BASIC tier with Flying Toasters: type flipped to 0 and notice queued") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::BASIC);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_basic_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 1}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 1) == 0);
+        REQUIRE(test_config.get<bool>("/display/screensaver_migration_notice_pending", false) ==
+                true);
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("EMBEDDED tier with Flying Toasters: type flipped to 0 and notice queued") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::EMBEDDED);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_embedded_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 1}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/config_version") == CURRENT_CONFIG_VERSION);
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 1) == 0);
+        REQUIRE(test_config.get<bool>("/display/screensaver_migration_notice_pending", false) ==
+                true);
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("STANDARD tier with Flying Toasters: setting untouched, no notice flag") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::STANDARD);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_standard_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 1}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 0) == 1);
+        REQUIRE_FALSE(test_config.exists("/display/screensaver_migration_notice_pending"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("BASIC tier with Starfield (type=2): untouched, no notice flag") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::BASIC);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_starfield_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 2}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 0) == 2);
+        REQUIRE_FALSE(test_config.exists("/display/screensaver_migration_notice_pending"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("BASIC tier with Pipes 3D (type=3): untouched, no notice flag") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::BASIC);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_pipes_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 3}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 0) == 3);
+        REQUIRE_FALSE(test_config.exists("/display/screensaver_migration_notice_pending"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("BASIC tier with screensaver already Off (type=0): no-op, no notice flag") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::BASIC);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_off_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v15_config = {{"config_version", 15}, {"display", {{"screensaver_type", 0}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v15_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 1) == 0);
+        REQUIRE_FALSE(test_config.exists("/display/screensaver_migration_notice_pending"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
+
+    SECTION("Already-v16 config: migration does not run, type stays as set") {
+        helix::config_testing::set_forced_tier_for_migration(helix::PlatformTier::BASIC);
+
+        std::string temp_dir = "/tmp/helix_test_v15_to_v16_already_v16_" + std::to_string(rand());
+        std::filesystem::remove_all(temp_dir);
+        std::filesystem::create_directories(temp_dir);
+        std::string temp_path = temp_dir + "/test_config.json";
+
+        json v16_config = {{"config_version", 16}, {"display", {{"screensaver_type", 1}}}};
+        {
+            std::ofstream o(temp_path);
+            o << v16_config.dump(2);
+        }
+
+        BackupGuard guard;
+        Config test_config;
+        test_config.init(temp_path);
+
+        // Migration gate (version < 16) must not fire for already-v16 config
+        REQUIRE(test_config.get<int>("/display/screensaver_type", 0) == 1);
+        REQUIRE_FALSE(test_config.exists("/display/screensaver_migration_notice_pending"));
+
+        std::filesystem::remove_all(temp_dir);
+    }
 }
