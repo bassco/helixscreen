@@ -17,7 +17,6 @@
 #include "printer_state.h"
 #include "probe_sensor_manager.h"
 #include "probe_sensor_types.h"
-#include "standard_macros.h"
 #include "static_panel_registry.h"
 #include "z_offset_utils.h"
 
@@ -461,13 +460,6 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
             gcode = "G28\n";
         }
 
-        // Optional nozzle clean before calibration
-        auto& clean_slot = StandardMacros::instance().get(StandardMacroSlot::CleanNozzle);
-        if (!clean_slot.is_empty()) {
-            gcode += clean_slot.get_macro() + "\n";
-            spdlog::info("[ZOffsetCal] Adding nozzle clean: {}", clean_slot.get_macro());
-        }
-
         char move_cmd[128];
         snprintf(move_cmd, sizeof(move_cmd), "G1 X%.1f Y%.1f Z5 F3000\nG1 Z0.1 F300", center_x,
                  center_y);
@@ -511,13 +503,6 @@ void ZOffsetCalibrationPanel::begin_probe_sequence() {
             spdlog::info("[ZOffsetCal] Axes not homed (homed_axes='{}'), homing first",
                          homed ? homed : "");
             gcode = "G28\n";
-        }
-
-        // Optional nozzle clean before calibration
-        auto& clean_slot = StandardMacros::instance().get(StandardMacroSlot::CleanNozzle);
-        if (!clean_slot.is_empty()) {
-            gcode += clean_slot.get_macro() + "\n";
-            spdlog::info("[ZOffsetCal] Adding nozzle clean: {}", clean_slot.get_macro());
         }
 
         const char* calibrate_cmd = nullptr;
