@@ -205,9 +205,21 @@ void ShutdownWidget::handle_click() {
     }
 
     if (helix::is_moonraker_on_same_host(host)) {
-        shutdown_modal_.set_single_callbacks(
-            [this]() { execute_printer_shutdown(); },
-            [this]() { execute_printer_reboot(); });
+        // Same-host single-scope: normally Moonraker's machine.shutdown brings
+        // the whole device down. If Moonraker isn't connected (e.g., Klipper
+        // failed to boot, or the user runs SonicPad as a screen-only with the
+        // local Moonraker disabled), fall back to SystemPower so the user
+        // isn't forced to use the hardware switch.
+        if (api_->is_connected()) {
+            shutdown_modal_.set_single_callbacks(
+                [this]() { execute_printer_shutdown(); },
+                [this]() { execute_printer_reboot(); });
+        } else {
+            spdlog::info("[ShutdownWidget] Moonraker not connected — using local SystemPower fallback");
+            shutdown_modal_.set_single_callbacks(
+                [this]() { execute_screen_shutdown(); },
+                [this]() { execute_screen_reboot(); });
+        }
     } else {
         shutdown_modal_.set_dual_callbacks(
             [this]() { execute_both_shutdown(); },
