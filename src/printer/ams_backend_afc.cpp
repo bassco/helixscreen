@@ -2367,7 +2367,11 @@ void AmsBackendAfc::on_lane_unload_done() {
 
 AmsError AmsBackendAfc::cancel() {
     // Drop any queued LANE_UNLOAD requests — the user wants to abort, not chain
-    // through a pile of pending ejects after RESET_FAILURE.
+    // through a pile of pending ejects after RESET_FAILURE. We deliberately do
+    // NOT clear `eject_in_flight_`: the in-flight LANE_UNLOAD's completion
+    // callback will still fire and call on_lane_unload_done(), which sees the
+    // empty queue and clears the flag itself. Clearing the flag here would
+    // leave us out of sync with the (still pending) callback.
     {
         std::lock_guard<std::mutex> lock(eject_queue_mutex_);
         if (!pending_eject_lanes_.empty()) {

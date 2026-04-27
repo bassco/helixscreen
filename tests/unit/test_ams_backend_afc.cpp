@@ -2907,6 +2907,70 @@ TEST_CASE("AFC eject_lane fires next eject after previous completes (synchronous
     REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane2");
 }
 
+TEST_CASE("AFC eject_lane queue drains on failure (error path)",
+          "[ams][afc][eject][serialization]") {
+    // In production, dispatch_lane_unload registers success AND error callbacks
+    // with api_->execute_gcode. Both call on_lane_unload_done() so the queue
+    // drains either way. This test simulates the error path: the in-flight
+    // gcode "fails", but on_lane_unload_done still advances to the next queued
+    // entry. Without this guarantee a transient AFC error would strand the
+    // queue and silently break subsequent eject taps.
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.defer_lane_unload_complete = true;
+
+    REQUIRE(helper.eject_lane(0).success());
+    REQUIRE(helper.eject_lane(1).success());
+    REQUIRE(helper.eject_lane(2).success());
+
+    REQUIRE(helper.captured_gcodes.size() == 1);
+
+    // Simulate the error callback path — completion still drains the queue.
+    helper.complete_pending_unload(); // "lane1 errored" → fire lane2
+    REQUIRE(helper.captured_gcodes.size() == 2);
+    REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane2");
+
+    helper.complete_pending_unload(); // "lane2 errored" → fire lane3
+    REQUIRE(helper.captured_gcodes.size() == 3);
+    REQUIRE(helper.captured_gcodes[2] == "LANE_UNLOAD LANE=lane3");
+
+    helper.complete_pending_unload(); // "lane3 errored" → queue empty
+    REQUIRE(helper.captured_gcodes.size() == 3);
+    // Subsequent eject_lane should fire immediately (in-flight flag cleared).
+    REQUIRE(helper.eject_lane(3).success());
+    REQUIRE(helper.captured_gcodes.size() == 4);
+    REQUIRE(helper.captured_gcodes[3] == "LANE_UNLOAD LANE=lane4");
+}
+
+TEST_CASE("AFC cancel drops queued ejects but lets in-flight complete",
+          "[ams][afc][eject][serialization][cancel]") {
+    AmsBackendAfcTestHelper helper;
+    helper.initialize_test_lanes_with_slots(4);
+    helper.set_running(true);
+    helper.defer_lane_unload_complete = true;
+
+    REQUIRE(helper.eject_lane(0).success());
+    REQUIRE(helper.eject_lane(1).success());
+    REQUIRE(helper.eject_lane(2).success());
+    REQUIRE(helper.eject_lane(3).success());
+    REQUIRE(helper.captured_gcodes.size() == 1); // only lane1 dispatched
+
+    // Cancel should drop queued lane2/lane3/lane4 but not abort the in-flight
+    // lane1 — its completion callback is still pending.
+    helper.cancel();
+
+    // The in-flight callback firing now should NOT dispatch a queued next
+    // (queue was cleared). It should just clear eject_in_flight_.
+    helper.complete_pending_unload();
+    REQUIRE(helper.captured_gcodes.size() == 1); // no new dispatches
+
+    // A fresh eject after cancel completes should fire immediately.
+    REQUIRE(helper.eject_lane(2).success());
+    REQUIRE(helper.captured_gcodes.size() == 2);
+    REQUIRE(helper.captured_gcodes[1] == "LANE_UNLOAD LANE=lane3");
+}
+
 TEST_CASE("AFC supports_lane_eject returns true", "[ams][afc][capability]") {
     AmsBackendAfcTestHelper helper;
     REQUIRE(helper.supports_lane_eject());
