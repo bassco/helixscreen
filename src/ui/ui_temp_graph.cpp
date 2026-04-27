@@ -5,6 +5,7 @@
 
 #include "ui_format_utils.h"
 
+#include "system/crash_handler.h"
 #include "theme_manager.h"
 
 #include <spdlog/spdlog.h>
@@ -956,17 +957,45 @@ void ui_temp_graph_destroy(ui_temp_graph_t* graph) {
     // Only clean up series and chart if chart widget still exists.
     // Chart may already be deleted by LVGL parent cascade (chart_delete_cb nulls graph->chart).
     if (graph_ptr->chart) {
+        lv_obj_t* chart = graph_ptr->chart;
+        crash_handler::breadcrumb::note("tg", "destroy_async", reinterpret_cast<long>(chart));
+
         // Remove all series (cursors will be cleaned up automatically)
         for (int i = 0; i < UI_TEMP_GRAPH_MAX_SERIES; i++) {
             if (graph_ptr->series_meta[i].chart_series) {
-                lv_chart_remove_series(graph_ptr->chart, graph_ptr->series_meta[i].chart_series);
+                lv_chart_remove_series(chart, graph_ptr->series_meta[i].chart_series);
             }
         }
 
-        // Delete chart widget — theme observer is auto-removed via lv_subject_add_observer_obj.
-        // Manual lv_observer_remove() would free the observer, but LVGL's child-delete
-        // cascade would then fire unsubscribe_on_delete_cb on freed memory → crash.
-        lv_obj_del(graph_ptr->chart);
+        // Sever every callback that captured `graph` as user_data so the deferred
+        // chart deletion below cannot dereference graph after unique_ptr frees it.
+        // chart_resize_cb is registered with nullptr user_data so it is safe to leave.
+        lv_obj_remove_event_cb(chart, mask_overrange_begin_cb);
+        lv_obj_remove_event_cb(chart, mask_overrange_end_cb);
+        lv_obj_remove_event_cb(chart, draw_gradient_cb);
+        lv_obj_remove_event_cb(chart, chart_delete_cb);
+        lv_obj_remove_event_cb(chart, draw_grid_lines_cb);
+        lv_obj_remove_event_cb(chart, draw_x_axis_labels_cb);
+        lv_obj_remove_event_cb(chart, draw_y_axis_labels_cb);
+        lv_obj_remove_event_cb(chart, draw_target_lines_cb);
+        lv_obj_remove_event_cb(chart, draw_legend_cb);
+        lv_obj_set_user_data(chart, nullptr);
+
+        // Theme observer's user_data points at `graph`; auto-removal does not fire
+        // until the chart is actually deleted by the async path below, leaving a
+        // window where a theme toggle would dereference freed graph. Remove now —
+        // lv_observer_remove also strips the chart's unsubscribe_on_delete_cb, so
+        // the eventual async deletion finds nothing to call.
+        if (graph_ptr->theme_observer) {
+            lv_observer_remove(graph_ptr->theme_observer);
+            graph_ptr->theme_observer = nullptr;
+        }
+
+        // Async deletion escapes any UpdateQueue::process_pending batch we may be
+        // running inside (e.g., reconnect → connection_observer → rebuild → destroy).
+        // Sync lv_obj_del here corrupts LVGL's global event list when other queued
+        // entries follow — see L081 / prestonbrown/helixscreen#867 cluster.
+        lv_obj_delete_async(chart);
     }
 
     // graph_ptr automatically freed via ~unique_ptr()

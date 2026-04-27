@@ -8,6 +8,7 @@
 #include "app_globals.h"
 #include "observer_factory.h"
 #include "printer_state.h"
+#include "system/crash_handler.h"
 #include "temperature_history_manager.h"
 #include "temperature_sensor_manager.h"
 #include "theme_manager.h"
@@ -127,6 +128,8 @@ void TempGraphController::rebuild() {
         return;
     }
     last_rebuild_time_ = now;
+
+    crash_handler::breadcrumb::note("tgc", "rebuild", static_cast<long>(generation_ + 1));
 
     detach();
     series_.clear();

@@ -5,6 +5,7 @@
 #include "../../include/ui_temp_graph.h"
 #include "../ui_test_utils.h"
 #include "lvgl/lvgl.h"
+#include "misc/lv_timer_private.h"
 
 #include "../catch_amalgamated.hpp"
 
@@ -63,6 +64,42 @@ TEST_CASE_METHOD(TempGraphTestFixture, "Create and destroy graph", "[ui][core]")
         lv_obj_t* chart = ui_temp_graph_get_chart(nullptr);
         REQUIRE(chart == nullptr);
     }
+}
+
+// L081 regression: ui_temp_graph_destroy must NOT call sync lv_obj_del on the chart
+// (sync widget deletion inside an UpdateQueue::process_pending batch corrupts LVGL's
+// global event list — see prestonbrown/helixscreen#867 cluster). Async deletion
+// escapes the batch via lv_obj_delete_async; the chart stays alive until the next
+// LVGL async drain. Sync delete would make the parent's child count 0 immediately;
+// async delete leaves it at 1 until the lv_async one-shot timer fires.
+TEST_CASE_METHOD(TempGraphTestFixture, "destroy defers chart deletion (L081)",
+                 "[ui][core][crash][L081]") {
+    ui_temp_graph_t* graph = ui_temp_graph_create(screen);
+    REQUIRE(graph != nullptr);
+    REQUIRE(lv_obj_get_child_count(screen) == 1);
+
+    ui_temp_graph_destroy(graph);
+    REQUIRE(lv_obj_get_child_count(screen) == 1);
+
+    // Drain LVGL's lv_async_call queue without spinning lv_timer_handler (which
+    // wants tick input the test fixture doesn't drive). Mirrors the helper in
+    // test_panel_widget_manager.cpp.
+    for (int safety = 0; safety < 50; ++safety) {
+        bool fired = false;
+        lv_timer_t* t = lv_timer_get_next(nullptr);
+        while (t) {
+            lv_timer_t* next = lv_timer_get_next(t);
+            if (t->repeat_count > 0 && t->timer_cb) {
+                t->timer_cb(t);
+                fired = true;
+                break;
+            }
+            t = next;
+        }
+        if (!fired)
+            break;
+    }
+    REQUIRE(lv_obj_get_child_count(screen) == 0);
 }
 
 // ============================================================================
