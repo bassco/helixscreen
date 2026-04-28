@@ -14,8 +14,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <lvgl.h>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 // Stack trace support (macOS and Linux with glibc)
 #if defined(__APPLE__) || (defined(__linux__) && defined(__GLIBC__))
@@ -28,6 +30,63 @@ namespace {
 
 // When true, translation warnings are suppressed to trace level during init
 static bool s_suppress_translation_warnings = false;
+
+// First-occurrence cache for high-frequency LVGL warnings/errors (e.g. missing
+// image assets). LVGL retries fs_open + image_decoder_get_info on every render
+// frame that touches a broken image, which in field logs accounted for >90% of
+// the volume. Dedupe by exact message text after stripping LVGL's leading
+// "(timestamp, +delta)\t" prefix; first occurrence logs at the original level,
+// subsequent identical messages drop to debug.
+constexpr size_t LVGL_DEDUPE_MAX = 256;
+static std::mutex s_dedupe_mutex;
+static std::unordered_set<std::string> s_seen_messages;
+
+/**
+ * @brief Strip LVGL's "(timestamp, +delta)\t" prefix from a log message.
+ *
+ * LVGL prepends a timing header like "(33165.838, +7629213)\t" to every
+ * log line. The numbers vary per call, so we strip them to compare bodies.
+ */
+std::string_view strip_lvgl_timestamp(std::string_view msg) {
+    if (msg.empty() || msg.front() != '(')
+        return msg;
+    size_t close = msg.find(')');
+    if (close == std::string_view::npos || close + 1 >= msg.size())
+        return msg;
+    size_t body = close + 1;
+    while (body < msg.size() && (msg[body] == '\t' || msg[body] == ' '))
+        ++body;
+    return msg.substr(body);
+}
+
+/**
+ * @brief Check if a message matches one of the per-frame retry patterns
+ *        whose repeats should be silenced.
+ */
+bool is_high_frequency_retry(std::string_view msg) {
+    return msg.find("fs_open: Could not open file:") != std::string_view::npos ||
+           msg.find("image_decoder_get_info: File open failed") != std::string_view::npos ||
+           msg.find("lv_draw_image: Couldn't get info about the image") != std::string_view::npos ||
+           msg.find("lv_image_set_src: failed to get image info") != std::string_view::npos;
+}
+
+/**
+ * @brief Record a message body and report whether it has been seen before.
+ *
+ * @return true if the message is a repeat (caller should drop to debug),
+ *         false if it is the first occurrence (caller logs at original level).
+ */
+bool seen_before(const std::string& msg) {
+    std::string key(strip_lvgl_timestamp(msg));
+    std::lock_guard<std::mutex> lock(s_dedupe_mutex);
+    if (s_seen_messages.size() >= LVGL_DEDUPE_MAX) {
+        // Best-effort cap: clear and start over. 256 unique broken-asset
+        // messages in one session would be extraordinary.
+        s_seen_messages.clear();
+    }
+    auto [_, inserted] = s_seen_messages.insert(std::move(key));
+    return !inserted;
+}
 
 #ifdef HAVE_STACK_TRACE
 /**
@@ -245,6 +304,13 @@ void lvgl_log_callback(lv_log_level_t level, const char* buf) {
                                    (msg.find("language is missing from tag") != std::string::npos ||
                                     msg.find("tag is not found") != std::string::npos));
 
+    // Dedupe high-frequency retry messages (broken image assets, etc.) — first
+    // occurrence at original level, repeats at debug. Decided up-front so the
+    // WARN-path anomaly detection below still runs on the first hit.
+    bool is_repeat_retry =
+        (level == LV_LOG_LEVEL_WARN || level == LV_LOG_LEVEL_ERROR) &&
+        is_high_frequency_retry(msg) && seen_before(msg);
+
     // Route to appropriate spdlog level
     switch (level) {
     case LV_LOG_LEVEL_TRACE:
@@ -256,7 +322,7 @@ void lvgl_log_callback(lv_log_level_t level, const char* buf) {
     case LV_LOG_LEVEL_WARN:
         if (is_translation_warning && s_suppress_translation_warnings) {
             spdlog::trace("[LVGL] {}", msg);
-        } else if (is_scroll_boundary_warning || is_translation_warning) {
+        } else if (is_scroll_boundary_warning || is_translation_warning || is_repeat_retry) {
             spdlog::debug("[LVGL] {}", msg);
         } else {
             spdlog::warn("[LVGL] {}", msg);
@@ -304,14 +370,18 @@ void lvgl_log_callback(lv_log_level_t level, const char* buf) {
         }
         break;
     case LV_LOG_LEVEL_ERROR:
-        spdlog::error("[LVGL] {}", msg);
-        // Detect heap corruption reports from lv_xml_get_font() and fire telemetry
-        if (msg.find("HEAP_CORRUPTION") != std::string::npos) {
-            TelemetryManager::instance().record_error("memory", "heap_corruption", msg);
-        }
-        // Detect render buffer failures from our safety patches
-        if (msg.find("reshape failed") != std::string::npos) {
-            TelemetryManager::instance().record_error("display", "render_failure", msg);
+        if (is_repeat_retry) {
+            spdlog::debug("[LVGL] {}", msg);
+        } else {
+            spdlog::error("[LVGL] {}", msg);
+            // Detect heap corruption reports from lv_xml_get_font() and fire telemetry
+            if (msg.find("HEAP_CORRUPTION") != std::string::npos) {
+                TelemetryManager::instance().record_error("memory", "heap_corruption", msg);
+            }
+            // Detect render buffer failures from our safety patches
+            if (msg.find("reshape failed") != std::string::npos) {
+                TelemetryManager::instance().record_error("display", "render_failure", msg);
+            }
         }
         break;
     case LV_LOG_LEVEL_USER:
