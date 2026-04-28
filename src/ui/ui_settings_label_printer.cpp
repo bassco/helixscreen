@@ -985,7 +985,7 @@ void LabelPrinterSettingsOverlay::handle_test_print() {
         return;
     }
 
-    spdlog::info("[{}] Test print requested", get_name());
+    spdlog::warn("[{}] Test print requested", get_name());
 
     // Disable test print button via subject binding
     lv_subject_set_int(&test_printing_subject_, 1);

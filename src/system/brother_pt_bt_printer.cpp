@@ -75,7 +75,7 @@ void BrotherPTBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
         return;
     }
 
-    spdlog::info("[Brother PT BT] Sending {} bytes to {} (channel resolved at send time)",
+    spdlog::warn("[Brother PT BT] Sending {} bytes to {} (channel resolved at send time)",
                  commands.size(), mac_);
 
     std::string mac = mac_;
@@ -243,7 +243,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
             return;
         }
 
-        spdlog::info("[Brother PT BT] Detected {} tape ({} printable pixels)", label_size->name,
+        spdlog::warn("[Brother PT BT] Detected {} tape ({} printable pixels)", label_size->name,
                      label_size->width_px);
 
         // Step 3: Render label at detected tape dimensions
@@ -294,7 +294,7 @@ void BrotherPTBluetoothPrinter::print_spool(const SpoolInfo& spool, LabelPreset 
             sent += static_cast<size_t>(w);
         }
 
-        spdlog::info("[Brother PT BT] Sent {} bytes, waiting for print completion", sent);
+        spdlog::warn("[Brother PT BT] Sent {} bytes, waiting for print completion", sent);
 
         // Brief wait for print completion status (printer sends 32-byte response)
         struct timeval tv2 = {3, 0};

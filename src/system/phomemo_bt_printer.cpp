@@ -48,7 +48,7 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
     }
 
     auto commands = phomemo_build_raster(bitmap, size);
-    spdlog::info("Phomemo BT: sending {} bytes to {} via {}", commands.size(), mac_, transport_);
+    spdlog::warn("Phomemo BT: sending {} bytes to {} via {}", commands.size(), mac_, transport_);
 
     std::string mac = mac_;
     bool use_spp = (transport_ == "spp");
@@ -88,7 +88,7 @@ void PhomemoBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
                         spdlog::error("Phomemo BT: {}", error);
                     } else {
                         success = true;
-                        spdlog::info("Phomemo BT: sent {} bytes via BLE", commands.size());
+                        spdlog::warn("Phomemo BT: sent {} bytes via BLE", commands.size());
                     }
                     loader.disconnect(ctx, handle);
                 }

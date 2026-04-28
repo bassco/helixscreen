@@ -74,7 +74,7 @@ void IppPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
         return;
     }
 
-    spdlog::info("IPP Printer: printing to {}:{}/{}, template={}, count={}, start={}",
+    spdlog::warn("IPP Printer: printing to {}:{}/{}, template={}, count={}, start={}",
                  host, port, resource_path, template_index, label_count, start_position);
 
     // Route through HttpExecutor::fast() bounded pool — raw std::thread spawn
@@ -193,7 +193,7 @@ void IppPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
                 return;
             }
 
-            spdlog::info("IPP Printer: print job submitted successfully");
+            spdlog::warn("IPP Printer: print job submitted successfully");
             helix::ui::queue_update([callback]() {
                 callback(true, "");
             });

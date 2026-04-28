@@ -155,7 +155,7 @@ static int ensure_connected(helix::bluetooth::BluetoothLoader& loader, const std
     s_rfcomm_fd = fd;
 
     s_connected_mac = mac;
-    spdlog::info("MakeID BT: RFCOMM connected (fd={})", s_rfcomm_fd);
+    spdlog::warn("MakeID BT: RFCOMM connected (fd={})", s_rfcomm_fd);
 
     // Drain any stale data, then handshake
     rfcomm_drain(s_rfcomm_fd);
@@ -225,7 +225,7 @@ void MakeIdBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& s
     config.max_rows_per_chunk = 170;
 
     auto job = makeid_build_print_job(bitmap, size, config);
-    spdlog::info("MakeID BT: {} chunks to {} via RFCOMM", job.chunks.size(), mac_);
+    spdlog::warn("MakeID BT: {} chunks to {} via RFCOMM", job.chunks.size(), mac_);
 
     std::string mac = mac_;
     // Wrap thread spawn in try/catch — pthread_create EAGAIN on resource-constrained
@@ -306,7 +306,7 @@ void MakeIdBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& s
                 rfcomm_write(fd, cancel.data(), cancel.size());
                 read_response(fd, "cancel", 2000);
                 success = true;
-                spdlog::info("MakeID BT: print complete");
+                spdlog::warn("MakeID BT: print complete");
             }
         }
 

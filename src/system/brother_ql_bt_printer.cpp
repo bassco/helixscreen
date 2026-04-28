@@ -48,7 +48,7 @@ void BrotherQLBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize
     }
 
     auto commands = brother_ql_build_raster(bitmap, size);
-    spdlog::info("Brother QL BT: sending {} bytes to {} ch{}", commands.size(), mac_, channel_);
+    spdlog::warn("Brother QL BT: sending {} bytes to {} ch{}", commands.size(), mac_, channel_);
 
     std::string mac = mac_;
     int channel = channel_;

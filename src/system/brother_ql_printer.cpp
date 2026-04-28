@@ -66,7 +66,7 @@ void BrotherQLPrinter::print_label(const std::string& host, int port,
                                     const LabelBitmap& bitmap, const LabelSize& size,
                                     PrintCallback callback) {
     auto commands = build_raster_commands(bitmap, size);
-    spdlog::info("Brother QL: sending {} bytes to {}:{}", commands.size(), host, port);
+    spdlog::warn("Brother QL: sending {} bytes to {}:{}", commands.size(), host, port);
 
     // Route TCP send through HttpExecutor::fast() — raw detached std::thread
     // spawned per print was the second half of the nested-thread chain that
@@ -115,7 +115,7 @@ void BrotherQLPrinter::print_label(const std::string& host, int port,
                     }
                     if (total_sent == commands.size()) {
                         success = true;
-                        spdlog::info("Brother QL: sent {} bytes successfully", total_sent);
+                        spdlog::warn("Brother QL: sent {} bytes successfully", total_sent);
                     }
                 }
             }

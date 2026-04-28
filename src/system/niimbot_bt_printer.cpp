@@ -95,7 +95,7 @@ static int ensure_connected(helix::bluetooth::BluetoothLoader& loader, const std
 
     s_last_connect_error.clear();
     s_connected_mac = mac;
-    spdlog::info("Niimbot BT: new persistent connection (handle={})", s_handle);
+    spdlog::warn("Niimbot BT: new persistent connection (handle={})", s_handle);
 
     // BLE connection settle time — AcquireWrite uses write-without-response,
     // and the printer firmware may silently discard data received before its
@@ -105,8 +105,12 @@ static int ensure_connected(helix::bluetooth::BluetoothLoader& loader, const std
     // Send Connect (0xC1) — printer-level session handshake.
     // This arms the thermal subsystem for printing.
     auto connect_pkt = niimbot_build_packet(NiimbotCmd::Connect, uint8_t(0x01));
-    loader.ble_write(s_ctx, s_handle, connect_pkt.data(),
-                      static_cast<int>(connect_pkt.size()));
+    int connect_write = loader.ble_write(s_ctx, s_handle, connect_pkt.data(),
+                                          static_cast<int>(connect_pkt.size()));
+    if (connect_write < 0) {
+        const char* err = loader.last_error ? loader.last_error(s_ctx) : "unknown";
+        spdlog::warn("Niimbot BT: Connect handshake write failed: {}", err);
+    }
     if (loader.ble_read) {
         uint8_t resp[64];
         int n = loader.ble_read(s_ctx, s_handle, resp, sizeof(resp), 2000);
@@ -117,6 +121,8 @@ static int ensure_connected(helix::bluetooth::BluetoothLoader& loader, const std
                 hex += fmt::format("{:02X}", resp[i]);
             }
             spdlog::debug("Niimbot BT: Connect response: {}", hex);
+        } else {
+            spdlog::warn("Niimbot BT: Connect handshake got no response (n={})", n);
         }
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -172,7 +178,7 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
     }
 
     auto job = niimbot_build_print_job(bitmap, size);
-    spdlog::info("Niimbot BT: {} packets, {} rows to {} via BLE",
+    spdlog::warn("Niimbot BT: {} packets, {} rows to {} via BLE",
                  job.packets.size(), job.total_rows, mac_);
 
     std::string mac = mac_;
@@ -329,7 +335,7 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
 
                 print_done:
                 success = true;
-                spdlog::info("Niimbot BT: print job complete");
+                spdlog::warn("Niimbot BT: print job complete");
             }
 
             // Keep connection alive for subsequent prints.

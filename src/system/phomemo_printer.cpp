@@ -101,7 +101,7 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
     }
 
     auto commands = build_raster_commands(bitmap, size);
-    spdlog::info("Phomemo: sending {} bytes to USB {:04x}:{:04x}", commands.size(), vid_, pid_);
+    spdlog::warn("Phomemo: sending {} bytes to USB {:04x}:{:04x}", commands.size(), vid_, pid_);
 
     uint16_t vid = vid_;
     uint16_t pid = pid_;
@@ -132,7 +132,7 @@ void PhomemoPrinter::print(const LabelBitmap& bitmap, const LabelSize& size,
                     f.flush();
                     if (f.good()) {
                         success = true;
-                        spdlog::info("Phomemo: sent {} bytes via {}", commands.size(), dev_path);
+                        spdlog::warn("Phomemo: sent {} bytes via {}", commands.size(), dev_path);
                     } else {
                         error = fmt::format("Write to {} failed", dev_path);
                         spdlog::error("Phomemo: {}", error);
