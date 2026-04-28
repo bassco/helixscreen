@@ -1693,88 +1693,6 @@ void theme_manager_refresh_widget_tree(lv_obj_t* root) {
     lv_obj_tree_walk(root, refresh_style_cb, nullptr);
 }
 
-/**
- * @brief Tree walk callback to swap gradient image sources based on dark/light mode
- *
- * Checks each lv_image widget for gradient-related names and swaps the
- * image source between -dark.bin and -light.bin variants.
- */
-struct GradientSwapCtx {
-    bool dark_mode;
-};
-
-static lv_obj_tree_walk_res_t gradient_swap_cb(lv_obj_t* obj, void* user_data) {
-    if (!lv_obj_check_type(obj, &lv_image_class))
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    // Check if this image widget has a gradient-related name
-    const char* obj_name = lv_obj_get_name(obj);
-    if (!obj_name)
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    if (strcmp(obj_name, "gradient_bg") != 0 && strcmp(obj_name, "gradient_background") != 0)
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    auto* ctx = static_cast<GradientSwapCtx*>(user_data);
-    const void* src = lv_image_get_src(obj);
-    if (!src)
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    // Skip draw_buf sources (e.g., dynamically rendered gradients from PrintSelectCardView)
-    if (lv_image_src_get_type(src) != LV_IMAGE_SRC_FILE)
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    const char* path = static_cast<const char*>(src);
-    std::string path_str(path);
-
-    // Determine the target suffix
-    const char* target = ctx->dark_mode ? "-dark.bin" : "-light.bin";
-
-    // Already has the correct suffix? Skip
-    if (path_str.size() >= strlen(target) &&
-        path_str.compare(path_str.size() - strlen(target), strlen(target), target) == 0)
-        return LV_OBJ_TREE_WALK_NEXT;
-
-    // Try replacing opposite suffix
-    const char* opposite = ctx->dark_mode ? "-light.bin" : "-dark.bin";
-    size_t pos = path_str.rfind(opposite);
-    if (pos != std::string::npos) {
-        std::string new_path = path_str.substr(0, pos) + target;
-        lv_image_set_src(obj, new_path.c_str());
-        spdlog::trace("[Theme] Gradient swap: {} -> {}", path_str, new_path);
-        return LV_OBJ_TREE_WALK_NEXT;
-    }
-
-    // Unsuffixed .bin file: append mode suffix before .bin
-    pos = path_str.rfind(".bin");
-    if (pos != std::string::npos) {
-        std::string new_path =
-            path_str.substr(0, pos) + (ctx->dark_mode ? "-dark" : "-light") + ".bin";
-        lv_image_set_src(obj, new_path.c_str());
-        spdlog::trace("[Theme] Gradient swap: {} -> {}", path_str, new_path);
-    }
-
-    return LV_OBJ_TREE_WALK_NEXT;
-}
-
-/**
- * @brief Swap gradient background images based on dark/light mode
- *
- * Walks the widget tree to find ALL gradient_bg and gradient_background
- * lv_image widgets and swaps their source between -dark.bin and -light.bin.
- */
-static void theme_swap_gradient_images(lv_obj_t* root, bool dark_mode) {
-    if (!root)
-        return;
-    GradientSwapCtx ctx{dark_mode};
-    lv_obj_tree_walk(root, gradient_swap_cb, &ctx);
-}
-
-void theme_manager_swap_gradients(lv_obj_t* root) {
-    theme_swap_gradient_images(root, use_dark_mode);
-    ui_gradient_canvas_theme_update(root);
-}
-
 void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
     if (!theme_display) {
         spdlog::error("[Theme] Cannot apply theme: theme not initialized");
@@ -1855,8 +1773,7 @@ void theme_manager_apply_theme(const helix::ThemeData& theme, bool dark_mode) {
     theme_manager_refresh_widget_tree(lv_screen_active());
     theme_apply_current_palette_to_tree(lv_screen_active());
 
-    // Swap gradient background images between dark/light variants
-    theme_swap_gradient_images(lv_screen_active(), effective_dark);
+    // Refresh ui_gradient_canvas widgets for the new dark/light mode
     ui_gradient_canvas_theme_update(lv_screen_active());
 
     // Invalidate and notify

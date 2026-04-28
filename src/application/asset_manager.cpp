@@ -206,13 +206,6 @@ void AssetManager::register_images() {
     lv_xml_register_image(nullptr, "A:assets/images/benchy_thumbnail_white.png",
                           "A:assets/images/benchy_thumbnail_white.png");
 
-    // Pre-rendered gradient backgrounds (LVGL native .bin format for fast blitting)
-    // Panel gradients used by print_status, print_file_detail, history_detail overlays
-    // Theme manager swaps -dark/-light suffixes at runtime
-    lv_xml_register_image(nullptr, "A:assets/images/gradient-panel-medium-dark.bin",
-                          "A:assets/images/gradient-panel-medium-dark.bin");
-    lv_xml_register_image(nullptr, "A:assets/images/gradient-panel-medium-light.bin",
-                          "A:assets/images/gradient-panel-medium-light.bin");
     lv_xml_register_image(nullptr, "A:assets/images/prerendered/benchy_thumbnail_white.bin",
                           "A:assets/images/prerendered/benchy_thumbnail_white.bin");
 

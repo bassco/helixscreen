@@ -180,9 +180,6 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
         return nullptr;
     }
 
-    // Swap gradient images to match current theme (XML hardcodes -dark.bin)
-    theme_manager_swap_gradients(overlay_root_);
-
     // Set width to fill space after nav bar
     ui_set_overlay_width(overlay_root_, parent_screen_);
 

@@ -516,9 +516,6 @@ lv_obj_t* PrintStatusPanel::create(lv_obj_t* parent) {
         return nullptr;
     }
 
-    // Swap gradient images to match current theme (XML hardcodes -dark.bin)
-    theme_manager_swap_gradients(overlay_root_);
-
     spdlog::debug("[{}] Setting up panel...", get_name());
 
     // Panel width is set via XML using #overlay_panel_width_large (same as print_file_detail)

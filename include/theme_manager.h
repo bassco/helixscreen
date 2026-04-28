@@ -311,21 +311,6 @@ void theme_manager_register_responsive_fonts(lv_display_t* display);
 void theme_manager_toggle_dark_mode();
 
 /**
- * @brief Swap gradient background images for a widget subtree
- *
- * Walks the widget tree to find gradient_bg and gradient_background lv_image
- * widgets and swaps their source between -dark.bin and -light.bin based on
- * the current theme mode. Call this after creating overlays or card pools
- * whose XML hardcodes -dark.bin, so they match the active theme.
- *
- * Subsequent theme changes are handled automatically by the global tree walk
- * in theme_manager_apply_theme().
- *
- * @param root Root widget to walk (e.g., overlay_root_ or container_)
- */
-void theme_manager_swap_gradients(lv_obj_t* root);
-
-/**
  * @brief Force style refresh on widget tree
  *
  * Walks the widget tree starting from root and forces style recalculation
