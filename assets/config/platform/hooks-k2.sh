@@ -34,14 +34,19 @@ platform_enable_backlight() {
 }
 
 platform_wait_for_services() {
-    # Wait for Moonraker to be ready (K2 Moonraker is on port 7125)
-    local timeout=30
-    local elapsed=0
-    while [ $elapsed -lt $timeout ]; do
+    # Wait for Moonraker to be ready (K2 Moonraker is on port 7125).
+    # Real wall-clock timeout: each iteration was ~3s (2s urlopen + 1s sleep)
+    # × 30 iterations = 90s wall, which surprised us in boot diagnostics.
+    # Track elapsed seconds via `date +%s` so the timeout reflects actual
+    # wall time, and drop urlopen timeout to 1s for quicker retries.
+    local timeout_sec=30
+    local start_sec
+    start_sec=$(date +%s)
+    while [ $(($(date +%s) - start_sec)) -lt $timeout_sec ]; do
         if python3 -c "
 import urllib.request
 try:
-    urllib.request.urlopen('http://127.0.0.1:7125/server/info', timeout=2)
+    urllib.request.urlopen('http://127.0.0.1:7125/server/info', timeout=1)
     exit(0)
 except:
     exit(1)
@@ -49,9 +54,8 @@ except:
             return 0
         fi
         sleep 1
-        elapsed=$((elapsed + 1))
     done
-    echo "[hooks-k2] Warning: Moonraker not ready after ${timeout}s"
+    echo "[hooks-k2] Warning: Moonraker not ready after ${timeout_sec}s"
 }
 
 platform_pre_start() {
@@ -61,19 +65,24 @@ platform_pre_start() {
     # SSL is disabled in the K2 build, but set this for safety
     export HELIX_DISABLE_SSL=1
 
-    # The stock wifi-server manages wpa_supplicant, but we killed it in
-    # platform_stop_competing_uis(). Start wpa_supplicant directly so
-    # WiFi stays up. Only needed if wlan0 exists and isn't already associated.
+    # Bring up WiFi in the background. The stock wifi-server manages
+    # wpa_supplicant but we killed it in platform_stop_competing_uis(),
+    # so we re-establish it here as a courtesy. Running synchronously
+    # cost ~7s (kill + sleep 1 + wpa_supplicant + sleep 3 + udhcpc) and
+    # blocked the entire boot path even when eth0 was already up — pure
+    # waste. Backgrounding lets boot proceed; helix-screen reaches
+    # Moonraker over localhost regardless, and external connectivity
+    # (updates, telemetry) follows whichever interface ends up associated.
     if [ -e /sys/class/net/wlan0 ] && ! ip addr show wlan0 2>/dev/null | grep -q 'inet '; then
         local wpa_conf="/etc/wifi/wpa_supplicant/wpa_supplicant.conf"
         if [ -f "$wpa_conf" ]; then
-            # Kill any stale wpa_supplicant (wifi-server may have left one)
-            killall wpa_supplicant 2>/dev/null || true
-            sleep 1
-            wpa_supplicant -B -i wlan0 -c "$wpa_conf" -D nl80211 2>/dev/null || true
-            # Wait briefly for association, then request DHCP
-            sleep 3
-            udhcpc -i wlan0 -n -q 2>/dev/null || true
+            (
+                killall wpa_supplicant 2>/dev/null || true
+                sleep 1
+                wpa_supplicant -B -i wlan0 -c "$wpa_conf" -D nl80211 2>/dev/null || true
+                sleep 3
+                udhcpc -i wlan0 -n -q 2>/dev/null || true
+            ) >/dev/null 2>&1 &
         fi
     fi
 }
