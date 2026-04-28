@@ -8,6 +8,13 @@
 # 1. Creates /oem/.debug to prevent overlay wipe on boot
 # 2. Patches /etc/init.d/S99screen to start HelixScreen instead of stock GUI
 #
+# The patch is regenerated and compared to the on-disk version every run; if
+# they differ we rewrite. This is self-healing: a legacy patch from an older
+# helixscreen version (e.g. one that hardcoded the init path before
+# helixscreen.init moved into config/) gets repaired on the next self-update,
+# and the previous "skip if first 5 lines mention HelixScreen" heuristic that
+# silently locked users to a broken patch is gone.
+#
 # To revert: rm -rf /userdata/helixscreen && reboot
 # (S99screen falls back to stock GUI when HelixScreen is not installed)
 
@@ -31,14 +38,12 @@ else
     echo "/oem/.debug already exists"
 fi
 
-# Step 2: Check if S99screen is already patched
-if head -5 /etc/init.d/S99screen 2>/dev/null | grep -q "HelixScreen"; then
-    echo "S99screen already patched for HelixScreen"
-    exit 0
-fi
+# Step 2: Render desired S99screen patch into a temp file
+S99_TARGET=/etc/init.d/S99screen
+TMP_PATCH=$(mktemp)
+trap 'rm -f "$TMP_PATCH"' EXIT
 
-# Step 3: Patch S99screen to delegate to HelixScreen when installed
-cat > /etc/init.d/S99screen << 'PATCH'
+cat > "$TMP_PATCH" << 'PATCH'
 #!/bin/sh
 #
 # Start/stop GUI process
@@ -100,6 +105,22 @@ case "$1" in
 esac
 PATCH
 
-chmod +x /etc/init.d/S99screen
+# Step 3: If the on-disk script already matches, nothing to do
+if [ -f "$S99_TARGET" ] && cmp -s "$TMP_PATCH" "$S99_TARGET"; then
+    echo "S99screen already patched (current version)"
+    exit 0
+fi
+
+# Step 4: Preserve the original stock S99screen the first time we replace it.
+# Detect "stock" by absence of any HelixScreen marker; once we've saved a
+# .stock copy we don't overwrite it.
+if [ -f "$S99_TARGET" ] && [ ! -f "$S99_TARGET.stock" ] && \
+   ! grep -q HelixScreen "$S99_TARGET" 2>/dev/null; then
+    cp "$S99_TARGET" "$S99_TARGET.stock"
+    echo "Saved stock S99screen backup to $S99_TARGET.stock"
+fi
+
+cp "$TMP_PATCH" "$S99_TARGET"
+chmod +x "$S99_TARGET"
 echo "S99screen patched — HelixScreen will auto-start on boot"
 echo "To revert: rm -rf $DEPLOY_DIR && reboot"
