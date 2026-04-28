@@ -259,6 +259,36 @@ class GCodeViewerState {
     /// -1 means "show all layers" (preview mode), >= 0 means "show up to this layer"
     int print_progress_layer_{-1};
 
+    /// Wall-clock ms when print_progress_layer_ last changed. Sampled by the
+    /// renderer-stall watchdog to detect "Klipper advanced but cache stalled"
+    /// — see watchdog_timer_ below.
+    uint32_t print_progress_last_change_ms_{0};
+
+    // ========================================================================
+    // Renderer-stall watchdog
+    //
+    // Self-heals the failure mode where a continuation lv_obj_invalidate from
+    // needs_more_frames() (gcode_viewer_draw_cb at LV_EVENT_DRAW_POST) was
+    // dropped or coalesced inside UpdateQueue back-pressure (CLAUDE.md L081 —
+    // helix::ui::async_call routes through queue_update, no escape from a
+    // batch). When that happens, cached_up_to_layer_ < target_layer is stuck
+    // even though print_progress_layer_ is advancing on every Moonraker layer
+    // event, and the user sees a visually-frozen 2D render despite numeric
+    // progress text updating correctly.
+    //
+    // Tick: WATCHDOG_INTERVAL_MS (default 2s). On each tick, if the 2D
+    // renderer reports needs_more_frames() AND its cached_up_to_layer_ has
+    // not advanced since the previous tick, force one lv_obj_invalidate(obj).
+    // The kick is idempotent: when the renderer is healthy each tick simply
+    // observes a moving cached_up_to_layer_ and does nothing.
+    // ========================================================================
+    static constexpr uint32_t WATCHDOG_INTERVAL_MS = 2000;
+    lv_timer_t* watchdog_timer_{nullptr};
+    int watchdog_last_cached_layer_{-2};   ///< -2 sentinel = never sampled
+    int watchdog_last_target_layer_{-2};   ///< -2 sentinel = never sampled
+    uint32_t watchdog_kicks_{0};           ///< Diagnostic counter
+    uint32_t watchdog_last_kick_log_ms_{0}; ///< Rate-limit kick warns to ~one per print phase
+
     /// Content offset (stored to apply when 2D renderer is lazily created)
     float content_offset_y_percent_{0.0f};
 
@@ -961,6 +991,83 @@ static void gcode_viewer_size_changed_cb(lv_event_t* e) {
 }
 
 /**
+ * @brief Renderer-stall watchdog timer callback.
+ *
+ * Detects the failure mode where the 2D renderer's progressive cache fails
+ * to catch up to the active print's current layer because a continuation
+ * lv_obj_invalidate() was dropped (UpdateQueue back-pressure / coalescing
+ * with a sync deletion in the same batch — see CLAUDE.md L081).
+ *
+ * Symptom in user reports: numerical layer text advances correctly, but the
+ * 2D render is visually frozen. Navigating away and back doesn't recover
+ * because pause/resume only invalidates once and that single frame may not
+ * complete the cache either.
+ *
+ * Self-heal logic: every WATCHDOG_INTERVAL_MS, observe the 2D renderer's
+ * cached_up_to_layer_. If the renderer reports needs_more_frames() AND the
+ * cached layer has not advanced since the previous tick, force one
+ * lv_obj_invalidate(obj). Idempotent — when the renderer is healthy, each
+ * tick simply observes a moving cached_up_to_layer_ and does nothing.
+ */
+static void gcode_viewer_watchdog_cb(lv_timer_t* timer) {
+    auto* obj = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+    if (!obj)
+        return;
+    gcode_viewer_state_t* st = get_state(obj);
+    if (!st)
+        return;
+
+    // Pre-conditions for the stall check. None of these indicate a bug — they
+    // just mean the watchdog has nothing useful to do this tick.
+    if (st->viewer_state != GcodeViewerState::Loaded)
+        return;
+    if (st->rendering_paused_)
+        return;
+    if (st->print_progress_layer_ < 0)
+        return; // Preview mode — not tracking a print
+    if (!st->is_using_2d_mode())
+        return; // 3D path has its own continuation chain via needs_3d_refresh_
+    if (!st->layer_renderer_2d_)
+        return;
+
+    int cached = st->layer_renderer_2d_->get_cached_up_to_layer();
+    int target = st->layer_renderer_2d_->get_current_layer();
+    bool needs_more = st->layer_renderer_2d_->needs_more_frames();
+
+    // Stall = renderer says "I'm not done" AND it's the same target+cached
+    // pair we observed last tick. Same target rules out "we're rapidly
+    // advancing through chunks", which would already self-correct.
+    bool same_state = (cached == st->watchdog_last_cached_layer_) &&
+                      (target == st->watchdog_last_target_layer_);
+
+    if (needs_more && same_state && st->watchdog_last_cached_layer_ != -2) {
+        st->watchdog_kicks_++;
+
+        // Rate-limit the warn so we don't fill the bundle on a wedged renderer.
+        // First kick logs immediately; subsequent kicks log at most every 30s.
+        uint32_t now_ms = lv_tick_get();
+        constexpr uint32_t kKickLogIntervalMs = 30000;
+        bool should_log = (st->watchdog_last_kick_log_ms_ == 0) ||
+                          (now_ms - st->watchdog_last_kick_log_ms_ >= kKickLogIntervalMs);
+        if (should_log) {
+            uint32_t age_ms =
+                st->print_progress_last_change_ms_ == 0
+                    ? 0
+                    : (now_ms - st->print_progress_last_change_ms_);
+            spdlog::warn("[GCode Viewer] watchdog: cache stalled (cached={} target={} "
+                         "progress_layer={} progress_age_ms={} kicks={}), forcing invalidate",
+                         cached, target, st->print_progress_layer_, age_ms, st->watchdog_kicks_);
+            st->watchdog_last_kick_log_ms_ = now_ms;
+        }
+
+        lv_obj_invalidate(obj);
+    }
+
+    st->watchdog_last_cached_layer_ = cached;
+    st->watchdog_last_target_layer_ = target;
+}
+
+/**
  * @brief Cleanup callback - free resources on widget deletion
  */
 static void gcode_viewer_delete_cb(lv_event_t* e) {
@@ -969,11 +1076,15 @@ static void gcode_viewer_delete_cb(lv_event_t* e) {
     lv_obj_set_user_data(obj, nullptr);
 
     if (state) {
-        // Delete timer now while LVGL is guaranteed alive (the destructor's
+        // Delete timers now while LVGL is guaranteed alive (the destructor's
         // lv_is_initialized() guard might skip this during shutdown)
         if (state->long_press_timer_) {
             lv_timer_delete(state->long_press_timer_);
             state->long_press_timer_ = nullptr;
+        }
+        if (state->watchdog_timer_) {
+            lv_timer_delete(state->watchdog_timer_);
+            state->watchdog_timer_ = nullptr;
         }
 
         // Stop build thread before state destruction
@@ -1046,6 +1157,12 @@ lv_obj_t* ui_gcode_viewer_create(lv_obj_t* parent) {
     } else {
         spdlog::error("[GCode Viewer] INIT: Invalid size {}x{}, using defaults", width, height);
     }
+
+    // Renderer-stall watchdog — see gcode_viewer_watchdog_cb for rationale.
+    // Always-on timer; the callback gates on viewer_state / paused / progress
+    // mode so it's a no-op when there's nothing to watch.
+    st->watchdog_timer_ = lv_timer_create(
+        gcode_viewer_watchdog_cb, gcode_viewer_state_t::WATCHDOG_INTERVAL_MS, obj);
 
     spdlog::debug("[GCode Viewer] Widget created");
     return obj;
@@ -1663,12 +1780,23 @@ void ui_gcode_viewer_set_paused(lv_obj_t* obj, bool paused) {
 
     if (st->rendering_paused_ != paused) {
         st->rendering_paused_ = paused;
-        spdlog::debug("[GCode Viewer] Rendering {} (visibility optimization)",
-                      paused ? "PAUSED" : "RESUMED");
+
+        // Include cache state in the log so a frozen-render bundle shows
+        // whether resume actually got the cache moving again.
+        int cached = st->layer_renderer_2d_ ? st->layer_renderer_2d_->get_cached_up_to_layer() : -1;
+        int target = st->layer_renderer_2d_ ? st->layer_renderer_2d_->get_current_layer() : -1;
+        spdlog::debug("[GCode Viewer] Rendering {} (cached={} target={} progress_layer={})",
+                      paused ? "PAUSED" : "RESUMED", cached, target, st->print_progress_layer_);
 
         // If resuming, trigger a redraw to show current state
         if (!paused) {
             lv_obj_invalidate(obj);
+
+            // Reset watchdog baseline on resume — the layer-stall comparison
+            // should start fresh from the resumed state, not flag the post-pause
+            // tick as "stalled" just because the cache didn't move while paused.
+            st->watchdog_last_cached_layer_ = -2;
+            st->watchdog_last_target_layer_ = -2;
         }
     }
 }
@@ -2171,8 +2299,14 @@ void ui_gcode_viewer_set_print_progress(lv_obj_t* obj, int current_layer) {
         return;
     }
 
+    int prev_layer = st->print_progress_layer_;
+
     // Store the print progress layer for use by render callback
     st->print_progress_layer_ = current_layer;
+    st->print_progress_last_change_ms_ = lv_tick_get();
+
+    spdlog::debug("[GCode Viewer] set_print_progress {} -> {} (paused={})", prev_layer,
+                  current_layer, st->rendering_paused_);
 
     // Skip renderer updates and invalidation when paused —
     // the stored value above will be picked up on resume.

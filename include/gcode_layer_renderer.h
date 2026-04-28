@@ -146,6 +146,19 @@ class GCodeLayerRenderer {
     bool needs_more_frames() const;
 
     /**
+     * @brief Highest solid-cache layer rendered so far (-1 if cache empty)
+     *
+     * Diagnostic accessor for the renderer-stall watchdog in ui_gcode_viewer.
+     * Lets the watchdog detect when print_progress_layer_ is advancing but
+     * the cache is not catching up — which means a continuation invalidate
+     * was dropped (UpdateQueue back-pressure, etc.) and the renderer is
+     * stranded mid-print.
+     */
+    int get_cached_up_to_layer() const {
+        return cached_up_to_layer_;
+    }
+
+    /**
      * @brief Set canvas dimensions
      * @param width Canvas width in pixels
      * @param height Canvas height in pixels
