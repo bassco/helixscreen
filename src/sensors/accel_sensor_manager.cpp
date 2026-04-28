@@ -174,9 +174,10 @@ void AccelSensorManager::update_from_status(const nlohmann::json& status) {
             auto& state = states_[sensor.klipper_name];
             AccelSensorState old_state = state;
 
-            // Update connected state
-            if (sensor_data.contains("connected")) {
-                state.connected = sensor_data["connected"].get<bool>();
+            // Guard against subscription-restricted nulls (type_error.302).
+            if (auto it = sensor_data.find("connected");
+                it != sensor_data.end() && it->is_boolean()) {
+                state.connected = it->get<bool>();
             }
 
             // Check for state change

@@ -198,19 +198,22 @@ void TemperatureSensorManager::update_from_status(const nlohmann::json& status) 
             auto& state = states_[sensor.klipper_name];
             TemperatureSensorState old_state = state;
 
-            // Update temperature (skip null values from drivers without temp sensing)
-            if (sensor_data.contains("temperature") && !sensor_data["temperature"].is_null()) {
-                state.temperature = sensor_data["temperature"].get<float>();
+            // Field-restricted Moonraker subscriptions send null for fields the
+            // underlying object lacks. Use find() + is_number() so unexpected
+            // nulls (or wrong types during firmware restarts) don't throw
+            // type_error.302 and crash the process.
+            if (auto it = sensor_data.find("temperature");
+                it != sensor_data.end() && it->is_number()) {
+                state.temperature = it->get<float>();
             }
-
-            // Update target (temperature_fan only)
-            if (sensor_data.contains("target")) {
-                state.target = sensor_data["target"].get<float>();
+            // target / speed are temperature_fan-only.
+            if (auto it = sensor_data.find("target");
+                it != sensor_data.end() && it->is_number()) {
+                state.target = it->get<float>();
             }
-
-            // Update speed (temperature_fan only)
-            if (sensor_data.contains("speed")) {
-                state.speed = sensor_data["speed"].get<float>();
+            if (auto it = sensor_data.find("speed");
+                it != sensor_data.end() && it->is_number()) {
+                state.speed = it->get<float>();
             }
 
             // Check for state change

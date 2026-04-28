@@ -144,14 +144,15 @@ void WidthSensorManager::update_from_status(const nlohmann::json& status) {
             auto& state = states_[sensor.klipper_name];
             WidthSensorState old_state = state;
 
-            // Update diameter
-            if (sensor_data.contains("Diameter")) {
-                state.diameter = sensor_data["Diameter"].get<float>();
+            // Field-restricted Moonraker subscriptions can send null for absent
+            // fields; guard with find() + is_number() to avoid type_error.302.
+            if (auto it = sensor_data.find("Diameter");
+                it != sensor_data.end() && it->is_number()) {
+                state.diameter = it->get<float>();
             }
-
-            // Update raw value
-            if (sensor_data.contains("Raw")) {
-                state.raw_value = sensor_data["Raw"].get<float>();
+            if (auto it = sensor_data.find("Raw");
+                it != sensor_data.end() && it->is_number()) {
+                state.raw_value = it->get<float>();
             }
 
             // Check for state change

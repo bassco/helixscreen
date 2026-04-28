@@ -152,19 +152,21 @@ void HumiditySensorManager::update_from_status(const nlohmann::json& status) {
             auto& state = states_[sensor.klipper_name];
             HumiditySensorState old_state = state;
 
-            // Update humidity
-            if (sensor_data.contains("humidity")) {
-                state.humidity = sensor_data["humidity"].get<float>();
+            // Field-restricted Moonraker subscriptions send null for absent
+            // fields; `contains()` returns true for null and .get<float>()
+            // would throw type_error.302. Skip via find() + is_number().
+            if (auto it = sensor_data.find("humidity");
+                it != sensor_data.end() && it->is_number()) {
+                state.humidity = it->get<float>();
             }
-
-            // Update temperature
-            if (sensor_data.contains("temperature")) {
-                state.temperature = sensor_data["temperature"].get<float>();
+            if (auto it = sensor_data.find("temperature");
+                it != sensor_data.end() && it->is_number()) {
+                state.temperature = it->get<float>();
             }
-
-            // Update pressure (BME280 only - HTU21D doesn't have pressure)
-            if (sensor_data.contains("pressure")) {
-                state.pressure = sensor_data["pressure"].get<float>();
+            // Pressure is BME280-only (HTU21D doesn't expose it).
+            if (auto it = sensor_data.find("pressure");
+                it != sensor_data.end() && it->is_number()) {
+                state.pressure = it->get<float>();
             }
 
             // Check for state change (compare at display precision to avoid log spam)
