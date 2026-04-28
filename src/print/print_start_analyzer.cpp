@@ -176,7 +176,7 @@ void PrintStartAnalyzer::analyze(const std::set<std::string>& active_files,
     }
 
     // Searched all files, macro not found
-    spdlog::info("[PrintStartAnalyzer] No PRINT_START macro found in any cached config file");
+    spdlog::debug("[PrintStartAnalyzer] No PRINT_START macro found in any cached config file");
     PrintStartAnalysis result;
     result.found = false;
     if (on_complete) {

@@ -142,8 +142,8 @@ void LedWidget::bind_led() {
             led_ctrl.sync_light_state(light_on_);
         }
 
-        spdlog::info("[LedWidget] Bound to LED: {} (initial state: {})", strips.front(),
-                     light_on_ ? "ON" : "OFF");
+        spdlog::debug("[LedWidget] Bound to LED: {} (initial state: {})", strips.front(),
+                      light_on_ ? "ON" : "OFF");
     } else {
         printer_state_.set_tracked_led("");
         spdlog::debug("[LedWidget] LED binding cleared (no strips selected)");

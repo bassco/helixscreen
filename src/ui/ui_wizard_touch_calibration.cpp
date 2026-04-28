@@ -474,8 +474,8 @@ void WizardTouchCalibrationStep::handle_screen_touched(lv_event_t* e) {
     lv_indev_get_point(lv_indev_active(), &point);
 
     auto state_before = panel_->get_state();
-    spdlog::info("[{}] Screen touched at ({}, {}) during state {}", get_name(), point.x, point.y,
-                 static_cast<int>(state_before));
+    spdlog::debug("[{}] Screen touched at ({}, {}) during state {}", get_name(), point.x, point.y,
+                  static_cast<int>(state_before));
 
     // add_sample() handles IDLE→POINT_1 auto-start and sample collection
     panel_->add_sample({point.x, point.y});

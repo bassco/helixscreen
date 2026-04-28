@@ -3184,7 +3184,7 @@ void ui_filament_path_canvas_set_filament_segment(lv_obj_t* obj, int segment) {
     // Start animation from old to new segment
     start_segment_animation(obj, data, old_segment, new_segment);
     data->filament_segment = new_segment;
-    spdlog::info("[FilamentPath] Segment changed: {} -> {} (animating)", old_segment, new_segment);
+    spdlog::debug("[FilamentPath] Segment changed: {} -> {} (animating)", old_segment, new_segment);
 
     // Stop flow animation when filament reaches a terminal position via a
     // single-step transition (normal operation). Big jumps (e.g., 0->7 initial

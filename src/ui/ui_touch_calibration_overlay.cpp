@@ -580,8 +580,8 @@ void TouchCalibrationOverlay::handle_screen_touched(lv_event_t* e) {
     }
 
     // add_sample() handles IDLE→POINT_1 auto-start and sample collection
-    spdlog::info("[{}] Screen touched at ({}, {}) during state {}", get_name(), point.x, point.y,
-                 static_cast<int>(state_before));
+    spdlog::debug("[{}] Screen touched at ({}, {}) during state {}", get_name(), point.x, point.y,
+                  static_cast<int>(state_before));
     panel_->add_sample({point.x, point.y});
 
     // Flash crosshair for visual tap feedback (only during calibration points,

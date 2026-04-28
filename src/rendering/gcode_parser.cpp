@@ -1083,11 +1083,11 @@ ParsedGCodeFile GCodeParser::finalize() {
     result.estimated_print_time_minutes = metadata_print_time_;
     result.total_layer_count = metadata_layer_count_;
 
-    spdlog::info("[GCode Parser] Layer height: {}mm, first layer: {}mm, extrusion width: {}mm",
-                 result.layer_height_mm,
-                 result.first_layer_height_mm > 0 ? result.first_layer_height_mm
-                                                  : result.layer_height_mm,
-                 result.extrusion_width_mm);
+    spdlog::debug("[GCode Parser] Layer height: {}mm, first layer: {}mm, extrusion width: {}mm",
+                  result.layer_height_mm,
+                  result.first_layer_height_mm > 0 ? result.first_layer_height_mm
+                                                   : result.layer_height_mm,
+                  result.extrusion_width_mm);
 
     // Transfer multi-color tool palette
     result.tool_color_palette = tool_color_palette_;
@@ -1095,8 +1095,8 @@ ParsedGCodeFile GCodeParser::finalize() {
     // Transfer interned object name table
     result.object_name_table = std::move(object_name_table_);
 
-    spdlog::info("[GCode Parser] Parsed G-code: {} layers, {} segments, {} objects",
-                 result.layers.size(), result.total_segments, result.objects.size());
+    spdlog::debug("[GCode Parser] Parsed G-code: {} layers, {} segments, {} objects",
+                  result.layers.size(), result.total_segments, result.objects.size());
 
     // Log warning summary if any out-of-range width calculations occurred
     if (out_of_range_width_count_ > 0) {
