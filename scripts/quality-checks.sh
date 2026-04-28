@@ -511,6 +511,42 @@ if [ "$STAGED_ONLY" = true ]; then
 fi
 
 # ====================================================================
+# Subscription Null-Safety Check
+# ====================================================================
+# Background: Moonraker delivers JSON null for subscribed fields the underlying
+# Klipper object lacks. .value() and .get<T>() throw type_error.302 on null;
+# an uncaught throw inside a subscription handler exits 134 → watchdog crash
+# loop (#filament_motion_sensor, fixed in f75b961d8).
+#
+# Baseline ratchets down as violations are fixed. New code adds to the count
+# only via opt-out comment (`// JSON_NULL_SAFE: <reason>`).
+SECTION_START=$(date +%s)
+echo -n "🔒 Checking subscription null-safety..."
+
+if [ -f "scripts/check_subscription_null_safety.py" ]; then
+  # Baseline: 0 — every subscription-handler `.get<T>()` must have an
+  # `.is_<type>()` guard within 15 lines, every `.value("k", default)` must
+  # have an explicit `// JSON_NULL_SAFE` opt-out. Don't regress.
+  if python3 scripts/check_subscription_null_safety.py --max-allowed 0 --summary >/tmp/null_safety.out 2>&1; then
+    section_time $SECTION_START
+    echo ""
+    cat /tmp/null_safety.out
+  else
+    section_time $SECTION_START
+    echo ""
+    cat /tmp/null_safety.out
+    echo "   Run: python3 scripts/check_subscription_null_safety.py"
+    EXIT_CODE=1
+  fi
+else
+  section_time $SECTION_START
+  echo ""
+  echo "⚠️  check_subscription_null_safety.py not found — skipping"
+fi
+
+echo ""
+
+# ====================================================================
 # Shell Script Linting (shellcheck)
 # ====================================================================
 SECTION_START=$(date +%s)
