@@ -542,21 +542,26 @@ void FilamentSensorManager::update_from_status(const json& status) {
             auto& state = states_[sensor.klipper_name];
             FilamentSensorState old_state = state;
 
-            // Update filament_detected (use value() for exception safety — Moonraker
-            // may send unexpected types during firmware restarts)
-            if (sensor_data.contains("filament_detected")) {
-                state.filament_detected =
-                    sensor_data.value("filament_detected", state.filament_detected);
+            // Update filament_detected. Subscriptions targeting specific fields
+            // (filament_detected, enabled, detection_count) cause Moonraker to send
+            // the field as JSON null when the underlying Klipper object lacks it
+            // (e.g. Snapmaker U1's filament_motion_sensor reports no detection_count).
+            // contains() returns true for null values, so we must explicitly skip
+            // null before calling .value(), which throws type_error.302 on null.
+            if (auto it = sensor_data.find("filament_detected");
+                it != sensor_data.end() && it->is_boolean()) {
+                state.filament_detected = it->get<bool>();
             }
 
             // Motion sensors have additional fields
             if (sensor.type == FilamentSensorType::MOTION) {
-                if (sensor_data.contains("enabled")) {
-                    state.enabled = sensor_data.value("enabled", state.enabled);
+                if (auto it = sensor_data.find("enabled");
+                    it != sensor_data.end() && it->is_boolean()) {
+                    state.enabled = it->get<bool>();
                 }
-                if (sensor_data.contains("detection_count")) {
-                    state.detection_count =
-                        sensor_data.value("detection_count", state.detection_count);
+                if (auto it = sensor_data.find("detection_count");
+                    it != sensor_data.end() && it->is_number_integer()) {
+                    state.detection_count = it->get<int>();
                 }
             }
 
