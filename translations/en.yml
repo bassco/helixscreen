@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: An error occurred during probing.
   An error occurred while loading filament.: An error occurred while loading filament.
   An unexpected printer error occurred.: An unexpected printer error occurred.
+  An update is available: An update is available
   Animations: Animations
   Anonymous data to help improve HelixScreen: Anonymous data to help improve HelixScreen
   Anonymous stats — no personal data, ever.: Anonymous stats — no personal data, ever.
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen Crashed
   HelixScreen is detecting your display orientation: HelixScreen is detecting your display orientation
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen will integrate with your filament changer for multi-spool/color print operations.
+  HelixScreen {} is available — tap Update: HelixScreen {} is available — tap Update
   Help & About: Help & About
   Help Improve HelixScreen: Help Improve HelixScreen
   Help improve HelixScreen?: Help improve HelixScreen?
@@ -1473,6 +1475,7 @@ translations:
   Screen shutdown failed: Screen shutdown failed
   Screen sleeps after the selected period of inactivity: Screen sleeps after the selected period of inactivity
   Screensaver: Screensaver
+  Screensaver disabled: Screensaver disabled
   Screws Tilt: Screws Tilt
   Search filename...: Search filename...
   Search spools...: Search spools...
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: Thanks! TOTALLY anonymous usage data helps improve HelixScreen.
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
   The heater will cycle on and off several times.: The heater will cycle on and off several times.
   The runout sensor indicates no filament is loaded. Start print anyway?: The runout sensor indicates no filament is loaded. Start print anyway?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: The toolhead sensor indicates filament is already loaded. Proceed with load anyway?
@@ -1855,12 +1860,14 @@ translations:
   X Axis: X Axis
   X Offset: X Offset
   X axis applied, but Y axis failed: X axis applied, but Y axis failed
+  X jog blocked at bed edge: X jog blocked at bed edge
   'X jog failed: {}': 'X jog failed: {}'
   'X:': 'X:'
   XY: XY
   Y: Y
   Y Axis: Y Axis
   Y Offset: Y Offset
+  Y jog blocked at bed edge: Y jog blocked at bed edge
   'Y jog failed: {}': 'Y jog failed: {}'
   'Y:': 'Y:'
   Year: Year

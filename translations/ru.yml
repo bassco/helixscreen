@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: Во время зондирования произошла ошибка.
   An error occurred while loading filament.: Во время загрузки филамента произошла ошибка.
   An unexpected printer error occurred.: Произошла непредвиденная ошибка принтера.
+  An update is available: Доступно обновление
   Animations: Анимации
   Anonymous data to help improve HelixScreen: Анонимные данные для улучшения HelixScreen
   Anonymous stats — no personal data, ever.: Анонимная статистика — никаких личных данных.
@@ -142,7 +143,7 @@ translations:
   Applying...: Применение...
   Are you sure you want to cancel this print? All progress will be lost.: Вы уверены, что хотите отменить печать? Весь прогресс будет потерян.
   Are you sure? This will power off or restart the printer host.: Вы уверены? Это выключит или перезагрузит хост принтера.
-  Are you sure? This will power off or restart this device.: ''
+  Are you sure? This will power off or restart this device.: Вы уверены? Это выключит или перезагрузит данное устройство.
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Назначьте макросы Klipper для управления LED через вкл/выкл, переключение или пресеты
   Assign a role to enable sensor monitoring: Назначьте роль для мониторинга датчика
   Assisting: Помощь
@@ -323,7 +324,7 @@ translations:
   Choose rendering mode for G-code visualization: Выберите режим рендеринга для визуализации G-code
   Choose rendering mode for bed mesh visualization: Выберите режим рендеринга для визуализации сетки стола
   Choose sound style: Выберите стиль звука
-  Choose what to power off or restart.: ''
+  Choose what to power off or restart.: Выберите, что выключить или перезагрузить.
   Clean Nozzle: Очистить сопло
   Cleaning Nozzle...: Очистка сопла...
   Clear: Очистить
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen аварийно завершился
   HelixScreen is detecting your display orientation: HelixScreen определяет ориентацию дисплея
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen интегрируется с вашим сменщиком филамента для многокатушечной/многоцветной печати.
+  HelixScreen {} is available — tap Update: Доступен HelixScreen {} — нажмите «Обновить»
   Help & About: Помощь и о программе
   Help Improve HelixScreen: Помогите улучшить HelixScreen
   Help improve HelixScreen?: Помочь улучшить HelixScreen?
@@ -1387,10 +1389,10 @@ translations:
   Restarting HelixScreen...: Перезапуск HelixScreen...
   Restarting Klipper...: Перезапуск Klipper...
   Restarting Moonraker...: Перезапуск Moonraker...
-  Restarting printer...: ''
-  Restarting screen...: ''
+  Restarting printer...: Перезапуск принтера...
+  Restarting screen...: Перезапуск экрана...
   Restarting with the new version...: Перезапуск с новой версией...
-  Restarting...: ''
+  Restarting...: Перезапуск...
   Resume: Продолжить
   Resume Print: Продолжить печать
   Resume macro not configured: Макрос возобновления не настроен
@@ -1469,10 +1471,11 @@ translations:
   Screen Dim: Затемнение экрана
   Screen dims to lower brightness after period of inactivity: Экран затемняется после периода простоя
   Screen lock and PIN settings: Блокировка экрана и настройки PIN
-  Screen reboot failed: ''
-  Screen shutdown failed: ''
+  Screen reboot failed: 'Ошибка перезагрузки экрана'
+  Screen shutdown failed: 'Ошибка выключения экрана'
   Screen sleeps after the selected period of inactivity: Экран затемнится после выбранного периода простоя
   Screensaver: Заставка
+  Screensaver disabled: Заставка отключена
   Screws Tilt: Наклон винтов
   Search filename...: Поиск файла...
   Search spools...: Поиск катушек...
@@ -1543,8 +1546,8 @@ translations:
   Shutdown / Reboot: Выключение / Перезагрузка
   Shutdown failed: 'Ошибка выключения'
   Shutdown failed — host is still reachable: 'Ошибка выключения — хост всё ещё доступен'
-  Shutting down printer...: ''
-  Shutting down screen...: ''
+  Shutting down printer...: Выключение принтера...
+  Shutting down screen...: Выключение экрана...
   Shutting down...: Выключение...
   Side: Сбоку
   Single toggle macro. State is not tracked.: Один макрос переключения. Состояние не отслеживается.
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: Спасибо! ПОЛНОСТЬЮ анонимные данные использования помогают улучшить HelixScreen.
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : Плагин HelixPrint позволяет быстро модифицировать G-code прямо на принтере — например, пропускать сетку стола для быстрых перепечаток.
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : Анимированная заставка была отключена на данном устройстве, чтобы она не мешала печати. Вы можете снова включить её в Настройки > Дисплей.
   The heater will cycle on and off several times.: Нагреватель будет несколько раз включаться и выключаться.
   The runout sensor indicates no filament is loaded. Start print anyway?: Датчик окончания филамента показывает, что филамент не загружен. Всё равно начать печать?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: Датчик печатающей головки показывает, что филамент уже загружен. Всё равно продолжить загрузку?
@@ -1855,12 +1860,14 @@ translations:
   X Axis: Ось X
   X Offset: Смещение X
   X axis applied, but Y axis failed: Ось X применена, но ось Y не удалась
+  X jog blocked at bed edge: Перемещение по X заблокировано на краю стола
   'X jog failed: {}': 'Ошибка перемещения X: {}'
   'X:': 'X:'
   XY: XY
   Y: Y
   Y Axis: Ось Y
   Y Offset: Смещение Y
+  Y jog blocked at bed edge: Перемещение по Y заблокировано на краю стола
   'Y jog failed: {}': 'Ошибка перемещения Y: {}'
   'Y:': 'Y:'
   Year: Год

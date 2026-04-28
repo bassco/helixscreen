@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: プローブ中にエラーが発生しました。
   An error occurred while loading filament.: フィラメントの装填中にエラーが発生しました。
   An unexpected printer error occurred.: 予期しないプリンターエラーが発生しました。
+  An update is available: 更新があります
   Animations: アニメーション
   Anonymous data to help improve HelixScreen: HelixScreen改善のための匿名データ
   Anonymous stats — no personal data, ever.: 匿名の統計情報 — 個人データは一切収集しません。
@@ -142,7 +143,7 @@ translations:
   Applying...: 適用中...
   Are you sure you want to cancel this print? All progress will be lost.: この印刷をキャンセルしますか？すべての進行状況が失われます。
   Are you sure? This will power off or restart the printer host.: よろしいですか？プリンターホストの電源がオフまたは再起動されます。
-  Are you sure? This will power off or restart this device.: ''
+  Are you sure? This will power off or restart this device.: よろしいですか？このデバイスの電源がオフまたは再起動されます。
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Klipper マクロを割り当ててオン/オフ、トグル、プリセットで LED を制御
   Assign a role to enable sensor monitoring: センサー監視を有効にするには役割を割り当ててください
   Assisting: アシスト中
@@ -323,7 +324,7 @@ translations:
   Choose rendering mode for G-code visualization: G-codeの視覚化レンダリングモードを選択
   Choose rendering mode for bed mesh visualization: ベッドメッシュの視覚化レンダリングモードを選択
   Choose sound style: サウンドスタイルを選択
-  Choose what to power off or restart.: ''
+  Choose what to power off or restart.: 電源オフまたは再起動する対象を選択してください。
   Clean Nozzle: ノズル清掃
   Cleaning Nozzle...: ノズル清掃中...
   Clear: クリア
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen がクラッシュしました
   HelixScreen is detecting your display orientation: HelixScreenがディスプレイの向きを検出しています
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen はマルチスプール/カラー印刷操作のためにフィラメントチェンジャーと連携します。
+  HelixScreen {} is available — tap Update: 'HelixScreen {} が利用可能です — 「更新」をタップ'
   Help & About: ヘルプと情報
   Help Improve HelixScreen: HelixScreen の改善にご協力ください
   Help improve HelixScreen?: HelixScreenの改善に協力しますか？
@@ -1387,10 +1389,10 @@ translations:
   Restarting HelixScreen...: HelixScreenを再起動中...
   Restarting Klipper...: Klipper を再起動中...
   Restarting Moonraker...: Moonrakerを再起動中...
-  Restarting printer...: ''
-  Restarting screen...: ''
+  Restarting printer...: プリンターを再起動中...
+  Restarting screen...: 画面を再起動中...
   Restarting with the new version...: 新しいバージョンで再起動中...
-  Restarting...: ''
+  Restarting...: 再起動中...
   Resume: 再開
   Resume Print: 印刷を再開
   Resume macro not configured: 再開マクロが未設定です
@@ -1469,10 +1471,11 @@ translations:
   Screen Dim: 画面減光
   Screen dims to lower brightness after period of inactivity: 一定時間操作がないと画面の明るさが下がります
   Screen lock and PIN settings: 画面ロックと PIN の設定
-  Screen reboot failed: ''
-  Screen shutdown failed: ''
+  Screen reboot failed: 画面の再起動に失敗しました
+  Screen shutdown failed: 画面のシャットダウンに失敗しました
   Screen sleeps after the selected period of inactivity: 選択した時間操作がないと画面が減光します
   Screensaver: スクリーンセーバー
+  Screensaver disabled: スクリーンセーバーを無効化しました
   Screws Tilt: ネジ傾き
   Search filename...: ファイル名を検索...
   Search spools...: スプール検索...
@@ -1543,8 +1546,8 @@ translations:
   Shutdown / Reboot: シャットダウン / 再起動
   Shutdown failed: 'シャットダウンに失敗しました'
   Shutdown failed — host is still reachable: 'シャットダウンに失敗しました — ホストに依然として到達可能です'
-  Shutting down printer...: ''
-  Shutting down screen...: ''
+  Shutting down printer...: プリンターをシャットダウン中...
+  Shutting down screen...: 画面をシャットダウン中...
   Shutting down...: シャットダウン中...
   Side: 側面
   Single toggle macro. State is not tracked.: 単一のトグルマクロ。状態は追跡されません。
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: ご協力ありがとうございます！完全匿名の使用データが HelixScreen の改善に役立ちます。
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : HelixPrint プラグインは、クイック再印刷のためのベッドメッシュスキップなど、プリンター上で直接高速 G-code 修正を可能にします。
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : アニメーション付きスクリーンセーバーが印刷に干渉しないよう、このデバイスではオフになっています。設定 > ディスプレイで再度有効にできます。
   The heater will cycle on and off several times.: ヒーターは数回オン/オフを繰り返します。
   The runout sensor indicates no filament is loaded. Start print anyway?: フィラメント切れセンサーがフィラメント未装填を検出しました。それでも印刷を開始しますか？
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: ツールヘッドセンサーがフィラメント装填済みを検出しました。それでも装填を続行しますか？
@@ -1855,12 +1860,14 @@ translations:
   X Axis: X軸
   X Offset: Xオフセット
   X axis applied, but Y axis failed: X軸は適用されましたが、Y軸は失敗しました
+  X jog blocked at bed edge: X軸移動はベッド端でブロックされました
   'X jog failed: {}': 'X軸移動に失敗しました: {}'
   'X:': 'X:'
   XY: XY
   Y: Y
   Y Axis: Y軸
   Y Offset: Yオフセット
+  Y jog blocked at bed edge: Y軸移動はベッド端でブロックされました
   'Y jog failed: {}': 'Y軸移動に失敗しました: {}'
   'Y:': 'Y:'
   Year: 年

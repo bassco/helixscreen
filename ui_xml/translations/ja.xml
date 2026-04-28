@@ -130,6 +130,7 @@
   <translation tag="An error occurred during probing." ja="プローブ中にエラーが発生しました。"/>
   <translation tag="An error occurred while loading filament." ja="フィラメントの装填中にエラーが発生しました。"/>
   <translation tag="An unexpected printer error occurred." ja="予期しないプリンターエラーが発生しました。"/>
+  <translation tag="An update is available" ja="更新があります"/>
   <translation tag="Animations" ja="アニメーション"/>
   <translation tag="Anonymous data to help improve HelixScreen" ja="HelixScreen改善のための匿名データ"/>
   <translation tag="Anonymous stats — no personal data, ever." ja="匿名の統計情報 — 個人データは一切収集しません。"/>
@@ -142,7 +143,7 @@
   <translation tag="Applying..." ja="適用中..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." ja="この印刷をキャンセルしますか？すべての進行状況が失われます。"/>
   <translation tag="Are you sure? This will power off or restart the printer host." ja="よろしいですか？プリンターホストの電源がオフまたは再起動されます。"/>
-  <translation tag="Are you sure? This will power off or restart this device."/>
+  <translation tag="Are you sure? This will power off or restart this device." ja="よろしいですか？このデバイスの電源がオフまたは再起動されます。"/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" ja="Klipper マクロを割り当ててオン/オフ、トグル、プリセットで LED を制御"/>
   <translation tag="Assign a role to enable sensor monitoring" ja="センサー監視を有効にするには役割を割り当ててください"/>
   <translation tag="Assisting" ja="アシスト中"/>
@@ -323,7 +324,7 @@
   <translation tag="Choose rendering mode for G-code visualization" ja="G-codeの視覚化レンダリングモードを選択"/>
   <translation tag="Choose rendering mode for bed mesh visualization" ja="ベッドメッシュの視覚化レンダリングモードを選択"/>
   <translation tag="Choose sound style" ja="サウンドスタイルを選択"/>
-  <translation tag="Choose what to power off or restart."/>
+  <translation tag="Choose what to power off or restart." ja="電源オフまたは再起動する対象を選択してください。"/>
   <translation tag="Clean Nozzle" ja="ノズル清掃"/>
   <translation tag="Cleaning Nozzle..." ja="ノズル清掃中..."/>
   <translation tag="Clear" ja="クリア"/>
@@ -767,6 +768,7 @@
   <translation tag="HelixScreen Crashed" ja="HelixScreen がクラッシュしました"/>
   <translation tag="HelixScreen is detecting your display orientation" ja="HelixScreenがディスプレイの向きを検出しています"/>
   <translation tag="HelixScreen will integrate with your filament changer for multi-spool/color print operations." ja="HelixScreen はマルチスプール/カラー印刷操作のためにフィラメントチェンジャーと連携します。"/>
+  <translation tag="HelixScreen {} is available — tap Update" ja="HelixScreen {} が利用可能です — 「更新」をタップ"/>
   <translation tag="Help &amp; About" ja="ヘルプと情報"/>
   <translation tag="Help Improve HelixScreen" ja="HelixScreen の改善にご協力ください"/>
   <translation tag="Help improve HelixScreen?" ja="HelixScreenの改善に協力しますか？"/>
@@ -1384,10 +1386,10 @@
   <translation tag="Restarting HelixScreen..." ja="HelixScreenを再起動中..."/>
   <translation tag="Restarting Klipper..." ja="Klipper を再起動中..."/>
   <translation tag="Restarting Moonraker..." ja="Moonrakerを再起動中..."/>
-  <translation tag="Restarting printer..."/>
-  <translation tag="Restarting screen..."/>
+  <translation tag="Restarting printer..." ja="プリンターを再起動中..."/>
+  <translation tag="Restarting screen..." ja="画面を再起動中..."/>
   <translation tag="Restarting with the new version..." ja="新しいバージョンで再起動中..."/>
-  <translation tag="Restarting..."/>
+  <translation tag="Restarting..." ja="再起動中..."/>
   <translation tag="Resume" ja="再開"/>
   <translation tag="Resume Print" ja="印刷を再開"/>
   <translation tag="Resume macro not configured" ja="再開マクロが未設定です"/>
@@ -1465,10 +1467,11 @@
   <translation tag="Screen Dim" ja="画面減光"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" ja="一定時間操作がないと画面の明るさが下がります"/>
   <translation tag="Screen lock and PIN settings" ja="画面ロックと PIN の設定"/>
-  <translation tag="Screen reboot failed"/>
-  <translation tag="Screen shutdown failed"/>
+  <translation tag="Screen reboot failed" ja="画面の再起動に失敗しました"/>
+  <translation tag="Screen shutdown failed" ja="画面のシャットダウンに失敗しました"/>
   <translation tag="Screen sleeps after the selected period of inactivity" ja="選択した時間操作がないと画面が減光します"/>
   <translation tag="Screensaver" ja="スクリーンセーバー"/>
+  <translation tag="Screensaver disabled" ja="スクリーンセーバーを無効化しました"/>
   <translation tag="Screws Tilt" ja="ネジ傾き"/>
   <translation tag="Search filename..." ja="ファイル名を検索..."/>
   <translation tag="Search spools..." ja="スプール検索..."/>
@@ -1539,8 +1542,8 @@
   <translation tag="Shutdown / Reboot" ja="シャットダウン / 再起動"/>
   <translation tag="Shutdown failed" ja="シャットダウンに失敗しました"/>
   <translation tag="Shutdown failed — host is still reachable" ja="シャットダウンに失敗しました — ホストに依然として到達可能です"/>
-  <translation tag="Shutting down printer..."/>
-  <translation tag="Shutting down screen..."/>
+  <translation tag="Shutting down printer..." ja="プリンターをシャットダウン中..."/>
+  <translation tag="Shutting down screen..." ja="画面をシャットダウン中..."/>
   <translation tag="Shutting down..." ja="シャットダウン中..."/>
   <translation tag="Side" ja="側面"/>
   <translation tag="Single toggle macro. State is not tracked." ja="単一のトグルマクロ。状態は追跡されません。"/>
@@ -1669,6 +1672,7 @@
   <translation tag="Thanks! Anonymous usage data helps improve HelixScreen." ja="ご協力ありがとうございます！匿名の使用データが HelixScreen の改善に役立ちます。"/>
   <translation tag="Thanks! TOTALLY anonymous usage data helps improve HelixScreen." ja="ご協力ありがとうございます！完全匿名の使用データが HelixScreen の改善に役立ちます。"/>
   <translation tag="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints." ja="HelixPrint プラグインは、クイック再印刷のためのベッドメッシュスキップなど、プリンター上で直接高速 G-code 修正を可能にします。"/>
+  <translation tag="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display." ja="アニメーション付きスクリーンセーバーが印刷に干渉しないよう、このデバイスではオフになっています。設定 &gt; ディスプレイで再度有効にできます。"/>
   <translation tag="The heater will cycle on and off several times." ja="ヒーターは数回オン/オフを繰り返します。"/>
   <translation tag="The runout sensor indicates no filament is loaded. Start print anyway?" ja="フィラメント切れセンサーがフィラメント未装填を検出しました。それでも印刷を開始しますか？"/>
   <translation tag="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?" ja="ツールヘッドセンサーがフィラメント装填済みを検出しました。それでも装填を続行しますか？"/>
@@ -1844,12 +1848,14 @@
   <translation tag="X Axis" ja="X軸"/>
   <translation tag="X Offset" ja="Xオフセット"/>
   <translation tag="X axis applied, but Y axis failed" ja="X軸は適用されましたが、Y軸は失敗しました"/>
+  <translation tag="X jog blocked at bed edge" ja="X軸移動はベッド端でブロックされました"/>
   <translation tag="X jog failed: {}" ja="X軸移動に失敗しました: {}"/>
   <translation tag="X:" ja="X:"/>
   <translation tag="XY" ja="XY"/>
   <translation tag="Y" ja="Y"/>
   <translation tag="Y Axis" ja="Y軸"/>
   <translation tag="Y Offset" ja="Yオフセット"/>
+  <translation tag="Y jog blocked at bed edge" ja="Y軸移動はベッド端でブロックされました"/>
   <translation tag="Y jog failed: {}" ja="Y軸移動に失敗しました: {}"/>
   <translation tag="Y:" ja="Y:"/>
   <translation tag="Year" ja="年"/>

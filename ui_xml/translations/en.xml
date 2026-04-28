@@ -130,6 +130,7 @@
   <translation tag="An error occurred during probing." en="An error occurred during probing."/>
   <translation tag="An error occurred while loading filament." en="An error occurred while loading filament."/>
   <translation tag="An unexpected printer error occurred." en="An unexpected printer error occurred."/>
+  <translation tag="An update is available" en="An update is available"/>
   <translation tag="Animations" en="Animations"/>
   <translation tag="Anonymous data to help improve HelixScreen" en="Anonymous data to help improve HelixScreen"/>
   <translation tag="Anonymous stats — no personal data, ever." en="Anonymous stats — no personal data, ever."/>
@@ -767,6 +768,7 @@
   <translation tag="HelixScreen Crashed" en="HelixScreen Crashed"/>
   <translation tag="HelixScreen is detecting your display orientation" en="HelixScreen is detecting your display orientation"/>
   <translation tag="HelixScreen will integrate with your filament changer for multi-spool/color print operations." en="HelixScreen will integrate with your filament changer for multi-spool/color print operations."/>
+  <translation tag="HelixScreen {} is available — tap Update" en="HelixScreen {} is available — tap Update"/>
   <translation tag="Help &amp; About" en="Help &amp; About"/>
   <translation tag="Help Improve HelixScreen" en="Help Improve HelixScreen"/>
   <translation tag="Help improve HelixScreen?" en="Help improve HelixScreen?"/>
@@ -1469,6 +1471,7 @@
   <translation tag="Screen shutdown failed" en="Screen shutdown failed"/>
   <translation tag="Screen sleeps after the selected period of inactivity" en="Screen sleeps after the selected period of inactivity"/>
   <translation tag="Screensaver" en="Screensaver"/>
+  <translation tag="Screensaver disabled" en="Screensaver disabled"/>
   <translation tag="Screws Tilt" en="Screws Tilt"/>
   <translation tag="Search filename..." en="Search filename..."/>
   <translation tag="Search spools..." en="Search spools..."/>
@@ -1669,6 +1672,7 @@
   <translation tag="Thanks! Anonymous usage data helps improve HelixScreen." en="Thanks! Anonymous usage data helps improve HelixScreen."/>
   <translation tag="Thanks! TOTALLY anonymous usage data helps improve HelixScreen." en="Thanks! TOTALLY anonymous usage data helps improve HelixScreen."/>
   <translation tag="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints." en="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints."/>
+  <translation tag="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display." en="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display."/>
   <translation tag="The heater will cycle on and off several times." en="The heater will cycle on and off several times."/>
   <translation tag="The runout sensor indicates no filament is loaded. Start print anyway?" en="The runout sensor indicates no filament is loaded. Start print anyway?"/>
   <translation tag="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?" en="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?"/>
@@ -1844,12 +1848,14 @@
   <translation tag="X Axis" en="X Axis"/>
   <translation tag="X Offset" en="X Offset"/>
   <translation tag="X axis applied, but Y axis failed" en="X axis applied, but Y axis failed"/>
+  <translation tag="X jog blocked at bed edge" en="X jog blocked at bed edge"/>
   <translation tag="X jog failed: {}" en="X jog failed: {}"/>
   <translation tag="X:" en="X:"/>
   <translation tag="XY" en="XY"/>
   <translation tag="Y" en="Y"/>
   <translation tag="Y Axis" en="Y Axis"/>
   <translation tag="Y Offset" en="Y Offset"/>
+  <translation tag="Y jog blocked at bed edge" en="Y jog blocked at bed edge"/>
   <translation tag="Y jog failed: {}" en="Y jog failed: {}"/>
   <translation tag="Y:" en="Y:"/>
   <translation tag="Year" en="Year"/>

@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: Beim Abtasten ist ein Fehler aufgetreten.
   An error occurred while loading filament.: Beim Laden des Filaments ist ein Fehler aufgetreten.
   An unexpected printer error occurred.: Ein unerwarteter Druckerfehler ist aufgetreten.
+  An update is available: Eine Aktualisierung ist verfügbar
   Animations: Animationen
   Anonymous data to help improve HelixScreen: Anonyme Daten zur Verbesserung von HelixScreen
   Anonymous stats — no personal data, ever.: Anonyme Statistiken — niemals persönliche Daten.
@@ -142,7 +143,7 @@ translations:
   Applying...: Wird angewendet...
   Are you sure you want to cancel this print? All progress will be lost.: Sind Sie sicher, dass Sie diesen Druck abbrechen möchten? Der gesamte Fortschritt geht verloren.
   Are you sure? This will power off or restart the printer host.: Sind Sie sicher? Dies schaltet den Drucker-Host aus oder startet ihn neu.
-  Are you sure? This will power off or restart this device.: ''
+  Are you sure? This will power off or restart this device.: Sind Sie sicher? Dies schaltet dieses Gerät aus oder startet es neu.
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Klipper-Makros zuweisen, um LEDs per Ein/Aus, Umschalten oder Voreinstellungen zu steuern
   Assign a role to enable sensor monitoring: Rolle zuweisen, um Sensorüberwachung zu aktivieren
   Assisting: Unterstützend
@@ -323,7 +324,7 @@ translations:
   Choose rendering mode for G-code visualization: Darstellungsmodus für G-Code-Visualisierung wählen
   Choose rendering mode for bed mesh visualization: Darstellungsmodus für Bettnetz-Visualisierung wählen
   Choose sound style: Klangstil auswählen
-  Choose what to power off or restart.: ''
+  Choose what to power off or restart.: Wählen Sie, was ausgeschaltet oder neu gestartet werden soll.
   Clean Nozzle: Düse reinigen
   Cleaning Nozzle...: Düse reinigen...
   Clear: Löschen
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen abgestürzt
   HelixScreen is detecting your display orientation: HelixScreen erkennt Ihre Display-Ausrichtung
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen wird sich mit Ihrem Filamentwechsler für Multi-Spulen/Farb-Druckoperationen integrieren.
+  HelixScreen {} is available — tap Update: HelixScreen {} ist verfügbar — auf Aktualisieren tippen
   Help & About: Hilfe & Über
   Help Improve HelixScreen: HelixScreen verbessern helfen
   Help improve HelixScreen?: HelixScreen verbessern helfen?
@@ -1387,10 +1389,10 @@ translations:
   Restarting HelixScreen...: HelixScreen wird neu gestartet...
   Restarting Klipper...: Klipper wird neu gestartet...
   Restarting Moonraker...: Moonraker wird neu gestartet...
-  Restarting printer...: ''
-  Restarting screen...: ''
+  Restarting printer...: Drucker wird neu gestartet...
+  Restarting screen...: Bildschirm wird neu gestartet...
   Restarting with the new version...: Neustart mit der neuen Version...
-  Restarting...: ''
+  Restarting...: Wird neu gestartet...
   Resume: Fortsetzen
   Resume Print: Druck fortsetzen
   Resume macro not configured: Fortsetzen-Makro nicht konfiguriert
@@ -1469,10 +1471,11 @@ translations:
   Screen Dim: Bildschirm dimmen
   Screen dims to lower brightness after period of inactivity: Bildschirm dimmt nach Inaktivitätszeitraum auf niedrigere Helligkeit
   Screen lock and PIN settings: Bildschirmsperre und PIN-Einstellungen
-  Screen reboot failed: ''
-  Screen shutdown failed: ''
+  Screen reboot failed: Neustart des Bildschirms fehlgeschlagen
+  Screen shutdown failed: Herunterfahren des Bildschirms fehlgeschlagen
   Screen sleeps after the selected period of inactivity: Bildschirm dimmt nach dem gewählten Inaktivitätszeitraum
   Screensaver: Bildschirmschoner
+  Screensaver disabled: Bildschirmschoner deaktiviert
   Screws Tilt: Schraubenneigung
   Search filename...: Dateiname suchen...
   Search spools...: Spulen suchen...
@@ -1543,8 +1546,8 @@ translations:
   Shutdown / Reboot: Herunterfahren / Neustart
   Shutdown failed: 'Herunterfahren fehlgeschlagen'
   Shutdown failed — host is still reachable: 'Herunterfahren fehlgeschlagen — Host ist weiterhin erreichbar'
-  Shutting down printer...: ''
-  Shutting down screen...: ''
+  Shutting down printer...: Drucker wird heruntergefahren...
+  Shutting down screen...: Bildschirm wird heruntergefahren...
   Shutting down...: Wird heruntergefahren...
   Side: Seite
   Single toggle macro. State is not tracked.: Einzelnes Umschalt-Makro. Status wird nicht verfolgt.
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: Danke! VÖLLIG anonyme Nutzungsdaten helfen, HelixScreen zu verbessern.
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : Das HelixPrint-Plugin ermöglicht schnelle G-Code-Modifikationen direkt auf Ihrem Drucker – wie das Überspringen des Bettnetzes für schnelle Neudrucke.
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : Der animierte Bildschirmschoner wurde auf diesem Gerät ausgeschaltet, um zu verhindern, dass er Drucke stört. Sie können ihn unter Einstellungen > Anzeige wieder aktivieren.
   The heater will cycle on and off several times.: Die Heizung wird mehrmals ein- und ausschalten.
   The runout sensor indicates no filament is loaded. Start print anyway?: Der Auslaufsensor zeigt an, dass kein Filament geladen ist. Druck trotzdem starten?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: Der Werkzeugkopfsensor zeigt an, dass Filament bereits geladen ist. Trotzdem mit dem Laden fortfahren?
@@ -1855,12 +1860,14 @@ translations:
   X Axis: X-Achse
   X Offset: X-Offset
   X axis applied, but Y axis failed: X-Achse angewendet, aber Y-Achse fehlgeschlagen
+  X jog blocked at bed edge: X-Bewegung an Bettkante blockiert
   'X jog failed: {}': 'X-Bewegung fehlgeschlagen: {}'
   'X:': 'X:'
   XY: XY
   Y: Y
   Y Axis: Y-Achse
   Y Offset: Y-Offset
+  Y jog blocked at bed edge: Y-Bewegung an Bettkante blockiert
   'Y jog failed: {}': 'Y-Bewegung fehlgeschlagen: {}'
   'Y:': 'Y:'
   Year: Jahr

@@ -130,6 +130,7 @@
   <translation tag="An error occurred during probing." de="Beim Abtasten ist ein Fehler aufgetreten."/>
   <translation tag="An error occurred while loading filament." de="Beim Laden des Filaments ist ein Fehler aufgetreten."/>
   <translation tag="An unexpected printer error occurred." de="Ein unerwarteter Druckerfehler ist aufgetreten."/>
+  <translation tag="An update is available" de="Eine Aktualisierung ist verfügbar"/>
   <translation tag="Animations" de="Animationen"/>
   <translation tag="Anonymous data to help improve HelixScreen" de="Anonyme Daten zur Verbesserung von HelixScreen"/>
   <translation tag="Anonymous stats — no personal data, ever." de="Anonyme Statistiken — niemals persönliche Daten."/>
@@ -142,7 +143,7 @@
   <translation tag="Applying..." de="Wird angewendet..."/>
   <translation tag="Are you sure you want to cancel this print? All progress will be lost." de="Sind Sie sicher, dass Sie diesen Druck abbrechen möchten? Der gesamte Fortschritt geht verloren."/>
   <translation tag="Are you sure? This will power off or restart the printer host." de="Sind Sie sicher? Dies schaltet den Drucker-Host aus oder startet ihn neu."/>
-  <translation tag="Are you sure? This will power off or restart this device."/>
+  <translation tag="Are you sure? This will power off or restart this device." de="Sind Sie sicher? Dies schaltet dieses Gerät aus oder startet es neu."/>
   <translation tag="Assign Klipper macros to control LEDs via on/off, toggle, or presets" de="Klipper-Makros zuweisen, um LEDs per Ein/Aus, Umschalten oder Voreinstellungen zu steuern"/>
   <translation tag="Assign a role to enable sensor monitoring" de="Rolle zuweisen, um Sensorüberwachung zu aktivieren"/>
   <translation tag="Assisting" de="Unterstützend"/>
@@ -323,7 +324,7 @@
   <translation tag="Choose rendering mode for G-code visualization" de="Darstellungsmodus für G-Code-Visualisierung wählen"/>
   <translation tag="Choose rendering mode for bed mesh visualization" de="Darstellungsmodus für Bettnetz-Visualisierung wählen"/>
   <translation tag="Choose sound style" de="Klangstil auswählen"/>
-  <translation tag="Choose what to power off or restart."/>
+  <translation tag="Choose what to power off or restart." de="Wählen Sie, was ausgeschaltet oder neu gestartet werden soll."/>
   <translation tag="Clean Nozzle" de="Düse reinigen"/>
   <translation tag="Cleaning Nozzle..." de="Düse reinigen..."/>
   <translation tag="Clear" de="Löschen"/>
@@ -767,6 +768,7 @@
   <translation tag="HelixScreen Crashed" de="HelixScreen abgestürzt"/>
   <translation tag="HelixScreen is detecting your display orientation" de="HelixScreen erkennt Ihre Display-Ausrichtung"/>
   <translation tag="HelixScreen will integrate with your filament changer for multi-spool/color print operations." de="HelixScreen wird sich mit Ihrem Filamentwechsler für Multi-Spulen/Farb-Druckoperationen integrieren."/>
+  <translation tag="HelixScreen {} is available — tap Update" de="HelixScreen {} ist verfügbar — auf Aktualisieren tippen"/>
   <translation tag="Help &amp; About" de="Hilfe &amp; Über"/>
   <translation tag="Help Improve HelixScreen" de="HelixScreen verbessern helfen"/>
   <translation tag="Help improve HelixScreen?" de="HelixScreen verbessern helfen?"/>
@@ -1384,10 +1386,10 @@
   <translation tag="Restarting HelixScreen..." de="HelixScreen wird neu gestartet..."/>
   <translation tag="Restarting Klipper..." de="Klipper wird neu gestartet..."/>
   <translation tag="Restarting Moonraker..." de="Moonraker wird neu gestartet..."/>
-  <translation tag="Restarting printer..."/>
-  <translation tag="Restarting screen..."/>
+  <translation tag="Restarting printer..." de="Drucker wird neu gestartet..."/>
+  <translation tag="Restarting screen..." de="Bildschirm wird neu gestartet..."/>
   <translation tag="Restarting with the new version..." de="Neustart mit der neuen Version..."/>
-  <translation tag="Restarting..."/>
+  <translation tag="Restarting..." de="Wird neu gestartet..."/>
   <translation tag="Resume" de="Fortsetzen"/>
   <translation tag="Resume Print" de="Druck fortsetzen"/>
   <translation tag="Resume macro not configured" de="Fortsetzen-Makro nicht konfiguriert"/>
@@ -1465,10 +1467,11 @@
   <translation tag="Screen Dim" de="Bildschirm dimmen"/>
   <translation tag="Screen dims to lower brightness after period of inactivity" de="Bildschirm dimmt nach Inaktivitätszeitraum auf niedrigere Helligkeit"/>
   <translation tag="Screen lock and PIN settings" de="Bildschirmsperre und PIN-Einstellungen"/>
-  <translation tag="Screen reboot failed"/>
-  <translation tag="Screen shutdown failed"/>
+  <translation tag="Screen reboot failed" de="Neustart des Bildschirms fehlgeschlagen"/>
+  <translation tag="Screen shutdown failed" de="Herunterfahren des Bildschirms fehlgeschlagen"/>
   <translation tag="Screen sleeps after the selected period of inactivity" de="Bildschirm dimmt nach dem gewählten Inaktivitätszeitraum"/>
   <translation tag="Screensaver" de="Bildschirmschoner"/>
+  <translation tag="Screensaver disabled" de="Bildschirmschoner deaktiviert"/>
   <translation tag="Screws Tilt" de="Schraubenneigung"/>
   <translation tag="Search filename..." de="Dateiname suchen..."/>
   <translation tag="Search spools..." de="Spulen suchen..."/>
@@ -1539,8 +1542,8 @@
   <translation tag="Shutdown / Reboot" de="Herunterfahren / Neustart"/>
   <translation tag="Shutdown failed" de="Herunterfahren fehlgeschlagen"/>
   <translation tag="Shutdown failed — host is still reachable" de="Herunterfahren fehlgeschlagen — Host ist weiterhin erreichbar"/>
-  <translation tag="Shutting down printer..."/>
-  <translation tag="Shutting down screen..."/>
+  <translation tag="Shutting down printer..." de="Drucker wird heruntergefahren..."/>
+  <translation tag="Shutting down screen..." de="Bildschirm wird heruntergefahren..."/>
   <translation tag="Shutting down..." de="Wird heruntergefahren..."/>
   <translation tag="Side" de="Seite"/>
   <translation tag="Single toggle macro. State is not tracked." de="Einzelnes Umschalt-Makro. Status wird nicht verfolgt."/>
@@ -1669,6 +1672,7 @@
   <translation tag="Thanks! Anonymous usage data helps improve HelixScreen." de="Danke! Anonyme Nutzungsdaten helfen, HelixScreen zu verbessern."/>
   <translation tag="Thanks! TOTALLY anonymous usage data helps improve HelixScreen." de="Danke! VÖLLIG anonyme Nutzungsdaten helfen, HelixScreen zu verbessern."/>
   <translation tag="The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints." de="Das HelixPrint-Plugin ermöglicht schnelle G-Code-Modifikationen direkt auf Ihrem Drucker – wie das Überspringen des Bettnetzes für schnelle Neudrucke."/>
+  <translation tag="The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings &gt; Display." de="Der animierte Bildschirmschoner wurde auf diesem Gerät ausgeschaltet, um zu verhindern, dass er Drucke stört. Sie können ihn unter Einstellungen &gt; Anzeige wieder aktivieren."/>
   <translation tag="The heater will cycle on and off several times." de="Die Heizung wird mehrmals ein- und ausschalten."/>
   <translation tag="The runout sensor indicates no filament is loaded. Start print anyway?" de="Der Auslaufsensor zeigt an, dass kein Filament geladen ist. Druck trotzdem starten?"/>
   <translation tag="The toolhead sensor indicates filament is already loaded. Proceed with load anyway?" de="Der Werkzeugkopfsensor zeigt an, dass Filament bereits geladen ist. Trotzdem mit dem Laden fortfahren?"/>
@@ -1844,12 +1848,14 @@
   <translation tag="X Axis" de="X-Achse"/>
   <translation tag="X Offset" de="X-Offset"/>
   <translation tag="X axis applied, but Y axis failed" de="X-Achse angewendet, aber Y-Achse fehlgeschlagen"/>
+  <translation tag="X jog blocked at bed edge" de="X-Bewegung an Bettkante blockiert"/>
   <translation tag="X jog failed: {}" de="X-Bewegung fehlgeschlagen: {}"/>
   <translation tag="X:" de="X:"/>
   <translation tag="XY" de="XY"/>
   <translation tag="Y" de="Y"/>
   <translation tag="Y Axis" de="Y-Achse"/>
   <translation tag="Y Offset" de="Y-Offset"/>
+  <translation tag="Y jog blocked at bed edge" de="Y-Bewegung an Bettkante blockiert"/>
   <translation tag="Y jog failed: {}" de="Y-Bewegung fehlgeschlagen: {}"/>
   <translation tag="Y:" de="Y:"/>
   <translation tag="Year" de="Jahr"/>

@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: Ocurrió un error durante el sondeo.
   An error occurred while loading filament.: Ocurrió un error al cargar el filamento.
   An unexpected printer error occurred.: Ocurrió un error inesperado en la impresora.
+  An update is available: Hay una actualización disponible
   Animations: Animaciones
   Anonymous data to help improve HelixScreen: Datos anónimos para mejorar HelixScreen
   Anonymous stats — no personal data, ever.: Estadísticas anónimas — sin datos personales, nunca.
@@ -142,7 +143,7 @@ translations:
   Applying...: Aplicando...
   Are you sure you want to cancel this print? All progress will be lost.: ¿Está seguro de que desea cancelar esta impresión? Todo el progreso se perderá.
   Are you sure? This will power off or restart the printer host.: ¿Está seguro? Esto apagará o reiniciará el host de la impresora.
-  Are you sure? This will power off or restart this device.: ''
+  Are you sure? This will power off or restart this device.: ¿Está seguro? Esto apagará o reiniciará este dispositivo.
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: Asignar macros de Klipper para controlar LEDs vía encendido/apagado, alternar o preajustes
   Assign a role to enable sensor monitoring: Asigne un rol para habilitar el monitoreo del sensor
   Assisting: Asistiendo
@@ -323,7 +324,7 @@ translations:
   Choose rendering mode for G-code visualization: Elija el modo de renderizado para la visualización de G-code
   Choose rendering mode for bed mesh visualization: Elija el modo de renderizado para la visualización de malla de cama
   Choose sound style: Elegir estilo de sonido
-  Choose what to power off or restart.: ''
+  Choose what to power off or restart.: Elija qué apagar o reiniciar.
   Clean Nozzle: Limpiar Boquilla
   Cleaning Nozzle...: Limpiando boquilla...
   Clear: Borrar
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen se Bloqueó
   HelixScreen is detecting your display orientation: HelixScreen está detectando la orientación de su pantalla
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen se integrará con su cambiador de filamento para operaciones de impresión multi-bobina/color.
+  HelixScreen {} is available — tap Update: HelixScreen {} está disponible — toque Actualizar
   Help & About: Ayuda y acerca de
   Help Improve HelixScreen: Ayude a mejorar HelixScreen
   Help improve HelixScreen?: ¿Ayudar a mejorar HelixScreen?
@@ -1387,10 +1389,10 @@ translations:
   Restarting HelixScreen...: Reiniciando HelixScreen...
   Restarting Klipper...: Reiniciando Klipper...
   Restarting Moonraker...: Reiniciando Moonraker...
-  Restarting printer...: ''
-  Restarting screen...: ''
+  Restarting printer...: Reiniciando impresora...
+  Restarting screen...: Reiniciando pantalla...
   Restarting with the new version...: Reiniciando con la nueva versión...
-  Restarting...: ''
+  Restarting...: Reiniciando...
   Resume: Reanudar
   Resume Print: Reanudar Impresión
   Resume macro not configured: Macro de reanudación no configurado
@@ -1469,10 +1471,11 @@ translations:
   Screen Dim: Atenuación de Pantalla
   Screen dims to lower brightness after period of inactivity: La pantalla atenúa el brillo después de un período de inactividad
   Screen lock and PIN settings: Bloqueo de pantalla y configuración de PIN
-  Screen reboot failed: ''
-  Screen shutdown failed: ''
+  Screen reboot failed: 'Error al reiniciar la pantalla'
+  Screen shutdown failed: 'Error al apagar la pantalla'
   Screen sleeps after the selected period of inactivity: La pantalla se atenuará después del período de inactividad seleccionado
   Screensaver: Salvapantallas
+  Screensaver disabled: Salvapantallas desactivado
   Screws Tilt: Inclinación de Tornillos
   Search filename...: Buscar archivo...
   Search spools...: Buscar bobinas...
@@ -1543,8 +1546,8 @@ translations:
   Shutdown / Reboot: Apagar / Reiniciar
   Shutdown failed: 'Error al apagar'
   Shutdown failed — host is still reachable: 'Error al apagar — el host sigue accesible'
-  Shutting down printer...: ''
-  Shutting down screen...: ''
+  Shutting down printer...: Apagando impresora...
+  Shutting down screen...: Apagando pantalla...
   Shutting down...: Apagando...
   Side: Lado
   Single toggle macro. State is not tracked.: Macro de alternancia único. El estado no se rastrea.
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: ¡Gracias! Los datos de uso TOTALMENTE anónimos ayudan a mejorar HelixScreen.
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : El plugin HelixPrint permite modificaciones rápidas de G-code directamente en su impresora, como omitir la malla de cama para reimpresiones rápidas.
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : El salvapantallas animado se ha desactivado en este dispositivo para evitar que interfiera con las impresiones. Puede volver a activarlo en Ajustes > Pantalla.
   The heater will cycle on and off several times.: El calentador se encenderá y apagará varias veces.
   The runout sensor indicates no filament is loaded. Start print anyway?: El sensor de agotamiento indica que no hay filamento cargado. ¿Iniciar la impresión de todos modos?
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: El sensor del cabezal indica que ya hay filamento cargado. ¿Continuar con la carga de todos modos?
@@ -1855,12 +1860,14 @@ translations:
   X Axis: Eje X
   X Offset: Desfase X
   X axis applied, but Y axis failed: Eje X aplicado, pero eje Y falló
+  X jog blocked at bed edge: Movimiento X bloqueado en el borde de la cama
   'X jog failed: {}': 'Error en movimiento X: {}'
   'X:': 'X:'
   XY: XY
   Y: Y
   Y Axis: Eje Y
   Y Offset: Desfase Y
+  Y jog blocked at bed edge: Movimiento Y bloqueado en el borde de la cama
   'Y jog failed: {}': 'Error en movimiento Y: {}'
   'Y:': 'Y:'
   Year: Año

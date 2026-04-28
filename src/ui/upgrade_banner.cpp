@@ -12,7 +12,9 @@
 
 #include "helix-xml/src/xml/lv_xml.h"
 #include "lvgl/lvgl.h"
+#include "lvgl/src/others/translation/lv_translation.h"
 
+#include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
@@ -128,9 +130,9 @@ void UpgradeBanner::update_message_text() {
     // overflow truncates rather than overflowing the banner height.
     std::string text;
     if (version.empty()) {
-        text = "An update is available";
+        text = lv_tr("An update is available");
     } else {
-        text = "HelixScreen " + version + " is available — tap Update";
+        text = fmt::format(lv_tr("HelixScreen {} is available — tap Update"), version);
     }
 
     size_t n = std::min<size_t>(text.size(), kMessageBufSize - 1);

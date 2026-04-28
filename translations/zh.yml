@@ -130,6 +130,7 @@ translations:
   An error occurred during probing.: 探测过程中发生错误。
   An error occurred while loading filament.: 加载耗材时发生错误。
   An unexpected printer error occurred.: 发生了意外的打印机错误。
+  An update is available: 有可用更新
   Animations: 动画
   Anonymous data to help improve HelixScreen: 匿名数据以帮助改进 HelixScreen
   Anonymous stats — no personal data, ever.: 匿名统计 — 绝不收集个人数据。
@@ -142,7 +143,7 @@ translations:
   Applying...: 正在应用...
   Are you sure you want to cancel this print? All progress will be lost.: 确定要取消此打印吗？所有进度将丢失。
   Are you sure? This will power off or restart the printer host.: 确定吗？这将关闭或重启打印机主机。
-  Are you sure? This will power off or restart this device.: ''
+  Are you sure? This will power off or restart this device.: 确定吗？这将关闭或重启此设备。
   Assign Klipper macros to control LEDs via on/off, toggle, or presets: 分配 Klipper 宏通过开/关、切换或预设控制 LED
   Assign a role to enable sensor monitoring: 分配角色以启用传感器监控
   Assisting: 辅助中
@@ -323,7 +324,7 @@ translations:
   Choose rendering mode for G-code visualization: 选择 G-code 可视化的渲染模式
   Choose rendering mode for bed mesh visualization: 选择热床网格可视化的渲染模式
   Choose sound style: 选择声音风格
-  Choose what to power off or restart.: ''
+  Choose what to power off or restart.: 选择要关闭或重启的对象。
   Clean Nozzle: 清洁喷嘴
   Cleaning Nozzle...: 正在清洁喷嘴...
   Clear: 清除
@@ -768,6 +769,7 @@ translations:
   HelixScreen Crashed: HelixScreen 崩溃
   HelixScreen is detecting your display orientation: HelixScreen正在检测显示屏方向
   HelixScreen will integrate with your filament changer for multi-spool/color print operations.: HelixScreen 将与您的耗材更换器集成，用于多料盘/多色打印操作。
+  HelixScreen {} is available — tap Update: HelixScreen {} 已发布 — 点击更新
   Help & About: 帮助与关于
   Help Improve HelixScreen: 帮助改进 HelixScreen
   Help improve HelixScreen?: 帮助改进 HelixScreen？
@@ -1387,10 +1389,10 @@ translations:
   Restarting HelixScreen...: 正在重启 HelixScreen…
   Restarting Klipper...: 正在重启 Klipper...
   Restarting Moonraker...: 正在重启 Moonraker...
-  Restarting printer...: ''
-  Restarting screen...: ''
+  Restarting printer...: 正在重启打印机...
+  Restarting screen...: 正在重启屏幕...
   Restarting with the new version...: 正在以新版本重启...
-  Restarting...: ''
+  Restarting...: 正在重启...
   Resume: 恢复
   Resume Print: 恢复打印
   Resume macro not configured: 恢复宏未配置
@@ -1469,10 +1471,11 @@ translations:
   Screen Dim: 屏幕变暗
   Screen dims to lower brightness after period of inactivity: 一段时间不活动后屏幕会降低亮度
   Screen lock and PIN settings: 屏幕锁定和 PIN 设置
-  Screen reboot failed: ''
-  Screen shutdown failed: ''
+  Screen reboot failed: 屏幕重启失败
+  Screen shutdown failed: 屏幕关机失败
   Screen sleeps after the selected period of inactivity: 在选定的不活动时间后屏幕将变暗
   Screensaver: 屏保
+  Screensaver disabled: 屏保已禁用
   Screws Tilt: 螺丝倾斜
   Search filename...: 搜索文件名...
   Search spools...: 搜索料盘...
@@ -1543,8 +1546,8 @@ translations:
   Shutdown / Reboot: 关机 / 重启
   Shutdown failed: '关机失败'
   Shutdown failed — host is still reachable: '关机失败 — 主机仍可访问'
-  Shutting down printer...: ''
-  Shutting down screen...: ''
+  Shutting down printer...: 正在关闭打印机...
+  Shutting down screen...: 正在关闭屏幕...
   Shutting down...: 正在关机...
   Side: 侧面
   Single toggle macro. State is not tracked.: 单个切换宏。不跟踪状态。
@@ -1674,6 +1677,8 @@ translations:
   Thanks! TOTALLY anonymous usage data helps improve HelixScreen.: 感谢！完全匿名的使用数据有助于改进 HelixScreen。
   ? The HelixPrint plugin enables fast G-code modifications directly on your printer—like skipping bed mesh for quick reprints.
   : HelixPrint 插件可在打印机上直接进行快速 G-code 修改——例如跳过热床网格以快速重新打印。
+  ? The animated screensaver has been turned off on this device to prevent it from interfering with prints. You can re-enable it in Settings > Display.
+  : 为防止动画屏保干扰打印，已在此设备上将其关闭。您可以在设置 > 显示中重新启用。
   The heater will cycle on and off several times.: 加热器将多次开关循环。
   The runout sensor indicates no filament is loaded. Start print anyway?: 断料传感器显示未装载耗材。仍要开始打印吗？
   The toolhead sensor indicates filament is already loaded. Proceed with load anyway?: 工具头传感器显示耗材已装载。仍要继续装载吗？
@@ -1855,12 +1860,14 @@ translations:
   X Axis: X 轴
   X Offset: X 偏移
   X axis applied, but Y axis failed: X 轴已应用，但 Y 轴失败
+  X jog blocked at bed edge: X 轴移动已限制在热床边缘
   'X jog failed: {}': 'X 轴移动失败: {}'
   'X:': X：
   XY: XY
   Y: Y
   Y Axis: Y 轴
   Y Offset: Y 偏移
+  Y jog blocked at bed edge: Y 轴移动已限制在热床边缘
   'Y jog failed: {}': 'Y 轴移动失败: {}'
   'Y:': Y：
   Year: 年
