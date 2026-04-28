@@ -116,14 +116,29 @@ class PanelWidgetManager {
     /// Per-panel gate observers that trigger widget rebuilds on hardware changes
     std::unordered_map<std::string, std::vector<ObserverGuard>> gate_observers_;
 
-    /// Per-panel "rebuild already pending in this tick" flag — coalesces N gate
-    /// observers firing back-to-back in one UpdateQueue tick into a single
-    /// deferred rebuild. Without this, each firing triggers its own
-    /// populate_page → safe_clean_children → lv_obj_delete_async cycle, and
-    /// the resulting backlog of N×children async deletes corrupts LVGL's
-    /// event list (L081 family). Cleared at the start of the deferred
-    /// rebuild so any gate firing AFTER the rebuild starts re-queues another.
-    std::unordered_map<std::string, bool> rebuild_pending_;
+    /// Per-panel async-rebuild slot. Stable storage in the singleton so the
+    /// `lv_async_call(trampoline, &slot)` user-data pointer is valid across
+    /// the entire panel-registration lifetime — no per-firing `new` (which on
+    /// memory-tight AD5X risks std::bad_alloc → terminate → SIGABRT through
+    /// the LVGL C frame, [L083]). `clear_gate_observers()` calls
+    /// `lv_async_call_cancel(trampoline, &slot)` before erasing so a queued
+    /// rebuild can't fire on a destroyed registration.
+    ///
+    /// Coalescing semantics unchanged: `pending=true` while a rebuild is
+    /// queued; the trampoline clears it before invoking rebuild_cb so any
+    /// gate firing while the rebuild runs queues a fresh rebuild for the
+    /// next tick.
+    struct GateRebuildSlot {
+        PanelWidgetManager* mgr = nullptr;
+        std::string panel_id;
+        bool pending = false;
+    };
+    std::unordered_map<std::string, GateRebuildSlot> gate_rebuild_slots_;
+    std::unordered_map<std::string, RebuildCallback> gate_rebuild_callbacks_;
+
+    /// Stable function pointer for `lv_async_call_cancel` — non-capturing
+    /// lambda addresses aren't guaranteed stable across cancel/queue calls.
+    static void gate_rebuild_trampoline(void* ud);
 
     /// Per-panel grid descriptor arrays — must persist while the grid layout is active
     /// on the associated container. Keyed by panel_id to support multiple panels.

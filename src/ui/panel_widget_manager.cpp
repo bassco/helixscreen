@@ -804,7 +804,19 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
     //     skipped because the cached list still showed "~gated". This
     //     async-coalesce pattern combines the correctness of direct dispatch
     //     with safety against backlog corruption.
-    rebuild_pending_[panel_id] = false;
+    // Stable per-panel slot: lives in the manager singleton so its address
+    // outlives any individual gate-observer registration. The slot is the
+    // user-data passed to lv_async_call; clear_gate_observers calls
+    // lv_async_call_cancel against it before erasing.
+    GateRebuildSlot& slot = gate_rebuild_slots_[panel_id];
+    slot.mgr = this;
+    slot.panel_id = panel_id;
+    slot.pending = false;
+    gate_rebuild_callbacks_[panel_id] = std::move(rebuild_cb);
+    // Cancel any rebuild that might still be queued from a previous registration
+    // for this panel_id (e.g. soft-restart re-registers the home panel).
+    lv_async_call_cancel(&PanelWidgetManager::gate_rebuild_trampoline, &slot);
+
     std::vector<const char*> gate_names;
     for (const auto& def : get_all_widget_defs()) {
         if (!def.hardware_gate_subject)
@@ -832,41 +844,30 @@ void PanelWidgetManager::setup_gate_observers(const std::string& panel_id,
         // a particular panel registration.
         observers.push_back(observe_int_sync<PanelWidgetManager>(
             subject, this,
-            [rebuild_cb, name, panel_id](PanelWidgetManager* self, int value) {
+            [name, panel_id](PanelWidgetManager* self, int value) {
                 spdlog::debug("[PanelWidgetManager] gate '{}' -> {} (rebuild)", name, value);
                 crash_handler::breadcrumb::note("gate", name, value);
 
-                // Coalesce: if a rebuild is already queued for this tick,
-                // skip — the queued rebuild will read the latest gate values
-                // when it runs.
-                auto it = self->rebuild_pending_.find(panel_id);
-                if (it != self->rebuild_pending_.end() && it->second) {
+                // Look up the stable per-panel slot. If the panel was torn
+                // down between subscription and firing, skip — the gate
+                // observer may have been pending in the UpdateQueue when
+                // clear_gate_observers ran.
+                auto sit = self->gate_rebuild_slots_.find(panel_id);
+                if (sit == self->gate_rebuild_slots_.end()) {
                     return;
                 }
-                self->rebuild_pending_[panel_id] = true;
-
-                // Schedule the rebuild via lv_async_call so it runs on LVGL's
-                // async list — outside the UpdateQueue batch that delivered
-                // this gate firing. The closure heap-allocates a small struct
-                // holding the captures; the async callback owns and frees it.
-                struct AsyncCtx {
-                    PanelWidgetManager* mgr;
-                    std::string panel_id;
-                    RebuildCallback rebuild_cb;
-                };
-                auto* ctx = new AsyncCtx{self, panel_id, rebuild_cb};
-                lv_async_call(
-                    [](void* ud) {
-                        auto* c = static_cast<AsyncCtx*>(ud);
-                        // Clear the flag BEFORE running the rebuild so any
-                        // late-arriving gate firing while rebuild_cb is still
-                        // executing can re-queue another rebuild for the next
-                        // tick.
-                        c->mgr->rebuild_pending_[c->panel_id] = false;
-                        c->rebuild_cb();
-                        delete c;
-                    },
-                    ctx);
+                GateRebuildSlot& s = sit->second;
+                // Coalesce: if a rebuild is already queued, the queued one
+                // will read the latest gate values when it runs.
+                if (s.pending) {
+                    return;
+                }
+                s.pending = true;
+                // Stable user_data — no allocation in the hot path. Avoids
+                // std::bad_alloc → terminate → SIGABRT on memory-tight AD5X
+                // ([L083] family). lv_async_call escapes the UpdateQueue
+                // batch per CLAUDE.md "safe escape routes".
+                lv_async_call(&PanelWidgetManager::gate_rebuild_trampoline, &s);
             }));
         spdlog::trace("[PanelWidgetManager] Observing gate subject '{}' for panel '{}'", name,
                       panel_id);
@@ -882,6 +883,43 @@ void PanelWidgetManager::clear_gate_observers(const std::string& panel_id) {
         spdlog::debug("[PanelWidgetManager] Clearing {} gate observers for panel '{}'",
                       it->second.size(), panel_id);
         gate_observers_.erase(it);
+    }
+    // Cancel any in-flight async rebuild *before* destroying the slot it
+    // points at. Without this, a rebuild queued via lv_async_call could fire
+    // after the slot's storage is freed → UAF on ud / on the captured
+    // rebuild_cb (which closes over the registering panel's `this`).
+    auto sit = gate_rebuild_slots_.find(panel_id);
+    if (sit != gate_rebuild_slots_.end()) {
+        lv_async_call_cancel(&PanelWidgetManager::gate_rebuild_trampoline, &sit->second);
+        gate_rebuild_slots_.erase(sit);
+    }
+    gate_rebuild_callbacks_.erase(panel_id);
+}
+
+void PanelWidgetManager::gate_rebuild_trampoline(void* ud) {
+    auto* slot = static_cast<GateRebuildSlot*>(ud);
+    if (!slot || !slot->mgr) {
+        return;
+    }
+    PanelWidgetManager& mgr = *slot->mgr;
+    std::string panel_id = slot->panel_id;
+    // Clear pending BEFORE invoking — a late-arriving gate firing while
+    // the rebuild runs queues a fresh rebuild for the next tick.
+    slot->pending = false;
+
+    auto cb_it = mgr.gate_rebuild_callbacks_.find(panel_id);
+    if (cb_it == mgr.gate_rebuild_callbacks_.end()) {
+        // Panel was torn down between queueing and dispatch. clear_gate_observers
+        // calls lv_async_call_cancel before erasing the slot, but the cancel
+        // can race with an in-progress dispatch — guard explicitly.
+        return;
+    }
+    // Copy the callback before invoking. If rebuild_cb itself triggers a
+    // re-registration (clear+setup) for this panel, the underlying map
+    // entry can move and invalidate cb_it; the local copy survives.
+    RebuildCallback cb = cb_it->second;
+    if (cb) {
+        cb();
     }
 }
 
