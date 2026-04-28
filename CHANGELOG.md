@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.52] - 2026-04-28
+
+A bug fix release dominated by killing a class of crash loops triggered by Moonraker subscription-restricted JSON nulls. Klipper objects don't always implement every field a subscription names; Moonraker faithfully delivers `null` for the missing ones, and several of our parsers were calling `.get<T>()` straight through, throwing `type_error.302` and unwinding into `main()`'s top-level catch (exit 134). Every restart hit the same bug, and the watchdog couldn't break out. Now: every parser type-guards before extracting, the dispatch path absorbs callback throws so one rogue parser can't take down the others, a CI lint gate fails any new violation, and the watchdog detects same-signature crash loops (≥3 in 90s) and offers a Safe Mode boot that defers the Moonraker connection so the user can reach Settings.
+
+### Added
+- **Watchdog Safe Mode boot** — when the same crash signature repeats 3+ times in 90s (typical of a deterministic state-driven crash), the recovery dialog switches to a loop-aware variant with the auto-restart countdown disabled and "Safe Mode" as the primary button. Picking it writes a one-shot marker, restarts the app, and Application defers the Moonraker connection on the next launch with a sticky banner. A clean reboot exits Safe Mode automatically.
+
+### Fixed
+- **Subscription-restricted-null crash loops** — Moonraker delivers `null` for subscribed fields the underlying Klipper object lacks (Snapmaker U1's `filament_motion_sensor.detection_count` is the prototypical case). Multiple parsers used unguarded `.get<T>()` that threw `json::type_error::302` on null, unwinding past the dispatch loop and exiting 134. Hardened `printer_state.update_from_notification`, `printer_print_state.update_from_status`, sensor parsers, `led_controller` color channels, and `filament_sensor`. The initial-subscription apply path (`MoonrakerClient::dispatch_status_update`) now also wraps each callback in try/catch so one throwing parser can't take down the rest. A CI lint gate (`scripts/check_subscription_null_safety.py`) prevents regressions.
+- **AD5X panel widget rebuilds could abort under memory pressure** — the panel widget manager allocated a small `AsyncCtx` struct per gate-observer firing and queued it via `lv_async_call`. On memory-tight AD5X (~107MB RAM) a `std::bad_alloc` here propagated through LVGL's C event-dispatch frame and aborted the process via `std::terminate`, surfacing as unrelated-looking crashes (L083 family). Now uses a stable per-panel slot stored in the manager singleton — no per-firing allocation in the hot path.
+- **G-code viewer renderer stalls now recover instead of going blank** — added a renderer-stall watchdog with cache-state logging; on detected stall the viewer reinitialises rather than freezing on a blank or partial render.
+- **Niimbot B1 cancelled print before the printer started moving** — the BLE PrintEnd packet was being treated as job-finished too early; now we wait for actual motion before allowing the cancel path to close the job.
+- **AD5X stock ZMOD: GET_ZCOLOR spam quieted** — the ZMOD slot poller was firing the macro every tick instead of only on JSON content change. Now polls the JSON contents and only emits the macro when something changed.
+- **AD5X installer refuses to run outside ZMOD chroot** — preflight now bails with a clear error rather than silently corrupting a non-ZMOD AD5X install.
+- **Snapmaker U1 install: self-heal stale S99screen patches** — old patched init scripts from prior installs are detected and replaced rather than skipped.
+- **ALSA buffer-underrun spam on Pi** — continuous underrun warnings during sound playback were burning log volume; the underrun path now backs off cleanly.
+- **Label printer: faster BlueZ unpair + truthful Forget toast** — the Forget action would hang on BlueZ's slow unpair, then toast success even when the unpair had failed. Now uses a faster path and surfaces real status.
+
+### Changed
+- **Debug bundle exposes canonical platform_model** — bundles now include `printer.platform_model` (derived from the build-time platform key) alongside the user-picked `printer.model`, plus a `platform_model_mismatch` flag when they disagree. Lets the triage dashboard surface AD5X-running-as-AD5M-Pro mismatches without trusting the wizard pick blindly.
+- **Shutdown observer-release contract test generalised** — the structural check that caught #888 is now table-driven; new singletons destroyed after `StaticSubjectRegistry::deinit_all()` can be added with one row.
+
 ## [0.99.51] - 2026-04-28
 
 A targeted fix release. K2 install path works end-to-end now: a procd shim makes the autostart actually fire (devices were sitting at the boot logo on fresh install), uninstall re-enables Creality's stock UI, and a 68s boot trim gets K2 Plus into HelixScreen in ~36s. AD5X stock-ZMOD users get IFS active-slot tracking via GET_ZCOLOR, and slot edits no longer pop Mainsail/Fluidd "Select print materials" prompts or native touchscreen confirmation dialogs on every sync.
@@ -3404,6 +3426,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.52]: https://github.com/prestonbrown/helixscreen/compare/v0.99.51...v0.99.52
 [0.99.51]: https://github.com/prestonbrown/helixscreen/compare/v0.99.50...v0.99.51
 [0.99.50]: https://github.com/prestonbrown/helixscreen/compare/v0.99.49...v0.99.50
 [0.99.49]: https://github.com/prestonbrown/helixscreen/compare/v0.99.48...v0.99.49
