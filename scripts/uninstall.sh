@@ -441,6 +441,47 @@ detect_platform() {
     echo "unsupported"
 }
 
+# AD5X (FlashForge / ZMOD) preflight: refuse to run outside the chroot.
+#
+# ZMOD installs HelixScreen into an overlay rooted at /usr/data/.mod/.zmod/.
+# Inside the chroot the rootfs is the overlay (/, /etc, /opt, /srv all live
+# under that overlay). Outside, those same paths point at the squashfs base
+# view that helix-screen never sees — so a curl|sh, --local, --update, or
+# --uninstall run from a fresh SSH session writes to the wrong filesystem
+# entirely. The `/usr/data/.mod/.zmod` directory is only visible from outside
+# the chroot, so its presence is the reliable "you forgot to chroot" tell.
+#
+# Aborts with an actionable message when called outside the chroot.
+ad5x_check_chroot_context() {
+    [ -d "/usr/data/.mod/.zmod" ] || return 0
+
+    log_error ""
+    log_error "=========================================================="
+    log_error " AD5X manual installs must run inside the ZMOD chroot."
+    log_error "=========================================================="
+    log_error ""
+    log_error "ZMOD installs HelixScreen into an overlay at:"
+    log_error "  /usr/data/.mod/.zmod/"
+    log_error ""
+    log_error "Running this installer from your default SSH shell writes"
+    log_error "into the squashfs base view, not the overlay HelixScreen"
+    log_error "actually runs out of. That leaves you with broken paths,"
+    log_error "no init script in scope, and a printer that boots into"
+    log_error "the stock UI."
+    log_error ""
+    log_error "Enter the chroot first, then re-run your command:"
+    log_error ""
+    log_error "  chroot /usr/data/.mod/.zmod"
+    log_error "  # then re-run: curl ... | sh   OR   sh install.sh --local <zip>"
+    log_error "  # OR:          sh install.sh --update / --uninstall"
+    log_error ""
+    log_error "ZMOD also manages routine updates through Moonraker's update"
+    log_error "manager — you only need this manual path for --local installs,"
+    log_error "specific versions, or troubleshooting."
+    log_error ""
+    exit 1
+}
+
 # Detect the Klipper ecosystem user (who runs klipper/moonraker services)
 # Detection cascade (most reliable first):
 #   1. systemd: systemctl show klipper.service
@@ -2921,6 +2962,9 @@ main() {
 
     # Detect platform and firmware to set correct paths
     platform=$(detect_platform)
+    if [ "$platform" = "ad5x" ]; then
+        ad5x_check_chroot_context
+    fi
     if [ "$platform" = "ad5m" ]; then
         AD5M_FIRMWARE=$(detect_ad5m_firmware)
         log_info "Detected AD5M firmware: $AD5M_FIRMWARE"

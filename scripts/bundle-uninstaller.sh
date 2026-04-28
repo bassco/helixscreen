@@ -366,6 +366,9 @@ main() {
 
     # Detect platform and firmware to set correct paths
     platform=$(detect_platform)
+    if [ "$platform" = "ad5x" ]; then
+        ad5x_check_chroot_context
+    fi
     if [ "$platform" = "ad5m" ]; then
         AD5M_FIRMWARE=$(detect_ad5m_firmware)
         log_info "Detected AD5M firmware: $AD5M_FIRMWARE"

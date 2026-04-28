@@ -253,6 +253,12 @@ main() {
     platform=$(detect_platform)
     log_info "Detected platform: ${BOLD}${platform}${NC}"
 
+    # AD5X: refuse to run outside the ZMOD chroot — applies to fresh install,
+    # --update, --uninstall, and --local. Inside the chroot the check is a no-op.
+    if [ "$platform" = "ad5x" ]; then
+        ad5x_check_chroot_context
+    fi
+
     if [ "$platform" = "unsupported" ]; then
         log_error "Unsupported platform: $(uname -m)"
         log_error "HelixScreen supports:"
