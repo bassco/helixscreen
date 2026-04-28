@@ -780,12 +780,18 @@ void NativeBackend::update_from_status(const nlohmann::json& status) {
         const auto& first = led["color_data"][0];
         if (!first.is_array() || first.size() < 3)
             continue;
+        // Field-restricted Moonraker subscriptions can deliver null channel
+        // values for strips that don't expose a particular component; guard
+        // each get<double>() so a null doesn't throw type_error.302 and
+        // unwind into main() (#filament_motion_sensor / f75b961d8 family).
+        if (!first[0].is_number() || !first[1].is_number() || !first[2].is_number())
+            continue;
 
         StripColor color;
         color.r = first[0].get<double>();
         color.g = first[1].get<double>();
         color.b = first[2].get<double>();
-        color.w = (first.size() >= 4) ? first[3].get<double>() : 0.0;
+        color.w = (first.size() >= 4 && first[3].is_number()) ? first[3].get<double>() : 0.0;
         strip_colors_[strip.id] = color;
 
         // Detect RGBW capability from actual color_data size (overrides prefix guess)

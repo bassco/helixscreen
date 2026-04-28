@@ -1490,3 +1490,72 @@ TEST_CASE("PrinterState::set_hardware respects 'none' override for chamber",
     settings.set_chamber_sensor_assignment("auto");
     settings.set_chamber_heater_assignment("auto");
 }
+
+// ============================================================================
+// Subscription-restricted-null safety
+// ============================================================================
+//
+// Background: Moonraker delivers JSON null for subscribed fields the underlying
+// Klipper object lacks (e.g. Snapmaker U1's filament_motion_sensor lacks
+// detection_count). nlohmann::json::value("k", default) and unguarded .get<T>()
+// throw type_error.302 on null. An uncaught throw inside a subscription
+// handler unwinds out of run() into main()'s top-level catch, exiting 134
+// and triggering a watchdog crash loop (#filament_motion_sensor, f75b961d8).
+//
+// These tests inject null for every field a parser reads and assert no
+// exception escapes — converting "the next narrow-subscription rollout
+// crashes Snapmaker users" into a CI failure.
+
+TEST_CASE("PrinterState: update_from_notification handles null method without throwing",
+          "[state][regression][subscription-null]") {
+    lv_init_safe();
+    auto& state = get_printer_state();
+
+    nlohmann::json with_null = {
+        {"method", nullptr},
+        {"params", nlohmann::json::array({nlohmann::json::object()})},
+    };
+    REQUIRE_NOTHROW(state.update_from_notification(with_null));
+
+    nlohmann::json missing_method = {
+        {"params", nlohmann::json::array({nlohmann::json::object()})},
+    };
+    REQUIRE_NOTHROW(state.update_from_notification(missing_method));
+
+    nlohmann::json wrong_type = {
+        {"method", 42},
+        {"params", nlohmann::json::array({nlohmann::json::object()})},
+    };
+    REQUIRE_NOTHROW(state.update_from_notification(wrong_type));
+}
+
+TEST_CASE("PrinterPrintState: update_from_status handles null print_stats fields",
+          "[state][regression][subscription-null]") {
+    lv_init_safe();
+    auto& state = get_printer_state();
+
+    // Field-restricted subscription delivers print_stats with state and filename
+    // present but null — exactly what Moonraker sends when the underlying
+    // Klipper object lacks the field. Pre-fix: get<std::string>() on null
+    // threw type_error.302. Post-fix: skip silently.
+    nlohmann::json status = {
+        {"print_stats", {
+            {"state", nullptr},
+            {"filename", nullptr},
+            {"print_duration", nullptr},
+            {"total_duration", nullptr},
+            {"filament_used", nullptr},
+        }},
+    };
+    REQUIRE_NOTHROW(state.update_from_status(status));
+
+    // Wrong types should also be tolerated (Moonraker may send unexpected
+    // types during firmware restart races).
+    nlohmann::json wrong_types = {
+        {"print_stats", {
+            {"state", 42},
+            {"filename", true},
+        }},
+    };
+    REQUIRE_NOTHROW(state.update_from_status(wrong_types));
+}

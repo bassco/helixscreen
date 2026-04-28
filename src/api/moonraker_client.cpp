@@ -852,9 +852,26 @@ void MoonrakerClient::dispatch_status_update(const json& status) {
         }
     }
 
+    // Wrap each callback in try/catch — this path delivers the initial subscription
+    // snapshot synchronously on the main thread (Application::on_discovery_complete →
+    // dispatch_status_update). An unhandled exception here unwinds straight through
+    // run_main_loop into main()'s top-level catch, exiting 134 and triggering a crash
+    // loop the watchdog can't break out of (#filament_motion_sensor null fields,
+    // f75b961d8). The onmessage path already wraps each callback (line 533); this
+    // mirrors that contract for the initial-state path.
     for (const auto& cb : callbacks_copy) {
-        if (cb) {
+        if (!cb)
+            continue;
+        try {
             cb(notification);
+        } catch (const std::exception& e) {
+            LOG_ERROR_INTERNAL(
+                "[Moonraker Client] dispatch_status_update callback threw exception: {}", e.what());
+            TelemetryManager::instance().record_error(
+                "websocket", "status_dispatch_exception", e.what());
+        } catch (...) {
+            LOG_ERROR_INTERNAL(
+                "[Moonraker Client] dispatch_status_update callback threw unknown exception");
         }
     }
 

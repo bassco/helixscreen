@@ -285,11 +285,13 @@ void PrinterState::update_from_notification(const json& notification) {
     // Moonraker notifications have structure:
     // {"method": "notify_status_update", "params": [{...printer state...}, eventtime]}
 
-    if (!notification.contains("method") || !notification.contains("params")) {
+    auto method_it = notification.find("method");
+    if (method_it == notification.end() || !method_it->is_string() ||
+        !notification.contains("params")) {
         return;
     }
 
-    std::string method = notification["method"].get<std::string>();
+    std::string method = method_it->get<std::string>();
     if (method != "notify_status_update") {
         return;
     }

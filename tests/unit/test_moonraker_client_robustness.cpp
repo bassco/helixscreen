@@ -321,6 +321,47 @@ TEST_CASE_METHOD(MoonrakerRobustnessFixture,
 }
 
 // ============================================================================
+// Subscription-restricted-null safety
+// ============================================================================
+//
+// Background: Moonraker delivers JSON null for subscribed fields the underlying
+// Klipper object lacks. nlohmann::json::value("k", default) and unguarded
+// .get<T>() throw type_error.302 on null. dispatch_status_update is the
+// initial-subscription apply path that runs synchronously on the main thread
+// (Application::on_discovery_complete); a throwing callback there used to
+// unwind into main()'s top-level catch, exiting 134 (#filament_motion_sensor,
+// f75b961d8). The dispatch path now wraps each callback in try/catch so a
+// single rogue parser doesn't crash the whole app.
+
+TEST_CASE("MoonrakerClient::dispatch_status_update absorbs throwing callbacks",
+          "[connection][regression][subscription-null]") {
+    // Build a client without connecting — dispatch_status_update is callable
+    // standalone since it just walks the registered notify callbacks.
+    MoonrakerClient client;
+
+    int good_calls = 0;
+    bool bad_call_attempted = false;
+
+    // First callback throws (simulates a parser hitting JSON null)
+    client.register_notify_update([&bad_call_attempted](const json& /*notif*/) {
+        bad_call_attempted = true;
+        throw nlohmann::json::type_error::create(302, "type must be number, but is null", nullptr);
+    });
+    // Second callback is well-behaved — must still fire after the first throws
+    client.register_notify_update([&good_calls](const json& /*notif*/) {
+        ++good_calls;
+    });
+
+    // dispatch_status_update wraps a status payload as notify_status_update
+    // and walks the notify_callbacks_ map. Pre-fix: the throw escaped this
+    // loop and propagated up. Post-fix: caught and logged, second cb fires.
+    json status = {{"some_object", {{"some_field", nullptr}}}};
+    REQUIRE_NOTHROW(client.dispatch_status_update(status));
+    REQUIRE(bad_call_attempted);
+    REQUIRE(good_calls == 1);
+}
+
+// ============================================================================
 // Priority 2: Message Parsing Edge Cases
 // ============================================================================
 

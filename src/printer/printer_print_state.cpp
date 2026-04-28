@@ -193,8 +193,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
     if (status.contains("print_stats")) {
         const auto& stats = status["print_stats"];
 
-        if (stats.contains("state")) {
-            std::string state_str = stats["state"].get<std::string>();
+        if (auto state_it = stats.find("state"); state_it != stats.end() && state_it->is_string()) {
+            std::string state_str = state_it->get<std::string>();
             PrintJobState new_state = parse_print_job_state(state_str.c_str());
             auto current_state = static_cast<PrintJobState>(lv_subject_get_int(&print_state_enum_));
             auto current_outcome = static_cast<PrintOutcome>(lv_subject_get_int(&print_outcome_));
@@ -275,8 +275,8 @@ void PrinterPrintState::update_from_status(const nlohmann::json& status) {
             update_print_show_progress();
         }
 
-        if (stats.contains("filename")) {
-            std::string filename = stats["filename"].get<std::string>();
+        if (auto fn_it = stats.find("filename"); fn_it != stats.end() && fn_it->is_string()) {
+            std::string filename = fn_it->get<std::string>();
             if (strcmp(lv_subject_get_string(&print_filename_), filename.c_str()) != 0) {
                 lv_subject_copy_string(&print_filename_, filename.c_str());
             }
