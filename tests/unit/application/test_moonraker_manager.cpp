@@ -174,19 +174,30 @@ TEST_CASE("should_start_print_collector - non-printing transitions", "[applicati
 }
 
 // ============================================================================
-// Shutdown Observer Release Contract (issue #888 / bundle T7M2ZYPY)
+// Shutdown Observer Release Contract (generalized; original: issue #888)
 // ============================================================================
 // `Application::shutdown()` deinit's all PrinterState subjects via
-// StaticSubjectRegistry::deinit_all() BEFORE destroying m_moonraker. The
-// subjects' observers are freed at that point, so any ObserverGuard member of
-// MoonrakerManager whose dtor still calls lv_observer_remove() — i.e. any
-// member NOT released() in MoonrakerManager::shutdown() — segfaults during
-// teardown. This was the snapmaker-u1 crash loop fixed by adding
-// m_print_duration_observer to the release list.
+// StaticSubjectRegistry::deinit_all() BEFORE destroying singletons that the
+// Application owns directly (m_moonraker, etc.). Subject memory is freed at
+// that point, so any ObserverGuard member whose dtor still calls
+// lv_observer_remove() — i.e. any member NOT released() in that class's
+// own shutdown() — segfaults during teardown.
 //
-// This test parses both header and impl. It catches the structural mistake of
-// adding a new ObserverGuard member without adding a matching release() call,
-// without needing to spin up the full MoonrakerManager dependency graph.
+// Originally this test covered just MoonrakerManager (issue #888 / bundle
+// T7M2ZYPY). Generalized via the SHUTDOWN_OBSERVER_CLASSES table below: any
+// class in the table is structurally checked for the same contract.
+//
+// **When to add a class to the table:** when the class is owned by
+// Application as a unique_ptr that's destroyed AFTER
+// StaticSubjectRegistry::deinit_all() in Application::shutdown() (search for
+// the deinit_all() call to find the boundary), AND the class observes static
+// PrinterState/AmsState subjects via ObserverGuard members. New singletons
+// reset()'d *before* deinit_all() don't need this — their observers are
+// removed cleanly while subjects are still alive.
+//
+// The test parses both header and impl. It catches the structural mistake
+// of adding a new ObserverGuard member without a matching release() call,
+// without needing to spin up the class's full dependency graph.
 
 namespace {
 
@@ -202,8 +213,10 @@ std::string read_file(const std::string& path) {
 
 std::set<std::string> extract_observer_guard_members(const std::string& header) {
     std::set<std::string> members;
-    // Match: optional whitespace, "ObserverGuard", whitespace, identifier, ";"
-    std::regex re(R"(ObserverGuard\s+(m_[A-Za-z0-9_]+)\s*;)");
+    // Match: optional whitespace, "ObserverGuard" (with optional helix:: qual),
+    // whitespace, identifier, ";". Captures m_-prefixed names and trailing-
+    // underscore names so the contract works for both naming conventions.
+    std::regex re(R"((?:helix::)?ObserverGuard\s+([A-Za-z][A-Za-z0-9_]*)\s*;)");
     auto begin = std::sregex_iterator(header.begin(), header.end(), re);
     auto end = std::sregex_iterator();
     for (auto it = begin; it != end; ++it) {
@@ -212,11 +225,14 @@ std::set<std::string> extract_observer_guard_members(const std::string& header) 
     return members;
 }
 
-std::set<std::string> extract_released_members_in_shutdown(const std::string& impl) {
-    // Find the body of MoonrakerManager::shutdown() and extract `member.release();` calls.
-    // Body starts at the function signature and ends at the matching closing brace at
-    // column 0. We use a simple state machine over balanced braces.
-    std::regex sig_re(R"(void\s+MoonrakerManager::shutdown\s*\(\s*\)\s*\{)");
+std::set<std::string> extract_released_members_in_method(const std::string& impl,
+                                                         const std::string& class_name,
+                                                         const std::string& method_name) {
+    // Find the body of <ClassName>::<methodName>() and extract `member.release();`
+    // calls. Body starts at the function signature and ends at the matching
+    // closing brace via a simple brace-balance state machine.
+    std::regex sig_re("(?:void|bool|int)\\s+" + class_name + "::" + method_name +
+                      R"(\s*\(\s*\)\s*(?:noexcept)?\s*\{)");
     std::smatch m;
     if (!std::regex_search(impl, m, sig_re)) {
         return {};
@@ -234,7 +250,7 @@ std::set<std::string> extract_released_members_in_shutdown(const std::string& im
     std::string body = impl.substr(start, pos - start - 1);
 
     std::set<std::string> released;
-    std::regex rel_re(R"((m_[A-Za-z0-9_]+)\.release\s*\(\s*\)\s*;)");
+    std::regex rel_re(R"(([A-Za-z][A-Za-z0-9_]*)\.release\s*\(\s*\)\s*;)");
     auto begin = std::sregex_iterator(body.begin(), body.end(), rel_re);
     auto end = std::sregex_iterator();
     for (auto it = begin; it != end; ++it) {
@@ -243,28 +259,56 @@ std::set<std::string> extract_released_members_in_shutdown(const std::string& im
     return released;
 }
 
+struct ShutdownObserverContract {
+    std::string header_path;
+    std::string impl_path;
+    std::string class_name;
+    std::string shutdown_method;
+    int min_expected_members; // Sanity guard for the regex parser.
+};
+
+// Classes whose destructor runs AFTER StaticSubjectRegistry::deinit_all() in
+// Application::shutdown(). Add new entries when the same risk pattern
+// appears — see comment block above for criteria.
+const std::vector<ShutdownObserverContract>& shutdown_observer_classes() {
+    static const std::vector<ShutdownObserverContract> contracts = {
+        {"include/moonraker_manager.h", "src/application/moonraker_manager.cpp",
+         "MoonrakerManager", "shutdown",
+         /*min_expected_members=*/5},
+    };
+    return contracts;
+}
+
 } // namespace
 
-TEST_CASE("MoonrakerManager::shutdown releases every ObserverGuard member (issue #888)",
+TEST_CASE("Shutdown observer release contract — every ObserverGuard member is released",
           "[application][shutdown][regression]") {
-    auto header = read_file("include/moonraker_manager.h");
-    auto impl = read_file("src/application/moonraker_manager.cpp");
-    REQUIRE_FALSE(header.empty());
-    REQUIRE_FALSE(impl.empty());
+    for (const auto& c : shutdown_observer_classes()) {
+        DYNAMIC_SECTION(c.class_name << "::" << c.shutdown_method) {
+            auto header = read_file(c.header_path);
+            auto impl = read_file(c.impl_path);
+            REQUIRE_FALSE(header.empty());
+            REQUIRE_FALSE(impl.empty());
 
-    auto members = extract_observer_guard_members(header);
-    REQUIRE(members.size() >= 5); // sanity: parser found all known guards
+            auto members = extract_observer_guard_members(header);
+            INFO("Header: " << c.header_path);
+            REQUIRE(static_cast<int>(members.size()) >= c.min_expected_members);
 
-    auto released = extract_released_members_in_shutdown(impl);
-    REQUIRE_FALSE(released.empty()); // sanity: parser found the shutdown body
+            auto released = extract_released_members_in_method(impl, c.class_name,
+                                                               c.shutdown_method);
+            INFO("Impl: " << c.impl_path << " method: " << c.shutdown_method);
+            REQUIRE_FALSE(released.empty());
 
-    for (const auto& member : members) {
-        INFO("ObserverGuard `" << member
-                               << "` declared in moonraker_manager.h must call "
-                                  "release() in MoonrakerManager::shutdown(). Subjects are "
-                                  "deinit'd before ~MoonrakerManager runs, so the implicit "
-                                  "ObserverGuard dtor calling lv_observer_remove() on freed "
-                                  "memory crashes (issue #888 / bundle T7M2ZYPY).");
-        REQUIRE(released.count(member) == 1);
+            for (const auto& member : members) {
+                INFO("ObserverGuard `" << member << "` declared in " << c.header_path
+                                       << " must call release() in " << c.class_name
+                                       << "::" << c.shutdown_method
+                                       << "(). Subjects are deinit'd before this class's "
+                                          "destructor runs, so the implicit ObserverGuard "
+                                          "dtor calling lv_observer_remove() on freed memory "
+                                          "crashes (issue #888 family).");
+                REQUIRE(released.count(member) == 1);
+            }
+        }
     }
 }
