@@ -1565,6 +1565,24 @@ void AmsBackendAd5xIfs::apply_zcolor_result(const ZColorSilentResult& result) {
             }
         }
 
+        // Active tool: GET_ZCOLOR's "Extruder:" line is zmod's live view of
+        // which slot is in the extruder. lessWaste/bambufy users get this
+        // from save_variables (<prefix>_current_tool), so leave them alone.
+        // Stock-ZMOD users have no other source — without this, active_tool_
+        // is permanently stuck at -1 and the UI never shows which lane is
+        // loaded (raza616's report against v0.99.50).
+        if (!has_ifs_vars_) {
+            int new_active_tool = -1;
+            if (result.extruder_slot.has_value()) {
+                int port = *result.extruder_slot + 1;
+                new_active_tool = find_first_tool_for_port(port);
+            }
+            if (active_tool_ != new_active_tool) {
+                active_tool_ = new_active_tool;
+                changed = true;
+            }
+        }
+
         if (changed) {
             for (int i = 0; i < NUM_PORTS; ++i) {
                 update_slot_from_state(i);

@@ -1797,6 +1797,106 @@ TEST_CASE("AD5X IFS apply_zcolor_result updates colors and materials", "[ams][ad
     REQUIRE(types.find("PETG") != std::string::npos);
 }
 
+// raza616 v0.99.50 report: "HelixScreen seems to be unaware of which IFS lane
+// is currently loaded. Doesn't update when an IFS lane is unloaded — shows
+// the filament that was unloaded." Root cause: parse_zcolor_silent extracted
+// extruder_slot from the GET_ZCOLOR summary line ("// Extruder: 3: PLA/HEX |
+// IFS: True") but apply_zcolor_result never used it. active_tool_ was only
+// updated from lessWaste/bambufy save_variables — stock-ZMOD users never
+// got an active-tool signal.
+TEST_CASE("AD5X IFS apply_zcolor_result derives active_tool from extruder_slot (stock ZMOD)",
+          "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Establish an identity tool map so find_first_tool_for_port(N) -> tool N-1.
+    // Default tool_map_ is all UNMAPPED_PORT, so without this find_first_tool_for_port
+    // returns -1 for every port and the test would always assert -1.
+    REQUIRE(backend.set_tool_mapping(0, 0).success());
+    REQUIRE(backend.set_tool_mapping(1, 1).success());
+    REQUIRE(backend.set_tool_mapping(2, 2).success());
+    REQUIRE(backend.set_tool_mapping(3, 3).success());
+
+    SECTION("extruder_slot present → active_tool follows tool_map_") {
+        AmsBackendAd5xIfs::ZColorSilentResult r;
+        r.saw_valid_response = true;
+        r.ifs_active = true;
+        r.extruder_slot = 2; // 0-based → port 3 → tool 2 under identity map
+        r.slots[2] = AmsBackendAd5xIfs::ZColorSlot{"PLA", "FFFFFF"};
+
+        Ad5xIfsTestAccess::apply_zcolor_result(backend, r);
+
+        REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == 2);
+    }
+
+    SECTION("extruder_slot absent (unloaded) → active_tool clears to -1") {
+        // Seed with a loaded slot first so we can detect the clear.
+        AmsBackendAd5xIfs::ZColorSilentResult loaded;
+        loaded.saw_valid_response = true;
+        loaded.ifs_active = true;
+        loaded.extruder_slot = 1;
+        loaded.slots[1] = AmsBackendAd5xIfs::ZColorSlot{"PLA", "FF0000"};
+        Ad5xIfsTestAccess::apply_zcolor_result(backend, loaded);
+        REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == 1);
+
+        // Now an "Extruder: None (N)" response — extruder_slot becomes nullopt.
+        AmsBackendAd5xIfs::ZColorSilentResult unloaded;
+        unloaded.saw_valid_response = true;
+        unloaded.ifs_active = true;
+        unloaded.current_channel = 1;
+        // extruder_slot deliberately not set; slots all empty
+        Ad5xIfsTestAccess::apply_zcolor_result(backend, unloaded);
+
+        REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == -1);
+    }
+
+    SECTION("extruder_slot maps to unmapped tool → active_tool becomes -1") {
+        // Wipe the map for slot 0 (port 1), then claim slot 0 is in the extruder.
+        // No tool maps to port 1, so find_first_tool_for_port(1) returns -1.
+        REQUIRE(backend.set_tool_mapping(0, /*slot=*/-1).success()); // unmap T0
+
+        AmsBackendAd5xIfs::ZColorSilentResult r;
+        r.saw_valid_response = true;
+        r.ifs_active = true;
+        r.extruder_slot = 0;
+        r.slots[0] = AmsBackendAd5xIfs::ZColorSlot{"PLA", "808080"};
+
+        Ad5xIfsTestAccess::apply_zcolor_result(backend, r);
+
+        REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == -1);
+    }
+}
+
+TEST_CASE("AD5X IFS apply_zcolor_result leaves active_tool alone when has_ifs_vars",
+          "[ams][ad5x_ifs]") {
+    // lessWaste/bambufy users get active_tool from <prefix>_current_tool in
+    // save_variables, which is authoritative for them. GET_ZCOLOR's view must
+    // not race against it — verify by setting has_ifs_vars=true and checking
+    // active_tool_ is unchanged after apply.
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Seed the tool map BEFORE flipping has_ifs_vars=true. set_tool_mapping
+    // tries to persist via write_ifs_var when has_ifs_vars is true, which
+    // requires an api_ connection — using nullptr would return "No API
+    // connection" before the in-memory mutation completes.
+    REQUIRE(backend.set_tool_mapping(0, 0).success());
+    REQUIRE(backend.set_tool_mapping(1, 1).success());
+    REQUIRE(backend.set_tool_mapping(2, 2).success());
+    REQUIRE(backend.set_tool_mapping(3, 3).success());
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
+
+    AmsBackendAd5xIfs::ZColorSilentResult r;
+    r.saw_valid_response = true;
+    r.ifs_active = true;
+    r.extruder_slot = 2;
+    r.slots[2] = AmsBackendAd5xIfs::ZColorSlot{"PLA", "FFFFFF"};
+
+    Ad5xIfsTestAccess::apply_zcolor_result(backend, r);
+
+    // active_tool defaulted to -1 and was not updated — lessWaste's save_variables
+    // path retains exclusive ownership.
+    REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == -1);
+}
+
 TEST_CASE("AD5X IFS apply_zcolor_result skips color write on dirty slot", "[ams][ad5x_ifs]") {
     // Dirty slot means an unsaved user edit is pending — we must NOT overwrite
     // the local color with zmod's view, or we'd clobber the user's edit.
