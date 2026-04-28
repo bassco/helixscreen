@@ -9,6 +9,8 @@
 
 #include <alsa/asoundlib.h>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -88,6 +90,10 @@ class ALSASoundBackend : public SoundBackend {
     snd_pcm_uframes_t period_size_ = 256;
     unsigned int channels_ = 1;
     bool use_s16_ = false;
+
+    // Underrun log rate limiter (touched only by render thread)
+    uint64_t xrun_count_ = 0;
+    std::chrono::steady_clock::time_point last_xrun_log_{};
 };
 
 #endif // HELIX_HAS_ALSA

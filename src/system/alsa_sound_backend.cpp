@@ -97,8 +97,12 @@ bool ALSASoundBackend::initialize() {
         return false;
     }
 
-    // Buffer size: 2x period for low latency
-    snd_pcm_uframes_t buffer_size = period_size_ * 2;
+    // Buffer size: 8x period for scheduling headroom. On a busy Pi (klipper +
+    // helix-screen UI), 2× period (~11.6 ms) is too tight — the writer thread
+    // gets descheduled longer than the buffer drains and underruns continuously.
+    // 8× period (~46 ms) is still well under any noticeable latency for UI
+    // sounds while giving the kernel ample slack.
+    snd_pcm_uframes_t buffer_size = period_size_ * 8;
     err = snd_pcm_hw_params_set_buffer_size_near(pcm_, hw_params, &buffer_size);
     if (err < 0) {
         spdlog::error("[ALSASound] Cannot set buffer size: {}", snd_strerror(err));
@@ -116,8 +120,34 @@ bool ALSASoundBackend::initialize() {
         return false;
     }
 
-    spdlog::info("[ALSASound] Audio initialized: {} Hz, {} ch, period {}, format {}", sample_rate_,
-                 channels_, period_size_, use_s16_ ? "S16_LE" : "FLOAT_LE");
+    // Software params: only start playback once the buffer is nearly full
+    // (start_threshold = buffer - one period), and wake the writer when one
+    // period of space is available. Without this, ALSA's default
+    // start_threshold of 1 means playback starts as soon as the first writei
+    // lands — and every recover→prepare→writei cycle immediately underruns
+    // again because the thread can't refill faster than hardware drains.
+    snd_pcm_sw_params_t* sw_params = nullptr;
+    snd_pcm_sw_params_alloca(&sw_params);
+    err = snd_pcm_sw_params_current(pcm_, sw_params);
+    if (err < 0) {
+        spdlog::error("[ALSASound] Cannot get sw params: {}", snd_strerror(err));
+        snd_pcm_close(pcm_);
+        pcm_ = nullptr;
+        return false;
+    }
+    snd_pcm_sw_params_set_start_threshold(pcm_, sw_params, buffer_size - period_size_);
+    snd_pcm_sw_params_set_avail_min(pcm_, sw_params, period_size_);
+    err = snd_pcm_sw_params(pcm_, sw_params);
+    if (err < 0) {
+        spdlog::error("[ALSASound] Cannot apply sw params: {}", snd_strerror(err));
+        snd_pcm_close(pcm_);
+        pcm_ = nullptr;
+        return false;
+    }
+
+    spdlog::info("[ALSASound] Audio initialized: {} Hz, {} ch, period {}, buffer {}, format {}",
+                 sample_rate_, channels_, period_size_, buffer_size,
+                 use_s16_ ? "S16_LE" : "FLOAT_LE");
 
     // Allocate scratch buffer for mixing
     mix_buf_.resize(period_size_);
@@ -328,7 +358,17 @@ void ALSASoundBackend::render_loop() {
 
 snd_pcm_sframes_t ALSASoundBackend::recover_xrun(snd_pcm_sframes_t err) {
     if (err == -EPIPE) {
-        spdlog::debug("[ALSASound] Buffer underrun, recovering");
+        // Rate-limited: log at most once every 5 seconds with cumulative
+        // count. Default-constructed last_xrun_log_ is epoch, so the first
+        // underrun always logs. Avoids 13/sec syslog spam when a device is
+        // stuck in a recover loop (see bundle ND8PEP2E).
+        ++xrun_count_;
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_xrun_log_ >= std::chrono::seconds(5)) {
+            spdlog::debug("[ALSASound] Buffer underrun (count={}), recovering",
+                          xrun_count_);
+            last_xrun_log_ = now;
+        }
         int ret = snd_pcm_prepare(pcm_);
         if (ret < 0) {
             spdlog::error("[ALSASound] Cannot recover from underrun: {}", snd_strerror(ret));
