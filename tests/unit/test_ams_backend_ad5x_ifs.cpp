@@ -2597,6 +2597,116 @@ TEST_CASE("AD5X IFS firmware color change clears the override (hardware swap det
     CHECK(api.mock_get_db_value("lane_data", "lane1").is_null());
 }
 
+// Regression: bundle AQ6DALWG, raza616 v0.99.51, "filament type changing on
+// boot". On startup, the initial printer.objects.query response feeds
+// parse_save_variables which iterates update_slot_from_state for every slot
+// BEFORE Adventurer5M.json is fetched and parsed. At that point colors_[idx]
+// is empty, so the firmware-color branch in update_slot_from_state is skipped
+// and entry->info.color_rgb is whatever was last left there — initially the
+// SlotInfo default (AMS_DEFAULT_SLOT_COLOR / 0x808080), or a value leaked by
+// a prior apply_overrides call.
+//
+// Pre-fix this populated last_firmware_color_ with a phantom 0x808080 baseline.
+// Seconds later parse_adventurer_json arrived with the real firmware color
+// (e.g. #898989); the diff against the phantom baseline was misread as a
+// physical spool swap and wiped the user override (brand, spoolman_id, weights,
+// material). User saw their PETG spool flip back to firmware-truth PLA on
+// every boot, and after the wipe the next boot loaded 0 overrides because
+// boot 1 had cleared them all.
+TEST_CASE("AD5X IFS empty colors_[] on boot does NOT establish phantom baseline",
+          "[ams][ad5x_ifs][filament_slot_override][slow]") {
+    Ad5xIfsTmpCacheDir tmp("boot_phantom_baseline_no_clear");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+
+    AmsBackendAd5xIfs backend(&api, nullptr);
+    auto store = std::make_unique<helix::ams::FilamentSlotOverrideStore>(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(*store, tmp.path);
+    Ad5xIfsTestAccess::inject_override_store(backend, std::move(store));
+
+    // Seed a saved override (PETG, brand, spoolman_id) — what the user
+    // configured in a prior session and persisted into filament_slot store.
+    api.mock_set_db_value("lane_data", "lane1",
+                          nlohmann::json{{"vendor", "Polymaker"},
+                                         {"spool_id", 42},
+                                         {"material", "PETG"},
+                                         {"color", "#898989"}});
+
+    helix::ams::FilamentSlotOverride ovr;
+    ovr.brand = "Polymaker";
+    ovr.spool_name = "PolyLite Gray";
+    ovr.spoolman_id = 42;
+    ovr.material = "PETG";
+    ovr.color_rgb = 0x898989;
+    Ad5xIfsTestAccess::seed_override(backend, 0, ovr);
+
+    // Boot path step 1: parse_save_variables fires from the initial
+    // printer.objects.query response. lessWaste/bambufy tools data is
+    // present, which triggers update_slot_from_state for every slot — but
+    // colors_[idx] is still empty because Adventurer5M.json hasn't been
+    // fetched yet. This is the call that, pre-fix, establishes the phantom
+    // 0x808080 baseline.
+    json save_vars;
+    save_vars["less_waste_tools"] = json::array(
+        {0, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5}); // tool 0 -> port 1
+    save_vars["less_waste_current_tool"] = -1;
+    save_vars["less_waste_external"] = 0;
+    Ad5xIfsTestAccess::parse_vars(backend, save_vars);
+
+    // Override must still be intact after parse_save_variables — the helper
+    // had no firmware-truth color so it MUST have skipped the swap check.
+    {
+        auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+        REQUIRE(staged.has_value());
+        CHECK(staged->brand == "Polymaker");
+        CHECK(staged->material == "PETG");
+        CHECK(staged->spoolman_id == 42);
+    }
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+
+    // Boot path step 2: Adventurer5M.json finally arrives with the real
+    // firmware color. This is the FIRST real firmware reading for the slot,
+    // so it MUST establish the baseline rather than be misread as a swap.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#898989", "ffmType1": "PLA"}
+    })");
+
+    // Override survives: brand + spoolman_id still present, user's chosen
+    // material (PETG) still wins over firmware-reported PLA.
+    {
+        auto info = backend.get_slot_info(0);
+        CHECK(info.brand == "Polymaker");
+        CHECK(info.spoolman_id == 42);
+        CHECK(info.material == "PETG"); // user override, not firmware PLA
+        CHECK(info.color_rgb == 0x898989u);
+    }
+    {
+        auto staged = Ad5xIfsTestAccess::get_override(backend, 0);
+        REQUIRE(staged.has_value());
+        CHECK(staged->brand == "Polymaker");
+        CHECK(staged->material == "PETG");
+    }
+    CHECK(!api.mock_get_db_value("lane_data", "lane1").is_null());
+    CHECK(Ad5xIfsTestAccess::last_firmware_color(backend, 0) == 0x898989u);
+
+    // Boot path step 3: a SUBSEQUENT firmware parse with a different color
+    // must still detect the swap correctly — the fix must not break the
+    // legitimate hardware-swap path.
+    Ad5xIfsTestAccess::parse_adventurer_json(backend, R"({
+        "FFMInfo": {"ffmColor1": "#FF5500", "ffmType1": "PLA"}
+    })");
+    {
+        auto info = backend.get_slot_info(0);
+        // Override cleared — brand blank, firmware truth flows through.
+        CHECK(info.brand.empty());
+        CHECK(info.spoolman_id == 0);
+        CHECK(info.color_rgb == 0xFF5500u);
+    }
+    CHECK_FALSE(Ad5xIfsTestAccess::get_override(backend, 0).has_value());
+}
+
 TEST_CASE("AD5X IFS first firmware color observation does NOT clear override",
           "[ams][ad5x_ifs][filament_slot_override][slow]") {
     // Even when the override's saved color differs from what the firmware

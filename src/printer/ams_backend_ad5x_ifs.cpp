@@ -455,11 +455,23 @@ void AmsBackendAd5xIfs::update_slot_from_state(int slot_index) {
     entry->info.mapped_tool = find_first_tool_for_port(slot_index + 1);
 
     // Hardware-event detection MUST run BEFORE apply_overrides. At this point
-    // entry->info.color_rgb is firmware-truth; after apply_overrides it may be
-    // masked by a stale override and we'd miss the swap signal. Pass entry->info
-    // so the helper can reset override-exclusive fields in place when a clear
-    // fires (apply_overrides below is then a no-op on the cleared slot).
-    check_hardware_event_clear(slot_index, entry->info.color_rgb, entry->info);
+    // entry->info.color_rgb is firmware-truth IF colors_[idx] was non-empty
+    // above; after apply_overrides it may be masked by a stale override and
+    // we'd miss the swap signal. Pass entry->info so the helper can reset
+    // override-exclusive fields in place when a clear fires (apply_overrides
+    // below is then a no-op on the cleared slot).
+    //
+    // When colors_[idx] is empty we have NO firmware reading yet — entry->info
+    // .color_rgb is whatever was left there by the SlotInfo default
+    // (AMS_DEFAULT_SLOT_COLOR / 0x808080) or a prior apply_overrides leak. Pass
+    // 0 (the helper's "no signal" sentinel) so we don't establish a phantom
+    // baseline that would later be misread as a physical spool swap. Boot path:
+    // parse_save_variables / handle_status_update call update_slot_from_state
+    // BEFORE parse_adventurer_json fills in colors_[]; pre-fix this populated
+    // a 0x808080 baseline, then the first real parse triggered a bogus clear
+    // and wiped the user's saved overrides on every boot.
+    const uint32_t observed_color = colors_[idx].empty() ? 0u : entry->info.color_rgb;
+    check_hardware_event_clear(slot_index, observed_color, entry->info);
 
     // Layer user-configured overrides on top of firmware-reported data. Called
     // last so overrides win for any non-default field. Callers hold mutex_,
