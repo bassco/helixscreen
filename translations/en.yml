@@ -333,6 +333,7 @@ translations:
   Clear Console?: Clear Console?
   Clear Spool: Clear Spool
   'Clear failed: {}': 'Clear failed: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: Cleared from settings — system unpair failed, may need OS Bluetooth
   Clipboard unavailable - use SSH: Clipboard unavailable - use SSH
   Clog Detection: Clog Detection
   Clog detection: Clog detection

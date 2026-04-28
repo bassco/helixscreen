@@ -333,6 +333,7 @@ translations:
   Clear Console?: Limpar Console?
   Clear Spool: Remover bobina
   'Clear failed: {}': 'Falha ao limpar: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: 'Removido das configurações; falha ao desemparelhar no sistema, pode ser necessário o Bluetooth do SO'
   Clipboard unavailable - use SSH: Área de transferência indisponível - use SSH
   Clog Detection: Detecção de Obstrução
   Clog detection: Detecção de obstrução

@@ -333,6 +333,7 @@ translations:
   Clear Console?: Очистить консоль?
   Clear Spool: Убрать катушку
   'Clear failed: {}': 'Ошибка очистки: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: 'Удалено из настроек; не удалось отменить сопряжение в системе, возможно нужен Bluetooth ОС'
   Clipboard unavailable - use SSH: Буфер обмена недоступен - используйте SSH
   Clog Detection: Обнаружение засора
   Clog detection: Обнаружение засора

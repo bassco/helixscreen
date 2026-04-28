@@ -333,6 +333,7 @@ translations:
   Clear Console?: コンソールをクリアしますか？
   Clear Spool: スプールを解除
   'Clear failed: {}': 'クリアに失敗しました: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: '設定から削除しました。システムのペアリング解除に失敗、OS の Bluetooth 設定が必要な場合があります'
   Clipboard unavailable - use SSH: クリップボード利用不可 - SSHを使用してください
   Clog Detection: 詰まり検出
   Clog detection: 詰まり検出

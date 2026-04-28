@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" zh="清空控制台？"/>
   <translation tag="Clear Spool" zh="移除料盘"/>
   <translation tag="Clear failed: {}" zh="清除失败: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" zh="已从设置中清除；系统解除配对失败，可能需使用系统蓝牙设置"/>
   <translation tag="Clipboard unavailable - use SSH" zh="剪贴板不可用 - 请使用 SSH"/>
   <translation tag="Clog Detection" zh="堵料检测"/>
   <translation tag="Clog detection" zh="堵料检测"/>

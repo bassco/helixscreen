@@ -363,12 +363,54 @@ extern "C" int helix_bt_remove_device(helix_bt_context* ctx, const char* mac) {
     int r = 0;
     std::string err;
 
+    // BlueZ's default sd_bus call timeout is 25s; RemoveDevice can hang that
+    // long when the device is mid-connect or has an active GATT link (BLE).
+    // Disconnect first (best-effort, NotConnected = success), then RemoveDevice
+    // with a tighter timeout so the UI fails fast instead of stalling.
+    constexpr uint64_t kCallTimeoutUs = 5'000'000;  // 5s
+
+    auto call_with_timeout = [](sd_bus* bus, const char* path, const char* iface,
+                                const char* method, sd_bus_error* error,
+                                const char* signature, const char* arg) -> int {
+        sd_bus_message* m = nullptr;
+        int rc = sd_bus_message_new_method_call(bus, &m, "org.bluez", path, iface, method);
+        if (rc < 0)
+            return rc;
+        if (signature && arg) {
+            rc = sd_bus_message_append(m, signature, arg);
+            if (rc < 0) {
+                sd_bus_message_unref(m);
+                return rc;
+            }
+        }
+        sd_bus_message* reply = nullptr;
+        rc = sd_bus_call(bus, m, kCallTimeoutUs, error, &reply);
+        sd_bus_message_unref(m);
+        if (reply)
+            sd_bus_message_unref(reply);
+        return rc;
+    };
+
     try {
         ctx->bus_thread->run_sync([&](sd_bus* bus) {
+            // Best-effort disconnect first — ignore NotConnected / DoesNotExist /
+            // any other failure. If the device has an active link, dropping it
+            // here unblocks RemoveDevice; if it's already disconnected or the
+            // object path is gone, BlueZ returns instantly.
+            {
+                sd_bus_error derr = SD_BUS_ERROR_NULL;
+                int dr = call_with_timeout(bus, device_path.c_str(), "org.bluez.Device1",
+                                           "Disconnect", &derr, nullptr, nullptr);
+                if (dr < 0) {
+                    fprintf(stderr, "[bt] pre-remove Disconnect for %s: %s (continuing)\n", mac,
+                            derr.message ? derr.message : strerror(-dr));
+                }
+                sd_bus_error_free(&derr);
+            }
+
             sd_bus_error error = SD_BUS_ERROR_NULL;
-            const char* device_path_cstr = device_path.c_str();
-            r = sd_bus_call_method(bus, "org.bluez", adapter_path, "org.bluez.Adapter1",
-                                   "RemoveDevice", &error, nullptr, "o", device_path_cstr);
+            r = call_with_timeout(bus, adapter_path, "org.bluez.Adapter1", "RemoveDevice", &error,
+                                  "o", device_path.c_str());
             if (r < 0) {
                 fprintf(stderr, "[bt] RemoveDevice failed for %s: %s\n", mac,
                         error.message ? error.message : strerror(-r));

@@ -333,6 +333,7 @@ translations:
   Clear Console?: Konsole leeren?
   Clear Spool: Spule entfernen
   'Clear failed: {}': 'Löschen fehlgeschlagen: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: 'Aus Einstellungen entfernt – System-Entkopplung fehlgeschlagen, ggf. OS-Bluetooth nötig'
   Clipboard unavailable - use SSH: Zwischenablage nicht verfügbar - verwenden Sie SSH
   Clog Detection: Verstopfungserkennung
   Clog detection: Verstopfungserkennung

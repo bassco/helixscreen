@@ -333,6 +333,7 @@ translations:
   Clear Console?: 清空控制台？
   Clear Spool: 移除料盘
   'Clear failed: {}': '清除失败: {}'
+  Cleared from settings — system unpair failed, may need OS Bluetooth: '已从设置中清除；系统解除配对失败，可能需使用系统蓝牙设置'
   Clipboard unavailable - use SSH: 剪贴板不可用 - 请使用 SSH
   Clog Detection: 堵料检测
   Clog detection: 堵料检测

@@ -1735,6 +1735,7 @@ void LabelPrinterSettingsOverlay::handle_bt_forget() {
     // (#724) — thread creation can fail on AD5M/CC1 due to tight thread limits.
     try {
         std::thread([this, tok, mac]() {
+            bool bluez_ok = false;
             auto& loader = helix::bluetooth::BluetoothLoader::instance();
             if (!loader.is_available() || !loader.remove_device) {
                 spdlog::error("[LabelPrinterSettings] remove_device symbol missing");
@@ -1754,13 +1755,14 @@ void LabelPrinterSettingsOverlay::handle_bt_forget() {
                         // show a stale config.
                     } else {
                         spdlog::info("[LabelPrinterSettings] BlueZ unpair succeeded for {}", mac);
+                        bluez_ok = true;
                     }
                 }
             }
 
             if (tok.expired())
                 return;
-            tok.defer([this, mac]() {
+            tok.defer([this, mac, bluez_ok]() {
                 auto& s = LabelPrinterSettingsManager::instance();
                 s.set_bt_address("");
                 s.set_bt_name("");
@@ -1779,8 +1781,18 @@ void LabelPrinterSettingsOverlay::handle_bt_forget() {
                 // Refresh label size dropdown (selected printer/transport just cleared).
                 init_label_size_dropdown();
 
-                ToastManager::instance().show(ToastSeverity::SUCCESS,
-                                              lv_tr("Bluetooth printer forgotten"), 2000);
+                if (bluez_ok) {
+                    ToastManager::instance().show(ToastSeverity::SUCCESS,
+                                                  lv_tr("Bluetooth printer forgotten"), 2000);
+                } else {
+                    // Settings cleared, but BlueZ refused/timed out unpair — the
+                    // bond is still on the system. Tell the user so they can
+                    // remove it via OS Bluetooth settings if needed.
+                    ToastManager::instance().show(
+                        ToastSeverity::WARNING,
+                        lv_tr("Cleared from settings — system unpair failed, may need OS Bluetooth"),
+                        5000);
+                }
             });
         }).detach();
     } catch (const std::system_error& e) {

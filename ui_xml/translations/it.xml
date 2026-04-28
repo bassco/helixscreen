@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" it="Cancellare la console?"/>
   <translation tag="Clear Spool" it="Rimuovi bobina"/>
   <translation tag="Clear failed: {}" it="Cancellazione fallita: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" it="Rimosso dalle impostazioni; disaccoppiamento di sistema fallito, potrebbe servire il Bluetooth del sistema operativo"/>
   <translation tag="Clipboard unavailable - use SSH" it="Appunti non disponibili - usare SSH"/>
   <translation tag="Clog Detection" it="Rilevamento intasamento"/>
   <translation tag="Clog detection" it="Rilevamento intasamento"/>

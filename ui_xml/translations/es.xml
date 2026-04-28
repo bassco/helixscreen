@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" es="¿Limpiar Consola?"/>
   <translation tag="Clear Spool" es="Quitar bobina"/>
   <translation tag="Clear failed: {}" es="Error al limpiar: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" es="Borrado de los ajustes; falló el desemparejamiento del sistema, puede que necesite el Bluetooth del SO"/>
   <translation tag="Clipboard unavailable - use SSH" es="Portapapeles no disponible - use SSH"/>
   <translation tag="Clog Detection" es="Detección de obstrucción"/>
   <translation tag="Clog detection" es="Detección de obstrucción"/>

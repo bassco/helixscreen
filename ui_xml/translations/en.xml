@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" en="Clear Console?"/>
   <translation tag="Clear Spool" en="Clear Spool"/>
   <translation tag="Clear failed: {}" en="Clear failed: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" en="Cleared from settings — system unpair failed, may need OS Bluetooth"/>
   <translation tag="Clipboard unavailable - use SSH" en="Clipboard unavailable - use SSH"/>
   <translation tag="Clog Detection" en="Clog Detection"/>
   <translation tag="Clog detection" en="Clog detection"/>

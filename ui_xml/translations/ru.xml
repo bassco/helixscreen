@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" ru="Очистить консоль?"/>
   <translation tag="Clear Spool" ru="Убрать катушку"/>
   <translation tag="Clear failed: {}" ru="Ошибка очистки: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" ru="Удалено из настроек; не удалось отменить сопряжение в системе, возможно нужен Bluetooth ОС"/>
   <translation tag="Clipboard unavailable - use SSH" ru="Буфер обмена недоступен - используйте SSH"/>
   <translation tag="Clog Detection" ru="Обнаружение засора"/>
   <translation tag="Clog detection" ru="Обнаружение засора"/>

@@ -333,6 +333,7 @@
   <translation tag="Clear Console?" pt="Limpar Console?"/>
   <translation tag="Clear Spool" pt="Remover bobina"/>
   <translation tag="Clear failed: {}" pt="Falha ao limpar: {}"/>
+  <translation tag="Cleared from settings — system unpair failed, may need OS Bluetooth" pt="Removido das configurações; falha ao desemparelhar no sistema, pode ser necessário o Bluetooth do SO"/>
   <translation tag="Clipboard unavailable - use SSH" pt="Área de transferência indisponível - use SSH"/>
   <translation tag="Clog Detection" pt="Detecção de Obstrução"/>
   <translation tag="Clog detection" pt="Detecção de obstrução"/>
