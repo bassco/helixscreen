@@ -712,22 +712,18 @@ void SettingsPanel::setup_action_handlers() {
 }
 
 void SettingsPanel::populate_info_rows() {
-    // === Printer Host (action row - shows IP/hostname:port as description) ===
-    lv_obj_t* host_row = lv_obj_find_by_name(panel_, "row_printer_host");
-    if (host_row) {
-        lv_obj_t* description = lv_obj_find_by_name(host_row, "description");
-        if (description) {
-            Config* config = Config::get_instance();
-            std::string host = config->get<std::string>(config->df() + "moonraker_host", "");
-            int port = config->get<int>(config->df() + "moonraker_port", 7125);
+    // Printer host description: bound declaratively in settings_system_overlay.xml
+    // via bind_description="printer_host_value". Seed the subject from config so the
+    // first paint shows the current host:port (otherwise it's the em-dash default
+    // until ChangeHostModal fires its completion callback).
+    Config* config = Config::get_instance();
+    if (!config) return;
 
-            if (!host.empty()) {
-                std::string host_display = host + ":" + std::to_string(port);
-                lv_subject_copy_string(&printer_host_value_subject_, host_display.c_str());
-            }
-            lv_label_bind_text(description, &printer_host_value_subject_, "%s");
-            spdlog::trace("[{}]   Printer Host action row with reactive description", get_name());
-        }
+    std::string host = config->get<std::string>(config->df() + "moonraker_host", "");
+    if (!host.empty()) {
+        int port = config->get<int>(config->df() + "moonraker_port", 7125);
+        std::string host_display = host + ":" + std::to_string(port);
+        lv_subject_copy_string(&printer_host_value_subject_, host_display.c_str());
     }
 }
 

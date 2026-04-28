@@ -31,7 +31,9 @@
       <!-- HOST -->
       <!-- ================================================================== -->
       <setting_action_row name="row_printer_host"
-                          label="Host" label_tag="Host" icon="lan" callback="on_change_host_clicked"/>
+                          label="Host" label_tag="Host" icon="lan"
+                          bind_description="printer_host_value"
+                          callback="on_change_host_clicked"/>
       <!-- ================================================================== -->
       <!-- TOUCH CALIBRATION (hidden on non-touch displays unless test mode) -->
       <!-- ================================================================== -->
