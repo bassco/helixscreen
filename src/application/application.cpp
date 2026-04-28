@@ -213,6 +213,50 @@ const std::string& crash_marker_path() {
     return p;
 }
 
+// Safe-mode marker written by the watchdog when it detects a deterministic
+// crash loop (CRASH_LOOP_MAX_CRASHES same-signature crashes within the
+// CRASH_LOOP_WINDOW_SEC window). When present at startup, the application
+// defers Moonraker connection so the user can reach Settings and clear the
+// underlying state (a stuck subscription field, bad printer URL, etc.)
+// without re-crashing on the same code path.
+//
+// One-shot: deleted once the main loop is running and the user can dismiss
+// the banner. A clean reboot exits Safe Mode automatically.
+const std::string& safe_mode_marker_path() {
+    static const std::string p = helix::writable_path("safe_mode.flag");
+    return p;
+}
+
+bool s_safe_mode_active = false;
+
+bool consume_safe_mode_marker() {
+    // Watchdog writes one of these two paths — primary (writable_path) first,
+    // then /tmp fallback if the primary path is unwritable (read-only fs,
+    // stuck systemd namespace, etc.). Check both so any successful write
+    // by the watchdog reaches us.
+    std::vector<std::string> paths{
+        safe_mode_marker_path(),
+        "/tmp/helix-screen-safe-mode.flag",
+    };
+    bool found = false;
+    for (const auto& path : paths) {
+        std::error_code ec;
+        if (!std::filesystem::exists(path, ec)) {
+            continue;
+        }
+        spdlog::warn("[Application] Safe Mode marker present at {} — booting without "
+                     "Moonraker connection",
+                     path);
+        std::filesystem::remove(path, ec);
+        if (ec) {
+            spdlog::warn("[Application] Failed to remove Safe Mode marker {}: {}", path,
+                         ec.message());
+        }
+        found = true;
+    }
+    return found;
+}
+
 /**
  * @brief Recursively invalidate all widgets in the tree
  *
@@ -424,6 +468,15 @@ int Application::run(int argc, char** argv) {
                   (m_args.dpi > 0 ? " (custom)" : " (default)"));
     spdlog::debug("[Application] Initial Panel: {}", m_args.initial_panel);
 
+    // Read and consume the Safe Mode marker before any subscription-triggering
+    // code runs. The watchdog writes this when it detects a deterministic
+    // crash loop; reading it here lets connect_moonraker() (Phase 9d) skip the
+    // auto-connect so the user can reach Settings without re-crashing.
+    s_safe_mode_active = consume_safe_mode_marker();
+    if (s_safe_mode_active) {
+        spdlog::warn("[Application] Booting in SAFE MODE — Moonraker connection deferred");
+    }
+
     // Cleanup stale temp files from G-code modifications
     size_t cleaned = helix::gcode::GCodeFileModifier::cleanup_temp_files();
     if (cleaned > 0) {
@@ -542,7 +595,14 @@ int Application::run(int argc, char** argv) {
     // Phase 9d: Start Moonraker connection early (during splash)
     // Discovery runs async — by the time UI is created and splash exits,
     // connection and discovery may already be complete, saving ~2s.
-    if (!connect_moonraker()) {
+    //
+    // Safe Mode skips this entirely — the watchdog wrote the marker because
+    // every previous boot crashed during subscription handling, and reaching
+    // Settings is more important than reconnecting. The user can re-enable
+    // the connection from Settings once they've fixed the underlying state.
+    if (s_safe_mode_active) {
+        spdlog::warn("[Application] Safe Mode: skipping Moonraker auto-connect");
+    } else if (!connect_moonraker()) {
         // Non-fatal - app can still run without connection
         spdlog::warn("[Application] Running without printer connection");
     }
@@ -677,6 +737,17 @@ int Application::run(int argc, char** argv) {
     // Must be after UI panels exist (injection points are registered by panels)
     if (!init_plugins()) {
         spdlog::warn("[Application] Plugin initialization had errors (non-fatal)");
+    }
+
+    // Banner: Safe Mode — UI is up, so this is the earliest the user can
+    // see why the printer connection didn't come up. Sticky (no auto-dismiss)
+    // because the user needs to act on it before the connection comes back.
+    if (s_safe_mode_active) {
+        ToastManager::instance().show(
+            ToastSeverity::WARNING,
+            "Safe Mode active. The printer connection is disabled because the app "
+            "kept crashing on startup. Open Settings to fix the issue, then reboot.",
+            0 /* sticky */);
     }
 
     // Phase 14b: Check WiFi availability if expected

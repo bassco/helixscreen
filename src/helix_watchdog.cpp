@@ -80,6 +80,16 @@ static constexpr int RESTART_LOOP_MAX_FAILURES = 5;
 static constexpr int RESTART_LOOP_WINDOW_SEC = 60;
 static constexpr int RESTART_LOOP_EXIT_CODE = 42;
 
+// Crash-loop detection (separate window from non-zero-exit loops above).
+// When the same crash signal repeats N times within M seconds, blind retry
+// is provably futile — every "Restart App" produces the same crash from the
+// same state (e.g. a JSON-null subscription field the printer keeps sending,
+// f75b961d8 family). Don't give up; instead, expand the recovery dialog to
+// offer a Safe Mode boot that defers Moonraker connection so the user can
+// reach Settings and fix the underlying state without crashing again.
+static constexpr int CRASH_LOOP_MAX_CRASHES = 3;
+static constexpr int CRASH_LOOP_WINDOW_SEC = 90;
+
 // UI Colors (dark theme, matches main app)
 static constexpr uint32_t BG_COLOR_DARK = 0x121212;
 static constexpr uint32_t CONTAINER_BG = 0x1E1E1E;
@@ -98,7 +108,7 @@ static constexpr uint32_t TEXT_MUTED = 0x888888;
 static volatile sig_atomic_t g_quit = 0;
 
 // Dialog choice from button press
-enum class DialogChoice { NONE, RESTART_APP, RESTART_SYSTEM };
+enum class DialogChoice { NONE, RESTART_APP, RESTART_SYSTEM, RESTART_SAFE_MODE };
 static volatile DialogChoice g_dialog_choice = DialogChoice::NONE;
 
 // Countdown state
@@ -623,6 +633,66 @@ static void on_restart_system_clicked(lv_event_t* /*e*/) {
     g_dialog_choice = DialogChoice::RESTART_SYSTEM;
 }
 
+static void on_safe_mode_clicked(lv_event_t* /*e*/) {
+    g_dialog_choice = DialogChoice::RESTART_SAFE_MODE;
+}
+
+/**
+ * @brief Path to the safe-mode marker file.
+ *
+ * The watchdog writes this when the user picks "Boot Safe Mode" from the
+ * crash-loop dialog. Application reads it at startup, defers the Moonraker
+ * connection, and shows a banner explaining the state. The marker is one-shot
+ * — the application clears it once the main loop is running and the user can
+ * see the banner, so a clean reboot exits safe mode automatically.
+ */
+static std::string safe_mode_marker_path() {
+    return helix::writable_path("safe_mode.flag");
+}
+
+/**
+ * @brief Write the safe-mode marker.
+ *
+ * @return true on success. On failure, the caller MUST NOT just `continue` —
+ *         restarting the app without a marker means the next boot reconnects
+ *         Moonraker, hits the same JSON-null bug, and crashes again. The user
+ *         is then stuck in a worse loop than before because they thought they
+ *         escaped via Safe Mode.
+ *
+ * Tries the canonical writable path first; if that fails (read-only fs,
+ * missing parent dir, sudo lockout) falls back to /tmp/helix-screen-safe-mode.flag
+ * which is world-writable and exists on every supported platform.
+ * Application::consume_safe_mode_marker checks both locations.
+ */
+static bool write_safe_mode_marker() {
+    auto try_write = [](const std::string& path) -> bool {
+        FILE* f = fopen(path.c_str(), "w");
+        if (!f) {
+            return false;
+        }
+        fprintf(f, "watchdog_crash_loop\n%lld\n", static_cast<long long>(time(nullptr)));
+        fclose(f);
+        return true;
+    };
+
+    std::string primary = safe_mode_marker_path();
+    if (try_write(primary)) {
+        spdlog::info("[Watchdog] Wrote safe-mode marker: {}", primary);
+        return true;
+    }
+    spdlog::error("[Watchdog] Failed to write safe-mode marker at {}: {}", primary,
+                  strerror(errno));
+
+    const char* fallback = "/tmp/helix-screen-safe-mode.flag";
+    if (try_write(fallback)) {
+        spdlog::warn("[Watchdog] Wrote safe-mode marker to fallback path: {}", fallback);
+        return true;
+    }
+    spdlog::critical("[Watchdog] Failed to write safe-mode marker at fallback {}: {}",
+                     fallback, strerror(errno));
+    return false;
+}
+
 // Cancel countdown on any touch
 static void on_screen_pressed(lv_event_t* /*e*/) {
     if (g_countdown_seconds > 0 && g_countdown_label) {
@@ -656,9 +726,16 @@ static lv_obj_t* create_button(lv_obj_t* parent, const char* text, uint32_t colo
 
 /**
  * @brief Create the crash dialog UI
+ *
+ * @param crash_loop_detected When true, the same crash has fired ≥3× in the
+ *        last 90s — blind retry won't help. Disable the auto-restart
+ *        countdown, swap in a more informative title, and add a "Boot Safe
+ *        Mode" button that writes the safe-mode marker so the next launch
+ *        skips Moonraker auto-connect.
  */
 static void create_crash_dialog(lv_obj_t* screen, int /*width*/, int /*height*/,
-                                const CrashInfo& crash, int auto_restart_sec) {
+                                const CrashInfo& crash, int auto_restart_sec,
+                                bool crash_loop_detected) {
     // Dark background
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG_COLOR_DARK), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
@@ -690,7 +767,8 @@ static void create_crash_dialog(lv_obj_t* screen, int /*width*/, int /*height*/,
 
     // Title
     lv_obj_t* title = lv_label_create(container);
-    lv_label_set_text(title, "HelixScreen Crashed");
+    lv_label_set_text(title, crash_loop_detected ? "HelixScreen Keeps Crashing"
+                                                 : "HelixScreen Crashed");
     lv_obj_set_style_text_font(title, &noto_sans_bold_24, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(TEXT_PRIMARY), 0);
     lv_obj_set_style_pad_top(title, 16, 0);
@@ -707,9 +785,27 @@ static void create_crash_dialog(lv_obj_t* screen, int /*width*/, int /*height*/,
     lv_obj_set_style_text_color(details, lv_color_hex(TEXT_SECONDARY), 0);
     lv_obj_set_style_pad_top(details, 8, 0);
 
-    // Countdown timer (hidden if auto_restart_sec == 0)
+    // Loop hint: when the same crash repeats, restarting won't help on its
+    // own — point the user at Safe Mode.
+    if (crash_loop_detected) {
+        lv_obj_t* hint = lv_label_create(container);
+        lv_label_set_text(hint,
+                          "Same crash 3+ times in a row. Try Safe Mode\n"
+                          "(boots without connecting to the printer) so\n"
+                          "you can adjust settings.");
+        lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(hint, LV_PCT(100));
+        lv_obj_set_style_text_font(hint, &noto_sans_14, 0);
+        lv_obj_set_style_text_color(hint, lv_color_hex(TEXT_SECONDARY), 0);
+        lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_style_pad_top(hint, 12, 0);
+    }
+
+    // Countdown timer (hidden if auto_restart_sec == 0 OR loop detected —
+    // auto-restart in a deterministic loop just hides the dialog without
+    // letting the user choose Safe Mode).
     g_countdown_label = lv_label_create(container);
-    if (auto_restart_sec > 0) {
+    if (auto_restart_sec > 0 && !crash_loop_detected) {
         g_countdown_seconds = auto_restart_sec;
         lv_label_set_text_fmt(g_countdown_label, "Auto-restart in %d seconds...",
                               g_countdown_seconds);
@@ -717,6 +813,7 @@ static void create_crash_dialog(lv_obj_t* screen, int /*width*/, int /*height*/,
         lv_obj_set_style_text_color(g_countdown_label, lv_color_hex(TEXT_MUTED), 0);
         lv_obj_set_style_pad_top(g_countdown_label, 12, 0);
     } else {
+        g_countdown_seconds = 0;
         lv_obj_add_flag(g_countdown_label, LV_OBJ_FLAG_HIDDEN);
     }
 
@@ -730,21 +827,27 @@ static void create_crash_dialog(lv_obj_t* screen, int /*width*/, int /*height*/,
     lv_obj_set_flex_align(btn_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_top(btn_container, 24, 0);
-    lv_obj_set_style_pad_column(btn_container, 24, 0);
+    lv_obj_set_style_pad_column(btn_container, 16, 0);
     lv_obj_clear_flag(btn_container, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Restart App button (primary action)
-    create_button(btn_container, "Restart App", BUTTON_PRIMARY, on_restart_app_clicked);
-
-    // Restart System button (danger action)
-    create_button(btn_container, "Restart System", BUTTON_DANGER, on_restart_system_clicked);
+    if (crash_loop_detected) {
+        // Loop dialog: Safe Mode is the primary action since plain restart
+        // is provably futile here.
+        create_button(btn_container, "Safe Mode", BUTTON_PRIMARY, on_safe_mode_clicked);
+        create_button(btn_container, "Restart App", BUTTON_DANGER, on_restart_app_clicked);
+    } else {
+        // Normal dialog: standard two-button layout.
+        create_button(btn_container, "Restart App", BUTTON_PRIMARY, on_restart_app_clicked);
+        create_button(btn_container, "Restart System", BUTTON_DANGER, on_restart_system_clicked);
+    }
 }
 
 /**
  * @brief Show crash dialog and wait for user choice
  * @return User's choice
  */
-static DialogChoice show_crash_dialog(int width, int height, int rotation, const CrashInfo& crash) {
+static DialogChoice show_crash_dialog(int width, int height, int rotation, const CrashInfo& crash,
+                                      bool crash_loop_detected) {
     int auto_restart_sec = read_auto_restart_timeout();
 
     spdlog::info("[Watchdog] Showing crash dialog (auto_restart={}s)", auto_restart_sec);
@@ -800,7 +903,7 @@ static DialogChoice show_crash_dialog(int width, int height, int rotation, const
 
     // Create dialog UI
     lv_obj_t* screen = lv_screen_active();
-    create_crash_dialog(screen, width, height, crash, auto_restart_sec);
+    create_crash_dialog(screen, width, height, crash, auto_restart_sec, crash_loop_detected);
 
     // Event loop with countdown
     g_dialog_choice = DialogChoice::NONE;
@@ -857,6 +960,17 @@ static int run_watchdog(const WatchdogArgs& args) {
     // Rolling window of recent non-zero deliberate-exit timestamps. See the
     // RESTART_LOOP_* constants at the top of this file for rationale.
     std::deque<std::chrono::steady_clock::time_point> recent_failures;
+
+    // Rolling window of recent crash signatures (signal_num for SIGNAL crashes,
+    // or exit_code for crash-handler 128..159 exits). Detecting the same
+    // signature ≥ CRASH_LOOP_MAX_CRASHES times within CRASH_LOOP_WINDOW_SEC
+    // means the same crash is reproducing every restart — blind retry won't
+    // fix it. See the CRASH_LOOP_* constants for rationale.
+    struct CrashEvent {
+        std::chrono::steady_clock::time_point at;
+        int signature; // signal_num (1..31) or exit code (128..159)
+    };
+    std::deque<CrashEvent> recent_crashes;
 
     while (!g_quit) {
         // Start or adopt splash screen before launching helix-screen.
@@ -981,14 +1095,71 @@ static int run_watchdog(const WatchdogArgs& args) {
             continue;
         }
 
-        // Crash detected - show recovery dialog (no splash during dialog)
-        spdlog::warn("[Watchdog] Crash detected, showing recovery dialog");
+        // Track this crash for loop detection. The signature folds both
+        // signal-killed and crash-handler-translated cases into a single
+        // value so any deterministic crash (same signal repeating) trips
+        // the loop branch.
+        {
+            int signature = crash.was_signaled ? crash.signal_num : crash.exit_code;
+            auto now = std::chrono::steady_clock::now();
+            const auto window = std::chrono::seconds(CRASH_LOOP_WINDOW_SEC);
+            while (!recent_crashes.empty() && (now - recent_crashes.front().at) > window) {
+                recent_crashes.pop_front();
+            }
+            recent_crashes.push_back({now, signature});
+        }
 
-        DialogChoice choice = show_crash_dialog(args.width, args.height, args.rotation, crash);
+        // Loop detected when we have ≥ N entries in the window AND at least
+        // CRASH_LOOP_MAX_CRASHES of them share a signature. Same-signature
+        // matters: alternating crashes from different bugs aren't a single
+        // deterministic state, so blind retry might still help.
+        bool crash_loop_detected = false;
+        if (static_cast<int>(recent_crashes.size()) >= CRASH_LOOP_MAX_CRASHES) {
+            int last_sig = recent_crashes.back().signature;
+            int matches = 0;
+            for (const auto& ev : recent_crashes) {
+                if (ev.signature == last_sig)
+                    ++matches;
+            }
+            if (matches >= CRASH_LOOP_MAX_CRASHES) {
+                crash_loop_detected = true;
+                spdlog::critical("[Watchdog] Crash loop detected: signature {} repeated {} times "
+                                 "in the last {}s. Offering Safe Mode.",
+                                 last_sig, matches, CRASH_LOOP_WINDOW_SEC);
+            }
+        }
+
+        // Crash detected - show recovery dialog (no splash during dialog)
+        spdlog::warn("[Watchdog] Crash detected, showing recovery dialog{}",
+                     crash_loop_detected ? " (loop detected)" : "");
+
+        DialogChoice choice = show_crash_dialog(args.width, args.height, args.rotation, crash,
+                                                crash_loop_detected);
 
         if (choice == DialogChoice::RESTART_SYSTEM) {
             perform_system_restart();
             // Never returns
+        }
+
+        if (choice == DialogChoice::RESTART_SAFE_MODE) {
+            if (!write_safe_mode_marker()) {
+                // Couldn't write the marker anywhere. Restarting the app now
+                // would just reconnect Moonraker and re-crash on the same bug,
+                // so escalate to a system restart instead — the kernel umount
+                // / re-mount cycle often fixes the writability issue (stuck
+                // namespace, transient ENOSPC, etc., per the bundle 7ZGHW5KX
+                // pattern in MEMORY.md).
+                spdlog::critical("[Watchdog] Safe Mode marker write failed — falling "
+                                 "back to system restart so the user isn't stranded");
+                perform_system_restart();
+                // Never returns
+            }
+            // Clear the recent_crashes deque so we don't immediately re-show
+            // the loop dialog if Safe Mode itself crashes once for unrelated
+            // reasons (less likely without Moonraker, but possible).
+            recent_crashes.clear();
+            spdlog::info("[Watchdog] Restarting helix-screen in Safe Mode");
+            continue;
         }
 
         // RESTART_APP: loop continues, will fork new child with splash
