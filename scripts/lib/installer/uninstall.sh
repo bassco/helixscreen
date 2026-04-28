@@ -129,6 +129,18 @@ uninstall() {
         log_info "ZMOD firmware: no previous UI to restore (managed by ZMOD)"
     fi
 
+    # K2 series (Creality K2 Plus / K2 Pro): re-enable the stock procd-managed UI.
+    # hooks-k2.sh runs `/etc/init.d/app disable` on every launch (which removes
+    # the procd rc.d symlink), so without this step the device boots into the
+    # Creality logo with no UI after uninstall.
+    if [ -z "$restored_ui" ] && [ -f /etc/init.d/app ] && \
+       { [ "$platform" = "k2" ] || [ -f /mnt/UDISK/printer_data/config/printer.cfg ]; }; then
+        log_info "Re-enabling Creality stock UI (/etc/init.d/app)..."
+        $SUDO /etc/init.d/app enable 2>/dev/null || true
+        $SUDO /etc/init.d/app start 2>/dev/null || true
+        restored_ui="Creality stock UI (/etc/init.d/app)"
+    fi
+
     # Check for K1/Simple AF GuppyScreen
     if [ -z "$restored_ui" ] && [ "$AD5M_FIRMWARE" != "zmod" ] && [ -f "/etc/init.d/S99guppyscreen" ]; then
         $SUDO chmod +x "/etc/init.d/S99guppyscreen" 2>/dev/null || true
