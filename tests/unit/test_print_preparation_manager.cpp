@@ -1186,13 +1186,13 @@ class MacroAnalysisRetryFixture {
             server_->clear_handlers();
         }
 
-        // Destroy client/API while event loop is still running so libhv can
-        // process close/cleanup callbacks and release I/O handles.
+        // Disconnect posts a close event to the libhv event loop. The Channel
+        // must remain alive until that event is dispatched (or the loop is
+        // stopped), otherwise the loop thread will run Channel::close() on
+        // freed memory — heap-use-after-free observed under ASAN nightly.
         if (client_) {
             client_->disconnect();
         }
-        api_.reset();
-        client_.reset();
 
         // Fully quiesce the server (joins libhv's HTTP worker threads) before
         // we stop the client's event loop. Without the guard below, a libhv
@@ -1210,7 +1210,15 @@ class MacroAnalysisRetryFixture {
         // machines; only relevant on slower Linux CI where the race opens up.
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
+        // Stop the event loop BEFORE deleting client_. Once stop(true) returns,
+        // the loop thread has joined and no further posted events will fire,
+        // so it is safe to free the Channel. Doing this in the opposite order
+        // (delete client → loop processes posted close → UAF on Channel) is
+        // exactly the bug the ASAN nightly caught.
         loop_thread_->stop(true);
+
+        api_.reset();
+        client_.reset();
 
         // Drain pending callbacks (manager_ is still alive here, so any final
         // deferred success/error lambda runs against a valid manager).

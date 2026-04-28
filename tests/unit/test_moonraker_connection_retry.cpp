@@ -56,14 +56,16 @@ class MoonrakerConnectionRetryFixture {
     }
 
     ~MoonrakerConnectionRetryFixture() {
-        // Destroy client while event loop is still running so libhv can
-        // process close/cleanup callbacks and release I/O handles.
+        // disconnect() posts a close event to the libhv loop. The Channel
+        // must remain alive until either the event is dispatched or the
+        // loop is stopped — deleting client_ first races with the loop
+        // thread running Channel::close() on freed memory (heap-use-after-
+        // free observed under ASAN nightly).
         if (client_) {
             client_->disconnect();
         }
-        client_.reset();
-
         loop_thread_->stop(true);
+        client_.reset();
     }
 
     std::shared_ptr<hv::EventLoopThread> loop_thread_;
