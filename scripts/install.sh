@@ -3474,7 +3474,61 @@ install_service() {
         install_service_systemd
     else
         install_service_sysv
+        # K2 (procd) needs an extra shim — see install_procd_shim_k2
+        if [ "$platform" = "k2" ]; then
+            install_procd_shim_k2
+        fi
     fi
+}
+
+# K2 (Tina Linux / procd) requires init scripts to use the rc.common
+# shebang AND declare a DEPEND directive — without both, procd's boot
+# iterator silently skips them. Our shared SysV-style S99helixscreen has
+# neither, so on K2 it's never auto-started at boot, leaving the device
+# stuck on the Creality boot logo with no UI.
+#
+# Fix: install a tiny procd-compatible /etc/init.d/helixscreen shim that
+# delegates every action to the real SysV script. Replace any existing
+# rc.d symlink (older installs pointed it at the SysV script directly,
+# which procd silently skips).
+install_procd_shim_k2() {
+    local shim_dest="/etc/init.d/helixscreen"
+
+    if [ ! -x /etc/rc.common ]; then
+        log_warn "K2 procd shim: /etc/rc.common not found — skipping (boot autostart will not work)"
+        return 0
+    fi
+
+    log_info "Installing K2 procd boot shim..."
+    $SUDO tee "$shim_dest" >/dev/null <<'SHIM_EOF'
+#!/bin/sh /etc/rc.common
+# K2 procd shim — delegates to the SysV-style /etc/init.d/S99helixscreen.
+# Required because K2's procd boot iterator only invokes scripts with the
+# rc.common shebang AND a DEPEND directive; plain SysV scripts are silently
+# skipped at boot.
+START=99
+STOP=01
+DEPEND=done
+
+boot()    { /etc/init.d/S99helixscreen start; }
+start()   { /etc/init.d/S99helixscreen start; }
+stop()    { /etc/init.d/S99helixscreen stop; }
+restart() { /etc/init.d/S99helixscreen restart; }
+status()  { /etc/init.d/S99helixscreen status; }
+SHIM_EOF
+    $SUDO chmod +x "$shim_dest"
+
+    # Older installs symlinked /etc/rc.d/S99helixscreen directly to the SysV
+    # script, which procd skips. Drop those, then let rc.common's enable
+    # create fresh S99/K01 symlinks pointing at the shim.
+    $SUDO rm -f /etc/rc.d/S99helixscreen /etc/rc.d/K01helixscreen
+    if ! $SUDO "$shim_dest" enable; then
+        log_warn "K2 procd shim: enable failed — UI will not autostart at boot"
+        log_warn "Manual fix: $SUDO $shim_dest enable"
+        return 1
+    fi
+
+    log_success "Installed K2 procd shim at $shim_dest"
 }
 
 install_service_snapmaker_u1() {
@@ -4444,13 +4498,33 @@ uninstall() {
         $SUDO systemctl daemon-reload
     else
         # Stop and remove SysV init scripts (check all possible locations)
+        local removed_procd_shim=false
         for init_script in $HELIX_INIT_SCRIPTS; do
             if [ -f "$init_script" ]; then
                 log_info "Stopping and removing $init_script..."
                 $SUDO "$init_script" stop 2>/dev/null || true
+                # K2 procd shim: only call disable if this is actually a
+                # rc.common-style script. CC1 installs a plain SysV script
+                # at the same /etc/init.d/helixscreen path, and CC1's BusyBox
+                # rejects `head -1` (only supports `head -n 1`), so we use
+                # awk for the shebang check (portable across all BusyBox
+                # variants we ship to). Also CC1 has no /etc/rc.common, so
+                # the first guard short-circuits anyway.
+                if [ "$init_script" = "/etc/init.d/helixscreen" ] && \
+                   [ -x /etc/rc.common ] && \
+                   awk 'NR==1 {exit !/\/etc\/rc\.common/}' "$init_script" 2>/dev/null; then
+                    $SUDO "$init_script" disable 2>/dev/null || true
+                    removed_procd_shim=true
+                fi
                 $SUDO rm -f "$init_script"
             fi
         done
+        # Belt-and-suspenders cleanup of rc.d symlinks, but only if we actually
+        # removed a procd shim (avoid touching /etc/rc.d on platforms that
+        # don't use the procd boot iterator).
+        if [ "$removed_procd_shim" = "true" ]; then
+            $SUDO rm -f /etc/rc.d/S99helixscreen /etc/rc.d/K01helixscreen 2>/dev/null || true
+        fi
     fi
 
     # Kill any remaining processes (watchdog first to prevent crash dialog flash)
@@ -4504,6 +4578,18 @@ uninstall() {
     # ZMOD - no UI restore needed; S80guppyscreen is managed by ZMOD
     if [ "$AD5M_FIRMWARE" = "zmod" ]; then
         log_info "ZMOD firmware: no previous UI to restore (managed by ZMOD)"
+    fi
+
+    # K2 series (Creality K2 Plus / K2 Pro): re-enable the stock procd-managed UI.
+    # hooks-k2.sh runs `/etc/init.d/app disable` on every launch (which removes
+    # the procd rc.d symlink), so without this step the device boots into the
+    # Creality logo with no UI after uninstall.
+    if [ -z "$restored_ui" ] && [ -f /etc/init.d/app ] && \
+       { [ "$platform" = "k2" ] || [ -f /mnt/UDISK/printer_data/config/printer.cfg ]; }; then
+        log_info "Re-enabling Creality stock UI (/etc/init.d/app)..."
+        $SUDO /etc/init.d/app enable 2>/dev/null || true
+        $SUDO /etc/init.d/app start 2>/dev/null || true
+        restored_ui="Creality stock UI (/etc/init.d/app)"
     fi
 
     # Check for K1/Simple AF GuppyScreen

@@ -67,13 +67,33 @@ uninstall() {
         $SUDO systemctl daemon-reload
     else
         # Stop and remove SysV init scripts (check all possible locations)
+        local removed_procd_shim=false
         for init_script in $HELIX_INIT_SCRIPTS; do
             if [ -f "$init_script" ]; then
                 log_info "Stopping and removing $init_script..."
                 $SUDO "$init_script" stop 2>/dev/null || true
+                # K2 procd shim: only call disable if this is actually a
+                # rc.common-style script. CC1 installs a plain SysV script
+                # at the same /etc/init.d/helixscreen path, and CC1's BusyBox
+                # rejects `head -1` (only supports `head -n 1`), so we use
+                # awk for the shebang check (portable across all BusyBox
+                # variants we ship to). Also CC1 has no /etc/rc.common, so
+                # the first guard short-circuits anyway.
+                if [ "$init_script" = "/etc/init.d/helixscreen" ] && \
+                   [ -x /etc/rc.common ] && \
+                   awk 'NR==1 {exit !/\/etc\/rc\.common/}' "$init_script" 2>/dev/null; then
+                    $SUDO "$init_script" disable 2>/dev/null || true
+                    removed_procd_shim=true
+                fi
                 $SUDO rm -f "$init_script"
             fi
         done
+        # Belt-and-suspenders cleanup of rc.d symlinks, but only if we actually
+        # removed a procd shim (avoid touching /etc/rc.d on platforms that
+        # don't use the procd boot iterator).
+        if [ "$removed_procd_shim" = "true" ]; then
+            $SUDO rm -f /etc/rc.d/S99helixscreen /etc/rc.d/K01helixscreen 2>/dev/null || true
+        fi
     fi
 
     # Kill any remaining processes (watchdog first to prevent crash dialog flash)

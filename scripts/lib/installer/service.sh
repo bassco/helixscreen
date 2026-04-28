@@ -74,7 +74,62 @@ install_service() {
         install_service_systemd
     else
         install_service_sysv
+        # K2 (procd) needs an extra shim — see install_procd_shim_k2
+        if [ "$platform" = "k2" ]; then
+            install_procd_shim_k2
+        fi
     fi
+}
+
+# K2 (Tina Linux / procd) requires init scripts to use the rc.common
+# shebang AND declare a DEPEND directive — without both, procd's boot
+# iterator silently skips them. Our shared SysV-style S99helixscreen has
+# neither, so on K2 it's never auto-started at boot, leaving the device
+# stuck on the Creality boot logo with no UI.
+#
+# Fix: install a tiny procd-compatible /etc/init.d/helixscreen shim that
+# delegates every action to the real SysV script. Replace any existing
+# rc.d symlink (older installs pointed it at the SysV script directly,
+# which procd silently skips).
+install_procd_shim_k2() {
+    local shim_dest="/etc/init.d/helixscreen"
+
+    if [ ! -x /etc/rc.common ]; then
+        log_warn "K2 procd shim: /etc/rc.common not found — skipping (boot autostart will not work)"
+        return 0
+    fi
+
+    log_info "Installing K2 procd boot shim..."
+    $SUDO tee "$shim_dest" >/dev/null <<'SHIM_EOF'
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-3.0-or-later
+# K2 procd shim — delegates to the SysV-style /etc/init.d/S99helixscreen.
+# Required because K2's procd boot iterator only invokes scripts with the
+# rc.common shebang AND a DEPEND directive; plain SysV scripts are silently
+# skipped at boot.
+START=99
+STOP=01
+DEPEND=done
+
+boot()    { /etc/init.d/S99helixscreen start; }
+start()   { /etc/init.d/S99helixscreen start; }
+stop()    { /etc/init.d/S99helixscreen stop; }
+restart() { /etc/init.d/S99helixscreen restart; }
+status()  { /etc/init.d/S99helixscreen status; }
+SHIM_EOF
+    $SUDO chmod +x "$shim_dest"
+
+    # Older installs symlinked /etc/rc.d/S99helixscreen directly to the SysV
+    # script, which procd skips. Drop those, then let rc.common's enable
+    # create fresh S99/K01 symlinks pointing at the shim.
+    $SUDO rm -f /etc/rc.d/S99helixscreen /etc/rc.d/K01helixscreen
+    if ! $SUDO "$shim_dest" enable; then
+        log_warn "K2 procd shim: enable failed — UI will not autostart at boot"
+        log_warn "Manual fix: $SUDO $shim_dest enable"
+        return 1
+    fi
+
+    log_success "Installed K2 procd shim at $shim_dest"
 }
 
 install_service_snapmaker_u1() {
