@@ -213,6 +213,23 @@ class Ad5xIfsTestAccess {
             return std::nullopt;
         return it->second;
     }
+    // Listener feedback fix (v0.99.51 spam loop) + JSON-poll watcher hooks.
+    static bool on_gcode_response_line(AmsBackendAd5xIfs& b, const std::string& line) {
+        return b.on_gcode_response_line(line);
+    }
+    static void set_zcolor_query_active(AmsBackendAd5xIfs& b, bool active) {
+        b.zcolor_query_active_.store(active);
+    }
+    static uint32_t zcolor_schedule_count(const AmsBackendAd5xIfs& b) {
+        return b.zcolor_schedule_count_.load();
+    }
+    static size_t zcolor_buffer_size(AmsBackendAd5xIfs& b) {
+        std::lock_guard<std::mutex> lock(b.zcolor_buffer_mutex_);
+        return b.zcolor_response_buffer_.size();
+    }
+    static bool note_json_content(AmsBackendAd5xIfs& b, const std::string& content) {
+        return b.note_json_content(content);
+    }
 };
 
 // Helper to build a full save_variables JSON payload
@@ -2958,4 +2975,92 @@ TEST_CASE("AD5X IFS clear_slot_override rejects out-of-range indices",
     backend.clear_slot_override(AmsBackendAd5xIfs::NUM_PORTS);
     backend.clear_slot_override(999);
     SUCCEED();
+}
+
+// ==========================================================================
+// Listener self-feedback regression (v0.99.51 GET_ZCOLOR spam loop)
+// ==========================================================================
+//
+// zmod's GET_ZCOLOR macro body echoes RUN_ZCOLOR/CHANGE_ZCOLOR tokens through
+// notify_gcode_response while our query is still in flight. Pre-fix, the
+// listener treated those echoes as external state-change triggers and called
+// schedule_zcolor_query() again, looping at ~2-4 Hz on the gcode console.
+// The fix: when zcolor_query_active_ is set, buffer the line and return
+// without re-arming a query.
+
+TEST_CASE("AD5X IFS listener buffers RUN_ZCOLOR during in-flight query (no re-arm)",
+          "[ams][ad5x_ifs][zcolor]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_zcolor_query_active(backend, true);
+
+    uint32_t before = Ad5xIfsTestAccess::zcolor_schedule_count(backend);
+    REQUIRE(Ad5xIfsTestAccess::zcolor_buffer_size(backend) == 0);
+
+    // Lines that pre-fix would have re-armed the query loop.
+    bool buffered_a =
+        Ad5xIfsTestAccess::on_gcode_response_line(backend, "// RUN_ZCOLOR slot=2 color=FF0000");
+    bool buffered_b =
+        Ad5xIfsTestAccess::on_gcode_response_line(backend, "// CHANGE_ZCOLOR slot=3");
+
+    CHECK(buffered_a);
+    CHECK(buffered_b);
+    CHECK(Ad5xIfsTestAccess::zcolor_buffer_size(backend) == 2);
+    // Critically: schedule_zcolor_query must NOT have been re-armed.
+    CHECK(Ad5xIfsTestAccess::zcolor_schedule_count(backend) == before);
+}
+
+TEST_CASE("AD5X IFS listener fires schedule_zcolor_query on external RUN_ZCOLOR (no in-flight)",
+          "[ams][ad5x_ifs][zcolor]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    // No in-flight query: the line is a genuine external state-change signal.
+    Ad5xIfsTestAccess::set_zcolor_query_active(backend, false);
+
+    uint32_t before = Ad5xIfsTestAccess::zcolor_schedule_count(backend);
+    bool buffered =
+        Ad5xIfsTestAccess::on_gcode_response_line(backend, "// CHANGE_ZCOLOR slot=1 color=00FF00");
+
+    CHECK_FALSE(buffered); // Treated as external trigger, not buffered.
+    CHECK(Ad5xIfsTestAccess::zcolor_schedule_count(backend) == before + 1);
+}
+
+TEST_CASE("AD5X IFS listener ignores unrelated gcode lines",
+          "[ams][ad5x_ifs][zcolor]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_zcolor_query_active(backend, false);
+
+    uint32_t before = Ad5xIfsTestAccess::zcolor_schedule_count(backend);
+
+    // Lines without RUN_ZCOLOR / CHANGE_ZCOLOR must not trigger anything.
+    Ad5xIfsTestAccess::on_gcode_response_line(backend, "// Extruder: 1: PLA/FF0000 | IFS: True");
+    Ad5xIfsTestAccess::on_gcode_response_line(backend, "ok");
+    Ad5xIfsTestAccess::on_gcode_response_line(backend, "// 2: PETG/00FF00");
+
+    CHECK(Ad5xIfsTestAccess::zcolor_schedule_count(backend) == before);
+}
+
+// ==========================================================================
+// JSON-content poll dedup
+// ==========================================================================
+//
+// poll_adventurer_json downloads Adventurer5M.json and only parses + fires
+// GET_ZCOLOR when the body has changed vs. last seen. The comparison is
+// content-equality on the raw JSON string. Tests drive the comparison
+// helper directly so they don't depend on a live download path.
+
+TEST_CASE("AD5X IFS note_json_content reports changed only on different bytes",
+          "[ams][ad5x_ifs][zcolor]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    const std::string a = R"({"FFMInfo":{"ffmColor1":"#FF0000","ffmType1":"PLA"}})";
+    const std::string b = R"({"FFMInfo":{"ffmColor1":"#00FF00","ffmType1":"PETG"}})";
+
+    // First-ever observation is "changed" (last_json_content_ starts empty).
+    CHECK(Ad5xIfsTestAccess::note_json_content(backend, a));
+    // Re-observing the same content is NOT changed.
+    CHECK_FALSE(Ad5xIfsTestAccess::note_json_content(backend, a));
+    CHECK_FALSE(Ad5xIfsTestAccess::note_json_content(backend, a));
+    // A different body flips back to changed.
+    CHECK(Ad5xIfsTestAccess::note_json_content(backend, b));
+    // And steady-state again on b.
+    CHECK_FALSE(Ad5xIfsTestAccess::note_json_content(backend, b));
 }

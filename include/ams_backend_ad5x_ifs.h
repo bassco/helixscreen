@@ -224,9 +224,28 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     void parse_adventurer_json(const std::string& content);
     void read_adventurer_json();
     void register_zcolor_listener();
+    // Listener body — extracted so tests can drive it directly without a live
+    // MoonrakerClient. Returns true if the line was buffered as part of an
+    // in-flight GET_ZCOLOR response (i.e., it was NOT treated as an external
+    // change trigger). Buffering-and-suppressing our own response avoids the
+    // self-feedback spam loop that hit v0.99.51 (zmod's GET_ZCOLOR macro body
+    // echoes RUN_ZCOLOR/CHANGE_ZCOLOR tokens which would otherwise re-arm
+    // schedule_zcolor_query() at ~2-4 Hz).
+    bool on_gcode_response_line(const std::string& line);
     void register_klippy_ready_listener();
     void unregister_moonraker_listeners();
     void schedule_json_reread();
+    // True when `content` differs from the last observed Adventurer5M.json
+    // body. Updates last_json_content_ on change. Single source of truth for
+    // the "did the JSON change?" decision used by both the initial read and
+    // the periodic poll.
+    bool note_json_content(const std::string& content);
+    // Lightweight HTTP poll that downloads Adventurer5M.json and only fires
+    // schedule_zcolor_query() when content actually changed. Replaces the old
+    // unconditional 15s GET_ZCOLOR backstop — the JSON download is invisible
+    // to the gcode console, so polling here costs nothing user-visible while
+    // still catching native-dialog edits zmod makes outside our gcode path.
+    void poll_adventurer_json();
 
     // GET_ZCOLOR SILENT=1 primary-truth query. zmod's Adventurer5M.json
     // is a stale last-known-colors cache; SILENT=1 emits one line per
@@ -304,18 +323,29 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     std::atomic<bool> zcolor_silent_supported_{true};
     std::mutex zcolor_buffer_mutex_;
     std::vector<std::string> zcolor_response_buffer_;
+    // Diagnostic counter — incremented on every schedule_zcolor_query() call.
+    // Exposed via Ad5xIfsTestAccess so the listener-feedback regression test
+    // can assert that buffered response lines never re-arm a query.
+    std::atomic<uint32_t> zcolor_schedule_count_{0};
+
+    // JSON poll state: download Adventurer5M.json on a slow tick and compare
+    // to last-seen content. Hash-by-equality is fine here — file is a few
+    // hundred bytes and changes are rare. json_poll_supported_ flips false
+    // permanently on a 404 so non-zmod printers stop trying.
+    std::atomic<bool> json_poll_in_flight_{false};
+    std::atomic<bool> json_poll_supported_{true};
+    std::string last_json_content_; // protected by mutex_
 
     // Action timeout tracking
     static constexpr int ACTION_TIMEOUT_SECONDS = 90;
     std::chrono::steady_clock::time_point action_start_time_;
 
-    // Freshness backstop for zmod-side color edits. handle_status_update kicks
-    // a schedule_zcolor_query() if at least 15s have elapsed since the last
-    // kick — covers the case where zmod's on-printer color dialog mutates
-    // state without echoing a CHANGE_ZCOLOR token through notify_gcode_response.
+    // Rate-limit gate for the JSON-content poll. handle_status_update kicks
+    // poll_adventurer_json() if at least kJsonPollInterval has elapsed since
+    // the last kick — replaces the old 15s unconditional GET_ZCOLOR backstop.
     // Default-constructed time_point is the epoch, so the first status update
-    // after backend start unconditionally fires a query.
-    std::chrono::steady_clock::time_point last_zcolor_refresh_kick_{};
+    // after backend start fires a poll immediately.
+    std::chrono::steady_clock::time_point last_json_poll_kick_{};
 
     // User-provided per-slot metadata (brand, spool name, spoolman IDs, remaining
     // weight, etc.) layered over firmware-reported state.

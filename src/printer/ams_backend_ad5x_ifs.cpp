@@ -288,22 +288,22 @@ void AmsBackendAd5xIfs::handle_status_update(const json& notification) {
         emit_event(EVENT_STATE_CHANGED);
     }
 
-    // Freshness backstop: zmod can mutate its color state via the on-printer
-    // "Select print materials" dialog. That path may not always echo a
-    // CHANGE_ZCOLOR token through notify_gcode_response (zmod's dialog handler
-    // is in the closed-source zmod_color.py). Without this kick, edits made
-    // outside HelixScreen would only refresh on klippy_ready / load/unload
-    // completion. Piggyback on notify_status_update — they arrive at sub-
-    // second cadence on a connected printer — and rate-limit via steady_clock.
+    // Freshness backstop: zmod can mutate Adventurer5M.json via the on-printer
+    // "Select print materials" dialog without echoing a CHANGE_ZCOLOR token
+    // through notify_gcode_response (zmod's dialog handler is closed-source).
     //
-    // schedule_zcolor_query() is itself debounced (500ms) and idempotent, so
-    // overlapping triggers from the gcode-echo listener or load/unload
-    // completion coalesce harmlessly.
-    constexpr auto kZColorRefreshInterval = std::chrono::seconds(15);
+    // We poll the JSON content over HTTP (invisible to the gcode console) and
+    // only fire GET_ZCOLOR when the content actually changed. The previous
+    // unconditional 15s GET_ZCOLOR backstop was producing 1-2 GET_ZCOLOR/s
+    // on connected printers (raza/DIEHARDave report on v0.99.51) and made the
+    // Mainsail/Fluidd console unusable. Piggybacking on notify_status_update
+    // gives us sub-second cadence; rate-limit via steady_clock so the actual
+    // download fires no more often than kJsonPollInterval.
+    constexpr auto kJsonPollInterval = std::chrono::seconds(5);
     auto now = std::chrono::steady_clock::now();
-    if (now - last_zcolor_refresh_kick_ >= kZColorRefreshInterval) {
-        last_zcolor_refresh_kick_ = now;
-        schedule_zcolor_query();
+    if (now - last_json_poll_kick_ >= kJsonPollInterval) {
+        last_json_poll_kick_ = now;
+        poll_adventurer_json();
     }
 }
 
@@ -1318,12 +1318,16 @@ void AmsBackendAd5xIfs::read_adventurer_json() {
                 return;
             spdlog::debug("{} Downloaded Adventurer5M.json ({} bytes)", backend_log_tag(),
                           content.size());
+            // Baseline the poll cache so the next periodic poll doesn't see
+            // this content as "changed" and double-fire GET_ZCOLOR.
+            (void)note_json_content(content);
             parse_adventurer_json(content);
         },
         [this, token](const MoonrakerError& err) {
             if (token.expired())
                 return;
             if (err.type == MoonrakerErrorType::FILE_NOT_FOUND || err.code == 404) {
+                json_poll_supported_.store(false);
                 spdlog::info("{} Adventurer5M.json not found — not a native ZMOD AD5X",
                              backend_log_tag());
             } else {
@@ -1331,6 +1335,80 @@ void AmsBackendAd5xIfs::read_adventurer_json() {
                              err.message);
             }
         });
+}
+
+bool AmsBackendAd5xIfs::note_json_content(const std::string& content) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (content == last_json_content_) {
+        return false;
+    }
+    last_json_content_ = content;
+    return true;
+}
+
+void AmsBackendAd5xIfs::poll_adventurer_json() {
+    if (!api_ || !json_poll_supported_.load())
+        return;
+    if (json_poll_in_flight_.exchange(true)) {
+        return; // Previous poll still running — coalesce.
+    }
+
+    auto token = lifetime_.token();
+    api_->transfers().download_file(
+        "config", "Adventurer5M.json",
+        [this, token](const std::string& content) {
+            json_poll_in_flight_.store(false);
+            if (token.expired())
+                return;
+
+            if (!note_json_content(content)) {
+                spdlog::trace("{} Adventurer5M.json unchanged ({} bytes), skipping GET_ZCOLOR",
+                              backend_log_tag(), content.size());
+                return;
+            }
+
+            spdlog::debug("{} Adventurer5M.json changed ({} bytes), parsing + scheduling GET_ZCOLOR",
+                          backend_log_tag(), content.size());
+            parse_adventurer_json(content);
+            schedule_zcolor_query();
+        },
+        [this, token](const MoonrakerError& err) {
+            json_poll_in_flight_.store(false);
+            if (token.expired())
+                return;
+            if (err.type == MoonrakerErrorType::FILE_NOT_FOUND || err.code == 404) {
+                json_poll_supported_.store(false);
+                spdlog::info("{} Adventurer5M.json poll: file not found, disabling poll",
+                             backend_log_tag());
+            } else {
+                spdlog::debug("{} Adventurer5M.json poll failed (will retry): {}",
+                              backend_log_tag(), err.message);
+            }
+        });
+}
+
+bool AmsBackendAd5xIfs::on_gcode_response_line(const std::string& line) {
+    // Lines arriving while our own GET_ZCOLOR is in flight belong to that
+    // response — buffer them and DO NOT treat as external triggers. zmod's
+    // GET_ZCOLOR macro body itself echoes RUN_ZCOLOR/CHANGE_ZCOLOR tokens;
+    // without this guard the listener self-feeds another schedule_zcolor_query
+    // on every response, producing a 2-4 Hz spam loop on the gcode console
+    // (raza/DIEHARDave report on v0.99.51).
+    if (zcolor_query_active_.load()) {
+        std::lock_guard<std::mutex> lock(zcolor_buffer_mutex_);
+        zcolor_response_buffer_.push_back(line);
+        return true;
+    }
+
+    if (line.find("RUN_ZCOLOR") != std::string::npos ||
+        line.find("CHANGE_ZCOLOR") != std::string::npos) {
+        spdlog::debug("{} Detected external color change in gcode stream, "
+                      "scheduling re-read + zcolor query",
+                      backend_log_tag());
+        schedule_json_reread();
+        schedule_zcolor_query();
+    }
+    return false;
 }
 
 void AmsBackendAd5xIfs::register_zcolor_listener() {
@@ -1355,19 +1433,7 @@ void AmsBackendAd5xIfs::register_zcolor_listener() {
                 return;
             }
 
-            if (zcolor_query_active_.load()) {
-                std::lock_guard<std::mutex> lock(zcolor_buffer_mutex_);
-                zcolor_response_buffer_.push_back(line);
-            }
-
-            if (line.find("RUN_ZCOLOR") != std::string::npos ||
-                line.find("CHANGE_ZCOLOR") != std::string::npos) {
-                spdlog::debug("{} Detected external color change in gcode stream, "
-                              "scheduling re-read + zcolor query",
-                              backend_log_tag());
-                schedule_json_reread();
-                schedule_zcolor_query();
-            }
+            on_gcode_response_line(line);
         });
 }
 
@@ -1425,6 +1491,7 @@ void AmsBackendAd5xIfs::schedule_zcolor_query() {
     if (!zcolor_silent_supported_.load()) {
         return; // Session flagged unsupported; don't retry.
     }
+    zcolor_schedule_count_.fetch_add(1, std::memory_order_relaxed);
     // Semantics of zcolor_query_pending_: "a refresh is wanted". Set here and
     // re-set by query_zcolor_silent() when it can't run (active in flight).
     // Cleared on claim by the first worker to wake OR by finalize_zcolor_response.
