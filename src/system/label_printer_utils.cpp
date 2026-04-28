@@ -328,6 +328,13 @@ std::string friendly_label_printer_error(const std::string& raw) {
     if (lower.find("http") != std::string::npos || lower.find("ipp") != std::string::npos) {
         return lv_tr("Print server rejected the job — check printer status");
     }
+    // Niimbot job buffered but printer isn't moving — almost always cover, paper,
+    // or label-type/RFID (B1/B18 reject non-genuine rolls). Surface verbatim so the
+    // firmware status/error bytes reach the user for diagnosis.
+    if (lower.find("isn't printing") != std::string::npos ||
+        lower.find("didn't start") != std::string::npos) {
+        return raw;
+    }
     return lv_tr("Print failed");
 }
 

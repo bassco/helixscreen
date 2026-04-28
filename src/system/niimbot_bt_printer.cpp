@@ -256,19 +256,26 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
                 }
             }
 
-            // Poll PrintStatus and send PrintEnd as soon as we get first B3 response.
-            // The D110 auto-repeats copies — sending PrintEnd early (at first B3)
-            // stops it after the current page while preserving content.
+            // Poll PrintStatus until we observe physical progress, then send PrintEnd.
+            // D110 auto-repeats copies — PrintEnd after the first observed motion
+            // stops the next copy from auto-starting while preserving the current
+            // page. B1 returns B3 immediately on poll with all-zero progress before
+            // motion begins, so we must wait for non-zero progress before sending
+            // PrintEnd or we cancel the job before it starts.
             // Persistent connections are required — disconnect/reconnect causes blank output.
             if (write_ok) {
                 spdlog::info("Niimbot BT: all {} packets sent, polling for completion",
                              job.packets.size());
 
                 bool print_end_sent = false;
+                bool saw_progress = false;
+                int b3_polls_seen = 0;
+                uint8_t last_ext_state = 0;
+                uint8_t last_ext_error = 0;
 
                 if (loader.ble_read) {
                     auto status_pkt = niimbot_build_packet(NiimbotCmd::PrintStatus, uint8_t(0x01));
-                    for (int poll = 0; poll < 60; poll++) {  // Up to 60 × 250ms = 15s
+                    for (int poll = 0; poll < 60; poll++) {  // ~60 × 3.25s ≈ 195s upper bound
                         std::this_thread::sleep_for(std::chrono::milliseconds(250));
                         ret = loader.ble_write(s_ctx, handle, status_pkt.data(),
                                                 static_cast<int>(status_pkt.size()));
@@ -294,20 +301,40 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
                                         uint16_t page = (resp[j + 2] << 8) | resp[j + 3];
                                         uint8_t print_progress = resp[j + 4];
                                         uint8_t feed_progress = resp[j + 5];
-                                        spdlog::debug("Niimbot BT: page={}, printProgress={}, feedProgress={}",
-                                                      page, print_progress, feed_progress);
+                                        // Extended status bytes (firmware-dependent; B1 populates
+                                        // payload[4]=state, payload[5]=error code).
+                                        uint8_t ext_state = (len >= 6) ? resp[j + 6] : 0;
+                                        uint8_t ext_error = (len >= 7) ? resp[j + 7] : 0;
+                                        spdlog::debug("Niimbot BT: page={}, printProgress={}, "
+                                                      "feedProgress={}, extState=0x{:02X}, "
+                                                      "extError=0x{:02X}",
+                                                      page, print_progress, feed_progress,
+                                                      ext_state, ext_error);
+                                        b3_polls_seen++;
+                                        last_ext_state = ext_state;
+                                        last_ext_error = ext_error;
 
-                                        // Send PrintEnd at first B3 response — printer is
-                                        // actively processing, so it will finish the current
-                                        // page but not start another copy.
-                                        if (!print_end_sent) {
+                                        bool any_progress =
+                                            (page >= 1) || (print_progress > 0) ||
+                                            (feed_progress > 0);
+
+                                        if (any_progress) {
+                                            saw_progress = true;
+                                        }
+
+                                        // Send PrintEnd once we see actual physical
+                                        // progress so D110 doesn't auto-start a second
+                                        // copy. B1 reports all-zero progress before
+                                        // motion — sending PrintEnd there cancels the
+                                        // job before it starts (npa62, bundle ND8PEP2E).
+                                        if (!print_end_sent && any_progress) {
                                             auto end_pkt = niimbot_build_packet(NiimbotCmd::PrintEnd, uint8_t(0x01));
                                             ret = loader.ble_write(s_ctx, handle, end_pkt.data(),
                                                                     static_cast<int>(end_pkt.size()));
                                             if (ret < 0) {
                                                 spdlog::warn("Niimbot BT: PrintEnd write failed");
                                             } else {
-                                                spdlog::info("Niimbot BT: PrintEnd sent at page={}, printProgress={}",
+                                                spdlog::warn("Niimbot BT: PrintEnd sent at page={}, printProgress={}",
                                                              page, print_progress);
                                             }
                                             print_end_sent = true;
@@ -322,12 +349,51 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
                                 }
                             }
                         }
+
+                        // If the printer has reported B3 status many times with no
+                        // progress, it has accepted the job but isn't moving. Common
+                        // causes: cover open, no/wrong label, RFID/auth mismatch on
+                        // genuine-label printers (B1, B18). Stop waiting and surface
+                        // the firmware status bytes for diagnosis.
+                        if (!saw_progress && b3_polls_seen >= 8) {
+                            error = fmt::format(
+                                "Printer accepted job but isn't printing — check cover, "
+                                "paper, and label type (firmware status=0x{:02X} "
+                                "error=0x{:02X})",
+                                last_ext_state, last_ext_error);
+                            spdlog::error("Niimbot BT: {}", error);
+                            // Still issue PrintEnd so the buffered job is cleared.
+                            auto end_pkt = niimbot_build_packet(NiimbotCmd::PrintEnd, uint8_t(0x01));
+                            loader.ble_write(s_ctx, handle, end_pkt.data(),
+                                              static_cast<int>(end_pkt.size()));
+                            print_end_sent = true;
+                            goto print_failed;
+                        }
                     }
                 }
 
-                // Fallback: if polling didn't send PrintEnd, send it now
+                // Polling exhausted with no progress at all — treat as a failure
+                // rather than reporting success and showing a "Test label printed"
+                // toast for a print that never happened.
+                if (!saw_progress) {
+                    error = fmt::format(
+                        "Print didn't start — printer may be busy or offline "
+                        "(B3 polls={}, status=0x{:02X}, error=0x{:02X})",
+                        b3_polls_seen, last_ext_state, last_ext_error);
+                    spdlog::error("Niimbot BT: {}", error);
+                    if (!print_end_sent) {
+                        auto end_pkt = niimbot_build_packet(NiimbotCmd::PrintEnd, uint8_t(0x01));
+                        loader.ble_write(s_ctx, handle, end_pkt.data(),
+                                          static_cast<int>(end_pkt.size()));
+                    }
+                    goto print_failed;
+                }
+
+                // Saw progress but never reached page>=1 within the loop. Send the
+                // fallback PrintEnd if we haven't already, and treat as success — the
+                // page is on its way out even if we didn't observe completion.
                 if (!print_end_sent) {
-                    spdlog::warn("Niimbot BT: polling timed out, sending PrintEnd");
+                    spdlog::warn("Niimbot BT: progress observed but page never completed; sending PrintEnd");
                     auto end_pkt = niimbot_build_packet(NiimbotCmd::PrintEnd, uint8_t(0x01));
                     loader.ble_write(s_ctx, handle, end_pkt.data(),
                                       static_cast<int>(end_pkt.size()));
@@ -336,6 +402,14 @@ void NiimbotBluetoothPrinter::print(const LabelBitmap& bitmap, const LabelSize& 
                 print_done:
                 success = true;
                 spdlog::warn("Niimbot BT: print job complete");
+                goto post_print;
+
+                print_failed:
+                success = false;
+                // error was set above
+
+                post_print:
+                ;
             }
 
             // Keep connection alive for subsequent prints.
