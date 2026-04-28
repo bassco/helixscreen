@@ -1032,15 +1032,18 @@ static void gcode_viewer_watchdog_cb(lv_timer_t* timer) {
 
     int cached = st->layer_renderer_2d_->get_cached_up_to_layer();
     int target = st->layer_renderer_2d_->get_current_layer();
-    bool needs_more = st->layer_renderer_2d_->needs_more_frames();
 
-    // Stall = renderer says "I'm not done" AND it's the same target+cached
-    // pair we observed last tick. Same target rules out "we're rapidly
-    // advancing through chunks", which would already self-correct.
+    // Stall = solid cache is behind the requested target AND it's the same
+    // target+cached pair we observed last tick. Direct cached<target check
+    // (vs. needs_more_frames()) avoids the ghost-build false-positive: ghost
+    // thread running with solid cache complete is a healthy waiting state,
+    // not a stall — kicking invalidate during ghost wait would cause a
+    // redundant solid re-render every 2s on AD5M.
+    bool cache_behind_target = (cached < target);
     bool same_state = (cached == st->watchdog_last_cached_layer_) &&
                       (target == st->watchdog_last_target_layer_);
 
-    if (needs_more && same_state && st->watchdog_last_cached_layer_ != -2) {
+    if (cache_behind_target && same_state && st->watchdog_last_cached_layer_ != -2) {
         st->watchdog_kicks_++;
 
         // Rate-limit the warn so we don't fill the bundle on a wedged renderer.
@@ -2305,7 +2308,11 @@ void ui_gcode_viewer_set_print_progress(lv_obj_t* obj, int current_layer) {
     st->print_progress_layer_ = current_layer;
     st->print_progress_last_change_ms_ = lv_tick_get();
 
-    spdlog::debug("[GCode Viewer] set_print_progress {} -> {} (paused={})", prev_layer,
+    // Trace-level: this fires on every Moonraker layer event during a print,
+    // which is multiple times per second on a fast print — too noisy for
+    // default-bundled debug logs. The watchdog warn carries the values that
+    // actually matter when something is wrong.
+    spdlog::trace("[GCode Viewer] set_print_progress {} -> {} (paused={})", prev_layer,
                   current_layer, st->rendering_paused_);
 
     // Skip renderer updates and invalidation when paused —
