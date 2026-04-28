@@ -167,6 +167,30 @@ json DebugBundleCollector::collect(const BundleOptions& options) {
 // System info
 // =============================================================================
 
+// Map a platform key ("ad5x", "ad5m", etc.) to the display-name root the
+// printer database uses for that hardware. The dashboard's title generator
+// can compare this against the user-picked model name (printer.model) and
+// surface the mismatch instead of trusting the wizard pick blindly. The
+// AD5X/AD5M Pro pair is the prototypical mismatch — same Klipper config,
+// different hardware; a wizard pick of "Adventurer 5M Pro" on an AD5X
+// platform is structurally wrong but has no local way to self-correct
+// without reflashing or re-running the wizard.
+static std::string platform_canonical_model(const std::string& platform) {
+    if (platform == "ad5x")
+        return "FlashForge Adventurer 5X";
+    if (platform == "ad5m")
+        return "FlashForge Adventurer 5M";
+    if (platform == "snapmaker-u1")
+        return "Snapmaker U1";
+    if (platform == "k1")
+        return "Creality K1";
+    if (platform == "k2")
+        return "Creality K2 Plus";
+    if (platform == "cc1")
+        return "Elegoo Centauri Carbon";
+    return "";
+}
+
 json DebugBundleCollector::collect_system_info() {
     json sys;
 
@@ -197,7 +221,28 @@ json DebugBundleCollector::collect_printer_info() {
     try {
         auto& ps = get_printer_state();
 
-        printer["model"] = ps.get_printer_type();
+        const std::string user_model = ps.get_printer_type();
+        printer["model"] = user_model;
+
+        // Platform-derived canonical hardware name. Hardware platform is
+        // detected at build/runtime (e.g. /usr/prog or /ZMOD on AD5X) and is
+        // ground truth; printer.model is whatever the user picked in the
+        // wizard, which can disagree (the AD5X/AD5M-Pro pair is the typical
+        // case — same Klipper config, different hardware). Dashboard title
+        // generation should prefer platform_model when it differs from model
+        // so AD5X devices stop showing as "5M Pro" in the bundle list.
+        const std::string platform = UpdateChecker::get_platform_key();
+        const std::string platform_model = platform_canonical_model(platform);
+        if (!platform_model.empty()) {
+            printer["platform_model"] = platform_model;
+            // Substring match handles trim variations ("5M" vs "5M Pro"). If
+            // the user-picked model doesn't even contain the platform name,
+            // surface the mismatch as a flag the dashboard can render.
+            if (!user_model.empty() && user_model.find(platform_model) == std::string::npos &&
+                platform_model.find(user_model) == std::string::npos) {
+                printer["platform_model_mismatch"] = true;
+            }
+        }
 
         // Get klipper version from the string subject
         auto* kv_subj = ps.get_klipper_version_subject();
