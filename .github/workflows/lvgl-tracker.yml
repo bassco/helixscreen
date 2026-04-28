@@ -9,7 +9,15 @@ on:
   workflow_dispatch:      # Manual trigger for testing
 
 jobs:
+  gate:
+    name: Upstream gate
+    if: github.repository == 'prestonbrown/helixscreen'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running on upstream repo"
+
   check-lvgl:
+    needs: gate
     runs-on: ubuntu-latest
     permissions:
       issues: write
