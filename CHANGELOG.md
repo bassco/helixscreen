@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.51] - 2026-04-28
+
+A targeted fix release. K2 install path works end-to-end now: a procd shim makes the autostart actually fire (devices were sitting at the boot logo on fresh install), uninstall re-enables Creality's stock UI, and a 68s boot trim gets K2 Plus into HelixScreen in ~36s. AD5X stock-ZMOD users get IFS active-slot tracking via GET_ZCOLOR, and slot edits no longer pop Mainsail/Fluidd "Select print materials" prompts or native touchscreen confirmation dialogs on every sync.
+
+### Fixed
+- **K2 install autostart never fired** — K2 (Tina Linux / OpenWrt procd) silently skips plain SysV init scripts at boot; procd's iterator only invokes scripts with both the rc.common shebang and a DEPEND directive. Our shared S99helixscreen had neither. Install now writes a procd-compatible shim at `/etc/init.d/helixscreen` that delegates to S99helixscreen, so K2 (Pro/Plus/Max) actually starts HelixScreen at boot instead of sitting at the boot logo. Reported by jacekruf (K2 Pro, F012 board).
+- **K2 uninstall left device with no UI** — `hooks-k2.sh` runs `/etc/init.d/app disable` on every helix-screen launch (suppressing the stock procd-managed UI), but the modular uninstaller had no K2 case to re-enable it. Devices booted into the Creality logo with no UI after uninstall. Now enable+start runs against `/etc/init.d/app` on K2 series.
+- **AD5X stock ZMOD: active loaded slot not tracked** — `parse_zcolor_silent()` correctly extracted `extruder_slot` from GET_ZCOLOR but `apply_zcolor_result()` dropped the field. For users without lessWaste, `active_tool_` stayed at -1 forever and the panel showed stale slot info on unload. Now derived from `extruder_slot` when no IFS vars are present. Reported by raza616.
+- **AD5X stock ZMOD: every slot edit popped two dialogs** — `CHANGE_ZCOLOR` always emits a Mainsail/Fluidd "Select print materials" prompt and (on `display=True` setups) an HTTP-driven confirmation dialog on the native AD5X touchscreen. Both fired every time HelixScreen synced a slot — QR scans, Spoolman pulls, tool-mapping changes. Now writes `Adventurer5M.json` directly (zmod's source of truth) and only fires `_IFS_VARS` for lessWaste users. Confirmed by DIEHARDave.
+
+### Changed
+- **K2 boot time trimmed by 68s** — empirical traces on the dev K2 Plus showed `platform_wait_for_services` was treating its 30 timeout as iteration count (not seconds) and `platform_pre_start`'s WiFi association ran synchronously. Now: timeout tracks wall time via `date +%s` and the wpa_supplicant + udhcpc dance is backgrounded. K2 Plus fresh boot: 104s → 36s; most of the remaining 30s is honoring the service-wait budget while Moonraker comes up.
+- **i18n** — upgrade banner and shutdown-modal Reboot/Shutdown buttons newly tagged for translation; 15 strings translated across de, es, fr, it, ja, pt, ru, zh. All locales now at 100% coverage (1940/1940).
+- **Settings: printer host description binding** — moved from imperative C++ (`lv_obj_find_by_name` + `lv_label_bind_text`) to declarative `bind_description` attribute, aligning with the project's "DATA in C++, APPEARANCE in XML" rule. Internal cleanup; no behavior change.
+
 ## [0.99.50] - 2026-04-27
 
 A perf and stability patch. Headlines: animated screensaver now defaults to Off on BASIC (Pi 3B-class) and EMBEDDED (AD5M / AD5X) tiers to keep the CPU out of Klipper's print loop, with a one-time migration notice and reduced frame rate when users re-enable on those tiers; another sweep of L081-family teardown crashes (`lv_event_mark_deleted`); plus targeted fixes for AD5X IFS color sync, AFC `LANE_UNLOAD` serialization, and the Z-offset probe sequence. Re-tagged after the initial CI release build broke on cross-compile targets and a SonicPad user reported the shutdown widget was unreachable when Moonraker failed to connect.
@@ -3389,6 +3404,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.51]: https://github.com/prestonbrown/helixscreen/compare/v0.99.50...v0.99.51
 [0.99.50]: https://github.com/prestonbrown/helixscreen/compare/v0.99.49...v0.99.50
 [0.99.49]: https://github.com/prestonbrown/helixscreen/compare/v0.99.48...v0.99.49
 [0.99.48]: https://github.com/prestonbrown/helixscreen/compare/v0.99.47...v0.99.48
