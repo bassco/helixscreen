@@ -1041,32 +1041,45 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
                 });
         }
 
-        // CHANGE_ZCOLOR is zmod's canonical setter for slot color + material.
-        // It updates zmod's in-memory color state AND persists Adventurer5M.json
-        // in one shot. This is the right write target regardless of whether
-        // lessWaste/bambufy is also installed — those plugins maintain a
-        // private save_variables namespace that zmod does not read, so the
-        // previous _IFS_VARS write path silently desynchronized HelixScreen
-        // edits from zmod's "Select print materials" dialog (raza's bundle
-        // ZYYRVVTG showed three-way divergence between Adventurer5M.json,
-        // less_waste_colors, and HelixScreen's override store).
-        std::string hex_for_gcode;
-        std::string mat_for_gcode;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            hex_for_gcode = colors_[idx].empty() ? std::string("808080") : colors_[idx];
-            mat_for_gcode = materials_[idx].empty() ? std::string("PLA") : materials_[idx];
-        }
-        const int port = slot_index + 1; // CHANGE_ZCOLOR uses 1-based slot numbering
-        std::string change_zcolor = "CHANGE_ZCOLOR SLOT=" + std::to_string(port) +
-                                    " HEX=" + hex_for_gcode + " TYPE=" + mat_for_gcode;
-        auto err = execute_gcode(change_zcolor);
+        // Write directly to Adventurer5M.json — zmod's authoritative store.
+        // CHANGE_ZCOLOR is the macro-level equivalent but always emits the
+        // Mainsail "Select print materials" prompt and (on display=True
+        // setups) a native AD5X-screen popup, both of which the user must
+        // dismiss manually. zmod re-reads Adventurer5M.json on every
+        // GET_ZCOLOR call (no in-memory cache), so direct file writes are
+        // picked up without ceremony.
+        auto err = write_adventurer_json(slot_index);
         {
             std::lock_guard<std::mutex> lock(mutex_);
             dirty_[idx] = false;
         }
         if (!err.success())
             return err;
+
+        // lessWaste/bambufy users: also persist to the plugin's save_variables
+        // store so its purge-skip logic sees consistent colors. zmod does not
+        // read these — both writes are required for fully-synchronized state.
+        // Best-effort: a failure here doesn't fail the operation because zmod's
+        // truth (Adventurer5M.json) is already current.
+        if (has_ifs_vars_) {
+            std::string colors_val;
+            std::string types_val;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                colors_val = build_color_list_value();
+                types_val = build_type_list_value();
+            }
+            auto colors_err = write_ifs_var("colors", colors_val);
+            if (!colors_err.success()) {
+                spdlog::warn("{} _IFS_VARS colors write failed for slot {}: {}",
+                             backend_log_tag(), slot_index, colors_err.technical_msg);
+            }
+            auto types_err = write_ifs_var("types", types_val);
+            if (!types_err.success()) {
+                spdlog::warn("{} _IFS_VARS types write failed for slot {}: {}",
+                             backend_log_tag(), slot_index, types_err.technical_msg);
+            }
+        }
     }
 
     emit_event(EVENT_SLOT_CHANGED, std::to_string(slot_index));
