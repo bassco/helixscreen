@@ -23,6 +23,7 @@
 #include "usb_backend.h"
 
 #include <atomic>
+#include <chrono>
 #include <ctime>
 #include <memory>
 #include <optional>
@@ -504,6 +505,13 @@ class PrintSelectPanel : public PanelBase {
     lv_timer_t* file_poll_timer_ = nullptr;
     static constexpr uint32_t FILE_POLL_INTERVAL_MS = 5000; ///< 5s polling fallback
     bool refresh_in_flight_ = false; ///< Guards against overlapping get_directory RPCs
+    std::chrono::steady_clock::time_point refresh_started_at_{};
+    /// If a refresh stays "in-flight" longer than this, treat the response as lost
+    /// and allow a fresh request through. The RPC layer's own 60s timeout normally
+    /// clears the flag via the error callback; this is a panel-level safety net.
+    /// Sits between worst-case slow embedded responses (K1C ~5-8s on large dirs)
+    /// and the RPC layer's 60s ceiling.
+    static constexpr std::chrono::seconds REFRESH_STUCK_THRESHOLD{30};
 
     // Virtualized view modules (extracted for maintainability)
     std::unique_ptr<helix::ui::PrintSelectCardView> card_view_;
