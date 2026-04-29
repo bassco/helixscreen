@@ -462,19 +462,19 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL obj delete async dedup patch already applied$(RESET)"; \
 	fi
-	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_async_del_crumb.patch 2>/dev/null; then \
-		echo "$(YELLOW)→ Applying LVGL async-delete breadcrumb patch (#840 diagnostic)...$(RESET)"; \
-		git -C $(LVGL_DIR) apply ../../patches/lvgl_async_del_crumb.patch && \
-		echo "$(GREEN)✓ async-delete breadcrumb patch applied$(RESET)"; \
-	else \
-		echo "$(GREEN)✓ LVGL async-delete breadcrumb patch already applied$(RESET)"; \
-	fi
 	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_obj_get_screen_cycle_guard.patch 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL obj_get_screen cycle guard patch (cap parent-walk depth to 128)...$(RESET)"; \
 		git -C $(LVGL_DIR) apply ../../patches/lvgl_obj_get_screen_cycle_guard.patch && \
 		echo "$(GREEN)✓ obj_get_screen cycle guard patch applied$(RESET)"; \
 	else \
 		echo "$(GREEN)✓ LVGL obj_get_screen cycle guard patch already applied$(RESET)"; \
+	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_async_del_crumb.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL async-delete breadcrumb patch (#840/#906 sync+async diagnostic)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_async_del_crumb.patch && \
+		echo "$(GREEN)✓ async-delete breadcrumb patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL async-delete breadcrumb patch already applied$(RESET)"; \
 	fi
 	$(Q)if git -C $(LVGL_DIR) diff --quiet src/widgets/label/lv_label.c 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL label text transform patch...$(RESET)"; \

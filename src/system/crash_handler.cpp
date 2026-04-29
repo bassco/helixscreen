@@ -1071,16 +1071,14 @@ extern "C" void helix_crash_note_event(const void* target, const void* original_
     crash_handler::set_current_event(target, original_target, code);
 }
 
-// C-ABI bridge for LVGL — see include/system/crash_handler.h
+// C-ABI bridges for LVGL — see include/system/crash_handler.h.
+// Crumb subject is the class name; detail is the pointer (correlate with
+// the destructor's `obj` argument via addr2line on the next bundle resolve).
 extern "C" void helix_crash_note_async_del(const void* obj, const char* class_name) {
-    // Subject = class name (truncated to 59 chars by breadcrumb slot).
-    // Detail  = pointer as long, for correlation with destructor `obj` via
-    //           addr2line on the next bundle resolve.
     crash_handler::breadcrumb::note("async_d", class_name ? class_name : "?",
                                     reinterpret_cast<long>(obj));
 }
 
-// C-ABI bridge for LVGL — see include/system/crash_handler.h
 extern "C" void helix_crash_note_sync_del(const void* obj, const char* class_name) {
     crash_handler::breadcrumb::note("sync_d", class_name ? class_name : "?",
                                     reinterpret_cast<long>(obj));

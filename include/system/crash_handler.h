@@ -255,20 +255,10 @@ extern "C" void helix_crash_note_event(const void* target,
                                        const void* original_target,
                                        unsigned int code);
 
-// C-ABI bridge for LVGL (C source) to breadcrumb an async-delete drain.
-// Called from lv_obj_delete_async_cb at the moment the root of an async-
-// scheduled destruction subtree starts tearing down. Names the class and
-// pointer — survives to crash-time when #840-class SIGBUS fires inside
-// lv_event_mark_deleted during obj_delete_core recursion into children.
-// Low-frequency site (one per async-scheduled root, not per child).
-extern "C" void helix_crash_note_async_del(const void* obj,
-                                           const char* class_name);
-
-// C-ABI bridge for LVGL (C source) to breadcrumb a sync-delete entry.
-// Called from lv_obj_delete() at user-level entry (suppressed when invoked
-// from lv_obj_delete_async_cb, which already emitted helix_crash_note_async_del).
-// Same purpose as the async sibling — names the doomed root for L081-class
-// crashes that come in through the sync path (#906 and similar AD5X/Pi
-// reports where no async_d crumb fired).
-extern "C" void helix_crash_note_sync_del(const void* obj,
-                                          const char* class_name);
+// C-ABI bridges for LVGL (C source) to breadcrumb the root of a destruction
+// subtree. Called from lv_obj_delete() and lv_obj_delete_async_cb at the
+// moment tear-down begins — names class + pointer so #840/L081-class SIGBUS
+// crashes inside lv_event_mark_deleted carry the doomed root in the crumb
+// ring. Low-frequency: one crumb per delete root, not per descendant.
+extern "C" void helix_crash_note_async_del(const void* obj, const char* class_name);
+extern "C" void helix_crash_note_sync_del(const void* obj, const char* class_name);
