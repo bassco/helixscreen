@@ -62,7 +62,10 @@ class FanStackWidget : public PanelWidget {
     lv_obj_t* hotend_icon_ = nullptr;
     lv_obj_t* aux_icon_ = nullptr;
 
-    // Per-fan observers
+    // Per-fan observers. lifetime_ is declared LAST below so reverse-
+    // declaration destruction tears it down first, expiring captured tokens
+    // before any observer destructs (including carousel_observers_ further
+    // down). Mirrors AX3CKAKB sweep — see 40dd27a9c / 45abc8c2a.
     ObserverGuard part_observer_;
     ObserverGuard hotend_observer_;
     ObserverGuard aux_observer_;
@@ -72,8 +75,6 @@ class FanStackWidget : public PanelWidget {
 
     // Animation settings observer
     ObserverGuard anim_settings_observer_;
-
-    helix::AsyncLifetimeGuard lifetime_;
 
     // Resolved fan object names and display names
     std::string part_fan_name_;
@@ -100,6 +101,11 @@ class FanStackWidget : public PanelWidget {
     };
     std::vector<CarouselPage> carousel_pages_;
     std::vector<ObserverGuard> carousel_observers_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer (including carousel_observers_ above) destructs.
+    helix::AsyncLifetimeGuard lifetime_;
 
     bool is_carousel_mode() const;
     void attach_stack(lv_obj_t* widget_obj);
