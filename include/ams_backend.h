@@ -100,6 +100,19 @@ class AmsBackend {
     virtual void release_subscriptions() {}
 
     /**
+     * @brief Re-fetch authoritative slot/state from the printer.
+     *
+     * Called from UI sites where the user expects a fresh view of slot state
+     * (e.g., entering the filament assignment screen). Lets users self-recover
+     * from any drift between cached UI state and printer truth without a
+     * full reconnect.
+     *
+     * Safe to call repeatedly — implementations should debounce/coalesce.
+     * Default: no-op. Override in backends with a meaningful resync path.
+     */
+    virtual void request_resync() {}
+
+    /**
      * @brief Check if backend is currently running/initialized
      * @return true if backend is active and ready for operations
      */

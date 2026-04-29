@@ -3,6 +3,7 @@
 
 #include "ui_print_select_detail_view.h"
 
+#include "ams_state.h"
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_filename_utils.h"
@@ -409,6 +410,14 @@ void PrintSelectDetailView::on_activate() {
     // Cache file size for safety checks (before modification attempts)
     if (prep_manager_ && current_file_size_bytes_ > 0) {
         prep_manager_->set_cached_file_size(current_file_size_bytes_);
+    }
+
+    // Ask the active AMS backend to refresh its slot/state view. Lets users
+    // self-recover from any drift between cached UI state and printer truth
+    // by navigating away and back. Default backend impl is a no-op; AD5X IFS
+    // re-reads Adventurer5M.json + GET_ZCOLOR. Debounced internally.
+    if (auto* backend = AmsState::instance().get_backend()) {
+        backend->request_resync();
     }
 
     // Trigger async scan for embedded G-code operations (for conflict detection)

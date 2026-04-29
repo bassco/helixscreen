@@ -195,6 +195,13 @@ void AmsBackendAd5xIfs::on_stopping() {
     unregister_moonraker_listeners();
 }
 
+void AmsBackendAd5xIfs::request_resync() {
+    spdlog::info("{} request_resync(): re-reading Adventurer5M.json + GET_ZCOLOR",
+                 backend_log_tag());
+    read_adventurer_json();
+    schedule_zcolor_query();
+}
+
 // --- Status parsing ---
 
 void AmsBackendAd5xIfs::handle_status_update(const json& notification) {

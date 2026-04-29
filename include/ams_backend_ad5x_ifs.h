@@ -110,6 +110,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     AmsError reset() override;
     AmsError cancel() override;
 
+    // User-initiated state refresh. Re-reads Adventurer5M.json (the JSON poll
+    // is the primary truth source on both old and new zmod) and schedules a
+    // GET_ZCOLOR SILENT=1 follow-up to refresh the active-slot view. Both
+    // calls are debounced/coalesced internally so this is safe to invoke
+    // from screen-activation hooks.
+    void request_resync() override;
+
     AmsError set_slot_info(int slot_index, const SlotInfo& info, bool persist = true) override;
     AmsError set_tool_mapping(int tool_number, int slot_index) override;
 
