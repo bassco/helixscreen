@@ -1913,6 +1913,8 @@
   <translation tag="nozzle" de="Düse" en="nozzle" es="boquilla" fr="buse" it="ugello" ja="ノズル" pt="bico" ru="сопло" zh="喷嘴"/>
   <translation tag="of" de="von" en="of" es="de" fr="de" it="di" ja="の" pt="de" ru="из" zh="的"/>
   <translation tag="off" de="aus" en="off" es="apagado" fr="éteint" it="spento" ja="オフ" pt="desligado" ru="выкл" zh="关闭"/>
+  <translation tag="pre_print_option.ai_detect.description" en="Monitor for print abnormalities (K2 Plus camera-based)"/>
+  <translation tag="pre_print_option.ai_detect.label" en="AI detection"/>
   <translation tag="prints" de="Drucke" en="prints" es="impresiones" fr="impressions" it="stampe" ja="印刷" pt="impressões" ru="печатей" zh="打印次数"/>
   <translation tag="remaining" de="verbleibend" en="remaining" es="restante" fr="restant" it="rimanente" ja="残り" pt="restante" ru="осталось" zh="剩余"/>
   <translation tag="remaining before clog detection triggers" de="verbleibend bis Verstopfungserkennung auslöst" en="remaining before clog detection triggers" es="restante antes de que se active la detección de obstrucción" fr="restant avant le déclenchement de la détection de bouchon" it="rimanente prima che si attivi il rilevamento intasamento" ja="残りで詰まり検出が作動します" pt="restante antes da detecção de obstrução ser acionada" ru="осталось до срабатывания обнаружения засора" zh="剩余即触发堵料检测"/>

@@ -11,6 +11,10 @@ class PrintPreparationManagerTestAccess {
     get_skip_params(const helix::ui::PrintPreparationManager& m) {
         return m.collect_macro_skip_params();
     }
+    static std::vector<std::string>
+    get_pre_start_gcode_lines(const helix::ui::PrintPreparationManager& m) {
+        return m.collect_pre_start_gcode_lines();
+    }
 };
 
 #include "../mocks/mock_websocket_server.h"
@@ -3407,4 +3411,86 @@ TEST_CASE("PrepManager: Extension safety - database key consistency", "[print_pr
             REQUIRE(matrix.is_controllable(info.category));
         }
     }
+}
+
+// ============================================================================
+// Tests: PreStartGcode strategy emission (Phase 4 — ai_detect proof)
+// ============================================================================
+
+/**
+ * Phase 4 closes the loop on the new framework: a printer (K2 Plus) declares
+ * `ai_detect` as a `pre_start_gcode` strategy in printer_database.json with
+ * `gcode_template = "LOAD_AI_RUN SWITCH={value}"`. When the user toggles the
+ * switch, `collect_pre_start_gcode_lines()` must emit exactly the rendered
+ * line for each PreStartGcode option in the active set, regardless of
+ * enabled/disabled state. Hidden / NOT_APPLICABLE options are skipped.
+ */
+TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines emits ai_detect for K2 Plus",
+          "[print_preparation][ai_detect][p4]") {
+    lv_init_safe();
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("Creality K2 Plus");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    SECTION("Provider says ENABLED -> SWITCH=1 emitted") {
+        manager.set_option_state_provider([](const std::string& id) {
+            // Only ai_detect is enabled; everything else returns -1 (fall back to default)
+            if (id == "ai_detect")
+                return 1;
+            return -1;
+        });
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.size() == 1);
+        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=1");
+    }
+
+    SECTION("Provider says DISABLED -> SWITCH=0 emitted") {
+        manager.set_option_state_provider([](const std::string& id) {
+            if (id == "ai_detect")
+                return 0;
+            return -1;
+        });
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.size() == 1);
+        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=0");
+    }
+
+    SECTION("No provider -> uses default_enabled (false) -> SWITCH=0") {
+        // ai_detect default_enabled is false; with no UI binding it should still
+        // emit SWITCH=0 because PreStartGcode emits regardless of state.
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.size() == 1);
+        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=0");
+    }
+}
+
+TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines empty for printer w/o "
+          "PreStartGcode options",
+          "[print_preparation][ai_detect][p4]") {
+    lv_init_safe();
+    // AD5M Pro only has MacroParam options — no PreStartGcode.
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+    REQUIRE(lines.empty());
+}
+
+TEST_CASE(
+    "PrintPreparationManager: collect_pre_start_gcode_lines empty when no printer state set",
+    "[print_preparation][ai_detect][p4]") {
+    lv_init_safe();
+    PrintPreparationManager manager;
+    // No printer_state -> get_cached_options() returns the empty static set.
+    auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+    REQUIRE(lines.empty());
 }

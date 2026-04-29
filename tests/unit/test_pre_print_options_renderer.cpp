@@ -275,6 +275,28 @@ TEST_CASE_METHOD(LVGLTestFixture,
 }
 
 TEST_CASE_METHOD(LVGLTestFixture,
+                 "PrePrintOptionsRenderer: K2 Plus live DB renders bed_mesh and ai_detect",
+                 "[print_file_detail][pre_print_options][db][ai_detect]") {
+    // K2 Plus advertises bed_mesh (Mechanical) + ai_detect (Monitoring).
+    // Two distinct categories means two subheaders should be emitted, and
+    // the PreStartGcode strategy should render its row identically to
+    // MacroParam — the renderer is strategy-agnostic.
+    auto set = PrinterDetector::get_pre_print_option_set("Creality K2 Plus");
+    REQUIRE_FALSE(set.empty());
+
+    PrePrintOptionsRenderer renderer;
+    lv_obj_t* container = lv_obj_create(test_screen());
+    renderer.populate(container, set, nullptr, nullptr);
+
+    REQUIRE(renderer.row_count() == set.options.size());
+    REQUIRE(renderer.get_row("bed_mesh") != nullptr);
+    REQUIRE(renderer.get_row("ai_detect") != nullptr);
+    REQUIRE(renderer.get_switch("ai_detect") != nullptr);
+    // Two categories -> two subheaders.
+    REQUIRE(count_subheaders(container) == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
                  "PrePrintOptionsRenderer: clear() drops rows and resets subjects",
                  "[print_file_detail][pre_print_options]") {
     PrePrintOptionsRenderer renderer;

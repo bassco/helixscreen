@@ -1033,6 +1033,16 @@
             "enable_value": "0",
             "skip_value": "1",
             "default_value": "0"
+          },
+          {
+            "id": "ai_detect",
+            "category": "monitoring",
+            "order": 10,
+            "default_enabled": false,
+            "label_key": "pre_print_option.ai_detect.label",
+            "description_key": "pre_print_option.ai_detect.description",
+            "strategy": "pre_start_gcode",
+            "gcode_template": "LOAD_AI_RUN SWITCH={value}"
           }
         ]
       },

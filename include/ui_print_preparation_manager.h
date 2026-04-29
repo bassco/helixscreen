@@ -721,6 +721,23 @@ class PrintPreparationManager {
      */
     [[nodiscard]] std::vector<std::pair<std::string, std::string>>
     collect_macro_skip_params() const;
+
+    /**
+     * @brief Collect rendered gcode lines for every PreStartGcode option in the
+     *        active printer's set.
+     *
+     * Walks the cached `PrePrintOptionSet`. For each option whose strategy is
+     * `PreStartGcode`, calls `render_pre_start_gcode(opt, enabled)` where
+     * `enabled` is `true` when `get_option_state(id) == ENABLED` and `false`
+     * otherwise (DISABLED). Options resolving to `NOT_APPLICABLE` are skipped
+     * entirely — they don't represent capabilities of this printer.
+     *
+     * Lines are returned in the same (category, order) order the option set is
+     * sorted in, so callers can fire them sequentially before START_PRINT.
+     *
+     * @return Vector of rendered gcode lines, e.g. {"LOAD_AI_RUN SWITCH=1"}.
+     */
+    [[nodiscard]] std::vector<std::string> collect_pre_start_gcode_lines() const;
 };
 
 } // namespace helix::ui

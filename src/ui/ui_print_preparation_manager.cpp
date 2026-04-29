@@ -963,22 +963,47 @@ void PrintPreparationManager::start_print(const std::string& filename,
     std::vector<std::pair<std::string, std::string>> macro_skip_params =
         collect_macro_skip_params();
 
-    // Pre-start gcode mechanism (K1/K1C: PRINT_PREPARED)
-    // When pre_start_gcode is set and user disabled operations, execute the
-    // pre-gcode command instead of appending skip params to START_PRINT.
-    // K1's "prepare" is a macro variable (not a passed parameter), so
-    // START_PRINT PREPARE=1 does nothing — PRINT_PREPARED must be called first.
-    // The PREPARE param in printer_database.json serves as a sentinel: it makes
-    // the checkbox visible and causes collect_macro_skip_params() to return
-    // non-empty, gating entry into this path. The param value is never sent.
+    // Pre-start gcode mechanism. Two distinct sources combine into a single
+    // pre-START_PRINT gcode call:
+    //
+    //   1. Printer-level `pre_start_gcode` (e.g. K1/K1C "PRINT_PREPARED").
+    //      Fires unconditionally when its trigger condition is met (skip
+    //      params present) — its purpose is to set up macro variables that
+    //      can't be passed as START_PRINT params. The PREPARE param in
+    //      printer_database.json serves as a sentinel: it makes the checkbox
+    //      visible and causes collect_macro_skip_params() to return
+    //      non-empty, gating entry into this path. The param value is never
+    //      sent.
+    //
+    //   2. Per-option PreStartGcode strategy lines (e.g. K2 Plus
+    //      "LOAD_AI_RUN SWITCH=1"). Fired per-option whether enabled or
+    //      disabled — see collect_pre_start_gcode_lines().
+    //
+    // Lines are concatenated with newlines; Moonraker forwards the whole
+    // block to Klipper as a single gcode_script.
     const auto& db_options = get_cached_options();
-    if (!macro_skip_params.empty() && !db_options.pre_start_gcode.empty()) {
-        spdlog::info("[PrintPreparationManager] Executing pre-start gcode: {}",
-                     db_options.pre_start_gcode);
+    std::vector<std::string> pre_start_lines = collect_pre_start_gcode_lines();
+    const bool emit_printer_pre_start =
+        !macro_skip_params.empty() && !db_options.pre_start_gcode.empty();
+
+    if (emit_printer_pre_start || !pre_start_lines.empty()) {
+        std::string combined;
+        if (emit_printer_pre_start) {
+            combined = db_options.pre_start_gcode;
+        }
+        for (const auto& line : pre_start_lines) {
+            if (!combined.empty()) {
+                combined += "\n";
+            }
+            combined += line;
+        }
+
+        spdlog::info("[PrintPreparationManager] Executing pre-start gcode ({} line(s)): {}",
+                     (emit_printer_pre_start ? 1 : 0) + pre_start_lines.size(), combined);
 
         auto token = lifetime_.token();
         api_->execute_gcode(
-            db_options.pre_start_gcode,
+            combined,
             [this, token, filename_to_print, ops_to_disable, on_navigate_to_status,
              wrapped_completion]() {
                 if (token.expired())
@@ -1243,10 +1268,14 @@ PrintPreparationManager::collect_macro_skip_params() const {
                 break;
             }
             case PrePrintStrategyKind::PreStartGcode:
+                // PreStartGcode is handled by collect_pre_start_gcode_lines();
+                // it fires before START_PRINT as a separate gcode call rather
+                // than appending KEY=value tokens to the macro invocation.
+                break;
             case PrePrintStrategyKind::QueueAheadJob:
             case PrePrintStrategyKind::RuntimeCommand:
-                spdlog::warn("[PrintPreparationManager] Option '{}' uses non-MacroParam strategy "
-                             "which is not yet wired up (Phase 3+). Ignoring.",
+                spdlog::warn("[PrintPreparationManager] Option '{}' uses strategy not yet wired up "
+                             "(QueueAheadJob/RuntimeCommand). Ignoring.",
                              opt.id);
                 break;
             }
@@ -1340,6 +1369,44 @@ PrintPreparationManager::collect_macro_skip_params() const {
     }
 
     return skip_params;
+}
+
+std::vector<std::string> PrintPreparationManager::collect_pre_start_gcode_lines() const {
+    std::vector<std::string> lines;
+
+    const auto& db_options = get_cached_options();
+    if (db_options.options.empty()) {
+        return lines;
+    }
+
+    for (const auto& opt : db_options.options) {
+        if (opt.strategy_kind != PrePrintStrategyKind::PreStartGcode) {
+            continue;
+        }
+
+        // Skip options that don't apply to this printer (hidden by visibility,
+        // or not bound to any UI row and absent from the cached set's
+        // capability list — unlikely here since we just pulled from the set).
+        const PrePrintOptionState state = get_option_state(opt.id);
+        if (state == PrePrintOptionState::NOT_APPLICABLE) {
+            continue;
+        }
+
+        const bool enabled = (state == PrePrintOptionState::ENABLED);
+        std::string line = render_pre_start_gcode(opt, enabled);
+        if (line.empty()) {
+            // render_pre_start_gcode logs its own warning on type mismatch.
+            continue;
+        }
+        spdlog::debug("[PrintPreparationManager] Pre-start gcode for option '{}' (enabled={}): {}",
+                      opt.id, enabled, line);
+        lines.push_back(std::move(line));
+    }
+
+    if (!lines.empty()) {
+        spdlog::info("[PrintPreparationManager] Collected {} pre-start gcode line(s)", lines.size());
+    }
+    return lines;
 }
 
 void PrintPreparationManager::modify_and_print(
