@@ -9,6 +9,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace helix {
 class MoonrakerClient;
@@ -260,6 +261,45 @@ class SettingsManager {
     }
 
     // =========================================================================
+    // CONSOLE FILTERS (owned by SettingsManager — gcode console noise toggles)
+    // =========================================================================
+
+    /** @brief Get whether the temperature-report filter is enabled (default true) */
+    bool get_console_filter_temps() const;
+    /** @brief Set whether the temperature-report filter is enabled */
+    void set_console_filter_temps(bool enabled);
+    /** @brief Subject (0/1) for temperature-report filter */
+    lv_subject_t* subject_console_filter_temps() {
+        return &console_filter_temps_subject_;
+    }
+
+    /** @brief Get whether the firmware-noise filter is enabled (default true) */
+    bool get_console_filter_firmware_noise() const;
+    /** @brief Set whether the firmware-noise filter is enabled */
+    void set_console_filter_firmware_noise(bool enabled);
+    /** @brief Subject (0/1) for firmware-noise filter */
+    lv_subject_t* subject_console_filter_firmware_noise() {
+        return &console_filter_firmware_noise_subject_;
+    }
+
+    /**
+     * @brief Get user-supplied extra patterns to add to the active printer's preset.
+     *        Each entry is a `<type>:<text>` spec (`prefix:`, `substring:`, `regex:`).
+     */
+    std::vector<std::string> get_console_filter_user_add() const;
+
+    /**
+     * @brief Get user-supplied patterns to drop from the active printer's preset.
+     *        Each entry must match a preset spec verbatim to take effect.
+     */
+    std::vector<std::string> get_console_filter_user_remove() const;
+
+    /** @brief Replace the additive user patterns. Persists immediately. */
+    void set_console_filter_user_add(const std::vector<std::string>& patterns);
+    /** @brief Replace the suppress-from-preset user patterns. Persists immediately. */
+    void set_console_filter_user_remove(const std::vector<std::string>& patterns);
+
+    // =========================================================================
     // BARCODE SCANNER (owned by SettingsManager — manual device selection)
     // =========================================================================
 
@@ -312,6 +352,8 @@ class SettingsManager {
     lv_subject_t show_printer_switcher_subject_;
     lv_subject_t show_widget_labels_subject_;
     lv_subject_t auto_color_map_subject_;
+    lv_subject_t console_filter_temps_subject_;
+    lv_subject_t console_filter_firmware_noise_subject_;
 
     // External references
     MoonrakerClient* moonraker_client_ = nullptr;

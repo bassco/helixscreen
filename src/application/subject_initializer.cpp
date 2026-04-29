@@ -11,6 +11,7 @@
 #include "ui_notification.h"
 #include "ui_notification_manager.h"
 #include "ui_overlay_printer_image.h"
+#include "ui_overlay_console_settings.h"
 #include "ui_overlay_retraction_settings.h"
 #include "ui_overlay_timelapse_install.h"
 #include "ui_overlay_timelapse_settings.h"
@@ -213,6 +214,9 @@ void SubjectInitializer::init_panel_subjects(MoonrakerAPI* api) {
 
     init_global_retraction_settings(api);
     get_global_retraction_settings().init_subjects();
+
+    init_global_console_settings();
+    get_global_console_settings().init_subjects();
 
     // Fan control overlay (opened from Controls panel secondary fans list)
     init_fan_control_overlay(get_printer_state());

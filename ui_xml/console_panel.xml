@@ -43,9 +43,9 @@
         <ui_button name="clear_btn" width="60" height="100%" variant="secondary" icon="delete">
           <event_cb trigger="clicked" callback="on_console_clear_clicked"/>
         </ui_button>
-        <!-- Temperature filter toggle (hidden for now, kept for future use) -->
-        <ui_button name="filter_btn" width="60" height="100%" variant="primary" icon="thermometer" hidden="true">
-          <event_cb trigger="clicked" callback="on_console_filter_toggled"/>
+        <!-- Settings gear: opens console_settings_overlay (filter toggles, future per-pattern editor) -->
+        <ui_button name="settings_btn" width="60" height="100%" variant="secondary" icon="cog">
+          <event_cb trigger="clicked" callback="on_console_settings_clicked"/>
         </ui_button>
       </lv_obj>
     </lv_obj>

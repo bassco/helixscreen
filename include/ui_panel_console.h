@@ -3,9 +3,11 @@
 
 #pragma once
 
+#include "console_filter_engine.h"
 #include "lvgl.h"
 #include "overlay_base.h"
 #include "subject_managed_panel.h"
+#include "ui_observer_guard.h"
 
 #include <deque>
 #include <memory>
@@ -108,6 +110,10 @@ class ConsolePanel : public OverlayBase {
     /// Unsubscribe from real-time G-code responses (called from on_deactivate)
     void unsubscribe_from_gcode_responses();
 
+    /// Rebuild the firmware-noise filter engine for the current printer.
+    /// Cheap when the printer hasn't changed (compares against firmware_filter_printer_).
+    void rebuild_firmware_filter();
+
     /// True if message is a periodic temperature report (e.g. "ok T:210.0 /210.0 B:60.0 /60.0")
     static bool is_temp_message(const std::string& message);
 
@@ -132,8 +138,16 @@ class ConsolePanel : public OverlayBase {
     std::string gcode_handler_name_; ///< Unique handler name for callback registration
     bool is_subscribed_ = false;     ///< True if subscribed to notify_gcode_response
     bool fetch_in_flight_ = false;   ///< True while a gcode_store fetch is pending
-    bool user_scrolled_up_ = false;  ///< True if user manually scrolled up
-    bool filter_temps_ = true;       ///< Filter out temperature status messages
+    bool user_scrolled_up_ = false; ///< True if user manually scrolled up
+
+    // Filtering — engine + observers driven by SettingsManager subjects.
+    // The engine is rebuilt on every on_activate() so user pattern edits take
+    // effect immediately when returning from the settings overlay.
+    helix::ui::ConsoleFilterEngine firmware_filter_;
+    ObserverGuard filter_temps_observer_;
+    ObserverGuard filter_firmware_observer_;
+    bool filter_temps_ = true;
+    bool filter_firmware_noise_ = true;
 
     // Timestamp display (responsive: medium+ breakpoints only)
     bool show_timestamps_ = false; ///< True if screen is large enough for timestamps

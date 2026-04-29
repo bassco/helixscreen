@@ -166,6 +166,22 @@ class PrinterDetector {
     static std::string get_image_for_printer_id(const std::string& printer_id);
 
     /**
+     * @brief Get console filter pattern preset for a printer
+     *
+     * Looks up the `console_filter_patterns` array from the database entry for
+     * the given printer name (matched against the entry's `name` field, then
+     * fall-through to `id`). Each pattern is a serialized
+     * `<type>:<text>` string (`prefix:`, `substring:`, `regex:`) consumed by
+     * `helix::ui::ConsoleFilterEngine`. Returns an empty vector when the
+     * printer is not in the database or has no preset.
+     *
+     * @param printer_name Printer name or ID
+     * @return Pattern specs in load order; empty if no preset.
+     */
+    static std::vector<std::string>
+    get_console_filter_patterns(const std::string& printer_name);
+
+    /**
      * @brief Get printer display name for a platform preset
      *
      * Looks up the database entry whose `preset` field matches and returns its

@@ -817,6 +817,51 @@ std::string PrinterDetector::get_image_for_printer_id(const std::string& printer
     return "";
 }
 
+std::vector<std::string>
+PrinterDetector::get_console_filter_patterns(const std::string& printer_name) {
+    std::vector<std::string> patterns;
+    if (printer_name.empty()) {
+        return patterns;
+    }
+    if (!g_database.load()) {
+        spdlog::warn("[PrinterDetector] Cannot lookup filter patterns without database");
+        return patterns;
+    }
+    if (!g_database.data.contains("printers") || !g_database.data["printers"].is_array()) {
+        return patterns;
+    }
+
+    auto lower = [](std::string s) {
+        std::transform(s.begin(), s.end(), s.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return s;
+    };
+    const std::string needle = lower(printer_name);
+
+    for (const auto& printer : g_database.data["printers"]) {
+        const std::string db_name = lower(printer.value("name", ""));
+        const std::string db_id = lower(printer.value("id", ""));
+        if (db_name != needle && db_id != needle) {
+            continue;
+        }
+        if (!printer.contains("console_filter_patterns") ||
+            !printer["console_filter_patterns"].is_array()) {
+            return patterns;
+        }
+        for (const auto& spec : printer["console_filter_patterns"]) {
+            if (spec.is_string()) {
+                patterns.push_back(spec.get<std::string>());
+            } else {
+                spdlog::warn("[PrinterDetector] Non-string console_filter_patterns entry "
+                             "for '{}', skipping",
+                             printer.value("id", "?"));
+            }
+        }
+        return patterns;
+    }
+    return patterns;
+}
+
 std::string PrinterDetector::get_name_for_preset(const std::string& preset_name) {
     if (preset_name.empty()) {
         return "";
