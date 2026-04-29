@@ -263,3 +263,12 @@ extern "C" void helix_crash_note_event(const void* target,
 // Low-frequency site (one per async-scheduled root, not per child).
 extern "C" void helix_crash_note_async_del(const void* obj,
                                            const char* class_name);
+
+// C-ABI bridge for LVGL (C source) to breadcrumb a sync-delete entry.
+// Called from lv_obj_delete() at user-level entry (suppressed when invoked
+// from lv_obj_delete_async_cb, which already emitted helix_crash_note_async_del).
+// Same purpose as the async sibling — names the doomed root for L081-class
+// crashes that come in through the sync path (#906 and similar AD5X/Pi
+// reports where no async_d crumb fired).
+extern "C" void helix_crash_note_sync_del(const void* obj,
+                                          const char* class_name);

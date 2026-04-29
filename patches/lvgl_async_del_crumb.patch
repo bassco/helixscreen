@@ -1,7 +1,7 @@
 diff --git a/src/core/lv_obj_tree.c b/src/core/lv_obj_tree.c
 --- a/src/core/lv_obj_tree.c
 +++ b/src/core/lv_obj_tree.c
-@@ -19,6 +19,14 @@
+@@ -19,6 +19,26 @@
   * with backtrace + device context for remote crash diagnostics. */
  extern void helix_lvgl_anomaly(const char * code, const char * context);
 
@@ -13,10 +13,38 @@ diff --git a/src/core/lv_obj_tree.c b/src/core/lv_obj_tree.c
 +__attribute__((weak))
 +extern void helix_crash_note_async_del(const void * obj, const char * class_name);
 +
++/* Sibling of helix_crash_note_async_del. Called from lv_obj_delete() at the
++ * user-level entry — covers the sync-delete path that #906 (AD5X v0.99.53)
++ * landed on with no async_d crumb. Suppressed during lv_obj_delete_async_cb
++ * via the helix_in_async_del flag below to avoid double-counting. */
++__attribute__((weak))
++extern void helix_crash_note_sync_del(const void * obj, const char * class_name);
++
++/* Set across the lv_obj_delete() call inside lv_obj_delete_async_cb so the
++ * sync-delete crumb is suppressed for that path (async_d already named the
++ * root). LVGL is single-threaded, so a plain int is sufficient. */
++static int helix_in_async_del = 0;
++
  /*********************
   *      DEFINES
   *********************/
-@@ -694,6 +702,17 @@ static void lv_obj_delete_async_cb(void * obj)
+@@ -58,6 +78,15 @@ void lv_obj_delete(lv_obj_t * obj)
+     if(obj->is_deleting)
+         return;
+
++    /* Breadcrumb the entry-level sync delete root so L081-class crashes inside
++     * lv_event_mark_deleted carry a `sync_d <class> <ptr>` crumb naming the
++     * doomed root regardless of which entry point was used. Suppressed when
++     * called from lv_obj_delete_async_cb (already emitted async_d). */
++    if(!helix_in_async_del && helix_crash_note_sync_del) {
++        const char * cls_name = (obj->class_p && obj->class_p->name) ? obj->class_p->name : "?";
++        helix_crash_note_sync_del(obj, cls_name);
++    }
++
+     LV_LOG_TRACE("begin (delete %p)", (void *)obj);
+     LV_ASSERT_OBJ(obj, MY_CLASS);
+     lv_obj_invalidate(obj);
+@@ -694,6 +723,19 @@ static void lv_obj_delete_async_cb(void * obj)
          helix_lvgl_anomaly("obj_delete_async_cb_invalid", "");
          return;
      }
@@ -32,6 +60,8 @@ diff --git a/src/core/lv_obj_tree.c b/src/core/lv_obj_tree.c
 +        helix_crash_note_async_del(obj, cls_name);
 +    }
 +
++    helix_in_async_del = 1;
      lv_obj_delete(obj);
++    helix_in_async_del = 0;
  }
 

@@ -1080,6 +1080,12 @@ extern "C" void helix_crash_note_async_del(const void* obj, const char* class_na
                                     reinterpret_cast<long>(obj));
 }
 
+// C-ABI bridge for LVGL — see include/system/crash_handler.h
+extern "C" void helix_crash_note_sync_del(const void* obj, const char* class_name) {
+    crash_handler::breadcrumb::note("sync_d", class_name ? class_name : "?",
+                                    reinterpret_cast<long>(obj));
+}
+
 void crash_handler::refresh_heap_snapshot() noexcept {
     // Timestamp first so a racing signal-handler reader either sees a stale
     // complete snapshot or the prior one — never a mix of old/new fields.
