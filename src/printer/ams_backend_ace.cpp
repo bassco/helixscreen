@@ -451,6 +451,11 @@ AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool
             ovr.color_rgb = info.color_rgb;
             ovr.color_name = info.color_name;
             ovr.material = info.material;
+            // SlotInfo carries the user's edit OR the bound Spoolman spool's
+            // filament profile; the material-DB fallback for fields left at 0
+            // is applied at emit time inside resolved_temps(). Centralized in
+            // the helper so the four AMS backends stay in sync.
+            helix::ams::populate_temps_from_slot_info(ovr, info);
             // updated_at left default — save_async stamps a fresh value.
             overrides_[slot_index] = ovr;
         }
@@ -879,8 +884,14 @@ uint32_t AmsBackendAce::parse_slot_color(const json& color_val) {
 void AmsBackendAce::start_rest_fallback() {
     use_rest_fallback_ = true;
     rest_stop_requested_.store(false);
-    rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);
-    spdlog::info("[ACE] REST fallback polling started");
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);
+        spdlog::info("[ACE] REST fallback polling started");
+    } catch (const std::system_error& e) {
+        spdlog::error("[ACE] Failed to spawn REST polling thread: {}", e.what());
+        use_rest_fallback_ = false;
+    }
 }
 
 void AmsBackendAce::stop_rest_fallback() {

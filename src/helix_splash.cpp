@@ -34,6 +34,7 @@
 #include <signal.h>
 #include <string>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 // Signal handling for graceful shutdown
@@ -58,6 +59,13 @@ static constexpr int DEFAULT_HEIGHT = 480;
 // Splash timing
 static constexpr int FADE_DURATION_MS = 1000; // Fade-in duration
 static constexpr int FRAME_DELAY_US = 16000;  // ~60 FPS
+
+// Defense-in-depth self-timeout. helix-screen normally signals SIGUSR1 once
+// discovery completes (or its 8s timeout fires); the watchdog also reaps us
+// on exit. If both paths fail (e.g. helix-screen never received --splash-pid
+// because the watchdog skipped adoption on DRM), splash would otherwise spin
+// forever at ~60% CPU. Cap our own lifetime so any upstream failure is bounded.
+static constexpr int MAX_LIFETIME_SEC = 30;
 
 // Read brightness from config file (simple parsing, no JSON library)
 // Returns configured brightness (10-100) or default_value on failure
@@ -491,7 +499,12 @@ int main(int argc, char** argv) {
 
     // Main loop - run until signaled to quit
     // Exit signals: SIGTERM, SIGINT (shutdown), SIGUSR1 (main app ready)
+    // Self-timeout: bail after MAX_LIFETIME_SEC if no signal arrives. Uses
+    // wall-clock (CLOCK_MONOTONIC) rather than frame counting so a slow or
+    // stuttering render loop still trips the safety net.
     int frame_count = 0;
+    struct timespec start_ts;
+    clock_gettime(CLOCK_MONOTONIC, &start_ts);
     while (!g_quit) {
         lv_timer_handler();
         usleep(FRAME_DELAY_US);
@@ -500,6 +513,15 @@ int main(int argc, char** argv) {
         if (needs_fb_self_heal && ++frame_count >= 30) {
             lv_obj_invalidate(screen);
             frame_count = 0;
+        }
+
+        struct timespec now_ts;
+        clock_gettime(CLOCK_MONOTONIC, &now_ts);
+        if ((now_ts.tv_sec - start_ts.tv_sec) >= MAX_LIFETIME_SEC) {
+            fprintf(stderr,
+                    "helix-splash: self-timeout after %ds with no SIGUSR1/SIGTERM, exiting\n",
+                    MAX_LIFETIME_SEC);
+            break;
         }
     }
 

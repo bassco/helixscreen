@@ -146,6 +146,14 @@ void SettingsManager::init_subjects() {
     UI_MANAGED_SUBJECT_INT(auto_color_map_subject_, auto_color_map ? 1 : 0, "auto_color_map",
                            subjects_);
 
+    // Console filters (defaults: both on — keeps the gcode console clean by default)
+    bool filter_temps = config->get<bool>("/console/filter_temps", true);
+    UI_MANAGED_SUBJECT_INT(console_filter_temps_subject_, filter_temps ? 1 : 0,
+                           "console_filter_temps", subjects_);
+    bool filter_firmware_noise = config->get<bool>("/console/filter_firmware_noise", true);
+    UI_MANAGED_SUBJECT_INT(console_filter_firmware_noise_subject_, filter_firmware_noise ? 1 : 0,
+                           "console_filter_firmware_noise", subjects_);
+
     // Chamber assignment (default: "auto" = use name heuristics).
     // Legacy paths (printer/chamber_{sensor,heater}) moved to the canonical flat paths
     // by config migration v11→v12.
@@ -420,6 +428,69 @@ void SettingsManager::set_auto_color_map(bool enabled) {
     lv_subject_set_int(&auto_color_map_subject_, enabled ? 1 : 0);
     Config* config = Config::get_instance();
     config->set<bool>(config->df() + "filament/auto_color_map", enabled);
+    config->save();
+}
+
+// ============================================================================
+// Console Filters
+// ============================================================================
+
+bool SettingsManager::get_console_filter_temps() const {
+    return lv_subject_get_int(const_cast<lv_subject_t*>(&console_filter_temps_subject_)) != 0;
+}
+
+void SettingsManager::set_console_filter_temps(bool enabled) {
+    spdlog::info("[SettingsManager] set_console_filter_temps({})", enabled);
+    lv_subject_set_int(&console_filter_temps_subject_, enabled ? 1 : 0);
+    Config* config = Config::get_instance();
+    config->set<bool>("/console/filter_temps", enabled);
+    config->save();
+}
+
+bool SettingsManager::get_console_filter_firmware_noise() const {
+    return lv_subject_get_int(
+               const_cast<lv_subject_t*>(&console_filter_firmware_noise_subject_)) != 0;
+}
+
+void SettingsManager::set_console_filter_firmware_noise(bool enabled) {
+    spdlog::info("[SettingsManager] set_console_filter_firmware_noise({})", enabled);
+    lv_subject_set_int(&console_filter_firmware_noise_subject_, enabled ? 1 : 0);
+    Config* config = Config::get_instance();
+    config->set<bool>("/console/filter_firmware_noise", enabled);
+    config->save();
+}
+
+std::vector<std::string> SettingsManager::get_console_filter_user_add() const {
+    try {
+        return Config::get_instance()->get<std::vector<std::string>>(
+            "/console/filter_user_add", std::vector<std::string>{});
+    } catch (const std::exception& e) {
+        spdlog::warn("[SettingsManager] /console/filter_user_add malformed, ignoring: {}",
+                     e.what());
+        return {};
+    }
+}
+
+std::vector<std::string> SettingsManager::get_console_filter_user_remove() const {
+    try {
+        return Config::get_instance()->get<std::vector<std::string>>(
+            "/console/filter_user_remove", std::vector<std::string>{});
+    } catch (const std::exception& e) {
+        spdlog::warn("[SettingsManager] /console/filter_user_remove malformed, ignoring: {}",
+                     e.what());
+        return {};
+    }
+}
+
+void SettingsManager::set_console_filter_user_add(const std::vector<std::string>& patterns) {
+    Config* config = Config::get_instance();
+    config->set<std::vector<std::string>>("/console/filter_user_add", patterns);
+    config->save();
+}
+
+void SettingsManager::set_console_filter_user_remove(const std::vector<std::string>& patterns) {
+    Config* config = Config::get_instance();
+    config->set<std::vector<std::string>>("/console/filter_user_remove", patterns);
     config->save();
 }
 

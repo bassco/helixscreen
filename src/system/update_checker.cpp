@@ -1032,7 +1032,15 @@ void UpdateChecker::start_download() {
     download_cancelled_ = false;
     report_download_status(DownloadStatus::Downloading, 0, "Starting download...");
 
-    download_thread_ = std::thread(&UpdateChecker::do_download, this);
+    // Wrap — pthread_create EAGAIN under thread exhaustion throws
+    // std::system_error; if this is invoked from a UI event-cb frame the
+    // throw aborts via std::terminate ([L083]).
+    try {
+        download_thread_ = std::thread(&UpdateChecker::do_download, this);
+    } catch (const std::system_error& e) {
+        spdlog::error("[UpdateChecker] Failed to spawn download thread: {}", e.what());
+        report_download_status(DownloadStatus::Error, 0, "System busy — try again");
+    }
 }
 
 void UpdateChecker::cancel_download() {
@@ -2029,8 +2037,31 @@ void UpdateChecker::check_for_updates(Callback callback) {
         });
     }
 
-    // Spawn worker thread
-    worker_thread_ = std::thread(&UpdateChecker::do_check, this);
+    // Spawn worker thread. Wrap — pthread_create EAGAIN under thread
+    // exhaustion throws std::system_error; would abort via std::terminate
+    // if this is invoked from an event-cb frame ([L083]).
+    try {
+        worker_thread_ = std::thread(&UpdateChecker::do_check, this);
+    } catch (const std::system_error& e) {
+        spdlog::error("[UpdateChecker] Failed to spawn check thread: {}", e.what());
+        // Roll back state we set above so the next check_for_updates() call
+        // can run, and notify the caller's callback with an Error result so
+        // it doesn't hang waiting for a do_check() that never started.
+        Callback cb_to_fire = std::move(pending_callback_);
+        pending_callback_ = nullptr;
+        status_ = Status::Error;
+        error_message_ = "system busy";
+        if (subjects_initialized_) {
+            helix::ui::queue_update([this]() {
+                lv_subject_set_int(&checking_subject_, 0);
+                lv_subject_set_int(&status_subject_, static_cast<int>(Status::Error));
+            });
+        }
+        if (cb_to_fire) {
+            helix::ui::queue_update(
+                [cb_to_fire]() { cb_to_fire(Status::Error, std::nullopt); });
+        }
+    }
 }
 
 UpdateChecker::Status UpdateChecker::get_status() const {

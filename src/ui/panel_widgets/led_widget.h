@@ -40,12 +40,19 @@ class LedWidget : public PanelWidget {
     lv_obj_t* parent_screen_ = nullptr;
     lv_obj_t* light_icon_ = nullptr;
 
-    helix::AsyncLifetimeGuard lifetime_;
     bool light_on_ = false;
 
     ObserverGuard led_version_observer_;
     ObserverGuard led_state_observer_;
     ObserverGuard led_brightness_observer_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer destructs. Without this, queued observer callbacks captured
+    // via tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     void handle_light_toggle();
     void update_light_icon();

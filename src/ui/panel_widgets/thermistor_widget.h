@@ -64,7 +64,6 @@ class ThermistorWidget : public PanelWidget {
     std::string display_name_;    // Pretty name for label
     ObserverGuard temp_observer_;
     SubjectLifetime temp_lifetime_;
-    helix::AsyncLifetimeGuard lifetime_;
     char temp_buffer_[16] = {};
 
     // Carousel mode
@@ -77,6 +76,15 @@ class ThermistorWidget : public PanelWidget {
     std::vector<ObserverGuard> carousel_observers_;
     std::vector<SubjectLifetime> carousel_lifetimes_;
     ObserverGuard version_observer_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer (temp_observer_, carousel_observers_, version_observer_)
+    // destructs. Without this, queued observer callbacks captured via
+    // tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     bool binding_in_progress_ = false; // reentrancy guard for bind_carousel_sensors
 

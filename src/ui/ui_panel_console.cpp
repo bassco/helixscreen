@@ -3,12 +3,18 @@
 
 #include "ui_panel_console.h"
 
+#include "console_filter_engine.h"
+#include "observer_factory.h"
+#include "printer_detector.h"
+#include "printer_state.h"
+#include "settings_manager.h"
 #include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_event_safety.h"
 #include "ui_global_panel_helper.h"
 #include "ui_modal.h"
 #include "ui_nav_manager.h"
+#include "ui_overlay_console_settings.h"
 #include "ui_panel_common.h"
 #include "ui_subject_registry.h"
 #include "ui_update_queue.h"
@@ -196,6 +202,19 @@ void ConsolePanel::init_subjects() {
         UI_MANAGED_SUBJECT_INT(status_visible_subject_, 1, "console_status_visible", subjects_);
         // Entry presence (1 = has entries, 0 = empty/show empty state)
         UI_MANAGED_SUBJECT_INT(has_entries_subject_, 0, "console_has_entries", subjects_);
+
+        // Seed filter flags from SettingsManager and observe future changes.
+        // SettingsManager subjects are static (singleton-owned) — no SubjectLifetime needed.
+        auto& sm = helix::SettingsManager::instance();
+        filter_temps_ = sm.get_console_filter_temps();
+        filter_firmware_noise_ = sm.get_console_filter_firmware_noise();
+
+        filter_temps_observer_ = helix::ui::observe_int_sync(
+            sm.subject_console_filter_temps(), this,
+            [](ConsolePanel* self, int v) { self->filter_temps_ = (v != 0); });
+        filter_firmware_observer_ = helix::ui::observe_int_sync(
+            sm.subject_console_filter_firmware_noise(), this,
+            [](ConsolePanel* self, int v) { self->filter_firmware_noise_ = (v != 0); });
     });
 }
 
@@ -203,9 +222,33 @@ void ConsolePanel::deinit_subjects() {
     if (!subjects_initialized_) {
         return;
     }
+    // Drop observers before subjects (subjects are static so order is mainly cosmetic here).
+    filter_temps_observer_.reset();
+    filter_firmware_observer_.reset();
     subjects_.deinit_all();
     subjects_initialized_ = false;
     spdlog::debug("[{}] Subjects deinitialized", get_name());
+}
+
+void ConsolePanel::rebuild_firmware_filter() {
+    // Always rebuild on activate so user-edited pattern lists take effect when
+    // the user returns from the settings overlay. Cost is trivial — a few
+    // dozen prefix-string copies plus optional regex compilation.
+    const std::string& printer = get_printer_state().get_printer_type();
+    firmware_filter_.clear();
+
+    auto preset = PrinterDetector::get_console_filter_patterns(printer);
+    auto& sm = helix::SettingsManager::instance();
+    const auto user_remove = sm.get_console_filter_user_remove();
+    for (const auto& spec : preset) {
+        if (std::find(user_remove.begin(), user_remove.end(), spec) != user_remove.end()) {
+            continue; // User chose to drop this preset entry.
+        }
+        firmware_filter_.add(spec);
+    }
+    firmware_filter_.add_all(sm.get_console_filter_user_add());
+    spdlog::debug("[{}] Firmware filter rebuilt for '{}': {} patterns", get_name(), printer,
+                  firmware_filter_.size());
 }
 
 // ============================================================================
@@ -239,15 +282,18 @@ void ConsolePanel::register_callbacks() {
                  },
                  nullptr, nullptr);
          }},
-        {"on_console_filter_toggled",
-         [](lv_event_t* e) {
-             spdlog::debug("[Console] Filter toggle clicked");
-             auto& panel = get_global_console_panel();
-             panel.filter_temps_ = !panel.filter_temps_;
-             spdlog::debug("[Console] Temperature filter: {}", panel.filter_temps_ ? "ON" : "OFF");
-             // Update button visual to indicate state
-             auto* btn = static_cast<lv_obj_t*>(lv_event_get_current_target(e));
-             lv_obj_set_style_opa(btn, panel.filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
+        {"on_console_settings_clicked",
+         [](lv_event_t* /*e*/) {
+             spdlog::debug("[Console] Settings gear clicked - opening overlay");
+             auto& overlay = get_global_console_settings();
+             auto* root = overlay.get_root();
+             if (!root) {
+                 root = overlay.create(lv_screen_active());
+             }
+             if (root) {
+                 NavigationManager::instance().register_overlay_instance(root, &overlay);
+                 NavigationManager::instance().push_overlay(root);
+             }
          }},
     });
 
@@ -383,17 +429,8 @@ void ConsolePanel::on_activate() {
     history_index_ = -1;
     saved_input_.clear();
 
-    // Sync filter button visual with current filter_temps_ state
-    lv_obj_t* overlay_content = lv_obj_find_by_name(overlay_root_, "overlay_content");
-    if (overlay_content) {
-        lv_obj_t* input_row = lv_obj_find_by_name(overlay_content, "input_row");
-        if (input_row) {
-            lv_obj_t* filter_btn = lv_obj_find_by_name(input_row, "filter_btn");
-            if (filter_btn) {
-                lv_obj_set_style_opa(filter_btn, filter_temps_ ? LV_OPA_100 : LV_OPA_50, 0);
-            }
-        }
-    }
+    // Refresh the firmware-noise filter for the active printer (cheap if unchanged).
+    rebuild_firmware_filter();
 
     // Refresh history when panel becomes visible
     fetch_history();
@@ -744,9 +781,9 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
         return;
     }
 
-    // Build entry on background thread (no LVGL calls, only pure C++)
-    // Note: is_temp_message and is_error_message are pure functions, safe on any thread
-    bool is_temp = is_temp_message(line);
+    // Build entry on background thread (no LVGL calls, only pure C++).
+    // is_temp_message / is_error_message are pure functions, safe on any thread.
+    const bool is_temp = is_temp_message(line);
 
     GcodeEntry entry;
     entry.message = line;
@@ -757,11 +794,16 @@ void ConsolePanel::on_gcode_response(const nlohmann::json& msg) {
     // CRITICAL: Defer LVGL operations to main thread via token.defer
     // WebSocket callbacks run on libhv thread - direct LVGL calls cause crashes.
     // Use token.defer() (not lifetime_.defer()) to avoid TOCTOU race (#707).
+    // Filtering decisions also happen on the main thread so the engine's pattern
+    // vector is mutated and read on the same thread (no lock required).
     auto tok = lifetime_.token();
     tok.defer("ConsolePanel::gcode_entry", [this, entry = std::move(entry), is_temp]() {
-        // C1: Read filter_temps_ on main thread only (avoids data race)
-        if (filter_temps_ && is_temp)
+        if (filter_temps_ && is_temp) {
             return;
+        }
+        if (filter_firmware_noise_ && firmware_filter_.should_filter(entry.message)) {
+            return;
+        }
         add_entry(entry);
     });
 }

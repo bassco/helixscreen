@@ -130,8 +130,8 @@ The top group is AFC-standard. The bottom group is HelixScreen's extensions.
 | `vendor` | string | optional | free-form | Brand / manufacturer. Readers match case-insensitively when pairing with their own filament databases. | User-edited. |
 | `spool_id` | integer | optional | positive integer | Spoolman spool ID for the physical spool currently loaded. Omitted when zero. | User-selected from Spoolman, if configured. |
 | `scan_time` | string | optional | ISO-8601 UTC, second precision (`YYYY-MM-DDTHH:MM:SSZ`) | Last time this record was written or scanned. Advisory only — used for conflict avoidance, not for mutual exclusion. Sub-second fractions are truncated. | `std::chrono::system_clock::now()` at save time. |
-| `bed_temp` | integer | optional | Celsius | Recommended bed temperature. HelixScreen does **not** currently emit this (no authoritative source on our side); we document it because OrcaSlicer reads it. | Not emitted by HelixScreen today. |
-| `nozzle_temp` | integer | optional | Celsius | Recommended nozzle temperature. Same caveat as `bed_temp`. | Not emitted by HelixScreen today. |
+| `bed_temp` | integer | optional | Celsius | Recommended bed temperature. | User entry, bound Spoolman spool's filament profile, or HelixScreen's internal material DB (in that priority order). |
+| `nozzle_temp` | integer | optional | Celsius | Recommended nozzle temperature. When derived from a Spoolman spool's min/max range, the midpoint is emitted. | Same priority order as `bed_temp`. |
 
 OrcaSlicer 2.3.2 only consumes `lane`, `color`, `material`, `bed_temp`, and
 `nozzle_temp`. All other fields are additive and must be silently ignored by
@@ -322,10 +322,15 @@ Clock skew between the printer and your writer can defeat this; treat
 
 ## Changelog
 
+- **v1.1 (2026-04-28)**: HelixScreen now emits `bed_temp` and `nozzle_temp`
+  on every save. Source priority: explicit user entry > bound Spoolman
+  spool's filament profile > internal material database default (looked up
+  by `material` name at write time). For `nozzle_temp` derived from a
+  Spoolman min/max range, the midpoint is emitted as a single integer to
+  match the AFC wire format.
 - **v1 (2026-04)**: HelixScreen's initial adoption of the `lane_data`
   convention. AFC-standard fields (`lane`, `color`, `material`, `vendor`,
   `spool_id`, `scan_time`, `bed_temp`, `nozzle_temp`) plus HelixScreen
   extensions (`spool_name`, `spoolman_vendor_id`, `remaining_weight_g`,
   `total_weight_g`, `color_name`). `bed_temp` / `nozzle_temp` documented
-  but not yet emitted by HelixScreen — no authoritative source on our side
-  today.
+  but not yet emitted (lifted in v1.1).

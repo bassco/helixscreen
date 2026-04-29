@@ -262,6 +262,18 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     std::string build_tool_map_value() const;
     AmsError write_ifs_var(const std::string& key, const std::string& value);
     AmsError write_adventurer_json(int slot_index);
+    // Direct filesystem write to the resolved AD5X-stock-ZMOD config path. Used
+    // when helix-screen runs on the same host as Moonraker AND the canonical
+    // config path is present + writable; bypasses Moonraker's HTTP upload (which
+    // does an os.rename across mount points on AD5X stock-ZMOD and corrupts the
+    // file via EXDEV on the symlinked /usr/prog/config target). Returns
+    // command_failed if the path isn't set or the read-modify-write fails.
+    AmsError write_adventurer_json_local(int slot_index);
+    // Resolve the on-disk Adventurer5M.json path when running on the same host
+    // as Moonraker. Sets local_adventurer_json_path_ to the realpath of the
+    // file if it exists and is regular; otherwise leaves it empty so we fall
+    // back to the Moonraker upload path.
+    void detect_local_adventurer_json_path();
     void detect_load_unload_completion(bool head_detected);
 
     int find_first_tool_for_port(int port_1based) const;
@@ -363,6 +375,13 @@ class AmsBackendAd5xIfs : public AmsSubscriptionBackend {
     // under mutex_ (via update_slot_from_state).
     std::unique_ptr<helix::ams::FilamentSlotOverrideStore> override_store_;
     std::unordered_map<int, helix::ams::FilamentSlotOverride> overrides_;
+
+    // Resolved on-disk path of Adventurer5M.json when helix-screen runs on the
+    // same host as Moonraker. Empty string means "fall back to Moonraker HTTP
+    // upload" — either we're remote, the file isn't where we expect it, or the
+    // path isn't writable. Set once during on_started() via
+    // detect_local_adventurer_json_path(); never mutated thereafter.
+    std::string local_adventurer_json_path_;
 
     // Per-slot previous firmware color (NOT the override-masked value).
     // Used to detect hardware-event "user swapped physical spool" and clear

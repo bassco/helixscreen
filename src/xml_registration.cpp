@@ -559,6 +559,7 @@ void register_xml_components() {
     register_xml("hardware_health_overlay.xml");
     register_xml("network_settings_overlay.xml");
     register_xml("retraction_settings_overlay.xml");
+    register_xml("console_settings_overlay.xml");
     register_xml("machine_limits_overlay.xml");
     register_xml("timelapse_settings_overlay.xml");
     register_xml("timelapse_install_overlay.xml");

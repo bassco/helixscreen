@@ -73,10 +73,16 @@ UsbError UsbBackendLinux::start() {
     spdlog::info("[UsbBackendLinux] Initial scan found {} USB drives (polling={})",
                  cached_drives_.size(), use_polling_);
 
-    // Start monitor thread
+    // Start monitor thread. Wrap — EAGAIN throws ([L083]).
     stop_requested_ = false;
     running_ = true;
-    monitor_thread_ = std::thread(&UsbBackendLinux::monitor_thread_func, this);
+    try {
+        monitor_thread_ = std::thread(&UsbBackendLinux::monitor_thread_func, this);
+    } catch (const std::system_error& e) {
+        spdlog::error("[UsbBackendLinux] Failed to spawn monitor thread: {}", e.what());
+        running_ = false;
+        return UsbError(UsbResult::BACKEND_ERROR, "system busy");
+    }
 
     spdlog::info("[UsbBackendLinux] Started (mode={})", use_polling_ ? "polling" : "inotify");
     return UsbError(UsbResult::SUCCESS);

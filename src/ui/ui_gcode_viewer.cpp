@@ -160,11 +160,20 @@ class GCodeViewerState {
         cancel_flag_.store(false);
         building_.store(true);
 
-        // Launch new thread
-        build_thread_ = std::thread([this, func = std::move(build_func)]() {
-            func();
+        // Launch new thread. Wrap — pthread_create EAGAIN under thread
+        // exhaustion (AD5M/CC1) throws std::system_error which would
+        // propagate through PrintStatusPanel::on_activate's event-cb
+        // frame and abort via std::terminate ([L083]). This is the exact
+        // hot path for L081-family crashes (RPHAV9T7).
+        try {
+            build_thread_ = std::thread([this, func = std::move(build_func)]() {
+                func();
+                building_.store(false);
+            });
+        } catch (const std::system_error& e) {
+            spdlog::error("[GcodeViewer] Failed to spawn build thread: {}", e.what());
             building_.store(false);
-        });
+        }
     }
 
     /**

@@ -48,10 +48,17 @@ class ActiveSpoolWidget : public PanelWidget {
     // No-spool label
     lv_obj_t* no_spool_label_ = nullptr;
 
-    helix::AsyncLifetimeGuard lifetime_;
     ObserverGuard spool_color_observer_;
     ObserverGuard current_slot_observer_;
     ObserverGuard slots_version_observer_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer destructs. Without this, queued observer callbacks captured
+    // via tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     bool is_wide_ = false;
 

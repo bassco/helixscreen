@@ -184,6 +184,7 @@ class AmsPanel : public PanelBase {
     void setup_path_canvas();
     void update_path_canvas_from_backend();
     void setup_bypass_spool();
+    void update_bypass_spool_position();
     void update_bypass_spool_from_state();
     void setup_endless_arrows();
     void update_endless_arrows_from_backend();

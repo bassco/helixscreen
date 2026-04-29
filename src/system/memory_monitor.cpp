@@ -107,9 +107,14 @@ void MemoryMonitor::start(int interval_ms) {
                  thresholds_.warn_available_kb / 1024, thresholds_.critical_available_kb / 1024,
                  thresholds_.growth_5min_kb / 1024, tier, sys_info.total_mb());
 
-    monitor_thread_ = std::thread([this]() { monitor_loop(); });
-
-    spdlog::debug("[MemoryMonitor] Started (interval={}ms)", interval_ms);
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        monitor_thread_ = std::thread([this]() { monitor_loop(); });
+        spdlog::debug("[MemoryMonitor] Started (interval={}ms)", interval_ms);
+    } catch (const std::system_error& e) {
+        spdlog::error("[MemoryMonitor] Failed to spawn monitor thread: {}", e.what());
+        running_.store(false);
+    }
 }
 
 void MemoryMonitor::stop() {

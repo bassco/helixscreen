@@ -47,22 +47,38 @@ void GCodeObjectThumbnailRenderer::render_async(const ParsedGCodeFile* gcode, in
     cancel_.store(false, std::memory_order_relaxed);
     rendering_.store(true, std::memory_order_relaxed);
 
-    thread_ =
-        std::thread([this, gcode, thumb_width, thumb_height, color, cb = std::move(callback)]() {
-            auto result = render_impl(gcode, thumb_width, thumb_height, color);
+    // Wrap thread spawn — pthread_create EAGAIN under tight thread limits
+    // (AD5M/CC1) throws std::system_error which would propagate through the
+    // calling event-cb frame and abort via std::terminate ([L083]).
+    // NOTE: capture callback by COPY (`cb = callback`) inside the lambda so
+    // the original `callback` parameter is still valid in the catch handler.
+    // Using std::move would leave callback empty if the std::thread ctor
+    // throws after the lambda is constructed but before the worker runs.
+    try {
+        thread_ = std::thread(
+            [this, gcode, thumb_width, thumb_height, color, cb = callback]() {
+                auto result = render_impl(gcode, thumb_width, thumb_height, color);
 
-            rendering_.store(false, std::memory_order_relaxed);
+                rendering_.store(false, std::memory_order_relaxed);
 
-            if (!cancel_.load(std::memory_order_relaxed) && cb) {
-                // Marshal result to UI thread. Use shared_ptr for lambda capture so the
-                // ObjectThumbnailSet is freed even if the UI queue is drained on shutdown
-                // before this lambda runs (std::function requires copyable lambdas).
-                auto shared = std::shared_ptr<ObjectThumbnailSet>(result.release());
-                helix::ui::queue_update([cb, shared]() {
-                    cb(std::make_unique<ObjectThumbnailSet>(std::move(*shared)));
-                });
-            }
-        });
+                if (!cancel_.load(std::memory_order_relaxed) && cb) {
+                    // Marshal result to UI thread. Use shared_ptr for lambda capture so the
+                    // ObjectThumbnailSet is freed even if the UI queue is drained on shutdown
+                    // before this lambda runs (std::function requires copyable lambdas).
+                    auto shared = std::shared_ptr<ObjectThumbnailSet>(result.release());
+                    helix::ui::queue_update([cb, shared]() {
+                        cb(std::make_unique<ObjectThumbnailSet>(std::move(*shared)));
+                    });
+                }
+            });
+    } catch (const std::system_error& e) {
+        spdlog::error("[ObjectThumbnail] Failed to spawn render thread: {}", e.what());
+        rendering_.store(false, std::memory_order_relaxed);
+        if (callback) {
+            helix::ui::queue_update(
+                [cb = std::move(callback)]() { cb(std::make_unique<ObjectThumbnailSet>()); });
+        }
+    }
 }
 
 std::unique_ptr<ObjectThumbnailSet>

@@ -927,8 +927,18 @@ void PrintSelectPanel::refresh_files(bool force) {
     }
 
     if (refresh_in_flight_ && !force) {
-        spdlog::debug("[{}] refresh_files() skipped: previous request still in-flight", get_name());
-        return;
+        const auto elapsed = std::chrono::steady_clock::now() - refresh_started_at_;
+        if (elapsed < REFRESH_STUCK_THRESHOLD) {
+            spdlog::debug("[{}] refresh_files() skipped: previous request still in-flight ({}ms)",
+                          get_name(),
+                          std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+            return;
+        }
+        spdlog::warn("[{}] refresh_files(): in-flight flag stuck for {}s — treating prior "
+                     "response as lost and retrying",
+                     get_name(),
+                     std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+        // Fall through and issue a fresh request. The flag is overwritten below.
     }
 
     spdlog::trace("[{}] refresh_files() called for path='{}', existing_count={}{}", get_name(),
@@ -936,6 +946,7 @@ void PrintSelectPanel::refresh_files(bool force) {
                   force ? " (forced)" : "");
 
     refresh_in_flight_ = true;
+    refresh_started_at_ = std::chrono::steady_clock::now();
 
     // Delegate to file provider - callbacks set in setup() will handle the results
     file_provider_->refresh_files(current_path_, file_list_);

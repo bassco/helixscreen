@@ -45,10 +45,16 @@ class TemperatureWidget : public PanelWidget {
     int cached_extruder_temp_ = 25;
     int cached_extruder_target_ = 0;
 
-    helix::AsyncLifetimeGuard lifetime_;
-
     ObserverGuard extruder_temp_observer_;
     ObserverGuard extruder_target_observer_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer destructs. Without this, queued observer callbacks captured
+    // via tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     void on_extruder_temp_changed(int temp_centi);
     void on_extruder_target_changed(int target_centi);

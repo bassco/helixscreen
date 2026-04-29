@@ -34,7 +34,6 @@ class NozzleTempsWidget : public PanelWidget {
     PrinterState& printer_state_;
     lv_obj_t* widget_obj_ = nullptr;
     lv_obj_t* parent_screen_ = nullptr;
-    helix::AsyncLifetimeGuard lifetime_;
 
     struct ExtruderRow {
         std::string name;
@@ -73,6 +72,15 @@ class NozzleTempsWidget : public PanelWidget {
     int rebuild_gen_ = 0;     // Generation counter to break infinite rebuild cycles (L074)
     bool rebuilding_ = false; // Re-entrancy guard: drain() inside clear_rows() can fire
                               // version_observer_ which calls rebuild_rows() again (#723)
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer (per-row in extruder_rows_, bed observers, version_observer_)
+    // destructs. Without this, queued observer callbacks captured via
+    // tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     void rebuild_rows();
     void clear_rows();
