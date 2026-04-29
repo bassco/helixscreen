@@ -354,30 +354,103 @@ static pid_t start_splash_process(const WatchdogArgs& args) {
 }
 
 /**
+ * @brief Verify that pid belongs to our splash binary
+ *
+ * Reads /proc/<pid>/comm and confirms it matches "helix-splash". Guards
+ * against PID recycling: if the original splash was reaped by a different
+ * parent and the kernel handed the PID to an unrelated process, sending
+ * signals to it would be a serious bug. Returns false on any uncertainty
+ * — better to leak a splash than kill the wrong process.
+ */
+static bool pid_is_our_splash(pid_t pid) {
+    if (pid <= 0) {
+        return false;
+    }
+    char comm_path[64];
+    snprintf(comm_path, sizeof(comm_path), "/proc/%d/comm", pid);
+    FILE* f = fopen(comm_path, "r");
+    if (!f) {
+        return false;
+    }
+    char comm[64] = {0};
+    bool got_line = (fgets(comm, sizeof(comm), f) != nullptr);
+    fclose(f);
+    if (!got_line) {
+        return false;
+    }
+    // Strip trailing newline
+    size_t n = strlen(comm);
+    if (n > 0 && comm[n - 1] == '\n') {
+        comm[n - 1] = '\0';
+    }
+    // Linux truncates /proc/<pid>/comm to 15 chars. "helix-splash" is 12, fits.
+    return strcmp(comm, "helix-splash") == 0;
+}
+
+/**
  * @brief Clean up splash process if still running
+ *
+ * Verifies the PID actually belongs to our splash binary (PID-recycling
+ * guard) and escalates SIGTERM → SIGKILL so a misbehaving splash cannot
+ * leak past helix-screen exit. Total worst-case wait ~800ms (30 × 20ms
+ * after SIGTERM, 10 × 20ms after SIGKILL).
+ *
+ * Safe to call on processes we did not fork: when waitpid() returns ECHILD,
+ * we fall through to kill(pid, 0) for liveness checks.
  */
 static void cleanup_splash(pid_t splash_pid) {
     if (splash_pid <= 0) {
         return;
     }
 
-    // Check if still running
-    if (kill(splash_pid, 0) == 0) {
-        spdlog::debug("[Watchdog] Cleaning up splash process (PID {})", splash_pid);
-        kill(splash_pid, SIGTERM);
-        // Non-blocking wait - don't hang if splash is stuck
+    auto clear_global = [splash_pid]() {
+        if (g_splash_pid == splash_pid) {
+            g_splash_pid = 0;
+        }
+    };
+
+    if (!pid_is_our_splash(splash_pid)) {
+        // Either already gone, never existed, or PID got recycled. In all
+        // three cases, do not signal — stale-PID kills cause incident reports
+        // worse than the leak we're trying to prevent.
+        spdlog::debug("[Watchdog] Skipping splash cleanup: PID {} is not helix-splash",
+                      splash_pid);
+        clear_global();
+        return;
+    }
+
+    auto reap_or_check = [splash_pid]() {
         int status;
         pid_t result = waitpid(splash_pid, &status, WNOHANG);
-        if (result == 0) {
-            // Still running after SIGTERM, give it a moment
-            usleep(100000); // 100ms
-            waitpid(splash_pid, &status, WNOHANG);
+        if (result == splash_pid) {
+            return false; // reaped
+        }
+        // Keep the comm-check as a continuous guard — if the PID gets recycled
+        // mid-loop, stop signaling immediately.
+        return pid_is_our_splash(splash_pid);
+    };
+
+    spdlog::debug("[Watchdog] Cleaning up splash process (PID {})", splash_pid);
+    kill(splash_pid, SIGTERM);
+
+    // Wait up to 600ms for SIGTERM, then escalate to SIGKILL.
+    bool alive = true;
+    for (int i = 0; i < 30 && alive; ++i) {
+        usleep(20000); // 20ms
+        alive = reap_or_check();
+    }
+
+    if (alive) {
+        spdlog::warn("[Watchdog] Splash (PID {}) didn't exit after SIGTERM, sending SIGKILL",
+                     splash_pid);
+        kill(splash_pid, SIGKILL);
+        for (int i = 0; i < 10 && alive; ++i) {
+            usleep(20000); // 20ms
+            alive = reap_or_check();
         }
     }
 
-    if (g_splash_pid == splash_pid) {
-        g_splash_pid = 0;
-    }
+    clear_global();
 }
 
 // =============================================================================
@@ -985,6 +1058,15 @@ static int run_watchdog(const WatchdogArgs& args) {
         bool use_drm = would_use_drm();
         if (use_drm) {
             spdlog::info("[Watchdog] DRM backend detected, skipping external splash");
+            // Init scripts (helixscreen.init) start splash unconditionally before the
+            // backend is selected. On DRM platforms (Snapmaker U1, etc.) that splash
+            // is invisible — DRM owns the panel — but the fbdev-compat /dev/fb0 layer
+            // lets it run, where it spins burning CPU forever. Reap it now.
+            if (first_launch && args.splash_pid > 0) {
+                spdlog::info("[Watchdog] Reaping orphaned external splash (PID {})",
+                             args.splash_pid);
+                cleanup_splash(args.splash_pid);
+            }
         } else if (first_launch && args.splash_pid > 0) {
             // Adopt externally-started splash (e.g. from init script)
             splash_pid = args.splash_pid;

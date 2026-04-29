@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Splash process orphaned on DRM platforms (Snapmaker U1)** — `helixscreen.init` starts `helix-splash` early before the display backend is selected, but `helix-watchdog`'s "skip external splash on DRM" branch (added because fbdev splash mmap conflicts with DRM) only avoided spawning a *new* splash; the externally-adopted PID was silently dropped, never forwarded to helix-screen via `--splash-pid`, and never reaped. Splash kept running after the UI took over the display, burning ~60% CPU on a single core forever (rockchipdrmfb's fbdev compat layer kept it from failing). Watchdog now reaps the orphan when DRM is selected. Belt-and-suspenders: `cleanup_splash` escalates to SIGKILL after a 600 ms SIGTERM grace, and the splash binary self-exits after 30 s if no signal arrives.
+
 ## [0.99.53] - 2026-04-28
 
 A hotfix release. The headline fix: **v0.99.51 and v0.99.52 could brick AD5X stock-ZMOD printers** by corrupting `Adventurer5M.json` to zero bytes through a Moonraker upload that crossed mount boundaries. On the next firmware restart, Klipper's zmod_color.py couldn't parse the empty file and never finished `connect` — recovery required SSH. Both releases have been pulled from the GitHub release feed; v0.99.53 ships the corrected write path. While we were here, this release also lands the per-printer gcode console filter system, OrcaSlicer-compatible bed/nozzle temperature emission to `lane_data` slot records, and a small theme polish.
