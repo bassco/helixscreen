@@ -977,6 +977,7 @@
   <translation tag="Measure belt path frequencies" en="Measure belt path frequencies"/>
   <translation tag="Measured" en="Measured"/>
   <translation tag="Measurement Failed" en="Measurement Failed"/>
+  <translation tag="Mechanical setup" en="Mechanical setup"/>
   <translation tag="Memory (MB)" en="Memory (MB)"/>
   <translation tag="Mesh Complete" en="Mesh Complete"/>
   <translation tag="Mesh saved as &apos;{}&apos;" en="Mesh saved as &apos;{}&apos;"/>
@@ -1244,6 +1245,7 @@
   <translation tag="Print Tuning" en="Print Tuning"/>
   <translation tag="Print failed" en="Print failed"/>
   <translation tag="Print preparation failed: {}" en="Print preparation failed: {}"/>
+  <translation tag="Print quality" en="Print quality"/>
   <translation tag="Print server rejected the job — check printer status" en="Print server rejected the job — check printer status"/>
   <translation tag="Printer" en="Printer"/>
   <translation tag="Printer Error" en="Printer Error"/>

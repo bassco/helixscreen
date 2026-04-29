@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ui_filament_mapping_card.h"
+#include "ui_pre_print_options_renderer.h"
 #include "ui_print_preparation_manager.h"
 
 #include "moonraker_types.h"
@@ -387,6 +388,13 @@ class PrintSelectDetailView : public OverlayBase {
     // Filament mapping card (replaces color swatches when AMS available)
     FilamentMappingCard filament_mapping_card_;
 
+    // Dynamically-built option toggle rows for the active printer's
+    // PrePrintOptionSet. Populated in on_activate() and rebuilt when the
+    // printer type changes. Owns per-option state subjects.
+    PrePrintOptionsRenderer option_rows_renderer_;
+    lv_obj_t* pre_print_options_container_ = nullptr;
+    std::string last_rendered_printer_type_;
+
     // === Cached show() parameters (used by on_activate) ===
     std::string current_filename_;
     std::string current_path_;
@@ -440,6 +448,18 @@ class PrintSelectDetailView : public OverlayBase {
      * Fixes Snapmaker (and other printers whose Moonraker doesn't return filament_colors).
      */
     void try_extract_gcode_colors(lv_obj_t* viewer);
+
+    /**
+     * @brief Populate the dynamic per-printer option-toggle rows.
+     *
+     * Reads the active printer's `PrePrintOptionSet` from PrinterState and
+     * regenerates the rows inside `pre_print_options_container_`. Idempotent
+     * — safe to call repeatedly; only rebuilds when the printer type changes.
+     * Wires the resulting state subjects through to the prep manager via
+     * `set_option_state_provider()`, and binds a single value-changed
+     * callback that updates the prep-time estimate.
+     */
+    void populate_option_rows();
 
     /**
      * @brief Static callback for delete confirmation

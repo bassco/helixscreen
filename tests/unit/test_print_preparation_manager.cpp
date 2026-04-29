@@ -2349,6 +2349,125 @@ TEST_CASE("PrintPreparationManager: collect_macro_skip_params with matrix",
 }
 
 // ============================================================================
+// Tests: Option State Provider (Phase 3 — pre-print options framework)
+// ============================================================================
+
+/**
+ * Phase 3 introduced an OptionStateProvider callback so the print-detail
+ * panel can surface dynamic per-option subjects without the manager knowing
+ * about their LVGL pointers. The manager's get_option_state(id) overload
+ * resolves through three layers:
+ *   1. Provider (when set and returning 0/1)
+ *   2. Legacy subject path (the six built-in toggles)
+ *   3. Cached PrePrintOptionSet's default_enabled fallback
+ */
+TEST_CASE("PrintPreparationManager: get_option_state(id) provider takes priority",
+          "[print_preparation][option_state][p3]") {
+    lv_init_safe();
+    PrintPreparationManager manager;
+
+    int provider_calls = 0;
+    std::string last_id;
+    int provider_returns = 1;
+    manager.set_option_state_provider([&](const std::string& id) {
+        ++provider_calls;
+        last_id = id;
+        return provider_returns;
+    });
+
+    SECTION("Provider returning 1 yields ENABLED") {
+        provider_returns = 1;
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
+        REQUIRE(provider_calls == 1);
+        REQUIRE(last_id == "bed_mesh");
+    }
+
+    SECTION("Provider returning 0 yields DISABLED") {
+        provider_returns = 0;
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+    }
+
+    SECTION("Provider returning -1 falls through to default") {
+        // No legacy subjects set, no printer state — so falls all the way
+        // through to "unknown id" -> NOT_APPLICABLE.
+        provider_returns = -1;
+        REQUIRE(manager.get_option_state("ai_detect") == PrePrintOptionState::NOT_APPLICABLE);
+    }
+}
+
+TEST_CASE("PrintPreparationManager: get_option_state(id) falls back to legacy subjects",
+          "[print_preparation][option_state][p3]") {
+    lv_init_safe();
+    PrintPreparationManager manager;
+    PreprintSubjectsFixture subjects;
+    subjects.init_all_subjects();
+
+    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
+                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
+                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
+    manager.set_preprint_visibility_subjects(
+        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
+        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
+        &subjects.can_show_timelapse);
+
+    SECTION("Hidden = NOT_APPLICABLE regardless of state") {
+        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);
+        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::NOT_APPLICABLE);
+    }
+
+    SECTION("Visible + checked = ENABLED") {
+        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
+        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
+    }
+
+    SECTION("Visible + unchecked = DISABLED") {
+        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
+        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+    }
+
+    SECTION("Unknown id returns NOT_APPLICABLE without crashing") {
+        REQUIRE(manager.get_option_state("ai_detect") == PrePrintOptionState::NOT_APPLICABLE);
+    }
+}
+
+TEST_CASE("PrintPreparationManager: collect_macro_skip_params drives off provider when set",
+          "[print_preparation][option_state][p3]") {
+    lv_init_safe();
+    // Use AD5M Pro DB entry — has bed_mesh as MacroParam.
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    SECTION("Provider says ENABLED -> no skip param emitted") {
+        manager.set_option_state_provider([](const std::string&) { return 1; });
+        auto params = PrintPreparationManagerTestAccess::get_skip_params(manager);
+        REQUIRE(params.empty());
+    }
+
+    SECTION("Provider says DISABLED -> skip param emitted") {
+        manager.set_option_state_provider([](const std::string&) { return 0; });
+        auto params = PrintPreparationManagerTestAccess::get_skip_params(manager);
+        REQUIRE(params.size() == 1);
+        REQUIRE(params[0].first == "SKIP_LEVELING");
+        REQUIRE(params[0].second == "1");
+    }
+
+    SECTION("Provider returning -1 falls back to option default (default_enabled=true -> no skip)") {
+        manager.set_option_state_provider([](const std::string&) { return -1; });
+        auto params = PrintPreparationManagerTestAccess::get_skip_params(manager);
+        // bed_mesh in AD5M Pro DB has default_enabled=true -> ENABLED -> no skip param.
+        REQUIRE(params.empty());
+    }
+}
+
+// ============================================================================
 // Tests: Unified Operation Capability Lookup (Phase 4)
 // ============================================================================
 

@@ -979,6 +979,7 @@ translations:
   Measure belt path frequencies: Measure belt path frequencies
   Measured: Measured
   Measurement Failed: Measurement Failed
+  Mechanical setup: Mechanical setup
   Memory (MB): Memory (MB)
   Mesh Complete: Mesh Complete
   Mesh saved as '{}': Mesh saved as '{}'
@@ -1246,6 +1247,7 @@ translations:
   Print Time: Print Time
   Print Tuning: Print Tuning
   Print failed: Print failed
+  Print quality: Print quality
   'Print preparation failed: {}': 'Print preparation failed: {}'
   Print server rejected the job — check printer status: Print server rejected the job — check printer status
   Printer: Printer

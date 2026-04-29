@@ -3,7 +3,6 @@
 
 #include "ui_print_select_detail_view.h"
 
-#include "ui_callback_helpers.h"
 #include "ui_error_reporting.h"
 #include "ui_filename_utils.h"
 #include "ui_gcode_viewer.h"
@@ -35,23 +34,18 @@ namespace helix::ui {
 // Static instance pointer for callback access
 // ============================================================================
 
-// Static instance pointer for XML event callbacks to access the PrintSelectDetailView
-// Only one detail view exists at a time, set during init_subjects() / cleared in destructor
+// Static instance pointer for the helper functions in this TU (currently
+// just update_prep_time_label) to reach the live detail view. Only one
+// detail view exists at a time; set during init_subjects() / cleared in the
+// destructor.
 static PrintSelectDetailView* s_detail_view_instance = nullptr;
-
-// Static flag to track if callbacks have been registered (idempotent registration)
-static bool s_callbacks_registered = false;
 
 // ============================================================================
 // Static callback declarations
 // ============================================================================
 
-static void on_preprint_bed_mesh_toggled(lv_event_t* e);
-static void on_preprint_qgl_toggled(lv_event_t* e);
-static void on_preprint_z_tilt_toggled(lv_event_t* e);
-static void on_preprint_nozzle_clean_toggled(lv_event_t* e);
-static void on_preprint_purge_line_toggled(lv_event_t* e);
-static void on_preprint_timelapse_toggled(lv_event_t* e);
+// Forward decl for the prep-time estimate refresh that runs after every
+// toggle. Defined later in this TU.
 static void update_prep_time_label();
 
 // ============================================================================
@@ -116,20 +110,10 @@ void PrintSelectDetailView::init_subjects() {
     // Set static instance pointer for callbacks (must be before callback registration)
     s_detail_view_instance = this;
 
-    // Register XML event callbacks BEFORE subjects (per [L013])
-    // Callbacks must be registered before XML is created
-    if (!s_callbacks_registered) {
-        register_xml_callbacks({
-            {"on_preprint_bed_mesh_toggled", on_preprint_bed_mesh_toggled},
-            {"on_preprint_qgl_toggled", on_preprint_qgl_toggled},
-            {"on_preprint_z_tilt_toggled", on_preprint_z_tilt_toggled},
-            {"on_preprint_nozzle_clean_toggled", on_preprint_nozzle_clean_toggled},
-            {"on_preprint_purge_line_toggled", on_preprint_purge_line_toggled},
-            {"on_preprint_timelapse_toggled", on_preprint_timelapse_toggled},
-        });
-        s_callbacks_registered = true;
-        spdlog::debug("[DetailView] Registered pre-print toggle callbacks");
-    }
+    // Per-option toggle callbacks are wired imperatively in
+    // populate_option_rows() once the dynamic rows are created. The previous
+    // hardcoded XML <event_cb callback="on_preprint_*_toggled"/> bindings are
+    // gone — there is nothing to register here.
 
     // G-code viewer visibility mode (0=thumbnail, 1=3D, 2=2D)
     UI_MANAGED_SUBJECT_INT(detail_gcode_viewer_mode_, 0, "detail_gcode_viewer_mode", subjects_);
@@ -233,13 +217,18 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
         ui_gcode_viewer_set_paused(gcode_viewer_, true);
     }
 
-    // Look up pre-print option checkboxes
-    bed_mesh_checkbox_ = lv_obj_find_by_name(overlay_root_, "bed_mesh_checkbox");
-    qgl_checkbox_ = lv_obj_find_by_name(overlay_root_, "qgl_checkbox");
-    z_tilt_checkbox_ = lv_obj_find_by_name(overlay_root_, "z_tilt_checkbox");
-    nozzle_clean_checkbox_ = lv_obj_find_by_name(overlay_root_, "nozzle_clean_checkbox");
-    purge_line_checkbox_ = lv_obj_find_by_name(overlay_root_, "purge_line_checkbox");
-    timelapse_checkbox_ = lv_obj_find_by_name(overlay_root_, "timelapse_checkbox");
+    // The pre-print option rows are populated dynamically from the active
+    // printer's PrePrintOptionSet — see populate_option_rows(). The
+    // hardcoded checkbox widgets that used to live in the XML are gone;
+    // their pointers exist only as inert nullptr fields kept on the class
+    // for backward compatibility with external callers (none today).
+    bed_mesh_checkbox_ = nullptr;
+    qgl_checkbox_ = nullptr;
+    z_tilt_checkbox_ = nullptr;
+    nozzle_clean_checkbox_ = nullptr;
+    purge_line_checkbox_ = nullptr;
+    timelapse_checkbox_ = nullptr;
+    pre_print_options_container_ = lv_obj_find_by_name(overlay_root_, "pre_print_options_container");
 
     // Look up color requirements display
     color_requirements_card_ = lv_obj_find_by_name(overlay_root_, "color_requirements_card");
@@ -396,8 +385,14 @@ void PrintSelectDetailView::on_activate() {
 
     spdlog::debug("[DetailView] on_activate() for file: {}", current_filename_);
 
-    // Reset pre-print option subjects to defaults for new file
-    // Skip switches default ON (don't skip = preserve file's original behavior)
+    // (Re)build dynamic option rows from the active printer's option set.
+    // Idempotent — only rebuilds when the printer type has changed.
+    populate_option_rows();
+
+    // Reset legacy per-panel subjects to their defaults — these are still
+    // referenced by the prep manager's legacy fallback path (used by tests
+    // and by the prep-time predictor's `add_if_enabled` calls). The new
+    // dynamic per-option subjects are reset by populate_option_rows() above.
     lv_subject_set_int(&preprint_bed_mesh_, 1);
     lv_subject_set_int(&preprint_qgl_, 1);
     lv_subject_set_int(&preprint_z_tilt_, 1);
@@ -510,13 +505,25 @@ void PrintSelectDetailView::on_ui_destroyed() {
     print_button_ = nullptr;
     gcode_viewer_ = nullptr;
 
-    // Pre-print option checkboxes
+    // Pre-print option checkboxes (kept as inert fields; see create()).
     bed_mesh_checkbox_ = nullptr;
     qgl_checkbox_ = nullptr;
     z_tilt_checkbox_ = nullptr;
     nozzle_clean_checkbox_ = nullptr;
     purge_line_checkbox_ = nullptr;
     timelapse_checkbox_ = nullptr;
+
+    // The dynamic option rows were children of overlay_root_, which has been
+    // destroyed by the base class. Drop the renderer's row state and force a
+    // rebuild on next show(). Subjects inside the renderer are heap-owned —
+    // their observers were attached to the now-deleted row widgets, so
+    // dropping the subjects here is safe.
+    pre_print_options_container_ = nullptr;
+    option_rows_renderer_.clear();
+    last_rendered_printer_type_.clear();
+    if (prep_manager_) {
+        prep_manager_->set_option_state_provider(nullptr);
+    }
 
     // Color requirements display
     color_requirements_card_ = nullptr;
@@ -1051,74 +1058,91 @@ static void update_prep_time_label() {
 }
 
 // ============================================================================
-// Static Callbacks for Pre-print Switch Toggles (LT2 Phase 4)
+// Dynamic option-row population
 // ============================================================================
+//
+// `pre_print_options_container_` is populated from the active printer's
+// `PrePrintOptionSet`. Each option becomes a row with a label + switch; rows
+// are grouped under sub-headers per category. This replaces the previous
+// hardcoded XML rows + per-option static callbacks.
+//
+// The renderer owns one heap-allocated lv_subject_t per option (the toggle
+// state). We register a state provider on `prep_manager_` so that
+// `collect_macro_skip_params()` can read these subjects without needing to
+// know about their LVGL pointers — it queries by id.
+//
+// Visibility per-row is bound to the existing PrinterState `can_show_*`
+// subjects, which are driven by macro analysis + plugin presence. The id ->
+// can_show subject mapping is currently hardcoded (the legacy six options
+// are the only ones gated by plugin/macro analysis); new options that use
+// pure-database visibility get no visibility binding and show whenever the
+// printer's option set advertises them.
 
-static void on_preprint_bed_mesh_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
+void PrintSelectDetailView::populate_option_rows() {
+    if (!pre_print_options_container_) {
         return;
     }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_bed_mesh_subject(), checked ? 1 : 0);
-    spdlog::debug("[DetailView] Bed mesh toggled: {}", checked);
-    update_prep_time_label();
-}
 
-static void on_preprint_qgl_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
+    if (!printer_state_) {
         return;
     }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_qgl_subject(), checked ? 1 : 0);
-    spdlog::debug("[DetailView] QGL toggled: {}", checked);
-    update_prep_time_label();
-}
 
-static void on_preprint_z_tilt_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
+    const auto& option_set = printer_state_->get_pre_print_option_set();
+
+    // Skip rebuild if rows already exist. Repopulation while children are
+    // already attached would race with safe_clean_children's deferred delete
+    // and the observer/subject cleanup ordering — see CLAUDE.md "No sync
+    // widget deletion in queued callbacks". The widget tree is destroyed and
+    // recreated on close (see on_ui_destroyed), so a fresh populate fires
+    // every time the panel re-opens. Switching printer type while the
+    // detail view is open is not currently supported; if needed, a future
+    // change can plumb in a defer-then-rebuild path.
+    const std::string& current_type = printer_state_->get_printer_type();
+    if (option_rows_renderer_.row_count() > 0) {
+        spdlog::trace("[DetailView] Skipping option-row rebuild (already populated)");
         return;
     }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_z_tilt_subject(), checked ? 1 : 0);
-    spdlog::debug("[DetailView] Z-tilt toggled: {}", checked);
-    update_prep_time_label();
-}
+    last_rendered_printer_type_ = current_type;
 
-static void on_preprint_nozzle_clean_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
-        return;
-    }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_nozzle_clean_subject(),
-                       checked ? 1 : 0);
-    spdlog::debug("[DetailView] Nozzle clean toggled: {}", checked);
-    update_prep_time_label();
-}
+    // Look up the existing PrinterState can_show_* subject for the legacy
+    // six-id set. Returns nullptr for unknown ids so the renderer leaves
+    // those rows always-visible (the database advertising the option is
+    // sufficient gating for new framework-only options).
+    auto visibility_lookup = [this](const std::string& id) -> lv_subject_t* {
+        if (!printer_state_) return nullptr;
+        if (id == "bed_mesh") return printer_state_->get_can_show_bed_mesh_subject();
+        if (id == "qgl") return printer_state_->get_can_show_qgl_subject();
+        if (id == "z_tilt") return printer_state_->get_can_show_z_tilt_subject();
+        if (id == "nozzle_clean") return printer_state_->get_can_show_nozzle_clean_subject();
+        if (id == "purge_line") return printer_state_->get_can_show_purge_line_subject();
+        if (id == "timelapse") return printer_state_->get_printer_has_timelapse_subject();
+        return nullptr;
+    };
 
-static void on_preprint_purge_line_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
-        return;
-    }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_purge_line_subject(), checked ? 1 : 0);
-    spdlog::debug("[DetailView] Purge line toggled: {}", checked);
-    update_prep_time_label();
-}
+    option_rows_renderer_.populate(pre_print_options_container_, option_set, visibility_lookup,
+                                   [](const std::string& id, int new_state) {
+                                       spdlog::debug("[DetailView] Option '{}' toggled: {}", id,
+                                                     new_state);
+                                       update_prep_time_label();
+                                   });
 
-static void on_preprint_timelapse_toggled(lv_event_t* e) {
-    if (!s_detail_view_instance) {
-        return;
+    // Wire up the option-state provider on the prep manager so that
+    // collect_macro_skip_params() reads from these dynamic subjects. -1 means
+    // "not bound" — manager falls back to its legacy subject path or the
+    // option's default.
+    if (prep_manager_) {
+        prep_manager_->set_option_state_provider([this](const std::string& id) -> int {
+            // Only return 0/1 for ids the renderer actually has rows for.
+            // Otherwise defer to the manager's fallback chain.
+            auto ids = option_rows_renderer_.rendered_ids();
+            for (const auto& rid : ids) {
+                if (rid == id) {
+                    return option_rows_renderer_.get_state(id, 0);
+                }
+            }
+            return -1;
+        });
     }
-    auto* sw = static_cast<lv_obj_t*>(lv_event_get_target(e));
-    bool checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
-    lv_subject_set_int(s_detail_view_instance->get_preprint_timelapse_subject(), checked ? 1 : 0);
-    spdlog::debug("[DetailView] Timelapse toggled: {}", checked);
-    update_prep_time_label();
 }
 
 } // namespace helix::ui

@@ -209,6 +209,47 @@ class PrintPreparationManager {
         on_macro_analysis_complete_ = std::move(callback);
     }
 
+    /**
+     * @brief Set a provider that returns the current toggle state for an
+     *        option id ("bed_mesh", "qgl", ...).
+     *
+     * Used by `collect_macro_skip_params()` to drive the new framework path:
+     * the print-detail panel sets this provider so the manager can read
+     * dynamic per-option subjects without hardcoding their names.
+     *
+     * The provider returns 1 when the user has the option toggled ON, 0 when
+     * OFF. Returning -1 means "not currently bound to a UI row" — the manager
+     * then falls back to the option's `default_enabled` value.
+     *
+     * Setting nullptr clears the provider; the manager reverts to the legacy
+     * subject-pointer path for the six built-in toggles.
+     */
+    using OptionStateProvider = std::function<int(const std::string& id)>;
+    void set_option_state_provider(OptionStateProvider provider) {
+        option_state_provider_ = std::move(provider);
+    }
+
+    /**
+     * @brief Read the user-intent state for a pre-print option by id.
+     *
+     * Resolution order:
+     *   1. If an `OptionStateProvider` is set and returns 0/1, use that.
+     *   2. Otherwise, for the six legacy ids (bed_mesh, qgl, z_tilt,
+     *      nozzle_clean, purge_line, timelapse), read the corresponding
+     *      legacy subject set via `set_preprint_subjects()`/
+     *      `set_preprint_visibility_subjects()`. Returns:
+     *         ENABLED        — visible + checked
+     *         DISABLED       — visible + unchecked
+     *         NOT_APPLICABLE — hidden, or no subject bound
+     *   3. Otherwise, returns ENABLED iff the option's `default_enabled` is
+     *      true, DISABLED if the option is in the cached set with default
+     *      false, or NOT_APPLICABLE if the option is unknown to the cached
+     *      set.
+     *
+     * @param id Option id (e.g. "bed_mesh", "ai_detect")
+     */
+    [[nodiscard]] PrePrintOptionState get_option_state(const std::string& id) const;
+
     // === PRINT_START Macro Analysis ===
 
     /**
@@ -531,6 +572,12 @@ class PrintPreparationManager {
     // === Callbacks ===
     ScanCompleteCallback on_scan_complete_;
     MacroAnalysisCallback on_macro_analysis_complete_;
+
+    // === Option-state provider (LT3) ===
+    // When set, drives get_option_state() — used by the print-detail panel
+    // to surface dynamic per-option subjects without the manager having to
+    // know about their LVGL pointers.
+    OptionStateProvider option_state_provider_;
 
     // === PRINT_START Analysis Cache ===
     std::optional<helix::PrintStartAnalysis> macro_analysis_;

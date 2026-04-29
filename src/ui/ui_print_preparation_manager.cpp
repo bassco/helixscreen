@@ -61,6 +61,65 @@ const PrePrintOptionSet& PrintPreparationManager::get_cached_options() const {
 }
 
 // ============================================================================
+// Option State Resolution (LT3)
+// ============================================================================
+
+PrePrintOptionState PrintPreparationManager::get_option_state(const std::string& id) const {
+    // 1. Provider takes priority. The detail panel registers a provider that
+    //    reads from per-option dynamic subjects. The provider returns 0/1
+    //    when bound; any other value means "not bound" — fall through.
+    if (option_state_provider_) {
+        int v = option_state_provider_(id);
+        if (v == 0) {
+            return PrePrintOptionState::DISABLED;
+        }
+        if (v == 1) {
+            return PrePrintOptionState::ENABLED;
+        }
+    }
+
+    // 2. Legacy subject path for the six built-in toggles. Mirrors the
+    //    historical hardcoded mapping. Reuses the same tri-state semantics
+    //    as the lv_subject_t* overload (hidden = NOT_APPLICABLE).
+    auto legacy = [this](lv_subject_t* vis,
+                         lv_subject_t* val) -> std::optional<PrePrintOptionState> {
+        if (!val) {
+            return std::nullopt;
+        }
+        return get_option_state(vis, val);
+    };
+
+    if (id == "bed_mesh") {
+        if (auto v = legacy(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_))
+            return *v;
+    } else if (id == "qgl") {
+        if (auto v = legacy(can_show_qgl_subject_, preprint_qgl_subject_))
+            return *v;
+    } else if (id == "z_tilt") {
+        if (auto v = legacy(can_show_z_tilt_subject_, preprint_z_tilt_subject_))
+            return *v;
+    } else if (id == "nozzle_clean") {
+        if (auto v = legacy(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_))
+            return *v;
+    } else if (id == "purge_line") {
+        if (auto v = legacy(can_show_purge_line_subject_, preprint_purge_line_subject_))
+            return *v;
+    } else if (id == "timelapse") {
+        if (auto v = legacy(can_show_timelapse_subject_, preprint_timelapse_subject_))
+            return *v;
+    }
+
+    // 3. Fall back to the option's default_enabled from the cached set.
+    const auto& opts = get_cached_options();
+    if (const PrePrintOption* opt = opts.find(id)) {
+        return opt->default_enabled ? PrePrintOptionState::ENABLED
+                                    : PrePrintOptionState::DISABLED;
+    }
+
+    return PrePrintOptionState::NOT_APPLICABLE;
+}
+
+// ============================================================================
 // Setup
 // ============================================================================
 
@@ -1154,41 +1213,28 @@ PrintPreparationManager::collect_macro_skip_params() const {
     // PRIORITY 1: Check printer pre-print options for known native params
     // If we have a database option set for this printer type, use it directly
     // instead of relying on macro analysis. This is faster and more reliable.
+    //
+    // Phase 3: walk the option set generically via get_option_state(id) — the
+    // print-detail panel registers an OptionStateProvider that reads dynamic
+    // per-option subjects, so adding a new option to printer_database.json
+    // is enough to enable it without a code change here.
     const auto& db_options = get_cached_options();
     if (!db_options.empty()) {
         spdlog::info("[PrintPreparationManager] Using pre-print options database ({} options)",
                      db_options.options.size());
 
-        // Map of option id → checkbox subject pair (visibility, value).
-        // Only the six built-in toggles have UI subjects in Phase 2.
-        struct UiBinding {
-            const char* id;
-            lv_subject_t* visibility_subject;
-            lv_subject_t* value_subject;
-        };
-        const UiBinding bindings[] = {
-            {"bed_mesh", can_show_bed_mesh_subject_, preprint_bed_mesh_subject_},
-            {"qgl", can_show_qgl_subject_, preprint_qgl_subject_},
-            {"z_tilt", can_show_z_tilt_subject_, preprint_z_tilt_subject_},
-            {"nozzle_clean", can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_},
-            // Priming/timelapse intentionally omitted — no checkbox bound today.
-        };
-
-        for (const auto& binding : bindings) {
-            const PrePrintOption* opt = db_options.find(binding.id);
-            if (!opt) {
-                continue;
-            }
-            // Only add skip param if user explicitly DISABLED (not hidden/not applicable)
-            if (get_option_state(binding.visibility_subject, binding.value_subject) !=
-                PrePrintOptionState::DISABLED) {
+        for (const auto& opt : db_options.options) {
+            // Only add skip param when user explicitly disabled the option
+            // (visible + unchecked). Hidden / not-applicable means the
+            // printer doesn't support the op and skip params shouldn't be
+            // appended.
+            if (get_option_state(opt.id) != PrePrintOptionState::DISABLED) {
                 continue;
             }
 
-            switch (opt->strategy_kind) {
+            switch (opt.strategy_kind) {
             case PrePrintStrategyKind::MacroParam: {
-                const auto* macro =
-                    std::get_if<PrePrintStrategyMacroParam>(&opt->strategy);
+                const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&opt.strategy);
                 if (macro) {
                     skip_params.emplace_back(macro->param_name, macro->skip_value);
                     spdlog::debug("[PrintPreparationManager] Using database param: {}={}",
@@ -1201,7 +1247,7 @@ PrintPreparationManager::collect_macro_skip_params() const {
             case PrePrintStrategyKind::RuntimeCommand:
                 spdlog::warn("[PrintPreparationManager] Option '{}' uses non-MacroParam strategy "
                              "which is not yet wired up (Phase 3+). Ignoring.",
-                             opt->id);
+                             opt.id);
                 break;
             }
         }
