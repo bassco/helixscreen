@@ -120,8 +120,8 @@
 - **Uses**: 5 | **Velocity**: 1.125 | **Learned**: 2026-02-07 | **Last**: 2026-04-20 | **Category**: system
 > AD5M (192.168.1.67, root@) runs armv7l Linux 5.4.61 (BusyBox). Key gotchas: (1) No curl, only wget - and wget has NO HTTPS support (compiled without SSL). (2) No sftp-server - use 'scp -O' (legacy protocol) instead of default scp. (3) Logging: default level is WARN, app logs to BOTH /tmp/helixscreen.log AND syslog (/var/log/messages) - syslog has the CURRENT session, /tmp/helixscreen.log may be stale from previous session. (4) No CA certificate bundle shipped - /etc/ssl/certs/ is empty, breaks ALL outbound HTTPS (libhv, wget). Must ship ca-certificates.crt with install. (5) No openssl CLI command. (6) No inotify support. (7) No WiFi (wpa_supplicant present but no interfaces). (8) OpenSSL 1.1 libs exist at /usr/lib/libssl.so.1.1. (9) Binary at /opt/helixscreen/, config at /opt/helixscreen/config/helixconfig.json. (10) ldd may return empty for statically-linked ARM binaries.
 
-### [L062] [**---|***--] AD5M build and deploy targets
-- **Uses**: 8 | **Velocity**: 1.375 | **Learned**: 2026-02-07 | **Last**: 2026-04-19 | **Category**: build
+### [L062] [***--|****-] AD5M build and deploy targets
+- **Uses**: 10 | **Velocity**: 3.375 | **Learned**: 2026-02-07 | **Last**: 2026-04-29 | **Category**: build
 > AD5M cross-compilation uses 'make ad5m-docker' (Docker-based ARM cross-compile), NOT 'make pi-test' (which targets Raspberry Pi). Deploy with 'AD5M_HOST=192.168.1.67 make ad5m-deploy'. The pi-test target is for a different device entirely.
 
 ### [L064] [***--|*****] Commit generated translation artifacts
@@ -153,7 +153,7 @@
 > When a parent view has an event_cb for "clicked", all child objects (lv_obj, icon, text_body, text_tiny, etc.) must have `clickable="false" event_bubble="true"` or they absorb the click before it reaches the parent's callback. LVGL objects are clickable by default.
 
 ### [L070] [***--|*****] Don't lv_tr() non-translatable strings
-- **Uses**: 23 | **Velocity**: 4.875 | **Learned**: 2026-02-17 | **Last**: 2026-04-23 | **Category**: i18n
+- **Uses**: 24 | **Velocity**: 5.875 | **Learned**: 2026-02-17 | **Last**: 2026-04-29 | **Category**: i18n
 > Never wrap product names (Spoolman, Klipper, Moonraker, HelixScreen), URLs/domains, technical abbreviations used as standalone labels (AMS, QGL, ADXL), or universal terms (OK, WiFi) in lv_tr(). Add '// i18n: do not translate' comment explaining why. Sentences CONTAINING product names ARE translatable — 'Restarting HelixScreen...' is fine because 'Restarting' translates. Material names (PLA, PETG, ABS, TPU, PA) also don't get translated or translation_tag in XML.
 
 ### [L072] [***--|****-] Never capture bare this in async/WebSocket callbacks
