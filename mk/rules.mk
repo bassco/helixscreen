@@ -275,17 +275,22 @@ endif
 # (e.g. LV_BIN_DECODER_RAM_LOAD) and missing rebuilds cause subtle runtime failures.
 # PATCHES_STAMP ensures patches are applied before compiling (race with -j on fresh checkout).
 # Emits .ccj fragment for incremental compile_commands.json generation
+# -fexceptions: emit cleanup actions in unwind tables so __attribute__((cleanup))
+# fires when a C++ exception unwinds through these C frames. Required for
+# lvgl_event_pop_unwind_safe.patch (L081 root cause fix). Code-size impact is
+# bounded — only functions with cleanups get extra unwind regions.
+LVGL_C_CFLAGS := $(SUBMODULE_CFLAGS) -fexceptions
 $(OBJ_DIR)/lvgl/%.o: $(LVGL_DIR)/%.c lv_conf.h $(PATCHES_STAMP)
 	$(Q)mkdir -p $(dir $@)
 	$(ECHO) "$(CYAN)[CC]$(RESET) $<"
 ifeq ($(V),1)
-	$(Q)echo "$(YELLOW)Command:$(RESET) $(CC) $(SUBMODULE_CFLAGS) $(INCLUDES) $(LV_CONF) -c $< -o $@"
+	$(Q)echo "$(YELLOW)Command:$(RESET) $(CC) $(LVGL_C_CFLAGS) $(INCLUDES) $(LV_CONF) -c $< -o $@"
 endif
-	$(Q)$(CC) $(SUBMODULE_CFLAGS) $(INCLUDES) $(LV_CONF) -c $< -o $@ || { \
+	$(Q)$(CC) $(LVGL_C_CFLAGS) $(INCLUDES) $(LV_CONF) -c $< -o $@ || { \
 		echo "$(RED)$(BOLD)✗ Compilation failed:$(RESET) $<"; \
 		exit 1; \
 	}
-	$(call emit-compile-command,$(CC),$(SUBMODULE_CFLAGS) $(INCLUDES) $(LV_CONF),$<,$@)
+	$(call emit-compile-command,$(CC),$(LVGL_C_CFLAGS) $(INCLUDES) $(LV_CONF),$<,$@)
 
 # Compile Helix XML sources (extracted from LVGL, with our patches baked in)
 $(OBJ_DIR)/helix-xml/%.o: $(HELIX_XML_DIR)/%.c lv_conf.h $(PATCHES_STAMP)

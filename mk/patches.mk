@@ -512,6 +512,13 @@ $(PATCHES_STAMP): $(PATCH_FILES) $(LVGL_HEAD) $(LIBHV_HEAD)
 	else \
 		echo "$(GREEN)✓ LVGL lv_event_mark_deleted defensive bail patch already applied$(RESET)"; \
 	fi
+	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_event_pop_unwind_safe.patch 2>/dev/null; then \
+		echo "$(YELLOW)→ Applying LVGL event-pop unwind-safe patch (RPHAV9T7 / L081 root cause)...$(RESET)"; \
+		git -C $(LVGL_DIR) apply ../../patches/lvgl_event_pop_unwind_safe.patch && \
+		echo "$(GREEN)✓ event-pop unwind-safe patch applied$(RESET)"; \
+	else \
+		echo "$(GREEN)✓ LVGL event-pop unwind-safe patch already applied$(RESET)"; \
+	fi
 	$(Q)if git -C $(LVGL_DIR) apply --check ../../patches/lvgl_style_null_guards.patch 2>/dev/null; then \
 		echo "$(YELLOW)→ Applying LVGL style NULL guards patch (null style pointers in transitions/cache)...$(RESET)"; \
 		git -C $(LVGL_DIR) apply ../../patches/lvgl_style_null_guards.patch && \
