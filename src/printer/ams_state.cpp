@@ -210,8 +210,10 @@ void AmsState::init_subjects(bool register_xml) {
     if (register_xml)
         lv_xml_register_subject(nullptr, "ams_system_name", &ams_system_name_);
 
-    // Logo uses pointer subject — bind_src expects a pointer to the path string buffer
-    lv_subject_init_pointer(&ams_system_logo_, system_logo_buf_);
+    // Logo uses pointer subject — bind_src expects a pointer to the path string buffer.
+    // Init to nullptr so XML bind_src doesn't fire lv_image_set_src("") warnings before
+    // sync_from_backend populates the real logo path.
+    lv_subject_init_pointer(&ams_system_logo_, nullptr);
     subjects_.register_subject(&ams_system_logo_);
     if (register_xml)
         lv_xml_register_subject(nullptr, "ams_system_logo", &ams_system_logo_);

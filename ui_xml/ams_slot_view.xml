@@ -80,9 +80,9 @@
               scrollable="false"
               clickable="false"
               event_bubble="true">
-        <!-- Slot number label (1, 2, 3, etc.) -->
+        <!-- Slot number label (1, 2, 3, etc.) — text set in C++, no translation -->
         <text_small name="slot_badge_label"
-                    text="?" translation_tag="?"
+                    text="?"
                     align="center"
                     style_text_color="#text"
                     clickable="false"

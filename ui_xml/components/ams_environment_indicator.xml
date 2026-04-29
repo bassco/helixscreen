@@ -72,7 +72,7 @@
           <bind_flag_if_not_eq subject="ams_env_ind_0_humidity_status" flag="hidden" ref_value="1"/>
         </text_small>
         <!-- Danger (red) — visible when status=2 -->
-        <text_small bind_text="ams_env_ind_0_humidity_text" style_text_color="#error"
+        <text_small bind_text="ams_env_ind_0_humidity_text" style_text_color="#danger"
                     clickable="false" event_bubble="true" hidden="true">
           <bind_flag_if_not_eq subject="ams_env_ind_0_humidity_status" flag="hidden" ref_value="2"/>
         </text_small>
