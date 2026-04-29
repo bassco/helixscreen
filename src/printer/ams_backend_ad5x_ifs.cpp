@@ -4,6 +4,8 @@
 
 #include "ams_backend_ad5x_ifs.h"
 
+#include "config.h"
+#include "host_identity.h"
 #include "http_executor.h"
 #include "moonraker_api.h"
 #include "moonraker_client.h"
@@ -12,6 +14,11 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <regex>
 #include <sstream>
 #include <thread>
@@ -71,6 +78,12 @@ void AmsBackendAd5xIfs::on_started() {
         spdlog::info("{} Loaded {} slot overrides from filament_slot store", backend_log_tag(),
                      loaded_count);
     }
+
+    // Resolve the on-disk Adventurer5M.json path so write_adventurer_json()
+    // can bypass the broken Moonraker upload path. Done after override-store
+    // setup so failure here doesn't block override loading. Safe no-op when
+    // we're remote, the file isn't present, or it isn't writable.
+    detect_local_adventurer_json_path();
 
     // Query initial state from printer
     if (!client_)
@@ -1235,6 +1248,16 @@ AmsError AmsBackendAd5xIfs::write_ifs_var(const std::string& key, const std::str
 }
 
 AmsError AmsBackendAd5xIfs::write_adventurer_json(int slot_index) {
+    // Same-host fast path: write the file via direct filesystem access.
+    // Avoids Moonraker's HTTP upload, which on AD5X stock-ZMOD does an
+    // os.rename across mount points (/root/printer_data/tmp →
+    // /usr/prog/config via symlink) and corrupts the file with EXDEV.
+    // Bundle DQK7X96B (v0.99.52) was a bricked Klipper at boot from this
+    // exact failure mode.
+    if (!local_adventurer_json_path_.empty()) {
+        return write_adventurer_json_local(slot_index);
+    }
+
     if (!api_) {
         return AmsErrorHelper::invalid_parameter("No API connection");
     }
@@ -1330,6 +1353,142 @@ AmsError AmsBackendAd5xIfs::write_adventurer_json(int slot_index) {
     }
 
     return *result;
+}
+
+AmsError AmsBackendAd5xIfs::write_adventurer_json_local(int slot_index) {
+    if (local_adventurer_json_path_.empty()) {
+        return AmsErrorHelper::command_failed("write_adventurer_json_local",
+                                              "Local path not resolved");
+    }
+
+    auto idx = static_cast<size_t>(slot_index);
+    int port = slot_index + 1;
+
+    std::string hex, material;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        hex = colors_[idx];
+        material = materials_[idx];
+    }
+    if (hex.empty())
+        hex = "808080";
+    if (material.empty())
+        material = "PLA";
+    const std::string hex_with_hash = "#" + hex;
+
+    // Read-modify-write. An empty / unparseable existing file is treated as
+    // "fresh start with empty FFMInfo" so we auto-repair the bricked-printer
+    // case (corrupted Adventurer5M.json from a prior EXDEV upload — the very
+    // failure mode this code path exists to fix).
+    json doc;
+    {
+        std::ifstream in(local_adventurer_json_path_);
+        std::stringstream buf;
+        buf << in.rdbuf();
+        const std::string content = buf.str();
+        if (content.empty()) {
+            doc = json::object();
+        } else {
+            try {
+                doc = json::parse(content);
+            } catch (const json::parse_error&) {
+                spdlog::warn("{} Adventurer5M.json at {} is unparseable; rewriting from scratch",
+                             backend_log_tag(), local_adventurer_json_path_);
+                doc = json::object();
+            }
+        }
+    }
+
+    if (!doc.contains("FFMInfo") || !doc["FFMInfo"].is_object()) {
+        doc["FFMInfo"] = json::object();
+    }
+    doc["FFMInfo"]["ffmColor" + std::to_string(port)] = hex_with_hash;
+    doc["FFMInfo"]["ffmType" + std::to_string(port)] = material;
+
+    const std::string updated = doc.dump(4);
+
+    // Atomic write: stage to <path>.tmp in the same directory, then rename().
+    // POSIX rename() is atomic when src+dst are on the same filesystem — that's
+    // guaranteed here because both live in the same directory. Critically, we
+    // do NOT cross filesystems the way Moonraker's upload does.
+    const std::string tmp_path = local_adventurer_json_path_ + ".tmp";
+    {
+        std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
+        if (!out) {
+            return AmsErrorHelper::command_failed("write_adventurer_json_local",
+                                                  std::string("open(") + tmp_path +
+                                                      ") failed: " + std::strerror(errno));
+        }
+        out << updated;
+        out.flush();
+        if (!out) {
+            std::error_code ec;
+            std::filesystem::remove(tmp_path, ec);
+            return AmsErrorHelper::command_failed("write_adventurer_json_local",
+                                                  "Write failed");
+        }
+    }
+
+    if (std::rename(tmp_path.c_str(), local_adventurer_json_path_.c_str()) != 0) {
+        const int saved_errno = errno;
+        std::error_code ec;
+        std::filesystem::remove(tmp_path, ec);
+        return AmsErrorHelper::command_failed("write_adventurer_json_local",
+                                              std::string("rename failed: ") +
+                                                  std::strerror(saved_errno));
+    }
+
+    spdlog::info("{} Wrote slot {} to Adventurer5M.json (direct fs path: {})", backend_log_tag(),
+                 port, local_adventurer_json_path_);
+    return AmsErrorHelper::success();
+}
+
+void AmsBackendAd5xIfs::detect_local_adventurer_json_path() {
+    // Only meaningful when Moonraker runs on the same host — otherwise
+    // /usr/prog/config/ is on a remote filesystem we can't touch.
+    std::string moonraker_host;
+    if (helix::Config* cfg = helix::Config::get_instance()) {
+        moonraker_host =
+            cfg->get<std::string>(cfg->df() + "moonraker_host", "localhost");
+    }
+    if (!helix::is_moonraker_on_same_host(moonraker_host)) {
+        spdlog::debug("{} Moonraker is remote ({}); leaving Adventurer5M.json on upload path",
+                      backend_log_tag(), moonraker_host);
+        return;
+    }
+
+    // Candidate paths in priority order. /usr/prog/config is the AD5X stock-ZMOD
+    // canonical install. /opt/config/Adventurer5M.json is where ZMOD-on-ForgeX
+    // stages it. Both are the EXDEV-prone destinations on AD5X stock — that's
+    // the entire reason we want direct write.
+    static constexpr std::array<const char*, 2> candidates = {
+        "/usr/prog/config/Adventurer5M.json",
+        "/opt/config/Adventurer5M.json",
+    };
+
+    for (const auto* candidate : candidates) {
+        std::error_code ec;
+        if (!std::filesystem::exists(candidate, ec) || ec) {
+            continue;
+        }
+        // Must be a regular file (or a symlink resolving to one) and writable.
+        if (!std::filesystem::is_regular_file(candidate, ec) || ec) {
+            continue;
+        }
+        if (::access(candidate, W_OK) != 0) {
+            spdlog::debug("{} {} exists but is not writable (errno={}); skipping",
+                          backend_log_tag(), candidate, errno);
+            continue;
+        }
+        local_adventurer_json_path_ = candidate;
+        spdlog::info("{} Resolved Adventurer5M.json local path: {} "
+                     "(bypasses Moonraker upload to avoid EXDEV on /usr/prog/config symlink)",
+                     backend_log_tag(), candidate);
+        return;
+    }
+
+    spdlog::debug("{} No local Adventurer5M.json candidate found; staying on Moonraker upload path",
+                  backend_log_tag());
 }
 
 void AmsBackendAd5xIfs::read_adventurer_json() {

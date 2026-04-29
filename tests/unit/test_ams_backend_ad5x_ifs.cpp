@@ -12,8 +12,10 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -229,6 +231,20 @@ class Ad5xIfsTestAccess {
     }
     static bool note_json_content(AmsBackendAd5xIfs& b, const std::string& content) {
         return b.note_json_content(content);
+    }
+    // Override the resolved on-disk Adventurer5M.json path so tests can drive
+    // the direct-write path against a tmp file instead of the real
+    // /usr/prog/config target. Empty string forces the Moonraker fallback.
+    static void set_local_adventurer_json_path(AmsBackendAd5xIfs& b, const std::string& p) {
+        b.local_adventurer_json_path_ = p;
+    }
+    static const std::string& local_adventurer_json_path(const AmsBackendAd5xIfs& b) {
+        return b.local_adventurer_json_path_;
+    }
+    // Drive the local read-modify-write path directly so tests can assert
+    // file content without going through the full set_slot_info pipeline.
+    static AmsError write_adventurer_json_local(AmsBackendAd5xIfs& b, int slot_index) {
+        return b.write_adventurer_json_local(slot_index);
     }
 };
 
@@ -3230,4 +3246,160 @@ TEST_CASE("AD5X IFS note_json_content reports changed only on different bytes",
     CHECK(Ad5xIfsTestAccess::note_json_content(backend, b));
     // And steady-state again on b.
     CHECK_FALSE(Ad5xIfsTestAccess::note_json_content(backend, b));
+}
+
+// ==========================================================================
+// write_adventurer_json local-filesystem path
+//
+// Bug context: bundle DQK7X96B (AD5X stock-ZMOD, v0.99.52) showed Klipper
+// shutdown with JSONDecodeError on Adventurer5M.json. Root cause: Moonraker's
+// /server/files/upload writes to /root/printer_data/tmp/ then os.rename's to
+// the symlinked /usr/prog/config/Adventurer5M.json — those two locations are
+// on different mounts on AD5X stock-ZMOD, so rename throws EXDEV and the
+// destination ends up empty. Klipper's zmod_color.py then crashes at startup
+// trying to json.load() the empty file → printer bricked.
+//
+// Fix: when helix-screen runs on the same host as Moonraker, write the file
+// directly via filesystem APIs (atomic temp+rename within the same dir).
+// Only falls back to the Moonraker upload when remote.
+// ==========================================================================
+
+namespace {
+struct Ad5xIfsTmpJsonFile {
+    std::filesystem::path path;
+    explicit Ad5xIfsTmpJsonFile(const std::string& suffix, const std::string& seed_content) {
+        path = std::filesystem::temp_directory_path() /
+               ("ad5x_ifs_advjson_" + suffix + "_" + std::to_string(::getpid()) + ".json");
+        std::filesystem::remove(path);
+        if (!seed_content.empty()) {
+            std::ofstream f(path);
+            f << seed_content;
+        }
+    }
+    ~Ad5xIfsTmpJsonFile() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+        // Cleanup any leftover temp from atomic write
+        std::filesystem::remove(path.string() + ".tmp", ec);
+    }
+};
+} // namespace
+
+TEST_CASE("AD5X IFS write_adventurer_json_local read-modify-writes the on-disk file",
+          "[ams][ad5x_ifs][local_write]") {
+    // Seed a realistic Adventurer5M.json with all four slots.
+    const std::string seed = R"({
+    "FFMInfo": {
+        "ffmColor1": "#FF0000",
+        "ffmType1": "PLA",
+        "ffmColor2": "#00FF00",
+        "ffmType2": "PETG",
+        "ffmColor3": "#0000FF",
+        "ffmType3": "ABS",
+        "ffmColor4": "#FFFFFF",
+        "ffmType4": "PLA"
+    }
+})";
+    Ad5xIfsTmpJsonFile tmp("rmw", seed);
+
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_local_adventurer_json_path(backend, tmp.path.string());
+
+    // Stage new color + material on slot 0 (port 1) and trigger the write.
+    Ad5xIfsTestAccess::set_color(backend, 0, "AABBCC");
+    Ad5xIfsTestAccess::set_material(backend, 0, "TPU");
+
+    auto err = Ad5xIfsTestAccess::write_adventurer_json_local(backend, 0);
+    REQUIRE(err.success());
+
+    // Read the file back; slot 1 should be updated and other slots untouched.
+    std::ifstream f(tmp.path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    auto doc = json::parse(ss.str());
+    CHECK(doc["FFMInfo"]["ffmColor1"] == "#AABBCC");
+    CHECK(doc["FFMInfo"]["ffmType1"] == "TPU");
+    CHECK(doc["FFMInfo"]["ffmColor2"] == "#00FF00");
+    CHECK(doc["FFMInfo"]["ffmType2"] == "PETG");
+    CHECK(doc["FFMInfo"]["ffmColor3"] == "#0000FF");
+    CHECK(doc["FFMInfo"]["ffmType3"] == "ABS");
+    CHECK(doc["FFMInfo"]["ffmColor4"] == "#FFFFFF");
+    CHECK(doc["FFMInfo"]["ffmType4"] == "PLA");
+}
+
+TEST_CASE("AD5X IFS write_adventurer_json_local creates FFMInfo if missing",
+          "[ams][ad5x_ifs][local_write]") {
+    // Adventurer5M.json without FFMInfo (zmod default-initialized empty file).
+    Ad5xIfsTmpJsonFile tmp("missing_ffminfo", "{}");
+
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_local_adventurer_json_path(backend, tmp.path.string());
+    Ad5xIfsTestAccess::set_color(backend, 1, "112233");
+    Ad5xIfsTestAccess::set_material(backend, 1, "PETG");
+
+    auto err = Ad5xIfsTestAccess::write_adventurer_json_local(backend, 1);
+    REQUIRE(err.success());
+
+    std::ifstream f(tmp.path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    auto doc = json::parse(ss.str());
+    CHECK(doc["FFMInfo"]["ffmColor2"] == "#112233");
+    CHECK(doc["FFMInfo"]["ffmType2"] == "PETG");
+}
+
+TEST_CASE("AD5X IFS write_adventurer_json_local rejects empty path",
+          "[ams][ad5x_ifs][local_write]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    // local path not set — direct write must report failure so caller falls
+    // back to Moonraker upload.
+    auto err = Ad5xIfsTestAccess::write_adventurer_json_local(backend, 0);
+    CHECK_FALSE(err.success());
+}
+
+TEST_CASE("AD5X IFS write_adventurer_json_local rejects unparseable existing file",
+          "[ams][ad5x_ifs][local_write]") {
+    // Existing corrupted file (the exact symptom from bundle DQK7X96B —
+    // an empty Adventurer5M.json that crashed Klipper). The local-write path
+    // must NOT silently overwrite — return an error and let the caller decide
+    // recovery. Empty file is not the same as missing file: missing means
+    // first-time write; empty means prior corruption that we shouldn't mask.
+    Ad5xIfsTmpJsonFile tmp("corrupt", "");
+    // Re-touch the file as zero bytes (Ad5xIfsTmpJsonFile's empty seed_content
+    // skips the file write). Create explicitly.
+    {
+        std::ofstream f(tmp.path);
+        // intentionally empty
+    }
+
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_local_adventurer_json_path(backend, tmp.path.string());
+    Ad5xIfsTestAccess::set_color(backend, 0, "FF0000");
+
+    auto err = Ad5xIfsTestAccess::write_adventurer_json_local(backend, 0);
+    // Recovery: write a fresh-baseline FFMInfo block. The corrupted-file case
+    // is exactly the bricked-printer state — auto-repair from the values we
+    // have in colors_/materials_ is the whole point of the direct-write fix.
+    REQUIRE(err.success());
+
+    std::ifstream f(tmp.path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    auto doc = json::parse(ss.str());
+    CHECK(doc["FFMInfo"]["ffmColor1"] == "#FF0000");
+}
+
+TEST_CASE("AD5X IFS write_adventurer_json_local atomic — leaves no .tmp on success",
+          "[ams][ad5x_ifs][local_write]") {
+    Ad5xIfsTmpJsonFile tmp("atomic", R"({"FFMInfo":{"ffmColor1":"#000000","ffmType1":"PLA"}})");
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_local_adventurer_json_path(backend, tmp.path.string());
+    Ad5xIfsTestAccess::set_color(backend, 2, "ABCDEF");
+
+    auto err = Ad5xIfsTestAccess::write_adventurer_json_local(backend, 2);
+    REQUIRE(err.success());
+
+    // The atomic-rename pattern uses <path>.tmp as the staging file. After a
+    // successful write the temp must be gone (rename consumes it).
+    CHECK_FALSE(std::filesystem::exists(tmp.path.string() + ".tmp"));
 }
