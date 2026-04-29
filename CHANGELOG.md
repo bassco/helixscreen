@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.99.53] - 2026-04-28
+
+A hotfix release. The headline fix: **v0.99.51 and v0.99.52 could brick AD5X stock-ZMOD printers** by corrupting `Adventurer5M.json` to zero bytes through a Moonraker upload that crossed mount boundaries. On the next firmware restart, Klipper's zmod_color.py couldn't parse the empty file and never finished `connect` — recovery required SSH. Both releases have been pulled from the GitHub release feed; v0.99.53 ships the corrected write path. While we were here, this release also lands the per-printer gcode console filter system, OrcaSlicer-compatible bed/nozzle temperature emission to `lane_data` slot records, and a small theme polish.
+
+### Added
+- **Per-printer gcode console filter** — every printer can have its own customizable filter list for the gcode console panel. Settings overlay lets you add/remove patterns and toggle the filter on/off without rebooting; defaults are seeded from the printer database so common boilerplate (heartbeat polls, M105 noise) is suppressed out of the box.
+- **OrcaSlicer-compatible bed/nozzle temperatures in `lane_data`** — HelixScreen now emits `bed_temp` and `nozzle_temp` on every filament-slot save so OrcaSlicer 2.3.2+ can sync them to its filament presets. Source priority: explicit user entry > bound Spoolman spool's profile > internal material database default. Spec docs bumped to v1.1.
+
 ### Fixed
-- **AD5X stock-ZMOD bricked at boot from corrupted Adventurer5M.json** — v0.99.51 switched IFS color/material persistence from `CHANGE_ZCOLOR` to a Moonraker HTTP upload of `Adventurer5M.json` to drop the per-edit Mainsail/Fluidd "Select print materials" popup. On AD5X stock-ZMOD, `/root/printer_data/tmp/` and `/usr/prog/config/` are on different mounts and the Moonraker config root entry symlinks across them; the upload's `os.rename(tmp → dest)` throws `EXDEV` and the destination ends up empty. On the next firmware restart, zmod_color.py's `json.load(file)` raised `JSONDecodeError`, klippy never finished `connect`, and the printer was unrecoverable without an SSH session. Bundle DQK7X96B and DIEHARDave's report. Fix: when helix-screen runs on the same host as Moonraker (the typical install), skip the upload and write `Adventurer5M.json` directly via filesystem APIs with an atomic temp+rename inside the destination directory. The Moonraker upload path remains as a fallback for remote/screen-only installs that aren't on the same machine.
+- **AD5X stock-ZMOD bricked at boot from corrupted Adventurer5M.json** — v0.99.51 switched IFS color/material persistence from `CHANGE_ZCOLOR` (which pops a Mainsail/Fluidd "Select print materials" prompt on every edit) to a Moonraker HTTP upload of `Adventurer5M.json`. On AD5X stock-ZMOD, `/root/printer_data/tmp/` and `/usr/prog/config/` are on different mounts and Moonraker's config root entry symlinks across them; the upload's `os.rename(tmp → dest)` throws `EXDEV` and the destination ends up empty. On the next firmware restart, zmod_color.py's `json.load(file)` raised `JSONDecodeError`, klippy never finished `connect`, and the printer was unrecoverable without SSH. Bundle DQK7X96B and DIEHARDave's report on Discord. Fix: when helix-screen runs on the same host as Moonraker (the typical install), skip the upload and write `Adventurer5M.json` directly via filesystem APIs with an atomic temp-then-rename inside the destination directory. The Moonraker upload path remains as a fallback for remote/screen-only installs that genuinely aren't on the same machine.
+- **ActionPromptModal footer divider used hardcoded color** — switched to the border design token so it tracks theme.
 
 ## [0.99.52] - 2026-04-28
 
@@ -3431,6 +3440,7 @@ Initial tagged release. Foundation for all subsequent development.
 - Automated GitHub Actions release pipeline
 - One-liner installation script with platform auto-detection
 
+[0.99.53]: https://github.com/prestonbrown/helixscreen/compare/v0.99.52...v0.99.53
 [0.99.52]: https://github.com/prestonbrown/helixscreen/compare/v0.99.51...v0.99.52
 [0.99.51]: https://github.com/prestonbrown/helixscreen/compare/v0.99.50...v0.99.51
 [0.99.50]: https://github.com/prestonbrown/helixscreen/compare/v0.99.49...v0.99.50
