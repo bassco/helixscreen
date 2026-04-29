@@ -66,6 +66,11 @@ class DebugBundleCollector {
     /// Filter a Klipper object list to filament-related objects (public for testing)
     static nlohmann::json filter_filament_objects(const nlohmann::json& object_list);
 
+    /// Collect platform-specific diagnostic files (e.g., AD5X Adventurer5M.json)
+    /// served via Moonraker's /server/files/<root>/<path> endpoint. Files that
+    /// don't exist (404) are skipped silently; other errors are recorded in-line.
+    static nlohmann::json collect_platform_files();
+
     /// Sanitize a string value for PII patterns (emails, credentials, webhooks, tokens, MACs)
     static std::string sanitize_value(const std::string& value);
 

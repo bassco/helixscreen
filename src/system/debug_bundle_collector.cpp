@@ -138,6 +138,16 @@ json DebugBundleCollector::collect(const BundleOptions& options) {
         bundle["filament_system"] = json{{"error", e.what()}};
     }
 
+    try {
+        auto platform_files = collect_platform_files();
+        if (!platform_files.empty()) {
+            bundle["platform_files"] = platform_files;
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[DebugBundle] Failed to collect platform files: {}", e.what());
+        bundle["platform_files"] = json{{"error", e.what()}};
+    }
+
     if (options.include_klipper_logs) {
         try {
             auto klipper_log = collect_klipper_log_tail();
@@ -584,7 +594,12 @@ json DebugBundleCollector::collect_moonraker_info() {
 
 json DebugBundleCollector::filter_filament_objects(const json& object_list) {
     static const std::vector<std::string> prefixes = {
-        "AFC", "mmu", "toolchanger", "tool ", "filament_switch_sensor", "filament_motion_sensor"};
+        "AFC",     "mmu",
+        "toolchanger", "tool ",
+        "filament_switch_sensor", "filament_motion_sensor",
+        // Creality CFS (K2 family): [box] is the CFS controller, [filament_rack]
+        // is the slot-occupancy gate. Both expose state via printer.objects.query.
+        "box",     "filament_rack"};
 
     json result = json::array();
     if (!object_list.is_array())
@@ -686,6 +701,130 @@ json DebugBundleCollector::collect_filament_system_info() {
     }
 
     return fs;
+}
+
+// =============================================================================
+// Platform-specific diagnostic files
+// =============================================================================
+
+enum class PlatformFileFormat { JSON, TEXT };
+
+struct PlatformFile {
+    std::string name;            // Logical name used as bundle key
+    std::string moonraker_path;  // Path rooted at Moonraker base URL
+    PlatformFileFormat format;
+};
+
+// Returns the platform-specific files to capture. moonraker_path is rooted
+// at the Moonraker base URL (e.g. "/server/files/config/Adventurer5M.json").
+// Empty list = nothing to collect.
+//
+// Keep entries small (a few KB each) — this is the debug-bundle hot path. For
+// larger files, route through a dedicated capture with a size cap.
+static std::vector<PlatformFile> platform_diagnostic_files(const std::string& platform) {
+    if (platform == "ad5x" || platform == "ad5m") {
+        return {
+            // ZMOD's authoritative IFS slot truth: color, material, lessWaste
+            // pairings. Polling this is our primary change-detection mechanism
+            // in AmsBackendAd5xIfs::poll_adventurer_json(); having it in the
+            // bundle lets us verify what zmod wrote vs. what the UI cached.
+            {"Adventurer5M.json", "/server/files/config/Adventurer5M.json",
+             PlatformFileFormat::JSON},
+            // zmod's user-defined filament types (PLA+, RPLA, HELIX, ...). Read
+            // by the COLOR gcode macro at print time. helix-screen's edit modal
+            // currently restricts to the firmware whitelist and silently
+            // normalises user types away on save (#904); the file in the bundle
+            // lets us see exactly what types were defined and how the macro
+            // consumes them.
+            {"user.cfg", "/server/files/config/mod_data/user.cfg", PlatformFileFormat::TEXT},
+        };
+    }
+    return {};
+}
+
+// Raw HTTP GET that returns body as text without JSON parsing. Used for
+// non-JSON platform files (e.g. Klipper-config user.cfg). Returns empty
+// string + sets out_status on failure; out_status==404 is a normal "not
+// present on this device" signal callers should treat as skip-silently.
+static std::string http_get_text(const std::string& url, int timeout_sec, int* out_status) {
+    if (out_status)
+        *out_status = 0;
+    try {
+        auto req = std::make_shared<HttpRequest>();
+        req->method = HTTP_GET;
+        req->url = url;
+        req->timeout = timeout_sec;
+        auto resp = requests::request(req);
+        if (!resp)
+            return {};
+        int status = static_cast<int>(resp->status_code);
+        if (out_status)
+            *out_status = status;
+        if (status < 200 || status >= 300)
+            return {};
+        // Cap text-file capture at 256 KB to keep bundles small even if a
+        // user.cfg has grown unexpectedly. The diagnostic files we ship here
+        // are normally < 8 KB.
+        constexpr size_t kMaxTextBytes = 256 * 1024;
+        if (resp->body.size() > kMaxTextBytes) {
+            return resp->body.substr(0, kMaxTextBytes) + "\n[truncated]\n";
+        }
+        return resp->body;
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
+json DebugBundleCollector::collect_platform_files() {
+    json result = json::object();
+    const std::string platform = UpdateChecker::get_platform_key();
+    auto files = platform_diagnostic_files(platform);
+    if (files.empty()) {
+        return result;
+    }
+
+    const std::string base_url = get_moonraker_url();
+    if (base_url.empty()) {
+        spdlog::debug("[DebugBundle] Moonraker not connected, skipping platform files");
+        return result;
+    }
+
+    spdlog::info("[DebugBundle] Collecting {} platform file(s) for platform '{}'", files.size(),
+                 platform);
+
+    for (const auto& f : files) {
+        if (f.format == PlatformFileFormat::JSON) {
+            json fetched = moonraker_get(base_url, f.moonraker_path);
+            // Files that Moonraker can't serve come back as {"error": "..."};
+            // skip 404 silently (file simply doesn't exist on this device —
+            // common on non-zmod AD5M installs), keep other errors inline.
+            if (fetched.is_object() && fetched.contains("error")) {
+                std::string err = fetched["error"].get<std::string>();
+                if (err.find("HTTP 404") != std::string::npos) {
+                    spdlog::debug("[DebugBundle] platform file '{}' not present (404)", f.name);
+                    continue;
+                }
+                result[f.name] = fetched;
+                continue;
+            }
+            result[f.name] = sanitize_json(fetched);
+        } else {
+            int status = 0;
+            std::string body = http_get_text(base_url + f.moonraker_path, 15, &status);
+            if (status == 404) {
+                spdlog::debug("[DebugBundle] platform file '{}' not present (404)", f.name);
+                continue;
+            }
+            if (status < 200 || status >= 300) {
+                result[f.name] =
+                    json{{"error", "HTTP " + std::to_string(status) + " from " + f.moonraker_path}};
+                continue;
+            }
+            result[f.name] = sanitize_value(body);
+        }
+    }
+
+    return result;
 }
 
 // =============================================================================
