@@ -451,6 +451,11 @@ AmsError AmsBackendAce::set_slot_info(int slot_index, const SlotInfo& info, bool
             ovr.color_rgb = info.color_rgb;
             ovr.color_name = info.color_name;
             ovr.material = info.material;
+            // SlotInfo carries the user's edit OR the bound Spoolman spool's
+            // filament profile; the material-DB fallback for fields left at 0
+            // is applied at emit time inside resolved_temps(). Centralized in
+            // the helper so the four AMS backends stay in sync.
+            helix::ams::populate_temps_from_slot_info(ovr, info);
             // updated_at left default — save_async stamps a fresh value.
             overrides_[slot_index] = ovr;
         }

@@ -5,6 +5,11 @@
 #include <string>
 #include "hv/json.hpp"
 
+// Forward declaration — full SlotInfo lives in ams_types.h. Forward-decl keeps
+// this header light (it's pulled into many backends) and avoids a transitive
+// pull-in of the much larger AMS type surface.
+struct SlotInfo;
+
 namespace helix::ams {
 
 struct FilamentSlotOverride {
@@ -19,11 +24,53 @@ struct FilamentSlotOverride {
     uint32_t color_rgb = 0;
     std::string color_name;
     std::string material;
+    // Recommended print temperatures, written into the lane_data record so
+    // OrcaSlicer 2.3.2+ can sync them onto the filament preset. Source order
+    // (highest to lowest priority): explicit user entry > Spoolman spool's
+    // filament profile > internal material database default. The first two
+    // land here via populate_temps_from_slot_info() from the backend's
+    // set_slot_info; the material-DB fallback is applied at *emit* time via
+    // resolved_temps() so a later material change always picks up fresh
+    // defaults instead of carrying stale values forward. 0 = unset.
+    int bed_temp = 0;
+    int nozzle_temp = 0;
     // Conflict avoidance for third-party writers.
     // ISO-8601 UTC on the wire. Second precision only — sub-second fractions
     // are truncated on format/parse.
     std::chrono::system_clock::time_point updated_at{};
 };
+
+// Effective (bed_temp, nozzle_temp) for an override. The struct stores
+// *intent* (0 = "use the material's default"); resolved_temps() is the
+// canonical accessor that materializes the effective values: explicit
+// non-zero fields pass through unchanged, and 0 fields fall back to the
+// internal material-database recommendation when `material` is set. Use
+// this anywhere downstream code wants the "what would actually get
+// printed at?" answer — including external-facing emits like
+// to_lane_data_record (the OrcaSlicer-visible Moonraker DB record).
+//
+// Crucially, the fallback is *not* baked into the struct on read or write:
+// if the user changes material PLA → PETG, the next call to resolved_temps()
+// picks up PETG's defaults automatically. Storing the resolved values would
+// freeze stale defaults and is a known anti-pattern here.
+//
+// The local cache (to_json / from_json) intentionally round-trips the *intent*
+// values, not resolved values, so the round-trip preserves the "0 = default"
+// signal across reboots. Anyone reading from cache who wants effective values
+// must call resolved_temps().
+struct ResolvedTemps {
+    int bed_temp = 0;
+    int nozzle_temp = 0;
+};
+ResolvedTemps resolved_temps(const FilamentSlotOverride& o);
+
+// Populate the override's temp fields from a SlotInfo carrying user/Spoolman
+// values. Called from each backend's set_slot_info to centralize the SlotInfo
+// → FilamentSlotOverride temp wiring (previously this was an 11-line block
+// duplicated across all four AMS backends). nozzle_temp is the midpoint of
+// nozzle_temp_min/max when both differ, else nozzle_temp_min when set, else
+// 0 (which signals to resolved_temps that the material-DB default should win).
+void populate_temps_from_slot_info(FilamentSlotOverride& ovr, const SlotInfo& info);
 
 nlohmann::json to_json(const FilamentSlotOverride& o);
 FilamentSlotOverride from_json(const nlohmann::json& j);

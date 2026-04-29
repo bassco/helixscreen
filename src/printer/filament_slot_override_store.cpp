@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "ams_types.h"
 #include "data_root_resolver.h"
+#include "filament_database.h"
 #include "filament_slot_override.h"
 #include "filament_slot_override_store.h"
 #include "i_moonraker_api.h"
@@ -64,7 +66,12 @@ nlohmann::json to_lane_data_record(int slot_index, const FilamentSlotOverride& o
     if (o.updated_at.time_since_epoch().count() > 0) {
         j["scan_time"] = format_iso8601(o.updated_at);
     }
-    // bed_temp, nozzle_temp deliberately omitted - unknown to HelixScreen today.
+    // Resolve at emit time — see resolved_temps() for the rule. The local
+    // cache (to_json) goes through the same resolver so the two stores never
+    // disagree on what an override means.
+    auto temps = resolved_temps(o);
+    if (temps.bed_temp > 0) j["bed_temp"] = temps.bed_temp;
+    if (temps.nozzle_temp > 0) j["nozzle_temp"] = temps.nozzle_temp;
     if (!o.spool_name.empty()) j["spool_name"] = o.spool_name;
     if (o.spoolman_vendor_id > 0) j["spoolman_vendor_id"] = o.spoolman_vendor_id;
     if (o.remaining_weight_g >= 0) j["remaining_weight_g"] = o.remaining_weight_g;
@@ -113,6 +120,8 @@ from_lane_data_record(const nlohmann::json& j) {
     o.material = j.value("material", "");
     o.brand = j.value("vendor", "");
     o.spoolman_id = j.value("spool_id", 0);
+    o.bed_temp = j.value("bed_temp", 0);
+    o.nozzle_temp = j.value("nozzle_temp", 0);
     if (j.contains("scan_time") && j["scan_time"].is_string()) {
         o.updated_at = parse_iso8601(j["scan_time"].get<std::string>());
     }
@@ -308,6 +317,8 @@ nlohmann::json to_json(const FilamentSlotOverride& o) {
         {"color_rgb", o.color_rgb},
         {"color_name", o.color_name},
         {"material", o.material},
+        {"bed_temp", o.bed_temp},
+        {"nozzle_temp", o.nozzle_temp},
         {"updated_at", format_iso8601(o.updated_at)},
     };
 }
@@ -323,10 +334,34 @@ FilamentSlotOverride from_json(const nlohmann::json& j) {
     o.color_rgb = j.value("color_rgb", 0u);
     o.color_name = j.value("color_name", "");
     o.material = j.value("material", "");
+    o.bed_temp = j.value("bed_temp", 0);
+    o.nozzle_temp = j.value("nozzle_temp", 0);
     if (j.contains("updated_at") && j["updated_at"].is_string()) {
         o.updated_at = parse_iso8601(j["updated_at"].get<std::string>());
     }
     return o;
+}
+
+ResolvedTemps resolved_temps(const FilamentSlotOverride& o) {
+    ResolvedTemps r{o.bed_temp, o.nozzle_temp};
+    if ((r.bed_temp == 0 || r.nozzle_temp == 0) && !o.material.empty()) {
+        if (auto mat = filament::find_material(o.material)) {
+            if (r.bed_temp == 0) r.bed_temp = mat->bed_temp;
+            if (r.nozzle_temp == 0) r.nozzle_temp = mat->nozzle_recommended();
+        }
+    }
+    return r;
+}
+
+void populate_temps_from_slot_info(FilamentSlotOverride& ovr, const SlotInfo& info) {
+    ovr.bed_temp = info.bed_temp;
+    if (info.nozzle_temp_min > 0 && info.nozzle_temp_max > info.nozzle_temp_min) {
+        ovr.nozzle_temp = (info.nozzle_temp_min + info.nozzle_temp_max) / 2;
+    } else if (info.nozzle_temp_min > 0) {
+        ovr.nozzle_temp = info.nozzle_temp_min;
+    } else {
+        ovr.nozzle_temp = 0;
+    }
 }
 
 // ============================================================================

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "../catch_amalgamated.hpp"
+#include "ams_types.h"
 #include "filament_slot_override.h"
 #include "filament_slot_override_store.h"
 #include "hv/json.hpp"
@@ -55,6 +56,122 @@ struct TmpCacheDir {
 };
 } // namespace
 
+TEST_CASE("resolved_temps preserves explicit values, falls back to material DB",
+          "[filament_slot_override]") {
+    using helix::ams::FilamentSlotOverride;
+    using helix::ams::resolved_temps;
+
+    SECTION("explicit values pass through unchanged") {
+        FilamentSlotOverride o;
+        o.material = "PLA";  // PLA defaults differ; explicit must win
+        o.bed_temp = 65;
+        o.nozzle_temp = 220;
+        auto r = resolved_temps(o);
+        CHECK(r.bed_temp == 65);
+        CHECK(r.nozzle_temp == 220);
+    }
+
+    SECTION("zero fields fall back to material DB") {
+        FilamentSlotOverride o;
+        o.material = "PETG";  // PETG defaults: bed 80, nozzle ~245
+        auto r = resolved_temps(o);
+        CHECK(r.bed_temp == 80);
+        CHECK(r.nozzle_temp == 245);
+    }
+
+    SECTION("partial fields: explicit bed, fallback nozzle") {
+        FilamentSlotOverride o;
+        o.material = "PETG";
+        o.bed_temp = 70;  // explicit
+        // nozzle_temp = 0 → fallback
+        auto r = resolved_temps(o);
+        CHECK(r.bed_temp == 70);     // user wins
+        CHECK(r.nozzle_temp == 245);  // material DB
+    }
+
+    SECTION("no material → no fallback, both stay 0") {
+        FilamentSlotOverride o;
+        // material empty
+        auto r = resolved_temps(o);
+        CHECK(r.bed_temp == 0);
+        CHECK(r.nozzle_temp == 0);
+    }
+
+    SECTION("unknown material → no fallback, both stay 0") {
+        FilamentSlotOverride o;
+        o.material = "ZZZ_NOT_A_REAL_MATERIAL";
+        auto r = resolved_temps(o);
+        CHECK(r.bed_temp == 0);
+        CHECK(r.nozzle_temp == 0);
+    }
+
+    SECTION("material change picks up new defaults — no stale carry-over") {
+        // The point of resolving at emit time, not stamping the override at
+        // set time: changing material from PLA → PETG must reflect PETG's
+        // defaults on the next resolved_temps() call. Storing fallback values
+        // on the struct would freeze PLA's 60°C with the new PETG material.
+        FilamentSlotOverride o;
+        o.material = "PLA";
+        auto pla = resolved_temps(o);
+        CHECK(pla.bed_temp == 60);  // PLA default
+
+        o.material = "PETG";
+        auto petg = resolved_temps(o);
+        CHECK(petg.bed_temp == 80);  // PETG default — fresh, not stale PLA
+    }
+}
+
+TEST_CASE("populate_temps_from_slot_info wires SlotInfo temps onto the override",
+          "[filament_slot_override]") {
+    using helix::ams::FilamentSlotOverride;
+    using helix::ams::populate_temps_from_slot_info;
+
+    SECTION("nozzle_temp_min < max → midpoint") {
+        FilamentSlotOverride o;
+        SlotInfo info;
+        info.bed_temp = 60;
+        info.nozzle_temp_min = 200;
+        info.nozzle_temp_max = 220;
+        populate_temps_from_slot_info(o, info);
+        CHECK(o.bed_temp == 60);
+        CHECK(o.nozzle_temp == 210);  // midpoint
+    }
+
+    SECTION("nozzle_temp_min == max → just min") {
+        // Single-value materials (some firmware-tracked sources don't carry
+        // a range) shouldn't fall through to the 0-leaves-fallback branch.
+        FilamentSlotOverride o;
+        SlotInfo info;
+        info.bed_temp = 65;
+        info.nozzle_temp_min = 215;
+        info.nozzle_temp_max = 215;
+        populate_temps_from_slot_info(o, info);
+        CHECK(o.nozzle_temp == 215);
+    }
+
+    SECTION("nozzle_temp_min set, max unset → just min") {
+        FilamentSlotOverride o;
+        SlotInfo info;
+        info.nozzle_temp_min = 215;
+        // nozzle_temp_max = 0
+        populate_temps_from_slot_info(o, info);
+        CHECK(o.nozzle_temp == 215);
+    }
+
+    SECTION("all temps unset → 0 sentinel for both") {
+        FilamentSlotOverride o;
+        // Pre-existing values must be cleared so resolved_temps()'s
+        // material-DB fallback can take over instead of carrying forward
+        // a stale value the SlotInfo didn't bring.
+        o.bed_temp = 99;
+        o.nozzle_temp = 99;
+        SlotInfo info;
+        populate_temps_from_slot_info(o, info);
+        CHECK(o.bed_temp == 0);
+        CHECK(o.nozzle_temp == 0);
+    }
+}
+
 TEST_CASE("FilamentSlotOverride roundtrips through JSON", "[filament_slot_override]") {
     FilamentSlotOverride ovr;
     ovr.brand = "Polymaker";
@@ -66,6 +183,8 @@ TEST_CASE("FilamentSlotOverride roundtrips through JSON", "[filament_slot_overri
     ovr.color_rgb = 0xFF5500;
     ovr.color_name = "Orange";
     ovr.material = "PLA";
+    ovr.bed_temp = 60;
+    ovr.nozzle_temp = 215;
     ovr.updated_at = std::chrono::system_clock::from_time_t(1713441296);
 
     json j = helix::ams::to_json(ovr);
@@ -80,6 +199,8 @@ TEST_CASE("FilamentSlotOverride roundtrips through JSON", "[filament_slot_overri
     CHECK(round.color_rgb == ovr.color_rgb);
     CHECK(round.color_name == ovr.color_name);
     CHECK(round.material == ovr.material);
+    CHECK(round.bed_temp == ovr.bed_temp);
+    CHECK(round.nozzle_temp == ovr.nozzle_temp);
     CHECK(round.updated_at == ovr.updated_at);
 }
 
@@ -104,6 +225,8 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking parses lane_data entries",
     MoonrakerAPIMock api(client, state);
 
     // Seed lane_data namespace with two AFC-shaped entries + our extensions.
+    // lane1 also exercises the print-temp fields parse — they round-trip via
+    // from_lane_data_record (the load path) into the in-memory override.
     json lane1 = {
         {"lane", "0"},
         {"color", "#FF5500"},
@@ -112,11 +235,15 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking parses lane_data entries",
         {"spool_id", 42},
         {"spool_name", "PolyLite PLA Orange"},
         {"remaining_weight_g", 850.0},
+        {"bed_temp", 65},
+        {"nozzle_temp", 220},
     };
     json lane2 = {
         {"lane", "1"},
         {"color", "0x00FF00"}, // 0x prefix accepted
         {"material", "PETG"},
+        // No bed_temp / nozzle_temp — load must default to 0 (the "use
+        // material default" sentinel that resolved_temps() consults at emit).
     };
     api.mock_set_db_value("lane_data", "lane1", lane1);
     api.mock_set_db_value("lane_data", "lane2", lane2);
@@ -131,6 +258,8 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking parses lane_data entries",
     CHECK(overrides[0].spoolman_id == 42);
     CHECK(overrides[0].spool_name == "PolyLite PLA Orange");
     CHECK(overrides[0].remaining_weight_g == 850.0f);
+    CHECK(overrides[0].bed_temp == 65);
+    CHECK(overrides[0].nozzle_temp == 220);
 
     REQUIRE(overrides.count(1) == 1);
     CHECK(overrides[1].material == "PETG");
@@ -138,6 +267,9 @@ TEST_CASE("FilamentSlotOverrideStore load_blocking parses lane_data entries",
     // brand / spoolman_id not present in lane2 entry - default values
     CHECK(overrides[1].brand == "");
     CHECK(overrides[1].spoolman_id == 0);
+    // Temps default to 0 when absent — the "use material default" sentinel.
+    CHECK(overrides[1].bed_temp == 0);
+    CHECK(overrides[1].nozzle_temp == 0);
 }
 
 TEST_CASE("FilamentSlotOverrideStore load_blocking skips entries missing lane field",
@@ -216,6 +348,86 @@ TEST_CASE("FilamentSlotOverrideStore save_async writes AFC-shaped record to lane
     CHECK(stored["remaining_weight_g"] == 850.0f);
     CHECK(stored["total_weight_g"] == 1000.0f);
     CHECK(stored.contains("scan_time"));  // set by save_async
+}
+
+TEST_CASE("FilamentSlotOverrideStore save_async emits explicit bed/nozzle temps",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("save_temps_explicit");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    // Override carries explicit temps (e.g. user-entered or Spoolman-derived).
+    // These must override any material-DB defaults, so we use a material whose
+    // DB defaults differ from the values we set.
+    FilamentSlotOverride ovr;
+    ovr.material = "PLA";   // PLA defaults: bed 60, nozzle ~205
+    ovr.bed_temp = 65;
+    ovr.nozzle_temp = 220;
+
+    bool cb_done = false;
+    store.save_async(0, ovr, [&](bool, std::string) { cb_done = true; });
+    REQUIRE(cb_done);
+
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK(stored["bed_temp"] == 65);
+    CHECK(stored["nozzle_temp"] == 220);
+}
+
+TEST_CASE("FilamentSlotOverrideStore save_async falls back to material DB when temps unset",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("save_temps_fallback");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    // Override has only material set — no explicit temps. The writer must
+    // pull recommended values from the internal material DB so OrcaSlicer's
+    // preset auto-sync still gets sensible values.
+    FilamentSlotOverride ovr;
+    ovr.material = "PETG";  // PETG defaults: bed 80, nozzle ~245
+
+    bool cb_done = false;
+    store.save_async(1, ovr, [&](bool, std::string) { cb_done = true; });
+    REQUIRE(cb_done);
+
+    auto stored = api.mock_get_db_value("lane_data", "lane2");
+    REQUIRE(!stored.is_null());
+    REQUIRE(stored.contains("bed_temp"));
+    REQUIRE(stored.contains("nozzle_temp"));
+    CHECK(stored["bed_temp"] == 80);
+    CHECK(stored["nozzle_temp"] == 245);
+}
+
+TEST_CASE("FilamentSlotOverrideStore save_async omits temps when no material and no override",
+          "[filament_slot_override][slow]") {
+    TmpCacheDir tmp("save_temps_none");
+    MoonrakerClientMock client(MoonrakerClientMock::PrinterType::VORON_24);
+    helix::PrinterState state;
+    state.init_subjects(false);
+    MoonrakerAPIMock api(client, state);
+    FilamentSlotOverrideStore store(&api, "ifs");
+    FilamentSlotOverrideStoreTestAccess::set_cache_directory(store, tmp.path);
+
+    // No material → nothing to look up, no explicit values → nothing to emit.
+    FilamentSlotOverride ovr;
+    ovr.brand = "eSUN";
+
+    bool cb_done = false;
+    store.save_async(0, ovr, [&](bool, std::string) { cb_done = true; });
+    REQUIRE(cb_done);
+
+    auto stored = api.mock_get_db_value("lane_data", "lane1");
+    REQUIRE(!stored.is_null());
+    CHECK_FALSE(stored.contains("bed_temp"));
+    CHECK_FALSE(stored.contains("nozzle_temp"));
 }
 
 TEST_CASE("FilamentSlotOverrideStore save_async sets updated_at on the stored record",

@@ -1003,6 +1003,11 @@ AmsError AmsBackendAd5xIfs::set_slot_info(int slot_index, const SlotInfo& info, 
             // materials_ copy; reuse it so the on-disk record carries the
             // firmware-valid value instead of the raw user-typed string.
             ovr.material = normalized_material;
+            // SlotInfo carries the user's edit OR the bound Spoolman spool's
+            // filament profile; the material-DB fallback for fields left at 0
+            // is applied at emit time inside resolved_temps(). Centralized in
+            // the helper so the four AMS backends stay in sync.
+            helix::ams::populate_temps_from_slot_info(ovr, info);
             // updated_at left default — save_async stamps a fresh value so
             // the on-disk record's scan_time wins over any local clock skew.
             overrides_[slot_index] = ovr;
