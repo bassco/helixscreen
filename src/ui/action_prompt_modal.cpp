@@ -158,7 +158,7 @@ void ActionPromptModal::create_buttons() {
                 if (footer_button_count > 0) {
                     lv_obj_t* divider = lv_obj_create(footer_container);
                     lv_obj_set_size(divider, 1, lv_pct(100));
-                    lv_obj_set_style_bg_color(divider, theme_manager_get_color("divider"),
+                    lv_obj_set_style_bg_color(divider, theme_manager_get_color("border"),
                                               LV_PART_MAIN);
                     lv_obj_set_style_bg_opa(divider, LV_OPA_COVER, LV_PART_MAIN);
                     lv_obj_set_style_pad_all(divider, 0, LV_PART_MAIN);
