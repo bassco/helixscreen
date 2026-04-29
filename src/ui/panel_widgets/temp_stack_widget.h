@@ -52,16 +52,26 @@ class TempStackWidget : public PanelWidget {
     int cached_bed_temp_ = 25;
     int cached_bed_target_ = 0;
 
-    helix::AsyncLifetimeGuard lifetime_;
     bool long_pressed_ = false;
 
-    // Observers
+    // Observers. The explicit detach() in ~TempStackWidget invalidates
+    // lifetime_ before resetting these — that is the primary defense. The
+    // member ordering below (lifetime_ declared LAST so it destructs FIRST)
+    // is a safety net for future refactors: it guarantees that even if a
+    // path destroys this widget without going through detach(), pending
+    // queued observer callbacks see token.expired() == true and short-circuit
+    // before touching the half-destroyed `self`. Bundle AX3CKAKB (k1 v0.99.52).
     ObserverGuard nozzle_temp_observer_;
     ObserverGuard nozzle_target_observer_;
     SubjectLifetime bed_temp_lifetime_;
     SubjectLifetime bed_target_lifetime_;
     ObserverGuard bed_temp_observer_;
     ObserverGuard bed_target_observer_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer destructs. See comment above.
+    helix::AsyncLifetimeGuard lifetime_;
 
     bool is_carousel_mode() const;
     void attach_stack(lv_obj_t* widget_obj);
