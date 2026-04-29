@@ -34,12 +34,18 @@ class ToolSwitcherWidget : public PanelWidget {
     int current_colspan_ = 1;
     int current_rowspan_ = 1;
 
-    helix::AsyncLifetimeGuard lifetime_;
-
     ObserverGuard active_tool_observer_;
     ObserverGuard tool_count_observer_;
 
     std::vector<lv_obj_t*> pill_buttons_;
+
+    // MUST stay declared LAST: reverse-declaration destruction makes this the
+    // first member torn down, invalidating every captured token before any
+    // observer destructs. Without this, queued observer callbacks captured
+    // via tok.defer() see token.expired() == false after the observers are
+    // already gone and dereference a half-destroyed widget. See temp_stack_widget.h
+    // (commit 45abc8c2a, bundle AX3CKAKB).
+    helix::AsyncLifetimeGuard lifetime_;
 
     void rebuild_pills();
     void rebuild_compact();
