@@ -306,6 +306,7 @@ TEST_CASE("AD5X IFS type identification", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS parse_save_variables full JSON", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
     Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
 
     REQUIRE(Ad5xIfsTestAccess::active_tool(backend) == 0);
@@ -395,6 +396,7 @@ TEST_CASE("AD5X IFS color hex parsing", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS tool mapping reverse lookup", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("standard 1:1 mapping") {
         Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
@@ -478,6 +480,7 @@ TEST_CASE("AD5X IFS native ZMOD motion sensor parsing", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS native ZMOD combined update (no per-port sensors)", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     // Simulate a native ZMOD IFS status update:
     // save_variables + motion sensor + head switch sensor, NO per-port sensors
@@ -507,6 +510,7 @@ TEST_CASE("AD5X IFS native ZMOD combined update (no per-port sensors)", "[ams][a
 
 TEST_CASE("AD5X IFS combined status update", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     // Build a combined notification with save_variables + sensors
     json notification;
@@ -540,6 +544,7 @@ TEST_CASE("AD5X IFS combined status update", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS get_system_info", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
     Ad5xIfsTestAccess::handle_status(backend, make_save_variables(standard_variables()));
 
     auto sys = backend.get_system_info();
@@ -570,6 +575,7 @@ TEST_CASE("AD5X IFS get_system_info", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS bypass mode", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("external=1 activates bypass") {
         auto vars = standard_variables();
@@ -619,6 +625,7 @@ TEST_CASE("AD5X IFS build_color_list_value format", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS build_tool_map_value format", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
     Ad5xIfsTestAccess::parse_vars(backend, standard_variables());
 
     std::string tools = Ad5xIfsTestAccess::build_tools(backend);
@@ -660,6 +667,7 @@ TEST_CASE("AD5X IFS set_slot_info persist=false", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS slot status mapping", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("port with filament, not active → AVAILABLE") {
         json notification;
@@ -739,6 +747,7 @@ TEST_CASE("AD5X IFS action state tracking", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS path segments", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("get_filament_segment: no filament anywhere → NONE") {
         REQUIRE(backend.get_filament_segment() == PathSegment::NONE);
@@ -818,6 +827,7 @@ static json wrap_notification(const json& status) {
 
 TEST_CASE("AD5X IFS handles wrapped notify_status_update", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("wrapped port sensor updates state") {
         auto wrapped = wrap_notification(make_port_sensor(1, true));
@@ -939,6 +949,7 @@ TEST_CASE("AD5X IFS action timeout resets stuck operations", "[ams][ad5x_ifs]") 
 
 TEST_CASE("AD5X IFS variable prefix auto-detection", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     SECTION("defaults to less_waste prefix") {
         REQUIRE(Ad5xIfsTestAccess::var_prefix(backend) == "less_waste");
@@ -1007,6 +1018,7 @@ TEST_CASE("AD5X IFS motion sensor completes load/unload", "[ams][ad5x_ifs]") {
 
 TEST_CASE("AD5X IFS native ZMOD infers active slot from head sensor", "[ams][ad5x_ifs]") {
     AmsBackendAd5xIfs backend(nullptr, nullptr);
+    Ad5xIfsTestAccess::set_has_ifs_vars(backend, true);
 
     // Seed colors_ + port_presence_ to simulate the post-GET_ZCOLOR / Adventurer5M
     // state. parse_save_variables no longer sets these fields (they live in
@@ -1127,6 +1139,51 @@ TEST_CASE("AD5X IFS has_ifs_vars reset when macro missing", "[ams][ad5x_ifs]") {
         auto err = backend.set_slot_info(0, info, false);
         REQUIRE(err.success());
     }
+}
+
+// Regression: lessWaste/bambufy save_variables rows persist in
+// printer_data/database/ even after the user uninstalls the plugin and the
+// gcode_macro _ifs_vars goes away. Pre-fix, parse_save_variables read
+// <prefix>_tools / _current_tool / _external unconditionally if the keys were
+// present, so a user with stale rows would silently keep using the dead
+// plugin's last-known tool map and active-tool guess as truth on every boot.
+// Now those reads are gated on has_ifs_vars_ — i.e. plugin actively loaded.
+TEST_CASE("AD5X IFS stale save_variables ignored when plugin macro missing",
+          "[ams][ad5x_ifs]") {
+    AmsBackendAd5xIfs backend(nullptr, nullptr);
+
+    // Confirm latch defaults to "macro missing" — the on_started() initial
+    // query never confirmed the macro exists.
+    REQUIRE_FALSE(Ad5xIfsTestAccess::has_ifs_vars(backend));
+
+    // Build a save_variables blob that looks like the user once had lessWaste
+    // installed: tools/active/external all set to non-default values that
+    // would VISIBLY change behavior if applied.
+    auto stale = standard_variables();
+    stale["less_waste_current_tool"] = 2;             // not the default 0
+    stale["less_waste_external"] = 1;                 // bypass mode active
+    stale["less_waste_tools"] =                       // T0 -> port 4 (not 1)
+        json::array({4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
+
+    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(stale));
+
+    // Macro confirmed missing → none of the stale plugin state should have
+    // taken effect. active_tool stays at its default -1, external_mode stays
+    // false, and the slot-tool mapping in SlotRegistry was never overwritten.
+    CHECK(Ad5xIfsTestAccess::active_tool(backend) == -1);
+    CHECK_FALSE(Ad5xIfsTestAccess::external_mode(backend));
+    CHECK_FALSE(backend.is_bypass_active());
+
+    // Now flip the latch as on_started() would when it sees the macro is
+    // present, then replay — the SAME save_variables payload now applies
+    // cleanly. This proves the gate, not some other guard, is what blocked
+    // the read.
+    Ad5xIfsTestAccess::set_ifs_macro_confirmed_missing(backend, false);
+    Ad5xIfsTestAccess::handle_status(backend, make_save_variables(stale));
+    CHECK(Ad5xIfsTestAccess::has_ifs_vars(backend));
+    CHECK(Ad5xIfsTestAccess::active_tool(backend) == 2);
+    CHECK(Ad5xIfsTestAccess::external_mode(backend));
+    CHECK(backend.is_bypass_active());
 }
 
 // ==========================================================================

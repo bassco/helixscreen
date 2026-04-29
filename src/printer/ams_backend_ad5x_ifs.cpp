@@ -345,32 +345,46 @@ void AmsBackendAd5xIfs::parse_save_variables(const json& vars) {
     //
     // The fields below — tools, current_tool, external — DO live only in the
     // plugin's save_variables namespace (no other Moonraker-visible source),
-    // so we keep reading them.
-
-    // Tool mapping: 16-element array, index=tool, value=port (1-4, 5=unmapped)
-    if (vars.contains(p + "_tools") && vars[p + "_tools"].is_array()) {
-        const auto& tools = vars[p + "_tools"];
-        for (size_t i = 0; i < std::min(tools.size(), static_cast<size_t>(TOOL_MAP_SIZE)); ++i) {
-            if (tools[i].is_number_integer()) {
-                tool_map_[i] = tools[i].get<int>();
+    // so we keep reading them — but ONLY when the plugin is actually active
+    // (has_ifs_vars_ requires both the prefix detection above AND the live
+    // gcode_macro _ifs_vars existence check from on_started). save_variables
+    // rows persist in printer_data/database/ even after a plugin uninstall;
+    // pre-fix, a user who removed lessWaste/bambufy but left the rows behind
+    // would silently keep using the stale tool map and last active-tool guess
+    // forever. The gate makes "macro present" load-bearing for trusting the
+    // plugin's data, matching the contract has_ifs_vars_ already advertises.
+    if (has_ifs_vars_) {
+        // Tool mapping: 16-element array, index=tool, value=port (1-4, 5=unmapped)
+        if (vars.contains(p + "_tools") && vars[p + "_tools"].is_array()) {
+            const auto& tools = vars[p + "_tools"];
+            for (size_t i = 0; i < std::min(tools.size(), static_cast<size_t>(TOOL_MAP_SIZE));
+                 ++i) {
+                if (tools[i].is_number_integer()) {
+                    tool_map_[i] = tools[i].get<int>();
+                }
             }
         }
-    }
 
-    // Current tool (-1 = none, 0-15 = tool number)
-    if (vars.contains(p + "_current_tool") && vars[p + "_current_tool"].is_number_integer()) {
-        active_tool_ = vars[p + "_current_tool"].get<int>();
-    }
+        // Current tool (-1 = none, 0-15 = tool number)
+        if (vars.contains(p + "_current_tool") &&
+            vars[p + "_current_tool"].is_number_integer()) {
+            active_tool_ = vars[p + "_current_tool"].get<int>();
+        }
 
-    // External/bypass mode (0 or 1)
-    if (vars.contains(p + "_external") && vars[p + "_external"].is_number_integer()) {
-        external_mode_ = (vars[p + "_external"].get<int>() != 0);
-    }
+        // External/bypass mode (0 or 1)
+        if (vars.contains(p + "_external") && vars[p + "_external"].is_number_integer()) {
+            external_mode_ = (vars[p + "_external"].get<int>() != 0);
+        }
 
-    // Rebuild SlotRegistry tool mapping from IFS tool_map_
-    for (int i = 0; i < NUM_PORTS; ++i) {
-        int tool = find_first_tool_for_port(i + 1); // port is 1-based
-        slots_.set_tool_mapping(i, tool);
+        // Rebuild SlotRegistry tool mapping from IFS tool_map_. Only meaningful
+        // when tool_map_ was populated above; without an active plugin the map
+        // is whatever default values the registry was constructed with, and
+        // running this loop would lock those defaults in over real data that
+        // might arrive later via apply_zcolor_result's extruder_slot path.
+        for (int i = 0; i < NUM_PORTS; ++i) {
+            int tool = find_first_tool_for_port(i + 1); // port is 1-based
+            slots_.set_tool_mapping(i, tool);
+        }
     }
 
     // Sync all slots from cached state
