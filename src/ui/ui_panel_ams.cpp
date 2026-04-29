@@ -751,17 +751,23 @@ void AmsPanel::setup_bypass_spool() {
         return;
     }
 
+    // Fixed-size box so layout is deterministic (LV_SIZE_CONTENT + flex/pad
+    // interact with the parent's layout in ways that cause the inner canvas to
+    // render dozens of pixels above the box — see prior bug where the spool
+    // drawing detached from its container's bounding rect).
+    static constexpr int32_t BYPASS_SPOOL_SIZE = 48;
+    static constexpr int32_t BOX_PAD = 4;
+    static constexpr int32_t BOX_SIZE = BYPASS_SPOOL_SIZE + BOX_PAD * 2;
     bypass_spool_box_ = lv_obj_create(path_container);
-    lv_obj_set_size(bypass_spool_box_, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_style_pad_all(bypass_spool_box_, 4, 0);
+    lv_obj_set_size(bypass_spool_box_, BOX_SIZE, BOX_SIZE);
+    lv_obj_set_style_pad_all(bypass_spool_box_, 0, 0);
     lv_obj_set_style_bg_opa(bypass_spool_box_, LV_OPA_TRANSP, 0);
     lv_obj_set_style_bg_color(bypass_spool_box_, theme_manager_get_color("card_bg"), 0);
     lv_obj_set_style_radius(bypass_spool_box_, theme_manager_get_spacing("border_radius"), 0);
     lv_obj_set_style_border_width(bypass_spool_box_, 0, 0);
     lv_obj_remove_flag(bypass_spool_box_, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Create spool_canvas inside the card
-    static constexpr int32_t BYPASS_SPOOL_SIZE = 48;
+    // Create spool_canvas inside the card and pin it to box-relative (BOX_PAD, BOX_PAD)
     bypass_spool_ = ui_spool_canvas_create(bypass_spool_box_, BYPASS_SPOOL_SIZE);
     if (!bypass_spool_) {
         spdlog::warn("[{}] Failed to create bypass spool canvas", get_name());
@@ -769,6 +775,7 @@ void AmsPanel::setup_bypass_spool() {
         bypass_spool_box_ = nullptr;
         return;
     }
+    lv_obj_set_pos(bypass_spool_, BOX_PAD, BOX_PAD);
 
     // Position will be set after layout in update_bypass_spool_position()
     // For now, use flag-based flow positioning (will be corrected on first layout update)
@@ -798,37 +805,60 @@ void AmsPanel::setup_bypass_spool() {
     lv_obj_set_style_text_color(bypass_label_, theme_manager_get_color("text"), 0);
     lv_obj_add_flag(bypass_label_, LV_OBJ_FLAG_FLOATING);
 
-    // Position spool widget relative to bypass merge point in path canvas.
-    // Layout: spool widget → horizontal line → "Bypass" label (top to bottom)
+    // Reposition whenever the path canvas resizes — the canvas size at the
+    // time setup_bypass_spool() runs is not its final size; the surrounding
+    // flex layout adjusts it later (we observed 251→283px height growth, which
+    // shifted the rendered tube ~13px and left the spool stranded above it).
+    lv_obj_add_event_cb(
+        path_canvas_,
+        [](lv_event_t* e) {
+            auto* self = static_cast<AmsPanel*>(lv_event_get_user_data(e));
+            if (self)
+                self->update_bypass_spool_position();
+        },
+        LV_EVENT_SIZE_CHANGED, this);
+
+    update_bypass_spool_position();
+}
+
+void AmsPanel::update_bypass_spool_position() {
+    if (!bypass_spool_box_ || !path_canvas_)
+        return;
+
+    // Read the canvas's CURRENT absolute coords — the same values its draw
+    // function uses via lv_obj_get_coords(). This sidesteps the relative-pos
+    // staleness that bit setup_bypass_spool() (canvas resized after setup).
     lv_obj_update_layout(path_canvas_);
-    int32_t canvas_w = lv_obj_get_width(path_canvas_);
-    int32_t canvas_h = lv_obj_get_height(path_canvas_);
-    int32_t canvas_x = lv_obj_get_x(path_canvas_);
-    int32_t canvas_y = lv_obj_get_y(path_canvas_);
+    lv_area_t canvas_abs;
+    lv_obj_get_coords(path_canvas_, &canvas_abs);
+    int32_t canvas_abs_w = lv_area_get_width(&canvas_abs);
+    int32_t canvas_abs_h = lv_area_get_height(&canvas_abs);
 
-    // Match the path canvas bypass ratios — spool aligns with bypass merge sensor.
-    // These MUST track ui_filament_path_canvas.cpp's BYPASS_X_RATIO / BYPASS_MERGE_Y_RATIO
-    // constants — they had drifted (spool was at 0.44 while the line draws at 0.58),
-    // so the spool floated noticeably above the bypass tube.
+    // Match ui_filament_path_canvas.cpp's BYPASS_X_RATIO / BYPASS_MERGE_Y_RATIO.
     static constexpr float BYPASS_X_RATIO = 0.85f;
-    static constexpr float BYPASS_MERGE_Y_RATIO = 0.9f;
-    int32_t bypass_x = canvas_x + (int32_t)(canvas_w * BYPASS_X_RATIO);
-    int32_t bypass_merge_y = canvas_y + (int32_t)(canvas_h * BYPASS_MERGE_Y_RATIO);
+    static constexpr float BYPASS_MERGE_Y_RATIO = 0.58f;
+    int32_t bypass_abs_x = canvas_abs.x1 + (int32_t)(canvas_abs_w * BYPASS_X_RATIO);
+    int32_t bypass_abs_y = canvas_abs.y1 + (int32_t)(canvas_abs_h * BYPASS_MERGE_Y_RATIO);
 
-    // Center spool vertically on the bypass merge line (horizontal filament path)
+    // Convert absolute target back into parent-relative coords for set_pos.
+    lv_obj_t* parent = lv_obj_get_parent(bypass_spool_box_);
+    lv_area_t parent_abs;
+    lv_obj_get_content_coords(parent, &parent_abs);
+
     lv_obj_update_layout(bypass_spool_box_);
     int32_t box_w = lv_obj_get_width(bypass_spool_box_);
     int32_t box_h = lv_obj_get_height(bypass_spool_box_);
-    lv_obj_set_pos(bypass_spool_box_, bypass_x - box_w / 2, bypass_merge_y - box_h / 2);
+    int32_t box_abs_top = bypass_abs_y - box_h / 2;
+    int32_t box_abs_left = bypass_abs_x - box_w / 2;
+    lv_obj_set_pos(bypass_spool_box_, box_abs_left - parent_abs.x1, box_abs_top - parent_abs.y1);
 
-    // Place label centered under the spool with a small gap.
-    lv_obj_update_layout(bypass_label_);
-    int32_t label_w = lv_obj_get_width(bypass_label_);
-    int32_t label_y = bypass_merge_y + box_h / 2 + 4;
-    lv_obj_set_pos(bypass_label_, bypass_x - label_w / 2, label_y);
-
-    spdlog::debug("[{}] Bypass spool: {}x{} at ({},{}), merge_y={}, label_y={}", get_name(), box_w,
-                  box_h, bypass_x - box_w / 2, bypass_merge_y - box_h / 2, bypass_merge_y, label_y);
+    if (bypass_label_) {
+        lv_obj_update_layout(bypass_label_);
+        int32_t label_w = lv_obj_get_width(bypass_label_);
+        int32_t label_abs_top = bypass_abs_y + box_h / 2 + 4;
+        lv_obj_set_pos(bypass_label_, bypass_abs_x - label_w / 2 - parent_abs.x1,
+                       label_abs_top - parent_abs.y1);
+    }
 }
 
 void AmsPanel::update_bypass_spool_from_state() {
