@@ -6,7 +6,7 @@
  * @brief Tests for CapabilityMatrix - unified capability source management
  *
  * CapabilityMatrix unifies three sources of pre-print operation capabilities:
- * 1. DATABASE - PrinterDetector's PrintStartCapabilities (highest priority)
+ * 1. DATABASE - PrinterDetector's PrePrintOptionSet (highest priority)
  * 2. MACRO_ANALYSIS - PrintStartAnalyzer's PrintStartAnalysis (medium priority)
  * 3. FILE_SCAN - GCodeOpsDetector's ScanResult (lowest priority)
  *
@@ -17,6 +17,7 @@
 #include "capability_matrix.h"
 #include "gcode_ops_detector.h"
 #include "operation_patterns.h"
+#include "pre_print_option.h"
 #include "print_start_analyzer.h"
 #include "printer_detector.h"
 
@@ -30,25 +31,25 @@ using namespace helix::gcode;
 // ============================================================================
 
 /**
- * @brief Create a database-style capability for testing
+ * @brief Create a database-style option set for testing
  */
-static PrintStartCapabilities make_database_caps(const std::string& macro_name = "START_PRINT") {
-    PrintStartCapabilities caps;
+static PrePrintOptionSet make_database_caps(const std::string& macro_name = "START_PRINT") {
+    PrePrintOptionSet caps;
     caps.macro_name = macro_name;
     return caps;
 }
 
 /**
- * @brief Add a capability param to PrintStartCapabilities
+ * @brief Add a MacroParam option to a PrePrintOptionSet
  */
-static void add_cap_param(PrintStartCapabilities& caps, const std::string& cap_name,
+static void add_cap_param(PrePrintOptionSet& caps, const std::string& cap_name,
                           const std::string& param, const std::string& skip_val,
                           const std::string& enable_val) {
-    PrintStartParamCapability cap;
-    cap.param = param;
-    cap.skip_value = skip_val;
-    cap.enable_value = enable_val;
-    caps.params[cap_name] = cap;
+    PrePrintOption opt;
+    opt.id = cap_name;
+    opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+    opt.strategy = PrePrintStrategyMacroParam{param, enable_val, skip_val, ""};
+    caps.options.push_back(opt);
 }
 
 /**
@@ -155,7 +156,7 @@ TEST_CASE("CapabilityMatrix: Single source - database (AD5M style)",
     CapabilityMatrix matrix;
 
     // Create AD5M-style database capabilities
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
     add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
 
     matrix.add_from_database(caps);
@@ -353,12 +354,14 @@ TEST_CASE("CapabilityMatrix: Database capability with empty param is skipped",
           "[capability_matrix][print_preparation][edge_cases]") {
     CapabilityMatrix matrix;
 
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
-    PrintStartParamCapability cap;
-    cap.param = ""; // Empty param
-    cap.skip_value = "false";
-    cap.enable_value = "true";
-    caps.params["bed_mesh"] = cap;
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
+    PrePrintOption opt;
+    opt.id = "bed_mesh";
+    opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+    // Construct directly with empty param_name; parse_pre_print_option would
+    // reject this, but add_from_database is the layer being tested here.
+    opt.strategy = PrePrintStrategyMacroParam{"", "true", "false", ""};
+    caps.options.push_back(opt);
 
     matrix.add_from_database(caps);
 
@@ -380,7 +383,7 @@ TEST_CASE("CapabilityMatrix: Priority ordering - DATABASE > MACRO_ANALYSIS > FIL
     // They should be prioritized: DATABASE > MACRO_ANALYSIS > FILE_SCAN
 
     // Source 1: Database (highest priority)
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
     add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
 
     // Source 2: Macro analysis (medium priority)
@@ -476,7 +479,7 @@ TEST_CASE("CapabilityMatrix: Multiple operations", "[capability_matrix][print_pr
     CapabilityMatrix matrix;
 
     // Add capabilities for multiple operations from database
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
     add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
     add_cap_param(caps, "qgl", "FORCE_QGL", "false", "true");
     add_cap_param(caps, "nozzle_clean", "NOZZLE_CLEAN", "false", "true");
@@ -527,7 +530,7 @@ TEST_CASE("CapabilityMatrix: Mixed sources for different operations",
     CapabilityMatrix matrix;
 
     // BED_MESH from database
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
     add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
 
     // QGL from macro analysis
@@ -607,7 +610,7 @@ TEST_CASE("CapabilityMatrix: Semantic handling - OPT_OUT vs OPT_IN",
         CapabilityMatrix matrix;
 
         // Database uses string values like "true"/"false" instead of 1/0
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
         matrix.add_from_database(caps);
 
@@ -628,7 +631,7 @@ TEST_CASE("CapabilityMatrix: Clear behavior", "[capability_matrix][print_prepara
     CapabilityMatrix matrix;
 
     // Add sources
-    PrintStartCapabilities caps = make_database_caps("START_PRINT");
+    PrePrintOptionSet caps = make_database_caps("START_PRINT");
     add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
     matrix.add_from_database(caps);
 
@@ -654,7 +657,7 @@ TEST_CASE("CapabilityMatrix: Clear behavior", "[capability_matrix][print_prepara
     }
 
     SECTION("Can add sources again after clear") {
-        PrintStartCapabilities new_caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet new_caps = make_database_caps("START_PRINT");
         add_cap_param(new_caps, "nozzle_clean", "CLEAN_NOZZLE", "false", "true");
         matrix.add_from_database(new_caps);
 
@@ -671,7 +674,7 @@ TEST_CASE("CapabilityMatrix: Clear behavior", "[capability_matrix][print_prepara
 TEST_CASE("CapabilityMatrix: Edge cases", "[capability_matrix][print_preparation][edge]") {
     SECTION("Adding empty database caps does not add capabilities") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps; // Empty
+        PrePrintOptionSet caps; // Empty
         matrix.add_from_database(caps);
 
         REQUIRE(matrix.has_any_controllable() == false);
@@ -703,11 +706,11 @@ TEST_CASE("CapabilityMatrix: Edge cases", "[capability_matrix][print_preparation
     SECTION("Multiple calls to same add method accumulate") {
         CapabilityMatrix matrix;
 
-        PrintStartCapabilities caps1 = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps1 = make_database_caps("START_PRINT");
         add_cap_param(caps1, "bed_mesh", "FORCE_LEVELING", "false", "true");
         matrix.add_from_database(caps1);
 
-        PrintStartCapabilities caps2 = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps2 = make_database_caps("START_PRINT");
         add_cap_param(caps2, "qgl", "FORCE_QGL", "false", "true");
         matrix.add_from_database(caps2);
 
@@ -724,7 +727,7 @@ TEST_CASE("CapabilityMatrix: Database capability name mapping",
           "[capability_matrix][print_preparation]") {
     SECTION("Maps 'bed_mesh' to OperationCategory::BED_MESH") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
         matrix.add_from_database(caps);
 
@@ -733,7 +736,7 @@ TEST_CASE("CapabilityMatrix: Database capability name mapping",
 
     SECTION("Maps 'qgl' to OperationCategory::QGL") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "qgl", "SKIP_QGL", "1", "0");
         matrix.add_from_database(caps);
 
@@ -742,7 +745,7 @@ TEST_CASE("CapabilityMatrix: Database capability name mapping",
 
     SECTION("Maps 'bed_level' to both QGL and Z_TILT (unified)") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "bed_level", "SKIP_BED_LEVEL", "1", "0");
         matrix.add_from_database(caps);
 
@@ -752,7 +755,7 @@ TEST_CASE("CapabilityMatrix: Database capability name mapping",
 
     SECTION("Maps 'nozzle_clean' to OperationCategory::NOZZLE_CLEAN") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "nozzle_clean", "CLEAN_NOZZLE", "false", "true");
         matrix.add_from_database(caps);
 
@@ -761,7 +764,7 @@ TEST_CASE("CapabilityMatrix: Database capability name mapping",
 
     SECTION("Maps 'purge_line' to OperationCategory::PURGE_LINE") {
         CapabilityMatrix matrix;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "purge_line", "SKIP_PURGE", "1", "0");
         matrix.add_from_database(caps);
 
@@ -795,7 +798,7 @@ TEST_CASE("CapabilityMatrix: Line number tracking for file operations",
 
     SECTION("Non-file sources have line_number=0") {
         CapabilityMatrix matrix2;
-        PrintStartCapabilities caps = make_database_caps("START_PRINT");
+        PrePrintOptionSet caps = make_database_caps("START_PRINT");
         add_cap_param(caps, "bed_mesh", "FORCE_LEVELING", "false", "true");
         matrix2.add_from_database(caps);
 

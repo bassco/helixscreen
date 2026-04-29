@@ -263,14 +263,14 @@ bool MacroModificationManager::should_show_notification(
         return false;
     }
 
-    // Check if printer has native capabilities in database that cover these operations
-    const PrintStartCapabilities& caps = get_printer_state().get_print_start_capabilities();
-    if (!caps.empty()) {
-        // Count how many uncontrollable ops are covered by native capabilities
+    // Check if printer has native pre-print options in database that cover these operations
+    const PrePrintOptionSet& options = get_printer_state().get_pre_print_option_set();
+    if (!options.empty()) {
+        // Count how many uncontrollable ops are covered by a database option
         size_t covered_by_native = 0;
         for (const auto* op : uncontrollable_ops) {
             std::string cap_key = category_to_capability_key(op->category);
-            if (!cap_key.empty() && caps.has_capability(cap_key)) {
+            if (!cap_key.empty() && options.find(cap_key) != nullptr) {
                 covered_by_native++;
             }
         }
@@ -279,12 +279,13 @@ bool MacroModificationManager::should_show_notification(
             // All uncontrollable operations have native params - no wizard needed!
             const std::string& printer_type = get_printer_state().get_printer_type();
             spdlog::info("[MacroModificationManager] Suppressing wizard toast: {} ops covered "
-                         "by native {} capabilities for '{}'",
-                         uncontrollable, caps.macro_name, printer_type);
+                         "by native {} pre-print options for '{}'",
+                         uncontrollable, options.macro_name, printer_type);
             return false;
         } else if (covered_by_native > 0) {
-            spdlog::debug("[MacroModificationManager] {}/{} ops covered by native capabilities",
-                          covered_by_native, uncontrollable);
+            spdlog::debug(
+                "[MacroModificationManager] {}/{} ops covered by native pre-print options",
+                covered_by_native, uncontrollable);
         }
     }
 

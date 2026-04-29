@@ -46,18 +46,18 @@ PrintPreparationManager::~PrintPreparationManager() {
 }
 
 // ============================================================================
-// Capability Cache Helper
+// Pre-Print Option Set Cache Helper
 // ============================================================================
 
-const PrintStartCapabilities& PrintPreparationManager::get_cached_capabilities() const {
-    // Delegate to PrinterState which owns the capability cache
+const PrePrintOptionSet& PrintPreparationManager::get_cached_options() const {
+    // Delegate to PrinterState which owns the cache
     if (printer_state_) {
-        return printer_state_->get_print_start_capabilities();
+        return printer_state_->get_pre_print_option_set();
     }
 
-    // Return empty capabilities if PrinterState not set
-    static const PrintStartCapabilities empty_caps;
-    return empty_caps;
+    // Return empty set if PrinterState not set
+    static const PrePrintOptionSet empty_set;
+    return empty_set;
 }
 
 // ============================================================================
@@ -453,9 +453,9 @@ CapabilityMatrix PrintPreparationManager::build_capability_matrix() const {
     CapabilityMatrix matrix;
 
     // Layer 1: Database capabilities (highest priority)
-    const auto& db_caps = get_cached_capabilities();
-    if (!db_caps.empty()) {
-        matrix.add_from_database(db_caps);
+    const auto& db_options = get_cached_options();
+    if (!db_options.empty()) {
+        matrix.add_from_database(db_options);
     }
 
     // Layer 2: Macro analysis (medium priority)
@@ -629,13 +629,14 @@ std::string PrintPreparationManager::format_preprint_steps() const {
     // 2. PRINT_START macro analysis (detected from printer config)
     // 3. G-code file scan (embedded operations)
 
-    // 1. Add operations from printer capability database (highest priority)
+    // 1. Add operations from printer pre-print option set (highest priority)
     // Database entries are curated and provide correct parameter names
-    const auto& caps = get_cached_capabilities();
-    if (!caps.empty()) {
-        for (const auto& [cap_key, cap_info] : caps.params) {
+    const auto& db_options = get_cached_options();
+    if (!db_options.empty()) {
+        for (const auto& opt : db_options.options) {
+            const std::string& cap_key = opt.id;
             // Look up friendly name from OperationRegistry (for controllable ops)
-            // or fall back to the cap_key if not found
+            // or fall back to the option id if not found
             std::string name;
             if (auto info = helix::OperationRegistry::get_by_key(cap_key)) {
                 name = info->friendly_name;
@@ -643,7 +644,7 @@ std::string PrintPreparationManager::format_preprint_steps() const {
                 // Non-controllable operations (priming, chamber_soak, skew_correct)
                 // still need friendly names - use hardcoded fallback for these edge cases
                 // since they're not in OperationRegistry
-                if (cap_key == "priming") {
+                if (cap_key == "priming" || cap_key == "nozzle_priming") {
                     name = "Nozzle priming";
                 } else if (cap_key == "chamber_soak") {
                     name = helix::category_name(helix::OperationCategory::CHAMBER_SOAK);
@@ -654,10 +655,10 @@ std::string PrintPreparationManager::format_preprint_steps() const {
                 }
             }
 
-            // Capabilities from database are skippable via macro params
+            // Options from database are skippable via macro params
             ops[cap_key] = UnifiedOp{name, true};
 
-            spdlog::debug("[PrintPreparationManager] From CAPABILITY DB: {} (key={})", name,
+            spdlog::debug("[PrintPreparationManager] From PRE_PRINT_OPTIONS DB: {} (id={})", name,
                           cap_key);
         }
     }
@@ -911,14 +912,14 @@ void PrintPreparationManager::start_print(const std::string& filename,
     // The PREPARE param in printer_database.json serves as a sentinel: it makes
     // the checkbox visible and causes collect_macro_skip_params() to return
     // non-empty, gating entry into this path. The param value is never sent.
-    const auto& caps = get_cached_capabilities();
-    if (!macro_skip_params.empty() && !caps.pre_start_gcode.empty()) {
+    const auto& db_options = get_cached_options();
+    if (!macro_skip_params.empty() && !db_options.pre_start_gcode.empty()) {
         spdlog::info("[PrintPreparationManager] Executing pre-start gcode: {}",
-                     caps.pre_start_gcode);
+                     db_options.pre_start_gcode);
 
         auto token = lifetime_.token();
         api_->execute_gcode(
-            caps.pre_start_gcode,
+            db_options.pre_start_gcode,
             [this, token, filename_to_print, ops_to_disable, on_navigate_to_status,
              wrapped_completion]() {
                 if (token.expired())
@@ -1150,61 +1151,67 @@ PrintPreparationManager::collect_macro_skip_params() const {
 
     std::vector<std::pair<std::string, std::string>> skip_params;
 
-    // PRIORITY 1: Check printer capability database for known native params
-    // If we have capabilities for this printer type, use them directly instead of
-    // relying on macro analysis. This is faster and more reliable.
-    const auto& caps = get_cached_capabilities();
-    if (!caps.empty()) {
-        spdlog::info("[PrintPreparationManager] Using capability database ({} capabilities)",
-                     caps.params.size());
+    // PRIORITY 1: Check printer pre-print options for known native params
+    // If we have a database option set for this printer type, use it directly
+    // instead of relying on macro analysis. This is faster and more reliable.
+    const auto& db_options = get_cached_options();
+    if (!db_options.empty()) {
+        spdlog::info("[PrintPreparationManager] Using pre-print options database ({} options)",
+                     db_options.options.size());
 
-        // Bed mesh - use database param if available
-        // Use get_capability() for safe access without exception risk
-        // Only add skip param if user explicitly DISABLED (not if hidden/not applicable)
-        if (auto* cap = caps.get_capability("bed_mesh");
-            cap && get_option_state(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
+        // Map of option id → checkbox subject pair (visibility, value).
+        // Only the six built-in toggles have UI subjects in Phase 2.
+        struct UiBinding {
+            const char* id;
+            lv_subject_t* visibility_subject;
+            lv_subject_t* value_subject;
+        };
+        const UiBinding bindings[] = {
+            {"bed_mesh", can_show_bed_mesh_subject_, preprint_bed_mesh_subject_},
+            {"qgl", can_show_qgl_subject_, preprint_qgl_subject_},
+            {"z_tilt", can_show_z_tilt_subject_, preprint_z_tilt_subject_},
+            {"nozzle_clean", can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_},
+            // Priming/timelapse intentionally omitted — no checkbox bound today.
+        };
 
-        // QGL - use database param if available
-        if (auto* cap = caps.get_capability("qgl");
-            cap && get_option_state(can_show_qgl_subject_, preprint_qgl_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // Z Tilt - use database param if available
-        if (auto* cap = caps.get_capability("z_tilt");
-            cap && get_option_state(can_show_z_tilt_subject_, preprint_z_tilt_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // Nozzle clean - use database param if available
-        if (auto* cap = caps.get_capability("nozzle_clean");
-            cap &&
-            get_option_state(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_) ==
+        for (const auto& binding : bindings) {
+            const PrePrintOption* opt = db_options.find(binding.id);
+            if (!opt) {
+                continue;
+            }
+            // Only add skip param if user explicitly DISABLED (not hidden/not applicable)
+            if (get_option_state(binding.visibility_subject, binding.value_subject) !=
                 PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
+                continue;
+            }
+
+            switch (opt->strategy_kind) {
+            case PrePrintStrategyKind::MacroParam: {
+                const auto* macro =
+                    std::get_if<PrePrintStrategyMacroParam>(&opt->strategy);
+                if (macro) {
+                    skip_params.emplace_back(macro->param_name, macro->skip_value);
+                    spdlog::debug("[PrintPreparationManager] Using database param: {}={}",
+                                  macro->param_name, macro->skip_value);
+                }
+                break;
+            }
+            case PrePrintStrategyKind::PreStartGcode:
+            case PrePrintStrategyKind::QueueAheadJob:
+            case PrePrintStrategyKind::RuntimeCommand:
+                spdlog::warn("[PrintPreparationManager] Option '{}' uses non-MacroParam strategy "
+                             "which is not yet wired up (Phase 3+). Ignoring.",
+                             opt->id);
+                break;
+            }
         }
 
-        // Priming - use database param if available
-        // Note: We don't have a priming checkbox yet, but AD5M supports it
-        // Future: Add priming_checkbox_ and use it here
-
-        // If we found capabilities, return them and skip macro analysis
+        // If we found options that produced skip params, return them and skip
+        // macro analysis — the database is authoritative.
         if (!skip_params.empty()) {
-            spdlog::info("[PrintPreparationManager] Using {} params from capability database",
-                         skip_params.size());
+            spdlog::info(
+                "[PrintPreparationManager] Using {} params from pre-print options database",
+                skip_params.size());
             return skip_params;
         }
     }

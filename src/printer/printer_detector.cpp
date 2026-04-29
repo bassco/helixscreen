@@ -1217,46 +1217,15 @@ int PrinterDetector::get_unknown_list_index(const std::string& kinematics) {
 }
 
 // ============================================================================
-// Print Start Capabilities Lookup
+// Pre-Print Option Set Lookup (printer-agnostic option framework)
 // ============================================================================
 
-namespace {
+PrePrintOptionSet
+PrinterDetector::get_pre_print_option_set(const std::string& printer_name) {
+    PrePrintOptionSet result;
 
-/**
- * @brief Get set of valid capability keys from PrintStartOpCategory enum
- *
- * These keys must match what category_to_string() returns.
- */
-const std::unordered_set<std::string>& get_valid_capability_keys() {
-    static const std::unordered_set<std::string> keys = {
-        helix::category_to_string(helix::PrintStartOpCategory::BED_MESH),
-        helix::category_to_string(helix::PrintStartOpCategory::QGL),
-        helix::category_to_string(helix::PrintStartOpCategory::Z_TILT),
-        helix::category_to_string(helix::PrintStartOpCategory::NOZZLE_CLEAN),
-        helix::category_to_string(helix::PrintStartOpCategory::PURGE_LINE),
-        helix::category_to_string(helix::PrintStartOpCategory::SKEW_CORRECT),
-        helix::category_to_string(helix::PrintStartOpCategory::CHAMBER_SOAK),
-        // HOMING and UNKNOWN intentionally excluded - they shouldn't have capabilities
-    };
-    return keys;
-}
-
-/**
- * @brief Check if a capability key is recognized
- */
-bool is_valid_capability_key(const std::string& key) {
-    return get_valid_capability_keys().count(key) > 0;
-}
-
-} // namespace
-
-PrintStartCapabilities
-PrinterDetector::get_print_start_capabilities(const std::string& printer_name) {
-    PrintStartCapabilities result;
-
-    // Load database if not already loaded
     if (!g_database.load()) {
-        spdlog::warn("[PrinterDetector] Cannot lookup capabilities without database");
+        spdlog::warn("[PrinterDetector] Cannot lookup pre_print_options without database");
         return result;
     }
 
@@ -1264,7 +1233,6 @@ PrinterDetector::get_print_start_capabilities(const std::string& printer_name) {
         return result;
     }
 
-    // Case-insensitive search by printer name
     std::string name_lower = printer_name;
     std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
                    [](unsigned char c) { return std::tolower(c); });
@@ -1275,53 +1243,23 @@ PrinterDetector::get_print_start_capabilities(const std::string& printer_name) {
         std::transform(db_name_lower.begin(), db_name_lower.end(), db_name_lower.begin(),
                        [](unsigned char c) { return std::tolower(c); });
 
-        if (db_name_lower == name_lower) {
-            // Found matching printer - check for capabilities
-            if (!printer.contains("print_start_capabilities")) {
-                spdlog::debug("[PrinterDetector] Printer '{}' has no print_start_capabilities",
-                              printer_name);
-                return result;
-            }
+        if (db_name_lower != name_lower) {
+            continue;
+        }
 
-            const auto& caps = printer["print_start_capabilities"];
-            result.macro_name = caps.value("macro_name", "");
-            result.pre_start_gcode = caps.value("pre_start_gcode", "");
-
-            if (caps.contains("params") && caps["params"].is_object()) {
-                for (const auto& [key, value] : caps["params"].items()) {
-                    // Validate capability key
-                    if (!is_valid_capability_key(key)) {
-                        spdlog::warn("[PrinterDetector] Unknown capability key '{}' for printer "
-                                     "'{}' - will be ignored during matching",
-                                     key, printer_name);
-                    }
-
-                    PrintStartParamCapability param;
-                    param.param = value.value("param", "");
-                    param.skip_value = value.value("skip_value", "");
-                    param.enable_value = value.value("enable_value", "");
-                    param.default_value = value.value("default_value", "");
-                    param.description = value.value("description", "");
-
-                    // Validate required fields
-                    if (param.param.empty()) {
-                        spdlog::warn("[PrinterDetector] Capability '{}' for printer '{}' has empty "
-                                     "'param' field - entry will be skipped",
-                                     key, printer_name);
-                        continue;
-                    }
-
-                    result.params[key] = param;
-                }
-            }
-
-            spdlog::info("[PrinterDetector] Found {} capabilities for '{}' (macro: {})",
-                         result.params.size(), printer_name, result.macro_name);
+        if (!printer.contains("pre_print_options")) {
+            spdlog::debug("[PrinterDetector] Printer '{}' has no pre_print_options",
+                          printer_name);
             return result;
         }
+
+        result = parse_pre_print_option_set(printer["pre_print_options"]);
+        spdlog::info("[PrinterDetector] Found {} pre-print options for '{}' (macro: {})",
+                     result.options.size(), printer_name, result.macro_name);
+        return result;
     }
 
-    spdlog::debug("[PrinterDetector] No capabilities found for printer '{}'", printer_name);
+    spdlog::debug("[PrinterDetector] No pre_print_options found for printer '{}'", printer_name);
     return result;
 }
 

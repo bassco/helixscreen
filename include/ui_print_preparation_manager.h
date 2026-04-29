@@ -519,14 +519,14 @@ class PrintPreparationManager {
     std::optional<size_t> cached_file_size_; ///< File size from Moonraker metadata
 
     /**
-     * @brief Get cached printer capabilities from PrinterState
+     * @brief Get the cached pre-print option set from PrinterState
      *
-     * Delegates to PrinterState which owns the capability cache. PrinterState
-     * caches the result and invalidates when printer type changes.
+     * Delegates to PrinterState which owns the cache. PrinterState refreshes
+     * the option set when the printer type changes.
      *
-     * @return Capabilities for current printer type, or empty if PrinterState not set
+     * @return Option set for current printer type, or empty if PrinterState not set
      */
-    [[nodiscard]] const PrintStartCapabilities& get_cached_capabilities() const;
+    [[nodiscard]] const PrePrintOptionSet& get_cached_options() const;
 
     // === Callbacks ===
     ScanCompleteCallback on_scan_complete_;

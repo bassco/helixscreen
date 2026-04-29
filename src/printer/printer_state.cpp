@@ -818,7 +818,7 @@ void PrinterState::set_printer_type_sync(const std::string& type) {
 void PrinterState::set_printer_type_internal(const std::string& type) {
     // Determine what the z-cal strategy would be for this type so we can
     // skip redundant updates (auto-detect often confirms the saved type).
-    auto new_caps = PrinterDetector::get_print_start_capabilities(type);
+    auto new_options = PrinterDetector::get_pre_print_option_set(type);
     std::string strategy_str = PrinterDetector::get_z_offset_calibration_strategy(type);
     ZOffsetCalibrationStrategy new_strategy;
     if (strategy_str == "firmware_managed") {
@@ -837,7 +837,7 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
     }
 
     printer_type_ = type;
-    print_start_capabilities_ = new_caps;
+    pre_print_option_set_ = new_options;
     z_offset_calibration_strategy_ = new_strategy;
 
     // Update z_offset_can_save subject: 0 when firmware/macros auto-persist (FIRMWARE_MANAGED)
@@ -855,9 +855,11 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
         }
     }
 
-    // Update printer_has_purge_line_ based on capabilities database
-    // "priming" is the capability key for purge/prime line in the database
-    bool has_priming = print_start_capabilities_.get_capability("priming") != nullptr;
+    // Update printer_has_purge_line_ based on the option set.
+    // "priming" is the option id for purge/prime line in the database (also accept legacy
+    // "nozzle_priming" as an alias).
+    bool has_priming = (pre_print_option_set_.find("priming") != nullptr) ||
+                       (pre_print_option_set_.find("nozzle_priming") != nullptr);
     capabilities_state_.set_purge_line(has_priming);
 
     // Recalculate composite visibility subjects
@@ -865,17 +867,18 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
 
     const char* strategy_names[] = {"probe_calibrate", "firmware_managed", "endstop"};
     spdlog::info(
-        "[PrinterState] Printer type set to: '{}' (capabilities: {}, priming={}, z_cal={})", type,
-        print_start_capabilities_.empty() ? "none" : print_start_capabilities_.macro_name,
-        has_priming, strategy_names[static_cast<int>(z_offset_calibration_strategy_)]);
+        "[PrinterState] Printer type set to: '{}' (pre_print_options: {}, priming={}, z_cal={})",
+        type,
+        pre_print_option_set_.empty() ? "none" : pre_print_option_set_.macro_name, has_priming,
+        strategy_names[static_cast<int>(z_offset_calibration_strategy_)]);
 }
 
 const std::string& PrinterState::get_printer_type() const {
     return printer_type_;
 }
 
-const PrintStartCapabilities& PrinterState::get_print_start_capabilities() const {
-    return print_start_capabilities_;
+const PrePrintOptionSet& PrinterState::get_pre_print_option_set() const {
+    return pre_print_option_set_;
 }
 
 ZOffsetCalibrationStrategy PrinterState::get_z_offset_calibration_strategy() const {

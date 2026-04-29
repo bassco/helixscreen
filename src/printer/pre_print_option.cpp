@@ -171,6 +171,7 @@ PrePrintOptionSet parse_pre_print_option_set(const nlohmann::json& j) {
     }
 
     set.macro_name = j.value("macro_name", "");
+    set.pre_start_gcode = j.value("pre_start_gcode", "");
 
     if (j.contains("options")) {
         const auto& arr = j["options"];

@@ -155,7 +155,8 @@ TEST_CASE("parse_pre_print_option_set yields empty set for empty options array",
 
     auto set = parse_pre_print_option_set(j);
     CHECK(set.options.empty());
-    // Note: empty() checks both macro_name AND options — set has macro_name here.
+    // Note: empty() checks macro_name, pre_start_gcode, AND options — this
+    // set has a macro_name so it's not empty.
     CHECK_FALSE(set.empty());
 
     SECTION("totally empty input is empty()") {

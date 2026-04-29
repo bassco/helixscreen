@@ -6,7 +6,7 @@
  * @brief Unified capability source management for pre-print operations
  *
  * CapabilityMatrix unifies three sources of pre-print operation capabilities:
- * 1. DATABASE - PrinterDetector's PrintStartCapabilities (highest priority)
+ * 1. DATABASE - PrinterDetector's PrePrintOptionSet (highest priority)
  * 2. MACRO_ANALYSIS - PrintStartAnalyzer's PrintStartAnalysis (medium priority)
  * 3. FILE_SCAN - GCodeOpsDetector's ScanResult (lowest priority)
  *
@@ -77,12 +77,14 @@ class CapabilityMatrix {
     /**
      * @brief Add capabilities from printer database
      *
-     * Maps capability names (bed_mesh, qgl, etc.) to OperationCategory
-     * and stores with DATABASE priority.
+     * Maps option ids (bed_mesh, qgl, etc.) to OperationCategory and stores
+     * with DATABASE priority. Only options whose strategy is `MacroParam`
+     * contribute to the matrix — other strategies don't expose a START_PRINT
+     * parameter and aren't representable as a capability source.
      *
-     * @param caps PrintStartCapabilities from PrinterDetector
+     * @param options PrePrintOptionSet from PrinterDetector
      */
-    void add_from_database(const PrintStartCapabilities& caps);
+    void add_from_database(const PrePrintOptionSet& options);
 
     /**
      * @brief Add capabilities from macro analysis
@@ -176,9 +178,9 @@ class CapabilityMatrix {
     static int origin_priority(CapabilityOrigin origin);
 
     /**
-     * @brief Map a database capability key to OperationCategory
+     * @brief Map a database option id to OperationCategory
      *
-     * @param key Capability key (e.g., "bed_mesh", "qgl")
+     * @param key Option id (e.g., "bed_mesh", "qgl")
      * @return Operation category, or UNKNOWN if not recognized
      */
     static OperationCategory category_from_key(const std::string& key);
@@ -199,24 +201,31 @@ class CapabilityMatrix {
 // Inline Implementations
 // =============================================================================
 
-inline void CapabilityMatrix::add_from_database(const PrintStartCapabilities& caps) {
-    for (const auto& [key, cap] : caps.params) {
-        OperationCategory category = category_from_key(key);
+inline void CapabilityMatrix::add_from_database(const PrePrintOptionSet& options) {
+    for (const auto& opt : options.options) {
+        // Only MacroParam options contribute to the capability matrix; other
+        // strategies don't map to a START_PRINT parameter.
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&opt.strategy);
+        if (!macro) {
+            continue;
+        }
+
+        OperationCategory category = category_from_key(opt.id);
         if (category == OperationCategory::UNKNOWN) {
             continue;
         }
 
-        // Skip capabilities with empty param names
-        if (cap.param.empty()) {
+        // Skip options with empty param names (defensive — parser already rejects these)
+        if (macro->param_name.empty()) {
             continue;
         }
 
         CapabilitySource source;
         source.origin = CapabilityOrigin::DATABASE;
-        source.param_name = cap.param;
-        source.skip_value = cap.skip_value;
-        source.enable_value = cap.enable_value;
-        source.semantic = infer_semantic(cap.param);
+        source.param_name = macro->param_name;
+        source.skip_value = macro->skip_value;
+        source.enable_value = macro->enable_value;
+        source.semantic = infer_semantic(macro->param_name);
         source.line_number = 0;
 
         add_source(category, source);

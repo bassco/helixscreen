@@ -3,12 +3,12 @@
 
 /**
  * @file test_printer_state_capabilities.cpp
- * @brief Tests for PrinterState printer type and capability storage
+ * @brief Tests for PrinterState printer type and pre-print option storage
  *
  * These tests verify the PrinterState methods:
  * - set_printer_type_sync(const std::string& type) - synchronous version for tests
  * - get_printer_type() const
- * - get_print_start_capabilities() const
+ * - get_pre_print_option_set() const
  *
  * Note: Tests use set_printer_type_sync() which directly calls the internal
  * method. The async set_printer_type() defers to the main thread via
@@ -89,18 +89,20 @@ TEST_CASE("PrinterState: set_printer_type fetches capabilities from database",
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
     // Get the capabilities
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
 
     // Verify macro name is populated from database
     REQUIRE(caps.macro_name == "START_PRINT");
 
-    // Verify bed_mesh param exists with correct values
-    REQUIRE(caps.has_capability("bed_mesh"));
-    const auto* bed_mesh = caps.get_capability("bed_mesh");
+    // Verify bed_mesh option exists with correct values
+    const PrePrintOption* bed_mesh = caps.find("bed_mesh");
     REQUIRE(bed_mesh != nullptr);
-    REQUIRE(bed_mesh->param == "SKIP_LEVELING");
-    REQUIRE(bed_mesh->skip_value == "1");
-    REQUIRE(bed_mesh->enable_value == "0");
+    REQUIRE(bed_mesh->strategy_kind == PrePrintStrategyKind::MacroParam);
+    const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_mesh->strategy);
+    REQUIRE(macro != nullptr);
+    REQUIRE(macro->param_name == "SKIP_LEVELING");
+    REQUIRE(macro->skip_value == "1");
+    REQUIRE(macro->enable_value == "0");
 }
 
 TEST_CASE("PrinterState: AD5M Pro does not include purge_line parameter",
@@ -113,10 +115,10 @@ TEST_CASE("PrinterState: AD5M Pro does not include purge_line parameter",
 
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
 
-    // AD5M Pro START_PRINT macro does not have purge_line or skew_correct params
-    REQUIRE_FALSE(caps.has_capability("purge_line"));
+    // AD5M Pro START_PRINT macro does not have purge_line or skew_correct options
+    REQUIRE(caps.find("purge_line") == nullptr);
 }
 
 TEST_CASE("PrinterState: AD5M Pro does not include skew_correct parameter",
@@ -129,10 +131,10 @@ TEST_CASE("PrinterState: AD5M Pro does not include skew_correct parameter",
 
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
 
-    // AD5M Pro START_PRINT macro does not have skew_correct param
-    REQUIRE_FALSE(caps.has_capability("skew_correct"));
+    // AD5M Pro START_PRINT macro does not have skew_correct option
+    REQUIRE(caps.find("skew_correct") == nullptr);
 }
 
 // ============================================================================
@@ -151,10 +153,10 @@ TEST_CASE("PrinterState: unknown printer type returns empty capabilities",
     state.set_printer_type_sync("Some Unknown Printer Model XYZ");
 
     // Capabilities should be empty
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
     REQUIRE(caps.empty());
     REQUIRE(caps.macro_name.empty());
-    REQUIRE(caps.params.empty());
+    REQUIRE(caps.options.empty());
 }
 
 TEST_CASE("PrinterState: Custom/Other printer type returns empty capabilities",
@@ -168,7 +170,7 @@ TEST_CASE("PrinterState: Custom/Other printer type returns empty capabilities",
     // Custom/Other is a valid selection but has no database entry
     state.set_printer_type_sync("Custom/Other");
 
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
     REQUIRE(caps.empty());
 }
 
@@ -182,7 +184,7 @@ TEST_CASE("PrinterState: empty printer type returns empty capabilities",
 
     state.set_printer_type_sync("");
 
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
     REQUIRE(caps.empty());
 }
 
@@ -201,17 +203,17 @@ TEST_CASE("PrinterState: changing printer type updates capabilities",
     // First set to AD5M Pro (has capabilities)
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-    // Verify it has capabilities
-    const PrintStartCapabilities& caps1 = state.get_print_start_capabilities();
+    // Verify it has the option set
+    const PrePrintOptionSet& caps1 = state.get_pre_print_option_set();
     REQUIRE_FALSE(caps1.empty());
     REQUIRE(caps1.macro_name == "START_PRINT");
-    REQUIRE(caps1.has_capability("bed_mesh"));
+    REQUIRE(caps1.find("bed_mesh") != nullptr);
 
     // Change to unknown printer
     state.set_printer_type_sync("Some Unknown Printer");
 
     // Capabilities should now be empty
-    const PrintStartCapabilities& caps2 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps2 = state.get_pre_print_option_set();
     REQUIRE(caps2.empty());
 }
 
@@ -225,12 +227,12 @@ TEST_CASE("PrinterState: changing from unknown to known updates capabilities",
 
     // Start with unknown
     state.set_printer_type_sync("Unknown Printer");
-    REQUIRE(state.get_print_start_capabilities().empty());
+    REQUIRE(state.get_pre_print_option_set().empty());
 
     // Change to known printer with capabilities
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
     REQUIRE_FALSE(caps.empty());
     REQUIRE(caps.macro_name == "START_PRINT");
 }
@@ -245,12 +247,12 @@ TEST_CASE("PrinterState: changing between printers with different capabilities",
 
     // Set to AD5M Pro
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-    const PrintStartCapabilities& caps1 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps1 = state.get_pre_print_option_set();
     REQUIRE(caps1.macro_name == "START_PRINT");
 
     // Change to regular AD5M (also has START_PRINT but same capabilities in DB)
     state.set_printer_type_sync("FlashForge Adventurer 5M");
-    const PrintStartCapabilities& caps2 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps2 = state.get_pre_print_option_set();
     // AD5M should also have capabilities from database
     REQUIRE(caps2.macro_name == "START_PRINT");
 }
@@ -278,7 +280,7 @@ TEST_CASE("PrinterState: initial capabilities are empty", "[printer_state][capab
     state.init_subjects(false);
 
     // Before setting any type, capabilities should be empty
-    const PrintStartCapabilities& caps = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps = state.get_pre_print_option_set();
     REQUIRE(caps.empty());
 }
 
@@ -296,11 +298,11 @@ TEST_CASE("PrinterState: printer type lookup is case-insensitive",
 
     // Correct case should work
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+    REQUIRE_FALSE(state.get_pre_print_option_set().empty());
 
     // Different case should also work (database lookup is case-insensitive)
     state.set_printer_type_sync("flashforge adventurer 5m pro");
-    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+    REQUIRE_FALSE(state.get_pre_print_option_set().empty());
 }
 
 TEST_CASE("PrinterState: setting same type twice is idempotent",
@@ -312,15 +314,15 @@ TEST_CASE("PrinterState: setting same type twice is idempotent",
     state.init_subjects(false);
 
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-    const PrintStartCapabilities& caps1 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps1 = state.get_pre_print_option_set();
 
     // Set same type again
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-    const PrintStartCapabilities& caps2 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps2 = state.get_pre_print_option_set();
 
-    // Should still have same capabilities
+    // Should still have same option set
     REQUIRE(caps2.macro_name == caps1.macro_name);
-    REQUIRE(caps2.params.size() == caps1.params.size());
+    REQUIRE(caps2.options.size() == caps1.options.size());
 }
 
 TEST_CASE("PrinterState: set_printer_type deduplicates redundant calls",
@@ -334,18 +336,18 @@ TEST_CASE("PrinterState: set_printer_type deduplicates redundant calls",
     // First call sets type and capabilities
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
     REQUIRE(state.get_printer_type() == "FlashForge Adventurer 5M Pro");
-    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+    REQUIRE_FALSE(state.get_pre_print_option_set().empty());
 
     // Capture the capabilities object address — if dedup works, the internal
     // object won't be reassigned, so the address stays the same.
-    const auto* caps_ptr = &state.get_print_start_capabilities();
+    const auto* caps_ptr = &state.get_pre_print_option_set();
 
     // Second call with same type should be a no-op (dedup early return)
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
     // The capabilities reference should point to the exact same object
     // (not a freshly-assigned copy) because the early-return skipped assignment
-    REQUIRE(&state.get_print_start_capabilities() == caps_ptr);
+    REQUIRE(&state.get_pre_print_option_set() == caps_ptr);
     REQUIRE(state.get_printer_type() == "FlashForge Adventurer 5M Pro");
 
     // But changing to a different type should NOT be deduped
@@ -366,13 +368,13 @@ TEST_CASE("PrinterState: set_printer_type dedup detects strategy changes",
     REQUIRE(state.get_printer_type() == "Unknown Printer");
 
     // Setting the same unknown type again should still dedup (same strategy)
-    const auto* caps_ptr = &state.get_print_start_capabilities();
+    const auto* caps_ptr = &state.get_pre_print_option_set();
     state.set_printer_type_sync("Unknown Printer");
-    REQUIRE(&state.get_print_start_capabilities() == caps_ptr);
+    REQUIRE(&state.get_pre_print_option_set() == caps_ptr);
 
     // But switching to a known type (different strategy) must NOT dedup
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-    REQUIRE_FALSE(state.get_print_start_capabilities().empty());
+    REQUIRE_FALSE(state.get_pre_print_option_set().empty());
 }
 
 TEST_CASE("PrinterState: get_printer_type returns const reference",
@@ -394,7 +396,7 @@ TEST_CASE("PrinterState: get_printer_type returns const reference",
     REQUIRE(type1 == "FlashForge Adventurer 5M Pro");
 }
 
-TEST_CASE("PrinterState: get_print_start_capabilities returns const reference",
+TEST_CASE("PrinterState: get_pre_print_option_set returns const reference",
           "[printer_state][capabilities][edge]") {
     lv_init_safe();
 
@@ -405,8 +407,8 @@ TEST_CASE("PrinterState: get_print_start_capabilities returns const reference",
     state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
     // Get reference and verify it's stable
-    const PrintStartCapabilities& caps1 = state.get_print_start_capabilities();
-    const PrintStartCapabilities& caps2 = state.get_print_start_capabilities();
+    const PrePrintOptionSet& caps1 = state.get_pre_print_option_set();
+    const PrePrintOptionSet& caps2 = state.get_pre_print_option_set();
 
     // Should return the same reference (not a copy)
     REQUIRE(&caps1 == &caps2);

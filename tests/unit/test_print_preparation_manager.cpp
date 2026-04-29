@@ -580,41 +580,41 @@ TEST_CASE("PrintPreparationManager: is_print_in_progress", "[print_preparation][
  * But collect_macro_skip_params() at line 878 uses has_capability("bed_leveling")
  * which will always return false because the key doesn't exist in the database.
  */
-TEST_CASE("PrintPreparationManager: capability keys match category_to_string",
+TEST_CASE("PrintPreparationManager: option ids match category_to_string",
           "[print_preparation][capabilities][bug]") {
-    // This test verifies that capability database keys align with category_to_string()
+    // This test verifies that pre_print_options ids align with category_to_string()
     // The database uses "bed_mesh", not "bed_leveling"
 
-    SECTION("BED_MESH category maps to 'bed_mesh' key (not 'bed_leveling')") {
+    SECTION("BED_MESH category maps to 'bed_mesh' id (not 'bed_leveling')") {
         // Verify what category_to_string returns for BED_MESH
         std::string expected_key = category_to_string(PrintStartOpCategory::BED_MESH);
         REQUIRE(expected_key == "bed_mesh");
 
-        // Get AD5M Pro capabilities (known to have bed_mesh capability)
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        // Get AD5M Pro options (known to have bed_mesh option)
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
         REQUIRE_FALSE(caps.empty());
 
-        // The database uses "bed_mesh" as the key
-        REQUIRE(caps.has_capability("bed_mesh"));
-
-        // "bed_leveling" is NOT a valid key in the database
-        REQUIRE_FALSE(caps.has_capability("bed_leveling"));
-
-        // Verify the param details are accessible via the correct key
-        auto* bed_cap = caps.get_capability("bed_mesh");
+        // The database uses "bed_mesh" as the id
+        const PrePrintOption* bed_cap = caps.find("bed_mesh");
         REQUIRE(bed_cap != nullptr);
-        REQUIRE(bed_cap->param == "SKIP_LEVELING");
 
-        // This is the key assertion: code using capabilities MUST use "bed_mesh",
+        // "bed_leveling" is NOT a valid id in the database
+        REQUIRE(caps.find("bed_leveling") == nullptr);
+
+        // Verify the param details are accessible via the correct id
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "SKIP_LEVELING");
+
+        // This is the key assertion: code using options MUST use "bed_mesh",
         // not "bed_leveling". Any lookup with "bed_leveling" will fail silently.
-        // The bug in collect_macro_skip_params() uses the wrong key.
     }
 
-    SECTION("All category strings are valid capability keys") {
+    SECTION("All category strings are valid option ids") {
         // Verify each PrintStartOpCategory has a consistent string representation
         // that matches what the database expects
 
-        // These should be the keys used in printer_database.json
+        // These should be the ids used in printer_database.json
         REQUIRE(std::string(category_to_string(PrintStartOpCategory::BED_MESH)) == "bed_mesh");
         REQUIRE(std::string(category_to_string(PrintStartOpCategory::QGL)) == "qgl");
         REQUIRE(std::string(category_to_string(PrintStartOpCategory::Z_TILT)) == "z_tilt");
@@ -630,38 +630,39 @@ TEST_CASE("PrintPreparationManager: capability keys match category_to_string",
 }
 
 /**
- * Test that verifies collect_macro_skip_params() uses correct capability keys.
+ * Test that verifies collect_macro_skip_params() uses correct option ids.
  *
- * The capability database uses keys that match category_to_string() output:
+ * The pre_print_options database uses ids that match category_to_string() output:
  *   - "bed_mesh" for BED_MESH
  *   - "qgl" for QGL
  *   - "z_tilt" for Z_TILT
  *   - "nozzle_clean" for NOZZLE_CLEAN
  *
- * This test verifies the code uses these correct keys (not legacy names like "bed_leveling").
+ * This test verifies the code uses these correct ids (not legacy names like "bed_leveling").
  */
-TEST_CASE("PrintPreparationManager: collect_macro_skip_params uses correct capability keys",
+TEST_CASE("PrintPreparationManager: collect_macro_skip_params uses correct option ids",
           "[print_preparation][capabilities]") {
-    // Get capabilities for a known printer
-    auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+    // Get options for a known printer
+    auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
     REQUIRE_FALSE(caps.empty());
 
-    SECTION("bed_mesh key is used (not bed_leveling)") {
-        // The CORRECT lookup key matches category_to_string(BED_MESH)
-        REQUIRE(caps.has_capability("bed_mesh"));
-
-        // The WRONG key should NOT exist - this ensures code using it would fail
-        REQUIRE_FALSE(caps.has_capability("bed_leveling"));
-
-        // Verify the param details are accessible via the correct key
-        auto* bed_cap = caps.get_capability("bed_mesh");
+    SECTION("bed_mesh id is used (not bed_leveling)") {
+        // The CORRECT lookup id matches category_to_string(BED_MESH)
+        const PrePrintOption* bed_cap = caps.find("bed_mesh");
         REQUIRE(bed_cap != nullptr);
-        REQUIRE(bed_cap->param == "SKIP_LEVELING");
+
+        // The WRONG id should NOT exist - this ensures code using it would fail
+        REQUIRE(caps.find("bed_leveling") == nullptr);
+
+        // Verify the param details are accessible via the correct id
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "SKIP_LEVELING");
     }
 
-    SECTION("All capability keys match category_to_string output") {
-        // These are the keys that collect_macro_skip_params() should use
-        // They must match the keys in printer_database.json
+    SECTION("All option ids match category_to_string output") {
+        // These are the ids that collect_macro_skip_params() should use
+        // They must match the ids in printer_database.json
 
         // BED_MESH -> "bed_mesh"
         REQUIRE(std::string(category_to_string(PrintStartOpCategory::BED_MESH)) == "bed_mesh");
@@ -748,25 +749,25 @@ TEST_CASE("PrintPreparationManager: capabilities come from PrinterState",
     PrintPreparationManager manager;
     manager.set_dependencies(nullptr, &printer_state);
 
-    SECTION("Manager uses PrinterState capabilities for known printer") {
+    SECTION("Manager uses PrinterState options for known printer") {
         // Set printer type on PrinterState (sync version for testing)
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-        // Verify PrinterState has the capabilities
-        const auto& state_caps = printer_state.get_print_start_capabilities();
+        // Verify PrinterState has the option set
+        const auto& state_caps = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(state_caps.empty());
-        REQUIRE(state_caps.has_capability("bed_mesh"));
         REQUIRE(state_caps.macro_name == "START_PRINT");
 
-        // Get expected capability details for comparison
-        auto* bed_cap = state_caps.get_capability("bed_mesh");
+        const PrePrintOption* bed_cap = state_caps.find("bed_mesh");
         REQUIRE(bed_cap != nullptr);
-        REQUIRE(bed_cap->param == "SKIP_LEVELING");
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "SKIP_LEVELING");
     }
 
     SECTION("Manager sees empty capabilities when PrinterState has no type") {
         // Don't set any printer type - should have empty capabilities
-        const auto& state_caps = printer_state.get_print_start_capabilities();
+        const auto& state_caps = printer_state.get_pre_print_option_set();
         REQUIRE(state_caps.empty());
         REQUIRE(state_caps.macro_name.empty());
     }
@@ -776,7 +777,7 @@ TEST_CASE("PrintPreparationManager: capabilities come from PrinterState",
         printer_state.set_printer_type_sync("Unknown Printer That Does Not Exist");
 
         // Should return empty capabilities, not crash
-        const auto& state_caps = printer_state.get_print_start_capabilities();
+        const auto& state_caps = printer_state.get_pre_print_option_set();
         REQUIRE(state_caps.empty());
     }
 
@@ -809,38 +810,37 @@ TEST_CASE("PrintPreparationManager: capabilities update when PrinterState type c
         // Set to AD5M Pro first
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-        // Verify AD5M Pro capabilities
-        const auto& caps_v1 = printer_state.get_print_start_capabilities();
+        // Verify AD5M Pro options
+        const auto& caps_v1 = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(caps_v1.empty());
         REQUIRE(caps_v1.macro_name == "START_PRINT");
-        std::string v1_macro = caps_v1.macro_name;
-        size_t v1_param_count = caps_v1.params.size();
+        size_t v1_option_count = caps_v1.options.size();
 
         // Now switch to AD5M (non-Pro)
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M");
 
-        // Verify capabilities updated
-        const auto& caps_v2 = printer_state.get_print_start_capabilities();
+        // Verify options updated
+        const auto& caps_v2 = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(caps_v2.empty());
         // Both have START_PRINT but this confirms the lookup happened
         REQUIRE(caps_v2.macro_name == "START_PRINT");
 
-        INFO("AD5M Pro params: " << v1_param_count);
-        INFO("AD5M params: " << caps_v2.params.size());
+        INFO("AD5M Pro options: " << v1_option_count);
+        INFO("AD5M options: " << caps_v2.options.size());
     }
 
     SECTION("Capabilities become empty when switching to unknown printer") {
         // Start with known printer
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-        const auto& caps_known = printer_state.get_print_start_capabilities();
+        const auto& caps_known = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(caps_known.empty());
 
         // Switch to unknown printer
         printer_state.set_printer_type_sync("Generic Unknown Printer XYZ");
 
         // Capabilities should now be empty (no stale cache)
-        const auto& caps_unknown = printer_state.get_print_start_capabilities();
+        const auto& caps_unknown = printer_state.get_pre_print_option_set();
         REQUIRE(caps_unknown.empty());
         REQUIRE(caps_unknown.macro_name.empty());
     }
@@ -849,75 +849,72 @@ TEST_CASE("PrintPreparationManager: capabilities update when PrinterState type c
         // Start with known printer
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
 
-        const auto& caps_before = printer_state.get_print_start_capabilities();
+        const auto& caps_before = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(caps_before.empty());
 
         // Clear printer type
         printer_state.set_printer_type_sync("");
 
         // Capabilities should be empty
-        const auto& caps_after = printer_state.get_print_start_capabilities();
+        const auto& caps_after = printer_state.get_pre_print_option_set();
         REQUIRE(caps_after.empty());
     }
 
     SECTION("No stale cache when rapidly switching printer types") {
         // Rapidly switch between multiple printer types
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        REQUIRE_FALSE(printer_state.get_print_start_capabilities().empty());
+        REQUIRE_FALSE(printer_state.get_pre_print_option_set().empty());
 
         printer_state.set_printer_type_sync("Unknown Printer 1");
-        REQUIRE(printer_state.get_print_start_capabilities().empty());
+        REQUIRE(printer_state.get_pre_print_option_set().empty());
 
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M");
-        REQUIRE_FALSE(printer_state.get_print_start_capabilities().empty());
+        REQUIRE_FALSE(printer_state.get_pre_print_option_set().empty());
 
         printer_state.set_printer_type_sync("");
-        REQUIRE(printer_state.get_print_start_capabilities().empty());
+        REQUIRE(printer_state.get_pre_print_option_set().empty());
 
         // Final state: set back to known printer
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        const auto& final_caps = printer_state.get_print_start_capabilities();
+        const auto& final_caps = printer_state.get_pre_print_option_set();
         REQUIRE_FALSE(final_caps.empty());
-        REQUIRE(final_caps.has_capability("bed_mesh"));
+        REQUIRE(final_caps.find("bed_mesh") != nullptr);
     }
 }
 
 // ============================================================================
-// Tests: Capability Cache Behavior (Legacy - using PrinterDetector directly)
+// Tests: Pre-Print Option Set Cache Behavior (using PrinterDetector directly)
 // ============================================================================
 
 /**
- * Tests for PrinterDetector capability lookup behavior.
+ * Tests for PrinterDetector pre-print option set lookup behavior.
  *
- * These tests verify the underlying PrinterDetector::get_print_start_capabilities()
+ * These tests verify the underlying PrinterDetector::get_pre_print_option_set()
  * works correctly. After the LT1 refactor, PrinterState wraps this, but these
  * tests remain valuable for verifying the database lookup layer.
  */
-TEST_CASE("PrintPreparationManager: capability cache behavior",
+TEST_CASE("PrintPreparationManager: pre-print options cache behavior",
           "[print_preparation][capabilities][cache]") {
-    SECTION("get_cached_capabilities returns capabilities for known printer types") {
-        // Verify PrinterDetector returns different capabilities for different printers
-        auto ad5m_caps =
-            PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
-        auto voron_caps = PrinterDetector::get_print_start_capabilities("Voron 2.4");
+    SECTION("get_cached_options returns options for known printer types") {
+        // Verify PrinterDetector returns different options for different printers
+        auto ad5m_caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+        auto voron_caps = PrinterDetector::get_pre_print_option_set("Voron 2.4");
 
-        // AD5M Pro should have bed_mesh capability
+        // AD5M Pro should have bed_mesh option
         REQUIRE_FALSE(ad5m_caps.empty());
-        REQUIRE(ad5m_caps.has_capability("bed_mesh"));
+        REQUIRE(ad5m_caps.find("bed_mesh") != nullptr);
 
-        // Voron 2.4 may have different capabilities (or none in database)
+        // Voron 2.4 may have different options (or none in database)
         // The key point is the lookup happens and returns a valid struct
         // (empty struct is valid - means no database entry)
-        INFO("AD5M caps: " << ad5m_caps.params.size() << " params");
-        INFO("Voron caps: " << voron_caps.params.size() << " params");
+        INFO("AD5M options: " << ad5m_caps.options.size());
+        INFO("Voron options: " << voron_caps.options.size());
     }
 
-    SECTION("Different printer types return different capabilities") {
+    SECTION("Different printer types return different option sets") {
         // This verifies the database contains distinct entries
-        auto ad5m_caps =
-            PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
-        auto ad5m_std_caps =
-            PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M");
+        auto ad5m_caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+        auto ad5m_std_caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M");
 
         // Both should exist (AD5M and AD5M Pro are separate entries)
         REQUIRE_FALSE(ad5m_caps.empty());
@@ -928,28 +925,32 @@ TEST_CASE("PrintPreparationManager: capability cache behavior",
         REQUIRE(ad5m_caps.macro_name == ad5m_std_caps.macro_name);
     }
 
-    SECTION("Unknown printer type returns empty capabilities") {
-        auto unknown_caps =
-            PrinterDetector::get_print_start_capabilities("NonExistent Printer XYZ");
+    SECTION("Unknown printer type returns empty options") {
+        auto unknown_caps = PrinterDetector::get_pre_print_option_set("NonExistent Printer XYZ");
 
-        // Unknown printer should return empty capabilities (not crash)
+        // Unknown printer should return empty options (not crash)
         REQUIRE(unknown_caps.empty());
         REQUIRE(unknown_caps.macro_name.empty());
-        REQUIRE(unknown_caps.params.empty());
+        REQUIRE(unknown_caps.options.empty());
     }
 
-    SECTION("Capability lookup is idempotent") {
+    SECTION("Option lookup is idempotent") {
         // Multiple lookups for same printer should return identical results
-        auto caps1 = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
-        auto caps2 = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        auto caps1 = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+        auto caps2 = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
 
         REQUIRE(caps1.macro_name == caps2.macro_name);
-        REQUIRE(caps1.params.size() == caps2.params.size());
+        REQUIRE(caps1.options.size() == caps2.options.size());
 
-        // Verify specific capability matches
-        if (caps1.has_capability("bed_mesh") && caps2.has_capability("bed_mesh")) {
-            REQUIRE(caps1.get_capability("bed_mesh")->param ==
-                    caps2.get_capability("bed_mesh")->param);
+        // Verify specific option matches
+        const PrePrintOption* a = caps1.find("bed_mesh");
+        const PrePrintOption* b = caps2.find("bed_mesh");
+        if (a && b) {
+            const auto* macro_a = std::get_if<PrePrintStrategyMacroParam>(&a->strategy);
+            const auto* macro_b = std::get_if<PrePrintStrategyMacroParam>(&b->strategy);
+            REQUIRE(macro_a != nullptr);
+            REQUIRE(macro_b != nullptr);
+            REQUIRE(macro_a->param_name == macro_b->param_name);
         }
     }
 }
@@ -979,20 +980,21 @@ TEST_CASE("PrintPreparationManager: priority order consistency",
         REQUIRE(steps.empty());
     }
 
-    SECTION("Database capabilities appear in format_preprint_steps output") {
+    SECTION("Database options appear in format_preprint_steps output") {
         // We can't directly set the printer type without Config, but we can verify
         // the database lookup returns expected operations for known printers
 
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
         REQUIRE_FALSE(caps.empty());
 
-        // AD5M Pro has bed_mesh capability
-        REQUIRE(caps.has_capability("bed_mesh"));
-
-        // The capability should have a param name (SKIP_LEVELING)
-        auto* bed_cap = caps.get_capability("bed_mesh");
+        // AD5M Pro has bed_mesh option
+        const PrePrintOption* bed_cap = caps.find("bed_mesh");
         REQUIRE(bed_cap != nullptr);
-        REQUIRE_FALSE(bed_cap->param.empty());
+
+        // The option should have a MacroParam strategy with non-empty param_name
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE_FALSE(macro->param_name.empty());
     }
 
     SECTION("Priority order: database > macro > file") {
@@ -1002,15 +1004,14 @@ TEST_CASE("PrintPreparationManager: priority order consistency",
         // This is tested indirectly through the format_preprint_steps() output
         // which uses "(optional)" suffix for skippable operations.
 
-        // Get database capabilities for a known printer
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        // Get database options for a known printer
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
 
-        // Database entries are skippable (have params)
-        if (caps.has_capability("bed_mesh")) {
-            auto* bed_cap = caps.get_capability("bed_mesh");
-            REQUIRE(bed_cap != nullptr);
-            // Has a skip value means it's controllable
-            REQUIRE_FALSE(bed_cap->skip_value.empty());
+        if (const PrePrintOption* bed_cap = caps.find("bed_mesh")) {
+            // Has a MacroParam strategy with non-empty skip_value means it's controllable
+            const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+            REQUIRE(macro != nullptr);
+            REQUIRE_FALSE(macro->skip_value.empty());
         }
     }
 
@@ -1030,12 +1031,12 @@ TEST_CASE("PrintPreparationManager: priority order consistency",
         REQUIRE(std::string(category_to_string(PrintStartOpCategory::NOZZLE_CLEAN)) ==
                 "nozzle_clean");
 
-        // And the database uses these same keys
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        // And the database uses these same ids
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
         if (!caps.empty()) {
-            // bed_mesh key exists (not "bed_leveling")
-            REQUIRE(caps.has_capability("bed_mesh"));
-            REQUIRE_FALSE(caps.has_capability("bed_leveling"));
+            // bed_mesh id exists (not "bed_leveling")
+            REQUIRE(caps.find("bed_mesh") != nullptr);
+            REQUIRE(caps.find("bed_leveling") == nullptr);
         }
     }
 }
@@ -1070,11 +1071,11 @@ TEST_CASE("PrintPreparationManager: format_preprint_steps formatting",
 
         // Since we can't inject mock data, we verify the format through
         // the database lookup which does populate steps
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
         if (!caps.empty()) {
-            // With capabilities set, format_preprint_steps would show them
-            // The test verifies the capability data exists for the merge
-            REQUIRE(caps.has_capability("bed_mesh"));
+            // With options set, format_preprint_steps would show them
+            // The test verifies the option data exists for the merge
+            REQUIRE(caps.find("bed_mesh") != nullptr);
         }
     }
 
@@ -1082,13 +1083,13 @@ TEST_CASE("PrintPreparationManager: format_preprint_steps formatting",
         // Operations from database and controllable macro operations
         // should show "(optional)" in the output
 
-        // Get database capability to verify skip_value exists
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
-        if (caps.has_capability("bed_mesh")) {
-            auto* bed_cap = caps.get_capability("bed_mesh");
-            REQUIRE(bed_cap != nullptr);
+        // Get database option to verify skip_value exists
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+        if (const PrePrintOption* bed_cap = caps.find("bed_mesh")) {
             // Has skip_value means it's controllable = shows (optional)
-            REQUIRE_FALSE(bed_cap->skip_value.empty());
+            const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+            REQUIRE(macro != nullptr);
+            REQUIRE_FALSE(macro->skip_value.empty());
         }
     }
 }
@@ -2845,9 +2846,15 @@ TEST_CASE("PrepManager: Extension safety - priority ordering", "[print_preparati
 
         // Create a matrix with DATABASE source
         CapabilityMatrix matrix;
-        PrintStartCapabilities db_caps;
+        PrePrintOptionSet db_caps;
         db_caps.macro_name = "START_PRINT";
-        db_caps.params["bed_mesh"] = {"FORCE_LEVELING", "false", "true"};
+        {
+            PrePrintOption opt;
+            opt.id = "bed_mesh";
+            opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+            opt.strategy = PrePrintStrategyMacroParam{"FORCE_LEVELING", "true", "false", ""};
+            db_caps.options.push_back(opt);
+        }
         matrix.add_from_database(db_caps);
 
         auto source = matrix.get_best_source(OperationCategory::BED_MESH);
@@ -2930,9 +2937,15 @@ TEST_CASE("PrepManager: Extension safety - priority ordering", "[print_preparati
         matrix.add_from_macro_analysis(analysis);
 
         // Add DATABASE source (highest priority)
-        PrintStartCapabilities db_caps;
+        PrePrintOptionSet db_caps;
         db_caps.macro_name = "START_PRINT";
-        db_caps.params["bed_mesh"] = {"FORCE_LEVELING_DB", "false", "true"};
+        {
+            PrePrintOption opt;
+            opt.id = "bed_mesh";
+            opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+            opt.strategy = PrePrintStrategyMacroParam{"FORCE_LEVELING_DB", "true", "false", ""};
+            db_caps.options.push_back(opt);
+        }
         matrix.add_from_database(db_caps);
 
         // DATABASE should win
@@ -3015,10 +3028,16 @@ TEST_CASE("PrepManager: Extension safety - semantic handling", "[print_preparati
         // - FORCE_LEVELING=0 or "false" -> skip leveling
 
         CapabilityMatrix matrix;
-        PrintStartCapabilities db_caps;
+        PrePrintOptionSet db_caps;
         db_caps.macro_name = "START_PRINT";
         // AD5M-style: FORCE_LEVELING with OPT_IN semantic
-        db_caps.params["bed_mesh"] = {"FORCE_LEVELING", "false", "true"};
+        {
+            PrePrintOption opt;
+            opt.id = "bed_mesh";
+            opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+            opt.strategy = PrePrintStrategyMacroParam{"FORCE_LEVELING", "true", "false", ""};
+            db_caps.options.push_back(opt);
+        }
         matrix.add_from_database(db_caps);
 
         auto source = matrix.get_best_source(OperationCategory::BED_MESH);
@@ -3226,35 +3245,39 @@ TEST_CASE("PrepManager: Extension safety - database key consistency", "[print_pr
         REQUIRE(std::string(category_key(OperationCategory::PURGE_LINE)) == "purge_line");
     }
 
-    SECTION("Known printer has expected capability keys") {
-        // Verify that the database returns capabilities with the correct keys
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+    SECTION("Known printer has expected option ids") {
+        // Verify that the database returns options with the correct ids
+        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
 
         if (!caps.empty()) {
-            // Database should use "bed_mesh" key, not alternatives like "bed_leveling"
-            if (caps.has_capability("bed_mesh")) {
-                REQUIRE_FALSE(caps.has_capability("bed_leveling")); // Wrong key doesn't exist
-                auto* bed_cap = caps.get_capability("bed_mesh");
-                REQUIRE(bed_cap != nullptr);
-                REQUIRE_FALSE(bed_cap->param.empty());
+            // Database should use "bed_mesh" id, not alternatives like "bed_leveling"
+            if (const PrePrintOption* bed_cap = caps.find("bed_mesh")) {
+                REQUIRE(caps.find("bed_leveling") == nullptr); // Wrong id doesn't exist
+                const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
+                REQUIRE(macro != nullptr);
+                REQUIRE_FALSE(macro->param_name.empty());
             }
         }
     }
 
     SECTION("CapabilityMatrix::category_from_key recognizes all registry keys") {
-        // The CapabilityMatrix uses category_from_key() to map database capability
-        // keys to OperationCategory. This must recognize all registry keys.
+        // The CapabilityMatrix uses category_from_key() to map option ids to
+        // OperationCategory. This must recognize all registry keys.
 
         // Note: category_from_key is private, so we test indirectly through add_from_database
 
         CapabilityMatrix matrix;
 
-        // Create database capabilities for all registry operations
-        PrintStartCapabilities db_caps;
+        // Create database options for all registry operations
+        PrePrintOptionSet db_caps;
         db_caps.macro_name = "START_PRINT";
 
         for (const auto& info : OperationRegistry::all()) {
-            db_caps.params[info.capability_key] = {"PARAM_" + info.capability_key, "0", "1"};
+            PrePrintOption opt;
+            opt.id = info.capability_key;
+            opt.strategy_kind = PrePrintStrategyKind::MacroParam;
+            opt.strategy = PrePrintStrategyMacroParam{"PARAM_" + info.capability_key, "1", "0", ""};
+            db_caps.options.push_back(opt);
         }
 
         matrix.add_from_database(db_caps);

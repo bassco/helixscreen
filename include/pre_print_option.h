@@ -15,9 +15,10 @@
  * @brief Printer-agnostic abstraction for per-print options shown on the
  *        print-detail panel (bed mesh, QGL, AI detect, timelapse, etc.).
  *
- * Phase 1 of the pre-print-options-framework refactor introduces these types
- * alongside (NOT replacing) the existing `PrintStartCapabilities` in
- * `printer_detector.h`. Phase 2 will migrate the JSON DB and call sites.
+ * Per-printer option definitions live in `assets/config/printer_database.json`
+ * under each entry's `pre_print_options` block; the JSON shape is parsed by
+ * `parse_pre_print_option_set()` and surfaced via
+ * `PrinterDetector::get_pre_print_option_set()`.
  */
 
 /**
@@ -102,13 +103,19 @@ struct PrePrintOption {
  *
  * `macro_name` is the START_PRINT macro to use when aggregating
  * `MacroParam` options. Options are sorted by (category, order).
+ *
+ * `pre_start_gcode` (optional) is a single gcode command sent BEFORE the
+ * start macro when any options are toggled off — used by Creality K1
+ * variants whose `PREPARE` macro variable can't be passed as a START_PRINT
+ * argument and must be set via a separate `PRINT_PREPARED` call first.
  */
 struct PrePrintOptionSet {
     std::string macro_name;
+    std::string pre_start_gcode;
     std::vector<PrePrintOption> options;
 
     bool empty() const {
-        return macro_name.empty() && options.empty();
+        return macro_name.empty() && pre_start_gcode.empty() && options.empty();
     }
 
     /// Returns nullptr if no option with the given id is present.

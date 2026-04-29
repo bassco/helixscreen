@@ -27,7 +27,7 @@ class PrinterStateTestAccess {
         helix::ui::UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
         ps.deinit_subjects();
         ps.printer_type_.clear();
-        ps.print_start_capabilities_ = PrintStartCapabilities();
+        ps.pre_print_option_set_ = PrePrintOptionSet();
         ps.z_offset_calibration_strategy_ = ZOffsetCalibrationStrategy::PROBE_CALIBRATE;
         ps.auto_detected_bed_moves_ = false;
         ps.last_kinematics_.clear();
