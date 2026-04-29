@@ -491,15 +491,29 @@ std::string DebugBundleCollector::get_moonraker_url() {
     return api->get_http_base_url();
 }
 
-json DebugBundleCollector::moonraker_get(const std::string& base_url, const std::string& endpoint,
-                                         int timeout_sec) {
-    if (base_url.empty()) {
-        return json{{"error", "Moonraker not connected"}};
-    }
+namespace {
 
+// Result of a raw HTTP GET. status==0 means the request never produced a
+// response (network failure, timeout, or hv exception); callers should treat
+// that as a hard failure distinct from an HTTP error code.
+struct RawHttpResult {
+    int status = 0;
+    std::string body;
+};
+
+// Shared HTTP-GET primitive used by moonraker_get() (JSON) and platform-file
+// fetchers (TEXT). Joins base + endpoint with a single slash if neither side
+// supplies one, so callers can pass either form. Never throws.
+RawHttpResult http_get_raw(const std::string& base_url, const std::string& endpoint,
+                           int timeout_sec) {
+    RawHttpResult result;
+    if (base_url.empty()) {
+        return result;
+    }
     std::string url = base_url;
-    if (!endpoint.empty() && endpoint[0] != '/')
-        url += "/";
+    if (!endpoint.empty() && endpoint[0] != '/' && !url.empty() && url.back() != '/') {
+        url += '/';
+    }
     url += endpoint;
 
     try {
@@ -510,19 +524,55 @@ json DebugBundleCollector::moonraker_get(const std::string& base_url, const std:
 
         auto resp = requests::request(req);
         if (!resp) {
-            return json{{"error", "No response from " + endpoint}};
+            return result;
         }
+        result.status = static_cast<int>(resp->status_code);
+        result.body = std::move(resp->body);
+    } catch (const std::exception&) {
+        // status stays 0 — caller treats as network failure.
+    }
+    return result;
+}
 
-        int status = static_cast<int>(resp->status_code);
-        if (status < 200 || status >= 300) {
-            return json{{"error", "HTTP " + std::to_string(status) + " from " + endpoint}};
+// Sanitize a multi-line text block by sanitize_value()-ing each line. Avoids
+// sanitize_value()'s 4 KB ReDoS guard kicking in on whole-file inputs (which
+// would redact the entire content as [REDACTED_LONG_VALUE]).
+std::string sanitize_text_block(const std::string& body) {
+    std::string result;
+    result.reserve(body.size());
+    size_t pos = 0;
+    while (pos <= body.size()) {
+        size_t nl = body.find('\n', pos);
+        if (nl == std::string::npos)
+            nl = body.size();
+        result += DebugBundleCollector::sanitize_value(body.substr(pos, nl - pos));
+        if (nl < body.size()) {
+            result += '\n';
         }
+        pos = nl + 1;
+    }
+    return result;
+}
 
-        return json::parse(resp->body);
+} // namespace
+
+json DebugBundleCollector::moonraker_get(const std::string& base_url, const std::string& endpoint,
+                                         int timeout_sec) {
+    if (base_url.empty()) {
+        return json{{"error", "Moonraker not connected"}};
+    }
+
+    auto raw = http_get_raw(base_url, endpoint, timeout_sec);
+    if (raw.status == 0) {
+        return json{{"error", "No response from " + endpoint}};
+    }
+    if (raw.status < 200 || raw.status >= 300) {
+        return json{{"error", "HTTP " + std::to_string(raw.status) + " from " + endpoint}};
+    }
+    try {
+        return json::parse(raw.body);
     } catch (const json::parse_error& e) {
         return json{{"error", "JSON parse error from " + endpoint + ": " + e.what()}};
-    } catch (const std::exception& e) {
-        return json{{"error", std::string("Exception: ") + e.what()}};
     }
 }
 
@@ -742,37 +792,20 @@ static std::vector<PlatformFile> platform_diagnostic_files(const std::string& pl
     return {};
 }
 
-// Raw HTTP GET that returns body as text without JSON parsing. Used for
-// non-JSON platform files (e.g. Klipper-config user.cfg). Returns empty
-// string + sets out_status on failure; out_status==404 is a normal "not
-// present on this device" signal callers should treat as skip-silently.
-static std::string http_get_text(const std::string& url, int timeout_sec, int* out_status) {
-    if (out_status)
-        *out_status = 0;
-    try {
-        auto req = std::make_shared<HttpRequest>();
-        req->method = HTTP_GET;
-        req->url = url;
-        req->timeout = timeout_sec;
-        auto resp = requests::request(req);
-        if (!resp)
-            return {};
-        int status = static_cast<int>(resp->status_code);
-        if (out_status)
-            *out_status = status;
-        if (status < 200 || status >= 300)
-            return {};
-        // Cap text-file capture at 256 KB to keep bundles small even if a
-        // user.cfg has grown unexpectedly. The diagnostic files we ship here
-        // are normally < 8 KB.
-        constexpr size_t kMaxTextBytes = 256 * 1024;
-        if (resp->body.size() > kMaxTextBytes) {
-            return resp->body.substr(0, kMaxTextBytes) + "\n[truncated]\n";
-        }
-        return resp->body;
-    } catch (const std::exception&) {
-        return {};
+// Fetch a text file from Moonraker. Returns body + HTTP status; an HTTP-status
+// of 404 is a normal "not present on this device" signal callers should treat
+// as skip-silently. Truncates the body at kMaxTextBytes to keep bundles small.
+static RawHttpResult http_get_text(const std::string& base_url, const std::string& endpoint,
+                                   int timeout_sec) {
+    auto raw = http_get_raw(base_url, endpoint, timeout_sec);
+    // Cap text-file capture at 256 KB. Diagnostic files we currently ship are
+    // < 8 KB; the cap is a guardrail against future entries that grow large.
+    constexpr size_t kMaxTextBytes = 256 * 1024;
+    if (raw.body.size() > kMaxTextBytes) {
+        raw.body.resize(kMaxTextBytes);
+        raw.body += "\n[truncated]\n";
     }
+    return raw;
 }
 
 json DebugBundleCollector::collect_platform_files() {
@@ -809,18 +842,20 @@ json DebugBundleCollector::collect_platform_files() {
             }
             result[f.name] = sanitize_json(fetched);
         } else {
-            int status = 0;
-            std::string body = http_get_text(base_url + f.moonraker_path, 15, &status);
-            if (status == 404) {
+            auto raw = http_get_text(base_url, f.moonraker_path, 15);
+            if (raw.status == 404) {
                 spdlog::debug("[DebugBundle] platform file '{}' not present (404)", f.name);
                 continue;
             }
-            if (status < 200 || status >= 300) {
-                result[f.name] =
-                    json{{"error", "HTTP " + std::to_string(status) + " from " + f.moonraker_path}};
+            if (raw.status < 200 || raw.status >= 300) {
+                result[f.name] = json{
+                    {"error", "HTTP " + std::to_string(raw.status) + " from " + f.moonraker_path}};
                 continue;
             }
-            result[f.name] = sanitize_value(body);
+            // Line-by-line sanitize so the multi-line file body doesn't trip
+            // sanitize_value()'s 4 KB ReDoS guard (which would redact the
+            // whole file as [REDACTED_LONG_VALUE]).
+            result[f.name] = sanitize_text_block(raw.body);
         }
     }
 
@@ -898,16 +933,16 @@ std::string DebugBundleCollector::fetch_log_tail(const std::string& base_url,
             }
         }
 
-        std::ostringstream result;
+        std::string joined;
         for (size_t i = 0; i < lines.size(); ++i) {
             if (i > 0)
-                result << '\n';
-            result << sanitize_value(lines[i]);
+                joined += '\n';
+            joined += lines[i];
         }
 
         spdlog::debug("[DebugBundle] Fetched {} lines from {} (HTTP {})", lines.size(), endpoint,
                       status);
-        return result.str();
+        return sanitize_text_block(joined);
     } catch (const std::exception& e) {
         spdlog::debug("[DebugBundle] Exception fetching {}: {}", endpoint, e.what());
         return {};
