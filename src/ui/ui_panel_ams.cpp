@@ -1661,9 +1661,16 @@ void destroy_ams_panel_ui() {
     if (s_ams_panel_obj) {
         spdlog::info("[AMS Panel] Destroying panel UI to free memory");
 
+        // Drain deferred observer callbacks while pointers are still valid.
+        // observe_int_sync queues lambdas via queue_update() that capture raw
+        // panel/sidebar pointers; processing them here prevents use-after-free.
+        auto freeze = helix::ui::UpdateQueue::instance().scoped_freeze();
+        helix::ui::UpdateQueue::instance().drain();
+
         // Unregister close callback BEFORE deleting to prevent double-invocation
         // (e.g., if destroy called manually while panel is in overlay stack)
         NavigationManager::instance().unregister_overlay_close_callback(s_ams_panel_obj);
+        NavigationManager::instance().unregister_overlay_instance(s_ams_panel_obj);
 
         // Clear the panel_ reference in AmsPanel before deleting
         if (g_ams_panel) {
@@ -1708,17 +1715,14 @@ AmsPanel& get_global_ams_panel() {
             g_ams_panel->setup(s_ams_panel_obj, screen);
             lv_obj_add_flag(s_ams_panel_obj, LV_OBJ_FLAG_HIDDEN); // Hidden by default
 
-            // Register overlay instance for lifecycle management
             NavigationManager::instance().register_overlay_instance(s_ams_panel_obj,
                                                                     g_ams_panel.get());
 
-            // Register close callback to clear scope when overlay is closed
-            // Panel stays alive for instant re-open (no lazy-load penalty)
-            NavigationManager::instance().register_overlay_close_callback(s_ams_panel_obj, []() {
-                if (g_ams_panel) {
-                    g_ams_panel->clear_unit_scope();
-                }
-            });
+            // Destroy on overlay close to free memory on tight devices (AD5M/AD5X
+            // ~107MB RAM). The C++ instance survives via g_ams_panel for state
+            // preservation; widgets are recreated on next open.
+            NavigationManager::instance().register_overlay_close_callback(
+                s_ams_panel_obj, []() { destroy_ams_panel_ui(); });
 
             spdlog::info("[AMS Panel] Lazy-created panel UI with close callback");
         } else {
