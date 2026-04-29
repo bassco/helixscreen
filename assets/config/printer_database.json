@@ -40,7 +40,14 @@
           "field": "macros",
           "pattern": "SET_EXTRUDER_SLOT",
           "confidence": 0,
-          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+          "reason": "Exclude AD5X stock firmware (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "_IFS_",
+          "confidence": 0,
+          "reason": "Exclude AD5X ZMOD firmware (private _IFS_* macros are AD5X-only)"
         },
         {
           "type": "sensor_match",
@@ -114,7 +121,14 @@
           "field": "macros",
           "pattern": "SET_EXTRUDER_SLOT",
           "confidence": 0,
-          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+          "reason": "Exclude AD5X stock firmware (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "_IFS_",
+          "confidence": 0,
+          "reason": "Exclude AD5X ZMOD firmware (private _IFS_* macros are AD5X-only)"
         },
         {
           "type": "macro_match",
@@ -215,7 +229,14 @@
           "field": "macros",
           "pattern": "SET_EXTRUDER_SLOT",
           "confidence": 0,
-          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+          "reason": "Exclude AD5X stock firmware (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "_IFS_",
+          "confidence": 0,
+          "reason": "Exclude AD5X ZMOD firmware (private _IFS_* macros are AD5X-only)"
         },
         {
           "type": "led_match",
@@ -310,7 +331,14 @@
           "field": "macros",
           "pattern": "SET_EXTRUDER_SLOT",
           "confidence": 0,
-          "reason": "Exclude AD5X (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+          "reason": "Exclude AD5X stock firmware (SET_EXTRUDER_SLOT is an AD5X IFS macro)"
+        },
+        {
+          "type": "macro_exclude",
+          "field": "macros",
+          "pattern": "_IFS_",
+          "confidence": 0,
+          "reason": "Exclude AD5X ZMOD firmware (private _IFS_* macros are AD5X-only)"
         },
         {
           "type": "led_match",
@@ -422,16 +450,23 @@
         {
           "type": "object_exists",
           "field": "printer_objects",
-          "pattern": "zmod_ifs_switch_sensor",
+          "pattern": "zmod_ifs",
           "confidence": 98,
-          "reason": "IFS filament switch sensor - exclusive to AD5X"
+          "reason": "[zmod_ifs] section - AD5X IFS firmware (matches zmod_ifs, zmod_ifs_switch_sensor, zmod_ifs_motion_sensor, etc.)"
+        },
+        {
+          "type": "macro_match",
+          "field": "macros",
+          "pattern": "_IFS_",
+          "confidence": 95,
+          "reason": "Private IFS macros (_IFS_AUTOINSERT, _IFS_ON/OFF, _IFS_REMOVE_*, _PRINT_IFS_MOTION) — ZMOD-firmware AD5X"
         },
         {
           "type": "macro_match",
           "field": "macros",
           "pattern": "SET_EXTRUDER_SLOT",
           "confidence": 95,
-          "reason": "SET_EXTRUDER_SLOT macro - AD5X IFS control"
+          "reason": "SET_EXTRUDER_SLOT macro - AD5X IFS control (stock firmware exposes it as a public macro)"
         },
         {
           "type": "hostname_match",

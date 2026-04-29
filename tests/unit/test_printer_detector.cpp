@@ -2998,6 +2998,44 @@ TEST_CASE_METHOD(
     REQUIRE(result.type_name == "FlashForge Adventurer 5X");
 }
 
+TEST_CASE_METHOD(
+    PrinterDetectorFixture,
+    "PrinterDetector: AD5X with ZMOD firmware detected via [zmod_ifs] section + private _IFS_ macros",
+    "[printer][heuristics][regression][ad5x]") {
+    // Regression for bundle Q8PJP63J: AD5X running ZMOD firmware does NOT publish
+    // the `zmod_ifs_switch_sensor` object or a public `SET_EXTRUDER_SLOT` macro.
+    // Instead it has a `[zmod_ifs]` section and private `_IFS_*` macros
+    // (_IFS_AUTOINSERT, _IFS_ON/OFF, _IFS_REMOVE_*, _PRINT_IFS_MOTION).
+    // Combined with the chamber LED that the AD5X shares with the AD5M Pro, the
+    // detector previously misclassified this hardware as "Adventurer 5M Pro".
+    PrinterHardwareData hardware{
+        .heaters = {"extruder", "extruder1", "extruder2", "extruder3", "heater_bed"},
+        .sensors = {"weightValue"},
+        .fans = {},
+        .leds = {"led chamber_led"}, // AD5X shares chamber LED with 5M Pro
+        .hostname = "flashforge",    // Generic — no "ad5x" token
+        .printer_objects = {"zmod_ifs",
+                            "zmod_ifs_motion_sensor ifs_motion_sensor",
+                            "filament_motion_sensor ifs_motion_sensor",
+                            "filament_switch_sensor head_switch_sensor",
+                            "gcode_macro _IFS_AUTOINSERT",
+                            "gcode_macro _IFS_ON",
+                            "gcode_macro _IFS_OFF",
+                            "gcode_macro _IFS_REMOVE_PRUTOK",
+                            "gcode_macro _PRINT_IFS_MOTION",
+                            "gcode_macro IFS_UNLOCK",
+                            "gcode_macro END_CHANGE_FILAMENT",
+                            "gcode_macro START_PRINT"},
+        .steppers = {},
+        .kinematics = "corexy",
+        .cpu_arch = "MIPS Ingenic X2600"};
+
+    auto result = PrinterDetector::detect(hardware);
+
+    REQUIRE(result.detected());
+    REQUIRE(result.type_name == "FlashForge Adventurer 5X");
+}
+
 // ============================================================================
 // ForgeX vs Stock Detection Tests
 // ============================================================================
