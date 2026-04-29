@@ -34,8 +34,17 @@ void SnapshotQrScanner::start(const std::string& snapshot_url,
     running_ = true;
     frame_pending_ = false;
 
-    poll_thread_ = std::thread([this]() { poll_loop(); });
-    spdlog::info("[SnapshotQR] Started polling {}", snapshot_url_);
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        poll_thread_ = std::thread([this]() { poll_loop(); });
+        spdlog::info("[SnapshotQR] Started polling {}", snapshot_url_);
+    } catch (const std::system_error& e) {
+        spdlog::error("[SnapshotQR] Failed to spawn poll thread: {}", e.what());
+        running_ = false;
+        if (on_error_) {
+            on_error_("system busy");
+        }
+    }
 }
 
 void SnapshotQrScanner::stop() {

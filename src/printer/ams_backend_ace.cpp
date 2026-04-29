@@ -884,8 +884,14 @@ uint32_t AmsBackendAce::parse_slot_color(const json& color_val) {
 void AmsBackendAce::start_rest_fallback() {
     use_rest_fallback_ = true;
     rest_stop_requested_.store(false);
-    rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);
-    spdlog::info("[ACE] REST fallback polling started");
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        rest_polling_thread_ = std::thread(&AmsBackendAce::rest_polling_loop, this);
+        spdlog::info("[ACE] REST fallback polling started");
+    } catch (const std::system_error& e) {
+        spdlog::error("[ACE] Failed to spawn REST polling thread: {}", e.what());
+        use_rest_fallback_ = false;
+    }
 }
 
 void AmsBackendAce::stop_rest_fallback() {

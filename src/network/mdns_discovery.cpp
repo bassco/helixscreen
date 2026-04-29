@@ -118,11 +118,17 @@ class MdnsDiscovery::Impl {
             }
         }
 
-        // Start discovery thread
+        // Start discovery thread. Wrap — EAGAIN under thread exhaustion
+        // throws std::system_error ([L083]).
         running_.store(true);
         initial_update_sent_.store(false); // Reset so first query dispatches even if empty
-        thread_ = std::thread(&Impl::discovery_loop, this);
-        spdlog::info("[MdnsDiscovery] Started discovery for {}", service_type_);
+        try {
+            thread_ = std::thread(&Impl::discovery_loop, this);
+            spdlog::info("[MdnsDiscovery] Started discovery for {}", service_type_);
+        } catch (const std::system_error& e) {
+            spdlog::error("[MdnsDiscovery] Failed to spawn discovery thread: {}", e.what());
+            running_.store(false);
+        }
     }
 
     void stop() {

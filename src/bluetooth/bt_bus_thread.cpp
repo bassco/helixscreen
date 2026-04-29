@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "spdlog/spdlog.h"
+
 namespace helix::bluetooth {
 
 BusThread::BusThread(sd_bus* bus) : bus_(bus) {
@@ -29,14 +31,20 @@ void BusThread::start() {
     if (!running_.compare_exchange_strong(expected, true))
         return;
     stopping_.store(false);
-    thread_ = std::thread([this]{
-        // Publish our id from inside the worker BEFORE any work runs, so
-        // on_thread() always sees a valid id — the parent thread used to
-        // write thread_id_ after std::thread construction, which races the
-        // worker's first on_thread() check.
-        thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
-        loop();
-    });
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        thread_ = std::thread([this]{
+            // Publish our id from inside the worker BEFORE any work runs, so
+            // on_thread() always sees a valid id — the parent thread used to
+            // write thread_id_ after std::thread construction, which races the
+            // worker's first on_thread() check.
+            thread_id_.store(std::this_thread::get_id(), std::memory_order_release);
+            loop();
+        });
+    } catch (const std::system_error& e) {
+        spdlog::error("[BusThread] Failed to spawn worker thread: {}", e.what());
+        running_.store(false);
+    }
 }
 
 void BusThread::stop() {

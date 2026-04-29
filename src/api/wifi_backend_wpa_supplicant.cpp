@@ -155,15 +155,22 @@ void WifiBackendWpaSupplicant::start_async() {
         async_init_thread_.join();
     }
 
-    async_init_thread_ = std::thread([this]() {
-        WiFiError result = start();
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    try {
+        async_init_thread_ = std::thread([this]() {
+            WiFiError result = start();
+            async_init_in_progress_ = false;
+            if (result.success()) {
+                dispatch_event("READY", "");
+            } else {
+                dispatch_event("INIT_FAILED", result.technical_msg);
+            }
+        });
+    } catch (const std::system_error& e) {
+        spdlog::error("[WifiBackend wpa] Failed to spawn init thread: {}", e.what());
         async_init_in_progress_ = false;
-        if (result.success()) {
-            dispatch_event("READY", "");
-        } else {
-            dispatch_event("INIT_FAILED", result.technical_msg);
-        }
-    });
+        dispatch_event("INIT_FAILED", "system busy");
+    }
 }
 
 void WifiBackendWpaSupplicant::stop() {

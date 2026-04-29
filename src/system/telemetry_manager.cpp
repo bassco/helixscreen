@@ -874,8 +874,20 @@ void TelemetryManager::try_send() {
 
     spdlog::info("[TelemetryManager] Sending batch of {} events", batch.size());
 
-    // Send on background thread; joined on next try_send() call or shutdown()
-    send_thread_ = std::thread([this, batch = std::move(batch)]() { do_send(batch); });
+    // Send on background thread; joined on next try_send() call or shutdown().
+    // Wrap — EAGAIN under thread exhaustion throws std::system_error ([L083]).
+    // build_batch() above copies from queue_ without removing — events are
+    // only removed via remove_sent_events() inside do_send on success — so on
+    // spawn failure the queue is already in the right state. Just log; the
+    // next try_send tick will retry.
+    try {
+        send_thread_ =
+            std::thread([this, batch = std::move(batch)]() { do_send(batch); });
+    } catch (const std::system_error& e) {
+        spdlog::error("[TelemetryManager] Failed to spawn send thread: {} — events remain "
+                      "queued for next try_send",
+                      e.what());
+    }
 }
 
 void TelemetryManager::do_send(const nlohmann::json& batch) {
