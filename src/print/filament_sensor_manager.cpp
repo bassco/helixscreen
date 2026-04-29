@@ -10,6 +10,7 @@
 #include "app_constants.h"
 #include "app_globals.h"
 #include "config.h"
+#include "printer_state.h"
 #include "spdlog/spdlog.h"
 #include "static_subject_registry.h"
 
@@ -592,8 +593,22 @@ void FilamentSensorManager::update_from_status(const json& status) {
                 // and active AMS filament operations (load/unload moves filament
                 // past sensors intentionally, generating spurious triggers)
                 bool ams_active = AmsState::instance().is_filament_operation_active();
+                // AD5X-IFS auto-unloads filament back into the IFS between prints.
+                // The head sensor going empty when the printer is idle is firmware
+                // behaviour, not a user-facing event. The runout role is preserved
+                // so in-print events still fire.
+                bool ad5x_idle_unload = false;
+                if (auto* backend = AmsState::instance().get_backend()) {
+                    if (backend->get_type() == AmsType::AD5X_IFS) {
+                        auto job_state = get_printer_state().get_print_job_state();
+                        if (job_state != PrintJobState::PRINTING &&
+                            job_state != PrintJobState::PAUSED) {
+                            ad5x_idle_unload = true;
+                        }
+                    }
+                }
                 notif.should_toast = !within_grace_period && !is_wizard_active() && !ams_active &&
-                                     master_enabled_ && sensor.enabled &&
+                                     !ad5x_idle_unload && master_enabled_ && sensor.enabled &&
                                      sensor.role != FilamentSensorRole::NONE;
                 if (within_grace_period && master_enabled_ && sensor.enabled &&
                     sensor.role != FilamentSensorRole::NONE) {
@@ -603,6 +618,11 @@ void FilamentSensorManager::update_from_status(const json& status) {
                            sensor.role != FilamentSensorRole::NONE) {
                     spdlog::debug(
                         "[FilamentSensorManager] Suppressing toast during AMS operation for {}",
+                        sensor.sensor_name);
+                } else if (ad5x_idle_unload && master_enabled_ && sensor.enabled &&
+                           sensor.role != FilamentSensorRole::NONE) {
+                    spdlog::debug(
+                        "[FilamentSensorManager] Suppressing AD5X idle-unload toast for {}",
                         sensor.sensor_name);
                 }
                 notifications.push_back(notif);
