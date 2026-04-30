@@ -69,12 +69,13 @@ namespace helix::ui {
 class PrePrintOptionsRenderer {
   public:
     /**
-     * @brief Optional lookup for an option's row visibility (can_show_*).
+     * @brief Optional lookup for an option's row visibility.
      *
      * Returning nullptr leaves the row visible unconditionally — used for
      * options whose visibility is purely driven by the option set being
-     * present in the database (e.g. timelapse or future framework-only
-     * options).
+     * present in the database (e.g. timelapse or framework-only options).
+     * Future plugin-/macro-gated options can plug a per-option visibility
+     * subject in here.
      */
     using VisibilitySubjectLookup = std::function<lv_subject_t*(const std::string& id)>;
 

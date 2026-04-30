@@ -218,7 +218,7 @@ void PrinterState::init_subjects(bool register_xml) {
     // Hardware validation subjects (for Hardware Health section in Settings)
     hardware_validation_state_.init_subjects(register_xml);
 
-    // Composite visibility subjects (derived can_show_* subjects)
+    // has_any_preprint_options aggregate (per-op can_show_* subjects retired)
     composite_visibility_state_.init_subjects(register_xml);
 
     // Note: Hardware validation subjects are now initialized by

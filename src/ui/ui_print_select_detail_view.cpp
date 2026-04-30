@@ -1058,9 +1058,9 @@ static void update_prep_time_label() {
 // invoked for each option; returning nullptr leaves the row unconditionally
 // visible. Today we always return nullptr — a printer's database entry
 // declaring an option is sufficient evidence that the option works on that
-// printer. The hook remains available for future plugin-/macro-gated options
-// (PrinterCompositeVisibilityState's `can_show_*` subjects are the natural
-// source).
+// printer. The hook remains available for future plugin-/macro-gated options;
+// any new option needing gating should declare its own subject (the legacy
+// per-op can_show_* subjects were retired with no consumers).
 
 void PrintSelectDetailView::populate_option_rows() {
     if (!pre_print_options_container_) {

@@ -1785,7 +1785,7 @@ class PrinterState {
     /// Hardware validation state component (issue counts, severity, status text)
     helix::PrinterHardwareValidationState hardware_validation_state_;
 
-    /// Composite visibility state component (can_show_* derived subjects)
+    /// Composite visibility state component (has_any_preprint_options aggregate)
     helix::PrinterCompositeVisibilityState composite_visibility_state_;
 
     /// Network state component (connection, klippy, nav buttons)
@@ -1939,11 +1939,12 @@ class PrinterState {
     void update_nav_buttons_enabled();
 
     /**
-     * @brief Update composite visibility subjects for G-code modification options
+     * @brief Refresh the has_any_preprint_options aggregate
      *
-     * Recalculates can_show_* subjects based on current plugin and capability state.
-     * Called whenever helix_plugin_installed or printer_has_* subjects change.
-     * Must be called from main thread (typically via async callbacks).
+     * Recomputes the aggregate visibility subject from current plugin status,
+     * capability subjects, and the framework option count. Called whenever
+     * helix_plugin_installed, printer_has_*, or the cached PrePrintOptionSet
+     * change. Must be called from the main thread (typically via async callbacks).
      */
     void update_gcode_modification_visibility();
 };
