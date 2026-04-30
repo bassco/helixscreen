@@ -354,6 +354,7 @@ class PrintSelectDetailView : public OverlayBase {
     // heap-allocated subject per option) — the legacy fixed six subjects
     // (preprint_bed_mesh_, preprint_qgl_, etc.) were retired in Phase 3.5.
     lv_subject_t filament_mismatch_{};          // 1 = material mismatch warning visible
+    lv_subject_t filament_mapping_visible_{};   // 1 = filament mapping card visible (AMS+tools)
     lv_subject_t prep_time_estimate_subject_{}; // formatted prep time string for bind_text
     char prep_time_estimate_buf_[64]{};         // buffer backing the string subject
     SubjectManager subjects_;                   // RAII manager for subject cleanup

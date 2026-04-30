@@ -125,6 +125,11 @@ void PrintSelectDetailView::init_subjects() {
     // Filament mismatch warning (0=hidden, 1=visible)
     UI_MANAGED_SUBJECT_INT(filament_mismatch_, 0, "filament_mismatch", subjects_);
 
+    // Filament mapping card visibility (0=hidden, 1=visible). Driven by
+    // FilamentMappingCard::should_show() after each update(); XML binds
+    // via bind_flag_if_eq in print_file_detail.xml.
+    UI_MANAGED_SUBJECT_INT(filament_mapping_visible_, 0, "filament_mapping_visible", subjects_);
+
     // Pre-print time estimate (formatted string for bind_text)
     UI_MANAGED_SUBJECT_STRING(prep_time_estimate_subject_, prep_time_estimate_buf_, "",
                               "preprint_estimate_text", subjects_);
@@ -303,11 +308,14 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     // Update filament mapping card (shown when AMS is available)
     filament_mapping_card_.update(filament_colors, filament_materials);
 
-    // Update mismatch warning icon via subject binding
+    // Publish card visibility + mismatch state through subjects so XML drives
+    // the HIDDEN flag and warning icon.
+    lv_subject_set_int(&filament_mapping_visible_,
+                       filament_mapping_card_.should_show() ? 1 : 0);
     lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
     // Show either the interactive mapping card OR the simple color swatches, never both
-    if (filament_mapping_card_.is_visible()) {
+    if (filament_mapping_card_.should_show()) {
         // Mapping card is active — hide legacy color swatches
         if (color_requirements_card_) {
             lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
@@ -773,10 +781,12 @@ void PrintSelectDetailView::try_extract_gcode_colors(lv_obj_t* viewer) {
 
     // Update the mapping card with extracted colors
     filament_mapping_card_.update(current_filament_colors_, current_filament_materials_);
+    lv_subject_set_int(&filament_mapping_visible_,
+                       filament_mapping_card_.should_show() ? 1 : 0);
     lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
     // Hide legacy color swatches if mapping card is now visible
-    if (filament_mapping_card_.is_visible() && color_requirements_card_) {
+    if (filament_mapping_card_.should_show() && color_requirements_card_) {
         lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
     }
 }

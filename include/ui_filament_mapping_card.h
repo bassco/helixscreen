@@ -18,8 +18,12 @@ namespace helix::ui {
  * for each tool mapping. Tapping the card opens the FilamentMappingModal
  * for full interaction.
  *
- * Visibility: shown when AMS/toolchanger is detected AND the file
- * uses at least one tool. Hidden otherwise (falls back to nothing).
+ * Visibility: declarative. The card itself does NOT toggle the LVGL HIDDEN
+ * flag. After each `update()` it caches whether it should be visible
+ * (`should_show()`); the print detail view publishes that on a subject the
+ * XML binds via `bind_flag_if_eq` — see print_file_detail.xml's
+ * `filament_mapping_visible` binding. Card visible iff AMS/toolchanger is
+ * detected AND the file uses at least one tool.
  */
 class FilamentMappingCard {
   public:
@@ -42,19 +46,18 @@ class FilamentMappingCard {
     /**
      * @brief Update with new file data + current AMS state
      *
-     * Shows the card if AMS is available and file has tools.
-     * Computes default mappings via FilamentMapper::compute_defaults().
+     * Caches whether the card should be visible (`should_show()`), based on
+     * AMS availability AND the file having at least one tool. Computes
+     * default mappings via FilamentMapper::compute_defaults().
+     *
+     * The detail view is responsible for publishing the cached state onto
+     * the `filament_mapping_visible` subject after this call returns.
      *
      * @param gcode_colors Per-tool hex color strings (e.g., "#FF0000")
      * @param gcode_materials Per-tool material strings (e.g., "PLA")
      */
     void update(const std::vector<std::string>& gcode_colors,
                 const std::vector<std::string>& gcode_materials);
-
-    /**
-     * @brief Hide the card
-     */
-    void hide();
 
     /**
      * @brief Get current tool-to-slot mappings
@@ -100,9 +103,15 @@ class FilamentMappingCard {
     [[nodiscard]] bool has_mismatch() const;
 
     /**
-     * @brief Check if card is currently visible
+     * @brief Whether the card should be visible after the latest `update()`
+     *
+     * True iff AMS is available and the file declares at least one tool.
+     * The detail view reads this and drives the `filament_mapping_visible`
+     * subject; XML's `bind_flag_if_eq` then toggles the HIDDEN flag.
      */
-    [[nodiscard]] bool is_visible() const;
+    [[nodiscard]] bool should_show() const {
+        return should_show_;
+    }
 
     /**
      * @brief Null widget pointers (called during destroy-on-close)
@@ -129,6 +138,8 @@ class FilamentMappingCard {
     lv_obj_t* card_ = nullptr;
     lv_obj_t* rows_container_ = nullptr;
     lv_obj_t* warning_container_ = nullptr;
+
+    bool should_show_ = false; ///< Cached visibility intent — see should_show()
 
     std::vector<helix::ToolMapping> mappings_;
     std::vector<helix::GcodeToolInfo> tool_info_;

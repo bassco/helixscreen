@@ -53,13 +53,14 @@ void FilamentMappingCard::create(lv_obj_t* card_widget, lv_obj_t* rows_container
 void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
                                   const std::vector<std::string>& gcode_materials) {
     if (!card_ || !rows_container_) {
+        should_show_ = false;
         return;
     }
 
     // Check if AMS is available
     auto& ams = AmsState::instance();
     if (!ams.is_available()) {
-        hide();
+        should_show_ = false;
         return;
     }
 
@@ -67,7 +68,7 @@ void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
     tool_info_ = build_tool_info(gcode_colors, gcode_materials);
 
     if (tool_info_.empty()) {
-        hide();
+        should_show_ = false;
         return;
     }
 
@@ -90,28 +91,16 @@ void FilamentMappingCard::update(const std::vector<std::string>& gcode_colors,
     // Build the compact UI
     rebuild_compact_view();
 
-    // Show the card
-    lv_obj_remove_flag(card_, LV_OBJ_FLAG_HIDDEN);
+    // Visibility is published via the `filament_mapping_visible` subject by the
+    // detail view — see PrintSelectDetailView::publish_mapping_visibility().
+    should_show_ = true;
 
     spdlog::debug("[FilamentMapping] Updated: {} tools, {} slots, {} mappings",
                   tool_info_.size(), available_slots_.size(), mappings_.size());
 }
 
-void FilamentMappingCard::hide() {
-    if (card_) {
-        lv_obj_add_flag(card_, LV_OBJ_FLAG_HIDDEN);
-    }
-}
-
 bool FilamentMappingCard::has_mismatch() const {
     return has_any_mismatch();
-}
-
-bool FilamentMappingCard::is_visible() const {
-    if (!card_) {
-        return false;
-    }
-    return !lv_obj_has_flag(card_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void FilamentMappingCard::on_ui_destroyed() {
