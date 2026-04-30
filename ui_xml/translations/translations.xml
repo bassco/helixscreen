@@ -977,6 +977,7 @@
   <translation tag="Measure belt path frequencies" de="Riemenpfad-Frequenzen messen" en="Measure belt path frequencies" es="Medir frecuencias de rutas de correa" fr="Mesurer les fréquences des chemins de courroie" it="Misura le frequenze dei percorsi cinghia" ja="ベルトパスの周波数を測定" pt="Medir frequências dos caminhos de correia" ru="Измерить частоты путей ремня" zh="测量皮带路径频率"/>
   <translation tag="Measured" de="Gemessen" en="Measured" es="Medido" fr="Mesuré" it="Misurato" ja="測定値" pt="Medido" ru="Измерено" zh="已测量"/>
   <translation tag="Measurement Failed" de="Messung fehlgeschlagen" en="Measurement Failed" es="Medición fallida" fr="Échec de la mesure" it="Misurazione fallita" ja="測定失敗" pt="Medição falhou" ru="Измерение не удалось" zh="测量失败"/>
+  <translation tag="Mechanical setup" en="Mechanical setup"/>
   <translation tag="Memory (MB)" de="Speicher (MB)" en="Memory (MB)" es="Memoria (MB)" fr="Mémoire (Mo)" it="Memoria (MB)" ja="メモリ (MB)" pt="Memória (MB)" ru="Память (МБ)" zh="内存 (MB)"/>
   <translation tag="Mesh Complete" de="Netz abgeschlossen" en="Mesh Complete" es="Malla Completa" fr="Maillage du plateau terminé" it="Mesh completata" ja="メッシュ完了" pt="Malha Concluída" ru="Сетка завершена" zh="网格完成"/>
   <translation tag="Mesh saved as &apos;{}&apos;" de="Netz gespeichert als &apos;{}&apos;" en="Mesh saved as &apos;{}&apos;" es="Malla guardada como &apos;{}&apos;" fr="Maillage enregistré sous &apos;{}&apos;" it="Mesh salvata come &apos;{}&apos;" ja="&quot;メッシュを &apos;{}&apos; として保存しました&quot;" pt="Malha salva como &apos;{}&apos;" ru="Сетка сохранена как &apos;{}&apos;" zh="网格已保存为 &apos;{}&apos;"/>
@@ -1244,6 +1245,7 @@
   <translation tag="Print Tuning" de="Druck-Feinabstimmung" en="Print Tuning" es="Ajuste de Impresión" fr="Réglage de l&apos;impression" it="Regolazione stampa" ja="印刷チューニング" pt="Ajuste de Impressão" ru="Настройка печати" zh="打印调优"/>
   <translation tag="Print failed" de="Druck fehlgeschlagen" en="Print failed" es="Impresión fallida" fr="Impression échouée" it="Stampa fallita" ja="印刷失敗" pt="Impressão falhou" ru="Печать не удалась" zh="打印失败"/>
   <translation tag="Print preparation failed: {}" de="Druckvorbereitung fehlgeschlagen: {}" en="Print preparation failed: {}" es="Error en preparación de impresión: {}" fr="Échec de la préparation de l&apos;impression : {}" it="Preparazione stampa fallita: {}" ja="印刷準備に失敗しました: {}" pt="Falha na preparação da impressão: {}" ru="Ошибка подготовки печати: {}" zh="打印准备失败: {}"/>
+  <translation tag="Print quality" en="Print quality"/>
   <translation tag="Print server rejected the job — check printer status" de="Druckserver hat den Auftrag abgelehnt — Druckerstatus prüfen" en="Print server rejected the job — check printer status" es="El servidor de impresión rechazó el trabajo — revisa el estado de la impresora" fr="Le serveur d&apos;impression a rejeté la tâche — vérifiez l&apos;état de l&apos;imprimante" it="Il server di stampa ha rifiutato il lavoro — controlla lo stato della stampante" ja="印刷サーバーがジョブを拒否しました — プリンターの状態を確認してください" pt="O servidor de impressão rejeitou o trabalho — verifique o status da impressora" ru="Сервер печати отклонил задание — проверьте статус принтера" zh="打印服务器拒绝了任务 — 请检查打印机状态"/>
   <translation tag="Printer" de="Drucker" en="Printer" es="Impresora" fr="Imprimante" it="Stampante" ja="プリンター" pt="Impressora" ru="Принтер" zh="打印机"/>
   <translation tag="Printer Error" de="Druckerfehler" en="Printer Error" es="Error de Impresora" fr="Erreur imprimante" it="Errore stampante" ja="プリンターエラー" pt="Erro da Impressora" ru="Ошибка принтера" zh="打印机错误"/>
@@ -1911,6 +1913,9 @@
   <translation tag="nozzle" de="Düse" en="nozzle" es="boquilla" fr="buse" it="ugello" ja="ノズル" pt="bico" ru="сопло" zh="喷嘴"/>
   <translation tag="of" de="von" en="of" es="de" fr="de" it="di" ja="の" pt="de" ru="из" zh="的"/>
   <translation tag="off" de="aus" en="off" es="apagado" fr="éteint" it="spento" ja="オフ" pt="desligado" ru="выкл" zh="关闭"/>
+  <translation tag="pre_print_option.ai_detect.description" en="Monitor for print abnormalities (K2 Plus camera-based)"/>
+  <translation tag="pre_print_option.ai_detect.label" en="AI detection"/>
+  <translation tag="pre_print_option.timelapse.label" en="Timelapse"/>
   <translation tag="prints" de="Drucke" en="prints" es="impresiones" fr="impressions" it="stampe" ja="印刷" pt="impressões" ru="печатей" zh="打印次数"/>
   <translation tag="remaining" de="verbleibend" en="remaining" es="restante" fr="restant" it="rimanente" ja="残り" pt="restante" ru="осталось" zh="剩余"/>
   <translation tag="remaining before clog detection triggers" de="verbleibend bis Verstopfungserkennung auslöst" en="remaining before clog detection triggers" es="restante antes de que se active la detección de obstrucción" fr="restant avant le déclenchement de la détection de bouchon" it="rimanente prima che si attivi il rilevamento intasamento" ja="残りで詰まり検出が作動します" pt="restante antes da detecção de obstrução ser acionada" ru="осталось до срабатывания обнаружения засора" zh="剩余即触发堵料检测"/>

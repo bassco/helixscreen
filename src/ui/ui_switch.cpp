@@ -136,6 +136,79 @@ static void switch_value_changed_sound_cb(lv_event_t* e) {
 }
 
 /**
+ * Apply HelixScreen theme styling to a switch — colors for CHECKED indicator,
+ * knob, track, and disabled state. Identical to the styling block previously
+ * inlined in ui_switch_xml_apply; extracted so C++ callers can produce
+ * theme-styled switches without going through the XML parser.
+ */
+static void apply_themed_styling(lv_obj_t* obj) {
+    const char* primary_str = lv_xml_get_const(NULL, "primary");
+    const char* tertiary_str = lv_xml_get_const(NULL, "tertiary");
+
+    lv_color_t secondary = theme_manager_get_color("secondary");
+    lv_obj_set_style_bg_color(obj, secondary, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(obj, 102, LV_PART_INDICATOR | LV_STATE_CHECKED);
+
+    if (primary_str && tertiary_str) {
+        lv_color_t knob_color = theme_get_knob_color();
+        lv_obj_set_style_bg_color(obj, knob_color, LV_PART_KNOB | LV_STATE_CHECKED);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_CHECKED);
+    }
+
+    lv_obj_set_style_bg_opa(obj, 102, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_DEFAULT);
+
+    lv_color_t track_color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
+    bool is_dark = theme_manager_is_dark_mode();
+    const char* dark_color_str = lv_xml_get_const(NULL, "elevated_bg");
+    const char* light_color_str = lv_xml_get_const(NULL, "text_subtle");
+
+    if (dark_color_str && light_color_str) {
+        lv_color_t dark_color = theme_manager_parse_hex_color(dark_color_str);
+        lv_color_t light_color = theme_manager_parse_hex_color(light_color_str);
+
+        lv_color_t disabled_track;
+        lv_color_t disabled_knob;
+        lv_opa_t track_opa;
+
+        if (is_dark) {
+            disabled_track = lv_color_mix(light_color, track_color, LV_OPA_20);
+            disabled_knob = lv_color_mix(light_color, disabled_track, LV_OPA_40);
+            track_opa = 77;
+        } else {
+            disabled_track = lv_color_mix(dark_color, track_color, LV_OPA_40);
+            disabled_knob = lv_color_mix(dark_color, track_color, LV_OPA_30);
+            track_opa = 128;
+        }
+
+        lv_obj_set_style_bg_color(obj, disabled_track, LV_PART_MAIN | LV_STATE_DISABLED);
+        lv_obj_set_style_bg_opa(obj, track_opa, LV_PART_MAIN | LV_STATE_DISABLED);
+        lv_obj_set_style_bg_color(obj, disabled_track, LV_PART_INDICATOR | LV_STATE_DISABLED);
+        lv_obj_set_style_bg_opa(obj, track_opa, LV_PART_INDICATOR | LV_STATE_DISABLED);
+        lv_obj_set_style_bg_color(obj, disabled_knob, LV_PART_KNOB | LV_STATE_DISABLED);
+        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_DISABLED);
+    }
+}
+
+extern "C" lv_obj_t* ui_switch_create_themed(lv_obj_t* parent, const char* size_str) {
+    lv_obj_t* obj = lv_switch_create(parent);
+    if (!obj) {
+        spdlog::error("[Switch] ui_switch_create_themed: lv_switch_create failed");
+        return nullptr;
+    }
+
+    lv_obj_add_event_cb(obj, switch_value_changed_sound_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    apply_themed_styling(obj);
+
+    SwitchSizePreset preset{};
+    if (parse_size_preset(size_str ? size_str : "small", &preset)) {
+        apply_size_preset(obj, preset);
+    }
+
+    return obj;
+}
+
+/**
  * XML create handler for ui_switch
  * Creates an lv_switch widget when <ui_switch> is encountered in XML
  */
@@ -193,84 +266,11 @@ static void ui_switch_xml_apply(lv_xml_parser_state_t* state, const char** attrs
     // Apply standard lv_obj properties first (LVGL theme + XML attributes)
     lv_xml_obj_apply(state, attrs);
 
-    // Apply custom styling AFTER theme (to override defaults)
-    //
-    // Switch anatomy (3 layers, drawn back-to-front):
-    //
-    // LV_PART_MAIN - Background track (always visible)
-    //   - Base rectangle behind everything
-    //   - Visible when UNCHECKED (behind knob)
-    //   - Mostly covered by INDICATOR when CHECKED
-    //
-    // LV_PART_INDICATOR - Filled/active portion (drawn on top of MAIN)
-    //   - Always drawn by LVGL, styled differently per state
-    //   - UNCHECKED: invisible or same as MAIN (you don't notice it)
-    //   - CHECKED: the "filled" track showing switch is ON
-    //
-    // LV_PART_KNOB - The sliding handle (drawn last, on top)
-    //   - Circular button that slides left/right
-    //   - Always visible in both states
-    // Get accent colors for switch styling
-    const char* primary_str = lv_xml_get_const(NULL, "primary");
-    const char* tertiary_str = lv_xml_get_const(NULL, "tertiary");
-
-    // CHECKED state indicator: secondary accent color, 40% opacity
-    lv_color_t secondary = theme_manager_get_color("secondary");
-    lv_obj_set_style_bg_color(obj, secondary, LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_opa(obj, 102, LV_PART_INDICATOR | LV_STATE_CHECKED);
-
-    if (primary_str && tertiary_str) {
-        // Knob color: more saturated of primary vs tertiary
-        lv_color_t knob_color = theme_get_knob_color();
-
-        // CHECKED state knob: saturated accent color
-        lv_obj_set_style_bg_color(obj, knob_color, LV_PART_KNOB | LV_STATE_CHECKED);
-        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_CHECKED);
-    }
-
-    // UNCHECKED state: 40% track opacity
-    // Knob color comes from theme_core's switch_knob_style (brighter of secondary/tertiary)
-    lv_obj_set_style_bg_opa(obj, 102, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_DEFAULT);
-
-    // DISABLED state: mode-aware styling using theme colors for proper contrast
-    // Light mode: mix toward dark theme colors; Dark mode: mix toward light theme colors
-    lv_color_t track_color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
-    bool is_dark = theme_manager_is_dark_mode();
-
-    // Get theme colors for mixing (preserves theme warmth/coolness)
-    const char* dark_color_str = lv_xml_get_const(NULL, "elevated_bg");
-    const char* light_color_str = lv_xml_get_const(NULL, "text_subtle");
-
-    if (dark_color_str && light_color_str) {
-        lv_color_t dark_color = theme_manager_parse_hex_color(dark_color_str);
-        lv_color_t light_color = theme_manager_parse_hex_color(light_color_str);
-
-        lv_color_t disabled_track;
-        lv_color_t disabled_knob;
-        lv_opa_t track_opa;
-
-        if (is_dark) {
-            // Dark mode: lighten track toward theme's light color
-            disabled_track = lv_color_mix(light_color, track_color, LV_OPA_20);
-            disabled_knob = lv_color_mix(light_color, disabled_track, LV_OPA_40);
-            track_opa = 77; // ~30%
-        } else {
-            // Light mode: darken track toward theme's dark color for visibility
-            disabled_track = lv_color_mix(dark_color, track_color, LV_OPA_40);
-            disabled_knob = lv_color_mix(dark_color, track_color, LV_OPA_30);
-            track_opa = 128; // ~50%
-        }
-
-        lv_obj_set_style_bg_color(obj, disabled_track, LV_PART_MAIN | LV_STATE_DISABLED);
-        lv_obj_set_style_bg_opa(obj, track_opa, LV_PART_MAIN | LV_STATE_DISABLED);
-
-        lv_obj_set_style_bg_color(obj, disabled_track, LV_PART_INDICATOR | LV_STATE_DISABLED);
-        lv_obj_set_style_bg_opa(obj, track_opa, LV_PART_INDICATOR | LV_STATE_DISABLED);
-
-        lv_obj_set_style_bg_color(obj, disabled_knob, LV_PART_KNOB | LV_STATE_DISABLED);
-        lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, LV_PART_KNOB | LV_STATE_DISABLED);
-    }
+    // Apply HelixScreen theme styling — colors for CHECKED indicator/knob,
+    // UNCHECKED track opacity, DISABLED state. Shared with C++ callers via
+    // ui_switch_create_themed(). See apply_themed_styling() for the full
+    // 3-layer (MAIN/INDICATOR/KNOB) anatomy reference.
+    apply_themed_styling(obj);
 
     // PASS 2: Apply size preset (if found), then process other custom properties
     if (preset_found) {

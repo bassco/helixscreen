@@ -92,17 +92,21 @@
           "reason": "Exclude AD5X from matching as AD5M"
         }
       ],
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "params": {
-          "bed_mesh": {
-            "param": "SKIP_LEVELING",
-            "skip_value": "1",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "SKIP_LEVELING",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Skip bed mesh calibration"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       }
     },
     {
@@ -194,17 +198,21 @@
           "reason": "Exclude AD5X from matching as AD5M"
         }
       ],
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "params": {
-          "bed_mesh": {
-            "param": "SKIP_LEVELING",
-            "skip_value": "1",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "SKIP_LEVELING",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Skip bed mesh calibration"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       }
     },
     {
@@ -302,17 +310,21 @@
           "reason": "Exclude AD5X from matching as AD5M Pro"
         }
       ],
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "params": {
-          "bed_mesh": {
-            "param": "SKIP_LEVELING",
-            "skip_value": "1",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "SKIP_LEVELING",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Skip bed mesh calibration"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       }
     },
     {
@@ -425,17 +437,21 @@
           "reason": "Exclude AD5X from matching as AD5M Pro"
         }
       ],
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "params": {
-          "bed_mesh": {
-            "param": "SKIP_LEVELING",
-            "skip_value": "1",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "SKIP_LEVELING",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Skip bed mesh calibration"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       }
     },
     {
@@ -855,18 +871,22 @@
       "probe_type": "prtouch_v2",
       "preset": "k1",
       "print_start_profile": "creality_k1",
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
-        "params": {
-          "bed_mesh": {
-            "param": "PREPARE",
-            "skip_value": "1",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Full calibration (home, nozzle clean, bed mesh)"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       },
       "heuristics": [
         {
@@ -939,18 +959,22 @@
       "probe_type": "prtouch_v2",
       "preset": "k1",
       "print_start_profile": "creality_k1",
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
-        "params": {
-          "bed_mesh": {
-            "param": "PREPARE",
-            "skip_value": "1",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Full calibration (home, nozzle clean, bed mesh)"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       },
       "heuristics": [
         {
@@ -1048,18 +1072,32 @@
         "substring:WILL LOAD_AI_DEAL",
         "prefix:// LOAD_AI_DEAL"
       ],
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
-        "params": {
-          "bed_mesh": {
-            "param": "PREPARE",
-            "skip_value": "1",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Full calibration (home, nozzle clean, bed mesh)"
+            "skip_value": "1",
+            "default_value": "0"
+          },
+          {
+            "id": "ai_detect",
+            "category": "monitoring",
+            "order": 10,
+            "default_enabled": false,
+            "label_key": "pre_print_option.ai_detect.label",
+            "description_key": "pre_print_option.ai_detect.description",
+            "strategy": "pre_start_gcode",
+            "gcode_template": "LOAD_AI_RUN SWITCH={value}"
           }
-        }
+        ]
       },
       "heuristics": [
         {
@@ -1160,18 +1198,22 @@
       "probe_type": "prtouch_v2",
       "preset": "k1c",
       "print_start_profile": "creality_k1",
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
-        "params": {
-          "bed_mesh": {
-            "param": "PREPARE",
-            "skip_value": "1",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Full calibration (home, nozzle clean, bed mesh)"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       },
       "heuristics": [
         {
@@ -1226,18 +1268,22 @@
       "image": "creality-k1-se.png",
       "probe_type": "prtouch_v2",
       "print_start_profile": "creality_k1",
-      "print_start_capabilities": {
+      "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
-        "params": {
-          "bed_mesh": {
-            "param": "PREPARE",
-            "skip_value": "1",
+        "setup_gcode": "PRINT_PREPARED",
+        "options": [
+          {
+            "id": "bed_mesh",
+            "category": "mechanical",
+            "order": 10,
+            "default_enabled": true,
+            "strategy": "macro_param",
+            "param_name": "PREPARE",
             "enable_value": "0",
-            "default_value": "0",
-            "description": "Full calibration (home, nozzle clean, bed mesh)"
+            "skip_value": "1",
+            "default_value": "0"
           }
-        }
+        ]
       },
       "heuristics": [
         {

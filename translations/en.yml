@@ -979,6 +979,7 @@ translations:
   Measure belt path frequencies: Measure belt path frequencies
   Measured: Measured
   Measurement Failed: Measurement Failed
+  Mechanical setup: Mechanical setup
   Memory (MB): Memory (MB)
   Mesh Complete: Mesh Complete
   Mesh saved as '{}': Mesh saved as '{}'
@@ -1246,6 +1247,7 @@ translations:
   Print Time: Print Time
   Print Tuning: Print Tuning
   Print failed: Print failed
+  Print quality: Print quality
   'Print preparation failed: {}': 'Print preparation failed: {}'
   Print server rejected the job — check printer status: Print server rejected the job — check printer status
   Printer: Printer
@@ -1924,6 +1926,9 @@ translations:
   nozzle: nozzle
   of: of
   'off': 'off'
+  pre_print_option.ai_detect.description: Monitor for print abnormalities (K2 Plus camera-based)
+  pre_print_option.ai_detect.label: AI detection
+  pre_print_option.timelapse.label: Timelapse
   prints: prints
   remaining: remaining
   remaining before clog detection triggers: remaining before clog detection triggers

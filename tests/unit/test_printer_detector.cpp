@@ -2286,81 +2286,98 @@ TEST_CASE_METHOD(PrinterDetectorFixture,
 }
 
 // ============================================================================
-// Print Start Capabilities Database Tests
+// Pre-Print Option Set Database Tests
 // ============================================================================
 
-TEST_CASE("PrinterDetector: Print start capabilities lookup", "[printer][capabilities]") {
-    SECTION("AD5M Pro returns expected capabilities") {
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
+TEST_CASE("PrinterDetector: Pre-print option set lookup", "[printer][capabilities]") {
+    SECTION("AD5M Pro returns expected option set") {
+        auto set = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
 
-        REQUIRE_FALSE(caps.empty());
-        REQUIRE(caps.macro_name == "START_PRINT");
-        REQUIRE(caps.has_capability("bed_mesh"));
+        REQUIRE_FALSE(set.empty());
+        REQUIRE(set.macro_name == "START_PRINT");
 
-        // Check bed_mesh param details
-        auto* bed_level = caps.get_capability("bed_mesh");
-        REQUIRE(bed_level != nullptr);
-        REQUIRE(bed_level->param == "SKIP_LEVELING");
-        REQUIRE(bed_level->skip_value == "1");
-        REQUIRE(bed_level->enable_value == "0");
+        const PrePrintOption* bed_mesh = set.find("bed_mesh");
+        REQUIRE(bed_mesh != nullptr);
+        REQUIRE(bed_mesh->strategy_kind == PrePrintStrategyKind::MacroParam);
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_mesh->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "SKIP_LEVELING");
+        REQUIRE(macro->skip_value == "1");
+        REQUIRE(macro->enable_value == "0");
     }
 
     SECTION("Case-insensitive printer name lookup") {
-        auto caps1 = PrinterDetector::get_print_start_capabilities("flashforge adventurer 5m pro");
-        auto caps2 = PrinterDetector::get_print_start_capabilities("FLASHFORGE ADVENTURER 5M PRO");
+        auto set1 = PrinterDetector::get_pre_print_option_set("flashforge adventurer 5m pro");
+        auto set2 = PrinterDetector::get_pre_print_option_set("FLASHFORGE ADVENTURER 5M PRO");
 
-        REQUIRE_FALSE(caps1.empty());
-        REQUIRE_FALSE(caps2.empty());
-        REQUIRE(caps1.macro_name == caps2.macro_name);
-        REQUIRE(caps1.params.size() == caps2.params.size());
+        REQUIRE_FALSE(set1.empty());
+        REQUIRE_FALSE(set2.empty());
+        REQUIRE(set1.macro_name == set2.macro_name);
+        REQUIRE(set1.options.size() == set2.options.size());
     }
 
-    SECTION("Unknown printer returns empty capabilities") {
-        auto caps = PrinterDetector::get_print_start_capabilities("Nonexistent Printer Model XYZ");
+    SECTION("Unknown printer returns empty option set") {
+        auto set = PrinterDetector::get_pre_print_option_set("Nonexistent Printer Model XYZ");
 
-        REQUIRE(caps.empty());
-        REQUIRE(caps.macro_name.empty());
-        REQUIRE(caps.params.empty());
+        REQUIRE(set.empty());
+        REQUIRE(set.macro_name.empty());
+        REQUIRE(set.options.empty());
     }
 
-    SECTION("Printer without capabilities section returns empty") {
-        // Voron 2.4 exists in database but likely has no print_start_capabilities
-        auto caps = PrinterDetector::get_print_start_capabilities("Voron 2.4");
+    SECTION("Printer without pre_print_options section returns empty") {
+        // Voron 2.4 exists in database but has no pre_print_options
+        auto set = PrinterDetector::get_pre_print_option_set("Voron 2.4");
 
         // This should return empty since Voron macros are user-customized
-        REQUIRE(caps.empty());
+        REQUIRE(set.empty());
+    }
+
+    SECTION("K1 family carries setup_gcode") {
+        auto set = PrinterDetector::get_pre_print_option_set("Creality K1");
+        REQUIRE_FALSE(set.empty());
+        REQUIRE(set.setup_gcode == "PRINT_PREPARED");
+
+        const PrePrintOption* bed_mesh = set.find("bed_mesh");
+        REQUIRE(bed_mesh != nullptr);
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_mesh->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "PREPARE");
     }
 }
 
-TEST_CASE("PrintStartCapabilities: Helper methods work correctly", "[printer][capabilities]") {
-    SECTION("empty() reflects capability state") {
-        PrintStartCapabilities empty_caps;
-        REQUIRE(empty_caps.empty());
+TEST_CASE("PrePrintOptionSet: Helper methods work correctly", "[printer][capabilities]") {
+    SECTION("empty() reflects state") {
+        PrePrintOptionSet empty_set;
+        REQUIRE(empty_set.empty());
 
-        PrintStartCapabilities filled_caps;
-        filled_caps.macro_name = "PRINT_START";
-        filled_caps.params["bed_mesh"] = PrintStartParamCapability{.param = "SKIP_BED_MESH"};
-        REQUIRE_FALSE(filled_caps.empty());
+        PrePrintOptionSet filled_set;
+        filled_set.macro_name = "PRINT_START";
+        REQUIRE_FALSE(filled_set.empty());
     }
 
-    SECTION("has_capability() and get_capability() work together") {
-        PrintStartCapabilities caps;
-        caps.params["bed_mesh"] =
-            PrintStartParamCapability{.param = "SKIP_BED_MESH", .skip_value = "1"};
-        caps.params["purge_line"] =
-            PrintStartParamCapability{.param = "DISABLE_PRIMING", .skip_value = "true"};
+    SECTION("find() returns expected option pointers") {
+        PrePrintOptionSet set;
+        PrePrintOption a;
+        a.id = "bed_mesh";
+        a.strategy_kind = PrePrintStrategyKind::MacroParam;
+        a.strategy = PrePrintStrategyMacroParam{"SKIP_BED_MESH", "0", "1", ""};
+        set.options.push_back(a);
 
-        REQUIRE(caps.has_capability("bed_mesh"));
-        REQUIRE(caps.has_capability("purge_line"));
-        REQUIRE_FALSE(caps.has_capability("qgl"));
-        REQUIRE_FALSE(caps.has_capability("unknown_key"));
+        PrePrintOption b;
+        b.id = "purge_line";
+        b.strategy_kind = PrePrintStrategyKind::MacroParam;
+        b.strategy = PrePrintStrategyMacroParam{"DISABLE_PRIMING", "false", "true", ""};
+        set.options.push_back(b);
 
-        auto* bed_cap = caps.get_capability("bed_mesh");
-        REQUIRE(bed_cap != nullptr);
-        REQUIRE(bed_cap->param == "SKIP_BED_MESH");
+        REQUIRE(set.find("bed_mesh") != nullptr);
+        REQUIRE(set.find("purge_line") != nullptr);
+        REQUIRE(set.find("qgl") == nullptr);
+        REQUIRE(set.find("unknown_key") == nullptr);
 
-        auto* missing = caps.get_capability("qgl");
-        REQUIRE(missing == nullptr);
+        const PrePrintOption* bed = set.find("bed_mesh");
+        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed->strategy);
+        REQUIRE(macro != nullptr);
+        REQUIRE(macro->param_name == "SKIP_BED_MESH");
     }
 }
 
@@ -3204,10 +3221,10 @@ TEST_CASE("PrinterDetector: compact_database strips heuristics, preserves lookup
         REQUIRE(delta_names.size() >= 2); // At least Custom/Other + Unknown
     }
 
-    SECTION("Capabilities lookup works after compact") {
-        auto caps = PrinterDetector::get_print_start_capabilities("FlashForge Adventurer 5M Pro");
-        // AD5M Pro has capabilities in the database
-        REQUIRE(!caps.macro_name.empty());
+    SECTION("Pre-print options lookup works after compact") {
+        auto set = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+        // AD5M Pro has options in the database
+        REQUIRE(!set.macro_name.empty());
     }
 }
 

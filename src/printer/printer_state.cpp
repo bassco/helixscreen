@@ -654,8 +654,13 @@ void PrinterState::set_webcam_available(bool available, const std::string& strea
 void PrinterState::set_timelapse_available(bool available) {
     // Delegate to capabilities_state_ component (handles thread-safety internally)
     capabilities_state_.set_timelapse_available(available);
-    // Recompute aggregate visibility (timelapse affects has_any_preprint_options)
-    helix::ui::queue_update([this]() { update_gcode_modification_visibility(); });
+    // Resynthesize the option set (timelapse is appended dynamically when
+    // available) and recompute aggregate visibility — both must run on the
+    // main thread.
+    helix::ui::queue_update([this]() {
+        apply_dynamic_options();
+        update_gcode_modification_visibility();
+    });
 }
 
 void PrinterState::set_helix_plugin_installed(bool installed) {
@@ -687,7 +692,8 @@ bool PrinterState::is_phase_tracking_enabled() const {
 void PrinterState::update_gcode_modification_visibility() {
     // Delegate to composite visibility component
     bool plugin = plugin_status_state_.service_has_helix_plugin();
-    composite_visibility_state_.update_visibility(plugin, capabilities_state_);
+    composite_visibility_state_.update_visibility(plugin, capabilities_state_,
+                                                  pre_print_option_set_.options.size());
 }
 
 // Note: update_print_show_progress() is now in print_domain_ component
@@ -818,7 +824,7 @@ void PrinterState::set_printer_type_sync(const std::string& type) {
 void PrinterState::set_printer_type_internal(const std::string& type) {
     // Determine what the z-cal strategy would be for this type so we can
     // skip redundant updates (auto-detect often confirms the saved type).
-    auto new_caps = PrinterDetector::get_print_start_capabilities(type);
+    auto new_options = PrinterDetector::get_pre_print_option_set(type);
     std::string strategy_str = PrinterDetector::get_z_offset_calibration_strategy(type);
     ZOffsetCalibrationStrategy new_strategy;
     if (strategy_str == "firmware_managed") {
@@ -837,8 +843,11 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
     }
 
     printer_type_ = type;
-    print_start_capabilities_ = new_caps;
+    pre_print_option_set_ = new_options;
     z_offset_calibration_strategy_ = new_strategy;
+
+    // Synthesize runtime-dependent options (timelapse) on top of the DB load.
+    apply_dynamic_options();
 
     // Update z_offset_can_save subject: 0 when firmware/macros auto-persist (FIRMWARE_MANAGED)
     int can_save = (new_strategy != ZOffsetCalibrationStrategy::FIRMWARE_MANAGED) ? 1 : 0;
@@ -855,9 +864,11 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
         }
     }
 
-    // Update printer_has_purge_line_ based on capabilities database
-    // "priming" is the capability key for purge/prime line in the database
-    bool has_priming = print_start_capabilities_.get_capability("priming") != nullptr;
+    // Update printer_has_purge_line_ based on the option set.
+    // "priming" is the option id for purge/prime line in the database (also accept legacy
+    // "nozzle_priming" as an alias).
+    bool has_priming = (pre_print_option_set_.find("priming") != nullptr) ||
+                       (pre_print_option_set_.find("nozzle_priming") != nullptr);
     capabilities_state_.set_purge_line(has_priming);
 
     // Recalculate composite visibility subjects
@@ -865,17 +876,61 @@ void PrinterState::set_printer_type_internal(const std::string& type) {
 
     const char* strategy_names[] = {"probe_calibrate", "firmware_managed", "endstop"};
     spdlog::info(
-        "[PrinterState] Printer type set to: '{}' (capabilities: {}, priming={}, z_cal={})", type,
-        print_start_capabilities_.empty() ? "none" : print_start_capabilities_.macro_name,
-        has_priming, strategy_names[static_cast<int>(z_offset_calibration_strategy_)]);
+        "[PrinterState] Printer type set to: '{}' (pre_print_options: {}, priming={}, z_cal={})",
+        type,
+        pre_print_option_set_.empty() ? "none" : pre_print_option_set_.macro_name, has_priming,
+        strategy_names[static_cast<int>(z_offset_calibration_strategy_)]);
+}
+
+void PrinterState::apply_dynamic_options() {
+    // Strip any previously synthesized dynamic options before re-adding so
+    // this method is idempotent and handles capability changes (e.g.
+    // moonraker-timelapse plugin going from absent to present).
+    pre_print_option_set_.options.erase(
+        std::remove_if(pre_print_option_set_.options.begin(),
+                       pre_print_option_set_.options.end(),
+                       [](const PrePrintOption& opt) { return opt.id == "timelapse"; }),
+        pre_print_option_set_.options.end());
+
+    // Timelapse: append when the moonraker-timelapse plugin reports available.
+    // Strategy is RuntimeCommand with sentinel values that
+    // PrintPreparationManager::start_print() recognizes (see the dispatch
+    // for command_enabled / command_disabled prefixed with "timelapse:").
+    // These are NOT gcode lines — start_print() routes them to
+    // `api_->timelapse().set_timelapse_enabled(...)`.
+    if (lv_subject_get_int(capabilities_state_.get_printer_has_timelapse_subject()) == 1) {
+        PrePrintOption tl;
+        tl.id = "timelapse";
+        tl.label_key = "pre_print_option.timelapse.label";
+        tl.category = PrePrintCategory::Monitoring;
+        tl.order = 100;
+        tl.default_enabled = false; // opt-in
+        tl.strategy_kind = PrePrintStrategyKind::RuntimeCommand;
+        PrePrintStrategyRuntimeCommand cmd;
+        cmd.command_enabled = "timelapse:on";
+        cmd.command_disabled = "timelapse:off";
+        tl.strategy = cmd;
+        pre_print_option_set_.options.push_back(std::move(tl));
+
+        // Maintain the (category, order) sort guarantee from
+        // parse_pre_print_option_set so renderers still see options in their
+        // documented order.
+        std::sort(pre_print_option_set_.options.begin(), pre_print_option_set_.options.end(),
+                  [](const PrePrintOption& a, const PrePrintOption& b) {
+                      if (a.category != b.category) {
+                          return static_cast<int>(a.category) < static_cast<int>(b.category);
+                      }
+                      return a.order < b.order;
+                  });
+    }
 }
 
 const std::string& PrinterState::get_printer_type() const {
     return printer_type_;
 }
 
-const PrintStartCapabilities& PrinterState::get_print_start_capabilities() const {
-    return print_start_capabilities_;
+const PrePrintOptionSet& PrinterState::get_pre_print_option_set() const {
+    return pre_print_option_set_;
 }
 
 ZOffsetCalibrationStrategy PrinterState::get_z_offset_calibration_strategy() const {

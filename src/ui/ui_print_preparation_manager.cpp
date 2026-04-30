@@ -46,18 +46,49 @@ PrintPreparationManager::~PrintPreparationManager() {
 }
 
 // ============================================================================
-// Capability Cache Helper
+// Pre-Print Option Set Cache Helper
 // ============================================================================
 
-const PrintStartCapabilities& PrintPreparationManager::get_cached_capabilities() const {
-    // Delegate to PrinterState which owns the capability cache
+const PrePrintOptionSet& PrintPreparationManager::get_cached_options() const {
+    // Delegate to PrinterState which owns the cache
     if (printer_state_) {
-        return printer_state_->get_print_start_capabilities();
+        return printer_state_->get_pre_print_option_set();
     }
 
-    // Return empty capabilities if PrinterState not set
-    static const PrintStartCapabilities empty_caps;
-    return empty_caps;
+    // Return empty set if PrinterState not set
+    static const PrePrintOptionSet empty_set;
+    return empty_set;
+}
+
+// ============================================================================
+// Option State Resolution (LT3)
+// ============================================================================
+
+PrePrintOptionState PrintPreparationManager::get_option_state(const std::string& id) const {
+    // 1. Provider takes priority. The detail panel registers a provider that
+    //    reads from per-option dynamic subjects. The provider returns 0/1
+    //    when bound; any other value means "not bound" — fall through.
+    if (option_state_provider_) {
+        int v = option_state_provider_(id);
+        if (v == 0) {
+            return PrePrintOptionState::DISABLED;
+        }
+        if (v == 1) {
+            return PrePrintOptionState::ENABLED;
+        }
+    }
+
+    // 2. Fall back to the option's default_enabled from the cached set.
+    //    This is the right answer when no panel is attached (e.g. macro
+    //    analysis runs in headless contexts and asks for the option's
+    //    intended state).
+    const auto& opts = get_cached_options();
+    if (const PrePrintOption* opt = opts.find(id)) {
+        return opt->default_enabled ? PrePrintOptionState::ENABLED
+                                    : PrePrintOptionState::DISABLED;
+    }
+
+    return PrePrintOptionState::NOT_APPLICABLE;
 }
 
 // ============================================================================
@@ -82,40 +113,11 @@ void PrintPreparationManager::set_dependencies(MoonrakerAPI* api, PrinterState* 
     }
 }
 
-void PrintPreparationManager::set_preprint_subjects(lv_subject_t* bed_mesh, lv_subject_t* qgl,
-                                                    lv_subject_t* z_tilt,
-                                                    lv_subject_t* nozzle_clean,
-                                                    lv_subject_t* purge_line,
-                                                    lv_subject_t* timelapse) {
-    preprint_bed_mesh_subject_ = bed_mesh;
-    preprint_qgl_subject_ = qgl;
-    preprint_z_tilt_subject_ = z_tilt;
-    preprint_nozzle_clean_subject_ = nozzle_clean;
-    preprint_purge_line_subject_ = purge_line;
-    preprint_timelapse_subject_ = timelapse;
-
-    // Initialize estimate subject (once)
+void PrintPreparationManager::ensure_estimate_subject_initialized() {
     if (!estimate_subject_initialized_) {
         lv_subject_init_int(&preprint_estimate_subject_, 0);
         estimate_subject_initialized_ = true;
     }
-
-    spdlog::debug("[PrintPreparationManager] Pre-print subjects set");
-}
-
-void PrintPreparationManager::set_preprint_visibility_subjects(lv_subject_t* can_show_bed_mesh,
-                                                               lv_subject_t* can_show_qgl,
-                                                               lv_subject_t* can_show_z_tilt,
-                                                               lv_subject_t* can_show_nozzle_clean,
-                                                               lv_subject_t* can_show_purge_line,
-                                                               lv_subject_t* can_show_timelapse) {
-    can_show_bed_mesh_subject_ = can_show_bed_mesh;
-    can_show_qgl_subject_ = can_show_qgl;
-    can_show_z_tilt_subject_ = can_show_z_tilt;
-    can_show_nozzle_clean_subject_ = can_show_nozzle_clean;
-    can_show_purge_line_subject_ = can_show_purge_line;
-    can_show_timelapse_subject_ = can_show_timelapse;
-    spdlog::debug("[PrintPreparationManager] Visibility subjects set");
 }
 
 // ============================================================================
@@ -123,6 +125,7 @@ void PrintPreparationManager::set_preprint_visibility_subjects(lv_subject_t* can
 // ============================================================================
 
 lv_subject_t* PrintPreparationManager::get_preprint_estimate_subject() {
+    ensure_estimate_subject_initialized();
     return &preprint_estimate_subject_;
 }
 
@@ -167,24 +170,23 @@ void PrintPreparationManager::recalculate_estimate() {
     }
     auto phases = cached_predictor_.predicted_phases();
 
-    // Add phase estimate if checkbox is enabled
-    auto add_if_enabled = [&](lv_subject_t* subj, int phase_int, float default_s) {
-        if (subj && lv_subject_get_int(subj) == 1) {
-            auto it = phases.find(phase_int);
-            total += (it != phases.end()) ? static_cast<float>(it->second) : default_s;
+    // Add phase estimate if the option is currently enabled. State is read
+    // through the new framework (get_option_state(id) — provider-driven from
+    // the active panel's renderer; falls back to default_enabled if no panel
+    // is attached).
+    auto add_if_enabled = [&](const std::string& id, int phase_int, float default_s) {
+        if (get_option_state(id) != PrePrintOptionState::ENABLED) {
+            return;
         }
+        auto it = phases.find(phase_int);
+        total += (it != phases.end()) ? static_cast<float>(it->second) : default_s;
     };
 
-    // Use PrintStartPhase enum values
-    add_if_enabled(preprint_bed_mesh_subject_, static_cast<int>(helix::PrintStartPhase::BED_MESH),
-                   90.0f);
-    add_if_enabled(preprint_qgl_subject_, static_cast<int>(helix::PrintStartPhase::QGL), 60.0f);
-    add_if_enabled(preprint_z_tilt_subject_, static_cast<int>(helix::PrintStartPhase::Z_TILT),
-                   45.0f);
-    add_if_enabled(preprint_nozzle_clean_subject_,
-                   static_cast<int>(helix::PrintStartPhase::CLEANING), 15.0f);
-    add_if_enabled(preprint_purge_line_subject_, static_cast<int>(helix::PrintStartPhase::PURGING),
-                   10.0f);
+    add_if_enabled("bed_mesh", static_cast<int>(helix::PrintStartPhase::BED_MESH), 90.0f);
+    add_if_enabled("qgl", static_cast<int>(helix::PrintStartPhase::QGL), 60.0f);
+    add_if_enabled("z_tilt", static_cast<int>(helix::PrintStartPhase::Z_TILT), 45.0f);
+    add_if_enabled("nozzle_clean", static_cast<int>(helix::PrintStartPhase::CLEANING), 15.0f);
+    add_if_enabled("purge_line", static_cast<int>(helix::PrintStartPhase::PURGING), 10.0f);
 
     int estimate_s = static_cast<int>(total);
     if (lv_subject_get_int(&preprint_estimate_subject_) != estimate_s) {
@@ -372,44 +374,6 @@ void PrintPreparationManager::analyze_print_start_macro_internal() {
         });
 }
 
-std::string PrintPreparationManager::format_macro_operations() const {
-    if (!macro_analysis_.has_value() || !macro_analysis_->found ||
-        macro_analysis_->operations.empty()) {
-        return "";
-    }
-
-    // Build operation list, noting controllability
-    std::string result = macro_analysis_->macro_name + " contains: ";
-    bool first = true;
-
-    for (const auto& op : macro_analysis_->operations) {
-        // Skip homing (always present, not interesting to display)
-        if (op.category == helix::PrintStartOpCategory::HOMING) {
-            continue;
-        }
-
-        if (!first) {
-            result += ", ";
-        }
-        first = false;
-
-        // Get user-friendly name for the operation from shared definitions
-        const char* name = helix::category_name(op.category);
-        if (name && op.category != helix::PrintStartOpCategory::UNKNOWN) {
-            result += name;
-        } else {
-            result += op.name;
-        }
-
-        // Add skip indicator if controllable
-        if (op.has_skip_param) {
-            result += " (skippable)";
-        }
-    }
-
-    return first ? "" : result; // Return empty if we only had homing
-}
-
 bool PrintPreparationManager::is_macro_op_controllable(helix::PrintStartOpCategory category) const {
     if (!macro_analysis_.has_value() || !macro_analysis_->found) {
         return false;
@@ -453,9 +417,9 @@ CapabilityMatrix PrintPreparationManager::build_capability_matrix() const {
     CapabilityMatrix matrix;
 
     // Layer 1: Database capabilities (highest priority)
-    const auto& db_caps = get_cached_capabilities();
-    if (!db_caps.empty()) {
-        matrix.add_from_database(db_caps);
+    const auto& db_options = get_cached_options();
+    if (!db_options.empty()) {
+        matrix.add_from_database(db_options);
     }
 
     // Layer 2: Macro analysis (medium priority)
@@ -490,18 +454,11 @@ void PrintPreparationManager::scan_file_for_operations(const std::string& filena
     // Skip if already cached for this file
     if (cached_scan_filename_ == filename && cached_scan_result_.has_value()) {
         spdlog::debug("[PrintPreparationManager] Using cached scan result for {}", filename);
-        // Still notify callback with cached result
-        if (on_scan_complete_) {
-            on_scan_complete_(format_detected_operations());
-        }
         return;
     }
 
     if (!api_) {
         spdlog::warn("[PrintPreparationManager] Cannot scan G-code - no API connection");
-        if (on_scan_complete_) {
-            on_scan_complete_("");
-        }
         return;
     }
 
@@ -547,9 +504,6 @@ void PrintPreparationManager::scan_file_for_operations(const std::string& filena
             token.defer("PrintPreparationManager::scan_success", [this, filename, scan_result]() {
                 cached_scan_result_ = scan_result;
                 cached_scan_filename_ = filename;
-                if (on_scan_complete_) {
-                    on_scan_complete_(format_detected_operations());
-                }
             });
         },
         // Error: just log, don't block the UI
@@ -563,197 +517,8 @@ void PrintPreparationManager::scan_file_for_operations(const std::string& filena
             token.defer("PrintPreparationManager::scan_error", [this]() {
                 cached_scan_result_.reset();
                 cached_scan_filename_.clear();
-                if (on_scan_complete_) {
-                    on_scan_complete_("");
-                }
             });
         });
-}
-
-std::string PrintPreparationManager::format_detected_operations() const {
-    if (!cached_scan_result_.has_value() || cached_scan_result_->operations.empty()) {
-        return "";
-    }
-
-    // Build unique list of operation names (some files may have duplicates)
-    std::vector<std::string> op_names;
-    std::set<gcode::OperationType> seen_types;
-
-    for (const auto& op : cached_scan_result_->operations) {
-        if (seen_types.find(op.type) == seen_types.end()) {
-            seen_types.insert(op.type);
-            op_names.push_back(op.display_name());
-        }
-    }
-
-    if (op_names.empty()) {
-        return "";
-    }
-
-    // Format as "Contains: Op1, Op2, Op3"
-    std::string result = "Contains: ";
-    for (size_t i = 0; i < op_names.size(); ++i) {
-        if (i > 0) {
-            result += ", ";
-        }
-        result += op_names[i];
-    }
-
-    return result;
-}
-
-std::string PrintPreparationManager::format_preprint_steps() const {
-    // Unified operation categories with friendly names and skip status
-    struct UnifiedOp {
-        std::string friendly_name;
-        bool can_skip = false;
-    };
-
-    // Use a map to deduplicate by category key
-    std::map<std::string, UnifiedOp> ops;
-
-    // Friendly name mapping for macro operations
-    // Uses the shared category_name() from operation_patterns.h
-    auto get_macro_friendly_name = [](helix::PrintStartOpCategory cat) -> std::string {
-        return helix::category_name(cat);
-    };
-
-    // Category key for deduplication
-    // Uses the shared category_key() from operation_patterns.h
-    auto get_category_key = [](helix::PrintStartOpCategory cat) -> std::string {
-        return helix::category_key(cat);
-    };
-
-    // Priority order matches collect_macro_skip_params() for consistency:
-    // 1. Printer capability database (authoritative for known printers)
-    // 2. PRINT_START macro analysis (detected from printer config)
-    // 3. G-code file scan (embedded operations)
-
-    // 1. Add operations from printer capability database (highest priority)
-    // Database entries are curated and provide correct parameter names
-    const auto& caps = get_cached_capabilities();
-    if (!caps.empty()) {
-        for (const auto& [cap_key, cap_info] : caps.params) {
-            // Look up friendly name from OperationRegistry (for controllable ops)
-            // or fall back to the cap_key if not found
-            std::string name;
-            if (auto info = helix::OperationRegistry::get_by_key(cap_key)) {
-                name = info->friendly_name;
-            } else {
-                // Non-controllable operations (priming, chamber_soak, skew_correct)
-                // still need friendly names - use hardcoded fallback for these edge cases
-                // since they're not in OperationRegistry
-                if (cap_key == "priming") {
-                    name = "Nozzle priming";
-                } else if (cap_key == "chamber_soak") {
-                    name = helix::category_name(helix::OperationCategory::CHAMBER_SOAK);
-                } else if (cap_key == "skew_correct") {
-                    name = helix::category_name(helix::OperationCategory::SKEW_CORRECT);
-                } else {
-                    name = cap_key;
-                }
-            }
-
-            // Capabilities from database are skippable via macro params
-            ops[cap_key] = UnifiedOp{name, true};
-
-            spdlog::debug("[PrintPreparationManager] From CAPABILITY DB: {} (key={})", name,
-                          cap_key);
-        }
-    }
-
-    // 2. Add operations from PRINT_START macro analysis
-    if (macro_analysis_.has_value() && macro_analysis_->found) {
-        for (const auto& op : macro_analysis_->operations) {
-            // Skip homing (always happens, not interesting)
-            if (op.category == helix::PrintStartOpCategory::HOMING) {
-                continue;
-            }
-
-            std::string key = get_category_key(op.category);
-            if (key.empty()) {
-                continue;
-            }
-
-            std::string name = get_macro_friendly_name(op.category);
-            if (name.empty()) {
-                name = op.name; // Fallback to raw name
-            }
-
-            // If already in map from database, update skip status if macro adds capability
-            if (ops.find(key) != ops.end()) {
-                if (op.has_skip_param) {
-                    ops[key].can_skip = true;
-                }
-                spdlog::debug("[PrintPreparationManager] From MACRO (merged): {} (key={}, skip={})",
-                              name, key, op.has_skip_param);
-            } else {
-                ops[key] = UnifiedOp{name, op.has_skip_param};
-                spdlog::debug("[PrintPreparationManager] From MACRO: {} (key={}, skip={})", name,
-                              key, op.has_skip_param);
-            }
-        }
-    }
-
-    // 3. Add operations from G-code file scan (these are already in the file)
-    if (cached_scan_result_.has_value()) {
-        for (const auto& op : cached_scan_result_->operations) {
-            // Skip operations we don't want to display (homing, start_print, unknown)
-            if (op.type == gcode::OperationType::HOMING ||
-                op.type == gcode::OperationType::START_PRINT ||
-                op.type == gcode::OperationType::UNKNOWN) {
-                continue;
-            }
-
-            // Get key and name from OperationRegistry for controllable operations,
-            // or use category_key/category_name for non-controllable ones
-            std::string key;
-            std::string name;
-
-            if (auto info = helix::OperationRegistry::get(op.type)) {
-                // Controllable operation - use registry data
-                key = info->capability_key;
-                name = info->friendly_name;
-            } else {
-                // Non-controllable operation (CHAMBER_SOAK, SKEW_CORRECT, BED_LEVEL)
-                // Use shared category_key/category_name functions
-                key = helix::category_key(op.type);
-                name = helix::category_name(op.type);
-            }
-
-            // Special case: PURGE_LINE maps to "priming" key in capability database
-            if (op.type == gcode::OperationType::PURGE_LINE) {
-                key = "priming";
-                name = "Nozzle priming";
-            }
-
-            // File operations are embedded in G-code, not skippable via macro
-            // Only add if not already present from database/macro
-            if (ops.find(key) == ops.end()) {
-                ops[key] = UnifiedOp{name, false};
-                spdlog::debug("[PrintPreparationManager] From FILE: {} (key={}, raw={})", name, key,
-                              op.display_name());
-            }
-        }
-    }
-
-    // 4. Format as bulleted list
-    if (ops.empty()) {
-        return "";
-    }
-
-    std::string result;
-    for (const auto& [key, op] : ops) {
-        if (!result.empty()) {
-            result += "\n";
-        }
-        result += "• " + op.friendly_name;
-        if (op.can_skip) {
-            result += " (optional)";
-        }
-    }
-
-    return result;
 }
 
 void PrintPreparationManager::clear_scan_cache() {
@@ -813,21 +578,16 @@ ModificationCapability PrintPreparationManager::check_modification_capability() 
 PrePrintOptions PrintPreparationManager::read_options_from_subjects() const {
     PrePrintOptions options;
 
-    options.bed_mesh = (get_option_state(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_) ==
-                        PrePrintOptionState::ENABLED);
-    options.qgl = (get_option_state(can_show_qgl_subject_, preprint_qgl_subject_) ==
-                   PrePrintOptionState::ENABLED);
-    options.z_tilt = (get_option_state(can_show_z_tilt_subject_, preprint_z_tilt_subject_) ==
-                      PrePrintOptionState::ENABLED);
-    options.nozzle_clean =
-        (get_option_state(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_) ==
-         PrePrintOptionState::ENABLED);
-    options.purge_line =
-        (get_option_state(can_show_purge_line_subject_, preprint_purge_line_subject_) ==
-         PrePrintOptionState::ENABLED);
-    options.timelapse =
-        (get_option_state(can_show_timelapse_subject_, preprint_timelapse_subject_) ==
-         PrePrintOptionState::ENABLED);
+    auto enabled = [this](const std::string& id) {
+        return get_option_state(id) == PrePrintOptionState::ENABLED;
+    };
+
+    options.bed_mesh = enabled("bed_mesh");
+    options.qgl = enabled("qgl");
+    options.z_tilt = enabled("z_tilt");
+    options.nozzle_clean = enabled("nozzle_clean");
+    options.purge_line = enabled("purge_line");
+    options.timelapse = enabled("timelapse");
 
     return options;
 }
@@ -884,15 +644,43 @@ void PrintPreparationManager::start_print(const std::string& filename,
         filename_to_print, options.bed_mesh, options.qgl, options.z_tilt, options.nozzle_clean,
         options.timelapse);
 
-    // Enable timelapse recording if requested (Moonraker-Timelapse plugin)
-    if (options.timelapse) {
-        api_->timelapse().set_timelapse_enabled(
-            true,
-            []() { spdlog::info("[PrintPreparationManager] Timelapse enabled for this print"); },
-            [](const MoonrakerError& err) {
-                spdlog::error("[PrintPreparationManager] Failed to enable timelapse: {}",
-                              err.message);
-            });
+    // Dispatch RuntimeCommand-strategy options. Currently used for the
+    // dynamically-synthesized `timelapse` option; the sentinel commands
+    // "timelapse:on" / "timelapse:off" are recognized here and routed to the
+    // moonraker-timelapse API. Other RuntimeCommand options will need their
+    // own dispatch arms.
+    const auto& db_options_for_runtime = get_cached_options();
+    for (const auto& opt : db_options_for_runtime.options) {
+        if (opt.strategy_kind != PrePrintStrategyKind::RuntimeCommand) {
+            continue;
+        }
+        const auto* cmd = std::get_if<PrePrintStrategyRuntimeCommand>(&opt.strategy);
+        if (!cmd) {
+            continue;
+        }
+        const PrePrintOptionState state = get_option_state(opt.id);
+        if (state == PrePrintOptionState::NOT_APPLICABLE) {
+            continue;
+        }
+        const bool enabled = (state == PrePrintOptionState::ENABLED);
+        const std::string& sentinel = enabled ? cmd->command_enabled : cmd->command_disabled;
+        if (sentinel == "timelapse:on" || sentinel == "timelapse:off") {
+            const bool tl_enable = (sentinel == "timelapse:on");
+            api_->timelapse().set_timelapse_enabled(
+                tl_enable,
+                [tl_enable]() {
+                    spdlog::info("[PrintPreparationManager] Timelapse {} for this print",
+                                 tl_enable ? "enabled" : "disabled");
+                },
+                [](const MoonrakerError& err) {
+                    spdlog::error("[PrintPreparationManager] Failed to update timelapse state: {}",
+                                  err.message);
+                });
+        } else if (!sentinel.empty()) {
+            spdlog::warn("[PrintPreparationManager] Unhandled RuntimeCommand sentinel '{}' for "
+                         "option '{}' — ignoring",
+                         sentinel, opt.id);
+        }
     }
 
     // Check if user disabled operations that are embedded in the G-code file
@@ -903,22 +691,47 @@ void PrintPreparationManager::start_print(const std::string& filename,
     std::vector<std::pair<std::string, std::string>> macro_skip_params =
         collect_macro_skip_params();
 
-    // Pre-start gcode mechanism (K1/K1C: PRINT_PREPARED)
-    // When pre_start_gcode is set and user disabled operations, execute the
-    // pre-gcode command instead of appending skip params to START_PRINT.
-    // K1's "prepare" is a macro variable (not a passed parameter), so
-    // START_PRINT PREPARE=1 does nothing — PRINT_PREPARED must be called first.
-    // The PREPARE param in printer_database.json serves as a sentinel: it makes
-    // the checkbox visible and causes collect_macro_skip_params() to return
-    // non-empty, gating entry into this path. The param value is never sent.
-    const auto& caps = get_cached_capabilities();
-    if (!macro_skip_params.empty() && !caps.pre_start_gcode.empty()) {
-        spdlog::info("[PrintPreparationManager] Executing pre-start gcode: {}",
-                     caps.pre_start_gcode);
+    // Pre-start gcode mechanism. Two distinct sources combine into a single
+    // pre-START_PRINT gcode call:
+    //
+    //   1. Printer-level `setup_gcode` (e.g. K1/K1C "PRINT_PREPARED"). Fires
+    //      unconditionally when its trigger condition is met (skip params
+    //      present) — its purpose is to set up macro variables that can't be
+    //      passed as START_PRINT params. The PREPARE param in
+    //      printer_database.json serves as a sentinel: it makes the checkbox
+    //      visible and causes collect_macro_skip_params() to return
+    //      non-empty, gating entry into this path. The param value is never
+    //      sent.
+    //
+    //   2. Per-option PreStartGcode strategy lines (e.g. K2 Plus
+    //      "LOAD_AI_RUN SWITCH=1"). Fired per-option whether enabled or
+    //      disabled — see collect_pre_start_gcode_lines().
+    //
+    // Lines are concatenated with newlines; Moonraker forwards the whole
+    // block to Klipper as a single gcode_script.
+    const auto& db_options = get_cached_options();
+    std::vector<std::string> pre_start_lines = collect_pre_start_gcode_lines();
+    const bool emit_printer_setup =
+        !macro_skip_params.empty() && !db_options.setup_gcode.empty();
+
+    if (emit_printer_setup || !pre_start_lines.empty()) {
+        std::string combined;
+        if (emit_printer_setup) {
+            combined = db_options.setup_gcode;
+        }
+        for (const auto& line : pre_start_lines) {
+            if (!combined.empty()) {
+                combined += "\n";
+            }
+            combined += line;
+        }
+
+        spdlog::info("[PrintPreparationManager] Executing pre-start gcode ({} line(s)): {}",
+                     (emit_printer_setup ? 1 : 0) + pre_start_lines.size(), combined);
 
         auto token = lifetime_.token();
         api_->execute_gcode(
-            caps.pre_start_gcode,
+            combined,
             [this, token, filename_to_print, ops_to_disable, on_navigate_to_status,
              wrapped_completion]() {
                 if (token.expired())
@@ -998,110 +811,6 @@ bool PrintPreparationManager::is_print_in_progress() const {
 // Internal Methods
 // ============================================================================
 
-PrePrintOptionState PrintPreparationManager::get_option_state(lv_subject_t* visibility_subject,
-                                                              lv_subject_t* checked_subject) const {
-    // Hidden = not applicable (e.g., plugin not installed, printer lacks capability)
-    if (visibility_subject && lv_subject_get_int(visibility_subject) == 0) {
-        return PrePrintOptionState::NOT_APPLICABLE;
-    }
-    // Visible + checked = user wants this operation
-    if (checked_subject && lv_subject_get_int(checked_subject) == 1) {
-        return PrePrintOptionState::ENABLED;
-    }
-    // Visible + unchecked = user explicitly disabled this
-    if (checked_subject && lv_subject_get_int(checked_subject) == 0) {
-        return PrePrintOptionState::DISABLED;
-    }
-    // No checked subject = can't determine
-    return PrePrintOptionState::NOT_APPLICABLE;
-}
-
-std::pair<lv_subject_t*, lv_subject_t*>
-PrintPreparationManager::get_subjects_for_category(OperationCategory cat) const {
-    switch (cat) {
-    case OperationCategory::BED_MESH:
-        return {can_show_bed_mesh_subject_, preprint_bed_mesh_subject_};
-    case OperationCategory::QGL:
-        return {can_show_qgl_subject_, preprint_qgl_subject_};
-    case OperationCategory::Z_TILT:
-        return {can_show_z_tilt_subject_, preprint_z_tilt_subject_};
-    case OperationCategory::NOZZLE_CLEAN:
-        return {can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_};
-    case OperationCategory::PURGE_LINE:
-        return {can_show_purge_line_subject_, preprint_purge_line_subject_};
-    // Note: We don't have timelapse in OperationCategory - it's separate
-    default:
-        return {nullptr, nullptr};
-    }
-}
-
-bool PrintPreparationManager::is_operation_visible(OperationCategory cat) const {
-    auto [visibility_subject, checked_subject] = get_subjects_for_category(cat);
-
-    // If we don't have a visibility subject for this category, consider it not applicable
-    if (!visibility_subject) {
-        return false;
-    }
-
-    // Visible if value is 1 (or non-zero)
-    return lv_subject_get_int(visibility_subject) != 0;
-}
-
-bool PrintPreparationManager::is_option_disabled_from_subject(OperationCategory cat) const {
-    auto [visibility_subject, checked_subject] = get_subjects_for_category(cat);
-
-    // If we don't have a checkbox subject for this category, can't determine state
-    if (!checked_subject) {
-        return false;
-    }
-
-    // Disabled = unchecked (value 0)
-    return lv_subject_get_int(checked_subject) == 0;
-}
-
-std::optional<OperationCapabilityResult>
-PrintPreparationManager::lookup_operation_capability(OperationCategory cat) const {
-    // 1. Check if we have subjects for this category
-    auto [visibility_subject, checked_subject] = get_subjects_for_category(cat);
-
-    // If we don't have subjects for this category, can't determine user intent
-    if (!visibility_subject || !checked_subject) {
-        return std::nullopt;
-    }
-
-    // 2. Check if operation is hidden (not applicable to this printer)
-    if (!is_operation_visible(cat)) {
-        return std::nullopt;
-    }
-
-    // 3. Check if operation is enabled (user wants it to run)
-    if (!is_option_disabled_from_subject(cat)) {
-        return std::nullopt;
-    }
-
-    // 4. Get skip param from CapabilityMatrix
-    auto matrix = build_capability_matrix();
-    auto skip_param = matrix.get_skip_param(cat);
-
-    if (!skip_param.has_value()) {
-        return std::nullopt; // No capability source for this operation
-    }
-
-    // 5. Build result
-    OperationCapabilityResult result;
-    result.should_skip = true;
-    result.param_name = skip_param->first;
-    result.skip_value = skip_param->second;
-
-    // Get source info
-    auto source = matrix.get_best_source(cat);
-    if (source) {
-        result.source = source->origin;
-    }
-
-    return result;
-}
-
 std::vector<gcode::OperationType> PrintPreparationManager::collect_ops_to_disable() const {
     std::vector<gcode::OperationType> ops_to_disable;
 
@@ -1110,30 +819,30 @@ std::vector<gcode::OperationType> PrintPreparationManager::collect_ops_to_disabl
     }
 
     // Check each operation type: if file has it embedded AND user explicitly disabled it
-    // Note: hidden (NOT_APPLICABLE) options are NOT candidates for disabling
-    if (get_option_state(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_) ==
-            PrePrintOptionState::DISABLED &&
+    // Note: hidden (NOT_APPLICABLE) options are NOT candidates for disabling.
+    // State resolution flows through the new framework via get_option_state(id).
+    auto is_disabled = [this](const std::string& id) {
+        return get_option_state(id) == PrePrintOptionState::DISABLED;
+    };
+
+    if (is_disabled("bed_mesh") &&
         cached_scan_result_->has_operation(gcode::OperationType::BED_MESH)) {
         ops_to_disable.push_back(gcode::OperationType::BED_MESH);
         spdlog::debug("[PrintPreparationManager] User disabled bed mesh, file has it embedded");
     }
 
-    if (get_option_state(can_show_qgl_subject_, preprint_qgl_subject_) ==
-            PrePrintOptionState::DISABLED &&
-        cached_scan_result_->has_operation(gcode::OperationType::QGL)) {
+    if (is_disabled("qgl") && cached_scan_result_->has_operation(gcode::OperationType::QGL)) {
         ops_to_disable.push_back(gcode::OperationType::QGL);
         spdlog::debug("[PrintPreparationManager] User disabled QGL, file has it embedded");
     }
 
-    if (get_option_state(can_show_z_tilt_subject_, preprint_z_tilt_subject_) ==
-            PrePrintOptionState::DISABLED &&
+    if (is_disabled("z_tilt") &&
         cached_scan_result_->has_operation(gcode::OperationType::Z_TILT)) {
         ops_to_disable.push_back(gcode::OperationType::Z_TILT);
         spdlog::debug("[PrintPreparationManager] User disabled Z-tilt, file has it embedded");
     }
 
-    if (get_option_state(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_) ==
-            PrePrintOptionState::DISABLED &&
+    if (is_disabled("nozzle_clean") &&
         cached_scan_result_->has_operation(gcode::OperationType::NOZZLE_CLEAN)) {
         ops_to_disable.push_back(gcode::OperationType::NOZZLE_CLEAN);
         spdlog::debug("[PrintPreparationManager] User disabled nozzle clean, file has it embedded");
@@ -1149,144 +858,138 @@ PrintPreparationManager::collect_macro_skip_params() const {
     // ui_async_call_safe callbacks). LVGL's single-threaded model ensures no races.
 
     std::vector<std::pair<std::string, std::string>> skip_params;
+    std::set<std::string> handled_ids;  // option ids already covered by DB
 
-    // PRIORITY 1: Check printer capability database for known native params
-    // If we have capabilities for this printer type, use them directly instead of
-    // relying on macro analysis. This is faster and more reliable.
-    const auto& caps = get_cached_capabilities();
-    if (!caps.empty()) {
-        spdlog::info("[PrintPreparationManager] Using capability database ({} capabilities)",
-                     caps.params.size());
+    // LAYER 1: Database options. Authoritative per-printer mapping (e.g. K2 Plus
+    // bed_mesh → PREPARE=1). When the DB declares an option, its handling
+    // takes precedence over macro analysis for that same option id.
+    const auto& db_options = get_cached_options();
+    if (!db_options.empty()) {
+        for (const auto& opt : db_options.options) {
+            // Only add skip param when user explicitly disabled the option
+            // (visible + unchecked). Hidden / not-applicable means the
+            // printer doesn't support the op and skip params shouldn't be
+            // appended.
+            if (get_option_state(opt.id) != PrePrintOptionState::DISABLED) {
+                // Even when ENABLED/NOT_APPLICABLE, the DB has spoken for this
+                // id — don't let macro analysis emit a duplicate param under
+                // the assumption the DB didn't cover it.
+                handled_ids.insert(opt.id);
+                continue;
+            }
 
-        // Bed mesh - use database param if available
-        // Use get_capability() for safe access without exception risk
-        // Only add skip param if user explicitly DISABLED (not if hidden/not applicable)
-        if (auto* cap = caps.get_capability("bed_mesh");
-            cap && get_option_state(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // QGL - use database param if available
-        if (auto* cap = caps.get_capability("qgl");
-            cap && get_option_state(can_show_qgl_subject_, preprint_qgl_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // Z Tilt - use database param if available
-        if (auto* cap = caps.get_capability("z_tilt");
-            cap && get_option_state(can_show_z_tilt_subject_, preprint_z_tilt_subject_) ==
-                       PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // Nozzle clean - use database param if available
-        if (auto* cap = caps.get_capability("nozzle_clean");
-            cap &&
-            get_option_state(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_) ==
-                PrePrintOptionState::DISABLED) {
-            skip_params.emplace_back(cap->param, cap->skip_value);
-            spdlog::debug("[PrintPreparationManager] Using database param: {}={}", cap->param,
-                          cap->skip_value);
-        }
-
-        // Priming - use database param if available
-        // Note: We don't have a priming checkbox yet, but AD5M supports it
-        // Future: Add priming_checkbox_ and use it here
-
-        // If we found capabilities, return them and skip macro analysis
-        if (!skip_params.empty()) {
-            spdlog::info("[PrintPreparationManager] Using {} params from capability database",
-                         skip_params.size());
-            return skip_params;
+            switch (opt.strategy_kind) {
+            case PrePrintStrategyKind::MacroParam: {
+                const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&opt.strategy);
+                if (macro) {
+                    skip_params.emplace_back(macro->param_name, macro->skip_value);
+                    spdlog::debug("[PrintPreparationManager] DB param: {}={} (id={})",
+                                  macro->param_name, macro->skip_value, opt.id);
+                }
+                handled_ids.insert(opt.id);
+                break;
+            }
+            case PrePrintStrategyKind::PreStartGcode:
+                // PreStartGcode is handled by collect_pre_start_gcode_lines();
+                // it fires before START_PRINT as a separate gcode call rather
+                // than appending KEY=value tokens to the macro invocation.
+                handled_ids.insert(opt.id);
+                break;
+            case PrePrintStrategyKind::RuntimeCommand:
+                // RuntimeCommand options dispatch in start_print() (e.g.
+                // timelapse:on/off → MoonrakerTimelapseAPI), not via macro
+                // skip params. Mark handled so macro analysis layer below
+                // doesn't double-emit a SKIP param for the same id.
+                handled_ids.insert(opt.id);
+                break;
+            case PrePrintStrategyKind::QueueAheadJob:
+                spdlog::warn("[PrintPreparationManager] Option '{}' uses strategy not yet wired up "
+                             "(QueueAheadJob). Ignoring.",
+                             opt.id);
+                handled_ids.insert(opt.id);
+                break;
+            }
         }
     }
 
-    // PRIORITY 2: Fall back to macro analysis
-    // If no macro analysis, nothing to skip
-    if (!macro_analysis_.has_value() || !macro_analysis_->found) {
-        return skip_params;
-    }
-
-    // Check each controllable macro operation against user's checkbox state
-    // Note: We only add skip params for operations that:
-    // 1. Exist in PRINT_START macro (detected by analyzer)
-    // 2. Have a skip parameter (controllable)
-    // 3. User has disabled (checkbox unchecked)
-
-    // Bed mesh
-    if (is_macro_op_controllable(helix::PrintStartOpCategory::BED_MESH) &&
-        get_option_state(can_show_bed_mesh_subject_, preprint_bed_mesh_subject_) ==
-            PrePrintOptionState::DISABLED) {
-        std::string param = get_macro_skip_param(helix::PrintStartOpCategory::BED_MESH);
-        if (!param.empty()) {
-            auto semantic = get_macro_param_semantic(helix::PrintStartOpCategory::BED_MESH);
+    // LAYER 2: Macro analysis. Picks up ops the DB didn't cover (e.g. QGL on a
+    // Voron whose entry only declares bed_mesh). DB-handled ids are skipped to
+    // avoid double-emission.
+    if (macro_analysis_.has_value() && macro_analysis_->found) {
+        auto emit_if_disabled = [this, &skip_params,
+                                 &handled_ids](helix::PrintStartOpCategory cat,
+                                               const std::string& id) {
+            if (handled_ids.count(id)) {
+                return;
+            }
+            if (!is_macro_op_controllable(cat)) {
+                return;
+            }
+            if (get_option_state(id) != PrePrintOptionState::DISABLED) {
+                return;
+            }
+            std::string param = get_macro_skip_param(cat);
+            if (param.empty()) {
+                return;
+            }
+            auto semantic = get_macro_param_semantic(cat);
             // OPT_OUT (SKIP_*): "1" means skip. OPT_IN (PERFORM_*): "0" means don't do.
             std::string value = (semantic == helix::ParameterSemantic::OPT_OUT) ? "1" : "0";
             skip_params.emplace_back(param, value);
-            spdlog::debug("[PrintPreparationManager] Adding skip param for bed mesh: {}={}", param,
-                          value);
-        }
-    }
+            spdlog::debug("[PrintPreparationManager] Macro-analysis param: {}={} (id={})", param,
+                          value, id);
+        };
 
-    // QGL
-    if (is_macro_op_controllable(helix::PrintStartOpCategory::QGL) &&
-        get_option_state(can_show_qgl_subject_, preprint_qgl_subject_) ==
-            PrePrintOptionState::DISABLED) {
-        std::string param = get_macro_skip_param(helix::PrintStartOpCategory::QGL);
-        if (!param.empty()) {
-            auto semantic = get_macro_param_semantic(helix::PrintStartOpCategory::QGL);
-            // OPT_OUT (SKIP_*): "1" means skip. OPT_IN (PERFORM_*): "0" means don't do.
-            std::string value = (semantic == helix::ParameterSemantic::OPT_OUT) ? "1" : "0";
-            skip_params.emplace_back(param, value);
-            spdlog::debug("[PrintPreparationManager] Adding skip param for QGL: {}={}", param,
-                          value);
-        }
-    }
-
-    // Z-Tilt
-    if (is_macro_op_controllable(helix::PrintStartOpCategory::Z_TILT) &&
-        get_option_state(can_show_z_tilt_subject_, preprint_z_tilt_subject_) ==
-            PrePrintOptionState::DISABLED) {
-        std::string param = get_macro_skip_param(helix::PrintStartOpCategory::Z_TILT);
-        if (!param.empty()) {
-            auto semantic = get_macro_param_semantic(helix::PrintStartOpCategory::Z_TILT);
-            // OPT_OUT (SKIP_*): "1" means skip. OPT_IN (PERFORM_*): "0" means don't do.
-            std::string value = (semantic == helix::ParameterSemantic::OPT_OUT) ? "1" : "0";
-            skip_params.emplace_back(param, value);
-            spdlog::debug("[PrintPreparationManager] Adding skip param for Z-tilt: {}={}", param,
-                          value);
-        }
-    }
-
-    // Nozzle clean
-    if (is_macro_op_controllable(helix::PrintStartOpCategory::NOZZLE_CLEAN) &&
-        get_option_state(can_show_nozzle_clean_subject_, preprint_nozzle_clean_subject_) ==
-            PrePrintOptionState::DISABLED) {
-        std::string param = get_macro_skip_param(helix::PrintStartOpCategory::NOZZLE_CLEAN);
-        if (!param.empty()) {
-            auto semantic = get_macro_param_semantic(helix::PrintStartOpCategory::NOZZLE_CLEAN);
-            // OPT_OUT (SKIP_*): "1" means skip. OPT_IN (PERFORM_*): "0" means don't do.
-            std::string value = (semantic == helix::ParameterSemantic::OPT_OUT) ? "1" : "0";
-            skip_params.emplace_back(param, value);
-            spdlog::debug("[PrintPreparationManager] Adding skip param for nozzle clean: {}={}",
-                          param, value);
-        }
+        emit_if_disabled(helix::PrintStartOpCategory::BED_MESH, "bed_mesh");
+        emit_if_disabled(helix::PrintStartOpCategory::QGL, "qgl");
+        emit_if_disabled(helix::PrintStartOpCategory::Z_TILT, "z_tilt");
+        emit_if_disabled(helix::PrintStartOpCategory::NOZZLE_CLEAN, "nozzle_clean");
     }
 
     if (!skip_params.empty()) {
-        spdlog::info("[PrintPreparationManager] Collected {} macro skip params (via analysis)",
+        spdlog::info("[PrintPreparationManager] Collected {} skip params (DB+macro combined)",
                      skip_params.size());
     }
 
     return skip_params;
+}
+
+std::vector<std::string> PrintPreparationManager::collect_pre_start_gcode_lines() const {
+    std::vector<std::string> lines;
+
+    const auto& db_options = get_cached_options();
+    if (db_options.options.empty()) {
+        return lines;
+    }
+
+    for (const auto& opt : db_options.options) {
+        if (opt.strategy_kind != PrePrintStrategyKind::PreStartGcode) {
+            continue;
+        }
+
+        // Skip options that don't apply to this printer (hidden by visibility,
+        // or not bound to any UI row and absent from the cached set's
+        // capability list — unlikely here since we just pulled from the set).
+        const PrePrintOptionState state = get_option_state(opt.id);
+        if (state == PrePrintOptionState::NOT_APPLICABLE) {
+            continue;
+        }
+
+        const bool enabled = (state == PrePrintOptionState::ENABLED);
+        std::string line = render_pre_start_gcode(opt, enabled);
+        if (line.empty()) {
+            // render_pre_start_gcode logs its own warning on type mismatch.
+            continue;
+        }
+        spdlog::debug("[PrintPreparationManager] Pre-start gcode for option '{}' (enabled={}): {}",
+                      opt.id, enabled, line);
+        lines.push_back(std::move(line));
+    }
+
+    if (!lines.empty()) {
+        spdlog::info("[PrintPreparationManager] Collected {} pre-start gcode line(s)", lines.size());
+    }
+    return lines;
 }
 
 void PrintPreparationManager::modify_and_print(

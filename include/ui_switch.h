@@ -21,6 +21,21 @@ void ui_switch_register_responsive_constants(void);
  */
 void ui_switch_register(void);
 
+/**
+ * Create a switch with full HelixScreen theme styling, callable from C++.
+ *
+ * Equivalent to instantiating `<ui_switch size="..."/>` from XML: applies
+ * theme colors (CHECKED indicator, knob, track, disabled state), the size
+ * preset (track dimensions, knob padding, margins), and the value-changed
+ * sound callback. Use when building rows dynamically in C++ where the XML
+ * parser path isn't available.
+ *
+ * @param parent Parent widget
+ * @param size_str One of "tiny", "small", "medium", "large" (NULL → "small")
+ * @return Created switch widget, or NULL on failure
+ */
+lv_obj_t* ui_switch_create_themed(lv_obj_t* parent, const char* size_str);
+
 #ifdef __cplusplus
 }
 #endif

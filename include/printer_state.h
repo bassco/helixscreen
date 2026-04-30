@@ -1706,10 +1706,10 @@ class PrinterState {
     // ========================================================================
 
     /**
-     * @brief Set the printer type and fetch capabilities from database (async)
+     * @brief Set the printer type and fetch the pre-print option set (async)
      *
-     * Stores the type name and fetches PrintStartCapabilities from the
-     * printer database via PrinterDetector::get_print_start_capabilities().
+     * Stores the type name and fetches the PrePrintOptionSet from the printer
+     * database via PrinterDetector::get_pre_print_option_set().
      *
      * Thread-safe: Uses helix::async::call_method_ref() to defer LVGL subject
      * updates to the main thread. Safe to call from WebSocket callbacks.
@@ -1736,15 +1736,15 @@ class PrinterState {
     const std::string& get_printer_type() const;
 
     /**
-     * @brief Get the print start capabilities for the current printer type
+     * @brief Get the pre-print option set for the current printer type
      *
-     * Returns capabilities fetched from the database when set_printer_type()
-     * was called. If the printer type is unknown or not set, returns an
-     * empty capabilities struct.
+     * Returns the option set fetched from the database when set_printer_type()
+     * was called. If the printer type is unknown or not set, returns an empty
+     * option set.
      *
-     * @return Const reference to the PrintStartCapabilities
+     * @return Const reference to the PrePrintOptionSet
      */
-    const PrintStartCapabilities& get_print_start_capabilities() const;
+    const PrePrintOptionSet& get_pre_print_option_set() const;
 
     /**
      * @brief Get the Z-offset calibration strategy for this printer
@@ -1920,9 +1920,9 @@ class PrinterState {
     // Cached hardware discovery result (for UI access to heater/sensor lists)
     helix::PrinterDiscovery discovery_;
 
-    // Printer type and print start capabilities
-    std::string printer_type_;                        ///< Selected printer type name
-    PrintStartCapabilities print_start_capabilities_; ///< Cached capabilities for current type
+    // Printer type and pre-print option set
+    std::string printer_type_;                ///< Selected printer type name
+    PrePrintOptionSet pre_print_option_set_;  ///< Cached option set for current type
     ZOffsetCalibrationStrategy z_offset_calibration_strategy_ =
         ZOffsetCalibrationStrategy::PROBE_CALIBRATE;
     lv_subject_t z_offset_can_save_{}; ///< 1 when manual save needed, 0 when auto-saved
@@ -1951,6 +1951,23 @@ class PrinterState {
     void set_os_version_internal(const std::string& version);
     void set_klippy_state_internal(KlippyState state);
     void set_printer_type_internal(const std::string& type);
+
+    /**
+     * @brief Synthesize runtime-dependent options (timelapse, etc.) into the
+     *        cached `PrePrintOptionSet`.
+     *
+     * Some options aren't declared in the printer database — they're driven
+     * by runtime capability discovery (e.g. the `timelapse` toggle only
+     * appears when the moonraker-timelapse plugin is installed). This helper
+     * appends those options to whatever the database loaded, so the rest of
+     * the system can treat them uniformly.
+     *
+     * Idempotent — call after the database load and again whenever one of
+     * the runtime capabilities changes (e.g. `set_timelapse_available()`).
+     * Re-running clears any previously synthesized options before re-adding
+     * the ones that should currently be present.
+     */
+    void apply_dynamic_options();
 
     /**
      * @brief Update combined nav_buttons_enabled subject

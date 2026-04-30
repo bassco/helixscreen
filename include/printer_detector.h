@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "pre_print_option.h"
+
 #include <map>
 #include <string>
 #include <vector>
@@ -44,45 +46,6 @@ struct BuildVolume {
     float y_min = 0.0f;
     float y_max = 0.0f;
     float z_max = 0.0f; ///< Maximum Z height (if available)
-};
-
-/**
- * @brief A single PRINT_START parameter capability
- *
- * Maps a capability (e.g., "bed_leveling") to the native param name and values.
- */
-struct PrintStartParamCapability {
-    std::string param;         ///< Native param name (e.g., "FORCE_LEVELING")
-    std::string skip_value;    ///< Value to skip/disable (e.g., "false")
-    std::string enable_value;  ///< Value to enable/force (e.g., "true")
-    std::string default_value; ///< Default value if param not specified
-    std::string description;   ///< Human-readable description
-};
-
-/**
- * @brief PRINT_START capabilities for a printer
- *
- * Contains the macro name and all supported skip/control parameters.
- */
-struct PrintStartCapabilities {
-    std::string macro_name;      ///< Macro name (e.g., "START_PRINT", "PRINT_START")
-    std::string pre_start_gcode; ///< Gcode to execute before print when skipping ops (e.g.,
-                                 ///< "PRINT_PREPARED" for K1)
-    std::map<std::string, PrintStartParamCapability>
-        params; ///< Map of capability name to param info
-
-    bool empty() const {
-        return macro_name.empty() && params.empty();
-    }
-
-    bool has_capability(const std::string& name) const {
-        return params.find(name) != params.end();
-    }
-
-    const PrintStartParamCapability* get_capability(const std::string& name) const {
-        auto it = params.find(name);
-        return (it != params.end()) ? &it->second : nullptr;
-    }
 };
 
 /**
@@ -321,16 +284,17 @@ class PrinterDetector {
     static int get_unknown_list_index(const std::string& kinematics);
 
     /**
-     * @brief Get PRINT_START capabilities for a printer
+     * @brief Get the pre-print option set for a printer
      *
-     * Looks up the print_start_capabilities field from the printer database JSON
-     * for the specified printer. This contains native macro parameters that can
-     * control pre-print operations (skip bed leveling, etc.) without file modification.
+     * Looks up the `pre_print_options` field from the printer database JSON for
+     * the specified printer and returns the parsed `PrePrintOptionSet`. This is
+     * the printer-agnostic abstraction used by the print-detail panel (Phase 2
+     * of the pre-print-options-framework refactor).
      *
      * @param printer_name Printer name (e.g., "FlashForge Adventurer 5M Pro")
-     * @return Capabilities struct, or empty struct if not found
+     * @return Option set, or empty set if not found
      */
-    static PrintStartCapabilities get_print_start_capabilities(const std::string& printer_name);
+    static PrePrintOptionSet get_pre_print_option_set(const std::string& printer_name);
 
     /**
      * @brief Get Z-offset calibration strategy for a printer
