@@ -8,6 +8,7 @@
 
 #include "pre_print_option.h"
 #include "printer_detector.h"
+#include "ui_print_preparation_manager.h"
 
 using namespace helix::ui;
 
@@ -361,4 +362,47 @@ TEST_CASE_METHOD(LVGLTestFixture,
     REQUIRE(renderer.row_count() == 0);
     REQUIRE(renderer.rendered_ids().empty());
     REQUIRE(renderer.get_row("bed_mesh") == nullptr);
+}
+
+// T4: integration — manager reads option state through a provider that
+// delegates to the renderer. Mirrors the production wiring in
+// PrintSelectDetailView::populate_option_rows() where the renderer
+// becomes the source of truth for per-option toggle state.
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "PrePrintOptionsRenderer: provider integration with PrintPreparationManager",
+                 "[print_file_detail][pre_print_options][integration]") {
+    PrePrintOptionsRenderer renderer;
+    lv_obj_t* container = lv_obj_create(test_screen());
+    auto set = make_multi_category_set();
+    renderer.populate(container, set, nullptr, nullptr);
+    REQUIRE(renderer.row_count() == 3);
+
+    PrintPreparationManager manager;
+    manager.set_option_state_provider(
+        [&renderer](const std::string& id) { return renderer.get_state(id, -1); });
+
+    SECTION("Initial provider readouts match default_enabled") {
+        // bed_mesh: default_enabled=true → ENABLED
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
+        // nozzle_clean: default_enabled=false → DISABLED
+        REQUIRE(manager.get_option_state("nozzle_clean") == PrePrintOptionState::DISABLED);
+        // ai_detect: default_enabled=false → DISABLED
+        REQUIRE(manager.get_option_state("ai_detect") == PrePrintOptionState::DISABLED);
+    }
+
+    SECTION("Programmatic state change is reflected in manager reads") {
+        renderer.set_state("bed_mesh", 0);
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+
+        renderer.set_state("ai_detect", 1);
+        REQUIRE(manager.get_option_state("ai_detect") == PrePrintOptionState::ENABLED);
+    }
+
+    SECTION("Unknown id falls through to NOT_APPLICABLE") {
+        // The provider returns -1 for unknown ids (renderer.get_state default),
+        // and the manager has no cached options without a printer_state, so
+        // the result is NOT_APPLICABLE.
+        REQUIRE(manager.get_option_state("does_not_exist") ==
+                PrePrintOptionState::NOT_APPLICABLE);
+    }
 }
