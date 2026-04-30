@@ -2332,10 +2332,10 @@ TEST_CASE("PrinterDetector: Pre-print option set lookup", "[printer][capabilitie
         REQUIRE(set.empty());
     }
 
-    SECTION("K1 family carries pre_start_gcode") {
+    SECTION("K1 family carries setup_gcode") {
         auto set = PrinterDetector::get_pre_print_option_set("Creality K1");
         REQUIRE_FALSE(set.empty());
-        REQUIRE(set.pre_start_gcode == "PRINT_PREPARED");
+        REQUIRE(set.setup_gcode == "PRINT_PREPARED");
 
         const PrePrintOption* bed_mesh = set.find("bed_mesh");
         REQUIRE(bed_mesh != nullptr);

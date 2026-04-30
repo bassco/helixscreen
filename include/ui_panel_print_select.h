@@ -450,11 +450,6 @@ class PrintSelectPanel : public PanelBase {
     lv_subject_t selected_filament_type_subject_;
     char selected_filament_type_buffer_[64]; // Longer for full names like "PolyMaker PolyLite ABS"
 
-    /// Unified pre-print steps (merged file + macro ops, bulleted list)
-    lv_subject_t selected_preprint_steps_subject_;
-    char selected_preprint_steps_buffer_[256]; ///< Larger buffer for multi-line bulleted list
-    lv_subject_t selected_preprint_steps_visible_subject_; ///< 1 if section should be visible
-
     lv_subject_t detail_view_visible_subject_;
 
     /// View mode subject: 0 = CARD, 1 = LIST (XML bindings control visibility)
@@ -642,14 +637,6 @@ class PrintSelectPanel : public PanelBase {
      * Disables the print button when a print is in progress to prevent concurrent prints.
      */
     void update_print_button_state();
-
-    /**
-     * @brief Update the unified preprint steps subject
-     *
-     * Called when either scan_complete or macro_analysis_complete fires to refresh
-     * the unified preprint steps display with merged and deduplicated operations.
-     */
-    void update_preprint_steps_subject();
 
     /**
      * @brief Update sort indicator icons on column headers

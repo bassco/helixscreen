@@ -11,16 +11,27 @@ namespace helix {
 /**
  * @brief Manages composite visibility subjects for G-code modification options
  *
- * These subjects combine helix_plugin_installed with individual printer capabilities
- * to control visibility of pre-print option rows in the UI. An option is shown only
- * when BOTH: plugin is installed AND printer has the capability.
- *
  * Composite visibility subjects (5 total):
  * - can_show_bed_mesh: helix_plugin_installed && printer_has_bed_mesh
  * - can_show_qgl: helix_plugin_installed && printer_has_qgl
  * - can_show_z_tilt: helix_plugin_installed && printer_has_z_tilt
  * - can_show_nozzle_clean: helix_plugin_installed && printer_has_nozzle_clean
  * - can_show_purge_line: helix_plugin_installed && printer_has_purge_line
+ *
+ * Plus an aggregate `has_any_preprint_options` that ORs all of the above
+ * together with `printer_has_timelapse`.
+ *
+ * @note Current consumers (Phase 3.5+):
+ *   - `has_any_preprint_options`: bound by `print_file_detail.xml` to hide
+ *     the entire PRINT OPTIONS card when no row would be visible. Live.
+ *   - Individual `can_show_*` subjects: NO live XML or production C++
+ *     consumer. They survive as a hook for `PrePrintOptionsRenderer`'s
+ *     `VisibilitySubjectLookup` callback — when a future option needs to be
+ *     hidden until the helix plugin is installed (or some other capability
+ *     check passes), the detail view's `populate_option_rows()` lookup can
+ *     return one of these subjects. Today the lookup always returns nullptr,
+ *     so these subjects are computed but unread. Removing them would force
+ *     re-introducing the same logic when the first plugin-gated option lands.
  *
  * Extracted from PrinterState as part of god class decomposition.
  *
@@ -67,8 +78,13 @@ class PrinterCompositeVisibilityState {
      *
      * @param plugin_installed True if HelixPrint plugin is installed
      * @param capabilities Reference to capabilities state for has_* queries
+     * @param framework_option_count Count of options declared by the new
+     *        PrePrintOption framework for the active printer. ORed into
+     *        has_any_preprint_options so the options card shows when only
+     *        framework-declared options (e.g. K2 Plus ai_detect) are present.
      */
-    void update_visibility(bool plugin_installed, const PrinterCapabilitiesState& capabilities);
+    void update_visibility(bool plugin_installed, const PrinterCapabilitiesState& capabilities,
+                           size_t framework_option_count = 0);
 
     // ========================================================================
     // Subject accessors

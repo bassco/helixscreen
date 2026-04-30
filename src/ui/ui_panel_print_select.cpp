@@ -285,12 +285,6 @@ void PrintSelectPanel::init_subjects() {
                               "selected_layer_height", subjects_);
     UI_MANAGED_SUBJECT_STRING(selected_filament_type_subject_, selected_filament_type_buffer_, "",
                               "selected_filament_type", subjects_);
-    // Unified preprint steps (merged file + macro, bulleted list)
-    UI_MANAGED_SUBJECT_STRING(selected_preprint_steps_subject_, selected_preprint_steps_buffer_, "",
-                              "selected_preprint_steps", subjects_);
-    UI_MANAGED_SUBJECT_INT(selected_preprint_steps_visible_subject_, 0,
-                           "selected_preprint_steps_visible", subjects_);
-
     // Initialize detail view visibility subject (0 = hidden, 1 = visible)
     UI_MANAGED_SUBJECT_INT(detail_view_visible_subject_, 0, "detail_view_visible", subjects_);
 
@@ -2197,27 +2191,6 @@ void PrintSelectPanel::update_print_button_state() {
     }
 }
 
-void PrintSelectPanel::update_preprint_steps_subject() {
-    if (!detail_view_) {
-        return;
-    }
-
-    auto* prep_mgr = detail_view_->get_prep_manager();
-    if (!prep_mgr) {
-        return;
-    }
-
-    // Get unified preprint steps (merges file + macro, deduplicates)
-    std::string steps = prep_mgr->format_preprint_steps();
-
-    // Update subject and visibility
-    lv_subject_copy_string(&selected_preprint_steps_subject_, steps.c_str());
-    lv_subject_set_int(&selected_preprint_steps_visible_subject_, steps.empty() ? 0 : 1);
-
-    spdlog::trace("[{}] Updated preprint steps (visible: {}): {}", get_name(), !steps.empty(),
-                  steps.empty() ? "(empty)" : steps);
-}
-
 void PrintSelectPanel::update_sort_indicators() {
     const char* header_names[] = {"header_filename", "header_size", "header_modified",
                                   "header_print_time"};
@@ -2336,18 +2309,13 @@ void PrintSelectPanel::create_detail_view() {
     detail_view_->set_visible_subject(&detail_view_visible_subject_);
     detail_view_->set_on_delete_confirmed([this]() { delete_file(); });
 
-    // Set callbacks to update unified preprint steps when scan/macro analysis completes
+    // Re-enable the print button when macro analysis completes. The legacy
+    // bullet-text "preprint steps" display has been replaced by the dynamic
+    // PrePrintOption toggle UI in print_file_detail.xml, so no scan/analysis
+    // text refresh is needed here anymore.
     if (auto* prep_mgr = detail_view_->get_prep_manager()) {
-        prep_mgr->set_scan_complete_callback([this](const std::string& /*formatted_ops*/) {
-            // Update unified preprint steps (merges file + macro ops)
-            update_preprint_steps_subject();
-        });
-
         prep_mgr->set_macro_analysis_callback(
             [this](const helix::PrintStartAnalysis& /*analysis*/) {
-                // Update unified preprint steps (merges file + macro ops)
-                update_preprint_steps_subject();
-                // Re-enable print button now that analysis is complete
                 update_print_button_state();
             });
     }

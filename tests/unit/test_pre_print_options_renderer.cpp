@@ -33,22 +33,12 @@ std::vector<std::string> child_widget_classes(lv_obj_t* container) {
     return classes;
 }
 
-/// Count direct child labels at the top level of a container.
-size_t count_subheaders(lv_obj_t* container) {
-    size_t count = 0;
-    uint32_t n = lv_obj_get_child_count(container);
-    for (uint32_t i = 0; i < n; ++i) {
-        if (lv_obj_get_class(lv_obj_get_child(container, i)) == &lv_label_class) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-/// Build an option set with options across multiple categories so we can
-/// exercise the subheader-grouping path. Mirrors the JSON shape that
-/// `parse_pre_print_option_set` accepts but builds it directly to keep the
-/// test independent of printer_database.json drift.
+/// Build an option set with options across multiple categories. (Categories
+/// are sort keys only — the renderer emits a flat row list with no
+/// subheaders. This helper just exercises the multi-category sort path.)
+/// Mirrors the JSON shape that `parse_pre_print_option_set` accepts but
+/// builds it directly to keep the test independent of printer_database.json
+/// drift.
 PrePrintOptionSet make_multi_category_set() {
     PrePrintOptionSet s;
     s.macro_name = "START_PRINT";
@@ -119,13 +109,12 @@ TEST_CASE_METHOD(LVGLTestFixture, "PrePrintOptionsRenderer: single-category set 
     REQUIRE(rendered.size() == 1);
     REQUIRE(rendered[0] == "bed_mesh");
 
-    // 1 subheader (label) + 1 row container = 2 children.
-    REQUIRE(lv_obj_get_child_count(container) == 2);
-    REQUIRE(count_subheaders(container) == 1);
+    // Flat list: 1 row container only, no subheader.
+    REQUIRE(lv_obj_get_child_count(container) == 1);
 }
 
 TEST_CASE_METHOD(LVGLTestFixture,
-                 "PrePrintOptionsRenderer: multi-category set emits subheader per category",
+                 "PrePrintOptionsRenderer: multi-category set emits flat row list",
                  "[print_file_detail][pre_print_options]") {
     PrePrintOptionsRenderer renderer;
     lv_obj_t* container = lv_obj_create(test_screen());
@@ -137,14 +126,13 @@ TEST_CASE_METHOD(LVGLTestFixture,
     REQUIRE(renderer.rendered_ids() == std::vector<std::string>{"bed_mesh", "nozzle_clean",
                                                                 "ai_detect"});
 
-    // 3 subheaders + 3 rows = 6 children.
-    REQUIRE(lv_obj_get_child_count(container) == 6);
-    REQUIRE(count_subheaders(container) == 3);
+    // 3 rows, no category subheaders — the section title comes from the
+    // surrounding XML card, not the renderer.
+    REQUIRE(lv_obj_get_child_count(container) == 3);
 
-    // Display order: subheader, row, subheader, row, subheader, row.
+    // Display order: row, row, row.
     auto classes = child_widget_classes(container);
-    REQUIRE(classes
-            == std::vector<std::string>{"label", "row", "label", "row", "label", "row"});
+    REQUIRE(classes == std::vector<std::string>{"row", "row", "row"});
 }
 
 TEST_CASE_METHOD(LVGLTestFixture,
@@ -278,9 +266,9 @@ TEST_CASE_METHOD(LVGLTestFixture,
                  "PrePrintOptionsRenderer: K2 Plus live DB renders bed_mesh and ai_detect",
                  "[print_file_detail][pre_print_options][db][ai_detect]") {
     // K2 Plus advertises bed_mesh (Mechanical) + ai_detect (Monitoring).
-    // Two distinct categories means two subheaders should be emitted, and
-    // the PreStartGcode strategy should render its row identically to
-    // MacroParam — the renderer is strategy-agnostic.
+    // Renderer emits a flat row list with no subheaders (categories are sort
+    // keys only; the section title comes from print_file_detail.xml's
+    // PRINT OPTIONS card header).
     auto set = PrinterDetector::get_pre_print_option_set("Creality K2 Plus");
     REQUIRE_FALSE(set.empty());
 
@@ -292,8 +280,71 @@ TEST_CASE_METHOD(LVGLTestFixture,
     REQUIRE(renderer.get_row("bed_mesh") != nullptr);
     REQUIRE(renderer.get_row("ai_detect") != nullptr);
     REQUIRE(renderer.get_switch("ai_detect") != nullptr);
-    // Two categories -> two subheaders.
-    REQUIRE(count_subheaders(container) == 2);
+}
+
+TEST_CASE_METHOD(LVGLTestFixture,
+                 "PrePrintOptionsRenderer: label_key wins over humanize_id",
+                 "[print_file_detail][pre_print_options][label]") {
+    // When `label_key` is present, the renderer must look it up via lv_tr
+    // and never fall through to the humanize_id path. We verify by giving
+    // the option an id that humanize_id WOULD garble (mixed case, no
+    // underscores) — if label_key is honored, the row label is the i18n
+    // value (or the key itself, since en.yml lacks this synthetic key);
+    // if humanize_id ran, the label would have been title-cased from the id.
+    PrePrintOptionsRenderer renderer;
+    lv_obj_t* container = lv_obj_create(test_screen());
+
+    PrePrintOptionSet set;
+    set.macro_name = "START_PRINT";
+
+    PrePrintOption keyed;
+    keyed.id = "weirdId123"; // humanize_id would emit "WeirdId123"
+    keyed.label_key = "pre_print_option.foo.label"; // not in en.yml; lv_tr returns it as-is
+    keyed.category = PrePrintCategory::Mechanical;
+    keyed.order = 10;
+    keyed.default_enabled = false;
+    keyed.strategy_kind = PrePrintStrategyKind::MacroParam;
+    keyed.strategy = PrePrintStrategyMacroParam{"PARAM", "1", "0", "0"};
+    set.options.push_back(keyed);
+
+    PrePrintOption unkeyed;
+    unkeyed.id = "ai_detect"; // humanize_id capitalizes after each separator -> "AI Detect"
+    unkeyed.category = PrePrintCategory::Mechanical;
+    unkeyed.order = 20;
+    unkeyed.default_enabled = false;
+    unkeyed.strategy_kind = PrePrintStrategyKind::MacroParam;
+    unkeyed.strategy = PrePrintStrategyMacroParam{"PARAM2", "1", "0", "0"};
+    set.options.push_back(unkeyed);
+
+    renderer.populate(container, set, nullptr, nullptr);
+    REQUIRE(renderer.row_count() == 2);
+
+    // Find the label widget inside each row. Each row container's first
+    // child is the label (it's added before the switch).
+    auto label_text_for = [&](const std::string& id) -> std::string {
+        lv_obj_t* row = renderer.get_row(id);
+        REQUIRE(row != nullptr);
+        REQUIRE(lv_obj_get_child_count(row) >= 1);
+        lv_obj_t* label = lv_obj_get_child(row, 0);
+        REQUIRE(lv_obj_get_class(label) == &lv_label_class);
+        const char* t = lv_label_get_text(label);
+        return std::string(t ? t : "");
+    };
+
+    // label_key path: lv_tr returns the key when no translation exists.
+    // The renderer never invokes humanize_id, so the output is exactly
+    // the key string (or its translation). Either way, it is NOT the
+    // title-cased id form.
+    std::string keyed_text = label_text_for("weirdId123");
+    REQUIRE(keyed_text != "WeirdId123");
+    REQUIRE_FALSE(keyed_text.empty());
+
+    // No label_key: humanize_id runs, then is run through lv_tr (which
+    // returns the humanized form when no translation exists). humanize_id
+    // capitalizes after each separator, then a fix_acronym pass uppercases
+    // "Ai" -> "AI" so the final output is "AI Detect".
+    std::string unkeyed_text = label_text_for("ai_detect");
+    REQUIRE(unkeyed_text == "AI Detect");
 }
 
 TEST_CASE_METHOD(LVGLTestFixture,

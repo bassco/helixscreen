@@ -20,21 +20,51 @@ namespace helix::ui {
  * @brief Renders the per-print toggle list on the print-detail panel.
  *
  * Owns the per-option `lv_subject_t` state (one int subject per option in the
- * active printer's `PrePrintOptionSet`). Builds a row for each option with a
- * label + ui_switch, grouped by category with sub-headers ("Mechanical setup",
- * "Print quality", "Monitoring"). Visibility per row is bound to a
- * caller-supplied `can_show_*` subject so a row only shows when both
- *   1. the printer's database entry advertises the option, AND
- *   2. macro analysis confirms the START_PRINT macro performs that operation.
+ * active printer's `PrePrintOptionSet`). Builds a flat row list — one row per
+ * option, label on the left and `ui_switch` on the right. Categories are used
+ * as a sort key only; no sub-headers are emitted (the surrounding "PRINT
+ * OPTIONS" card header in `print_file_detail.xml` provides the section title).
  *
- * The renderer does NOT decide visibility itself — the caller passes a lookup
- * function that maps option id → existing PrinterState `can_show_*` subject.
+ * Visibility per row may be bound to a caller-supplied subject via the
+ * `VisibilitySubjectLookup` callback — returning a non-null subject hides the
+ * row when it reads 0. The current detail-view caller passes a lookup that
+ * always returns nullptr (declared options are always visible) but the hook
+ * remains available for future plugin-/macro-gated options.
  *
- * State subject lifecycle: subjects are heap-allocated and owned by the
- * renderer. They live until `clear()` runs (or the renderer is destroyed),
- * which happens AFTER the rows themselves are deleted via
- * `safe_clean_children`. Rows hold `bind_state_if_eq` observers on these
- * subjects; deleting the rows first removes the observers.
+ * The renderer does NOT decide visibility itself — the caller passes the
+ * lookup function.
+ *
+ * ## Subject lifecycle
+ *
+ * Per-option state subjects are heap-allocated `lv_subject_t` instances owned
+ * by `OptionRow::state_subject`. They are paired one-to-one with their row
+ * widget. The pairing means subject and observers always die together inside
+ * `clear()` / the destructor, so no `SubjectLifetime` token is needed: when a
+ * row's owning subject is deinited, all of that subject's observers are
+ * uninstalled atomically. There is no scenario where the subject can outlive
+ * its observers (or vice-versa) since both are stored in the same `OptionRow`
+ * struct.
+ *
+ * ## clear() lifetime contract
+ *
+ * `clear()` deinits every state subject (which uninstalls observers from the
+ * row widgets) and then drops the row vector. It runs in three contexts, each
+ * with different widget liveness:
+ *
+ *   1. From `populate()` rebuild path — `clear()` runs BEFORE
+ *      `safe_clean_children`. Widgets are still alive at deinit time, so
+ *      `lv_subject_deinit` walks each observer's widget and removes the
+ *      `LV_EVENT_DELETE` cleanup callback cleanly.
+ *
+ *   2. From `OverlayBase::on_ui_destroyed()` (panel close) — widgets are
+ *      still alive per OverlayBase's contract (deferred delete on next tick).
+ *      Same path as above.
+ *
+ *   3. From the renderer destructor at static teardown — widgets may already
+ *      be gone (LVGL deleted them earlier). In that case, observers were
+ *      auto-removed when the widgets were deleted, so the subject's observer
+ *      list is already empty and `lv_subject_deinit` is a no-op cleanup that
+ *      still frees the subject's internal lists.
  */
 class PrePrintOptionsRenderer {
   public:
@@ -97,6 +127,13 @@ class PrePrintOptionsRenderer {
 
     /**
      * @brief Set toggle state for `id`. No-op if id is not present.
+     *
+     * @note This updates the underlying subject (and propagates to the
+     *       switch's checked state via the observer wiring), but does NOT
+     *       invoke the `OnToggleCallback`. Only user-driven changes that fire
+     *       `LV_EVENT_VALUE_CHANGED` on the switch reach the toggle callback.
+     *       Callers that need both the model update and the side-effect must
+     *       invoke the side-effect themselves.
      */
     void set_state(const std::string& id, int new_state);
 
@@ -132,12 +169,10 @@ class PrePrintOptionsRenderer {
         std::unique_ptr<lv_subject_t> state_subject;
     };
 
-    static const char* category_translation_key(PrePrintCategory category);
     /// Look up the i18n string for an option's label, falling back to a
     /// humanized version of the id when no `label_key` is set in the DB.
     static std::string label_for(const PrePrintOption& opt);
 
-    void make_subheader(lv_obj_t* container, PrePrintCategory category);
     void make_row(lv_obj_t* container, const PrePrintOption& opt,
                   const VisibilitySubjectLookup& visibility_lookup);
 

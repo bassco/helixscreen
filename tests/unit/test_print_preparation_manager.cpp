@@ -15,6 +15,10 @@ class PrintPreparationManagerTestAccess {
     get_pre_start_gcode_lines(const helix::ui::PrintPreparationManager& m) {
         return m.collect_pre_start_gcode_lines();
     }
+    static std::vector<gcode::OperationType>
+    get_ops_to_disable(const helix::ui::PrintPreparationManager& m) {
+        return m.collect_ops_to_disable();
+    }
 };
 
 #include "../mocks/mock_websocket_server.h"
@@ -37,7 +41,9 @@ class PrintPreparationManagerTestAccess {
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <map>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -57,14 +63,10 @@ using namespace helix::ui;
 // Tests: Macro Analysis Formatting
 // ============================================================================
 
-TEST_CASE("PrintPreparationManager: format_macro_operations", "[print_preparation][macro]") {
+TEST_CASE("PrintPreparationManager: has_macro_analysis when no analysis available",
+          "[print_preparation][macro]") {
     PrintPreparationManager manager;
-    // No dependencies set - tests formatting without API
-
-    SECTION("Returns empty string when no analysis available") {
-        REQUIRE(manager.format_macro_operations().empty());
-        REQUIRE(manager.has_macro_analysis() == false);
-    }
+    REQUIRE(manager.has_macro_analysis() == false);
 }
 
 TEST_CASE("PrintPreparationManager: is_macro_op_controllable", "[print_preparation][macro]") {
@@ -91,12 +93,9 @@ TEST_CASE("PrintPreparationManager: get_macro_skip_param", "[print_preparation][
 // Tests: File Operations Scanning
 // ============================================================================
 
-TEST_CASE("PrintPreparationManager: format_detected_operations", "[print_preparation][gcode]") {
+TEST_CASE("PrintPreparationManager: scan cache state when no scan done",
+          "[print_preparation][gcode]") {
     PrintPreparationManager manager;
-
-    SECTION("Returns empty string when no scan result available") {
-        REQUIRE(manager.format_detected_operations().empty());
-    }
 
     SECTION("has_scan_result_for returns false when no scan done") {
         REQUIRE(manager.has_scan_result_for("test.gcode") == false);
@@ -110,7 +109,7 @@ TEST_CASE("PrintPreparationManager: clear_scan_cache", "[print_preparation][gcod
     SECTION("Can be called when no cache exists") {
         // Should not throw or crash
         manager.clear_scan_cache();
-        REQUIRE(manager.format_detected_operations().empty());
+        REQUIRE(manager.has_scan_result_for("test.gcode") == false);
     }
 }
 
@@ -183,148 +182,82 @@ TEST_CASE("PrintPreparationManager: set_cached_file_size", "[print_preparation][
 }
 
 // ============================================================================
-// Tests: Subject-Based Options Reading (LT2)
+// Tests: Option-State Provider (replaces removed legacy subject API)
 // ============================================================================
 
 /**
- * LT2 Refactor: Observer Pattern for Checkbox State
+ * The pre-print options framework reads option state through
+ * `OptionStateProvider`, a callback that maps an option id ("bed_mesh",
+ * "qgl", ...) to its current toggle state:
  *
- * These tests verify the new read_options_from_subjects() method which reads
- * pre-print options from lv_subject_t pointers instead of LVGL widget state.
+ *   1  -> ENABLED   (visible + checked in the active panel)
+ *   0  -> DISABLED  (visible + unchecked — user explicitly skipped)
+ *  -1  -> NOT_APPLICABLE (no row for this id in the active panel)
  *
- * Benefits of subject-based approach:
- * - No direct LVGL widget dependency (easier testing, better separation)
- * - Consistent with LVGL 9.x observer pattern used elsewhere
- * - Enables reactive updates when options change
- *
- * These tests are designed to FAIL initially because:
- * - read_options_from_subjects() doesn't exist yet
- * - set_preprint_subjects() doesn't exist yet
- *
- * After implementation, they should PASS.
+ * `MockOptionState` is a small in-memory map that implements that contract,
+ * replacing the per-id LVGL subject members that were removed in Phase 3.5.
  */
+struct MockOptionState {
+    std::map<std::string, int> values;
 
-/**
- * @brief Test fixture for subject-based option reading
- *
- * Manages LVGL subject lifecycle and provides helper methods for
- * configuring checkbox and visibility subjects.
- */
-struct PreprintSubjectsFixture {
-    // Checkbox state subjects (1 = checked, 0 = unchecked)
-    lv_subject_t preprint_bed_mesh{};
-    lv_subject_t preprint_qgl{};
-    lv_subject_t preprint_z_tilt{};
-    lv_subject_t preprint_nozzle_clean{};
-    lv_subject_t preprint_purge_line{};
-    lv_subject_t preprint_timelapse{};
-
-    // Visibility subjects (1 = visible/enabled, 0 = hidden/disabled)
-    lv_subject_t can_show_bed_mesh{};
-    lv_subject_t can_show_qgl{};
-    lv_subject_t can_show_z_tilt{};
-    lv_subject_t can_show_nozzle_clean{};
-    lv_subject_t can_show_purge_line{};
-    lv_subject_t can_show_timelapse{};
-
-    bool initialized = false;
-
-    void init_all_subjects() {
-        if (initialized) {
-            return;
-        }
-
-        // Initialize checkbox subjects (default unchecked)
-        lv_subject_init_int(&preprint_bed_mesh, 0);
-        lv_subject_init_int(&preprint_qgl, 0);
-        lv_subject_init_int(&preprint_z_tilt, 0);
-        lv_subject_init_int(&preprint_nozzle_clean, 0);
-        lv_subject_init_int(&preprint_purge_line, 0);
-        lv_subject_init_int(&preprint_timelapse, 0);
-
-        // Initialize visibility subjects (default visible)
-        lv_subject_init_int(&can_show_bed_mesh, 1);
-        lv_subject_init_int(&can_show_qgl, 1);
-        lv_subject_init_int(&can_show_z_tilt, 1);
-        lv_subject_init_int(&can_show_nozzle_clean, 1);
-        lv_subject_init_int(&can_show_purge_line, 1);
-        lv_subject_init_int(&can_show_timelapse, 1);
-
-        initialized = true;
+    /// Mark `id` as ENABLED (visible + checked).
+    void enable(const std::string& id) {
+        values[id] = 1;
+    }
+    /// Mark `id` as DISABLED (visible + unchecked).
+    void disable(const std::string& id) {
+        values[id] = 0;
+    }
+    /// Hide `id` (NOT_APPLICABLE — not in the active panel).
+    void hide(const std::string& id) {
+        values[id] = -1;
+    }
+    /// Remove an explicit setting; provider returns -1 (NOT_APPLICABLE).
+    void clear(const std::string& id) {
+        values.erase(id);
     }
 
-    void deinit_all_subjects() {
-        if (!initialized) {
-            return;
-        }
-
-        // Deinitialize in reverse order
-        lv_subject_deinit(&can_show_timelapse);
-        lv_subject_deinit(&can_show_purge_line);
-        lv_subject_deinit(&can_show_nozzle_clean);
-        lv_subject_deinit(&can_show_z_tilt);
-        lv_subject_deinit(&can_show_qgl);
-        lv_subject_deinit(&can_show_bed_mesh);
-
-        lv_subject_deinit(&preprint_timelapse);
-        lv_subject_deinit(&preprint_purge_line);
-        lv_subject_deinit(&preprint_nozzle_clean);
-        lv_subject_deinit(&preprint_z_tilt);
-        lv_subject_deinit(&preprint_qgl);
-        lv_subject_deinit(&preprint_bed_mesh);
-
-        initialized = false;
-    }
-
-    ~PreprintSubjectsFixture() {
-        deinit_all_subjects();
+    /// Build a callable provider that closes over this map.
+    [[nodiscard]] std::function<int(const std::string&)> provider() {
+        return [this](const std::string& id) -> int {
+            auto it = values.find(id);
+            return (it != values.end()) ? it->second : -1;
+        };
     }
 };
 
-TEST_CASE("PrintPreparationManager: read_options_from_subjects with initialized subjects",
-          "[print_preparation][options][lt2]") {
+TEST_CASE("PrintPreparationManager: read_options_from_subjects via OptionStateProvider",
+          "[print_preparation][options]") {
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-    SECTION("Returns options matching subject values - all checked") {
-        // Set all checkboxes to checked
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);
+    SECTION("All options enabled - returns all true") {
+        state.enable("bed_mesh");
+        state.enable("qgl");
+        state.enable("z_tilt");
+        state.enable("nozzle_clean");
+        state.enable("purge_line");
+        state.enable("timelapse");
 
-        // Set subjects on manager (this method doesn't exist yet - will cause compile failure)
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-
-        // Read options from subjects (this method doesn't exist yet - will cause compile failure)
         auto options = manager.read_options_from_subjects();
-
         REQUIRE(options.bed_mesh == true);
         REQUIRE(options.qgl == true);
         REQUIRE(options.z_tilt == true);
         REQUIRE(options.nozzle_clean == true);
+        REQUIRE(options.purge_line == true);
         REQUIRE(options.timelapse == true);
     }
 
-    SECTION("Returns options matching subject values - mixed states") {
-        // Set mixed checkbox states
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);     // checked
-        lv_subject_set_int(&subjects.preprint_qgl, 0);          // unchecked
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);       // checked
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 0); // unchecked
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);    // checked
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
+    SECTION("Mixed enabled/disabled states") {
+        state.enable("bed_mesh");
+        state.disable("qgl");
+        state.enable("z_tilt");
+        state.disable("nozzle_clean");
+        state.enable("timelapse");
 
         auto options = manager.read_options_from_subjects();
-
         REQUIRE(options.bed_mesh == true);
         REQUIRE(options.qgl == false);
         REQUIRE(options.z_tilt == true);
@@ -332,127 +265,15 @@ TEST_CASE("PrintPreparationManager: read_options_from_subjects with initialized 
         REQUIRE(options.timelapse == true);
     }
 
-    SECTION("Returns options matching subject values - all unchecked") {
-        // All checkboxes unchecked (default state from fixture init)
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
+    SECTION("All disabled - returns all false") {
+        state.disable("bed_mesh");
+        state.disable("qgl");
+        state.disable("z_tilt");
+        state.disable("nozzle_clean");
+        state.disable("purge_line");
+        state.disable("timelapse");
 
         auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == false);
-        REQUIRE(options.qgl == false);
-        REQUIRE(options.z_tilt == false);
-        REQUIRE(options.nozzle_clean == false);
-        REQUIRE(options.timelapse == false);
-    }
-}
-
-TEST_CASE("PrintPreparationManager: read_options_from_subjects respects visibility",
-          "[print_preparation][options][lt2]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
-
-    SECTION("Hidden checkbox returns false even when subject says checked") {
-        // Set checkbox to checked
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-
-        // But hide it (visibility = 0)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);
-
-        // Set both checkbox and visibility subjects
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        auto options = manager.read_options_from_subjects();
-
-        // bed_mesh should be false because it's hidden (visibility subject = 0)
-        REQUIRE(options.bed_mesh == false);
-    }
-
-    SECTION("Multiple hidden checkboxes all return false") {
-        // Set all checkboxes to checked
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);
-
-        // Hide some checkboxes
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);     // hidden
-        lv_subject_set_int(&subjects.can_show_qgl, 1);          // visible
-        lv_subject_set_int(&subjects.can_show_z_tilt, 0);       // hidden
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 1); // visible
-        lv_subject_set_int(&subjects.can_show_timelapse, 0);    // hidden
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        auto options = manager.read_options_from_subjects();
-
-        // Hidden checkboxes should return false
-        REQUIRE(options.bed_mesh == false);    // hidden
-        REQUIRE(options.qgl == true);          // visible + checked
-        REQUIRE(options.z_tilt == false);      // hidden
-        REQUIRE(options.nozzle_clean == true); // visible + checked
-        REQUIRE(options.timelapse == false);   // hidden
-    }
-
-    SECTION("Visible but unchecked returns false") {
-        // Set checkbox to unchecked
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-
-        // Keep it visible
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        auto options = manager.read_options_from_subjects();
-
-        // Visible but unchecked = false
-        REQUIRE(options.bed_mesh == false);
-    }
-}
-
-TEST_CASE("PrintPreparationManager: read_options_from_subjects with null subjects",
-          "[print_preparation][options][lt2]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-
-    SECTION("Returns all false when no subjects set") {
-        // Don't call set_preprint_subjects - subjects should be nullptr
-        auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == false);
-        REQUIRE(options.qgl == false);
-        REQUIRE(options.z_tilt == false);
-        REQUIRE(options.nozzle_clean == false);
-        REQUIRE(options.timelapse == false);
-    }
-
-    SECTION("Returns all false when subjects explicitly set to nullptr") {
-        manager.set_preprint_subjects(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-
-        auto options = manager.read_options_from_subjects();
-
         REQUIRE(options.bed_mesh == false);
         REQUIRE(options.qgl == false);
         REQUIRE(options.z_tilt == false);
@@ -460,93 +281,88 @@ TEST_CASE("PrintPreparationManager: read_options_from_subjects with null subject
         REQUIRE(options.purge_line == false);
         REQUIRE(options.timelapse == false);
     }
+}
 
-    SECTION("Handles partial null subjects gracefully") {
-        PreprintSubjectsFixture subjects;
-        subjects.init_all_subjects();
+TEST_CASE("PrintPreparationManager: read_options_from_subjects treats hidden as false",
+          "[print_preparation][options]") {
+    // Hidden = NOT_APPLICABLE (provider returns -1) — must NOT be treated as enabled.
+    // Without an attached printer DB the cached fallback also yields NOT_APPLICABLE,
+    // so read_options_from_subjects() returns false for a hidden id.
+    lv_init_safe();
+    PrintPreparationManager manager;
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);
+    SECTION("Provider returning -1 yields options.bed_mesh = false") {
+        state.hide("bed_mesh");
+        auto options = manager.read_options_from_subjects();
+        REQUIRE(options.bed_mesh == false);
+    }
 
-        // Set only some subjects, others are nullptr
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, nullptr, nullptr, nullptr,
-                                      nullptr, &subjects.preprint_timelapse);
+    SECTION("Multiple hidden ids: only enabled ones are true") {
+        state.hide("bed_mesh");
+        state.enable("qgl");
+        state.hide("z_tilt");
+        state.enable("nozzle_clean");
+        state.hide("timelapse");
 
         auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == true);
-        REQUIRE(options.qgl == false);          // nullptr subject = false
-        REQUIRE(options.z_tilt == false);       // nullptr subject = false
-        REQUIRE(options.nozzle_clean == false); // nullptr subject = false
-        REQUIRE(options.purge_line == false);   // nullptr subject = false
-        REQUIRE(options.timelapse == true);
+        REQUIRE(options.bed_mesh == false);    // hidden
+        REQUIRE(options.qgl == true);          // enabled
+        REQUIRE(options.z_tilt == false);      // hidden
+        REQUIRE(options.nozzle_clean == true); // enabled
+        REQUIRE(options.timelapse == false);   // hidden
     }
 }
 
-TEST_CASE("PrintPreparationManager: subject state changes are reflected immediately",
-          "[print_preparation][options][lt2]") {
+TEST_CASE("PrintPreparationManager: read_options_from_subjects without provider",
+          "[print_preparation][options]") {
+    // No provider, no PrinterState — every id falls through to NOT_APPLICABLE
+    // and read_options_from_subjects() reports all options as false.
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
 
-    SECTION("Changes to subject values are reflected in subsequent reads") {
-        // Initial state: unchecked
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
+    auto options = manager.read_options_from_subjects();
+    REQUIRE(options.bed_mesh == false);
+    REQUIRE(options.qgl == false);
+    REQUIRE(options.z_tilt == false);
+    REQUIRE(options.nozzle_clean == false);
+    REQUIRE(options.purge_line == false);
+    REQUIRE(options.timelapse == false);
+}
 
-        auto options1 = manager.read_options_from_subjects();
-        REQUIRE(options1.bed_mesh == false);
-        REQUIRE(options1.qgl == false);
+TEST_CASE("PrintPreparationManager: provider state changes are reflected immediately",
+          "[print_preparation][options]") {
+    lv_init_safe();
+    PrintPreparationManager manager;
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-        // Change subject values
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 1);
+    SECTION("Provider value flips between reads") {
+        state.disable("bed_mesh");
+        state.disable("qgl");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == false);
+        REQUIRE(manager.read_options_from_subjects().qgl == false);
 
-        // Read again - should reflect new values
-        auto options2 = manager.read_options_from_subjects();
-        REQUIRE(options2.bed_mesh == true);
-        REQUIRE(options2.qgl == true);
+        state.enable("bed_mesh");
+        state.enable("qgl");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == true);
+        REQUIRE(manager.read_options_from_subjects().qgl == true);
 
-        // Change back
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-
-        // Read again - should reflect latest values
-        auto options3 = manager.read_options_from_subjects();
-        REQUIRE(options3.bed_mesh == false);
-        REQUIRE(options3.qgl == true);
+        state.disable("bed_mesh");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == false);
+        REQUIRE(manager.read_options_from_subjects().qgl == true);
     }
 
-    SECTION("Visibility changes are reflected immediately") {
-        // Set checkbox to checked
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
+    SECTION("Hide/show transitions") {
+        state.enable("bed_mesh");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == true);
 
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
+        state.hide("bed_mesh");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == false);
 
-        // Initially visible
-        auto options1 = manager.read_options_from_subjects();
-        REQUIRE(options1.bed_mesh == true);
-
-        // Hide it
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);
-
-        // Should now be false
-        auto options2 = manager.read_options_from_subjects();
-        REQUIRE(options2.bed_mesh == false);
-
-        // Show it again
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-
-        // Should be true again
-        auto options3 = manager.read_options_from_subjects();
-        REQUIRE(options3.bed_mesh == true);
+        state.enable("bed_mesh");
+        REQUIRE(manager.read_options_from_subjects().bed_mesh == true);
     }
 }
 
@@ -785,14 +601,13 @@ TEST_CASE("PrintPreparationManager: capabilities come from PrinterState",
         REQUIRE(state_caps.empty());
     }
 
-    SECTION("Manager without PrinterState returns empty capabilities") {
-        // Create manager without setting dependencies
+    SECTION("Manager without PrinterState returns empty pre-start gcode") {
+        // Create manager without setting dependencies — collect_pre_start_gcode_lines()
+        // walks the cached option set and should return an empty vector without
+        // crashing when there's no printer state to source the set from.
         PrintPreparationManager standalone_manager;
-
-        // format_preprint_steps uses get_cached_capabilities internally
-        // Without printer_state_, it should return empty steps (not crash)
-        std::string steps = standalone_manager.format_preprint_steps();
-        REQUIRE(steps.empty());
+        REQUIRE(PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(standalone_manager)
+                    .empty());
     }
 }
 
@@ -960,141 +775,28 @@ TEST_CASE("PrintPreparationManager: pre-print options cache behavior",
 }
 
 // ============================================================================
-// Tests: Priority Order Consistency
+// Tests: Database option key consistency
 // ============================================================================
 
 /**
- * Tests for operation priority order consistency.
- *
- * Both format_preprint_steps() and collect_macro_skip_params() should use
- * the same priority order for merging operations:
- *   1. Database (authoritative for known printers)
- *   2. Macro analysis (detected from printer config)
- *   3. File scan (embedded operations in G-code)
- *
- * This ensures the UI shows the same operations that will be controlled.
+ * Verifies the option ids used by the database match those produced by
+ * `category_to_string()` for macro analysis. This invariant matters because
+ * `collect_macro_skip_params()` keys macro params by option id, and macro
+ * analysis derives the same id via category_to_string — drift between the
+ * two would silently dehydrate the toggles.
  */
-TEST_CASE("PrintPreparationManager: priority order consistency",
-          "[print_preparation][priority][order]") {
-    PrintPreparationManager manager;
+TEST_CASE("PrintPreparationManager: option id keys are consistent",
+          "[print_preparation][option_keys]") {
+    REQUIRE(std::string(category_to_string(PrintStartOpCategory::BED_MESH)) == "bed_mesh");
+    REQUIRE(std::string(category_to_string(PrintStartOpCategory::QGL)) == "qgl");
+    REQUIRE(std::string(category_to_string(PrintStartOpCategory::Z_TILT)) == "z_tilt");
+    REQUIRE(std::string(category_to_string(PrintStartOpCategory::NOZZLE_CLEAN)) ==
+            "nozzle_clean");
 
-    SECTION("format_preprint_steps returns empty when no data available") {
-        // Without scan result, macro analysis, or capabilities, should return empty
-        std::string steps = manager.format_preprint_steps();
-        REQUIRE(steps.empty());
-    }
-
-    SECTION("Database options appear in format_preprint_steps output") {
-        // We can't directly set the printer type without Config, but we can verify
-        // the database lookup returns expected operations for known printers
-
-        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
-        REQUIRE_FALSE(caps.empty());
-
-        // AD5M Pro has bed_mesh option
-        const PrePrintOption* bed_cap = caps.find("bed_mesh");
-        REQUIRE(bed_cap != nullptr);
-
-        // The option should have a MacroParam strategy with non-empty param_name
-        const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
-        REQUIRE(macro != nullptr);
-        REQUIRE_FALSE(macro->param_name.empty());
-    }
-
-    SECTION("Priority order: database > macro > file") {
-        // Verify the code comment/contract: Database takes priority over macro,
-        // which takes priority over file scan.
-        //
-        // This is tested indirectly through the format_preprint_steps() output
-        // which uses "(optional)" suffix for skippable operations.
-
-        // Get database options for a known printer
-        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
-
-        if (const PrePrintOption* bed_cap = caps.find("bed_mesh")) {
-            // Has a MacroParam strategy with non-empty skip_value means it's controllable
-            const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
-            REQUIRE(macro != nullptr);
-            REQUIRE_FALSE(macro->skip_value.empty());
-        }
-    }
-
-    SECTION("Category keys are consistent between operations") {
-        // Verify the category keys used in format_preprint_steps match those
-        // used in collect_macro_skip_params. Both should use:
-        // - "bed_mesh" (not "bed_leveling")
-        // - "qgl" (not "quad_gantry_level")
-        // - "z_tilt"
-        // - "nozzle_clean"
-
-        // These keys come from category_to_string() for macro operations
-        // and are hardcoded for database lookups
-        REQUIRE(std::string(category_to_string(PrintStartOpCategory::BED_MESH)) == "bed_mesh");
-        REQUIRE(std::string(category_to_string(PrintStartOpCategory::QGL)) == "qgl");
-        REQUIRE(std::string(category_to_string(PrintStartOpCategory::Z_TILT)) == "z_tilt");
-        REQUIRE(std::string(category_to_string(PrintStartOpCategory::NOZZLE_CLEAN)) ==
-                "nozzle_clean");
-
-        // And the database uses these same ids
-        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
-        if (!caps.empty()) {
-            // bed_mesh id exists (not "bed_leveling")
-            REQUIRE(caps.find("bed_mesh") != nullptr);
-            REQUIRE(caps.find("bed_leveling") == nullptr);
-        }
-    }
-}
-
-// ============================================================================
-// Tests: format_preprint_steps Content Verification
-// ============================================================================
-
-/**
- * Tests for format_preprint_steps() output format and content.
- *
- * The function merges operations from database, macro, and file scan,
- * deduplicates them, and formats as a bulleted list.
- */
-TEST_CASE("PrintPreparationManager: format_preprint_steps formatting",
-          "[print_preparation][format][steps]") {
-    PrintPreparationManager manager;
-
-    SECTION("Returns empty string when no operations detected") {
-        std::string steps = manager.format_preprint_steps();
-        REQUIRE(steps.empty());
-    }
-
-    SECTION("Output uses bullet point format") {
-        // We can verify the format contract: output should use "• " prefix
-        // for each operation when there are operations.
-        // This test documents the expected format without requiring mock data.
-
-        // The format_preprint_steps() returns either:
-        // - Empty string (no operations)
-        // - "• Operation name\n• Another operation (optional)\n..."
-
-        // Since we can't inject mock data, we verify the format through
-        // the database lookup which does populate steps
-        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
-        if (!caps.empty()) {
-            // With options set, format_preprint_steps would show them
-            // The test verifies the option data exists for the merge
-            REQUIRE(caps.find("bed_mesh") != nullptr);
-        }
-    }
-
-    SECTION("Skippable operations show (optional) suffix") {
-        // Operations from database and controllable macro operations
-        // should show "(optional)" in the output
-
-        // Get database option to verify skip_value exists
-        auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
-        if (const PrePrintOption* bed_cap = caps.find("bed_mesh")) {
-            // Has skip_value means it's controllable = shows (optional)
-            const auto* macro = std::get_if<PrePrintStrategyMacroParam>(&bed_cap->strategy);
-            REQUIRE(macro != nullptr);
-            REQUIRE_FALSE(macro->skip_value.empty());
-        }
+    auto caps = PrinterDetector::get_pre_print_option_set("FlashForge Adventurer 5M Pro");
+    if (!caps.empty()) {
+        REQUIRE(caps.find("bed_mesh") != nullptr);
+        REQUIRE(caps.find("bed_leveling") == nullptr);
     }
 }
 
@@ -1600,57 +1302,34 @@ TEST_CASE_METHOD(MacroAnalysisRetryFixture,
 }
 
 // ============================================================================
-// Tests: Subject-Only API (P1 Priority - Deprecated Widget API Removal)
+// Tests: Provider-Driven Option State (replaces removed legacy subject API)
 // ============================================================================
 
 /**
- * These tests document the expected behavior of the subject-based API that must
- * be preserved when the deprecated widget-based API is removed.
+ * The pre-print options framework reads option state through OptionStateProvider.
+ * These tests cover the same behaviors the old P1 subject tests covered, but
+ * driven through `MockOptionState` instead of raw `lv_subject_t` member fields:
  *
- * The subject-based API allows reading pre-print options from lv_subject_t
- * pointers instead of directly querying LVGL widget states, enabling better
- * separation of concerns and easier testing.
- *
- * Key methods being tested:
- * - read_options_from_subjects(): Reads checkbox states from subjects
- * - get_option_state(): Determines tri-state from visibility + checked subjects
- * - collect_ops_to_disable(): Uses subjects exclusively for determining what to disable
+ * - read_options_from_subjects(): walks the cached option set and queries the
+ *   provider per id. Hidden/unknown ids fall through to NOT_APPLICABLE -> false.
+ * - get_option_state(id): returns the tri-state ENABLED/DISABLED/NOT_APPLICABLE.
+ * - collect_macro_skip_params(): only emits skip params for ids the provider
+ *   reports as DISABLED — never for hidden ids.
  */
 
 TEST_CASE("PrintPreparationManager: read_options_from_subjects returns correct PrePrintOptions",
           "[print_preparation][p1][subjects]") {
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-    SECTION("All options checked with all visible - returns all true") {
-        // Set all visibility to visible (1)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.can_show_z_tilt, 1);
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.can_show_purge_line, 1);
-        lv_subject_set_int(&subjects.can_show_timelapse, 1);
-
-        // Set all checkboxes to checked (1)
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.preprint_purge_line, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
+    SECTION("All options enabled - returns all true") {
+        for (const char* id :
+             {"bed_mesh", "qgl", "z_tilt", "nozzle_clean", "purge_line", "timelapse"}) {
+            state.enable(id);
+        }
         auto options = manager.read_options_from_subjects();
-
         REQUIRE(options.bed_mesh == true);
         REQUIRE(options.qgl == true);
         REQUIRE(options.z_tilt == true);
@@ -1659,27 +1338,12 @@ TEST_CASE("PrintPreparationManager: read_options_from_subjects returns correct P
         REQUIRE(options.timelapse == true);
     }
 
-    SECTION("All options unchecked with all visible - returns all false") {
-        // Set all visibility to visible (1)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.can_show_z_tilt, 1);
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.can_show_purge_line, 1);
-        lv_subject_set_int(&subjects.can_show_timelapse, 1);
-
-        // Set all checkboxes to unchecked (0 - default from fixture)
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
+    SECTION("All options disabled - returns all false") {
+        for (const char* id :
+             {"bed_mesh", "qgl", "z_tilt", "nozzle_clean", "purge_line", "timelapse"}) {
+            state.disable(id);
+        }
         auto options = manager.read_options_from_subjects();
-
         REQUIRE(options.bed_mesh == false);
         REQUIRE(options.qgl == false);
         REQUIRE(options.z_tilt == false);
@@ -1688,34 +1352,12 @@ TEST_CASE("PrintPreparationManager: read_options_from_subjects returns correct P
         REQUIRE(options.timelapse == false);
     }
 
-    SECTION("Hidden options return false even when checked") {
-        // Set all visibility to hidden (0)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);
-        lv_subject_set_int(&subjects.can_show_qgl, 0);
-        lv_subject_set_int(&subjects.can_show_z_tilt, 0);
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 0);
-        lv_subject_set_int(&subjects.can_show_purge_line, 0);
-        lv_subject_set_int(&subjects.can_show_timelapse, 0);
-
-        // Set all checkboxes to checked (1)
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.preprint_purge_line, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 1);
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
+    SECTION("Hidden options return false (NOT_APPLICABLE)") {
+        for (const char* id :
+             {"bed_mesh", "qgl", "z_tilt", "nozzle_clean", "purge_line", "timelapse"}) {
+            state.hide(id);
+        }
         auto options = manager.read_options_from_subjects();
-
-        // Hidden options should return false regardless of checked state
         REQUIRE(options.bed_mesh == false);
         REQUIRE(options.qgl == false);
         REQUIRE(options.z_tilt == false);
@@ -1724,164 +1366,81 @@ TEST_CASE("PrintPreparationManager: read_options_from_subjects returns correct P
         REQUIRE(options.timelapse == false);
     }
 
-    SECTION("Mixed visibility and checked states") {
-        // bed_mesh: visible + checked = true
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-
-        // qgl: visible + unchecked = false
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 0);
-
-        // z_tilt: hidden + checked = false
-        lv_subject_set_int(&subjects.can_show_z_tilt, 0);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-
-        // nozzle_clean: hidden + unchecked = false
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 0);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 0);
-
-        // purge_line: visible + checked = true
-        lv_subject_set_int(&subjects.can_show_purge_line, 1);
-        lv_subject_set_int(&subjects.preprint_purge_line, 1);
-
-        // timelapse: visible + unchecked = false
-        lv_subject_set_int(&subjects.can_show_timelapse, 1);
-        lv_subject_set_int(&subjects.preprint_timelapse, 0);
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == true);      // visible + checked
-        REQUIRE(options.qgl == false);          // visible + unchecked
-        REQUIRE(options.z_tilt == false);       // hidden + checked
-        REQUIRE(options.nozzle_clean == false); // hidden + unchecked
-        REQUIRE(options.purge_line == true);    // visible + checked
-        REQUIRE(options.timelapse == false);    // visible + unchecked
-    }
-
-    SECTION("Without visibility subjects set - only checks checked state") {
-        // Only set checkbox subjects, not visibility subjects
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 0);
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        // Don't call set_preprint_visibility_subjects - they remain nullptr
-
-        auto options = manager.read_options_from_subjects();
-
-        // Without visibility subjects, should just check the checked state
-        REQUIRE(options.bed_mesh == true); // checked
-        REQUIRE(options.qgl == false);     // unchecked
-        REQUIRE(options.z_tilt == false);  // unchecked (default)
-    }
-}
-
-TEST_CASE("PrintPreparationManager: get_option_state returns correct tri-state",
-          "[print_preparation][p1][subjects]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-
-    SECTION("Visible + checked = ENABLED") {
-        PreprintSubjectsFixture subjects;
-        subjects.init_all_subjects();
-
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr);
-        manager.set_preprint_visibility_subjects(&subjects.can_show_bed_mesh, nullptr, nullptr,
-                                                 nullptr, nullptr, nullptr);
+    SECTION("Mixed enabled/disabled/hidden states") {
+        state.enable("bed_mesh");
+        state.disable("qgl");
+        state.hide("z_tilt");
+        state.hide("nozzle_clean");
+        state.enable("purge_line");
+        state.disable("timelapse");
 
         auto options = manager.read_options_from_subjects();
         REQUIRE(options.bed_mesh == true);
+        REQUIRE(options.qgl == false);
+        REQUIRE(options.z_tilt == false);       // hidden
+        REQUIRE(options.nozzle_clean == false); // hidden
+        REQUIRE(options.purge_line == true);
+        REQUIRE(options.timelapse == false);
     }
 
-    SECTION("Visible + unchecked = DISABLED (user explicitly skipped)") {
-        PreprintSubjectsFixture subjects;
-        subjects.init_all_subjects();
-
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr);
-        manager.set_preprint_visibility_subjects(&subjects.can_show_bed_mesh, nullptr, nullptr,
-                                                 nullptr, nullptr, nullptr);
-
-        auto options = manager.read_options_from_subjects();
+    SECTION("Without provider - all options report as false") {
+        // No provider set; with no PrinterState DB attached, every id falls
+        // through to NOT_APPLICABLE -> false. (read_options_from_subjects
+        // doesn't itself differentiate "no panel attached" from "explicitly
+        // not applicable" — both result in the conservative false.)
+        PrintPreparationManager bare_manager;
+        auto options = bare_manager.read_options_from_subjects();
         REQUIRE(options.bed_mesh == false);
+        REQUIRE(options.qgl == false);
+        REQUIRE(options.z_tilt == false);
+    }
+}
+
+TEST_CASE("PrintPreparationManager: get_option_state tri-state via provider",
+          "[print_preparation][p1][subjects]") {
+    lv_init_safe();
+    PrintPreparationManager manager;
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
+
+    SECTION("Provider returns 1 -> ENABLED") {
+        state.enable("bed_mesh");
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
     }
 
-    SECTION("Hidden + checked = NOT_APPLICABLE (not enabled, not disabled)") {
-        PreprintSubjectsFixture subjects;
-        subjects.init_all_subjects();
-
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked (irrelevant)
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr);
-        manager.set_preprint_visibility_subjects(&subjects.can_show_bed_mesh, nullptr, nullptr,
-                                                 nullptr, nullptr, nullptr);
-
-        auto options = manager.read_options_from_subjects();
-        // Hidden = NOT_APPLICABLE, not ENABLED
-        REQUIRE(options.bed_mesh == false);
+    SECTION("Provider returns 0 -> DISABLED (user explicitly skipped)") {
+        state.disable("bed_mesh");
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
     }
 
-    SECTION("Hidden + unchecked = NOT_APPLICABLE (not enabled, not disabled)") {
-        PreprintSubjectsFixture subjects;
-        subjects.init_all_subjects();
+    SECTION("Provider returns -1 (hidden) -> NOT_APPLICABLE") {
+        state.hide("bed_mesh");
+        // Without a printer DB attached the hidden state surfaces as NOT_APPLICABLE.
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::NOT_APPLICABLE);
+    }
 
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked (irrelevant)
-
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr);
-        manager.set_preprint_visibility_subjects(&subjects.can_show_bed_mesh, nullptr, nullptr,
-                                                 nullptr, nullptr, nullptr);
-
-        auto options = manager.read_options_from_subjects();
-        // Hidden = NOT_APPLICABLE, not DISABLED
-        REQUIRE(options.bed_mesh == false);
+    SECTION("Unknown id -> NOT_APPLICABLE") {
+        // Provider returns -1 for unset ids; no DB fallback either.
+        REQUIRE(manager.get_option_state("nonexistent_op") ==
+                PrePrintOptionState::NOT_APPLICABLE);
     }
 }
 
 TEST_CASE("PrintPreparationManager: hidden options don't produce macro skip params",
           "[print_preparation][p1][subjects]") {
-    // This is the actual bug test: when visibility=0 (hidden), the old code treated
-    // the option as "disabled" which caused collect_macro_skip_params() to add skip
-    // params, triggering modification, which then warned about missing plugin.
+    // Bug regression: when an option is hidden (provider returns -1, NOT_APPLICABLE),
+    // collect_macro_skip_params() must NOT emit a skip param for it. The old
+    // visibility=0 + unchecked combination was misclassified as "user disabled"
+    // and produced phantom SKIP_* params, triggering unnecessary file modification.
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-    // Set up subjects on manager
-    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
-
-    // Set up macro analysis with controllable bed mesh operation
+    // Macro analysis with controllable BED_MESH (OPT_OUT semantic).
     PrintStartAnalysis analysis;
     analysis.found = true;
     analysis.macro_name = "PRINT_START";
-
     PrintStartOperation op;
     op.name = "BED_MESH_CALIBRATE";
     op.category = PrintStartOpCategory::BED_MESH;
@@ -1889,156 +1448,68 @@ TEST_CASE("PrintPreparationManager: hidden options don't produce macro skip para
     op.skip_param_name = "SKIP_BED_MESH";
     op.param_semantic = ParameterSemantic::OPT_OUT;
     analysis.operations.push_back(op);
-
     manager.set_macro_analysis(analysis);
 
-    SECTION("Hidden visibility + unchecked produces NO skip params") {
-        // This was the bug: hidden (visibility=0) + unchecked was treated as "disabled"
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden (plugin not installed)
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
-
-        auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
-
-        // Should be EMPTY - hidden means not applicable, not "user disabled"
-        REQUIRE(skip_params.empty());
-    }
-
-    SECTION("Hidden visibility + checked also produces NO skip params") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked (irrelevant)
-
+    SECTION("Hidden -> NO skip params (the regression we're guarding)") {
+        state.hide("bed_mesh");
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
         REQUIRE(skip_params.empty());
     }
 
-    SECTION("Visible + unchecked DOES produce skip params") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked = user wants to skip
-
+    SECTION("Disabled (visible + unchecked) DOES produce skip params") {
+        state.disable("bed_mesh");
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
-
         REQUIRE(skip_params.size() == 1);
         REQUIRE(skip_params[0].first == "SKIP_BED_MESH");
         REQUIRE(skip_params[0].second == "1"); // OPT_OUT: 1 = skip
     }
 
-    SECTION("Visible + checked produces NO skip params") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked = user wants operation
-
+    SECTION("Enabled (visible + checked) produces NO skip params") {
+        state.enable("bed_mesh");
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
         REQUIRE(skip_params.empty());
     }
 }
 
-TEST_CASE("PrintPreparationManager: collect_ops_to_disable uses subjects exclusively",
+TEST_CASE("PrintPreparationManager: get_option_state in collection context",
           "[print_preparation][p1][subjects]") {
+    // Sanity-check that the provider correctly drives get_option_state(id) for
+    // the six option ids the legacy subject path used to handle. This is the
+    // contract collect_ops_to_disable() and collect_macro_skip_params() rely on.
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
-    // Set up subjects on manager
-    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
+    SECTION("Disabled provider state surfaces as DISABLED for every id") {
+        state.disable("bed_mesh");
+        state.disable("qgl");
+        state.disable("z_tilt");
+        state.disable("nozzle_clean");
 
-    SECTION("Returns empty when no scan result available") {
-        // Set some options as visible + unchecked (would be disabled)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
-
-        // Without a scan result, collect_ops_to_disable should return empty
-        // (There's no G-code file to check for embedded operations)
-        // We can't directly call collect_ops_to_disable (it's private),
-        // but we can verify behavior through start_print flow
-        // For now, verify read_options_from_subjects works correctly
-        auto options = manager.read_options_from_subjects();
-        REQUIRE(options.bed_mesh == false); // visible + unchecked = not enabled
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+        REQUIRE(manager.get_option_state("qgl") == PrePrintOptionState::DISABLED);
+        REQUIRE(manager.get_option_state("z_tilt") == PrePrintOptionState::DISABLED);
+        REQUIRE(manager.get_option_state("nozzle_clean") == PrePrintOptionState::DISABLED);
     }
 
-    SECTION("Visible + unchecked options are candidates for disabling") {
-        // Set bed_mesh as visible + unchecked (user wants to disable)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
-
-        // Set qgl as visible + checked (user wants to keep)
-        lv_subject_set_int(&subjects.can_show_qgl, 1); // visible
-        lv_subject_set_int(&subjects.preprint_qgl, 1); // checked
-
-        auto options = manager.read_options_from_subjects();
-
-        // bed_mesh: visible + unchecked = false (would be disabled if in file)
-        REQUIRE(options.bed_mesh == false);
-        // qgl: visible + checked = true (would NOT be disabled)
-        REQUIRE(options.qgl == true);
+    SECTION("Hidden ids surface as NOT_APPLICABLE — not as DISABLED") {
+        state.hide("bed_mesh");
+        state.hide("qgl");
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::NOT_APPLICABLE);
+        REQUIRE(manager.get_option_state("qgl") == PrePrintOptionState::NOT_APPLICABLE);
     }
 
-    SECTION("Hidden options are NOT candidates for disabling") {
-        // Set bed_mesh as hidden + unchecked
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
+    SECTION("Mixed state: enabled / disabled / hidden distinguishable per id") {
+        state.disable("bed_mesh");
+        state.hide("qgl");
+        state.enable("z_tilt");
+        state.hide("nozzle_clean");
 
-        // Set qgl as hidden + checked
-        lv_subject_set_int(&subjects.can_show_qgl, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_qgl, 1); // checked
-
-        auto options = manager.read_options_from_subjects();
-
-        // Hidden options should return false (not enabled)
-        // but they should NOT be added to ops_to_disable
-        // (hidden means not applicable to this printer, not user-disabled)
-        REQUIRE(options.bed_mesh == false);
-        REQUIRE(options.qgl == false);
-    }
-
-    SECTION("All operations disabled when visible + all unchecked") {
-        // Set all as visible + unchecked
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.can_show_z_tilt, 1);
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 1);
-
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-        lv_subject_set_int(&subjects.preprint_qgl, 0);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 0);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 0);
-
-        auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == false);
-        REQUIRE(options.qgl == false);
-        REQUIRE(options.z_tilt == false);
-        REQUIRE(options.nozzle_clean == false);
-    }
-
-    SECTION("Mixed state: some visible+unchecked, some hidden, some visible+checked") {
-        // bed_mesh: visible + unchecked = false (would be disabled)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-
-        // qgl: hidden + unchecked = false (NOT disabled - just not applicable)
-        lv_subject_set_int(&subjects.can_show_qgl, 0);
-        lv_subject_set_int(&subjects.preprint_qgl, 0);
-
-        // z_tilt: visible + checked = true (enabled)
-        lv_subject_set_int(&subjects.can_show_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 1);
-
-        // nozzle_clean: hidden + checked = false (NOT disabled - just not applicable)
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 0);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 1);
-
-        auto options = manager.read_options_from_subjects();
-
-        REQUIRE(options.bed_mesh == false);     // visible + unchecked
-        REQUIRE(options.qgl == false);          // hidden
-        REQUIRE(options.z_tilt == true);        // visible + checked
-        REQUIRE(options.nozzle_clean == false); // hidden
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+        REQUIRE(manager.get_option_state("qgl") == PrePrintOptionState::NOT_APPLICABLE);
+        REQUIRE(manager.get_option_state("z_tilt") == PrePrintOptionState::ENABLED);
+        REQUIRE(manager.get_option_state("nozzle_clean") == PrePrintOptionState::NOT_APPLICABLE);
     }
 }
 
@@ -2238,114 +1709,82 @@ TEST_CASE("PrintPreparationManager: collect_macro_skip_params with matrix",
           "[print_preparation][p3]") {
     lv_init_safe();
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
-
-    // Set up manager with subjects
-    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
+    MockOptionState state;
+    manager.set_option_state_provider(state.provider());
 
     SECTION("Returns skip params from best source") {
-        // Set up PrinterState with AD5M Pro (database source)
+        // AD5M Pro DB has bed_mesh with SKIP_LEVELING (MacroParam, OPT_OUT).
         PrinterState& printer_state = get_printer_state();
         PrinterStateTestAccess::reset(printer_state);
         printer_state.init_subjects(false);
         printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
         manager.set_dependencies(nullptr, &printer_state);
 
-        // Make bed_mesh visible but UNCHECKED (user wants to disable)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked = skip
+        // User unchecks bed_mesh.
+        state.disable("bed_mesh");
 
-        // NOTE: collect_macro_skip_params() is private. This test uses the new
-        // Test accessor: PrintPreparationManagerTestAccess::get_skip_params()
-        // Implementation should add this method or make collect_macro_skip_params public.
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
-
-        // Should have one param for bed_mesh using database source
         REQUIRE(skip_params.size() >= 1);
 
-        // Find the bed_mesh param
         bool found_skip_leveling = false;
         for (const auto& [param, value] : skip_params) {
             if (param == "SKIP_LEVELING") {
                 found_skip_leveling = true;
-                // AD5M uses SKIP_LEVELING with OPT_OUT semantic
-                // When user unchecks, we set to skip_value ("1")
-                REQUIRE(value == "1");
+                REQUIRE(value == "1"); // OPT_OUT skip_value
             }
         }
         REQUIRE(found_skip_leveling);
     }
 
     SECTION("Handles OPT_IN semantic correctly") {
-        // Set up macro analysis with OPT_IN semantic (FORCE_LEVELING style)
+        // No DB; pure macro analysis with OPT_IN (FORCE_BED_MESH style).
         PrintStartAnalysis analysis;
         analysis.found = true;
         analysis.macro_name = "PRINT_START";
-
         PrintStartOperation op;
         op.name = "BED_MESH_CALIBRATE";
         op.category = PrintStartOpCategory::BED_MESH;
         op.has_skip_param = true;
-        op.skip_param_name = "FORCE_BED_MESH"; // OPT_IN: force=1 means do, force=0 means skip
+        op.skip_param_name = "FORCE_BED_MESH";
         op.param_semantic = ParameterSemantic::OPT_IN;
         analysis.operations.push_back(op);
-
         manager.set_macro_analysis(analysis);
 
-        // Make bed_mesh visible but UNCHECKED (user wants to skip)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
+        state.disable("bed_mesh");
 
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
-
-        // Find the param
         bool found_force_bed_mesh = false;
         for (const auto& [param, value] : skip_params) {
             if (param == "FORCE_BED_MESH") {
                 found_force_bed_mesh = true;
-                // OPT_IN: skip_value is "0" (param=0 means don't do it)
-                REQUIRE(value == "0");
+                REQUIRE(value == "0"); // OPT_IN: 0 = don't do it
             }
         }
         REQUIRE(found_force_bed_mesh);
     }
 
     SECTION("Handles OPT_OUT semantic correctly") {
-        // Set up macro analysis with OPT_OUT semantic (SKIP_BED_MESH style)
+        // No DB; pure macro analysis with OPT_OUT (SKIP_BED_MESH style).
         PrintStartAnalysis analysis;
         analysis.found = true;
         analysis.macro_name = "PRINT_START";
-
         PrintStartOperation op;
         op.name = "BED_MESH_CALIBRATE";
         op.category = PrintStartOpCategory::BED_MESH;
         op.has_skip_param = true;
-        op.skip_param_name = "SKIP_BED_MESH"; // OPT_OUT: skip=1 means skip, skip=0 means do
+        op.skip_param_name = "SKIP_BED_MESH";
         op.param_semantic = ParameterSemantic::OPT_OUT;
         analysis.operations.push_back(op);
-
         manager.set_macro_analysis(analysis);
 
-        // Make bed_mesh visible but UNCHECKED (user wants to skip)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked
+        state.disable("bed_mesh");
 
         auto skip_params = PrintPreparationManagerTestAccess::get_skip_params(manager);
-
-        // Find the param
         bool found_skip_bed_mesh = false;
         for (const auto& [param, value] : skip_params) {
             if (param == "SKIP_BED_MESH") {
                 found_skip_bed_mesh = true;
-                // OPT_OUT: skip_value is "1" (param=1 means skip it)
-                REQUIRE(value == "1");
+                REQUIRE(value == "1"); // OPT_OUT: 1 = skip
             }
         }
         REQUIRE(found_skip_bed_mesh);
@@ -2399,41 +1838,34 @@ TEST_CASE("PrintPreparationManager: get_option_state(id) provider takes priority
     }
 }
 
-TEST_CASE("PrintPreparationManager: get_option_state(id) falls back to legacy subjects",
+TEST_CASE("PrintPreparationManager: get_option_state(id) falls back to DB default_enabled",
           "[print_preparation][option_state][p3]") {
+    // When no provider returns 0/1 for an id, get_option_state(id) falls
+    // through to the cached PrePrintOptionSet's default_enabled flag — used
+    // by headless callers (macro analysis) that don't have a panel attached.
     lv_init_safe();
+
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
     PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
+    manager.set_dependencies(nullptr, &printer_state);
 
-    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
-
-    SECTION("Hidden = NOT_APPLICABLE regardless of state") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
-        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::NOT_APPLICABLE);
-    }
-
-    SECTION("Visible + checked = ENABLED") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1);
+    SECTION("No provider, known id with default_enabled=true -> ENABLED") {
+        // AD5M Pro's bed_mesh has default_enabled=true.
         REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
     }
 
-    SECTION("Visible + unchecked = DISABLED") {
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::DISABLED);
+    SECTION("Provider returning -1 also falls through to DB default") {
+        manager.set_option_state_provider([](const std::string&) { return -1; });
+        REQUIRE(manager.get_option_state("bed_mesh") == PrePrintOptionState::ENABLED);
     }
 
     SECTION("Unknown id returns NOT_APPLICABLE without crashing") {
-        REQUIRE(manager.get_option_state("ai_detect") == PrePrintOptionState::NOT_APPLICABLE);
+        REQUIRE(manager.get_option_state("ai_detect_nonexistent") ==
+                PrePrintOptionState::NOT_APPLICABLE);
     }
 }
 
@@ -2471,359 +1903,6 @@ TEST_CASE("PrintPreparationManager: collect_macro_skip_params drives off provide
     }
 }
 
-// ============================================================================
-// Tests: Unified Operation Capability Lookup (Phase 4)
-// ============================================================================
-
-/**
- * Phase 4: lookup_operation_capability() - Unified Entry Point for Capability Queries
- *
- * This method provides a single interface for determining what action to take for
- * a pre-print operation based on:
- * 1. Visibility state (from PrinterState subjects)
- * 2. Checkbox state (from UI subjects)
- * 3. Available capability sources (database, macro analysis, file scan)
- *
- * Return semantics:
- * - nullopt: Operation should be ignored (hidden, enabled, or no capability source)
- * - OperationCapabilityResult: Operation is disabled, contains skip parameters
- *
- * These tests are designed to FAIL initially because:
- * - lookup_operation_capability() doesn't exist yet
- * - OperationCapabilityResult struct doesn't exist yet
- *
- * After implementation, they should PASS.
- */
-
-TEST_CASE("PrintPreparationManager: lookup_operation_capability", "[print_preparation][p4]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
-
-    // Set up manager with all subjects
-    manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                  &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                  &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
-
-    SECTION("Returns skip param when operation disabled (visible + unchecked)") {
-        // Set up PrinterState with AD5M Pro (has database capability for BED_MESH)
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Set visibility = shown (1), checked = unchecked (0) for BED_MESH
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0); // unchecked = user wants to skip
-
-        // Call the new unified method
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Should return a result with skip parameters
-        REQUIRE(result.has_value());
-        REQUIRE(result->should_skip == true);
-        REQUIRE(result->param_name == "SKIP_LEVELING");
-        // AD5M uses OPT_OUT semantic: skip_value is "1" (SKIP_LEVELING=1 means skip)
-        REQUIRE(result->skip_value == "1");
-        REQUIRE(result->source == CapabilityOrigin::DATABASE);
-    }
-
-    SECTION("Returns nullopt when operation hidden (visibility = 0)") {
-        // Set up PrinterState with known printer
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Hide the BED_MESH option (visibility = 0)
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 0); // hidden
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked (doesn't matter when hidden)
-
-        // When operation is hidden, it's not applicable to this printer
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Should return nullopt - operation is hidden, nothing to do
-        REQUIRE_FALSE(result.has_value());
-    }
-
-    SECTION("Returns nullopt when operation enabled (visible + checked)") {
-        // Set up PrinterState with known printer
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Set visibility = shown (1), checked = checked (1) for BED_MESH
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1); // visible
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 1); // checked = user wants operation
-
-        // When user wants the operation enabled, no skip param needed
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Should return nullopt - user wants operation, no skip needed
-        REQUIRE_FALSE(result.has_value());
-    }
-
-    SECTION("Returns nullopt when no capability source available") {
-        // No PrinterState set, no macro analysis, no file scan
-        // Manager has no way to know how to control this operation
-
-        // Make the operation visible and unchecked
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 0); // unchecked
-
-        // Without any capability source, can't return skip params
-        auto result = manager.lookup_operation_capability(OperationCategory::QGL);
-
-        // Should return nullopt - no capability source available
-        REQUIRE_FALSE(result.has_value());
-    }
-
-    SECTION("Uses macro analysis as capability source") {
-        // Set up macro analysis with QGL capability (no database for this example)
-        PrintStartAnalysis analysis;
-        analysis.found = true;
-        analysis.macro_name = "PRINT_START";
-
-        PrintStartOperation op;
-        op.name = "QUAD_GANTRY_LEVEL";
-        op.category = PrintStartOpCategory::QGL;
-        op.has_skip_param = true;
-        op.skip_param_name = "SKIP_QGL";
-        op.param_semantic = ParameterSemantic::OPT_OUT;
-        analysis.operations.push_back(op);
-        analysis.controllable_count = 1;
-        analysis.is_controllable = true;
-
-        manager.set_macro_analysis(analysis);
-
-        // Make QGL visible but unchecked
-        lv_subject_set_int(&subjects.can_show_qgl, 1);
-        lv_subject_set_int(&subjects.preprint_qgl, 0); // unchecked
-
-        auto result = manager.lookup_operation_capability(OperationCategory::QGL);
-
-        REQUIRE(result.has_value());
-        REQUIRE(result->should_skip == true);
-        REQUIRE(result->param_name == "SKIP_QGL");
-        // OPT_OUT semantic: skip_value is "1"
-        REQUIRE(result->skip_value == "1");
-        REQUIRE(result->source == CapabilityOrigin::MACRO_ANALYSIS);
-    }
-
-    SECTION("Uses best source based on priority (database over macro)") {
-        // Set up PrinterState with AD5M Pro (database source)
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Also add macro analysis for the same operation with different param
-        PrintStartAnalysis analysis;
-        analysis.found = true;
-        analysis.macro_name = "PRINT_START";
-
-        PrintStartOperation op;
-        op.name = "BED_MESH_CALIBRATE";
-        op.category = PrintStartOpCategory::BED_MESH;
-        op.has_skip_param = true;
-        op.skip_param_name = "SKIP_BED_MESH"; // Different from database's FORCE_LEVELING
-        op.param_semantic = ParameterSemantic::OPT_OUT;
-        analysis.operations.push_back(op);
-
-        manager.set_macro_analysis(analysis);
-
-        // Make BED_MESH visible but unchecked
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-        lv_subject_set_int(&subjects.preprint_bed_mesh, 0);
-
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Database should win over macro analysis
-        REQUIRE(result.has_value());
-        REQUIRE(result->source == CapabilityOrigin::DATABASE);
-        REQUIRE(result->param_name == "SKIP_LEVELING"); // Database param, not SKIP_BED_MESH
-    }
-
-    SECTION("Uses file scan as capability source when no other sources") {
-        // Set up file scan with NOZZLE_CLEAN operation
-        gcode::ScanResult scan;
-        scan.lines_scanned = 100;
-        scan.bytes_scanned = 5000;
-
-        gcode::DetectedOperation op;
-        op.type = gcode::OperationType::NOZZLE_CLEAN;
-        op.embedding = gcode::OperationEmbedding::MACRO_PARAMETER;
-        op.param_name = "SKIP_NOZZLE_CLEAN";
-        op.macro_name = "PRINT_START";
-        op.line_number = 42;
-        scan.operations.push_back(op);
-
-        manager.set_cached_scan_result(scan, "test.gcode");
-
-        // Make NOZZLE_CLEAN visible but unchecked
-        lv_subject_set_int(&subjects.can_show_nozzle_clean, 1);
-        lv_subject_set_int(&subjects.preprint_nozzle_clean, 0);
-
-        auto result = manager.lookup_operation_capability(OperationCategory::NOZZLE_CLEAN);
-
-        REQUIRE(result.has_value());
-        REQUIRE(result->source == CapabilityOrigin::FILE_SCAN);
-        REQUIRE(result->param_name == "SKIP_NOZZLE_CLEAN");
-    }
-}
-
-TEST_CASE("PrintPreparationManager: lookup_operation_capability edge cases",
-          "[print_preparation][p4]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
-
-    SECTION("Returns nullopt when subjects not set") {
-        // Don't call set_preprint_subjects or set_preprint_visibility_subjects
-        // Manager has no subjects to check
-
-        // Set up a capability source
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Without subjects, can't determine visibility or checked state
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Should return nullopt - can't determine user intent without subjects
-        REQUIRE_FALSE(result.has_value());
-    }
-
-    SECTION("Returns nullopt for UNKNOWN operation category") {
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        // UNKNOWN is not a valid operation to look up
-        auto result = manager.lookup_operation_capability(OperationCategory::UNKNOWN);
-
-        REQUIRE_FALSE(result.has_value());
-    }
-
-    SECTION("Handles Z_TILT operation correctly") {
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        // Set up macro analysis with Z_TILT capability
-        PrintStartAnalysis analysis;
-        analysis.found = true;
-        analysis.macro_name = "PRINT_START";
-
-        PrintStartOperation op;
-        op.name = "Z_TILT_ADJUST";
-        op.category = PrintStartOpCategory::Z_TILT;
-        op.has_skip_param = true;
-        op.skip_param_name = "SKIP_Z_TILT";
-        op.param_semantic = ParameterSemantic::OPT_OUT;
-        analysis.operations.push_back(op);
-
-        manager.set_macro_analysis(analysis);
-
-        // Make Z_TILT visible but unchecked
-        lv_subject_set_int(&subjects.can_show_z_tilt, 1);
-        lv_subject_set_int(&subjects.preprint_z_tilt, 0);
-
-        auto result = manager.lookup_operation_capability(OperationCategory::Z_TILT);
-
-        REQUIRE(result.has_value());
-        REQUIRE(result->param_name == "SKIP_Z_TILT");
-        REQUIRE(result->skip_value == "1");
-    }
-
-    SECTION("Handles PURGE_LINE operation correctly") {
-        manager.set_preprint_subjects(&subjects.preprint_bed_mesh, &subjects.preprint_qgl,
-                                      &subjects.preprint_z_tilt, &subjects.preprint_nozzle_clean,
-                                      &subjects.preprint_purge_line, &subjects.preprint_timelapse);
-        manager.set_preprint_visibility_subjects(
-            &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-            &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-            &subjects.can_show_timelapse);
-
-        // Set up macro analysis with PURGE_LINE capability
-        PrintStartAnalysis analysis;
-        analysis.found = true;
-        analysis.macro_name = "PRINT_START";
-
-        PrintStartOperation op;
-        op.name = "PRIME_LINE";
-        op.category = PrintStartOpCategory::PURGE_LINE;
-        op.has_skip_param = true;
-        op.skip_param_name = "PERFORM_PURGE"; // OPT_IN style
-        op.param_semantic = ParameterSemantic::OPT_IN;
-        analysis.operations.push_back(op);
-
-        manager.set_macro_analysis(analysis);
-
-        // Make PURGE_LINE visible but unchecked
-        lv_subject_set_int(&subjects.can_show_purge_line, 1);
-        lv_subject_set_int(&subjects.preprint_purge_line, 0);
-
-        auto result = manager.lookup_operation_capability(OperationCategory::PURGE_LINE);
-
-        REQUIRE(result.has_value());
-        REQUIRE(result->param_name == "PERFORM_PURGE");
-        // OPT_IN: skip_value is "0" (PERFORM_PURGE=0 means don't do it)
-        REQUIRE(result->skip_value == "0");
-    }
-}
-
-TEST_CASE("PrintPreparationManager: lookup_operation_capability with visibility-only subjects",
-          "[print_preparation][p4]") {
-    lv_init_safe();
-    PrintPreparationManager manager;
-    PreprintSubjectsFixture subjects;
-    subjects.init_all_subjects();
-
-    // Only set visibility subjects, not checkbox subjects
-    manager.set_preprint_visibility_subjects(
-        &subjects.can_show_bed_mesh, &subjects.can_show_qgl, &subjects.can_show_z_tilt,
-        &subjects.can_show_nozzle_clean, &subjects.can_show_purge_line,
-        &subjects.can_show_timelapse);
-
-    SECTION("Returns nullopt when checkbox subjects not set") {
-        // Set up capability source
-        PrinterState& printer_state = get_printer_state();
-        PrinterStateTestAccess::reset(printer_state);
-        printer_state.init_subjects(false);
-        printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
-        manager.set_dependencies(nullptr, &printer_state);
-
-        // Visibility is set, but checkbox subjects are not
-        lv_subject_set_int(&subjects.can_show_bed_mesh, 1);
-
-        auto result = manager.lookup_operation_capability(OperationCategory::BED_MESH);
-
-        // Without checkbox subject, can't determine if user wants to skip
-        REQUIRE_FALSE(result.has_value());
-    }
-}
 
 // ============================================================================
 // Tests: Extension Safety and Documentation (Phase 5)
@@ -3425,6 +2504,68 @@ TEST_CASE("PrepManager: Extension safety - database key consistency", "[print_pr
  * line for each PreStartGcode option in the active set, regardless of
  * enabled/disabled state. Hidden / NOT_APPLICABLE options are skipped.
  */
+TEST_CASE("PrintPreparationManager: timelapse option synthesized when plugin available",
+          "[print_preparation][timelapse][p4]") {
+    // When the moonraker-timelapse plugin is reported available via
+    // PrinterState::set_timelapse_available(true), the cached
+    // PrePrintOptionSet should grow a synthesized "timelapse" option (id,
+    // RuntimeCommand strategy, default_enabled=false). This is the path
+    // that drives both the renderer (toggle row visibility) and start_print
+    // (sentinel-string dispatch).
+    lv_init_safe();
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("Creality K2 Plus");
+
+    SECTION("Without timelapse: option set has NO timelapse entry") {
+        const auto& set = printer_state.get_pre_print_option_set();
+        const PrePrintOption* tl = set.find("timelapse");
+        REQUIRE(tl == nullptr);
+    }
+
+    SECTION("With timelapse available: timelapse option is appended") {
+        printer_state.set_timelapse_available(true);
+        helix::ui::UpdateQueue::instance().drain();
+
+        const auto& set = printer_state.get_pre_print_option_set();
+        const PrePrintOption* tl = set.find("timelapse");
+        REQUIRE(tl != nullptr);
+        CHECK(tl->category == PrePrintCategory::Monitoring);
+        CHECK(tl->default_enabled == false);
+        CHECK(tl->strategy_kind == PrePrintStrategyKind::RuntimeCommand);
+
+        const auto* cmd = std::get_if<PrePrintStrategyRuntimeCommand>(&tl->strategy);
+        REQUIRE(cmd != nullptr);
+        CHECK(cmd->command_enabled == "timelapse:on");
+        CHECK(cmd->command_disabled == "timelapse:off");
+    }
+
+    SECTION("Toggle off: timelapse option is removed when capability lost") {
+        printer_state.set_timelapse_available(true);
+        helix::ui::UpdateQueue::instance().drain();
+        REQUIRE(printer_state.get_pre_print_option_set().find("timelapse") != nullptr);
+
+        printer_state.set_timelapse_available(false);
+        helix::ui::UpdateQueue::instance().drain();
+        REQUIRE(printer_state.get_pre_print_option_set().find("timelapse") == nullptr);
+    }
+
+    SECTION("Provider drives ENABLED state for timelapse") {
+        printer_state.set_timelapse_available(true);
+        helix::ui::UpdateQueue::instance().drain();
+
+        PrintPreparationManager manager;
+        manager.set_dependencies(nullptr, &printer_state);
+        manager.set_option_state_provider([](const std::string& id) {
+            if (id == "timelapse")
+                return 1; // user toggled ON
+            return -1;
+        });
+        REQUIRE(manager.get_option_state("timelapse") == PrePrintOptionState::ENABLED);
+    }
+}
+
 TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines emits ai_detect for K2 Plus",
           "[print_preparation][ai_detect][p4]") {
     lv_init_safe();
@@ -3491,6 +2632,125 @@ TEST_CASE(
     lv_init_safe();
     PrintPreparationManager manager;
     // No printer_state -> get_cached_options() returns the empty static set.
+    auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+    REQUIRE(lines.empty());
+}
+
+// ============================================================================
+// Post-Phase-3.5 framework tests (T1-T5 from review)
+// ============================================================================
+
+TEST_CASE("PrintPreparationManager: collect_ops_to_disable returns ops user disabled",
+          "[print_preparation][gcode][framework]") {
+    // T1: Verifies the post-Phase-3.5 path where collect_ops_to_disable()
+    // resolves user intent through get_option_state() (provider-driven) for
+    // the embedded-op skip set.
+    lv_init_safe();
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    // Mock a file scan that contains BED_MESH embedded.
+    gcode::ScanResult scan;
+    gcode::DetectedOperation op;
+    op.type = gcode::OperationType::BED_MESH;
+    op.embedding = gcode::OperationEmbedding::DIRECT_COMMAND;
+    op.line_number = 5;
+    scan.operations.push_back(op);
+    manager.set_cached_scan_result(scan, "test.gcode");
+
+    SECTION("Default state (ENABLED) -> empty disable list") {
+        // bed_mesh in AD5M Pro DB has default_enabled=true, so without a
+        // provider override, get_option_state returns ENABLED — collect_ops_
+        // to_disable should NOT include BED_MESH.
+        auto ops = PrintPreparationManagerTestAccess::get_ops_to_disable(manager);
+        REQUIRE(ops.empty());
+    }
+
+    SECTION("Provider DISABLED -> BED_MESH included") {
+        manager.set_option_state_provider([](const std::string& id) {
+            if (id == "bed_mesh")
+                return 0; // user explicitly disabled
+            return -1;
+        });
+        auto ops = PrintPreparationManagerTestAccess::get_ops_to_disable(manager);
+        REQUIRE(ops.size() == 1);
+        REQUIRE(ops[0] == gcode::OperationType::BED_MESH);
+    }
+
+    SECTION("Provider DISABLED but file lacks op -> empty") {
+        gcode::ScanResult empty_scan;
+        manager.set_cached_scan_result(empty_scan, "test.gcode");
+        manager.set_option_state_provider([](const std::string& id) {
+            if (id == "bed_mesh")
+                return 0;
+            return -1;
+        });
+        auto ops = PrintPreparationManagerTestAccess::get_ops_to_disable(manager);
+        REQUIRE(ops.empty());
+    }
+}
+
+TEST_CASE("PrintPreparationManager: K2 Plus DB-driven bed_mesh emits PREPARE=1 when disabled",
+          "[print_preparation][framework][k2_plus]") {
+    // T2: Full pipeline test — provider DISABLES K2 Plus's bed_mesh
+    // (MacroParam strategy with PREPARE=0/1). collect_macro_skip_params()
+    // should emit ("PREPARE", "1") via the LAYER 1 (DB) path, with no
+    // duplicate from macro analysis.
+    lv_init_safe();
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("Creality K2 Plus");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+    manager.set_option_state_provider([](const std::string& id) {
+        if (id == "bed_mesh")
+            return 0; // disabled -> emit skip param
+        return -1;
+    });
+
+    auto params = PrintPreparationManagerTestAccess::get_skip_params(manager);
+    bool found_prepare = false;
+    for (const auto& [k, v] : params) {
+        if (k == "PREPARE") {
+            REQUIRE(v == "1"); // skip_value for K2 Plus bed_mesh
+            found_prepare = true;
+        }
+    }
+    REQUIRE(found_prepare);
+}
+
+TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines skips NOT_APPLICABLE",
+          "[print_preparation][framework][ai_detect]") {
+    // T5: K2 Plus has ai_detect (PreStartGcode strategy). When the provider
+    // returns -1 (not bound) AND the option's default_enabled is false, the
+    // option resolves to DISABLED — emitting SWITCH=0. To get NOT_APPLICABLE,
+    // we'd need an option that isn't in the DB at all, which means it can't
+    // appear in the iteration. So this test verifies that for an id that's
+    // simply not declared, no line is emitted (regardless of provider state).
+    lv_init_safe();
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("FlashForge Adventurer 5M Pro");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    // AD5M Pro doesn't declare ai_detect, so even if a provider claimed it
+    // was enabled, no PreStartGcode line should emerge — the iteration walks
+    // the cached set, not the provider's id space.
+    manager.set_option_state_provider([](const std::string& id) {
+        if (id == "ai_detect")
+            return 1;
+        return -1;
+    });
     auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
     REQUIRE(lines.empty());
 }

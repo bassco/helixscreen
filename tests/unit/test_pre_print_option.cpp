@@ -139,6 +139,33 @@ TEST_CASE("parse_pre_print_option rejects missing required fields",
         CHECK_FALSE(parse_pre_print_option(j).has_value());
     }
 
+    SECTION("MacroParam missing enable_value") {
+        // Empty enable_value would render as "PARAM=" (no value) — silent
+        // garbage that the macro will misparse. Reject at parse time.
+        json j = {{"id", "x"},
+                  {"strategy", "macro_param"},
+                  {"param_name", "PARAM"},
+                  {"skip_value", "0"}};
+        CHECK_FALSE(parse_pre_print_option(j).has_value());
+    }
+
+    SECTION("MacroParam missing skip_value") {
+        json j = {{"id", "x"},
+                  {"strategy", "macro_param"},
+                  {"param_name", "PARAM"},
+                  {"enable_value", "1"}};
+        CHECK_FALSE(parse_pre_print_option(j).has_value());
+    }
+
+    SECTION("MacroParam empty enable_value rejected") {
+        json j = {{"id", "x"},
+                  {"strategy", "macro_param"},
+                  {"param_name", "PARAM"},
+                  {"enable_value", ""},
+                  {"skip_value", "0"}};
+        CHECK_FALSE(parse_pre_print_option(j).has_value());
+    }
+
     SECTION("PreStartGcode missing gcode_template") {
         json j = {{"id", "x"}, {"strategy", "pre_start_gcode"}};
         CHECK_FALSE(parse_pre_print_option(j).has_value());
@@ -155,7 +182,7 @@ TEST_CASE("parse_pre_print_option_set yields empty set for empty options array",
 
     auto set = parse_pre_print_option_set(j);
     CHECK(set.options.empty());
-    // Note: empty() checks macro_name, pre_start_gcode, AND options — this
+    // Note: empty() checks macro_name, setup_gcode, AND options — this
     // set has a macro_name so it's not empty.
     CHECK_FALSE(set.empty());
 

@@ -1953,6 +1953,23 @@ class PrinterState {
     void set_printer_type_internal(const std::string& type);
 
     /**
+     * @brief Synthesize runtime-dependent options (timelapse, etc.) into the
+     *        cached `PrePrintOptionSet`.
+     *
+     * Some options aren't declared in the printer database — they're driven
+     * by runtime capability discovery (e.g. the `timelapse` toggle only
+     * appears when the moonraker-timelapse plugin is installed). This helper
+     * appends those options to whatever the database loaded, so the rest of
+     * the system can treat them uniformly.
+     *
+     * Idempotent — call after the database load and again whenever one of
+     * the runtime capabilities changes (e.g. `set_timelapse_available()`).
+     * Re-running clears any previously synthesized options before re-adding
+     * the ones that should currently be present.
+     */
+    void apply_dynamic_options();
+
+    /**
      * @brief Update combined nav_buttons_enabled subject
      *
      * Recalculates nav_buttons_enabled based on connection and klippy state.

@@ -279,26 +279,8 @@ class PrintSelectDetailView : public OverlayBase {
         return timelapse_checkbox_;
     }
 
-    // === Subject Access (for prep manager to read toggle state - LT2) ===
+    // === Subject Access ===
 
-    [[nodiscard]] lv_subject_t* get_preprint_bed_mesh_subject() {
-        return &preprint_bed_mesh_;
-    }
-    [[nodiscard]] lv_subject_t* get_preprint_qgl_subject() {
-        return &preprint_qgl_;
-    }
-    [[nodiscard]] lv_subject_t* get_preprint_z_tilt_subject() {
-        return &preprint_z_tilt_;
-    }
-    [[nodiscard]] lv_subject_t* get_preprint_nozzle_clean_subject() {
-        return &preprint_nozzle_clean_;
-    }
-    [[nodiscard]] lv_subject_t* get_preprint_timelapse_subject() {
-        return &preprint_timelapse_;
-    }
-    [[nodiscard]] lv_subject_t* get_preprint_purge_line_subject() {
-        return &preprint_purge_line_;
-    }
     [[nodiscard]] lv_subject_t* get_prep_time_estimate_subject() {
         return &prep_time_estimate_subject_;
     }
@@ -368,14 +350,9 @@ class PrintSelectDetailView : public OverlayBase {
     std::string temp_gcode_path_; // Cached downloaded gcode file path
     bool gcode_loaded_ = false;   // Whether gcode file has been loaded into viewer
 
-    // Pre-print option subjects (1 = checked/enabled, 0 = unchecked/disabled)
-    // Enable switches default ON, add-on switches default OFF
-    lv_subject_t preprint_bed_mesh_{};
-    lv_subject_t preprint_qgl_{};
-    lv_subject_t preprint_z_tilt_{};
-    lv_subject_t preprint_nozzle_clean_{};
-    lv_subject_t preprint_purge_line_{};
-    lv_subject_t preprint_timelapse_{};
+    // Pre-print option toggle state lives in `option_rows_renderer_` (one
+    // heap-allocated subject per option) — the legacy fixed six subjects
+    // (preprint_bed_mesh_, preprint_qgl_, etc.) were retired in Phase 3.5.
     lv_subject_t filament_mismatch_{};          // 1 = material mismatch warning visible
     lv_subject_t prep_time_estimate_subject_{}; // formatted prep time string for bind_text
     char prep_time_estimate_buf_[64]{};         // buffer backing the string subject

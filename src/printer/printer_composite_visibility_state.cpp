@@ -53,7 +53,8 @@ void PrinterCompositeVisibilityState::deinit_subjects() {
 }
 
 void PrinterCompositeVisibilityState::update_visibility(
-    bool plugin_installed, const PrinterCapabilitiesState& capabilities) {
+    bool plugin_installed, const PrinterCapabilitiesState& capabilities,
+    size_t framework_option_count) {
     // Recalculate composite subjects: can_show_X = helix_plugin_installed && printer_has_X
     // These control visibility of pre-print G-code modification options in the UI
     // Only update subjects when the value changes to avoid spurious observer notifications
@@ -94,12 +95,15 @@ void PrinterCompositeVisibilityState::update_visibility(
             ? 1
             : 0);
 
-    // Aggregate: any preprint option visible (includes timelapse which doesn't need plugin)
+    // Aggregate: any preprint option visible (includes timelapse which doesn't need plugin,
+    // plus any options declared by the new PrePrintOption framework — necessary so cards
+    // showing framework-only options like K2 Plus ai_detect aren't hidden).
     bool any_visible =
         lv_subject_get_int(&can_show_bed_mesh_) || lv_subject_get_int(&can_show_qgl_) ||
         lv_subject_get_int(&can_show_z_tilt_) || lv_subject_get_int(&can_show_nozzle_clean_) ||
         lv_subject_get_int(&can_show_purge_line_) ||
-        lv_subject_get_int(capabilities.get_printer_has_timelapse_subject());
+        lv_subject_get_int(capabilities.get_printer_has_timelapse_subject()) ||
+        framework_option_count > 0;
     update_if_changed(&has_any_preprint_options_, any_visible ? 1 : 0);
 
     int cur_bm = lv_subject_get_int(&can_show_bed_mesh_);

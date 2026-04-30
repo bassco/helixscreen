@@ -41,9 +41,9 @@ namespace helix::ui {
  * ```cpp
  * PrintPreparationManager prep_manager;
  * prep_manager.set_dependencies(api, printer_state);
- * prep_manager.set_preprint_subjects(bed_subj, qgl_subj, z_tilt_subj, clean_subj, purge_subj,
- * timelapse_subj); prep_manager.set_preprint_visibility_subjects(can_show_bed_mesh, can_show_qgl,
- * ...);
+ * prep_manager.set_option_state_provider([&](const std::string& id) {
+ *     return renderer.get_state_for(id); // 0/1/-1 from active panel rows
+ * });
  *
  * // When detail view opens:
  * prep_manager.scan_file_for_operations(filename, current_path);
@@ -85,17 +85,6 @@ struct PrePrintOptions {
 };
 
 /**
- * @brief Result of capability lookup for an operation
- */
-struct OperationCapabilityResult {
-    bool should_skip = false; ///< Whether this operation should be skipped
-    std::string param_name;   ///< Parameter name to pass (e.g., "FORCE_LEVELING")
-    std::string skip_value;   ///< Value to use when skipping (e.g., "false", "1")
-    helix::CapabilityOrigin source =
-        helix::CapabilityOrigin::DATABASE; ///< Where capability came from
-};
-
-/**
  * @brief Result of checking if G-code modification can be performed safely
  *
  * On resource-constrained devices (like AD5M with 512MB RAM), modifying large
@@ -120,14 +109,6 @@ using NavigateToStatusCallback = std::function<void()>;
  * @brief Callback for print completion (success or failure)
  */
 using PrintCompletionCallback = std::function<void(bool success, const std::string& error)>;
-
-/**
- * @brief Callback when G-code scan completes with detected operations
- *
- * @param formatted_ops Human-readable string of detected operations
- *                      (e.g., "Contains: Bed Leveling, QGL" or "")
- */
-using ScanCompleteCallback = std::function<void(const std::string& formatted_ops)>;
 
 /**
  * @brief Callback when PRINT_START macro analysis completes
@@ -158,51 +139,6 @@ class PrintPreparationManager {
     void set_dependencies(MoonrakerAPI* api, PrinterState* printer_state);
 
     /**
-     * @brief Set pre-print checkbox state subjects (LT2)
-     *
-     * These subjects are updated by switch toggle callbacks and represent
-     * the user's checkbox selections (1=checked, 0=unchecked).
-     *
-     * @param bed_mesh Subject for bed mesh checkbox state
-     * @param qgl Subject for QGL checkbox state
-     * @param z_tilt Subject for Z-tilt checkbox state
-     * @param nozzle_clean Subject for nozzle clean checkbox state
-     * @param purge_line Subject for purge line (priming) checkbox state
-     * @param timelapse Subject for timelapse checkbox state
-     */
-    void set_preprint_subjects(lv_subject_t* bed_mesh, lv_subject_t* qgl, lv_subject_t* z_tilt,
-                               lv_subject_t* nozzle_clean, lv_subject_t* purge_line,
-                               lv_subject_t* timelapse);
-
-    /**
-     * @brief Set pre-print option visibility subjects (LT2)
-     *
-     * These subjects come from PrinterState and control whether each
-     * option row is visible in the UI (1=visible, 0=hidden).
-     *
-     * @param can_show_bed_mesh Subject for bed mesh row visibility
-     * @param can_show_qgl Subject for QGL row visibility
-     * @param can_show_z_tilt Subject for Z-tilt row visibility
-     * @param can_show_nozzle_clean Subject for nozzle clean row visibility
-     * @param can_show_purge_line Subject for purge line row visibility
-     * @param can_show_timelapse Subject for timelapse row visibility
-     */
-    void set_preprint_visibility_subjects(lv_subject_t* can_show_bed_mesh,
-                                          lv_subject_t* can_show_qgl, lv_subject_t* can_show_z_tilt,
-                                          lv_subject_t* can_show_nozzle_clean,
-                                          lv_subject_t* can_show_purge_line,
-                                          lv_subject_t* can_show_timelapse);
-
-    /**
-     * @brief Set callback for when G-code scan completes
-     *
-     * Called with formatted string of detected operations when scan finishes.
-     */
-    void set_scan_complete_callback(ScanCompleteCallback callback) {
-        on_scan_complete_ = std::move(callback);
-    }
-
-    /**
      * @brief Set callback for when PRINT_START macro analysis completes
      */
     void set_macro_analysis_callback(MacroAnalysisCallback callback) {
@@ -213,16 +149,18 @@ class PrintPreparationManager {
      * @brief Set a provider that returns the current toggle state for an
      *        option id ("bed_mesh", "qgl", ...).
      *
-     * Used by `collect_macro_skip_params()` to drive the new framework path:
-     * the print-detail panel sets this provider so the manager can read
+     * Used by `collect_macro_skip_params()` and friends to read user intent:
+     * the print-detail panel sets this provider so the manager can query
      * dynamic per-option subjects without hardcoding their names.
      *
      * The provider returns 1 when the user has the option toggled ON, 0 when
      * OFF. Returning -1 means "not currently bound to a UI row" — the manager
-     * then falls back to the option's `default_enabled` value.
+     * then falls back to the option's `default_enabled` value from the
+     * cached `PrePrintOptionSet`.
      *
-     * Setting nullptr clears the provider; the manager reverts to the legacy
-     * subject-pointer path for the six built-in toggles.
+     * Setting nullptr clears the provider; the manager falls back unconditionally
+     * to `default_enabled` from the cached option set for every id (the legacy
+     * built-in subject-pointer path was removed in Phase 3.5).
      */
     using OptionStateProvider = std::function<int(const std::string& id)>;
     void set_option_state_provider(OptionStateProvider provider) {
@@ -234,17 +172,13 @@ class PrintPreparationManager {
      *
      * Resolution order:
      *   1. If an `OptionStateProvider` is set and returns 0/1, use that.
-     *   2. Otherwise, for the six legacy ids (bed_mesh, qgl, z_tilt,
-     *      nozzle_clean, purge_line, timelapse), read the corresponding
-     *      legacy subject set via `set_preprint_subjects()`/
-     *      `set_preprint_visibility_subjects()`. Returns:
-     *         ENABLED        — visible + checked
-     *         DISABLED       — visible + unchecked
-     *         NOT_APPLICABLE — hidden, or no subject bound
-     *   3. Otherwise, returns ENABLED iff the option's `default_enabled` is
+     *      The detail panel registers a provider that reads from the
+     *      per-option dynamic subjects on the active row widgets.
+     *   2. Otherwise, return ENABLED iff the option's `default_enabled` is
      *      true, DISABLED if the option is in the cached set with default
      *      false, or NOT_APPLICABLE if the option is unknown to the cached
-     *      set.
+     *      set (e.g. headless macro analysis querying about an option that
+     *      isn't in this printer's database entry).
      *
      * @param id Option id (e.g. "bed_mesh", "ai_detect")
      */
@@ -288,13 +222,6 @@ class PrintPreparationManager {
     }
 
     /**
-     * @brief Format macro-detected operations as human-readable string
-     *
-     * @return Formatted string like "PRINT_START contains: Bed Mesh, QGL" or ""
-     */
-    [[nodiscard]] std::string format_macro_operations() const;
-
-    /**
      * @brief Check if a specific operation in PRINT_START is controllable
      *
      * @param category The operation category to check
@@ -328,20 +255,6 @@ class PrintPreparationManager {
      * @return CapabilityMatrix populated with all known capabilities
      */
     [[nodiscard]] CapabilityMatrix build_capability_matrix() const;
-
-    /**
-     * @brief Look up capability info for a single operation
-     *
-     * This is the unified entry point for capability queries. It checks:
-     * 1. If the operation is hidden (visibility subject = 0) -> nullopt
-     * 2. If the operation is enabled (checkbox checked) -> nullopt
-     * 3. Otherwise, gets skip param from CapabilityMatrix
-     *
-     * @param cat The operation category to look up
-     * @return OperationCapabilityResult if operation should be skipped, nullopt otherwise
-     */
-    [[nodiscard]] std::optional<OperationCapabilityResult>
-    lookup_operation_capability(helix::OperationCategory cat) const;
 
     // === Test Helpers ===
 
@@ -391,24 +304,6 @@ class PrintPreparationManager {
     [[nodiscard]] const std::optional<gcode::ScanResult>& get_scan_result() const {
         return cached_scan_result_;
     }
-
-    /**
-     * @brief Format detected operations as human-readable string
-     *
-     * @return Formatted string like "Contains: Bed Leveling, QGL" or "" if none
-     */
-    [[nodiscard]] std::string format_detected_operations() const;
-
-    /**
-     * @brief Format unified pre-print steps from both file scan and macro analysis
-     *
-     * Merges operations detected in the G-code file with operations found in the
-     * PRINT_START macro, deduplicates them, and formats as a user-friendly list.
-     *
-     * @return Bulleted list like "• Bed leveling\n• Nozzle cleaning (optional)"
-     *         or empty string if no operations detected
-     */
-    [[nodiscard]] std::string format_preprint_steps() const;
 
     // === Resource Safety ===
 
@@ -526,25 +421,6 @@ class PrintPreparationManager {
     PrinterState* printer_state_ = nullptr;
 
     // === Checkbox State Subjects (LT2 - from PrintSelectDetailView) ===
-    // These subjects track the checked state of each pre-print option switch
-    // Value: 1 = checked/enabled, 0 = unchecked/disabled
-    lv_subject_t* preprint_bed_mesh_subject_ = nullptr;
-    lv_subject_t* preprint_qgl_subject_ = nullptr;
-    lv_subject_t* preprint_z_tilt_subject_ = nullptr;
-    lv_subject_t* preprint_nozzle_clean_subject_ = nullptr;
-    lv_subject_t* preprint_purge_line_subject_ = nullptr;
-    lv_subject_t* preprint_timelapse_subject_ = nullptr;
-
-    // === Visibility Subjects (LT2 - from PrinterState) ===
-    // These subjects control whether each option row is shown in the UI
-    // Value: 1 = visible, 0 = hidden (based on printer capabilities)
-    lv_subject_t* can_show_bed_mesh_subject_ = nullptr;
-    lv_subject_t* can_show_qgl_subject_ = nullptr;
-    lv_subject_t* can_show_z_tilt_subject_ = nullptr;
-    lv_subject_t* can_show_nozzle_clean_subject_ = nullptr;
-    lv_subject_t* can_show_purge_line_subject_ = nullptr;
-    lv_subject_t* can_show_timelapse_subject_ = nullptr;
-
     // === Pre-print estimate ===
     lv_subject_t preprint_estimate_subject_{};
     bool estimate_subject_initialized_ = false;
@@ -570,7 +446,6 @@ class PrintPreparationManager {
     [[nodiscard]] const PrePrintOptionSet& get_cached_options() const;
 
     // === Callbacks ===
-    ScanCompleteCallback on_scan_complete_;
     MacroAnalysisCallback on_macro_analysis_complete_;
 
     // === Option-state provider (LT3) ===
@@ -653,47 +528,12 @@ class PrintPreparationManager {
                               PrintCompletionCallback on_completion);
 
     /**
-     * @brief Unified helper to determine option state from visibility + checked subjects
+     * @brief Lazy-initialize the prep-time estimate subject.
      *
-     * Single source of truth for the three-way logic:
-     * - Hidden (visibility=0) → NOT_APPLICABLE (not relevant to this printer)
-     * - Visible + checked → ENABLED (user wants this operation)
-     * - Visible + unchecked → DISABLED (user explicitly skipped)
-     * - No checked subject → NOT_APPLICABLE (can't determine)
-     *
-     * @param visibility_subject Subject controlling row visibility (1=visible, 0=hidden)
-     * @param checked_subject Subject controlling checkbox state (1=checked, 0=unchecked)
-     * @return PrePrintOptionState indicating user intent
+     * Called from get_preprint_estimate_subject(); ensures the subject is
+     * ready before any observer wires up.
      */
-    [[nodiscard]] PrePrintOptionState get_option_state(lv_subject_t* visibility_subject,
-                                                       lv_subject_t* checked_subject) const;
-
-    /**
-     * @brief Get the visibility and checkbox subjects for a given operation category
-     *
-     * @param cat The operation category
-     * @return Pair of (visibility_subject, checked_subject), either may be nullptr
-     */
-    [[nodiscard]] std::pair<lv_subject_t*, lv_subject_t*>
-    get_subjects_for_category(helix::OperationCategory cat) const;
-
-    /**
-     * @brief Check if an operation is visible (visibility subject is 1 or null)
-     *
-     * @param cat The operation category to check
-     * @return true if operation is visible, false if hidden (visibility = 0)
-     */
-    [[nodiscard]] bool is_operation_visible(helix::OperationCategory cat) const;
-
-    /**
-     * @brief Check if an operation is disabled from its checkbox subject
-     *
-     * Returns true if the checkbox subject is not null and its value is 0 (unchecked).
-     *
-     * @param cat The operation category to check
-     * @return true if the checkbox is unchecked (user wants to skip)
-     */
-    [[nodiscard]] bool is_option_disabled_from_subject(helix::OperationCategory cat) const;
+    void ensure_estimate_subject_initialized();
 
     /**
      * @brief Internal implementation of macro analysis (for retries)

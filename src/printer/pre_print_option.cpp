@@ -117,6 +117,14 @@ std::optional<PrePrintOption> parse_pre_print_option(const nlohmann::json& j) {
                          opt.id);
             return std::nullopt;
         }
+        // Empty enable/skip values would render as `KEY=` (no value) — silent
+        // garbage that the macro will misparse. Reject at parse time.
+        if (p.enable_value.empty() || p.skip_value.empty()) {
+            spdlog::warn("[PrePrintOption] Skipping option '{}': MacroParam strategy requires "
+                         "non-empty 'enable_value' and 'skip_value' (got enable='{}' skip='{}')",
+                         opt.id, p.enable_value, p.skip_value);
+            return std::nullopt;
+        }
         opt.strategy = std::move(p);
         break;
     }
@@ -171,7 +179,7 @@ PrePrintOptionSet parse_pre_print_option_set(const nlohmann::json& j) {
     }
 
     set.macro_name = j.value("macro_name", "");
-    set.pre_start_gcode = j.value("pre_start_gcode", "");
+    set.setup_gcode = j.value("setup_gcode", "");
 
     if (j.contains("options")) {
         const auto& arr = j["options"];

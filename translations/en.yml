@@ -1928,6 +1928,7 @@ translations:
   'off': 'off'
   pre_print_option.ai_detect.description: Monitor for print abnormalities (K2 Plus camera-based)
   pre_print_option.ai_detect.label: AI detection
+  pre_print_option.timelapse.label: Timelapse
   prints: prints
   remaining: remaining
   remaining before clog detection triggers: remaining before clog detection triggers

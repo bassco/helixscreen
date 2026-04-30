@@ -4,6 +4,7 @@
 #include "ui_pre_print_options_renderer.h"
 
 #include "theme_manager.h"
+#include "ui_switch.h"
 #include "ui_utils.h"
 
 #include "lvgl/src/others/translation/lv_translation.h"
@@ -29,8 +30,8 @@ struct SwitchUserData {
 /// Translation tags follow the existing convention of using the English
 /// label as both key and default value (see `translations/en.yml`). For
 /// options without an explicit `label_key` in the database we fall back to a
-/// best-effort humanization of the id ("ai_detect" -> "AI detect"). Phase 4
-/// will replace these with real translation keys for new options.
+/// best-effort humanization of the id ("ai_detect" -> "AI Detect"). New
+/// options should declare `label_key` directly to bypass this path.
 std::string humanize_id(const std::string& id) {
     std::string out;
     out.reserve(id.size());
@@ -85,18 +86,6 @@ PrePrintOptionsRenderer::~PrePrintOptionsRenderer() {
     clear();
 }
 
-const char* PrePrintOptionsRenderer::category_translation_key(PrePrintCategory category) {
-    switch (category) {
-    case PrePrintCategory::Mechanical:
-        return "Mechanical setup";
-    case PrePrintCategory::Quality:
-        return "Print quality";
-    case PrePrintCategory::Monitoring:
-        return "Monitoring";
-    }
-    return "";
-}
-
 std::string PrePrintOptionsRenderer::label_for(const PrePrintOption& opt) {
     // First preference: explicit i18n key from the DB.
     if (!opt.label_key.empty()) {
@@ -141,14 +130,17 @@ void PrePrintOptionsRenderer::populate(lv_obj_t* container, const PrePrintOption
 
     on_toggle_ = std::move(on_toggle);
 
-    // Clear any prior content. clear() walks each row's state subject and
-    // calls lv_subject_deinit, which iterates the subject's observer list
-    // and uninstalls each observer's LV_EVENT_DELETE callback on its widget.
-    // This MUST happen before deleting the widgets — otherwise the deferred
-    // widget delete would later try to fire the unsubscribe-on-delete
-    // callback against a freed subject. Observers being attached to widgets
-    // that haven't been deleted yet is fine; LVGL's `lv_observer_remove`
-    // handles that case.
+    // Order matters: deinit subjects (observers attached to live widgets) BEFORE
+    // we ask LVGL to delete those widgets. If we deleted widgets first,
+    // `safe_clean_children`'s widget cleanup would later fire each observer's
+    // LV_EVENT_DELETE handler, and that handler calls `lv_observer_remove` on
+    // the still-live subject — except in our case the subject is about to
+    // disappear and our deinit walk would race the widget-side cleanup. By
+    // deiniting subjects first, we walk each subject's observer list and
+    // uninstall the per-observer state from the (still-alive) widget, so the
+    // subsequent widget delete has nothing to do for those observers. The
+    // alternative ordering would risk `lv_observer_remove` touching a freed
+    // subject's `subs_ll` (UAF).
     clear();
     safe_clean_children(container);
 
@@ -157,17 +149,10 @@ void PrePrintOptionsRenderer::populate(lv_obj_t* container, const PrePrintOption
         return;
     }
 
-    // Walk options grouped by category. The set is already sorted by
-    // (category, order) on parse, so a single pass with a "last category"
-    // sentinel suffices to emit subheaders at the right boundaries.
-    bool any_category_seen = false;
-    PrePrintCategory last_category = PrePrintCategory::Mechanical;
+    // Flat list of rows in (category, order) sort order. Categories serve as
+    // a sort key only — no subheaders rendered. The single PRINT OPTIONS card
+    // header in print_file_detail.xml acts as the section title.
     for (const auto& opt : option_set.options) {
-        if (!any_category_seen || opt.category != last_category) {
-            make_subheader(container, opt.category);
-            last_category = opt.category;
-            any_category_seen = true;
-        }
         make_row(container, opt, visibility_lookup);
     }
 
@@ -230,21 +215,6 @@ lv_obj_t* PrePrintOptionsRenderer::get_switch(const std::string& id) const {
     return (it != rows_.end()) ? it->switch_widget : nullptr;
 }
 
-void PrePrintOptionsRenderer::make_subheader(lv_obj_t* container, PrePrintCategory category) {
-    const char* key = category_translation_key(category);
-    if (!key || !*key) {
-        return;
-    }
-
-    lv_obj_t* label = lv_label_create(container);
-    lv_label_set_text(label, lv_tr(key));
-    lv_obj_set_width(label, lv_pct(100));
-    lv_obj_set_style_text_font(label, theme_manager_get_font("font_small"), 0);
-    lv_obj_set_style_text_color(label, theme_manager_get_color("text_muted"), 0);
-    lv_obj_set_style_pad_top(label, 0, 0);
-    lv_obj_set_style_pad_bottom(label, 0, 0);
-}
-
 void PrePrintOptionsRenderer::make_row(lv_obj_t* container, const PrePrintOption& opt,
                                        const VisibilitySubjectLookup& visibility_lookup) {
     OptionRow row;
@@ -272,12 +242,9 @@ void PrePrintOptionsRenderer::make_row(lv_obj_t* container, const PrePrintOption
     lv_obj_set_style_text_font(label, theme_manager_get_font("font_body"), 0);
     lv_obj_set_style_text_color(label, theme_manager_get_color("text"), 0);
 
-    // Switch — use plain lv_switch (the ui_switch styling pass is normally
-    // applied via XML parser; for dynamic rows we accept the default LVGL
-    // styling which is functional and visually acceptable. Phase 4+ may move
-    // to building rows from a registered XML row component if a richer style
-    // is needed here.)
-    lv_obj_t* sw = lv_switch_create(row.row);
+    // Themed switch — same styling as <ui_switch size="small"/> from XML:
+    // theme colors, size preset, value-changed sound callback all applied.
+    lv_obj_t* sw = ui_switch_create_themed(row.row, "small");
     if (opt.default_enabled) {
         lv_obj_add_state(sw, LV_STATE_CHECKED);
     }
@@ -334,6 +301,10 @@ void PrePrintOptionsRenderer::make_row(lv_obj_t* container, const PrePrintOption
 }
 
 void PrePrintOptionsRenderer::on_switch_value_changed(lv_event_t* e) {
+    // user_data lifetime is guaranteed by the LV_EVENT_DELETE handler, which
+    // LVGL fires last among a widget's event callbacks. VALUE_CHANGED can
+    // never fire after `data` is freed because deletion runs first only on
+    // the LV_EVENT_DELETE path, which then frees `data` once.
     auto* data = static_cast<SwitchUserData*>(lv_event_get_user_data(e));
     if (!data || !data->renderer) {
         return;

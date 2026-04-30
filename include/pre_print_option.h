@@ -104,18 +104,24 @@ struct PrePrintOption {
  * `macro_name` is the START_PRINT macro to use when aggregating
  * `MacroParam` options. Options are sorted by (category, order).
  *
- * `pre_start_gcode` (optional) is a single gcode command sent BEFORE the
- * start macro when any options are toggled off — used by Creality K1
- * variants whose `PREPARE` macro variable can't be passed as a START_PRINT
- * argument and must be set via a separate `PRINT_PREPARED` call first.
+ * `setup_gcode` (optional) is a single gcode command sent BEFORE the start
+ * macro when any options are toggled off — used by Creality K1 variants
+ * whose `PREPARE` macro variable can't be passed as a START_PRINT argument
+ * and must be set via a separate `PRINT_PREPARED` call first.
+ *
+ * The name `setup_gcode` deliberately avoids overlap with the per-option
+ * `PrePrintStrategyKind::PreStartGcode` strategy: this field is the
+ * printer-level "fire once before START_PRINT" hook, while the strategy
+ * emits per-option gcode lines collected by
+ * `PrintPreparationManager::collect_pre_start_gcode_lines()`.
  */
 struct PrePrintOptionSet {
     std::string macro_name;
-    std::string pre_start_gcode;
+    std::string setup_gcode;
     std::vector<PrePrintOption> options;
 
     bool empty() const {
-        return macro_name.empty() && pre_start_gcode.empty() && options.empty();
+        return macro_name.empty() && setup_gcode.empty() && options.empty();
     }
 
     /// Returns nullptr if no option with the given id is present.

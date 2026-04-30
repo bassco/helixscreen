@@ -120,17 +120,6 @@ void PrintSelectDetailView::init_subjects() {
     // G-code loading indicator (0=hidden, 1=visible)
     UI_MANAGED_SUBJECT_INT(detail_gcode_loading_, 0, "detail_gcode_loading", subjects_);
 
-    // Enable switches default ON (1) - "perform this operation"
-    // Subject=1 means switch is checked, operation is enabled
-    UI_MANAGED_SUBJECT_INT(preprint_bed_mesh_, 1, "preprint_bed_mesh", subjects_);
-    UI_MANAGED_SUBJECT_INT(preprint_qgl_, 1, "preprint_qgl", subjects_);
-    UI_MANAGED_SUBJECT_INT(preprint_z_tilt_, 1, "preprint_z_tilt", subjects_);
-    UI_MANAGED_SUBJECT_INT(preprint_nozzle_clean_, 1, "preprint_nozzle_clean", subjects_);
-    UI_MANAGED_SUBJECT_INT(preprint_purge_line_, 1, "preprint_purge_line", subjects_);
-
-    // Add-on switches default OFF (0) - "don't add extras by default"
-    UI_MANAGED_SUBJECT_INT(preprint_timelapse_, 0, "preprint_timelapse", subjects_);
-
     // Filament mismatch warning (0=hidden, 1=visible)
     UI_MANAGED_SUBJECT_INT(filament_mismatch_, 0, "filament_mismatch", subjects_);
 
@@ -265,23 +254,9 @@ void PrintSelectDetailView::set_dependencies(MoonrakerAPI* api, PrinterState* pr
 
     if (prep_manager_) {
         prep_manager_->set_dependencies(api_, printer_state_);
-
-        // LT2: Wire up subjects for declarative state reading
-        prep_manager_->set_preprint_subjects(
-            get_preprint_bed_mesh_subject(), get_preprint_qgl_subject(),
-            get_preprint_z_tilt_subject(), get_preprint_nozzle_clean_subject(),
-            get_preprint_purge_line_subject(), get_preprint_timelapse_subject());
-
-        // Wire up visibility subjects from PrinterState
-        if (printer_state_) {
-            prep_manager_->set_preprint_visibility_subjects(
-                printer_state_->get_can_show_bed_mesh_subject(),
-                printer_state_->get_can_show_qgl_subject(),
-                printer_state_->get_can_show_z_tilt_subject(),
-                printer_state_->get_can_show_nozzle_clean_subject(),
-                printer_state_->get_can_show_purge_line_subject(),
-                printer_state_->get_printer_has_timelapse_subject());
-        }
+        // Per-option toggle state flows through the OptionStateProvider that
+        // populate_option_rows() registers with the prep manager — no need to
+        // wire individual legacy state/visibility subjects here.
     }
 }
 
@@ -388,18 +363,6 @@ void PrintSelectDetailView::on_activate() {
     // (Re)build dynamic option rows from the active printer's option set.
     // Idempotent — only rebuilds when the printer type has changed.
     populate_option_rows();
-
-    // Reset legacy per-panel subjects to their defaults — these are still
-    // referenced by the prep manager's legacy fallback path (used by tests
-    // and by the prep-time predictor's `add_if_enabled` calls). The new
-    // dynamic per-option subjects are reset by populate_option_rows() above.
-    lv_subject_set_int(&preprint_bed_mesh_, 1);
-    lv_subject_set_int(&preprint_qgl_, 1);
-    lv_subject_set_int(&preprint_z_tilt_, 1);
-    lv_subject_set_int(&preprint_nozzle_clean_, 1);
-    lv_subject_set_int(&preprint_purge_line_, 1);
-    // Timelapse stays OFF by default (it's an add-on feature)
-    lv_subject_set_int(&preprint_timelapse_, 0);
 
     // Cache file size for safety checks (before modification attempts)
     if (prep_manager_ && current_file_size_bytes_ > 0) {
@@ -1062,21 +1025,22 @@ static void update_prep_time_label() {
 // ============================================================================
 //
 // `pre_print_options_container_` is populated from the active printer's
-// `PrePrintOptionSet`. Each option becomes a row with a label + switch; rows
-// are grouped under sub-headers per category. This replaces the previous
-// hardcoded XML rows + per-option static callbacks.
+// `PrePrintOptionSet`. Each option becomes a row with a label + switch in a
+// flat list (categories are sort keys only — no subheaders). This replaces
+// the previous hardcoded XML rows + per-option static callbacks.
 //
 // The renderer owns one heap-allocated lv_subject_t per option (the toggle
 // state). We register a state provider on `prep_manager_` so that
-// `collect_macro_skip_params()` can read these subjects without needing to
-// know about their LVGL pointers — it queries by id.
+// `collect_macro_skip_params()` and friends can read these subjects without
+// needing to know about their LVGL pointers — they query by id.
 //
-// Visibility per-row is bound to the existing PrinterState `can_show_*`
-// subjects, which are driven by macro analysis + plugin presence. The id ->
-// can_show subject mapping is currently hardcoded (the legacy six options
-// are the only ones gated by plugin/macro analysis); new options that use
-// pure-database visibility get no visibility binding and show whenever the
-// printer's option set advertises them.
+// Per-row visibility: the renderer's `VisibilitySubjectLookup` callback is
+// invoked for each option; returning nullptr leaves the row unconditionally
+// visible. Today we always return nullptr — a printer's database entry
+// declaring an option is sufficient evidence that the option works on that
+// printer. The hook remains available for future plugin-/macro-gated options
+// (PrinterCompositeVisibilityState's `can_show_*` subjects are the natural
+// source).
 
 void PrintSelectDetailView::populate_option_rows() {
     if (!pre_print_options_container_) {
@@ -1089,34 +1053,38 @@ void PrintSelectDetailView::populate_option_rows() {
 
     const auto& option_set = printer_state_->get_pre_print_option_set();
 
-    // Skip rebuild if rows already exist. Repopulation while children are
-    // already attached would race with safe_clean_children's deferred delete
-    // and the observer/subject cleanup ordering — see CLAUDE.md "No sync
-    // widget deletion in queued callbacks". The widget tree is destroyed and
-    // recreated on close (see on_ui_destroyed), so a fresh populate fires
-    // every time the panel re-opens. Switching printer type while the
-    // detail view is open is not currently supported; if needed, a future
-    // change can plumb in a defer-then-rebuild path.
+    // Skip rebuild only when rows are already populated AND the active
+    // printer hasn't changed since they were built. Mid-session printer-type
+    // changes (e.g. multi-printer setups) need a repopulate so the rows
+    // reflect the new option set.
+    //
+    // The rebuild path is safe: `populate()` calls `clear()` (which deinits
+    // every option subject — uninstalling observers from their row widgets)
+    // BEFORE `safe_clean_children` deletes the widgets themselves. That
+    // ordering is what the renderer's class doc spells out as "case 1" of
+    // the lifetime contract — observers are uninstalled while widgets are
+    // still alive, so the deferred widget-delete tick has nothing to do for
+    // them. Repopulating mid-session is therefore not the race that this
+    // early-return originally guarded against.
     const std::string& current_type = printer_state_->get_printer_type();
-    if (option_rows_renderer_.row_count() > 0) {
-        spdlog::trace("[DetailView] Skipping option-row rebuild (already populated)");
+    if (option_rows_renderer_.row_count() > 0 &&
+        current_type == last_rendered_printer_type_) {
+        spdlog::trace("[DetailView] Skipping option-row rebuild (already populated for '{}')",
+                      current_type);
         return;
     }
     last_rendered_printer_type_ = current_type;
 
-    // Look up the existing PrinterState can_show_* subject for the legacy
-    // six-id set. Returns nullptr for unknown ids so the renderer leaves
-    // those rows always-visible (the database advertising the option is
-    // sufficient gating for new framework-only options).
-    auto visibility_lookup = [this](const std::string& id) -> lv_subject_t* {
-        if (!printer_state_) return nullptr;
-        if (id == "bed_mesh") return printer_state_->get_can_show_bed_mesh_subject();
-        if (id == "qgl") return printer_state_->get_can_show_qgl_subject();
-        if (id == "z_tilt") return printer_state_->get_can_show_z_tilt_subject();
-        if (id == "nozzle_clean") return printer_state_->get_can_show_nozzle_clean_subject();
-        if (id == "purge_line") return printer_state_->get_can_show_purge_line_subject();
-        if (id == "timelapse") return printer_state_->get_printer_has_timelapse_subject();
-        return nullptr;
+    // No visibility gating: a printer's database entry declaring an option in
+    // pre_print_options is sufficient evidence that the option works on that
+    // printer. The legacy plugin_installed && capabilities.X gate (used for
+    // the deprecated PrintStartCapabilities path) hid options like K2 Plus's
+    // bed_mesh because the K2 Plus doesn't ship with HelixPrint installed —
+    // but its native START_PRINT macro takes the PREPARE param directly, so
+    // no plugin is needed. If a future option DOES require the plugin, add a
+    // requires_plugin field to the option JSON and gate at parse/render.
+    auto visibility_lookup = [](const std::string& /*id*/) -> lv_subject_t* {
+        return nullptr;  // Always visible for declared options
     };
 
     option_rows_renderer_.populate(pre_print_options_container_, option_set, visibility_lookup,

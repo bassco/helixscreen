@@ -162,15 +162,6 @@
           <icon name="history_status_icon" src="check" size="sm" variant="success"/>
           <text_body name="history_status_label" text=""/>
         </lv_obj>
-        <!-- Unified pre-print steps section (hidden if empty via reactive binding) -->
-        <lv_obj name="preprint_steps_section"
-                width="100%" style_pad_all="0" flex_flow="column" style_pad_gap="#space_xs">
-          <bind_flag_if_eq subject="selected_preprint_steps_visible" flag="hidden" ref_value="0"/>
-          <text_small text="PRE-PRINT STEPS" translation_tag="PRE-PRINT STEPS"/>
-          <text_body name="preprint_steps_label"
-                     bind_text="selected_preprint_steps" long_mode="wrap" style_text_color="#text"/>
-        </lv_obj>
-
         <!-- Color requirements card (hidden by default, shown for multi-color prints) -->
         <ui_card name="color_requirements_card" width="100%" style_pad_all="0" flex_flow="column" hidden="true">
           <text_small text="COLORS REQUIRED" translation_tag="COLORS REQUIRED"/>
@@ -209,6 +200,7 @@
                no preprint options apply, via has_any_preprint_options. -->
           <ui_card name="options_card" width="100%" style_pad_ver="0" style_pad_gap="#space_sm" flex_flow="column" style_bg_color="#elevated_bg">
             <bind_flag_if_eq subject="has_any_preprint_options" flag="hidden" ref_value="0"/>
+            <text_small text="PRINT OPTIONS" translation_tag="PRINT OPTIONS"/>
             <lv_obj name="pre_print_options_container"
                     width="100%" height="content" style_pad_all="0" style_pad_gap="#space_xs"
                     flex_flow="column" scrollable="false">

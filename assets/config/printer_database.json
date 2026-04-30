@@ -838,7 +838,7 @@
       "print_start_profile": "creality_k1",
       "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
+        "setup_gcode": "PRINT_PREPARED",
         "options": [
           {
             "id": "bed_mesh",
@@ -926,7 +926,7 @@
       "print_start_profile": "creality_k1",
       "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
+        "setup_gcode": "PRINT_PREPARED",
         "options": [
           {
             "id": "bed_mesh",
@@ -1039,7 +1039,7 @@
       ],
       "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
+        "setup_gcode": "PRINT_PREPARED",
         "options": [
           {
             "id": "bed_mesh",
@@ -1165,7 +1165,7 @@
       "print_start_profile": "creality_k1",
       "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
+        "setup_gcode": "PRINT_PREPARED",
         "options": [
           {
             "id": "bed_mesh",
@@ -1235,7 +1235,7 @@
       "print_start_profile": "creality_k1",
       "pre_print_options": {
         "macro_name": "START_PRINT",
-        "pre_start_gcode": "PRINT_PREPARED",
+        "setup_gcode": "PRINT_PREPARED",
         "options": [
           {
             "id": "bed_mesh",
