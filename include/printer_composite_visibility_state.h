@@ -9,31 +9,22 @@
 namespace helix {
 
 /**
- * @brief Manages composite visibility subjects for G-code modification options
+ * @brief Manages the aggregate `has_any_preprint_options` visibility subject
  *
- * Composite visibility subjects (5 total):
- * - can_show_bed_mesh: helix_plugin_installed && printer_has_bed_mesh
- * - can_show_qgl: helix_plugin_installed && printer_has_qgl
- * - can_show_z_tilt: helix_plugin_installed && printer_has_z_tilt
- * - can_show_nozzle_clean: helix_plugin_installed && printer_has_nozzle_clean
- * - can_show_purge_line: helix_plugin_installed && printer_has_purge_line
+ * `has_any_preprint_options` is set to 1 when at least one PRINT OPTIONS row
+ * would be visible — i.e. plugin-gated hardware ops (bed_mesh / QGL / z-tilt /
+ * nozzle_clean / purge_line, each AND-gated by `helix_plugin_installed`),
+ * timelapse (no plugin gate), or any option declared by the new
+ * `PrePrintOption` framework. Used by `print_file_detail.xml` to hide the
+ * entire PRINT OPTIONS card when no row would be visible.
  *
- * Plus an aggregate `has_any_preprint_options` that ORs all of the above
- * together with `printer_has_timelapse`.
- *
- * @note Current consumers (Phase 3.5+):
- *   - `has_any_preprint_options`: bound by `print_file_detail.xml` to hide
- *     the entire PRINT OPTIONS card when no row would be visible. Live.
- *   - Individual `can_show_*` subjects: NO live XML or production C++
- *     consumer. They survive as a hook for `PrePrintOptionsRenderer`'s
- *     `VisibilitySubjectLookup` callback — when a future option needs to be
- *     hidden until the helix plugin is installed (or some other capability
- *     check passes), the detail view's `populate_option_rows()` lookup can
- *     return one of these subjects. Today the lookup always returns nullptr,
- *     so these subjects are computed but unread. Removing them would force
- *     re-introducing the same logic when the first plugin-gated option lands.
- *
- * Extracted from PrinterState as part of god class decomposition.
+ * The legacy individual `can_show_*` subjects (one per hardware op) were
+ * retired alongside the imperative-visibility cleanup: nothing in XML or
+ * production C++ ever read them, and `PrePrintOptionsRenderer`'s
+ * `VisibilitySubjectLookup` callback (which was the speculative future
+ * consumer) is still wired with a `nullptr`-returning lambda. If a future
+ * plugin-gated option needs gating, it should declare its own subject rather
+ * than resurrecting these.
  *
  * @note Update triggers:
  *   - Hardware discovery (set_hardware_internal)
@@ -60,81 +51,26 @@ class PrinterCompositeVisibilityState {
      */
     void deinit_subjects();
 
-    // ========================================================================
-    // Update method
-    // ========================================================================
-
     /**
-     * @brief Recalculate all composite visibility subjects
+     * @brief Recalculate `has_any_preprint_options`
      *
-     * Computes can_show_X = plugin_installed && printer_has_X for all five
-     * composite subjects. Only updates subjects when the computed value differs
-     * from the current value to avoid spurious observer notifications.
+     * Sets to 1 iff:
+     *   (plugin_installed AND any of bed_mesh/qgl/z_tilt/nozzle_clean/purge_line)
+     *   OR timelapse capability OR framework_option_count > 0.
      *
-     * Called by PrinterState when:
-     * - Hardware is discovered (set_hardware_internal)
-     * - Plugin status changes (set_helix_plugin_installed)
-     * - Printer type changes (set_printer_type_internal)
+     * Only writes the subject when the computed value differs from the current
+     * one (avoids spurious observer notifications).
      *
      * @param plugin_installed True if HelixPrint plugin is installed
      * @param capabilities Reference to capabilities state for has_* queries
      * @param framework_option_count Count of options declared by the new
-     *        PrePrintOption framework for the active printer. ORed into
-     *        has_any_preprint_options so the options card shows when only
-     *        framework-declared options (e.g. K2 Plus ai_detect) are present.
+     *        PrePrintOption framework for the active printer.
      */
     void update_visibility(bool plugin_installed, const PrinterCapabilitiesState& capabilities,
                            size_t framework_option_count = 0);
 
-    // ========================================================================
-    // Subject accessors
-    // ========================================================================
-
-    /**
-     * @brief Get visibility subject for bed mesh row
-     * @return 1 when bed mesh option should be visible, 0 otherwise
-     */
-    lv_subject_t* get_can_show_bed_mesh_subject() {
-        return &can_show_bed_mesh_;
-    }
-
-    /**
-     * @brief Get visibility subject for QGL row
-     * @return 1 when QGL option should be visible, 0 otherwise
-     */
-    lv_subject_t* get_can_show_qgl_subject() {
-        return &can_show_qgl_;
-    }
-
-    /**
-     * @brief Get visibility subject for Z-tilt row
-     * @return 1 when Z-tilt option should be visible, 0 otherwise
-     */
-    lv_subject_t* get_can_show_z_tilt_subject() {
-        return &can_show_z_tilt_;
-    }
-
-    /**
-     * @brief Get visibility subject for nozzle clean row
-     * @return 1 when nozzle clean option should be visible, 0 otherwise
-     */
-    lv_subject_t* get_can_show_nozzle_clean_subject() {
-        return &can_show_nozzle_clean_;
-    }
-
-    /**
-     * @brief Get visibility subject for purge line row
-     * @return 1 when purge line option should be visible, 0 otherwise
-     */
-    lv_subject_t* get_can_show_purge_line_subject() {
-        return &can_show_purge_line_;
-    }
-
     /**
      * @brief Get aggregate subject: 1 if ANY preprint option row is visible
-     *
-     * OR of all can_show_* subjects plus printer_has_timelapse.
-     * Used to hide the entire options card when no rows would be shown.
      */
     lv_subject_t* get_has_any_preprint_options_subject() {
         return &has_any_preprint_options_;
@@ -146,19 +82,12 @@ class PrinterCompositeVisibilityState {
     SubjectManager subjects_;
     bool subjects_initialized_ = false;
 
-    // Dirty-tracking for debug logging (only log when values change)
+    // Dirty-tracking for debug logging (only log when any input flips).
     bool last_log_state_initialized_ = false;
-    int last_bed_mesh_ = -1, last_qgl_ = -1, last_z_tilt_ = -1;
-    int last_nozzle_clean_ = -1, last_purge_line_ = -1, last_any_ = -1;
+    int last_any_ = -1;
     bool last_plugin_ = false;
 
-    // Composite visibility subjects (all integer: 0=hidden, 1=visible)
-    lv_subject_t can_show_bed_mesh_{};        // helix_plugin_installed && printer_has_bed_mesh
-    lv_subject_t can_show_qgl_{};             // helix_plugin_installed && printer_has_qgl
-    lv_subject_t can_show_z_tilt_{};          // helix_plugin_installed && printer_has_z_tilt
-    lv_subject_t can_show_nozzle_clean_{};    // helix_plugin_installed && printer_has_nozzle_clean
-    lv_subject_t can_show_purge_line_{};      // helix_plugin_installed && printer_has_purge_line
-    lv_subject_t has_any_preprint_options_{}; // OR of all can_show_* + printer_has_timelapse
+    lv_subject_t has_any_preprint_options_{};
 };
 
 } // namespace helix

@@ -1427,51 +1427,24 @@ class PrinterState {
         return plugin_status_state_.get_phase_tracking_enabled_subject();
     }
 
-    // === Visibility Subject Getters (LT2: for pre-print option row visibility) ===
-
-    /**
-     * @brief Get visibility subject for bed mesh row
-     *
-     * Returns 1 when bed mesh option should be visible (helix_plugin_installed AND
-     * printer_has_bed_mesh), 0 otherwise.
-     */
-    lv_subject_t* get_can_show_bed_mesh_subject() {
-        return composite_visibility_state_.get_can_show_bed_mesh_subject();
-    }
-
-    /**
-     * @brief Get visibility subject for QGL row
-     */
-    lv_subject_t* get_can_show_qgl_subject() {
-        return composite_visibility_state_.get_can_show_qgl_subject();
-    }
-
-    /**
-     * @brief Get visibility subject for Z-tilt row
-     */
-    lv_subject_t* get_can_show_z_tilt_subject() {
-        return composite_visibility_state_.get_can_show_z_tilt_subject();
-    }
-
-    /**
-     * @brief Get visibility subject for nozzle clean row
-     */
-    lv_subject_t* get_can_show_nozzle_clean_subject() {
-        return composite_visibility_state_.get_can_show_nozzle_clean_subject();
-    }
+    // === Visibility Subject Getters (pre-print options card aggregate) ===
 
     /**
      * @brief Get aggregate subject: 1 if any preprint option row is visible
+     *
+     * Bound by `print_file_detail.xml` to hide the entire PRINT OPTIONS card
+     * when no row would be visible. The legacy individual `can_show_*`
+     * forwarding accessors were retired — they had no production consumer.
      */
     lv_subject_t* get_has_any_preprint_options_subject() {
         return composite_visibility_state_.get_has_any_preprint_options_subject();
     }
 
     /**
-     * @brief Get visibility subject for timelapse row
+     * @brief Get visibility subject for timelapse capability
      *
      * Returns 1 when printer has timelapse plugin installed, 0 otherwise.
-     * Note: Unlike other can_show_* subjects, timelapse doesn't require helix_print plugin.
+     * Timelapse does not require helix_print plugin.
      */
     lv_subject_t* get_printer_has_timelapse_subject() {
         return capabilities_state_.get_printer_has_timelapse_subject();
@@ -1479,21 +1452,9 @@ class PrinterState {
 
     /**
      * @brief Get capability subject for purge line (priming)
-     *
-     * Returns 1 when printer has purge/priming capability, 0 otherwise.
      */
     lv_subject_t* get_printer_has_purge_line_subject() {
         return capabilities_state_.get_printer_has_purge_line_subject();
-    }
-
-    /**
-     * @brief Get visibility subject for purge line row
-     *
-     * Returns 1 when purge line option should be visible (helix_plugin_installed AND
-     * printer_has_purge_line), 0 otherwise.
-     */
-    lv_subject_t* get_can_show_purge_line_subject() {
-        return composite_visibility_state_.get_can_show_purge_line_subject();
     }
 
     /**
@@ -1870,9 +1831,9 @@ class PrinterState {
     // Note: Plugin status subjects (helix_plugin_installed_, phase_tracking_enabled_)
     // are now managed by plugin_status_state_ component
 
-    // Note: Composite visibility subjects (can_show_bed_mesh_, can_show_qgl_,
-    // can_show_z_tilt_, can_show_nozzle_clean_, can_show_purge_line_)
-    // are now managed by composite_visibility_state_ component
+    // Note: Aggregate visibility subject (has_any_preprint_options_) is managed
+    // by composite_visibility_state_ component. The legacy per-op can_show_*
+    // subjects were retired — nothing in XML or production C++ ever read them.
 
     // Note: Firmware retraction, manual probe, and motor state subjects
     // (retract_length_, retract_speed_, unretract_extra_length_, unretract_speed_,

@@ -23,7 +23,9 @@
  * Key behaviors:
  * - Both subjects are tri-state: -1 (unknown) is the initial value
  * - Unknown state (-1) is treated as false for boolean queries
- * - Updates trigger update_gcode_modification_visibility() for composite subjects
+ * - Updates trigger update_gcode_modification_visibility() which refreshes the
+ *   aggregate has_any_preprint_options subject (per-op can_show_* subjects
+ *   were retired — see PrinterCompositeVisibilityState).
  */
 
 #include "../test_helpers/printer_state_test_access.h"
@@ -280,53 +282,7 @@ TEST_CASE("Plugin status characterization: async update behavior",
     }
 }
 
-// ============================================================================
-// Integration Tests - Verify interaction with composite visibility subjects
-// ============================================================================
-
-TEST_CASE("Plugin status characterization: triggers composite visibility update",
-          "[characterization][plugin][integration]") {
-    lv_init_safe();
-
-    PrinterState& state = get_printer_state();
-    PrinterStateTestAccess::reset(state);
-    state.init_subjects(true);
-
-    SECTION("set_helix_plugin_installed(true) updates can_show_* subjects") {
-        // First verify can_show_bed_mesh is 0 (plugin not installed)
-        lv_subject_t* can_show_bed_mesh = get_subject_by_name("can_show_bed_mesh");
-        REQUIRE(can_show_bed_mesh != nullptr);
-        REQUIRE(lv_subject_get_int(can_show_bed_mesh) == 0);
-
-        // Install plugin and enable bed mesh capability
-        state.set_helix_plugin_installed(true);
-        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
-
-        // Note: can_show_bed_mesh also requires printer_has_bed_mesh to be true
-        // So it stays 0 unless we also set the capability
-        // This test documents that plugin install triggers the visibility update
-    }
-
-    SECTION("set_helix_plugin_installed(false) clears can_show_* subjects") {
-        // Install plugin first
-        state.set_helix_plugin_installed(true);
-        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
-
-        // Then uninstall
-        state.set_helix_plugin_installed(false);
-        UpdateQueueTestAccess::drain(helix::ui::UpdateQueue::instance());
-
-        // All can_show_* should be 0
-        lv_subject_t* can_show_bed_mesh = get_subject_by_name("can_show_bed_mesh");
-        lv_subject_t* can_show_qgl = get_subject_by_name("can_show_qgl");
-        lv_subject_t* can_show_z_tilt = get_subject_by_name("can_show_z_tilt");
-        lv_subject_t* can_show_nozzle_clean = get_subject_by_name("can_show_nozzle_clean");
-        lv_subject_t* can_show_purge_line = get_subject_by_name("can_show_purge_line");
-
-        REQUIRE(lv_subject_get_int(can_show_bed_mesh) == 0);
-        REQUIRE(lv_subject_get_int(can_show_qgl) == 0);
-        REQUIRE(lv_subject_get_int(can_show_z_tilt) == 0);
-        REQUIRE(lv_subject_get_int(can_show_nozzle_clean) == 0);
-        REQUIRE(lv_subject_get_int(can_show_purge_line) == 0);
-    }
-}
+// Note: tests for the legacy per-op `can_show_*` subjects were removed when
+// those subjects were retired (no production consumer ever read them). The
+// surviving aggregate `has_any_preprint_options` is exercised end-to-end by
+// the print_file_detail tests.

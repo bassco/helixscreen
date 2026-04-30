@@ -22,7 +22,7 @@ namespace helix {
  * - "Available" (show feature controls)
  *
  * @note set_helix_plugin_installed triggers composite visibility updates
- *       in PrinterState (can_show_bed_mesh_, can_show_qgl_, etc.)
+ *       in PrinterState (the has_any_preprint_options aggregate subject).
  */
 class PrinterPluginStatusState {
   public:
