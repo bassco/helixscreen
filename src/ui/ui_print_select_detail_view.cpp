@@ -130,6 +130,12 @@ void PrintSelectDetailView::init_subjects() {
     // via bind_flag_if_eq in print_file_detail.xml.
     UI_MANAGED_SUBJECT_INT(filament_mapping_visible_, 0, "filament_mapping_visible", subjects_);
 
+    // Legacy color swatches card visibility (0=hidden, 1=visible). Shown
+    // only when the mapping card is NOT visible AND the file is multi-tool.
+    // The two subjects are mutually exclusive by construction — see show()
+    // and the metadata-derived-colors path.
+    UI_MANAGED_SUBJECT_INT(color_swatches_visible_, 0, "color_swatches_visible", subjects_);
+
     // Pre-print time estimate (formatted string for bind_text)
     UI_MANAGED_SUBJECT_STRING(prep_time_estimate_subject_, prep_time_estimate_buf_, "",
                               "preprint_estimate_text", subjects_);
@@ -226,8 +232,8 @@ lv_obj_t* PrintSelectDetailView::create(lv_obj_t* parent_screen) {
     timelapse_checkbox_ = nullptr;
     pre_print_options_container_ = lv_obj_find_by_name(overlay_root_, "pre_print_options_container");
 
-    // Look up color requirements display
-    color_requirements_card_ = lv_obj_find_by_name(overlay_root_, "color_requirements_card");
+    // Look up the color swatches row container (parent card visibility is
+    // driven by the color_swatches_visible subject — no flag manipulation here).
     color_swatches_row_ = lv_obj_find_by_name(overlay_root_, "color_swatches_row");
 
     // Look up and initialize filament mapping card
@@ -308,20 +314,18 @@ void PrintSelectDetailView::show(const std::string& filename, const std::string&
     // Update filament mapping card (shown when AMS is available)
     filament_mapping_card_.update(filament_colors, filament_materials);
 
-    // Publish card visibility + mismatch state through subjects so XML drives
-    // the HIDDEN flag and warning icon.
-    lv_subject_set_int(&filament_mapping_visible_,
-                       filament_mapping_card_.should_show() ? 1 : 0);
+    // Publish all three color-display subjects so XML drives every HIDDEN
+    // flag and the warning icon. Mapping card and swatches card are mutually
+    // exclusive: swatches only show when mapping doesn't AND file is
+    // multi-tool.
+    const bool mapping_visible = filament_mapping_card_.should_show();
+    const bool swatches_visible = !mapping_visible && filament_colors.size() > 1;
+    lv_subject_set_int(&filament_mapping_visible_, mapping_visible ? 1 : 0);
+    lv_subject_set_int(&color_swatches_visible_, swatches_visible ? 1 : 0);
     lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
-    // Show either the interactive mapping card OR the simple color swatches, never both
-    if (filament_mapping_card_.should_show()) {
-        // Mapping card is active — hide legacy color swatches
-        if (color_requirements_card_) {
-            lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
-        }
-    } else {
-        // No AMS — fall back to simple color swatches display
+    // Build swatch content only when swatches will actually be shown.
+    if (swatches_visible) {
         update_color_swatches(filament_colors);
     }
 
@@ -506,8 +510,6 @@ void PrintSelectDetailView::on_ui_destroyed() {
         prep_manager_->set_option_state_provider(nullptr);
     }
 
-    // Color requirements display
-    color_requirements_card_ = nullptr;
     color_swatches_row_ = nullptr;
 
     // Filament mapping card
@@ -591,13 +593,12 @@ void PrintSelectDetailView::on_cancel_delete_static(lv_event_t* e) {
 }
 
 void PrintSelectDetailView::update_color_swatches(const std::vector<std::string>& colors) {
-    if (!color_requirements_card_ || !color_swatches_row_) {
-        return;
-    }
-
-    // Hide card if no colors or single color (single-color prints don't need this display)
-    if (colors.size() <= 1) {
-        lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
+    // Builds swatch widgets for the given color palette. Visibility of the
+    // enclosing color_requirements_card is driven entirely by the
+    // color_swatches_visible subject — this function never touches the
+    // HIDDEN flag. Caller is responsible for not invoking this when there
+    // aren't enough colors to display.
+    if (!color_swatches_row_) {
         return;
     }
 
@@ -651,9 +652,6 @@ void PrintSelectDetailView::update_color_swatches(const std::vector<std::string>
             lv_obj_set_style_text_color(label, text_color, 0);
         }
     }
-
-    // Show the card
-    lv_obj_remove_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
 
     spdlog::debug("[DetailView] Updated color swatches: {} colors", colors.size());
 }
@@ -779,15 +777,17 @@ void PrintSelectDetailView::try_extract_gcode_colors(lv_obj_t* viewer) {
                  parsed->tool_color_palette.size());
     current_filament_colors_ = parsed->tool_color_palette;
 
-    // Update the mapping card with extracted colors
+    // Update the mapping card with extracted colors and republish all three
+    // color-display subjects (mapping/swatches are mutually exclusive).
     filament_mapping_card_.update(current_filament_colors_, current_filament_materials_);
-    lv_subject_set_int(&filament_mapping_visible_,
-                       filament_mapping_card_.should_show() ? 1 : 0);
+    const bool mapping_visible = filament_mapping_card_.should_show();
+    const bool swatches_visible = !mapping_visible && current_filament_colors_.size() > 1;
+    lv_subject_set_int(&filament_mapping_visible_, mapping_visible ? 1 : 0);
+    lv_subject_set_int(&color_swatches_visible_, swatches_visible ? 1 : 0);
     lv_subject_set_int(&filament_mismatch_, filament_mapping_card_.has_mismatch() ? 1 : 0);
 
-    // Hide legacy color swatches if mapping card is now visible
-    if (filament_mapping_card_.should_show() && color_requirements_card_) {
-        lv_obj_add_flag(color_requirements_card_, LV_OBJ_FLAG_HIDDEN);
+    if (swatches_visible) {
+        update_color_swatches(current_filament_colors_);
     }
 }
 

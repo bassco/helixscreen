@@ -334,8 +334,8 @@ class PrintSelectDetailView : public OverlayBase {
     lv_obj_t* purge_line_checkbox_ = nullptr;
     lv_obj_t* timelapse_checkbox_ = nullptr;
 
-    // Color requirements display
-    lv_obj_t* color_requirements_card_ = nullptr;
+    // Color swatches container (parent card visibility driven by the
+    // color_swatches_visible subject — bound in print_file_detail.xml).
     lv_obj_t* color_swatches_row_ = nullptr;
 
     // History status display
@@ -355,6 +355,7 @@ class PrintSelectDetailView : public OverlayBase {
     // (preprint_bed_mesh_, preprint_qgl_, etc.) were retired in Phase 3.5.
     lv_subject_t filament_mismatch_{};          // 1 = material mismatch warning visible
     lv_subject_t filament_mapping_visible_{};   // 1 = filament mapping card visible (AMS+tools)
+    lv_subject_t color_swatches_visible_{};     // 1 = legacy color swatches card visible
     lv_subject_t prep_time_estimate_subject_{}; // formatted prep time string for bind_text
     char prep_time_estimate_buf_[64]{};         // buffer backing the string subject
     SubjectManager subjects_;                   // RAII manager for subject cleanup
