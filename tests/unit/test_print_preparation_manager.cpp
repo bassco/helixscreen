@@ -19,6 +19,12 @@ class PrintPreparationManagerTestAccess {
     get_ops_to_disable(const helix::ui::PrintPreparationManager& m) {
         return m.collect_ops_to_disable();
     }
+    static std::string
+    build_pre_start_gcode_block(const std::string& setup_gcode,
+                                const std::vector<std::string>& lines, bool emit_setup) {
+        return helix::ui::PrintPreparationManager::build_pre_start_gcode_block(
+            setup_gcode, lines, emit_setup);
+    }
 };
 
 #include "../mocks/mock_websocket_server.h"
@@ -801,21 +807,19 @@ TEST_CASE("PrintPreparationManager: option id keys are consistent",
 }
 
 // ============================================================================
-// T3: setup_gcode + PreStartGcode join behavior
+// T3a: collect_pre_start_gcode_lines — per-option line emission
 // ============================================================================
 
 /**
- * Verifies the contract that `start_print()` uses to build the pre-start gcode
- * block: `setup_gcode` (printer preamble, e.g. K2 Plus "PRINT_PREPARED") joined
- * with the per-option PreStartGcode lines emitted by
- * `collect_pre_start_gcode_lines()`. Disabled options still emit lines (with
- * their template's `{value}` substituted to `0`) — they're not skipped.
- *
- * The K2 Plus DB entry is the only printer today carrying both pieces, so it
- * doubles as the join contract anchor.
+ * Locks `collect_pre_start_gcode_lines()` for the K2 Plus DB shape: one
+ * `PreStartGcode` option (`ai_detect`, template `LOAD_AI_RUN SWITCH={value}`).
+ * Disabled options are NOT skipped — they emit the template with `{value}`
+ * substituted to `0`. The provider returning `-1` for `bed_mesh` falls through
+ * to default_enabled, but that option is `macro_param` (not `pre_start_gcode`)
+ * so it's filtered out here regardless.
  */
-TEST_CASE("PrintPreparationManager: setup_gcode + PreStartGcode join (K2 Plus)",
-          "[print_preparation][pre_print_options][gcode_join]") {
+TEST_CASE("PrintPreparationManager: collect_pre_start_gcode_lines (K2 Plus ai_detect)",
+          "[print_preparation][pre_print_options]") {
     lv_init_safe();
 
     PrinterState& printer_state = get_printer_state();
@@ -826,8 +830,6 @@ TEST_CASE("PrintPreparationManager: setup_gcode + PreStartGcode join (K2 Plus)",
     PrintPreparationManager manager;
     manager.set_dependencies(nullptr, &printer_state);
 
-    // Drive ai_detect via the provider; let bed_mesh fall through to its
-    // default_enabled (true) since it's macro_param, not pre_start_gcode.
     bool ai_detect_on = false;
     manager.set_option_state_provider([&](const std::string& id) -> int {
         if (id == "ai_detect") {
@@ -836,42 +838,68 @@ TEST_CASE("PrintPreparationManager: setup_gcode + PreStartGcode join (K2 Plus)",
         return -1;
     });
 
-    const auto& opts = printer_state.get_pre_print_option_set();
-    REQUIRE(opts.setup_gcode == "PRINT_PREPARED");
-    REQUIRE(opts.find("ai_detect") != nullptr);
-
-    SECTION("ai_detect ON: PreStartGcode emits SWITCH=1") {
+    SECTION("ai_detect ON emits SWITCH=1") {
         ai_detect_on = true;
-        auto lines =
-            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
-        REQUIRE(lines.size() == 1);
-        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=1");
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines == std::vector<std::string>{"LOAD_AI_RUN SWITCH=1"});
     }
 
-    SECTION("ai_detect OFF: PreStartGcode still emits with SWITCH=0") {
+    SECTION("ai_detect OFF still emits, with SWITCH=0") {
         ai_detect_on = false;
-        auto lines =
-            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
-        REQUIRE(lines.size() == 1);
-        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=0");
+        auto lines = PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines == std::vector<std::string>{"LOAD_AI_RUN SWITCH=0"});
+    }
+}
+
+// ============================================================================
+// T3b: build_pre_start_gcode_block — the actual join contract
+// ============================================================================
+
+/**
+ * `start_print()` calls `build_pre_start_gcode_block()` with the live inputs;
+ * this test calls the same helper directly with synthetic inputs so a refactor
+ * of the join (separator, ordering, gating on the `emit_setup` flag) shows up
+ * here instead of silently changing the wire format Klipper sees.
+ *
+ * `emit_setup` is computed in `start_print()` as
+ * `!macro_skip_params.empty() && !setup_gcode.empty()` — the K2 Plus path
+ * fires it whenever the bed_mesh PREPARE param is in skip_params. The helper
+ * itself just trusts the caller's flag.
+ */
+TEST_CASE("PrintPreparationManager: build_pre_start_gcode_block (join contract)",
+          "[print_preparation][pre_print_options][gcode_join]") {
+    SECTION("emit_setup=true with one option line: setup precedes line, '\\n' separator") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block(
+                    "PRINT_PREPARED", {"LOAD_AI_RUN SWITCH=1"}, true) ==
+                "PRINT_PREPARED\nLOAD_AI_RUN SWITCH=1");
     }
 
-    SECTION("Combined block: setup_gcode precedes PreStartGcode lines, "
-            "newline-separated") {
-        ai_detect_on = true;
-        auto lines =
-            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+    SECTION("emit_setup=false suppresses setup_gcode (per-option lines only)") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block(
+                    "PRINT_PREPARED", {"LOAD_AI_RUN SWITCH=0"}, false) ==
+                "LOAD_AI_RUN SWITCH=0");
+    }
 
-        // Replicate the join logic from start_print() (ui_print_preparation_manager.cpp:717-727)
-        // so a future refactor of that join surfaces here.
-        std::string combined = opts.setup_gcode;
-        for (const auto& line : lines) {
-            if (!combined.empty()) {
-                combined += "\n";
-            }
-            combined += line;
-        }
-        REQUIRE(combined == "PRINT_PREPARED\nLOAD_AI_RUN SWITCH=1");
+    SECTION("emit_setup=true but setup_gcode empty: per-option lines only") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block(
+                    "", {"LOAD_AI_RUN SWITCH=1"}, true) == "LOAD_AI_RUN SWITCH=1");
+    }
+
+    SECTION("Multiple per-option lines join with '\\n', preserve order") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block(
+                    "PRINT_PREPARED", {"LINE_A", "LINE_B", "LINE_C"}, true) ==
+                "PRINT_PREPARED\nLINE_A\nLINE_B\nLINE_C");
+    }
+
+    SECTION("emit_setup=true, no per-option lines: just setup_gcode") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block(
+                    "PRINT_PREPARED", {}, true) == "PRINT_PREPARED");
+    }
+
+    SECTION("Nothing to emit returns empty string") {
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block("PRINT_PREPARED", {}, false)
+                    .empty());
+        REQUIRE(PrintPreparationManagerTestAccess::build_pre_start_gcode_block("", {}, true).empty());
     }
 }
 

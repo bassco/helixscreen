@@ -713,19 +713,10 @@ void PrintPreparationManager::start_print(const std::string& filename,
     std::vector<std::string> pre_start_lines = collect_pre_start_gcode_lines();
     const bool emit_printer_setup =
         !macro_skip_params.empty() && !db_options.setup_gcode.empty();
+    std::string combined =
+        build_pre_start_gcode_block(db_options.setup_gcode, pre_start_lines, emit_printer_setup);
 
-    if (emit_printer_setup || !pre_start_lines.empty()) {
-        std::string combined;
-        if (emit_printer_setup) {
-            combined = db_options.setup_gcode;
-        }
-        for (const auto& line : pre_start_lines) {
-            if (!combined.empty()) {
-                combined += "\n";
-            }
-            combined += line;
-        }
-
+    if (!combined.empty()) {
         spdlog::info("[PrintPreparationManager] Executing pre-start gcode ({} line(s)): {}",
                      (emit_printer_setup ? 1 : 0) + pre_start_lines.size(), combined);
 
@@ -990,6 +981,22 @@ std::vector<std::string> PrintPreparationManager::collect_pre_start_gcode_lines(
         spdlog::info("[PrintPreparationManager] Collected {} pre-start gcode line(s)", lines.size());
     }
     return lines;
+}
+
+std::string PrintPreparationManager::build_pre_start_gcode_block(
+    const std::string& setup_gcode, const std::vector<std::string>& pre_start_lines,
+    bool emit_setup) {
+    std::string combined;
+    if (emit_setup && !setup_gcode.empty()) {
+        combined = setup_gcode;
+    }
+    for (const auto& line : pre_start_lines) {
+        if (!combined.empty()) {
+            combined += '\n';
+        }
+        combined += line;
+    }
+    return combined;
 }
 
 void PrintPreparationManager::modify_and_print(

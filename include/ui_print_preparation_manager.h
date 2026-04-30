@@ -578,6 +578,28 @@ class PrintPreparationManager {
      * @return Vector of rendered gcode lines, e.g. {"LOAD_AI_RUN SWITCH=1"}.
      */
     [[nodiscard]] std::vector<std::string> collect_pre_start_gcode_lines() const;
+
+    /**
+     * @brief Build the combined pre-start gcode block executed before START_PRINT.
+     *
+     * Concatenates `setup_gcode` (when `emit_setup` is true and `setup_gcode`
+     * is non-empty) and `pre_start_lines` with `\n` separators. Returns "" when
+     * nothing should be emitted.
+     *
+     * Pure static function — exists as a separate symbol so the join contract
+     * has a single test entry point (`PrintPreparationManagerTestAccess::
+     * build_pre_start_gcode_block`). Re-implementing the join in test code
+     * would let production drift silently.
+     *
+     * @param setup_gcode Printer-wide preamble (e.g. "PRINT_PREPARED")
+     * @param pre_start_lines Per-option PreStartGcode lines
+     * @param emit_setup Whether to include setup_gcode. start_print() gates on
+     *        `!macro_skip_params.empty()` — when no skip params are passed,
+     *        START_PRINT runs without modification and setup_gcode is suppressed.
+     */
+    [[nodiscard]] static std::string
+    build_pre_start_gcode_block(const std::string& setup_gcode,
+                                const std::vector<std::string>& pre_start_lines, bool emit_setup);
 };
 
 } // namespace helix::ui
