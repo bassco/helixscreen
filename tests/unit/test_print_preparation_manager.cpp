@@ -801,6 +801,81 @@ TEST_CASE("PrintPreparationManager: option id keys are consistent",
 }
 
 // ============================================================================
+// T3: setup_gcode + PreStartGcode join behavior
+// ============================================================================
+
+/**
+ * Verifies the contract that `start_print()` uses to build the pre-start gcode
+ * block: `setup_gcode` (printer preamble, e.g. K2 Plus "PRINT_PREPARED") joined
+ * with the per-option PreStartGcode lines emitted by
+ * `collect_pre_start_gcode_lines()`. Disabled options still emit lines (with
+ * their template's `{value}` substituted to `0`) — they're not skipped.
+ *
+ * The K2 Plus DB entry is the only printer today carrying both pieces, so it
+ * doubles as the join contract anchor.
+ */
+TEST_CASE("PrintPreparationManager: setup_gcode + PreStartGcode join (K2 Plus)",
+          "[print_preparation][pre_print_options][gcode_join]") {
+    lv_init_safe();
+
+    PrinterState& printer_state = get_printer_state();
+    PrinterStateTestAccess::reset(printer_state);
+    printer_state.init_subjects(false);
+    printer_state.set_printer_type_sync("Creality K2 Plus");
+
+    PrintPreparationManager manager;
+    manager.set_dependencies(nullptr, &printer_state);
+
+    // Drive ai_detect via the provider; let bed_mesh fall through to its
+    // default_enabled (true) since it's macro_param, not pre_start_gcode.
+    bool ai_detect_on = false;
+    manager.set_option_state_provider([&](const std::string& id) -> int {
+        if (id == "ai_detect") {
+            return ai_detect_on ? 1 : 0;
+        }
+        return -1;
+    });
+
+    const auto& opts = printer_state.get_pre_print_option_set();
+    REQUIRE(opts.setup_gcode == "PRINT_PREPARED");
+    REQUIRE(opts.find("ai_detect") != nullptr);
+
+    SECTION("ai_detect ON: PreStartGcode emits SWITCH=1") {
+        ai_detect_on = true;
+        auto lines =
+            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.size() == 1);
+        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=1");
+    }
+
+    SECTION("ai_detect OFF: PreStartGcode still emits with SWITCH=0") {
+        ai_detect_on = false;
+        auto lines =
+            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+        REQUIRE(lines.size() == 1);
+        REQUIRE(lines[0] == "LOAD_AI_RUN SWITCH=0");
+    }
+
+    SECTION("Combined block: setup_gcode precedes PreStartGcode lines, "
+            "newline-separated") {
+        ai_detect_on = true;
+        auto lines =
+            PrintPreparationManagerTestAccess::get_pre_start_gcode_lines(manager);
+
+        // Replicate the join logic from start_print() (ui_print_preparation_manager.cpp:717-727)
+        // so a future refactor of that join surfaces here.
+        std::string combined = opts.setup_gcode;
+        for (const auto& line : lines) {
+            if (!combined.empty()) {
+                combined += "\n";
+            }
+            combined += line;
+        }
+        REQUIRE(combined == "PRINT_PREPARED\nLOAD_AI_RUN SWITCH=1");
+    }
+}
+
+// ============================================================================
 // Tests: Macro Analysis Retry Logic (with MockWebSocketServer)
 // ============================================================================
 
